@@ -68,3 +68,28 @@ export async function writeDiffCommentsToHost(
     { timeoutMs: 15_000 }
   )
 }
+
+/** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */
+export async function readDiffCommentsFromHost(
+  owner: Extract<DiffCommentOwner, { kind: 'worktree' }>
+): Promise<DiffComment[]> {
+  const { endpoint, at } = owner.authority
+  if (endpoint.kind === 'self') {
+    const meta = await window.api.worktrees.updateMeta({
+      worktreeId: owner.worktreeId,
+      executionHostId: at,
+      updates: {}
+    })
+    if (!meta) {
+      throw new Error('This computer did not answer with the review notes.')
+    }
+    return meta.diffComments ?? []
+  }
+  const { worktree } = await callRuntimeRpc<{ worktree?: { diffComments?: DiffComment[] } }>(
+    { kind: 'environment', environmentId: endpoint.environmentId },
+    'worktree.show',
+    { worktree: toRuntimeWorktreeSelector(owner.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
+  return worktree?.diffComments ?? []
+}

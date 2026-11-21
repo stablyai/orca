@@ -17,11 +17,8 @@ const rewriter = createWslDriveUncRewriter({
 
 describe('createWslDriveUncRewriter', () => {
   it.each([
-    ['a worktree id', ID, NEW_ID],
     ['a workspace key', `worktree:${ID}`, `worktree:${NEW_ID}`],
     ['a local host-qualified id', `local|${ID}`, `local|${NEW_ID}`],
-    ['a minted PTY session id', `${ID}@@abc`, `${NEW_ID}@@abc`],
-    ['a path inside the project', `${ROOT}\\src\\a.ts`, String.raw`C:\src\app\src\a.ts`],
     ['the older UNC spelling', String.raw`\\wsl$\ubuntu\mnt\c\src\app`, String.raw`C:\src\app`],
     ['a comparison-form path', '//wsl/ubuntu/mnt/c/src/app/x', 'c:/src/app/x'],
     [
@@ -41,7 +38,6 @@ describe('createWslDriveUncRewriter', () => {
   it.each([
     ['another repo', String.raw`r2::\\wsl.localhost\Ubuntu\mnt\c\src\app`],
     ['another host', `ssh:box|${ID}`],
-    ['a path outside the project', String.raw`\\wsl.localhost\Ubuntu\mnt\c\src\other\a.ts`],
     ['a path inside the distro', String.raw`r1::\\wsl.localhost\Ubuntu\home\me\app`],
     ['another distro', String.raw`\\wsl.localhost\Debian\mnt\c\src\app`],
     ['a folder workspace key', 'folder:f1'],

@@ -5,12 +5,15 @@ import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
-import { chatHoldsAgentMail } from '../../../../../bots/bot-chat-mail-hold'
-import { heldChatSentNext, namedChatHeld } from '../../../../../bots/bot-held-chat-request'
+import {
+  failureHeldChat,
+  heldChatSentNext,
+  type HeldChat
+} from '../../../../../bots/bot-held-chat-request'
 import { admitInOwnConversation, sessionAddress } from './bot-request-conversation'
 import { actsForOwner } from '../../../../../../shared/bots/bot-acts-for'
 import { ownerChatCard } from './bot-request-owner-card'
-import { botRequestView, type BotRequestRecord } from '../../../../../bots/bot-request-view'
+import { botRequestPayload, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import type { BotRequestAdmission } from '../../../../orchestration/db/bot-requests/bot-request-store'
 import {
   BOT_REQUEST_TYPE_REFUSAL,
@@ -74,9 +77,7 @@ export async function sendToBot(
     /** About something in the addressed chat (a comment on its item): lands there, a teammate's
      *  request included, instead of in a conversation of its own. */
     keepChat?: boolean
-    /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
-    senderSnapshot?: string
-  }
+  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images' | 'onAdmitted'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -125,9 +126,14 @@ type SendBotRequestArgs = {
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   messageId?: string
   keepChat?: boolean
+  /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
   senderSnapshot?: string
+  /** Store images claimed for the receiving chat (`send --item --file`). */
+  images?: readonly string[]
   /** Nudges the sender runs later instead of now. */
   held?: (() => void)[]
+  /** Commits with the request's admission, before anyone is woken for it. */
+  onAdmitted?: () => void
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -234,7 +240,7 @@ async function admitBotRequestMail(
     return blockedReceipt(blocked).receipt
   }
   // The whole payload is Orca's, so the receiving bot never reads the sender's own fields as these.
-  const payload = JSON.stringify({ botRequest: botRequestView(record, messageId) })
+  const payload = botRequestPayload(record, messageId, args.images)
   const request = {
     ...key,
     fromBotId: record.fromBotId,
@@ -242,8 +248,8 @@ async function admitBotRequestMail(
     record: JSON.stringify(record)
   }
   /** `reserved`: the request's place is already held, so only its mail is stored. */
-  /** `held`: the chat a failed turn holds that this request was kept out of, named to the sender. */
-  const admit = (address: string, reserved = false, held: string | null = null) => {
+  /** `held`: the chat a failed turn holds that this request queues in, named to the sender. */
+  const admit = (address: string, reserved = false, held?: HeldChat | null) => {
     const recipient =
       address.startsWith('run:') && receiving.via === 'address'
         ? { ok: true as const, to: address, runId: address.slice('run:'.length) }
@@ -271,13 +277,14 @@ async function admitBotRequestMail(
       priority: params.priority,
       threadId: params.threadId,
       payload,
+      orcaAuthored: 'bot-request' as const,
       senderPaneKey: args.senderPaneKey,
       runId: recipient.runId,
       answerSenderSnapshot: args.senderSnapshot
     }
     const admission: BotRequestAdmission = reserved
-      ? { kind: 'sent', message: db.admitReservedBotRequest(mail) }
-      : db.admitBotRequest({ ...request, message: mail })
+      ? { kind: 'sent', message: db.admitReservedBotRequest(mail, args.onAdmitted) }
+      : db.admitBotRequest({ ...request, message: mail, onAdmitted: args.onAdmitted })
     if (admission.kind !== 'sent') {
       return blockedReceipt(admission)
     }
@@ -285,7 +292,7 @@ async function admitBotRequestMail(
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(
       args.recordMutationReceipt,
-      { message: exposeMessage(message), next: heldChatSentNext(record, held, recipient.to) },
+      { message: exposeMessage(message), next: heldChatSentNext(record, held) },
       () => runtime.notifyMessageArrived(message.to_handle, message.type)
     )
     if (args.held) {
@@ -296,14 +303,14 @@ async function admitBotRequestMail(
     return { sent: true, receipt: sent.receipt }
   }
   /** `home`: the owner's Chat, told where a request it would have had went; null tells none. */
-  const inOwnConversation = (home: { chat: string | null } | null, held: string | null = null) => {
+  const inOwnConversation = (home: { chat: string | null } | null) => {
     // Held before the chat is made, so a competing send makes none.
     const reservation = db.reserveBotRequest({ ...request, messageId })
     if (reservation.kind !== 'reserved') {
       return Promise.resolve(blockedReceipt(reservation).receipt)
     }
     return admitInOwnConversation(runtime, target, record, params.subject, home, {
-      admit: (address) => admit(address, true, held),
+      admit: (address) => admit(address, true),
       release: () => db.releaseBotRequest(messageId)
     })
   }
@@ -314,20 +321,14 @@ async function admitBotRequestMail(
     // Only a teammate's request Orca kept out of the Chat is noted there; `--chat new` was the sender's choice.
     return inOwnConversation(receiving.newChat === true ? null : { chat: target.chatSessionId })
   }
+  // A chat whose last turn failed queues it like its owner's own follow-ups; the sender is told.
   if (receiving.via === 'address') {
-    // A chat the sender named holds it the same way; status asks for nothing, so it may wait there.
-    const held = await namedChatHeld(runtime, purpose, receiving.chat)
-    return held ? inOwnConversation({ chat: held }, held) : admit(args.to).receipt
+    const home = receiving.chat !== null && receiving.chat === target.chatSessionId
+    return admit(args.to, false, await failureHeldChat(runtime, receiving.chat, home)).receipt
   }
   // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
-  const chosen = await runtimeBotChats(runtime).withChat<{ held: string } | { receipt: unknown }>(
-    target.id,
-    async (sessionId) =>
-      (await chatHoldsAgentMail(runtime, sessionId))
-        ? { held: sessionId }
-        : { receipt: admit(sessionAddress(sessionId)).receipt }
-  )
-  // A Chat whose last turn failed holds mail until its owner sends, so the request starts a chat of its
-  // own, noted in the Chat that was chosen. Read once as it is chosen: a turn failing later still holds it.
-  return 'held' in chosen ? inOwnConversation({ chat: chosen.held }, chosen.held) : chosen.receipt
+  return runtimeBotChats(runtime).withChat(target.id, async (sessionId) => {
+    const held = await failureHeldChat(runtime, sessionId, true)
+    return admit(sessionAddress(sessionId), false, held).receipt
+  })
 }

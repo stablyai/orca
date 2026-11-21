@@ -30,6 +30,7 @@ const FILE_SUFFIX = '.json'
 const STAGED_FILE = /\.json\.\d+\.(\d+\.[0-9a-f]+|[0-9a-f-]{36})\.tmp$/
 
 export type BotMemoryHistoryIo = {
+  /** Null only when the bot has no history; any other failure rejects, so nothing writes over it. */
   read: (botId: string) => Promise<string | null>
   /** Null text removes the bot's history. */
   write: (botId: string, text: string | null) => Promise<void>
@@ -73,7 +74,10 @@ export function botMemoryHistoryFiles(
     read: async (botId) => {
       try {
         return await readFile(path(botId), 'utf8')
-      } catch {
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+          throw error
+        }
         return null
       }
     },
@@ -123,14 +127,6 @@ function redacted(
   }
 }
 
-function parseJson(text: string | null): unknown {
-  try {
-    return JSON.parse(text ?? '[]')
-  } catch {
-    return []
-  }
-}
-
 export function createBotMemoryHistory(
   io: BotMemoryHistoryIo = botMemoryHistoryFiles(),
   now: () => number = Date.now
@@ -150,13 +146,17 @@ export function createBotMemoryHistory(
   }
   const kept = (row: BotMemoryHistoryRow): boolean =>
     row.at >= now() - BOT_MEMORY_HISTORY_DAYS * DAY_MS
-  /** The bot's rows still within the limit; rows past it are deleted from disk too. Run queued. */
+  /** The bot's rows still within the limit; rows past it are deleted from disk too. Run queued.
+   *  Rejects for a file it can't read or parse, so no write replaces history it never saw. */
   const read = async (botId: string): Promise<BotMemoryHistoryRow[]> => {
-    const parsed = z.array(BotMemoryHistoryRowSchema).safeParse(parseJson(await io.read(botId)))
-    const all = parsed.success ? parsed.data : []
+    const text = await io.read(botId)
+    const all = text === null ? [] : z.array(BotMemoryHistoryRowSchema).parse(JSON.parse(text))
     const rows = all.filter(kept)
     if (rows.length < all.length) {
-      await io.write(botId, rows.length > 0 ? JSON.stringify(rows) : null)
+      // What was read still holds; a later read deletes the old rows.
+      await io
+        .write(botId, rows.length > 0 ? JSON.stringify(rows) : null)
+        .catch((error: unknown) => console.warn('[bots] memory history not pruned', error))
     }
     return rows
   }
@@ -293,7 +293,11 @@ export function createBotMemoryHistory(
           loaded?.()
         },
         (error: unknown) => {
-          undoneLoads.delete(botId)
+          // Answers as for no history until a list reads it, so an unreadable file isn't reread each ask;
+          // a removal or a newer answer since wins.
+          if (undoneLoads.delete(botId) && !undoneRows.has(botId)) {
+            undoneRows.set(botId, undoTargets(pending.get(botId)?.unwritten ?? []))
+          }
           console.warn('[bots] memory history not read', error)
         }
       )

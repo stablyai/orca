@@ -8,6 +8,7 @@ import {
   parseBotItemPrRef,
   type BotItem
 } from '../../../../shared/bots/bot-items'
+import type { BotItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
 import { botNotFound } from '../../../bots/bot-request-policy'
 import { BotItemError } from '../../../bots/bot-item-error'
 import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-items-input'
@@ -24,6 +25,8 @@ export type BotItemWriteResult = {
   eventId: string | null
   created?: boolean
   unchanged?: boolean
+  /** A Needs you ask that may be hard to read: why, and one tip for the bot. */
+  advice?: BotItemAskAdvice
 }
 
 /** Stops a write when the caller is not a bot chat, before any store work. The writer is the session
@@ -72,7 +75,7 @@ export async function writeResult(
   if (!record) {
     throw new BotItemError('not_found', 'The item is gone.')
   }
-  runtime.botItems.changed([record.ownerBotId])
+  runtime.botItems.changed([record])
   const [item] = await runtime.botItems.views([record])
   if (outcome.eventId !== null) {
     await noteBotItemWrite(store, writer.sessionId, record, outcome.eventId, item!.links)

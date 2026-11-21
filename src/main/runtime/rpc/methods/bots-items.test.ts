@@ -10,6 +10,8 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsHost, type BotItemsHostDeps } from '../../../bots/bot-items-runtime'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
+import type { BotItemEvent } from '../../../../shared/bots/bot-items'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { BotsDbWorkerClient } from '../../../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores } from '../../../bots/db-worker/bots-db-worker-entry'
 import { inProcessBotsDbWorker } from '../../../bots/db-worker/bots-db-worker.test-fixture'
@@ -17,6 +19,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { BOT_ITEMS_METHODS } from './bots-items'
+import { BotItemsListReadSchema } from '../../../../shared/bots/bot-item-schema'
 import { checkedWorkerOrigin } from './bots-items-worker-origin'
 
 const paths = vi.hoisted(() => ({ userData: '' }))
@@ -213,7 +216,7 @@ describe('bot items over RPC', () => {
   })
 
   it('makes no item for a bot that refuses the request', async () => {
-    const { dispatcher, host: items } = itemsRuntime()
+    const { dispatcher } = itemsRuntime()
     sendToBot.mockRejectedValue(new OrchestrationError('bot_paused', 'Docs is paused.'))
 
     const refused = await dispatcher.dispatch(
@@ -229,10 +232,6 @@ describe('bot items over RPC', () => {
       error: { message: 'Docs is paused.' }
     })
     expect(sendToBot).toHaveBeenCalledTimes(1)
-    expect(await items.store().list({ botId: 'docs', statuses: ['planned'], limit: 10 })).toEqual({
-      items: [],
-      counts: {}
-    })
     expect(
       await dispatcher.dispatch(request('bots.items.list', { botId: 'docs', all: true }))
     ).toMatchObject({ ok: true, result: { items: [] } })
@@ -253,30 +252,7 @@ describe('bot items over RPC', () => {
     expect(sendToBot).not.toHaveBeenCalled()
   })
 
-  it('makes an item for another bot with a repeated link stored once', async () => {
-    const { dispatcher } = itemsRuntime()
-    sendToBot.mockImplementation(async (_context: unknown, mail: { messageId: string }) => {
-      messages.set(mail.messageId, { to_handle: `orca_session_id:${DOCS_CHAT}` })
-      return { receipt: {}, nudge: () => {} }
-    })
-
-    const made = await dispatcher.dispatch(
-      request('bots.items.add', {
-        callerSessionId: RANGER_CHAT,
-        title: 'Fix the onboarding invite link',
-        forBot: 'bot:Docs',
-        links: Array.from({ length: 51 }, () => 'https://example.com/spec')
-      })
-    )
-
-    expect(made).toMatchObject({
-      ok: true,
-      result: { item: { links: [{ kind: 'url', ref: 'https://example.com/spec' }] } }
-    })
-    expect(sendToBot).toHaveBeenCalledTimes(1)
-  })
-
-  it('makes an item for another bot in the chat its request landed in', async () => {
+  it('makes an item with deduplicated links in the chat its request landed in', async () => {
     const { dispatcher } = itemsRuntime()
     sendToBot.mockImplementation(
       async (_context: unknown, mail: { messageId: string; to: string }) => {
@@ -290,7 +266,8 @@ describe('bot items over RPC', () => {
       request('bots.items.add', {
         callerSessionId: RANGER_CHAT,
         title: 'Fix the onboarding invite link',
-        forBot: 'bot:Docs'
+        forBot: 'bot:Docs',
+        links: Array.from({ length: 51 }, () => 'https://example.com/spec')
       })
     )
 
@@ -300,10 +277,12 @@ describe('bot items over RPC', () => {
         item: {
           owner: { botId: 'docs' },
           chat: { id: DOCS_CHAT },
-          madeBy: { botId: 'ranger', chatId: RANGER_CHAT }
+          madeBy: { botId: 'ranger', chatId: RANGER_CHAT },
+          links: [{ kind: 'url', ref: 'https://example.com/spec' }]
         }
       }
     })
+    expect(sendToBot).toHaveBeenCalledOnce()
   })
 
   it("mails the item's chat once for each owner change, a close with nothing running included", async () => {
@@ -327,6 +306,100 @@ describe('bot items over RPC', () => {
       { chatId: RANGER_CHAT, eventId: 2, kind: 'commented' },
       { chatId: RANGER_CHAT, eventId: 3, kind: 'status' }
     ])
+  })
+
+  it('answers a summary list, a Closed page without the open items, and named items alone', async () => {
+    const { dispatcher } = itemsRuntime()
+    for (const title of ['Share dialog', 'Old fix']) {
+      await dispatcher.dispatch(
+        request('bots.items.add', {
+          callerSessionId: RANGER_CHAT,
+          title,
+          description: 'Long text',
+          doneMeans: 'Shipped'
+        })
+      )
+    }
+    const desktop = { caller: DESKTOP_RPC_CALLER }
+    await dispatcher.dispatch(
+      request('bots.items.owner.status', { items: ['2'], status: 'done' }),
+      desktop
+    )
+    const list = async (params: Record<string, unknown>) => {
+      const answer = await dispatcher.dispatch(
+        request('bots.items.owner.list', { botId: 'ranger', summary: true, ...params }),
+        desktop
+      )
+      if (!answer.ok) {
+        throw new Error('list failed')
+      }
+      return BotItemsListReadSchema.parse(answer.result)
+    }
+
+    const whole = await list({})
+    expect(whole.items.map((item) => [item.number, item.description, item.doneMeans])).toEqual([
+      [1, null, null],
+      [2, null, null]
+    ])
+    const closedPage = await list({
+      closedCursor: `${Number.MAX_SAFE_INTEGER}:1000`,
+      closedOnly: true
+    })
+    expect(closedPage.items.map((item) => item.number)).toEqual([2])
+    const named = await list({ uids: [whole.items[0]!.uid] })
+    expect(named.items.map((item) => item.number)).toEqual([1])
+    expect(named.counts).toEqual({ planned: 1, done: 1 })
+  })
+
+  it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
+    const { dispatcher } = itemsRuntime()
+    for (const title of ['Go ahead', 'Go ahead too']) {
+      await dispatcher.dispatch(request('bots.items.add', { callerSessionId: RANGER_CHAT, title }))
+    }
+    const prose = 'Go ahead without review? Reply **yes**, or **wait**.'
+
+    const tipped = await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '1',
+        status: 'needs_you',
+        comment: prose
+      })
+    )
+    const clean = await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '2',
+        status: 'needs_you',
+        ask: {
+          questions: [{ prompt: 'Go ahead?', options: [{ label: 'Go' }, { label: 'Wait' }] }]
+        }
+      })
+    )
+    const shown = await dispatcher.dispatch(
+      request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1', newest: true })
+    )
+
+    expect(tipped).toMatchObject({
+      ok: true,
+      result: {
+        item: { status: 'needs_you', question: { text: prose } },
+        advice: {
+          codes: ['prose_choices'],
+          tip: 'Posted. Tip: Give the choices as --option values after --ask, so they show as quick replies. Set Needs you again if you rewrite it.'
+        }
+      }
+    })
+    expect(clean).toMatchObject({ ok: true, result: { item: { status: 'needs_you' } } })
+    expect(clean).not.toHaveProperty('result.advice')
+    expect(shown).toMatchObject({
+      ok: true,
+      result: {
+        events: expect.arrayContaining([
+          expect.objectContaining({ kind: 'commented', data: { text: prose } })
+        ])
+      }
+    })
   })
 
   it("takes a paired client's store image on a comment, claimed for the item's live chat, and nothing outside the store", async () => {
@@ -392,6 +465,95 @@ describe('bot items over RPC', () => {
             })
           ])
         }
+      })
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      itemChat.sessionId = null
+    }
+  })
+
+  it("attaches a bot's --file files to its comment and its status comment; one unreadable file posts nothing", async () => {
+    const { dispatcher } = itemsRuntime()
+    const store = new AgentSessionAttachmentStore(
+      join(paths.userData, 'agent-session-attachments'),
+      { hasSession: () => true }
+    )
+    const claim = vi.fn(async (_sessionId: string, _body: AgentJournalMessageItem) => undefined)
+    setAgentSessionAttachmentStore(store, claim)
+    itemChat.sessionId = 'ranger-live'
+    try {
+      await dispatcher.dispatch(
+        request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Install dialog' })
+      )
+      const shot = join(paths.userData, 'after.png')
+      const log = join(paths.userData, 'run.log')
+      writeFileSync(shot, Buffer.alloc(4))
+      writeFileSync(log, 'ok')
+      const comment = (params: Record<string, unknown>) =>
+        dispatcher.dispatch(
+          request('bots.items.comment', { callerSessionId: RANGER_CHAT, item: '1', ...params })
+        )
+
+      expect(
+        await comment({ text: 'Fixed.', files: [shot, join(paths.userData, 'gone.png')] })
+      ).toMatchObject({
+        ok: false,
+        error: { message: "gone.png can't be read. Nothing was posted." }
+      })
+      expect(await comment({ text: '', files: [shot, log] })).toMatchObject({ ok: true })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'needs_you',
+            comment: 'Which one?',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: true })
+      // What the write would refuse is refused before a file is copied or claimed.
+      expect(await comment({ text: 'x'.repeat(7_990), files: [log] })).toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringMatching(/^The comment and its files' paths come to \d+ characters/)
+        }
+      })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'canceled',
+            comment: 'Dropping it.',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: false, error: { message: 'Canceling needs a reason: --reason "..."' } })
+      expect(claim).toHaveBeenCalledTimes(2)
+      const shown = await dispatcher.dispatch(
+        request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1' })
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a successful bots.items.show reply carries its events, which the matcher below checks.
+      const { events } = (shown as { result: { events: BotItemEvent[] } }).result
+      const comments = events.filter((event) => event.kind === 'commented')
+      expect(comments).toHaveLength(2)
+      expect(comments[0]?.data.images).toMatchObject([
+        { name: 'after.png', bytes: 4, path: expect.stringContaining(store.rootDir) }
+      ])
+      expect(comments[0]?.data.text).toMatch(/^@\S+agent-session-attachments\S+run\.log$/)
+      expect(claim).toHaveBeenNthCalledWith(1, 'ranger-live', {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: comments[0]?.data.text },
+          { type: 'image-ref', path: comments[0]?.data.images?.[0]?.path }
+        ]
+      })
+      expect(claim).toHaveBeenNthCalledWith(2, 'ranger-live', expect.anything())
+      expect(comments[1]?.data).toMatchObject({
+        text: 'Which one?',
+        images: [{ name: 'after.png', bytes: 4 }]
       })
     } finally {
       setAgentSessionAttachmentStore(null)

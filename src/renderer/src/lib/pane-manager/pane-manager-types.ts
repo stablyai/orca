@@ -170,7 +170,7 @@ export type ManagedPaneInternal = {
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
   paneDragCleanup?: (() => void) | null
-  compositionHandler: (() => void) | null
+  imeCandidateAnchorCleanup: (() => void) | null
   focusClassSyncCleanup?: (() => void) | null
   domBlockFillCleanup?: (() => void) | null
   terminalScrollIntentDisposable?: IDisposable | null

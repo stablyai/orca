@@ -194,10 +194,10 @@ index 18c275ccbe583f48ccb5c5f66cd26d0bd8621e39..2dc0ef346d3ce07b3d0b5f03fd72c4f5
      if (diff !== 0) {
        this._latestYDisp = newRow;
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a1770c942abe 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..83647f3bd5f2c883d88dbcc2a5043279830c8b20 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
-@@ -1,10 +1,15 @@
+@@ -1,17 +1,64 @@
 +/// <reference lib="es2022.intl" />
  /**
   * Copyright (c) 2016 The xterm.js authors. All rights reserved.
@@ -208,17 +208,38 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 -import { IBufferService, ICoreService, IOptionsService } from '../../common/services/Services';
 +import { IRenderService, IThemeService } from '../services/Services';
 +import { IBufferService, ICoreService, IOptionsService, IUnicodeService } from '../../common/services/Services';
-+import { WidthCacheFontVariantCanvas } from '../renderer/dom/WidthCache';
++import { WidthCache, WidthCacheFontVariantCanvas } from '../renderer/dom/WidthCache';
 +import { addDisposableListener } from '../Dom';
-+import { Disposable } from '../../common/Lifecycle';
-+import { color } from '../../common/Color';
++import { combinedDisposable, Disposable } from '../../common/Lifecycle';
++import { channels, color } from '../../common/Color';
  import { C0 } from '../../common/data/EscapeSequences';
++import { CellData } from '../../common/buffer/CellData';
++import { Attributes, FgFlags, UnderlineStyle, WHITESPACE_CELL_CHAR } from '../../common/buffer/Constants';
++import { IBufferLine, ICellData } from '../../common/buffer/Types';
++import { treatGlyphAsBackgroundColor } from '../renderer/shared/RendererUtils';
++import { IColor, IDisposable } from '../../common/Types';
  
  interface IPosition {
-@@ -12,6 +17,27 @@ interface IPosition {
+   start: number;
    end: number;
  }
  
++/** Adjacent tail cells that render alike; `style` is '' when the view's own styling suffices. */
++interface ITailRun {
++  text: string;
++  style: string;
++}
++
++/** Bounds the elements a tail repaint lays out; the cells past it join one unstyled run. */
++const MAX_TAIL_RUNS = 64;
++
++const UNDERLINE_STYLES: { [style: number]: string } = {
++  [UnderlineStyle.DOUBLE]: 'double',
++  [UnderlineStyle.CURLY]: 'wavy',
++  [UnderlineStyle.DOTTED]: 'dotted',
++  [UnderlineStyle.DASHED]: 'dashed'
++};
++
 +interface IPendingComposition {
 +  transactionId: number;
 +  finalizerTimer?: ReturnType<typeof setTimeout>;
@@ -243,7 +264,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
  /**
   * Encapsulates the logic for handling compositionstart, compositionupdate and compositionend
   * events, displaying the in-progress composition to the UI and forwarding the final composition
-@@ -24,6 +50,15 @@ export class CompositionHelper {
+@@ -24,6 +71,15 @@ export class CompositionHelper {
     */
    private _isComposing: boolean;
    public get isComposing(): boolean { return this._isComposing; }
@@ -259,7 +280,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +71,146 @@ export class CompositionHelper {
+@@ -36,52 +92,197 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -327,6 +348,42 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +  /** The rendered row tail, set only while the cursor sits mid-line. */
 +  private _compositionRemainder?: HTMLElement;
 +
++  private _compositionRemainderRuns: ITailRun[] = [];
++
++  /** One span per entry of `_compositionRemainderRuns`, reused across rebuilds. */
++  private _compositionRemainderSpans: HTMLElement[] = [];
++
++  private readonly _tailCell = new CellData();
++
++  private _tailWidthCache?: WidthCache;
++
++  /**
++   * The cursor cell and the tail cells the view was last built from, four words per cell, so a
++   * render that changed none of them, nor any style input, skips the rebuild.
++   */
++  private _tailKey = new Uint32Array(0);
++
++  private _tailKeyCombined: string[] = [];
++
++  private _tailKeyStart = -1;
++
++  private _tailKeyEnd = -1;
++
++  private _tailKeyCellWidth = 0;
++
++  private _tailKeyHasPreedit = false;
++
++  /** Cleared when the view is reset or a theme or option the view is drawn with changes. */
++  private _tailKeyValid = false;
++
++  private _viewBackground?: IColor;
++
++  private _viewForeground?: IColor;
++
++  private _caretColor?: IColor;
++
++  private readonly _styleListeners: IDisposable;
++
 +  /** The insertion caret painted above the renderer cursor the composition view covers. */
 +  private _compositionCaret?: HTMLElement;
 +
@@ -368,6 +425,21 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    this._compositionTransactionId = 0;
 +    this._compositionTimers = new Set();
 +    this._imeKeydownAwaitingCommit = false;
++    const restyle = (): void => {
++      this._tailKeyValid = false;
++      this.updateCompositionElements(true);
++    };
++    this._styleListeners = combinedDisposable(
++      this._optionsService.onMultipleOptionChange([
++        'drawBoldTextInBrightColors',
++        'fontFamily',
++        'fontSize',
++        'fontWeight',
++        'fontWeightBold',
++        'minimumContrastRatio'
++      ], restyle),
++      ...this._themeService ? [this._themeService.onChangeColors(restyle)] : []
++    );
    }
  
    /**
@@ -416,7 +488,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
    }
  
    /**
-@@ -89,22 +218,95 @@ export class CompositionHelper {
+@@ -89,22 +290,98 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -518,10 +590,13 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    this._resetCompositionView();
 +    this._preeditRenderer?.dispose();
 +    this._preeditRenderer = undefined;
++    this._tailWidthCache?.dispose();
++    this._tailWidthCache = undefined;
++    this._styleListeners.dispose();
    }
  
    /**
-@@ -113,10 +315,33 @@ export class CompositionHelper {
+@@ -113,10 +390,33 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -556,7 +631,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
          return false;
        }
        if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18) {
-@@ -128,6 +353,10 @@ export class CompositionHelper {
+@@ -128,6 +428,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -567,7 +642,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +367,95 @@ export class CompositionHelper {
+@@ -138,6 +442,95 @@ export class CompositionHelper {
      return true;
    }
  
@@ -663,7 +738,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +464,52 @@ export class CompositionHelper {
+@@ -146,23 +539,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -727,7 +802,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,35 +519,313 @@ export class CompositionHelper {
+@@ -172,35 +594,313 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -1068,7 +1143,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
    }
  
    /**
-@@ -222,6 +847,9 @@ export class CompositionHelper {
+@@ -222,6 +922,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -1078,7 +1153,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +864,106 @@ export class CompositionHelper {
+@@ -236,6 +939,347 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -1104,43 +1179,294 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    const caret = doc.createElement('span');
 +    caret.className = 'xterm-composition-caret';
 +    caret.setAttribute('aria-hidden', 'true');
-+    this._compositionView.replaceChildren(preedit, caret);
++    // The tail is kept: updateCompositionElements rebuilds it only when its cells changed.
++    this._compositionView.replaceChildren(preedit, caret, ...this._compositionRemainder ? [this._compositionRemainder] : []);
 +    this._compositionPreedit = preedit;
 +    this._compositionCaret = caret;
-+    this._compositionRemainder = undefined;
-+    this._renderCompositionRemainder(this._getRowRemainderText());
-+    this._styleCompositionCaret();
 +  }
 +
-+  private _renderCompositionRemainder(data: string): void {
-+    if (!data) {
-+      this._compositionRemainder?.remove();
-+      this._compositionRemainder = undefined;
++  /**
++   * Rebuilds the view's colours and the rendered tail when the cursor cell, the tail cells or a
++   * style input changed since the last build. Otherwise only the cells are read and compared.
++   */
++  private _syncCompositionCells(): void {
++    const buffer = this._bufferService.buffer;
++    const line = buffer.lines.get(buffer.ybase + buffer.y);
++    const start = Math.min(buffer.x, this._bufferService.cols - 1);
++    // Reading cells, not translateToString, keeps this off the line string cache, whose
++    // self-renewing idle-clear timer the composition path must not arm.
++    const end = line && buffer.isCursorInViewport ? line.getTrimmedLength() : 0;
++    const cellWidth = this._renderService.dimensions.css.cell.width;
++    if (!this._compositionCellsChanged(line, start, end, cellWidth)) {
 +      return;
 +    }
++    // The preedit stands on the cursor cell, so the view takes that cell's background — a TUI
++    // input box stays its own colour behind the composing text.
++    const background = this._cellBackground(line && this._loadCursorCell(line, start));
++    const colors = this._themeService?.colors;
++    // Themed rather than the stock #000/#FFF, so the pushed tail reads as ordinary terminal text
++    // and light themes keep contrast. The preedit takes the view's colour at the grid's minimum
++    // contrast, floored at 3 on a TUI's own box colour, which the theme foreground was not picked
++    // against.
++    const minimumContrast = this._optionsService.rawOptions.minimumContrastRatio;
++    const onThemeBackground = colors && background && background.rgba >>> 8 === colors.background.rgba >>> 8;
++    const contrast = onThemeBackground ? minimumContrast : Math.max(3, minimumContrast);
++    this._viewBackground = background;
++    this._viewForeground = colors && background &&
++      (color.ensureContrastRatio(background, colors.foreground, contrast) ?? colors.foreground);
++    this._caretColor = colors && background &&
++      (color.ensureContrastRatio(background, colors.cursor, 3) ?? colors.cursor);
++    if (this._compositionPreedit) {
++      this._renderCompositionRemainder(line && start < end ? this._getRowRemainder(line, start, end, cellWidth, background) : []);
++    }
++  }
++
++  /** Compares the cells and style inputs a build reads with the last build's, recording them. */
++  private _compositionCellsChanged(line: IBufferLine | undefined, start: number, end: number, cellWidth: number): boolean {
++    const hasPreedit = this._compositionPreedit !== undefined;
++    let changed = !this._tailKeyValid || start !== this._tailKeyStart || end !== this._tailKeyEnd ||
++      cellWidth !== this._tailKeyCellWidth || hasPreedit !== this._tailKeyHasPreedit;
++    // Without a line there is nothing to compare, so the next call rebuilds.
++    this._tailKeyValid = line !== undefined;
++    this._tailKeyStart = start;
++    this._tailKeyEnd = end;
++    if (cellWidth !== this._tailKeyCellWidth) {
++      // Cell width changes when the font loads or the zoom changes; either invalidates the widths.
++      this._tailWidthCache?.clear();
++      this._tailKeyCellWidth = cellWidth;
++    }
++    this._tailKeyHasPreedit = hasPreedit;
++    if (!line) {
++      return true;
++    }
++    const count = Math.max(end, start + 1) - start;
++    if (this._tailKey.length < count * 4) {
++      this._tailKey = new Uint32Array(count * 4);
++      changed = true;
++    }
++    const key = this._tailKey;
++    const cell = this._tailCell;
++    for (let i = 0; i < count; i++) {
++      const x = start + i;
++      if (i === 0) {
++        this._loadCursorCell(line, x);
++      } else {
++        line.loadCell(x, cell);
++      }
++      const ext = cell.extended.ext >>> 0;
++      const k = i * 4;
++      if (key[k] !== cell.content || key[k + 1] !== cell.fg || key[k + 2] !== cell.bg || key[k + 3] !== ext) {
++        key[k] = cell.content;
++        key[k + 1] = cell.fg;
++        key[k + 2] = cell.bg;
++        key[k + 3] = ext;
++        changed = true;
++      }
++      if (cell.combinedData && this._tailKeyCombined[i] !== cell.combinedData) {
++        this._tailKeyCombined[i] = cell.combinedData;
++        changed = true;
++      }
++    }
++    return changed;
++  }
++
++  private _renderCompositionRemainder(runs: ITailRun[]): void {
++    const previous = this._compositionRemainderRuns;
++    this._compositionRemainderRuns = runs;
++    if (!runs.length) {
++      this._compositionRemainder?.remove();
++      this._compositionRemainder = undefined;
++      this._compositionRemainderSpans = [];
++      return;
++    }
++    const doc = this._compositionView.ownerDocument;
 +    if (!this._compositionRemainder) {
-+      const remainder = this._compositionView.ownerDocument.createElement('span');
++      const remainder = doc.createElement('span');
 +      remainder.className = 'xterm-composition-remainder';
 +      // Preserve padding cells before the trailing glyphs.
 +      remainder.style.whiteSpace = 'pre';
++      remainder.style.fontKerning = 'none';
 +      this._compositionView.appendChild(remainder);
 +      this._compositionRemainder = remainder;
 +    }
-+    this._compositionRemainder.textContent = data;
++    const remainder = this._compositionRemainder;
++    // Default-colour cells keep the theme foreground, as the grid draws them, not the preedit's,
++    // at the weight the glyph widths were measured at.
++    remainder.style.color = this._themeService?.colors.foreground.css ?? '';
++    remainder.style.fontWeight = String(this._optionsService.rawOptions.fontWeight);
++    const spans = this._compositionRemainderSpans;
++    for (let i = 0; i < runs.length; i++) {
++      let span = spans[i];
++      if (!span) {
++        span = doc.createElement('span');
++        remainder.appendChild(span);
++        spans.push(span);
++      }
++      if (previous[i]?.style !== runs[i].style) {
++        span.style.cssText = runs[i].style;
++      }
++      if (previous[i]?.text !== runs[i].text) {
++        span.textContent = runs[i].text;
++      }
++    }
++    while (spans.length > runs.length) {
++      spans.pop()?.remove();
++    }
 +  }
 +
-+  /** The committed row text from the cursor rightwards — what a mid-line preedit would cover. */
-+  private _getRowRemainderText(): string {
-+    const buffer = this._bufferService.buffer;
-+    if (!buffer.isCursorInViewport) {
-+      return '';
++  /**
++   * The committed row from the cursor rightwards — what a mid-line preedit would cover — as runs
++   * styled like their cells, each glyph spaced to the cells it spans so the tail stays on the grid.
++   */
++  private _getRowRemainder(line: IBufferLine, start: number, end: number, cellWidth: number, background: IColor | undefined): ITailRun[] {
++    const options = this._optionsService.rawOptions;
++    const widths = this._tailWidthCache ??= new WidthCache();
++    widths.setFont(options.fontFamily, options.fontSize, options.fontWeight, options.fontWeightBold);
++    const cell = this._tailCell;
++    const runs: ITailRun[] = [];
++    let fg = -1;
++    let bg = -1;
++    let ext = -1;
++    let spacing = NaN;
++    let solid: boolean | undefined;
++    let style = '';
++    // The view takes the cursor cell's background, so only cells that differ paint their own.
++    const viewBackground = background?.css;
++    for (let x = start; x < end;) {
++      if (x === start) {
++        this._loadCursorCell(line, x);
++      } else {
++        line.loadCell(x, cell);
++      }
++      const columns = cell.getWidth() || 1;
++      x += columns;
++      let chars = cell.getChars() || WHITESPACE_CELL_CHAR;
++      if (chars === ' ' && (cell.isUnderline() || cell.isOverline())) {
++        chars = '\xa0';
++      }
++      const open = runs[runs.length - 1];
++      if (runs.length > MAX_TAIL_RUNS) {
++        // Past the cap the glyphs drift off the grid, but no column of the row goes missing.
++        open.text += chars;
++        continue;
++      }
++      const cellSpacing = cellWidth > 0
++        ? columns * cellWidth - widths.get(chars, cell.isBold(), cell.isItalic())
++        : 0;
++      const cellSolid = treatGlyphAsBackgroundColor(cell.getCode());
++      if (cell.fg !== fg || cell.bg !== bg || cell.extended.ext !== ext || cellSpacing !== spacing || cellSolid !== solid) {
++        fg = cell.fg;
++        bg = cell.bg;
++        ext = cell.extended.ext;
++        spacing = cellSpacing;
++        solid = cellSolid;
++        style = this._tailRunStyle(cell, cellSpacing, viewBackground);
++      }
++      if (open?.style === style) {
++        open.text += chars;
++      } else {
++        runs.push({ text: chars, style: runs.length < MAX_TAIL_RUNS ? style : '' });
++      }
 +    }
-+    const line = buffer.lines.get(buffer.ybase + buffer.y);
-+    // The explicit end column keeps this off the line string cache, whose self-renewing
-+    // idle-clear timer the composition path must not arm.
-+    return line
-+      ? line.translateToString(true, Math.min(buffer.x, this._bufferService.cols - 1), line.length)
-+      : '';
++    return runs;
++  }
++
++  /** Inline CSS that draws a tail cell the way the renderer draws it in the grid. */
++  private _tailRunStyle(cell: ICellData, spacing: number, viewBackground: string | undefined): string {
++    const declarations: string[] = [];
++    if (spacing) {
++      declarations.push(`letter-spacing:${spacing}px`);
++    }
++    const colors = this._themeService?.colors;
++    if (!colors) {
++      return declarations.join(';');
++    }
++    const brighten = !!cell.isBold() && this._optionsService.rawOptions.drawBoldTextInBrightColors;
++    let fg = cell.isInverse()
++      ? this._cellColor(cell.getBgColorMode(), cell.getBgColor(), brighten) ?? color.opaque(colors.background)
++      : this._cellColor(cell.getFgColorMode(), cell.getFgColor(), brighten);
++    const background = this._cellBackground(cell);
++    if (background && !treatGlyphAsBackgroundColor(cell.getCode())) {
++      // The grid's minimum contrast, which it halves for dim cells.
++      const ratio = this._optionsService.rawOptions.minimumContrastRatio / (cell.isDim() ? 2 : 1);
++      fg = color.ensureContrastRatio(background, fg ?? colors.foreground, ratio) ?? fg;
++    }
++    if (cell.isDim()) {
++      fg = color.multiplyOpacity(fg ?? colors.foreground, 0.5);
++    }
++    if (cell.isInvisible()) {
++      declarations.push('color:transparent');
++    } else if (fg) {
++      declarations.push(`color:${fg.css}`);
++    }
++    if (background?.css !== viewBackground) {
++      // Full height, as the DOM renderer draws cells, so the background fills the whole cell.
++      declarations.push('display:inline-block', 'height:100%', 'vertical-align:top', `background-color:${background?.css}`);
++    }
++    if (cell.isBold()) {
++      declarations.push(`font-weight:${this._optionsService.rawOptions.fontWeightBold}`);
++    }
++    if (cell.isItalic()) {
++      declarations.push('font-style:italic');
++    }
++    const lines: string[] = [];
++    if (cell.isUnderline()) {
++      lines.push('underline');
++    }
++    if (cell.isOverline()) {
++      lines.push('overline');
++    }
++    if (cell.isStrikethrough()) {
++      lines.push('line-through');
++    }
++    if (lines.length) {
++      declarations.push(`text-decoration:${lines.join(' ')} ${cell.isUnderline() && UNDERLINE_STYLES[cell.getUnderlineStyle()] || ''}`.trimEnd());
++    }
++    return declarations.join(';');
++  }
++
++  /**
++   * Loads the cursor cell into the tail cell. A lone inverse cell there is a TUI's painted caret,
++   * which the composition caret stands in for, so it loads plain: the preedit would otherwise stand
++   * on a block of its own colour. An inverse field (a reverse-video prompt) keeps its colours.
++   */
++  private _loadCursorCell(line: IBufferLine, x: number): ICellData {
++    const cell = line.loadCell(x, this._tailCell);
++    const next = x + (cell.getWidth() || 1);
++    const inverseNeighbor = (x > 0 && line.getFg(x - 1) & FgFlags.INVERSE) ||
++      (next < line.length && line.getFg(next) & FgFlags.INVERSE);
++    if (cell.isInverse() && !inverseNeighbor) {
++      cell.fg &= ~FgFlags.INVERSE;
++    }
++    return cell;
++  }
++
++  /**
++   * The cell's background as the grid paints it, with the theme background's alpha dropped: the
++   * view masks the cells it draws over, so a see-through background would re-expose them.
++   */
++  private _cellBackground(cell: ICellData | undefined): IColor | undefined {
++    const colors = this._themeService?.colors;
++    if (!colors) {
++      return undefined;
++    }
++    const background = cell?.isInverse()
++      ? this._cellColor(cell.getFgColorMode(), cell.getFgColor(), false) ?? colors.foreground
++      : cell && this._cellColor(cell.getBgColorMode(), cell.getBgColor(), false);
++    return background ?? color.opaque(colors.background);
++  }
++
++  /** A palette or RGB cell colour, or undefined when the cell uses the default. */
++  private _cellColor(mode: number, value: number, brighten: boolean): IColor | undefined {
++    switch (mode) {
++      case Attributes.CM_P16:
++      case Attributes.CM_P256:
++        return this._themeService?.colors.ansi[brighten && value < 8 ? value + 8 : value];
++      case Attributes.CM_RGB:
++        return channels.toColor((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF);
++      default:
++        return undefined;
++    }
 +  }
 +
 +  private _styleCompositionCaret(): void {
@@ -1150,11 +1476,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    }
 +    const width = Math.max(1, this._optionsService.rawOptions.cursorWidth);
 +    const cellHeight = this._renderService.dimensions.css.cell.height;
-+    const colors = this._themeService?.colors;
-+    const cursor = colors && (
-+      color.ensureContrastRatio(colors.background, colors.cursor, 3) ?? colors.cursor
-+    );
-+    caret.style.backgroundColor = cursor?.css ?? '#FFF';
++    caret.style.backgroundColor = this._caretColor?.css ?? '#FFF';
 +    caret.style.display = 'inline-block';
 +    caret.style.flexShrink = '0';
 +    caret.style.height = cellHeight + 'px';
@@ -1168,24 +1490,18 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    this._compositionView.textContent = '';
 +    this._compositionPreedit = undefined;
 +    this._compositionRemainder = undefined;
++    this._compositionRemainderRuns = [];
++    this._compositionRemainderSpans = [];
 +    this._compositionCaret = undefined;
++    this._tailKeyValid = false;
 +    this._compositionView.style.display = '';
 +    this._compositionView.style.justifyContent = '';
-+  }
-+
-+  /**
-+   * The theme background with any alpha dropped. The view masks the cells it draws over, so a
-+   * see-through background would re-expose the very characters the rendered tail stands in for.
-+   */
-+  private _opaqueViewBackground(): string {
-+    const background = this._themeService?.colors.background;
-+    return background ? color.opaque(background).css : '#000';
 +  }
 +
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +971,33 @@ export class CompositionHelper {
+@@ -243,10 +1287,27 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -1206,21 +1522,15 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    );
 +
 +    // A TUI can repaint the row under an open composition (spinners, streamed output), and this
-+    // already runs on every render — so keep the rendered tail current with the buffer. A string
-+    // compare adds no layout read.
-+    const rowRemainder = this._getRowRemainderText();
-+    if (
-+      this._compositionPreedit &&
-+      rowRemainder !== (this._compositionRemainder?.textContent ?? '')
-+    ) {
-+      this._renderCompositionRemainder(rowRemainder);
-+    }
++    // already runs on every render — so keep the rendered tail current with the buffer. Comparing
++    // cells adds no layout read.
++    this._syncCompositionCells();
 +    this._styleCompositionCaret();
 +
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -254,31 +1005,176 @@ export class CompositionHelper {
+@@ -254,31 +1315,178 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  
@@ -1259,10 +1569,12 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +      this._compositionView.style.direction = 'ltr';
 +      this._compositionView.style.display = showsRemainder ? '' : 'flex';
 +      this._compositionView.style.justifyContent = showsRemainder ? '' : 'flex-end';
-+      // Themed rather than the stock #000/#FFF, so the pushed tail reads as ordinary terminal text
-+      // and light themes keep contrast.
-+      this._compositionView.style.background = this._opaqueViewBackground();
-+      this._compositionView.style.color = this._themeService?.colors.foreground.css ?? '#FFF';
++      // Without a preedit the view shows another writer's text (Orca's iPad Hangul overlay), which
++      // sets its own colours.
++      if (this._compositionPreedit) {
++        this._compositionView.style.background = this._viewBackground?.css ?? '#000';
++        this._compositionView.style.color = this._viewForeground?.css ?? '#FFF';
++      }
 +      // Sized and placed to match the preedit, not the whole view, so the candidate window
 +      // anchors to the composing text rather than the end of the rendered tail. The clamp has to
 +      // be applied here and not only in Orca's terminal-ime-candidate-anchor.ts, because

@@ -45,6 +45,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
 
   'src/main/runtime/construction/orca-runtime.test.ts',
+  'src/main/runtime/terminal/stop/worktree-sleep-resume-recording.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',
@@ -117,6 +118,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
+  // Restarts a file-backed database; Bun's SQLite close keeps the file open until its statements are
+  // collected, so Windows cannot delete it afterwards.
+  'src/main/runtime/rpc/methods/orchestration/worker/release/worker-auto-release.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'tests/e2e/desktop/electron-fixtures/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'

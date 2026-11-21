@@ -100,35 +100,20 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
   })
 
-  it('leaves the remote alone while its branch still exists (preserve-on-delete kept alive)', async () => {
+  it('reclaims an owned remote only after its last branch is deleted', async () => {
     await git(['branch', 'contributor/fix', `${FORK_REMOTE}/contributor/fix`], repoPath)
     await git(['config', `branch.contributor/fix.remote`, FORK_REMOTE], repoPath)
+    const store = storeOf({ [worktreeId(join(scratchDir, 'wt-gone'))]: forkTarget() })
+    const reconcile = () =>
+      reconcileOrphanedPrRemotesWithExec(repoPath, REPO_ID, store, execGit, [])
 
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      repoPath,
-      REPO_ID,
-      storeOf({ [worktreeId(join(scratchDir, 'wt-gone'))]: forkTarget() }),
-      execGit,
-      []
-    )
-    expect(reclaimed).toEqual([])
+    await expect(reconcile()).resolves.toEqual([])
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
-  })
 
-  it('reclaims the remote once the branch that pinned it is deleted (path 2)', async () => {
-    await git(['branch', 'contributor/fix', `${FORK_REMOTE}/contributor/fix`], repoPath)
-    await git(['config', `branch.contributor/fix.remote`, FORK_REMOTE], repoPath)
-    // Delete the ref but retain stale config to verify actual branch existence gates retention.
-    await rm(join(repoPath, '.git', 'refs', 'heads', 'contributor', 'fix'))
+    // Deleting the ref directly keeps stale branch config in place.
+    await git(['update-ref', '-d', 'refs/heads/contributor/fix'], repoPath)
 
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      repoPath,
-      REPO_ID,
-      storeOf({ [worktreeId(join(scratchDir, 'wt-gone'))]: forkTarget() }),
-      execGit,
-      []
-    )
-    expect(reclaimed).toEqual([FORK_REMOTE])
+    await expect(reconcile()).resolves.toEqual([FORK_REMOTE])
     await expect(git(['remote'], repoPath)).resolves.not.toContain(FORK_REMOTE)
   })
 })

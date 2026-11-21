@@ -55,8 +55,8 @@ describe('sleeping instead of closing a terminal', () => {
       onConfirm: vi.fn()
     })
     render(<RunningTerminalCloseDialog />)
-    await act(async () => screen.getByRole('button', { name: 'Sleep workspace instead' }).click())
-    await act(async () => screen.getByRole('button', { name: 'Sleep workspace instead' }).click())
+    await act(async () => screen.getByRole('button', { name: 'Sleep workspace' }).click())
+    await act(async () => screen.getByRole('button', { name: 'Sleep workspace' }).click())
     expect(sleep).toHaveBeenCalledOnce()
     expect(sleep.mock.calls[0]?.[0].targets[0].worktreeId).toBe('wt-1')
     expect(

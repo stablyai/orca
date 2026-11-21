@@ -10,7 +10,7 @@ import {
   TUI_AGENT_DISPLAY_NAMES
 } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate } from '@/i18n/i18n'
-import { uniqueKeywords } from '../search/settings-search-keywords'
+import { translateSearchKeyword, uniqueKeywords } from '../search/settings-search-keywords'
 
 type StaticKeybindingActionId = Exclude<
   KeybindingActionId,
@@ -22,7 +22,7 @@ const STATIC_TITLE_COPY = {
   'worktree.quickOpen': () => translate('keybindings.title.1d1d2ec47b', 'Go to file'),
   'app.settings': () => translate('keybindings.title.e316152321', 'Open settings'),
   'app.forceReload': () => translate('keybindings.title.8a1982d598', 'Force reload'),
-  'worktree.palette': () => translate('keybindings.title.worktreePalette', 'Switch worktree'),
+  'worktree.palette': () => translate('keybindings.title.worktreePalette', 'Search everything'),
   'worktree.navigateUp': () =>
     translate('keybindings.title.worktreeNavigateUp', 'Previous worktree'),
   'worktree.navigateDown': () =>
@@ -152,6 +152,8 @@ const STATIC_TITLE_COPY = {
   'terminal.setTitle': () => translate('keybindings.title.128cce6e6d', 'Set title…'),
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
   'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
+  'botItem.previous': () => translate('keybindings.title.botItemPrevious', 'Previous item'),
+  'botItem.next': () => translate('keybindings.title.botItemNext', 'Next item'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>
@@ -199,6 +201,18 @@ const TITLE_COPY_BY_ID = new Map<string, () => string>([
 
 const GROUP_COPY_BY_NAME = new Map<string, () => string>(Object.entries(GROUP_COPY))
 
+// Renamed rows keep their former localized title searchable for users who learned it.
+const FORMER_TITLE_KEYWORDS_BY_ID = new Map<string, () => string[]>([
+  [
+    'worktree.palette',
+    () =>
+      translateSearchKeyword(
+        'keybindings.searchKeyword.worktreePaletteFormerTitle',
+        'Switch worktree'
+      )
+  ]
+])
+
 // Plugin and unknown actions keep their registry title.
 export function localizedKeybindingTitle(
   definition: Pick<KeybindingDefinition, 'id' | 'title'>
@@ -226,7 +240,8 @@ export function localizeKeybindingDefinition(
     searchKeywords: uniqueKeywords([
       ...definition.searchKeywords,
       definition.title,
-      definition.group
+      definition.group,
+      ...(FORMER_TITLE_KEYWORDS_BY_ID.get(definition.id)?.() ?? [])
     ])
   }
 }

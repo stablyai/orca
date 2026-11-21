@@ -32,7 +32,8 @@ export type BotItemGroupId = (typeof BOT_ITEM_GROUP_IDS)[number]
 export const BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT: ReadonlySet<BotItemGroupId> = new Set([
   'planned',
   'snoozed',
-  'stale'
+  'stale',
+  'closed'
 ])
 
 export type BotItemGroups = Record<BotItemGroupId, BotItem[]>
@@ -198,13 +199,20 @@ export function groupBotsItems(
 }
 
 /** Several bots' loaded Closed items as one list in time order, newest first. Each bot pages its own,
- *  so an item older than the oldest loaded item of a bot with more pages waits: that bot's next page
- *  may hold newer ones. `more`: the bot has Closed pages not read yet. */
+ *  so an item older than the loaded end of a bot with more pages waits: that bot's next page may hold
+ *  newer ones. `more`: the bot has Closed pages not read yet; `endAt`: its loaded end's last activity,
+ *  when known (else its oldest loaded item's). */
 export function botItemsClosedInTimeOrder(
-  bots: readonly { closed: readonly BotItem[]; more: boolean }[]
+  bots: readonly { closed: readonly BotItem[]; more: boolean; endAt?: number | null }[]
 ): BotItem[] {
-  const tails = bots.flatMap(({ closed, more }) =>
-    more && closed.length > 0 ? [Math.min(...closed.map((item) => item.lastActivityAt))] : []
+  const tails = bots.flatMap(({ closed, more, endAt }) =>
+    !more
+      ? []
+      : endAt != null
+        ? [endAt]
+        : closed.length > 0
+          ? [Math.min(...closed.map((item) => item.lastActivityAt))]
+          : []
   )
   const cutoff = tails.length > 0 ? Math.max(...tails) : -Infinity
   return bots

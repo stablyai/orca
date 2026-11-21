@@ -33,9 +33,10 @@ const OPTIONS: ts.CompilerOptions = {
 
 /** A program over the author typings plus in-memory plugin sources keyed by file name. */
 export function authorTypingsProgram(sources: Record<string, string> = {}): ts.Program {
-  const root = path.join(RESOURCES, '__plugin__')
+  // TypeScript hands the host forward-slash paths on every platform, Windows included.
+  const root = path.join(RESOURCES, '__plugin__').replaceAll(path.sep, '/')
   const virtual = new Map(
-    Object.entries(sources).map(([name, text]) => [path.join(root, name), text])
+    Object.entries(sources).map(([name, text]) => [path.posix.join(root, name), text])
   )
   const host = ts.createCompilerHost(OPTIONS)
   const readFile = host.readFile.bind(host)
@@ -44,8 +45,7 @@ export function authorTypingsProgram(sources: Record<string, string> = {}): ts.P
   host.fileExists = (file) => virtual.has(file) || ts.sys.fileExists(file)
   // Virtual folders exist too, so relative imports between the samples resolve.
   host.directoryExists = (dir) =>
-    [...virtual.keys()].some((file) => file.startsWith(dir + path.sep)) ||
-    ts.sys.directoryExists(dir)
+    [...virtual.keys()].some((file) => file.startsWith(`${dir}/`)) || ts.sys.directoryExists(dir)
   host.getSourceFile = (file, language, ...rest) => {
     const text = virtual.get(file)
     return text === undefined

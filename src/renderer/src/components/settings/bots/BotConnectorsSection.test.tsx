@@ -3,7 +3,7 @@
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
 import '@testing-library/jest-dom/vitest'
 import type { ReactElement } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -12,7 +12,10 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackStateResponse } from '../../../../../shared/connector-bot-slack-contract'
 import { useAppStore } from '@/store'
 import { ORCA_SIGNED_OUT, orcaSignIn } from '@/components/bots/orca-sign-in.test-fixture'
-import { forgetBotConnectorRowsOpen } from '@/components/bots/bot-connector-row-open'
+import { botConnectorRowKey, openBotConnectorPage } from '@/components/bots/bot-connector-page'
+import { refreshGoogle } from '@/components/bots/google/google-connect-client'
+import BotConnectorsPanel from '@/components/bots/BotConnectorsPanel'
+import { publishBots, readHostBots } from '@/lib/bot-catalog-snapshot'
 import { BotConnectorsSection } from './BotConnectorsSection'
 
 function bot(overrides: Partial<Bot> = {}): Bot {
@@ -85,12 +88,10 @@ const gitHubOn = {
 // The Slack state read, for counting reads; renderWith answers it.
 const slackState = vi.fn()
 
-function sectionFor(subject: Bot): ReactElement {
+function withProviders(content: ReactElement): ReactElement {
   return (
     <ConfirmationDialogContext.Provider value={confirm}>
-      <TooltipProvider>
-        <BotConnectorsSection bot={subject} />
-      </TooltipProvider>
+      <TooltipProvider>{content}</TooltipProvider>
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -99,10 +100,17 @@ function sectionFor(subject: Bot): ReactElement {
 function renderWith(
   subject: Bot,
   slack: ConnectorBotSlackStateResponse,
-  github: unknown = gitHubOff
+  github: unknown = gitHubOff,
+  googleStatus?: () => unknown
 ): (next: Bot) => void {
   Object.assign(window, {
     api: withBotConnectorRuntime({
+      runtime: {
+        call: ({ method }) =>
+          method === 'google.status' && googleStatus
+            ? { ok: true, result: googleStatus() }
+            : undefined
+      },
       botSlack: {
         state: slackState.mockResolvedValue({ ok: true, value: slack })
       },
@@ -110,14 +118,14 @@ function renderWith(
       botGitHub: { state: vi.fn().mockResolvedValue(github) }
     })
   })
-  const { rerender } = render(sectionFor(subject))
-  return (next) => rerender(sectionFor(next))
+  const { rerender } = render(withProviders(<BotConnectorsSection bot={subject} />))
+  return (next) => rerender(withProviders(<BotConnectorsSection bot={next} />))
 }
 
 afterEach(() => {
   cleanup()
   // Each test is a new session: no row remembers how an earlier one left it.
-  forgetBotConnectorRowsOpen()
+  openBotConnectorPage(null)
   slackState.mockReset()
   Reflect.deleteProperty(window, 'api')
 })
@@ -130,7 +138,7 @@ const sentence =
 
 describe('BotConnectorsSection', () => {
   it('gives a Slack workspace a row named for it, with no status while well, and its own Who can ask', async () => {
-    renderWith(bot(), {
+    renderWith(bot({ name: '<b>Scout</b> & co' }), {
       state: 'installed',
       teamId: 'T05',
       teamName: 'Globex',
@@ -145,6 +153,9 @@ describe('BotConnectorsSection', () => {
     expect(screen.getByText('Sam Lee')).toBeDefined()
     // Another service's people belong on that service's card.
     expect(screen.queryByText('Cy on Discord')).toBeNull()
+    const mention = screen.getByText('@<b>Scout</b> & co')
+    expect(mention.tagName).toBe('CODE')
+    expect(mention.querySelector('b')).toBeNull()
   })
 
   it('says once, signed out, what is off and offers Sign in, which reads the connectors again', async () => {
@@ -204,8 +215,6 @@ describe('BotConnectorsSection', () => {
       screen.getByText(sentence('Mention @Orca scout on an issue, or add the label bot:scout.'))
     ).toBeDefined()
     expect(screen.getByText('bot:scout').tagName).toBe('CODE')
-    fireEvent.click(screen.getByRole('button', { name: 'Linear · Acme' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Slack' }))
     // Each row lists only its own service's people.
     const cards = screen.getAllByText('Who can ask Scout')
     expect(cards).toHaveLength(2)
@@ -230,7 +239,7 @@ describe('BotConnectorsSection', () => {
     expect(await screen.findByText('web, api · signed in as @dana')).toBeDefined()
     expect(screen.getByRole('button', { name: 'GitHub · acme' })).toBeDefined()
     expect(
-      screen.getByText(sentence('Mention @orca-ide scout … on an issue or pull request.'))
+      screen.getByText(sentence('Mention @orca-bots scout … on an issue or pull request.'))
     ).toBeDefined()
     // Each row lists only its own service's people.
     expect(screen.getAllByText('octocat')).toHaveLength(1)
@@ -299,11 +308,9 @@ describe('BotConnectorsSection', () => {
         .map((button) => button.textContent)
         .filter((text) => /^(Slack|Linear|GitHub)/.test(text ?? ''))
     ).toEqual(['Slack · Globex', 'Slack', 'Linear · Acme', 'Linear · Beta', 'GitHub · acme'])
-    // Only the workspace waiting on its install shows a status.
-    expect(await screen.findByText('Waiting for the install in Slack.')).toBeDefined()
+    // The workspace waiting on its install and Beta, not linked yet, each say what they need.
+    expect(await screen.findAllByText('Finish setup')).toHaveLength(2)
     expect(screen.getAllByText(/link your Linear account in Beta/).length).toBeGreaterThan(0)
-    // Not linked in Beta yet, so it offers setup there.
-    expect(screen.getAllByRole('button', { name: 'Finish setup' }).length).toBeGreaterThan(1)
     expect(await screen.findByText('web, api · signed in as @dana')).toBeDefined()
     expect(screen.queryByText(/old-org/)).toBeNull()
   })
@@ -318,119 +325,129 @@ const installedSlack: ConnectorBotSlackStateResponse = {
   installerUserId: 'U07'
 }
 
-// A row's panel, which its header button names as the part it shows and hides.
-function panelOf(header: HTMLElement): HTMLElement {
-  return document.getElementById(header.getAttribute('aria-controls') ?? '')!
-}
+describe('BotConnectorsSection pages', () => {
+  it('opens the requested app when switching from a bot with different tools', async () => {
+    const first = bot({ id: 'first', folderWorkspaceId: 'first-home' })
+    const second = bot({ id: 'second', folderWorkspaceId: 'second-home' })
+    const previousBots = readHostBots('local')
+    const previousWorkspace = useAppStore.getState().activeWorktreeId
+    publishBots([first, second])
+    useAppStore.setState({ activeWorktreeId: 'folder:first-home' })
+    Object.assign(window, {
+      api: {
+        runtime: {
+          call: ({ method, params }: { method: string; params?: { botId: string } }) => {
+            if (method === 'bots.list') {
+              return { ok: true, result: { bots: [first, second] } }
+            }
+            if (method === 'bots.tools.list') {
+              const name = params?.botId === second.id ? 'docs' : 'reports'
+              return {
+                ok: true,
+                result: {
+                  own: [{ name, remote: true, detail: 'https://example.test/mcp' }],
+                  inherited: []
+                }
+              }
+            }
+            return { ok: false, error: { code: 'unavailable', message: method } }
+          }
+        }
+      }
+    })
+    try {
+      render(withProviders(<BotConnectorsPanel />))
+      await screen.findByRole('button', { name: 'Reports' })
+      act(() => {
+        openBotConnectorPage(botConnectorRowKey(second, 'app:docs'))
+        useAppStore.setState({ activeWorktreeId: 'folder:second-home' })
+      })
+      expect(await screen.findByRole('heading', { name: 'Docs' })).toBeVisible()
+    } finally {
+      cleanup()
+      publishBots(previousBots)
+      useAppStore.setState({ activeWorktreeId: previousWorkspace })
+    }
+  })
 
-describe('BotConnectorsSection folding', () => {
-  it('folds an open connector again from its header, by click or by keyboard', async () => {
+  it('focuses a deep-linked page and forgets it when its connector is removed', async () => {
+    const first = bot({ linear: { workspaceId: 'org-1', workspaceName: 'Acme' } })
+    openBotConnectorPage(botConnectorRowKey(first, 'linear:org-1'))
+    renderWith(first, installedSlack)
+    expect(await screen.findByRole('button', { name: 'Connectors' })).toHaveFocus()
+    cleanup()
+    const show = renderWith({ ...first, linear: null }, installedSlack)
+    expect(await screen.findByRole('button', { name: 'Slack · Globex' })).toBeVisible()
+    show(first)
+    expect(await screen.findByRole('button', { name: 'Linear · Acme' })).toBeVisible()
+  })
+
+  it('restores an open Google page when its host read recovers', async () => {
+    const googleStatus = vi.fn(() => ({ accounts: [], client: null, bots: [] }))
+    renderWith(bot({ google: true }), installedSlack, gitHubOff, googleStatus)
+    fireEvent.click(await screen.findByRole('button', { name: 'Google' }))
+    expect(screen.getByRole('heading', { name: 'Google' })).toBeVisible()
+    googleStatus.mockImplementationOnce(() => {
+      throw new Error('offline')
+    })
+    await act(() => refreshGoogle({ kind: 'local' }))
+    expect(screen.queryByRole('heading', { name: 'Google' })).toBeNull()
+    await act(() => refreshGoogle({ kind: 'local' }))
+    expect(screen.getByRole('heading', { name: 'Google' })).toBeVisible()
+  })
+
+  it('keeps the list open when a pending Slack installation finishes loading', async () => {
+    renderWith(bot(), { state: 'created', appId: 'A1', teamId: 'T05' })
+    await screen.findByText('Finish setup')
+    expect(screen.getByRole('button', { name: 'Slack' })).toBeVisible()
+  })
+
+  it('opens a connector as its own page, and Back or Esc returns to the list on its row', async () => {
     const user = userEvent.setup()
     renderWith(bot({ github: {} }), installedSlack, gitHubOn)
     await screen.findByText('installed by U07')
     const slack = screen.getByRole('button', { name: 'Slack · Globex' })
-    const github = screen.getByRole('button', { name: 'GitHub · acme' })
-    // Every connector row has a fold control saying whether it is open.
-    expect(slack).toHaveAttribute('aria-expanded', 'false')
-    expect(github).toHaveAttribute('aria-expanded', 'false')
-    expect(panelOf(slack)).not.toBeVisible()
-
-    await user.click(slack)
-    expect(slack).toHaveAttribute('aria-expanded', 'true')
-    expect(panelOf(slack)).toBeVisible()
-    expect(within(panelOf(slack)).getByText('Who can ask')).toBeVisible()
-
-    // The way back: the same header folds it.
-    await user.click(slack)
-    expect(slack).toHaveAttribute('aria-expanded', 'false')
-    expect(panelOf(slack)).not.toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Slack · Globex' })).toBeNull()
 
     slack.focus()
     await user.keyboard('{Enter}')
-    expect(slack).toHaveAttribute('aria-expanded', 'true')
-    await user.keyboard(' ')
-    expect(slack).toHaveAttribute('aria-expanded', 'false')
-    // One row folding leaves the other alone.
-    expect(github).toHaveAttribute('aria-expanded', 'false')
-  })
-
-  it('opens the ⋯ menu without folding the row', async () => {
-    const user = userEvent.setup()
-    renderWith(bot(), installedSlack)
-    await screen.findByText('installed by U07')
-    const slack = screen.getByRole('button', { name: 'Slack · Globex' })
-    await user.click(slack)
+    // The page replaces the list: its heading and body, no other connector.
+    expect(screen.getByRole('heading', { name: 'Slack · Globex' })).toBeVisible()
+    expect(screen.getByText('Who can ask')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'GitHub · acme' })).toBeNull()
+    // Its ⋯ menu opens without leaving the page.
     await user.click(screen.getByRole('button', { name: 'Slack · Globex actions' }))
     expect(await screen.findByRole('menuitem', { name: /Remove|Disconnect/ })).toBeDefined()
-    expect(slack).toHaveAttribute('aria-expanded', 'true')
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('heading', { name: 'Slack · Globex' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Connectors' }))
+    expect(screen.queryByRole('heading', { name: 'Slack · Globex' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Slack · Globex' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'GitHub · acme' }))
+    expect(screen.getByRole('heading', { name: 'GitHub · acme' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('heading', { name: 'GitHub · acme' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'GitHub · acme' })).toHaveFocus()
   })
 
-  it('keeps each row as the owner left it when the list shows again this session', async () => {
+  it('keeps the page open when the list shows again, and starts another bot on its list', async () => {
     const user = userEvent.setup()
-    const notLinked = {
-      ok: true,
-      value: { ...gitHubOn.value, account: null, installations: [] }
-    }
-    renderWith(bot({ github: {} }), installedSlack, notLinked)
-    await screen.findByText('installed by U07')
-    // GitHub opens itself because it needs the owner; the owner closes it and opens Slack.
-    await screen.findByRole('button', { name: 'Finish setup' })
-    expect(screen.getByRole('button', { name: 'GitHub' })).toHaveAttribute('aria-expanded', 'true')
-    await user.click(screen.getByRole('button', { name: 'GitHub' }))
-    await user.click(screen.getByRole('button', { name: 'Slack · Globex' }))
+    const first = bot({ id: 'bot-1' })
+    renderWith(first, installedSlack)
+    await user.click(await screen.findByRole('button', { name: 'Slack · Globex' }))
     cleanup()
 
     // Leaving the tab and coming back.
-    renderWith(bot({ github: {} }), installedSlack, notLinked)
-    await screen.findByText('installed by U07')
-    await screen.findByRole('button', { name: 'Finish setup' })
-    expect(screen.getByRole('button', { name: 'Slack · Globex' })).toHaveAttribute(
-      'aria-expanded',
-      'true'
-    )
-    expect(screen.getByRole('button', { name: 'GitHub' })).toHaveAttribute('aria-expanded', 'false')
-    cleanup()
+    const show = renderWith(first, installedSlack)
+    expect(await screen.findByRole('heading', { name: 'Slack · Globex' })).toBeVisible()
 
-    // Another bot's Slack row is its own.
-    renderWith(bot({ id: 'bot-2' }), installedSlack)
-    await screen.findByText('installed by U07')
-    expect(screen.getByRole('button', { name: 'Slack · Globex' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    )
-  })
-
-  it('keeps each bot its own rows when the shown bot changes in place', async () => {
-    const user = userEvent.setup()
-    const notLinked = {
-      ok: true,
-      value: { ...gitHubOn.value, account: null, installations: [] }
-    }
-    const first = bot({ id: 'bot-1', github: {} })
-    const second = bot({ id: 'bot-2', name: 'Pilot', github: {} })
-    const show = renderWith(first, installedSlack, notLinked)
-    await screen.findByText('installed by U07')
-    await screen.findByRole('button', { name: 'Finish setup' })
-    const expanded = (name: string): string | null =>
-      screen.getByRole('button', { name }).getAttribute('aria-expanded')
-    expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['false', 'true'])
-    // Open Slack and close GitHub for the first bot.
-    await user.click(screen.getByRole('button', { name: 'Slack · Globex' }))
-    await user.click(screen.getByRole('button', { name: 'GitHub' }))
-    expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['true', 'false'])
-
-    // Straight to the second bot, the section never unmounting: its own rows, and GitHub
-    // opens itself because the owner never closed it there.
-    show(second)
-    await screen.findAllByText('Who can ask Pilot')
-    expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['false', 'true'])
-
-    // Back and forth: each bot's rows are as the owner left them, neither written over.
+    // Another bot, the section never unmounting, then back: each starts on its list.
+    show(bot({ id: 'bot-2', name: 'Pilot' }))
+    expect(await screen.findByRole('button', { name: 'Slack · Globex' })).toBeVisible()
     show(first)
-    await screen.findAllByText('Who can ask Scout')
-    expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['true', 'false'])
-    show(second)
-    await screen.findAllByText('Who can ask Pilot')
-    expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['false', 'true'])
+    expect(await screen.findByRole('button', { name: 'Slack · Globex' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Slack · Globex' })).toBeNull()
   })
 })

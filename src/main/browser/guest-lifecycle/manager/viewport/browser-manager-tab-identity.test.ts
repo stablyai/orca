@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   guestSetWindowOpenHandlerMock: vi.fn(),
   guestOpenDevToolsMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
+  webFrameFromIdMock: vi.fn(),
   screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 })),
   openPopupWithOriginBarMock: vi.fn(),
   processUserAgentMode: 'clean',
@@ -24,7 +25,8 @@ vi.mock('electron', () => ({
   shell: { openExternal: mocks.shellOpenExternalMock },
   Menu: { buildFromTemplate: mocks.menuBuildFromTemplateMock },
   screen: { getCursorScreenPoint: mocks.screenGetCursorScreenPointMock },
-  webContents: { fromId: mocks.webContentsFromIdMock }
+  webContents: { fromId: mocks.webContentsFromIdMock },
+  webFrameMain: { fromId: mocks.webFrameFromIdMock }
 }))
 vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: mocks.openPopupWithOriginBarMock
@@ -42,6 +44,8 @@ vi.mock('../../../identity/browser-process-user-agent', async (importOriginal) =
 }))
 
 import { browserManager } from '../browser-manager'
+import { hasBrowserSessionUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
+import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../../../../../shared/browser/identity/browser-subframe-unload'
 import { googleAuthUserAgent } from '../../../identity/browser-site-user-agent'
 import { resetBrowserManagerMocks, resetBrowserManagerState } from '../browser-manager-test-harness'
 import {
@@ -286,5 +290,80 @@ describe('tab identity ownership', () => {
     expect(observed.presented).toBe(GUEST_CLEAN_UA)
     expect(observed.standingOverride).toBeNull()
     expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+  })
+  it('turns the header policy off once a site iframe fails or is removed', async () => {
+    vi.useFakeTimers()
+    mocks.processUserAgentMode = 'native'
+    mocks.processUserAgent =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
+    const { handle } = openTab(ORDINARY_URL)
+    const teamsUrl = 'https://teams.microsoft.com/v2/'
+    type FakeFrame = {
+      frameTreeNodeId: number
+      url: string
+      origin: string
+      detached: boolean
+      isDestroyed: () => boolean
+    }
+    const frame = (frameTreeNodeId: number, url: string, origin: string): FakeFrame => ({
+      frameTreeNodeId,
+      url,
+      origin,
+      detached: false,
+      isDestroyed: () => false
+    })
+    const mainFrame: FakeFrame & { framesInSubtree: FakeFrame[] } = {
+      ...frame(1, ORDINARY_URL, 'https://example.com'),
+      framesInSubtree: []
+    }
+    const blocked = frame(2, teamsUrl, 'https://teams.microsoft.com')
+    const loading = frame(3, '', 'https://example.com')
+    const unrelated = frame(4, 'https://ads.example/', 'https://ads.example')
+    mainFrame.framesInSubtree = [mainFrame, blocked, loading, unrelated]
+    Object.assign(handle.guest, { mainFrame })
+    // Process and routing ids map to frames the way Electron's frame registry does.
+    mocks.webFrameFromIdMock.mockImplementation((_processId: number, routingId: number) =>
+      mainFrame.framesInSubtree.find((candidate) => candidate.frameTreeNodeId === routingId)
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: demand keys on session identity only.
+    const session = handle.guest.session as Electron.Session
+    const fire = (event: string, ...args: unknown[]): void => {
+      for (const [name, listener] of mocks.guestOnMock.mock.calls) {
+        if (name === event) {
+          listener(...args)
+        }
+      }
+    }
+    const unloaded = (sender: FakeFrame): void => {
+      fire(
+        'ipc-message',
+        { sender: handle.guest, senderFrame: sender },
+        BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL
+      )
+      vi.advanceTimersByTime(1_000)
+    }
+    try {
+      fire('did-start-navigation', { frame: blocked }, teamsUrl, false, false)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      // Blocked by the site's frame-ancestors: an error page that keeps the Teams URL.
+      blocked.origin = 'null'
+      fire('did-fail-provisional-load', {}, -27, 'ERR_BLOCKED_BY_RESPONSE', teamsUrl, false, 9, 2)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
+      // A new Teams iframe hasn't committed yet when an unrelated frame goes away.
+      fire('did-start-navigation', { frame: loading }, teamsUrl, false, false)
+      mainFrame.framesInSubtree = [mainFrame, blocked, loading]
+      unloaded(unrelated)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      Object.assign(loading, { url: teamsUrl, origin: 'https://teams.microsoft.com' })
+      fire('did-frame-navigate', {}, teamsUrl, 200, 'OK', false, 9, 3)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      // The page removes it after loading.
+      mainFrame.framesInSubtree = [mainFrame, blocked]
+      loading.detached = true
+      unloaded(loading)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

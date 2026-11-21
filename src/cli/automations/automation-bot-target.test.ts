@@ -161,9 +161,9 @@ describe('orca automations create --bot', () => {
     [
       [
         ['bot', 'Reviewer'],
-        ['agent', 'opencode2']
+        ['agent', 'aider']
       ],
-      "Bots can't run on opencode2 yet; use one of: claude, codex, grok, opencode, omp, pi, antigravity."
+      "Bots can't run on aider"
     ],
     [
       [
@@ -305,12 +305,6 @@ describe('orca automations edit --runs-in / --results-to', () => {
       ownClaude,
       [['agent', 'codex']],
       { agent: 'codex' }
-    ],
-    [
-      "pins the bot's current agent and launch when it had none",
-      botAutomation,
-      [['effort', 'high']],
-      { agent: 'codex', launch: { model: 'm1', options: { effort: 'high' } } }
     ]
   ] satisfies [string, object, [string, string][], object][])(
     '%s',
@@ -325,7 +319,7 @@ describe('orca automations edit --runs-in / --results-to', () => {
     }
   )
 
-  it("says a model edit pinned the bot's current agent", async () => {
+  it("pins the bot's current agent and launch and reports the switch", async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     const pinned = {
@@ -336,9 +330,12 @@ describe('orca automations edit --runs-in / --results-to', () => {
       nextRunAt: 1,
       precheck: null,
       workspaceMode: 'existing',
-      bot: { ...botAutomation.bot, agentSetup: { agent: 'codex' } }
+      bot: {
+        ...botAutomation.bot,
+        agentSetup: { agent: 'codex', launch: { model: 'm1', options: { effort: 'high' } } }
+      }
     }
-    const { client } = editHost(botAutomation, pinned)
+    const { client, updates } = editHost(botAutomation, pinned)
 
     await AUTOMATION_HANDLERS['automations edit']!({
       client,
@@ -350,6 +347,9 @@ describe('orca automations edit --runs-in / --results-to', () => {
       json: false
     })
 
+    expect(updates[0]).toMatchObject({
+      bot: { botId: 'bot-1', runsIn: 'new', agentSetup: pinned.bot.agentSetup }
+    })
     expect(out.mock.calls.map(([line]) => String(line)).join('')).toContain(
       "Pinned to Reviewer's current agent (codex)"
     )

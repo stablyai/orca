@@ -81,9 +81,10 @@ async function expectColumnsInSync(page: Page, ptyId: string, label: string): Pr
     .poll(
       async () => {
         const snap = await readColumnSnapshot(page, ptyId)
-        return snap.ptyCols === snap.xtermCols
+        const reportedCols = await readReportedPtyCols(page, ptyId)
+        return snap.ptyCols === snap.xtermCols && reportedCols === snap.ptyCols
           ? 'synced'
-          : `pty=${snap.ptyCols} xterm=${snap.xtermCols}`
+          : `pty=${snap.ptyCols} xterm=${snap.xtermCols} reported=${reportedCols}`
       },
       { timeout: 30_000, message: `${label}: PTY cols should converge to xterm cols` }
     )
@@ -121,42 +122,18 @@ test.describe('Terminal column desync repro', () => {
     await ensureTerminalVisible(orcaPage)
     const ptyId = await settleTerminal(orcaPage)
 
+    await orcaPage.setViewportSize({ width: 1280, height: 800 })
     await expectColumnsInSync(orcaPage, ptyId, 'baseline')
+    const wideCols = await readRenderedTerminalCols(orcaPage)
 
     await orcaPage.setViewportSize({ width: 760, height: 800 })
+    await expect.poll(() => readRenderedTerminalCols(orcaPage)).toBeLessThan(wideCols)
     await expectColumnsInSync(orcaPage, ptyId, 'after shrink')
+    const narrowCols = await readRenderedTerminalCols(orcaPage)
 
     await orcaPage.setViewportSize({ width: 1280, height: 800 })
+    await expect.poll(() => readRenderedTerminalCols(orcaPage)).toBeGreaterThan(narrowCols)
     await expectColumnsInSync(orcaPage, ptyId, 'after widen')
-  })
-
-  // Compare getSize to in-PTY columns: intent-only reporting hides dropped resizes from resume/handoff drift correction.
-  test('pty:getSize reports the size the PTY actually applied', async ({ orcaPage }) => {
-    test.setTimeout(120_000)
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await closeRightSidebarAndFeatureTips(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    const ptyId = await settleTerminal(orcaPage)
-
-    await orcaPage.setViewportSize({ width: 900, height: 800 })
-
-    // Poll applied size through loaded CI’s async resize chain.
-    await expect
-      .poll(
-        async () => {
-          const ptyCols = await readPtyCols(orcaPage, ptyId)
-          const reportedCols = await readReportedPtyCols(orcaPage, ptyId)
-          return reportedCols === ptyCols ? 'match' : `reported=${reportedCols} pty=${ptyCols}`
-        },
-        {
-          timeout: 30_000,
-          message:
-            'pty:getSize must converge to the applied PTY columns (process.stdout.columns) ' +
-            'so the drift-check can detect a dropped resize'
-        }
-      )
-      .toBe('match')
   })
 
   test('PTY columns re-sync after repeated background resizes', async ({ orcaPage }) => {

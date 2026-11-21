@@ -111,35 +111,30 @@ describe('a failed Codex turn in the journal', () => {
     ).toBe(1)
   })
 
-  it.each([
-    ['still queued', false],
-    ['already written', true]
-  ] as const)(
-    'keeps the first completion when a second one arrives while the first is %s',
-    async (_label, drainFirst) => {
-      const { on, drained, items } = await session()
-      on('turn/started', { turn: { id: TURN } }, 1_000)
-      await drained()
+  it('keeps the first completion through duplicates before and after its write', async () => {
+    const { on, drained, items } = await session()
+    on('turn/started', { turn: { id: TURN } }, 1_000)
+    await drained()
 
-      // Queue a reply so the completion must wait behind its write.
-      on(
-        'item/completed',
-        { turnId: TURN, item: { type: 'agentMessage', id: 'agent-1', text: 'Done' } },
-        1_900
-      )
-      on('turn/completed', { turn: { id: TURN, status: 'completed', durationMs: 900 } }, 2_000)
-      if (drainFirst) {
-        await drained()
-      }
-      on('turn/completed', { turn: { id: TURN, status: 'failed' } }, 3_000)
+    // Queue a reply so the completion must wait behind its write.
+    on(
+      'item/completed',
+      { turnId: TURN, item: { type: 'agentMessage', id: 'agent-1', text: 'Done' } },
+      1_900
+    )
+    on('turn/completed', { turn: { id: TURN, status: 'completed', durationMs: 900 } }, 2_000)
+    on('turn/completed', { turn: { id: TURN, status: 'failed' } }, 3_000)
 
-      expect(turnRecord(await items())).toMatchObject({
-        state: 'completed',
-        outcome: 'success',
-        startedAt: 1_000,
-        completedAt: 2_000,
-        durationMs: 900
-      })
+    const success = {
+      state: 'completed',
+      outcome: 'success',
+      startedAt: 1_000,
+      completedAt: 2_000,
+      durationMs: 900
     }
-  )
+    expect(turnRecord(await items())).toMatchObject(success)
+
+    on('turn/completed', { turn: { id: TURN, status: 'failed' } }, 4_000)
+    expect(turnRecord(await items())).toMatchObject(success)
+  })
 })

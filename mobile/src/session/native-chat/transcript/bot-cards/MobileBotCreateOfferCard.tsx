@@ -1,6 +1,6 @@
 // The card a bot shows with `orca bot create --offer`: a new bot it proposes. Nothing is made until
 // the owner presses Create bot (or creates from Edit); the card then reads Created, from the bots there are.
-import { useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react-native'
 import { isBotMascotId } from '../../../../../../src/shared/bot-avatar'
@@ -11,14 +11,13 @@ import {
   botCreateOfferView,
   botProposalDetails
 } from '../../../../../../src/shared/bots/bot-create-offer-view'
-import { answerBotOffer } from '../../../../../../src/shared/bots/bot-offer-answers'
 import {
   botCreateOfferState,
   proposalCreateParams,
   type BotCreateOffer
 } from '../../../../../../src/shared/bots/bot-proposal'
 import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../../../src/shared/bot-runtime-capabilities'
-import { botCreate, botUpdate } from '../../../../bots/bot-sheet-operations'
+import { botCreate } from '../../../../bots/bot-sheet-operations'
 import { publishHostBot, useHostBotById, useHostBotsEntry } from '../../../../bots/host-bot-store'
 import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
 import { workspaceLineageRead, type PhoneBot } from '../../../../bots/host-bots-operations'
@@ -33,7 +32,8 @@ import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { mobileBotCreateOfferSay } from './mobile-bot-card-copy'
-import { MobileBotCardSendContext, useMobileBotCardHost } from './mobile-bot-card-host'
+import { useMobileBotCardHost } from './mobile-bot-card-host'
+import { useMobileBotOfferAnswer } from './use-mobile-bot-offer-answer'
 import {
   BOT_CARD_AVATAR_SIZE,
   MobileBotCardActions,
@@ -94,13 +94,13 @@ export function MobileBotCreateOfferCard({
   const say = mobileBotCreateOfferSay(t)
   const host = useMobileBotCardHost()
   const client = host?.client ?? null
-  const send = useContext(MobileBotCardSendContext)
   const proposer = useHostBotById(offer.botId)
   const bots = useHostBotsEntry(host?.hostKey ?? null)?.bots ?? NO_BOTS
   const takesTemplates = useRouteCapability(BOTS_TEMPLATES_RUNTIME_CAPABILITY)
   const [open, setOpen] = useMobileNativeChatDisclosure(`bot-create-card:${cardId}`, false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const answer = useMobileBotOfferAnswer(offer.botId, cardId)
   const state = proposer ? botCreateOfferState(offer, proposer, bots) : null
   const created = state?.kind === 'created' ? bots.find((bot) => bot.id === state.botId) : undefined
   const taken = useTakenOver(client, created?.folderWorkspaceId, offer.proposal.worktrees)
@@ -111,9 +111,6 @@ export function MobileBotCreateOfferCard({
   }
   const { proposal } = offer
   const view = botCreateOfferView(offer, state, created, taken, say)
-  const dismissed = proposer.offerAnswers?.some(
-    (entry) => entry.cardId === cardId && entry.dismissed === true
-  )
   const fromOffer = { botId: proposer.id, offerId: offer.offerId }
   // The new bot runs on its proposer's agent. One this build doesn't know isn't made directly; Edit picks one.
   const agent = isBotAgent(proposer.agent) ? proposer.agent : null
@@ -125,36 +122,8 @@ export function MobileBotCreateOfferCard({
       origin: botCreateOfferOrigin(proposal, proposer.name, say),
       templatePackages: takesTemplates
     })
-  const dismissLabel = t('chat.botCards.offer.dismiss', 'Dismiss')
   const fail = (caught: unknown) =>
     setError(caught instanceof Error ? caught.message : String(caught))
-
-  const dismiss = () => {
-    if (!client) {
-      return
-    }
-    setError(null)
-    // Claimed on the host first, so a second device or press sends nothing.
-    void answerBotOffer(
-      { cardId, dismissed: true },
-      {
-        update: async (offerAnswer) =>
-          publishHostBot(
-            host.hostKey,
-            botUpdate.interpret(
-              await botUpdate.request(client, { botId: proposer.id, updates: { offerAnswer } })
-            ).bot
-          ),
-        send: async () => (await send?.(dismissLabel)) === true
-      }
-    )
-      .then((outcome) => {
-        if (outcome === 'refused') {
-          setError(t('chat.botCards.offer.notSent', "Couldn't send that to the bot. Try again."))
-        }
-      })
-      .catch(fail)
-  }
 
   const create = () => {
     if (!client || !agent) {
@@ -162,6 +131,7 @@ export function MobileBotCreateOfferCard({
     }
     setBusy(true)
     setError(null)
+    answer.clearError()
     // The host makes one bot per card, however many devices press.
     void botCreate
       .request(
@@ -192,6 +162,7 @@ export function MobileBotCreateOfferCard({
   return (
     <MobileBotCardFrame
       avatar={avatar}
+      heading={t('chat.botCards.offer.heading', 'New bot')}
       title={view.title}
       trailing={null}
       meta={
@@ -235,12 +206,22 @@ export function MobileBotCreateOfferCard({
           )}
         </MobileBotCardMeta>
       ) : null}
-      {error ? (
-        <Text style={[styles.error, scaledType(typography.metaSize, fontScale)]}>{error}</Text>
+      {(error ?? answer.error) ? (
+        <Text style={[styles.error, scaledType(typography.metaSize, fontScale)]}>
+          {error ?? answer.error}
+        </Text>
       ) : null}
       {view.open ? (
         <MobileBotCardActions>
-          {dismissed ? null : <MobileNativeChatNoticePill label={dismissLabel} onPress={dismiss} />}
+          {answer.dismissed ? null : (
+            <MobileNativeChatNoticePill
+              label={t('chat.botCards.offer.notNow', 'Not now')}
+              onPress={() => {
+                setError(null)
+                answer.dismiss()
+              }}
+            />
+          )}
           {view.open.actions === 'rename' ? (
             <MobileNativeChatNoticePill label={say('rename')} onPress={edit} />
           ) : (

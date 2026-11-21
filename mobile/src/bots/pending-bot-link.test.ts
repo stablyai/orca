@@ -1,6 +1,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   clearBotLink,
+  continueBotLink,
   publishBotLink,
   readPendingBotLink,
   subscribeToPendingBotLink
@@ -35,5 +36,19 @@ describe('pending bot link', () => {
     unsubscribe()
     publishBotLink({ kind: 'bot', botId: 'atlas' })
     expect(notify).toHaveBeenCalledTimes(3)
+  })
+
+  it('carries on only the current link, under its id', () => {
+    publishBotLink({ kind: 'bot', botId: 'atlas' })
+    const first = readPendingBotLink()!
+    publishBotLink({ kind: 'bot', botId: 'scout' })
+    const second = readPendingBotLink()!
+    onTestFinished(() => clearBotLink(second.id))
+
+    continueBotLink(first.id, { kind: 'bot', botId: 'other' })
+    expect(readPendingBotLink()).toBe(second)
+
+    continueBotLink(second.id, { kind: 'bot', botId: 'other' })
+    expect(readPendingBotLink()).toEqual({ id: second.id, target: { kind: 'bot', botId: 'other' } })
   })
 })

@@ -135,21 +135,9 @@ export class BotItemsTables {
     actor: BotItemActor,
     reopenTo?: BotItemStatus
   ): void {
-    if (actor.kind === 'bot' && actor.botId !== item.ownerBotId) {
-      throw new BotItemError(
-        'not_owner',
-        `Item ${item.number} belongs to another bot. Read it, or ask its bot.`
-      )
-    }
+    assertBotItemOwnerWrite(item, actor, reopenTo)
     if (isOpenBotItemStatus(item.status)) {
       return
-    }
-    const closed = item.status === 'done' ? 'done' : 'canceled'
-    if (reopenTo !== 'planned' && reopenTo !== 'working') {
-      throw new BotItemError(
-        'item_closed',
-        `Item ${item.number} is ${closed}; reopen it with \`--status planned\` or \`--status in-progress\`, or comment on it.`
-      )
     }
     if (actor.kind === 'bot' && item.status === 'canceled' && this.canceledByOwner(item.uid)) {
       throw new BotItemError(
@@ -234,5 +222,29 @@ export class BotItemsTables {
         )
         .run(uid, link.kind, link.ref, eventId)
     }
+  }
+}
+
+/** The owner-write rules readable from the item alone: its bot's, and open unless this reopens it. */
+export function assertBotItemOwnerWrite(
+  item: BotItemRecord,
+  actor: BotItemActor,
+  reopenTo?: BotItemStatus
+): void {
+  if (actor.kind === 'bot' && actor.botId !== item.ownerBotId) {
+    throw new BotItemError(
+      'not_owner',
+      `Item ${item.number} belongs to another bot. Read it, or ask its bot.`
+    )
+  }
+  if (isOpenBotItemStatus(item.status)) {
+    return
+  }
+  const closed = item.status === 'done' ? 'done' : 'canceled'
+  if (reopenTo !== 'planned' && reopenTo !== 'working') {
+    throw new BotItemError(
+      'item_closed',
+      `Item ${item.number} is ${closed}; reopen it with \`--status planned\` or \`--status in-progress\`, or comment on it.`
+    )
   }
 }

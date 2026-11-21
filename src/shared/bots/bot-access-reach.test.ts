@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  botAccessConfirm,
   botAccessAdvice,
   botAccessReach,
   googleReachAreas,
@@ -83,6 +84,48 @@ describe('botAccessAdvice', () => {
       botAccessAdvice({ others: 1, permission: { mode: null, fellBackFrom: null }, google: true })
         .fixes
     ).toContain('ask-for-approval')
+  })
+})
+
+describe('botAccessConfirm', () => {
+  const at = (mode: 'ask' | 'auto' | 'full-access' | null) => ({ mode, fellBackFrom: null })
+
+  it('is amber for Ask or Auto without Google: computer, who approves, the connector', () => {
+    for (const mode of ['ask', 'auto'] as const) {
+      expect(botAccessConfirm({ permission: at(mode), connector: 'slack', google: false })).toEqual(
+        {
+          tone: 'medium',
+          rows: [
+            { kind: 'computer' },
+            { kind: 'approves' },
+            { kind: 'connector', connector: 'slack' }
+          ]
+        }
+      )
+    }
+  })
+
+  it('is red for Full access, with no approvals, and one Google row for any area', () => {
+    expect(
+      botAccessConfirm({ permission: at('full-access'), connector: 'github', google: true })
+    ).toEqual({
+      tone: 'high',
+      rows: [
+        { kind: 'computer' },
+        { kind: 'no-approvals' },
+        { kind: 'google' },
+        { kind: 'connector', connector: 'github' }
+      ]
+    })
+  })
+
+  it('is red when Google reaches or the starting mode can’t be read', () => {
+    expect(
+      botAccessConfirm({ permission: at('ask'), connector: 'linear', google: true }).tone
+    ).toBe('high')
+    const unknown = botAccessConfirm({ permission: at(null), connector: 'linear', google: false })
+    expect(unknown.tone).toBe('high')
+    expect(unknown.rows[1]).toEqual({ kind: 'may-skip-approvals' })
   })
 })
 

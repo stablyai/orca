@@ -56,6 +56,7 @@ const initialAppState = useAppStore.getInitialState()
 
 const roots: Root[] = []
 let latest: ReturnType<typeof useAiVaultSessionRefresh> | null = null
+const renderedSessionIds: string[][] = []
 
 function HookProbe(props: {
   scopePaths: readonly string[]
@@ -69,6 +70,7 @@ function HookProbe(props: {
     props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT,
     props.scopeOnly ?? false
   )
+  renderedSessionIds.push(latest.sessions.map((session) => session.id))
   return null
 }
 
@@ -235,6 +237,31 @@ async function restartWithScanPending(): Promise<(result: AiVaultListResult) => 
   listSessionsMock.mockReturnValueOnce(scan.promise)
   return scan.resolve
 }
+
+describe('useAiVaultSessionRefresh across panel visits', () => {
+  it('opens on the list it showed, from the first render', async () => {
+    listSessionsMock.mockResolvedValueOnce({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    await flushMicrotasks()
+    roots.splice(0).forEach((root) => act(() => root.unmount()))
+    listSessionsMock.mockReturnValueOnce(deferredList().promise)
+    renderedSessionIds.length = 0
+
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+
+    expect(renderedSessionIds[0]).toEqual(['session-1'])
+  })
+
+  it('leaves a running scan to finish when the panel closes', async () => {
+    listSessionsMock.mockReturnValueOnce(deferredList().promise)
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    await flushMicrotasks()
+
+    roots.splice(0).forEach((root) => act(() => root.unmount()))
+
+    expect(cancelListSessionsMock).not.toHaveBeenCalled()
+  })
+})
 
 describe('useAiVaultSessionRefresh after a restart', () => {
   it('shows the last list as refreshing until the rescan replaces it', async () => {

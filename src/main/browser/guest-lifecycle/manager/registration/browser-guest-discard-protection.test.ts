@@ -2,12 +2,13 @@ import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 import {
   installBrowserGuestDiscardProtection,
+  noteBrowserGuestFormData,
   readBrowserGuestDiscardAdmission,
   readBrowserGuestDiscardProtection,
   registerBrowserSessionNotificationGrant,
   setBrowserGuestSemanticVisibility
 } from './browser-guest-discard-protection'
-import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
+import { GET_PAGE_STATE, POST_PAGE_STATE } from './browser-page-state-form-data.test-fixture'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
 it('protects only the current document, never earlier history', () => {
@@ -15,6 +16,7 @@ it('protects only the current document, never earlier history', () => {
   let audible = false
   let crashed = false
   let url = 'about:blank'
+  let pageState = GET_PAGE_STATE
   const mainFrame = { frames, send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
@@ -24,7 +26,8 @@ it('protects only the current document, never earlier history', () => {
     getURL: () => url,
     isDestroyed: () => false,
     isCrashed: () => crashed,
-    isCurrentlyAudible: () => audible
+    isCurrentlyAudible: () => audible,
+    navigationHistory: { getActiveIndex: () => 0, getEntryAtIndex: () => ({ pageState }) }
   }) as unknown as Electron.WebContents
   const changed = vi.fn()
   const stop = installBrowserGuestDiscardProtection(guest, changed)
@@ -37,22 +40,13 @@ it('protects only the current document, never earlier history', () => {
       { generation, dirty, pictureInPicture: false, contentType: 'text/html' }
     )
   }
-  const navigate = (next: string, status = 200, method = 'GET'): void => {
+  const navigate = (next: string, status = 200): void => {
     url = next
     guest.emit('did-start-navigation', {
       url,
       frame: mainFrame,
       isMainFrame: true,
       isSameDocument: false
-    })
-    reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', {
-      id: 1,
-      url,
-      method,
-      frame: guest.mainFrame,
-      resourceType: 'mainFrame',
-      webContentsId: 7,
-      timestamp: 0
     })
     guest.emit('did-navigate', {}, url, status, 'OK')
     guest.emit('dom-ready')
@@ -122,8 +116,18 @@ it('protects only the current document, never earlier history', () => {
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
     guest.emit('did-navigate-in-page', {}, 'https://example.test/after-frame#step', true)
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
-    navigate('https://example.test/result', 200, 'POST')
+    navigate('https://example.test/result')
+    // A discard found Chromium recorded this page's form body.
+    noteBrowserGuestFormData(guest, 'form-data')
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+    // A POST result that rewrites its address keeps its protection after Chromium drops the body.
+    pageState = POST_PAGE_STATE
+    navigate('https://example.test/replaced')
+    guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true })
+    pageState = GET_PAGE_STATE
+    guest.emit('did-navigate-in-page', {}, 'https://example.test/replaced?done', true)
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+    pageState = GET_PAGE_STATE
     // Earlier edited and POST pages, and non-2xx pages, do not keep the current page.
     navigate('https://example.test/missing', 404)
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')

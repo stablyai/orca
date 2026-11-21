@@ -73,7 +73,7 @@ describe('a login Linear refuses mid-call', () => {
   it('is refreshed and the call tried once more with the new token', async () => {
     const { client, store } = await load()
     // Still "fresh" by its saved expiry, as after a sleep that outlived the token.
-    store.keepConnectedLinearLogin(
+    await store.keepConnectedLinearLogin(
       {
         accessToken: 'access-old',
         refreshToken: 'refresh-old',
@@ -88,19 +88,19 @@ describe('a login Linear refuses mid-call', () => {
         json(200, { access_token: 'access-new', refresh_token: 'refresh-new', expires_in: 86_399 }),
       viewer
     ])
-    const linearClient = client.getClient('org-acme')
+    const linearClient = await client.getClient('org-acme')
     await expect(linearClient?.viewer).resolves.toMatchObject({ id: 'user-ada' })
     expect(calls.map((call) => [call.url, call.authorization])).toEqual([
       ['https://api.linear.app/graphql', 'Bearer access-old'],
       ['https://api.linear.app/oauth/token', null],
       ['https://api.linear.app/graphql', 'Bearer access-new']
     ])
-    expect(store.readWorkspaceLogin('org-acme')?.refreshToken).toBe('refresh-new')
+    expect((await store.readWorkspaceLogin('org-acme'))?.refreshToken).toBe('refresh-new')
   })
 
   it('fails with Linear’s refusal when the refresh can’t help, without retrying again', async () => {
     const { client, store } = await load()
-    store.keepConnectedLinearLogin(
+    await store.keepConnectedLinearLogin(
       {
         accessToken: 'access-old',
         refreshToken: 'refresh-old',
@@ -110,18 +110,18 @@ describe('a login Linear refuses mid-call', () => {
       linked
     )
     const calls = linear([refused, () => json(400, { error: 'invalid_grant' })])
-    await expect(client.getClient('org-acme')?.viewer).rejects.toThrow(/Authentication/)
+    await expect((await client.getClient('org-acme'))?.viewer).rejects.toThrow(/Authentication/)
     expect(calls).toHaveLength(2)
     // Revoked for good: Orca forgets it and says to connect again.
-    expect(store.readWorkspaceLogin('org-acme')).toBeNull()
+    expect(await store.readWorkspaceLogin('org-acme')).toBeNull()
   })
 
   it('never retries an API key', async () => {
     const { client } = await load()
     const { saveWorkspaceToken } = await import('./linear-token-store')
     const { upsertWorkspace } = await import('./linear-workspace-registry')
-    saveWorkspaceToken('org-acme', 'lin_api_key')
-    upsertWorkspace({
+    await saveWorkspaceToken('org-acme', 'lin_api_key')
+    await upsertWorkspace({
       id: 'org-acme',
       organizationId: 'org-acme',
       organizationName: 'Acme',
@@ -129,7 +129,7 @@ describe('a login Linear refuses mid-call', () => {
       email: null
     })
     const calls = linear([refused])
-    await expect(client.getClient('org-acme')?.viewer).rejects.toThrow()
+    await expect((await client.getClient('org-acme'))?.viewer).rejects.toThrow()
     expect(calls).toHaveLength(1)
   })
 })

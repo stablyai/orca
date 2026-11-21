@@ -4,39 +4,34 @@
 
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import type { BotRequestOutcome } from '../../../../orchestration/db/bot-requests/bot-request-outcomes'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   botAnswerView,
   botRequestAnswerRef,
-  botRequestSenderName,
-  botRequestUnansweredText
+  botRequestSenderName
 } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
-import { resolveReplyRecipient } from './recipient-routing'
-import { mayNameSession } from './session-recipient'
-import {
-  peerMailSender,
-  peerMailSenderLabel,
-  queuePeerMailReply
-} from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
-import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
-import { generateId } from '../../../../orchestration/db/generated-id'
+import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
-import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
 
 /** The payload a reply to a request carries: what the sender does with the answer. */
-export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): string | undefined {
-  const answer = botAnswerOf(db, original).botAnswer
+export function botAnswerPayload(
+  db: OrchestrationDb,
+  original: MessageRow,
+  shownInRoom = false
+): string | undefined {
+  const answer = botAnswerOf(db, original, shownInRoom).botAnswer
   return answer
     ? JSON.stringify({ requestId: answer.requestId, botAnswer: answer.view })
     : undefined
@@ -45,7 +40,8 @@ export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): str
 /** The answer a reply to a request is, recorded once; empty for a reply to other mail. */
 export function botAnswerOf(
   db: OrchestrationDb,
-  original: MessageRow
+  original: MessageRow,
+  shownInRoom = false
 ): { botAnswer?: { requestId: string; view: Record<string, string> } } {
   const record = botRequestRecord(db, original.id)
   if (!record) {
@@ -65,7 +61,30 @@ export function botAnswerOf(
       "You already answered that request, so send new mail if there's more to say."
     )
   }
-  return { botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted) } }
+  return {
+    botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted, shownInRoom) }
+  }
+}
+
+/** The room turn a group member's answer to a request shows on, read before the reply is written;
+ *  null outside a group room, or where the room cannot show it. Never fails the reply. */
+export async function groupAnswerTurn(
+  runtime: OrcaRuntimeService,
+  original: MessageRow,
+  callerSessionId: string | undefined,
+  body: string
+): Promise<string | null> {
+  const record = botRequestRecord(runtime.getOrchestrationDb(), original.id)
+  const group = record?.group
+  if (!group || callerSessionId !== group.targetSessionId || !awaitsAnswer(record.purpose)) {
+    return null
+  }
+  return runtimeBotGroups(runtime)
+    .answerTurn(callerSessionId, body)
+    .catch((error: unknown) => {
+      console.warn('[bot-groups] could not find the room turn for an answer', error)
+      return null
+    })
 }
 
 /** True when a reply's payload is the answer to this request. */
@@ -127,7 +146,13 @@ export async function settleBotRequestFailure(
   }
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
-  await settleBotRequests(runtime, failure.sessionId, why, error?.text)
+  // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
+  await settleBotRequests(
+    runtime,
+    failure.sessionId,
+    why,
+    error ? redactFailure(error.text) : undefined
+  )
 }
 
 async function settleBotRequests(
@@ -170,8 +195,8 @@ async function continuesAfterUsageLimit(sessionId: string): Promise<boolean> {
 export async function dropUnreadBotRequests(
   runtime: OrcaRuntimeService,
   botId: string,
-  why: 'paused' | 'deleted' | 'new-chat',
-  /** Only those mailed to this conversation (the Chat a new one replaced). */
+  why: 'paused' | 'deleted' | 'new-chat' | 'chat-deleted',
+  /** Only those mailed to this conversation (the Chat a new one replaced, or a deleted chat). */
   onlyTo?: string
 ): Promise<void> {
   try {
@@ -182,113 +207,13 @@ export async function dropUnreadBotRequests(
       .filter((message) => !onlyTo || message.to_handle.endsWith(onlyTo))
     await ensureSenderRecords(runtime, dropped)
     for (const message of dropped) {
-      if (tellSender(runtime, db, message, 'dropped', why)) {
-        db.markAsRead([message.id])
-      }
+      // Read in the same write as its outcome and notice, so the drop is never half done.
+      tellSender(runtime, db, message, 'dropped', why, undefined, () =>
+        db.markAsRead([message.id], { kind: 'dropped', why })
+      )
     }
   } catch (error) {
     // The change itself stands; only the senders go untold.
     console.warn('[bots] could not tell senders of dropped bot requests', error)
-  }
-}
-
-// Session senders resolve against the session records, which a restart leaves uninstalled until asked.
-async function ensureSenderRecords(
-  runtime: OrcaRuntimeService,
-  requests: readonly (MessageRow | null | undefined)[]
-): Promise<void> {
-  if (requests.some((request) => request && mayNameSession(request.from_handle))) {
-    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-  }
-}
-
-/** False leaves the request as it was: its sender cannot be verified yet, so a later end retries. */
-function tellSender(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  request: MessageRow,
-  outcome: BotRequestOutcome,
-  why: Parameters<typeof botRequestUnansweredText>[1],
-  reason?: string
-): boolean {
-  const record = botRequestRecord(db, request.id)
-  if (!record || !awaitsAnswer(record.purpose)) {
-    return true
-  }
-  const body = botRequestUnansweredText(record, why, reason)
-  if (tellPeerSender(runtime, db, request, outcome, body)) {
-    return true
-  }
-  const sender = reachableSender(runtime, db, request)
-  if (sender === 'unverified') {
-    return false
-  }
-  if (!db.recordBotRequestOutcome(request.id, outcome) || sender === 'gone') {
-    return true
-  }
-  const recipient = sender
-  const told = db.insertMessage({
-    from: request.to_handle,
-    to: recipient.to,
-    subject: `Re: ${request.subject}`,
-    body,
-    threadId: request.thread_id ?? request.id,
-    runId: recipient.runId
-  })
-  runtime.notifyMessageArrived(told.to_handle, told.type)
-  return true
-}
-
-/** A request from a paired computer is told over the conversation it came on, from the bot's own address. */
-function tellPeerSender(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  request: MessageRow,
-  outcome: BotRequestOutcome,
-  body: string
-): boolean {
-  const route = db.getPeerMailMessage(request.id)
-  const conversation = route ? db.getPeerMailConversation(route.conversation_id) : undefined
-  if (conversation?.role !== 'peer') {
-    return false
-  }
-  if (db.recordBotRequestOutcome(request.id, outcome)) {
-    queuePeerMailReply(db, conversation.conversation_id, generateId('msg'), {
-      senderLabel: peerMailSenderLabel(runtime, request.to_handle),
-      fromAddress: request.to_handle,
-      subject: `Re: ${request.subject}`,
-      body,
-      threadId: request.thread_id ?? request.id,
-      sender: peerMailSender(runtime, request.to_handle)
-    })
-    notifyPeerMailQueued(db.db)
-  }
-  return true
-}
-
-// 'gone': the sender is proven closed, unknown or on another host, so nothing would read a notice.
-// 'unverified': the session records are not installed, which proves neither.
-function reachableSender(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  request: MessageRow
-): ReturnType<typeof resolveReplyRecipient> | 'gone' | 'unverified' {
-  if (mayNameSession(request.from_handle) && !readAgentSessionRecordStore()) {
-    return 'unverified'
-  }
-  try {
-    return resolveReplyRecipient({
-      runtime,
-      db,
-      originalFrom: request.from_handle,
-      originalRunId: request.run_id,
-      // A bot request comes from a chat or a worker, never a terminal agent.
-      terminalRecipient: null
-    })
-  } catch (error) {
-    if (error instanceof OrchestrationError) {
-      return 'gone'
-    }
-    throw error
   }
 }

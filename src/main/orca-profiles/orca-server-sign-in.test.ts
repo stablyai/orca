@@ -290,28 +290,21 @@ describe('OrcaServerSignIn', () => {
     expect(account.signInWithCode.mock.calls[0]?.[2]?.signal?.aborted).toBe(true)
   })
 
-  it('ends a sign-in still waiting for its code when the server signs out', async () => {
+  it('cancels the pending sign-in and publishes signed-out status', async () => {
     const { server, account } = track(harness())
     const started = server.startSignIn('device-a', 'sign-in')
     await settledOrPrompt(server, 'device-a', started)
+    const seen: string[] = []
+    server.onChanged((status) => seen.push(status.state))
 
     const status = await server.signOut()
 
     expect(status.state).toBe('signed-out')
+    expect(seen).toEqual(['signed-out'])
     expect(account.signOut).toHaveBeenCalledTimes(1)
     await expect(server.waitSignIn('device-a', started.flowId, 0)).resolves.toMatchObject({
       phase: 'cancelled'
     })
-  })
-
-  it('publishes status changes to subscribers', async () => {
-    const { server } = track(harness())
-    const seen: string[] = []
-    server.onChanged((status) => seen.push(status.state))
-
-    await server.signOut()
-
-    expect(seen).toEqual(['signed-out'])
   })
 
   it('refreshes once a day only while signed in', async () => {

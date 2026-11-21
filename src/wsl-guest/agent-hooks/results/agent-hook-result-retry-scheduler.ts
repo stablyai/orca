@@ -24,6 +24,7 @@ import {
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
+import { AgentHookDroidVerdictReads } from './agent-hook-droid-verdict-reads'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -57,9 +58,11 @@ export class AgentHookResultRetryScheduler {
   private host: AgentHookResultRetryHost
   private readonly claudeHelperKills: ClaudeHelperKillPoller
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
+  private readonly droidVerdictReads: AgentHookDroidVerdictReads
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.droidVerdictReads = new AgentHookDroidVerdictReads(host, this.assistantMessageRetryTimers)
     this.claudeHelperKills = new ClaudeHelperKillPoller(host.state, {
       current: (paneKey) => host.state.lastStatusByPaneKey.get(paneKey),
       publish: (event) => {
@@ -99,12 +102,12 @@ export class AgentHookResultRetryScheduler {
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
-    const timer = this.assistantMessageRetryTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
+    clearTimeout(this.assistantMessageRetryTimers.get(paneKey))
     this.assistantMessageRetryTimers.delete(paneKey)
+  }
+
+  scheduleDroidVerdictRead(...args: Parameters<AgentHookDroidVerdictReads['schedule']>): void {
+    this.droidVerdictReads.schedule(...args)
   }
 
   clearTranscriptPoll(paneKey: string): void {

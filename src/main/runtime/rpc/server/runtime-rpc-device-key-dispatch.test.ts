@@ -44,7 +44,8 @@ describe('streams on an authenticated phone socket', () => {
       listMobileSessionTabs: async () => snapshot,
       registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
       cleanupSubscription: (id: string) => cleanups.get(id)?.(),
-      onMobileSessionTabsChanged: () => () => {}
+      onMobileSessionTabsChanged: () => () => {},
+      onClientEvent: () => () => {}
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({
       runtime,

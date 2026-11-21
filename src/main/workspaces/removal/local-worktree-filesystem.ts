@@ -1,9 +1,10 @@
 import { posix } from 'node:path'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
-import { removeHostTree } from '../../filesystem/host-tree-removal'
+import { removeHostTree, removeUnregisteredHostCheckout } from '../../filesystem/host-tree-removal'
 import {
   guestUncPath,
   resolveWslGuestPaths,
@@ -26,7 +27,7 @@ function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolea
 // Coreutils need no login shell; rc/motd output would corrupt parsed stdout.
 async function runWslCommand(distro: string, command: string): Promise<string> {
   const result = await runProcess({
-    program: 'wsl.exe',
+    program: windowsSystem32Binary('wsl.exe'),
     args: buildWslExecArgs(distro, ['sh', '-c', command]),
     // An inherited cwd may be the worktree currently being deleted (#16463).
     cwd: resolveWslInteropSpawnCwd(),
@@ -134,21 +135,43 @@ export function getLocalWorktreePathAccess(
   }
 }
 
+/** `markerLast` keeps the entry `.git` resolves to (matched by identity, so a case-folding mount's `.GIT` stays too, and a differently cased sibling is removed first) until everything else is gone, so a failed delete still proves whose folder it is. */
 export async function removeLocalWorktreePath(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  { markerLast = false }: { markerLast?: boolean } = {}
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
     throwIfSignalAborted(signal)
-    await removeHostTree(targetPath, { signal })
+    await (markerLast
+      ? removeUnregisteredHostCheckout(targetPath, signal)
+      : removeHostTree(targetPath, { signal }))
     return
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
-  await runWslCommand(
-    distro,
-    guestCommand(targetPath, (target) => `rm -rf -- ${target}`)
-  )
+  const inGuest = (script: (target: string) => string) =>
+    runWslCommand(distro, guestCommand(targetPath, script))
+  try {
+    await inGuest((target) =>
+      markerLast
+        ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; if [ -e ${target}/.git ] || [ -L ${target}/.git ]; then LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -samefile ${target}/.git -exec rm -rf -- {} +; else LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi && rm -f -- ${target}/.git && LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && LC_ALL=C rmdir -- ${target}`
+        : `rm -rf -- ${target}`
+    )
+  } catch (error) {
+    // Only a definitive "No such file" means done; permission errors must not read as removed.
+    if (!markerLast || !isWslMissingPathError(error)) {
+      throw error
+    }
+    // A child (the marker) vanishing mid-command also reads as missing; only an absent root is done.
+    const rootStillPresent = await inGuest((target) => `LC_ALL=C stat -c %F -- ${target}`).then(
+      () => true,
+      (statError: unknown) => !isWslMissingPathError(statError)
+    )
+    if (rootStillPresent) {
+      throw error
+    }
+  }
 }

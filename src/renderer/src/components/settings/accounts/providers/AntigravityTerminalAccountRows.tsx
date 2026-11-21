@@ -161,7 +161,6 @@ export function AntigravityTerminalAccountRows({
   }
   for (const account of state?.accounts ?? []) {
     const active = state?.activeAccountId === account.id
-    const removable = !active && state?.selectedAccountId !== account.id
     const reading =
       account.usage === undefined
         ? null
@@ -186,7 +185,7 @@ export function AntigravityTerminalAccountRows({
         actions={
           active ? (
             usageButton(account.usage)
-          ) : removable ? (
+          ) : (
             <Button
               variant="ghost"
               size="xs"
@@ -196,7 +195,7 @@ export function AntigravityTerminalAccountRows({
               <Trash2 />
               {t('accounts.antigravity.remove', 'Remove')}
             </Button>
-          ) : null
+          )
         }
       />
     )

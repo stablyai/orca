@@ -87,21 +87,25 @@ describe('acquireInstallLock waiting on a held lock', () => {
     vi.restoreAllMocks()
   })
 
-  it('takes over a fresh flock-backed lock seconds after its holder is seen gone twice', async () => {
+  it('reports a short countdown and takes over after two probes find the holder gone', async () => {
     lock.createdAt = Date.now() - 60_000
     lock.holderGoneAt = Date.now() + 30_000
     const start = Date.now()
+    const waits: InstallLockWait[] = []
     const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
       relayGcClaim: false,
       waitThroughStaleTakeover: true,
       owner: { fileName: '.orca-fence-owner', token: 't-next' },
-      probeExitedHolder: true
+      probeExitedHolder: true,
+      onWait: (wait) => waits.push(wait)
     })
     expect(await settle(acquired, 2 * 60_000)).toBe('done')
     expect(lock.stolen).toBe(true)
     // First gone reading at 30s, confirmed by the next probe 5s later.
     expect(Date.now() - start).toBeGreaterThanOrEqual(35_000)
     expect(Date.now() - start).toBeLessThanOrEqual(41_000)
+    expect(waits[0]).toEqual({ takeoverInMs: 19 * 60_000, givesUpInMs: 20 * 60_000 })
+    expect(waits.at(-1)).toMatchObject({ takeoverInMs: 5_000, holderGone: true })
   })
 
   it('treats a takeover whose reply was lost as acquired once the lock names its token', async () => {
@@ -131,23 +135,6 @@ describe('acquireInstallLock waiting on a held lock', () => {
     })
     expect(await settle(acquired, 5 * 60_000)).toBe('done')
     expect(lock.probes).toBe(0)
-  })
-
-  it('reports a takeover in seconds, not the age countdown, once a holder reads gone', async () => {
-    lock.createdAt = Date.now() - 60_000
-    lock.holderGoneAt = Date.now() + 90_000
-    const waits: InstallLockWait[] = []
-    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
-      relayGcClaim: false,
-      waitThroughStaleTakeover: true,
-      owner: { fileName: '.orca-fence-owner', token: 't-next' },
-      probeExitedHolder: true,
-      onWait: (wait) => waits.push(wait)
-    })
-    expect(await settle(acquired, 3 * 60_000)).toBe('done')
-    // While the holder runs, the age countdown stands; once it reads gone, seconds.
-    expect(waits[0]).toEqual({ takeoverInMs: 19 * 60_000, givesUpInMs: 20 * 60_000 })
-    expect(waits.at(-1)).toMatchObject({ takeoverInMs: 5_000, holderGone: true })
   })
 
   it('returns to the age countdown at the next probe when a holder no longer reads gone', async () => {

@@ -42,22 +42,28 @@ class OrchestrationDbCore {
   /** Told, with its id, of every change to what places or shows a Dispatch (see worker-status-notice),
    *  by any writer; bots' chats trees and Activity re-read on it. */
   workerStatusListener: ((dispatchId: string | null, change: DispatchRowChange) => void) | undefined
+  /** Set by a crew-notified mutation while it runs, to learn which Dispatches it wrote. */
+  crewDispatchNotice: ((dispatchId: string | null, change: DispatchRowChange) => void) | undefined
   /** Told of the creating chat session whenever one of its Dispatches or workers is written. */
   sessionWorkersListener: ((sessionId: string) => void) | undefined
   /** Told when a paired server's answer for these Dispatches' workers changed; no row was written. */
   federatedWorkersListener: ((dispatchIds: readonly string[]) => void) | undefined
   private closed = false
+  private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  /** PTYs whose pointers were released this session; title edges skip the release write for them. */
+  readonly releasedPointerPtyIds = new Set<string>()
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
+    // First, so opening beside another connection's checkpoint waits rather than failing.
+    this.db.pragma('busy_timeout = 5000')
     // Before WAL and any table, so a new file returns free pages in bounded steps; an existing one needs a VACUUM.
     this.db.pragma('auto_vacuum = INCREMENTAL')
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
-    this.db.pragma('busy_timeout = 5000')
     // Truncate the WAL back to 8 MiB after a checkpoint, as the other app databases do; otherwise it stays at its high-water size.
     this.db.pragma('journal_size_limit = 8388608')
     // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
@@ -70,7 +76,8 @@ class OrchestrationDbCore {
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
-      ['federation_relay_items', ['answer_sender_report']]
+      ['federation_relay_items', ['answer_sender_report']],
+      ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
       const existing = new Set(
         this.db
@@ -134,6 +141,7 @@ class OrchestrationDbCore {
         revokeAgentSessionPublicationFences([JSON.stringify(['worker', dispatchId])])
       }
       this.workerStatusListener?.(dispatchId, change)
+      this.crewDispatchNotice?.(dispatchId, change)
       if (dispatchId) {
         this.noteWorkerChanged(dispatchId)
       }
@@ -172,13 +180,26 @@ class OrchestrationDbCore {
     })
   }
 
+  /** Runs once, just before the connection closes; returns its removal. */
+  onClose(listener: () => void): () => void {
+    this.closeListeners.add(listener)
+    return () => this.closeListeners.delete(listener)
+  }
+
   close(): void {
     this.closed = true
+    for (const listener of this.closeListeners) {
+      listener()
+    }
+    this.closeListeners.clear()
     this.db.close()
   }
 }
 
 export type OrchestrationDb = OrchestrationDbCore & OrchestrationDbMethods
+
+/** Only the connection: what read queries need, so a reader thread's read-only one runs them too. */
+export type OrchestrationDbConnection = Pick<OrchestrationDb, 'db'>
 
 attachOrchestrationDbMethods(OrchestrationDbCore)
 

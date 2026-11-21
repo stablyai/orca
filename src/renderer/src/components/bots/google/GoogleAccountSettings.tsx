@@ -96,7 +96,7 @@ function NoApp({
           </>
         ) : (
           <Button size="sm" onClick={() => setCreating(true)}>
-            {t('bots.google.createBotToSetUp', 'Create a bot to set up Google')}
+            {t('bots.google.createBotToSetUp', 'New bot')}
           </Button>
         )}
       </div>
@@ -239,7 +239,7 @@ function AccountPanel({
             variant="outline"
             onClick={() => shareGoogleApp(target, client.projectId)}
           >
-            {t('bots.google.shareButton', 'Share with teammates')}
+            {t('bots.google.shareButton', 'Share setup')}
           </Button>
         ) : null}
         <DropdownMenu>

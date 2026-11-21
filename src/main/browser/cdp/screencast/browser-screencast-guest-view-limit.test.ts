@@ -74,62 +74,42 @@ async function startOversizedStream(guest: ReturnType<typeof createGuest>, onFra
 }
 
 describe('screencast of a guest smaller than the requested viewport (#30341)', () => {
-  it('keeps dropping guest frames until the fitted size is actually emulated', async () => {
+  it('drops guest frames until fitted metrics apply, then resumes before the next snapshot', async () => {
     const guest = createGuest('webview')
-    let releaseSnapshot!: () => void
-    const snapshotHeld = new Promise<void>((resolve) => {
-      releaseSnapshot = resolve
-    })
+    const releaseCaptures: (() => void)[] = []
     guest.debugger.sendCommand.mockImplementation(async (method: string) => {
       if (method === 'Page.captureScreenshot') {
-        await snapshotHeld
+        await new Promise<void>((resolve) => releaseCaptures.push(resolve))
       }
       return {}
     })
     const onFrame = vi.fn()
     const session = await startOversizedStream(guest, onFrame)
 
-    emitGuestFrame(guest, 1, { width: 1463, height: 849 })
-    emitGuestFrame(guest, 2, { width: 1463, height: 849 })
-    await vi.waitFor(() =>
-      expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
-        sessionId: 2
-      })
-    )
-    expect(onFrame).not.toHaveBeenCalled()
-    expect(emulatedSizes(guest)).toEqual(['1833x1179'])
+    try {
+      emitGuestFrame(guest, 1, { width: 1463, height: 849 })
+      emitGuestFrame(guest, 2, { width: 1463, height: 849 })
+      await vi.waitFor(() =>
+        expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+          sessionId: 2
+        })
+      )
+      expect(onFrame).not.toHaveBeenCalled()
+      expect(emulatedSizes(guest)).toEqual(['1833x1179'])
+      expect(releaseCaptures).toHaveLength(1)
 
-    releaseSnapshot()
-    await vi.waitFor(() => expect(emulatedSizes(guest)).toEqual(['1833x1179', '1463x849']))
-    emitGuestFrame(guest, 3, { width: 1463, height: 849 })
-    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+      releaseCaptures[0]()
+      await vi.waitFor(() => expect(releaseCaptures).toHaveLength(2))
+      expect(emulatedSizes(guest)).toEqual(['1833x1179', '1463x849'])
 
-    session.stop()
-    await session.done
-  })
-
-  it('resumes live frames once the fitted size is emulated, before its snapshot returns', async () => {
-    const guest = createGuest('webview')
-    let screenshots = 0
-    guest.debugger.sendCommand.mockImplementation(async (method: string) => {
-      if (method === 'Page.captureScreenshot') {
-        screenshots += 1
-        if (screenshots > 1) {
-          await new Promise<void>(() => {})
-        }
+      emitGuestFrame(guest, 3, { width: 1463, height: 849 })
+      await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    } finally {
+      session.stop()
+      for (const release of releaseCaptures) {
+        release()
       }
-      return {}
-    })
-    const onFrame = vi.fn()
-    const session = await startOversizedStream(guest, onFrame)
-    await vi.waitFor(() => expect(screenshots).toBe(1))
-
-    emitGuestFrame(guest, 1, { width: 1463, height: 849 })
-    await vi.waitFor(() => expect(screenshots).toBe(2))
-    expect(emulatedSizes(guest)).toEqual(['1833x1179', '1463x849'])
-    emitGuestFrame(guest, 2, { width: 1463, height: 849 })
-    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
-
-    session.stop()
+      await session.done
+    }
   })
 })

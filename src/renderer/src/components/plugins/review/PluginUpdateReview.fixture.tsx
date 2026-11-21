@@ -261,6 +261,7 @@ export const toastOne = defineFixture({
       <PluginUpdateReviewToast
         notices={[notice(installedExcalidraw, '2.3.1')]}
         onResolved={() => undefined}
+        onResize={() => undefined}
       />
     </div>
   )
@@ -274,6 +275,7 @@ export const toastMany = defineFixture({
       <PluginUpdateReviewToast
         notices={[notice(installedExcalidraw, '2.3.1'), notice(installedMermaid, '0.5.0')]}
         onResolved={() => undefined}
+        onResize={() => undefined}
       />
     </div>
   )

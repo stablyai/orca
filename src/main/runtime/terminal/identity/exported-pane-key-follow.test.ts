@@ -97,7 +97,7 @@ describe('agent status of a terminal re-homed after a restart', () => {
     agentHookServer.clearPaneKeyAliasesForPty(OTHER)
   })
 
-  it('moves the row filed under the exported key and routes later hooks to the new pane', async () => {
+  it('moves the row and its hooks as the terminal changes panes and returns', async () => {
     hookFromOldShell('working')
     const runtime = await relaunch([listedSurvivor(OLD_PANE_KEY)])
 
@@ -107,6 +107,13 @@ describe('agent status of a terminal re-homed after a restart', () => {
     hookFromOldShell('done')
     expect(statesOn(NEW_PANE_KEY)).toEqual(['done'])
     expect(statesOn(OLD_PANE_KEY)).toEqual([])
+
+    await showSurvivorIn(runtime, OLD_TAB, OLD_LEAF)
+
+    expect(statesOn(OLD_PANE_KEY)).toEqual(['done'])
+    expect(statesOn(NEW_PANE_KEY)).toEqual([])
+    hookFromOldShell('working')
+    expect(statesOn(OLD_PANE_KEY)).toEqual(['working'])
   })
 
   it('returns a moved row to the exported key once a second live terminal also exported it', async () => {
@@ -117,19 +124,6 @@ describe('agent status of a terminal re-homed after a restart', () => {
     listed.push({ ...listedSurvivor(OLD_PANE_KEY), id: OTHER })
 
     await runtime.listTerminals()
-
-    expect(statesOn(OLD_PANE_KEY)).toEqual(['working'])
-    expect(statesOn(NEW_PANE_KEY)).toEqual([])
-    hookFromOldShell('done')
-    expect(statesOn(OLD_PANE_KEY)).toEqual(['done'])
-  })
-
-  it('brings the row back when the terminal is shown in its exported pane again', async () => {
-    hookFromOldShell('working')
-    const runtime = await relaunch([listedSurvivor(OLD_PANE_KEY)])
-    await showSurvivorInNewTab(runtime)
-
-    await showSurvivorIn(runtime, OLD_TAB, OLD_LEAF)
 
     expect(statesOn(OLD_PANE_KEY)).toEqual(['working'])
     expect(statesOn(NEW_PANE_KEY)).toEqual([])

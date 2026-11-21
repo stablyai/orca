@@ -71,7 +71,8 @@ describe('dispatch mailbox consumer fencing', () => {
         runId: dispatch.runId,
         mailboxHandle: `dispatch:${dispatch.id}`,
         consumerGeneration: generation,
-        deliveryId: delivery!.delivery.id
+        deliveryId: delivery!.delivery.id,
+        taker: { kind: 'orca' }
       }).duplicate
     ).toBe(false)
   })

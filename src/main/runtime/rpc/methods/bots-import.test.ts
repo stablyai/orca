@@ -5,12 +5,13 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { BOT_GROUP_ROOM_CARD_REFUSAL } from '../../../bots/bot-group-session-access'
 import { BOT_IMPORT_METHODS } from './bots-import'
 
 const cards = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
-    sessionId === 'bot-chat' || sessionId === 'look' ? bots.list()[0] : null
+    ['bot-chat', 'look', 'bot-group-member-m1'].includes(sessionId) ? bots.list()[0] : null
 }))
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
@@ -52,6 +53,14 @@ const plan = {
   ]
 }
 
+const done = {
+  app: 'Hermes',
+  name: 'Research desk',
+  created: [{ kind: 'automations', what: '2 automations', detail: 'paused' }],
+  stayed: ['chat history'],
+  paused: 2
+}
+
 describe('bot import cards', () => {
   it('puts the plan in the bot chat as a card, with the bot it belongs to', async () => {
     const dispatcher = importRuntime(makeTestBot({ id: 'b1', name: 'Molty' }))
@@ -63,20 +72,29 @@ describe('bot import cards', () => {
         body: expect.objectContaining({
           kind: 'status',
           presentation: 'bot-import-plan',
-          botImportPlan: { ...plan, botId: 'b1' },
-          text: expect.stringContaining('Stays in OpenClaw:')
+          botImportPlan: { ...plan, botId: 'b1' }
         })
       })
     ])
   })
 
-  it('refuses outside a bot chat and from a look-around run', async () => {
+  it('refuses outside a bot chat, from a look-around run, and from a group room', async () => {
     const dispatcher = importRuntime(makeTestBot({ id: 'b1' }))
-    for (const callerSessionId of ['elsewhere', 'look']) {
+    for (const callerSessionId of ['elsewhere', 'look', 'bot-group-member-m1']) {
       expect(
         await dispatcher.dispatch(request('bots.import.plan', { callerSessionId, plan }))
       ).toMatchObject({ ok: false })
     }
+    expect(cards).toEqual([])
+  })
+
+  it('refuses the summary from a group room, whose transcript shows no card', async () => {
+    const dispatcher = importRuntime(makeTestBot({ id: 'b1' }))
+    expect(
+      await dispatcher.dispatch(
+        request('bots.import.done', { callerSessionId: 'bot-group-member-m1', done })
+      )
+    ).toMatchObject({ ok: false, error: { message: BOT_GROUP_ROOM_CARD_REFUSAL } })
     expect(cards).toEqual([])
   })
 
@@ -91,13 +109,6 @@ describe('bot import cards', () => {
 
   it('puts the summary in the chat', async () => {
     const dispatcher = importRuntime(makeTestBot({ id: 'b1' }))
-    const done = {
-      app: 'Hermes',
-      name: 'Research desk',
-      created: [{ kind: 'automations', what: '2 automations', detail: 'paused' }],
-      stayed: ['chat history'],
-      paused: 2
-    }
     await dispatcher.dispatch(request('bots.import.done', { callerSessionId: 'bot-chat', done }))
     expect(cards).toEqual([
       expect.objectContaining({

@@ -31,6 +31,7 @@ async function fixture(
   roots.push(root)
   const repo = join(root, repoName)
   await git(root, ['init', '--quiet', repo])
+  await git(repo, ['config', 'core.autocrlf', 'false'])
   await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   await writeFile(join(repo, 'tracked.txt'), 'original\n')
   await git(repo, ['add', 'tracked.txt'])

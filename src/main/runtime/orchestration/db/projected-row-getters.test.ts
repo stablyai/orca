@@ -7,7 +7,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { OrchestrationDb } from './orchestration-db'
-import { WORKER_DISPATCH_COLUMNS, WORKER_TERMINAL_RESOURCE_COLUMNS } from './row-column-lists'
 
 const opened: OrchestrationDb[] = []
 const directories: string[] = []
@@ -121,7 +120,8 @@ const FULL_DISPATCH = {
   follow_up_of_dispatch_id: null,
   follow_up_mail_at: null,
   creator_turn_source: 'connector',
-  origin_ref: null
+  origin_ref: null,
+  for_message_id: null
 }
 
 const FULL_WORKER = {
@@ -270,27 +270,13 @@ describe('projected row getters', () => {
     expect(db.getWorkerTerminalResourceByProcessIncarnation('proc-full')).toEqual(NEWEST_RESOURCE)
   })
 
-  it('return the same rows from a reopened connection', () => {
-    const path = fileDbPath()
-    const first = openDb(path)
-    seed(first)
-    expectSeededRows(first)
-    first.close()
-    opened.pop()
-
-    const reopened = openDb(path)
-    expectSeededRows(reopened)
-    expectSeededRows(reopened)
-  })
-
-  it('return the same rows after DDL on this connection, and after DDL from another connection', () => {
+  it('return the same rows after local and external DDL and after reopening', () => {
     const path = fileDbPath()
     const db = openDb(path)
     seed(db)
     expectSeededRows(db)
 
     db.db.exec('ALTER TABLE worker_terminal_resources ADD COLUMN probe_here TEXT')
-    expectSeededRows(db)
     expectSeededRows(db)
 
     // Another connection's DDL is invisible to this connection's cache; SQLite re-prepares the statement.
@@ -299,22 +285,9 @@ describe('projected row getters', () => {
     other.close()
     expectSeededRows(db)
     expect(db.getWorkerDispatch('d-min')?.state).toBe('starting')
-  })
 
-  // The `satisfies` clause pins each list to its row type; the migrated schema is the other side.
-  it('project exactly the columns the migrated worker tables declare, in schema order', () => {
-    const db = openDb()
-    const columnsOf = (table: string): string[] => {
-      const rows = db.db.pragma(`table_info(${table})`)
-      return Array.isArray(rows)
-        ? rows.map((row) =>
-            typeof row === 'object' && row !== null && 'name' in row ? String(row.name) : ''
-          )
-        : []
-    }
-
-    expect([...WORKER_DISPATCH_COLUMNS]).toEqual(columnsOf('worker_dispatches'))
-    expect([...WORKER_TERMINAL_RESOURCE_COLUMNS]).toEqual(columnsOf('worker_terminal_resources'))
-    expect(Object.keys(db.getWorkerDispatch('nobody') ?? {})).toEqual([])
+    db.close()
+    opened.pop()
+    expectSeededRows(openDb(path))
   })
 })

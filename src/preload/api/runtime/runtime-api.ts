@@ -135,6 +135,8 @@ export type RuntimeApi = {
       selector: string
       timeoutMs?: number
       observeOnly?: true
+      /** A user-requested check that probes now even while a recent failure is backing off. */
+      force?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
     onSharedControlDiagnostics?: (
       callback: (event: {

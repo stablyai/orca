@@ -10,7 +10,11 @@ import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
 import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
-import { normalizePersistedBots } from '../../../../shared/bot-types'
+import { normalizePersistedBots, splitBotsByOlderBuildSupport } from '../../../../shared/bot-types'
+import {
+  markImmutableBotSnapshot,
+  orderBotsBySavedOrder
+} from '../../../../shared/bots/bot-lookup-index'
 import { withBotAutomationAgents } from '../../../bots/bot-automation-agent-sync'
 import {
   normalizeSshRemotePtyLease,
@@ -47,10 +51,38 @@ export function normalizeLoadedProfileState(
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
   // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
-  const bots = parsed.bots === undefined ? undefined : normalizePersistedBots(parsed.bots)
-  if (bots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
+  const parsedBotOrder = Array.isArray(parsed.botOrder)
+    ? parsed.botOrder.filter((id): id is string => typeof id === 'string')
+    : undefined
+  const normalizedBots =
+    parsed.bots === undefined && parsed.botsNewerAgents === undefined
+      ? undefined
+      : normalizePersistedBots([
+          ...(Array.isArray(parsed.bots) ? parsed.bots : []),
+          ...(Array.isArray(parsed.botsNewerAgents) ? parsed.botsNewerAgents : [])
+        ])
+  const allBots =
+    normalizedBots && parsedBotOrder
+      ? orderBotsBySavedOrder(normalizedBots, parsedBotOrder)
+      : normalizedBots
+  const { readable: bots, newer: botsNewerAgents } = allBots
+    ? splitBotsByOlderBuildSupport(allBots)
+    : { readable: undefined, newer: [] }
+  if (bots) {
+    markImmutableBotSnapshot(bots)
+  }
+  const hasStaleNewerBotState =
+    botsNewerAgents.length === 0 &&
+    (parsed.botsNewerAgents !== undefined || parsed.botOrder !== undefined)
+  if (
+    hasStaleNewerBotState ||
+    (botsNewerAgents.length > 0 && parsed.bots?.length !== bots?.length)
+  ) {
+    markNeedsSave()
+  }
+  if (allBots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
     // Old bots were created with Ask; later explicit Ask overrides must survive reloads.
-    for (const bot of bots) {
+    for (const bot of allBots) {
       if (bot.permissionMode === 'ask') {
         delete bot.permissionMode
       }
@@ -82,9 +114,15 @@ export function normalizeLoadedProfileState(
     return decoded
   })
 
+  const {
+    botsNewerAgents: _parsedBotsNewerAgents,
+    botOrder: _parsedBotOrder,
+    ...restParsed
+  } = parsed
+
   return {
     ...defaults,
-    ...parsed,
+    ...restParsed,
     featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
       parsed.featureInteractionTelemetryBuckets
     ),
@@ -150,11 +188,24 @@ export function normalizeLoadedProfileState(
     // Bots that switched agents before their automations followed: those catch up once.
     automations: withBotAutomationAgents(
       Array.isArray(parsed.automations) ? parsed.automations : [],
-      bots ?? [],
+      allBots ?? [],
       markNeedsSave
     ),
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
-    ...(bots === undefined ? {} : { bots, botsPermissionDefaultMigrated: true as const }),
+    ...(bots === undefined
+      ? {}
+      : {
+          bots,
+          botsPermissionDefaultMigrated: true as const,
+          ...(botsNewerAgents.length > 0
+            ? {
+                botsNewerAgents: markImmutableBotSnapshot(botsNewerAgents),
+                botOrder: markImmutableBotSnapshot(
+                  parsedBotOrder ?? (allBots ?? []).map((bot) => bot.id)
+                )
+              }
+            : {})
+        }),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
       parsed.orcadMigrationImportReceipts
     ),

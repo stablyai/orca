@@ -13,6 +13,7 @@ import {
 } from './connector-poll-client.test-fixture'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { FAKE_BOT } from './fake-connector-seam.test-fixture'
+import { CONNECTOR_REHELLO_SPREAD_MS } from './connector-poll-control'
 
 const h = pollClientHarness()
 const { startClient, poll } = h
@@ -98,7 +99,7 @@ describe('ConnectorPollClient events', () => {
     expect(h.fake.requestsTo(CONNECTOR_PATHS.events)[0]?.body).toMatchObject({ helloRev: 1 })
     h.fake.forgetHello()
     poll([])
-    await settle()
+    await settle(CONNECTOR_REHELLO_SPREAD_MS)
     const renewed = h.fake.requestsTo(CONNECTOR_PATHS.events).at(-1)?.body
     expect(renewed).toMatchObject({
       helloRev: 2,

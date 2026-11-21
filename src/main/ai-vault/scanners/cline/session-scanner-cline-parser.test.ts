@@ -30,7 +30,7 @@ describe('Cline AI Vault sessions', () => {
         status: 'idle',
         interactive: true,
         provider: 'deepseek',
-        model: 'deepseek-v4-flash',
+        prompt: 'Manifest fallback',
         cwd: '/repo/cline',
         workspace_root: '/repo/cline'
       })
@@ -69,6 +69,7 @@ describe('Cline AI Vault sessions', () => {
       cwd: '/repo/cline',
       model: 'deepseek-v4-flash',
       messageCount: 2,
+      updatedAt: '2026-08-11T16:38:00.000Z',
       resumeCommand: `cd '/repo/cline' && cline --id '${sessionId}'`,
       filePath: join(sessionDir, `${sessionId}.json`)
     })

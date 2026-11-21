@@ -58,7 +58,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     })
   }
 
-  /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */
+  /** Bump snapshotVersion before emitting (coalesced and owed until a client frame unless immediate); clients discard re-emits at the same version. */
   touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options: { immediate?: boolean } = {}
@@ -68,6 +68,14 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       return
     }
     this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)
+    if (!options.immediate && snapshot.worktree === worktreeId) {
+      // Status bursts bump once per client frame, and only build one when someone listens.
+      this.mobileSessionTabsByWorktree.oweVersion(worktreeId)
+      if (this.mobileSessionTabListeners.size > 0) {
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      }
+      return
+    }
     this.storeMobileSessionSnapshot(worktreeId, {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1
@@ -79,6 +87,24 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     }
     // Coalesce spinner-driven title/status bursts instead of broadcasting every version.
     this.scheduleMobileSessionTabsChanged(worktreeId)
+  }
+
+  /** Pays a deferred status bump before a stored snapshot is projected: at most one store per owed bump. */
+  protected settleOwedMobileSessionSnapshotVersion(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const worktreeId = snapshot.worktree
+    if (this.mobileSessionTabsByWorktree.get(worktreeId) !== snapshot) {
+      return snapshot
+    }
+    return (
+      this.mobileSessionTabsByWorktree.payOwedVersion(worktreeId, () =>
+        this.storeMobileSessionSnapshot(worktreeId, {
+          ...snapshot,
+          snapshotVersion: snapshot.snapshotVersion + 1
+        })
+      ) ?? snapshot
+    )
   }
 
   scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void {

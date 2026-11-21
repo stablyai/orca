@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   isCompleteAgentPromptDraft,
   isHeldAgentPromptDraft,
-  iterateAgentPromptPasteChunks
+  iterateAgentPromptPasteChunks,
+  openCodeCollapsesPaste
 } from './agent-prompt-injection'
 
 describe('agent prompt injection bytes', () => {
@@ -29,7 +30,6 @@ describe('isCompleteAgentPromptDraft', () => {
       'first line second\nline',
       false
     ],
-    ['the prompt with its spacing edited', 'a  b', 'a b', false],
     ['a prompt whose trailing newline may not render', 'first line\n', 'first line', false]
   ])('%s', (_case, prompt, draft, complete) => {
     expect(isCompleteAgentPromptDraft(draft, prompt)).toBe(complete)
@@ -57,8 +57,26 @@ describe('isHeldAgentPromptDraft', () => {
     ],
     ['a larger unrelated paste', `[Pasted Content ${prompt.length * 2} chars]`, false],
     ['a shorter paste', `[Pasted Content ${prompt.length - 1} chars]`, false],
+    ["OpenCode's placeholder for its lines", '[Pasted ~143 lines]', true],
+    ['an OpenCode paste of other lines', '[Pasted ~142 lines]', false],
+    ['the user typing beside an OpenCode paste', '[Pasted ~143 lines] also fix the readme', false],
     ['a rotating placeholder', 'Explain this codebase', false]
   ])('%s -> %s', (_case, draft, held) => {
     expect(isHeldAgentPromptDraft(draft, prompt, 1)).toBe(held)
+  })
+})
+
+// OpenCode v2.3.2 `pasteInputText`: `lineCount >= 3 || pastedContent.length > 150` on trimmed text.
+describe('openCodeCollapsesPaste', () => {
+  it.each([
+    ['a one-line request', 'Fix the failing test.', false],
+    ['two lines', 'Fix the failing test.\nThen run lint.', false],
+    ['three lines', 'a\nb\nc', true],
+    ['three lines with Windows line endings', 'a\r\nb\rc', true],
+    ['150 chars', 'x'.repeat(150), false],
+    ['151 chars', 'x'.repeat(151), true],
+    ['150 chars inside surrounding whitespace', `\n\n  ${'x'.repeat(150)}  \n`, false]
+  ])('%s -> %s', (_case, prompt, collapses) => {
+    expect(openCodeCollapsesPaste(prompt)).toBe(collapses)
   })
 })

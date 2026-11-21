@@ -1,33 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', () => ({ app: { isReady: () => false, userAgentFallback: '' } }))
+vi.mock('electron', () => ({
+  app: {
+    isReady: () => false,
+    userAgentFallback:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.4.264 Chrome/150.0.7871.250 Electron/43.8.10 Safari/537.36'
+  }
+}))
 
-const { cleanElectronUserAgent } = await import('./browser-process-user-agent')
+const { cleanElectronUserAgent, initializeBrowserProcessUserAgent } =
+  await import('./browser-process-user-agent')
 
-const MAC_CLEAN =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
-const LINUX_CLEAN =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
+describe('initializeBrowserProcessUserAgent', () => {
+  it('drops the app token but keeps the Electron token in native mode', () => {
+    expect(initializeBrowserProcessUserAgent('native').userAgent).toBe(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.250 Electron/43.8.10 Safari/537.36'
+    )
+  })
+})
 
 describe('cleanElectronUserAgent', () => {
-  it.each([
-    [
-      'an app name containing two spaces',
-      `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) My Orca Build/1.0.0 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
-      LINUX_CLEAN
-    ],
-    [
-      'no app token at all',
-      `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
-      MAC_CLEAN
-    ],
-    [
-      'an app name after the engine comment on a platform with a short OS comment',
-      `Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Package/0.0.0 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
-      'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
-    ]
-  ])('strips the Electron and app tokens for %s', (_label, raw, expected) => {
-    expect(cleanElectronUserAgent(raw)).toBe(expected)
+  it('strips the Electron and multi-word app tokens', () => {
+    const raw =
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) My Orca Build/1.0.0 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36'
+    expect(cleanElectronUserAgent(raw)).toBe(
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
+    )
   })
 
   it('leaves an OS comment without an engine comment unchanged', () => {

@@ -150,6 +150,8 @@ export const composerInputStyles = themedStyleSheet(() => ({
   },
   fieldText: {
     ...noOwnRing,
+    // On web an unpositioned input paints under TextField's absolute focus backdrop.
+    position: 'relative',
     flex: 1,
     minWidth: 0,
     alignSelf: 'stretch',

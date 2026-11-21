@@ -130,4 +130,41 @@ describe('reading paired servers for many bots at once', () => {
       hosts.slice(0, 4).map((host) => `ctx_${host}`)
     )
   })
+
+  it('answers a new worker within the deadline while its server is stuck refreshing an old one', async () => {
+    vi.useFakeTimers()
+    db = new OrchestrationDb(':memory:')
+    const database = db
+    startedOn(database, 'ctx_old', 'env-a')
+    startedOn(database, 'ctx_new', 'env-a')
+    let stuck = false
+    const runtime: FederatedFleetRuntime = {
+      resolveOrchestrationWorkerServer: async (environmentId: string) => ({
+        environmentId,
+        name: environmentId,
+        peerFingerprint: `peer-${environmentId}`,
+        pairingRevision: 1
+      }),
+      callOrchestrationWorkerServer: () =>
+        stuck ? new Promise<never>(() => {}) : Promise.resolve({ runtimeEpoch: 'e', items: [] })
+    }
+    const read = (dispatchIds: string[]) =>
+      readCachedFederatedFleetSnapshots({ runtime, db: database, dispatchIds, isOpen: () => true })
+    await read(['ctx_old'])
+    await vi.advanceTimersByTimeAsync(10_000)
+    stuck = true
+
+    let answered = false
+    const both = read(['ctx_old', 'ctx_new']).then((snapshots) => {
+      answered = true
+      return snapshots
+    })
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    expect(answered).toBe(true)
+    expect((await both)?.errors.flatMap((error) => error.dispatchIds).sort()).toEqual([
+      'ctx_new',
+      'ctx_old'
+    ])
+  })
 })

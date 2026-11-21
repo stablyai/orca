@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -150,8 +151,8 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
-  const editorPromptMaxLength = useAppStore((state) =>
-    editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
+  const editorPromptMaxLength = useAppStoreWithHostStatuses((_state, statuses) =>
+    editor ? getTerminalQuickCommandHostPromptMaxLength(statuses, editor.hostId) : undefined
   )
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)

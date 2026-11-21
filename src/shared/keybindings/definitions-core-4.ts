@@ -52,7 +52,7 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
       darwin: ['Mod+Shift+J'],
       // Why: Ctrl+Alt chords skip the physical-key fallback (AltGr guard), so a
       // letter primary would fail on non-Latin layouts and IMEs. Mod+Shift+J stays
-      // as the alias wherever Switch worktree is remapped or terminal-first.
+      // as the alias wherever Search everything is remapped or terminal-first.
       linux: WINDOWS_LINUX_TOGGLE_BINDINGS,
       win32: WINDOWS_LINUX_TOGGLE_BINDINGS
     }
@@ -217,5 +217,24 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
       linux: ['Alt+ArrowLeft'],
       win32: ['Alt+ArrowLeft']
     }
+  },
+  {
+    id: 'botItem.previous',
+    title: 'Previous item',
+    group: 'Bots',
+    scope: 'botItem',
+    // Why: global and tab chords run first wherever focus is, so a rebind there would shadow this.
+    conflictGroups: ['global', 'tabs', 'botItem'],
+    searchKeywords: ['shortcut', 'bot', 'item', 'items', 'previous', 'up'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowUp'])
+  },
+  {
+    id: 'botItem.next',
+    title: 'Next item',
+    group: 'Bots',
+    scope: 'botItem',
+    conflictGroups: ['global', 'tabs', 'botItem'],
+    searchKeywords: ['shortcut', 'bot', 'item', 'items', 'next', 'down'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
   }
 ]

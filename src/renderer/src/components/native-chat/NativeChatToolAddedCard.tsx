@@ -3,7 +3,6 @@ import { useCardBot } from '@/lib/bot-catalog'
 import { Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { botToolSubtitle, botToolTitle } from '../../../../shared/bots/bot-tool-labels'
 import { BotToolFinishSignIn } from '@/components/bots/BotToolFinishSignIn'
@@ -16,8 +15,7 @@ import {
   type BotToolAddedCardSay
 } from '../../../../shared/bots/bot-tool-added-card-view'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { NativeChatCardAvatar, NativeChatCardFrame } from './NativeChatCardFrame'
-import { NativeChatMessageTimestamp } from './messages/rows/NativeChatMessageTimestamp'
+import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
 
 type ToolAdded = NonNullable<NativeChatMessage['toolAdded']>
 
@@ -31,7 +29,7 @@ function sayWith(t: Translate): BotToolAddedCardSay {
   return (id) => PIECES[id](t)
 }
 
-/** A tool this chat's bot gave itself: its sign-in while it needs one, and a way to remove it. */
+/** A tool this chat's bot gave itself, as a status row: its sign-in while it needs one, and Remove. */
 export function NativeChatToolAddedCard({
   added,
   timestamp
@@ -39,7 +37,8 @@ export function NativeChatToolAddedCard({
   added: ToolAdded
   timestamp: number | null
 }): React.JSX.Element {
-  const say = sayWith(useTranslate())
+  const t = useTranslate()
+  const say = sayWith(t)
   useTranslation()
   const { botId, tool } = added
   const { ref: bot } = useCardBot(botId)
@@ -64,53 +63,60 @@ export function NativeChatToolAddedCard({
     signIn.line,
     say
   )
+  const title = botToolTitle(tool.name)
+  const removed = own !== null && !present
+  const lead = removed ? say('removed') : t('components.native-chat.toolAdded.added', 'Added')
+  const after = removed ? [] : [botToolSubtitle(tool), state].filter(Boolean)
+  const actionClass =
+    'rounded-sm text-xs font-medium text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   return (
-    <NativeChatCardFrame
-      avatar={
-        <NativeChatCardAvatar>
-          <Wrench className="size-4 text-muted-foreground" aria-hidden />
-        </NativeChatCardAvatar>
-      }
-      heading={say('heading')}
-      trailing={
-        <NativeChatMessageTimestamp timestamp={timestamp} className="text-muted-foreground" />
-      }
-    >
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{botToolTitle(tool.name)}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {[botToolSubtitle(tool), state].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-        {present ? (
-          <div className="flex shrink-0 items-center gap-1.5">
-            {signIn.action ? (
-              <Button
+    <div>
+      <NativeChatEventRow
+        icon={<Wrench aria-hidden className="size-3.5" />}
+        timestamp={timestamp}
+        action={
+          present ? (
+            <span className="flex items-center gap-2">
+              {signIn.action ? (
+                <button
+                  type="button"
+                  className={actionClass}
+                  disabled={busy || signIn.action.busy}
+                  onClick={signIn.action.run}
+                >
+                  {signIn.action.label}
+                </button>
+              ) : null}
+              <button
                 type="button"
-                variant="outline"
-                size="xs"
-                disabled={busy || signIn.action.busy}
-                onClick={signIn.action.run}
+                className={actionClass}
+                disabled={busy}
+                onClick={() => run(() => removeBotTool(bot, tool.name))}
               >
-                {signIn.action.label}
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              onClick={() => run(() => removeBotTool(bot, tool.name))}
-            >
-              {say('remove')}
-            </Button>
-          </div>
+                {say('remove')}
+              </button>
+            </span>
+          ) : null
+        }
+      >
+        <span className="shrink-0">{lead}</span>
+        <span
+          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
+          title={title}
+        >
+          {title}
+        </span>
+        {after.length > 0 ? (
+          <span className="min-w-0 max-w-max grow basis-0 truncate" title={after.join(' · ')}>
+            {after.map((part) => `· ${part}`).join(' ')}
+          </span>
         ) : null}
-      </div>
+      </NativeChatEventRow>
       {present && signIn.pasteBack ? (
-        <BotToolFinishSignIn bot={bot} name={tool.name} openAgain />
+        <div className="ml-5">
+          <BotToolFinishSignIn bot={bot} name={tool.name} openAgain />
+        </div>
       ) : null}
-    </NativeChatCardFrame>
+    </div>
   )
 }

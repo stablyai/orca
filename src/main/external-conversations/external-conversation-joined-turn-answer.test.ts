@@ -39,50 +39,47 @@ function receiver(capable: () => boolean) {
   return { sent, listen }
 }
 
-it.each([false, true])(
-  'posts a mail-started turn’s answer once a thread message joins it, never its question to an old receiver (host capable: %s)',
-  async (hostCapable) => {
-    const h = mailStartedBot('bot-chat', hostCapable)
-    const wire = receiver(() => false)
-    h.forward(wire.listen)
-    const turns = h.create()
-    h.joinDelivery()
-    turns.observe(h.link.paneKey)
-    turns.news({ kind: 'prompt', sessionId: 'session-1' })
-    h.answer()
-    turns.news({
-      kind: 'turn-ended',
-      sessionId: 'session-1',
-      outcome: 'success',
-      at: 600,
-      readTurn: async () => ({
-        lastAssistantMessage: 'Private mail result'
+it('posts a mail-started turn’s answer once a thread message joins it, never its question to an old receiver', async () => {
+  const h = mailStartedBot('bot-chat', true)
+  const wire = receiver(() => false)
+  h.forward(wire.listen)
+  const turns = h.create()
+  h.joinDelivery()
+  turns.observe(h.link.paneKey)
+  turns.news({ kind: 'prompt', sessionId: 'session-1' })
+  h.answer()
+  turns.news({
+    kind: 'turn-ended',
+    sessionId: 'session-1',
+    outcome: 'success',
+    at: 600,
+    readTurn: async () => ({
+      lastAssistantMessage: 'Private mail result'
+    })
+  })
+  h.publicTurn()
+  turns.observe(h.link.paneKey)
+  turns.news({
+    kind: 'turn-ended',
+    sessionId: 'session-1',
+    outcome: 'success',
+    at: 1000,
+    readTurn: h.end('Public result')
+  })
+  await vi.waitFor(() =>
+    expect(wire.sent).toContainEqual(
+      expect.objectContaining({
+        kind: 'turn-ended',
+        turnId: 900,
+        lastAssistantMessage: 'Public result'
       })
-    })
-    h.publicTurn()
-    turns.observe(h.link.paneKey)
-    turns.news({
-      kind: 'turn-ended',
-      sessionId: 'session-1',
-      outcome: 'success',
-      at: 1000,
-      readTurn: h.end('Public result')
-    })
-    await vi.waitFor(() =>
-      expect(wire.sent).toContainEqual(
-        expect.objectContaining({
-          kind: 'turn-ended',
-          turnId: 900,
-          lastAssistantMessage: 'Public result'
-        })
-      )
     )
-    expect(answersOf(wire.sent, 500)).toEqual([
-      expect.objectContaining({ origin: 'delivery', lastAssistantMessage: PRIVATE })
-    ])
-    expect(wire.sent.filter((event) => event.kind === 'prompt')).toEqual([])
-  }
-)
+  )
+  expect(answersOf(wire.sent, 500)).toEqual([
+    expect.objectContaining({ origin: 'delivery', lastAssistantMessage: PRIVATE })
+  ])
+  expect(wire.sent.filter((event) => event.kind === 'prompt')).toEqual([])
+})
 
 it.each(['watcher', 'host'] as const)(
   'posts an adopted turn’s answer once a thread message joins it after a downgrade and %s recreation',

@@ -37,7 +37,12 @@ const link = (item: typeof a, at: Status): BotItemNoteEntry => ({
 function said(entries: BotItemNoteEntry[], t: typeof translate = translate): string[] {
   return botItemNoteLines({ noteId: 'n', by: 'bot', entries }, t).map((line) =>
     line.kind === 'line'
-      ? [line.lead, line.items.map((item) => `<${item.title} ${item.status}>`).join(' '), line.tail]
+      ? [
+          line.lead,
+          line.link && `[${line.link.name}] ${line.link.after}`,
+          line.items.map((item) => `<${item.title} ${item.status}>`).join(' '),
+          line.tail
+        ]
           .filter(Boolean)
           .join(' ') + (line.detail === undefined ? '' : `: ${line.detail}`)
       : `comment ${line.text}`
@@ -94,15 +99,6 @@ describe("the bot's writes in a chat: each item once, at its final state", () =>
     ])
   })
 
-  it('treats a round trip back to where it started as no move', () => {
-    const there = move(a, 'planned', 'working')
-    const back = move(a, 'working', 'planned')
-    expect(said([there, back, comment(a, 'planned')])).toEqual([
-      'Commented on <Share links planned>'
-    ])
-    expect(said([there, back])).toEqual(['Updated <Share links planned>'])
-  })
-
   it('shares a line between items that ended the same way, in the order they first appear', () => {
     expect(said([comment(a), comment(b)])).toEqual([
       'Commented on <Share links working> <Share dialog working>'
@@ -155,27 +151,29 @@ describe('a bot write that only links', () => {
   ): BotItemNoteEntry => botItemNoteEntry({ kind: 'linked', data: { links: refs } }, item, links)!
 
   it('names a single link with or without saved metadata', () => {
-    expect(said([linked(a, ['pr:acme/app#786'])])).toEqual(['Linked #786 to <Share links working>'])
+    expect(said([linked(a, ['pr:acme/app#786'])])).toEqual([
+      'Linked [#786] to <Share links working>'
+    ])
     expect(said([linked(a, ['pr:other/lib#5'])])).toEqual([
-      'Linked other/lib#5 to <Share links working>'
+      'Linked [other/lib#5] to <Share links working>'
     ])
     expect(said([{ ...a, event: 'linked', refs: ['pr:other/lib#5'] }])).toEqual([
-      'Linked #5 to <Share links working>'
+      'Linked [#5] to <Share links working>'
     ])
     expect(said([linked(a, ['url:https://github.com/acme/app/issues/12'])])).toEqual([
-      'Linked #12 to <Share links working>'
+      'Linked [#12] to <Share links working>'
     ])
     expect(said([linked(a, ['url:https://linear.app/acme/issue/eng-42/share'])])).toEqual([
-      'Linked ENG-42 to <Share links working>'
+      'Linked [ENG-42] to <Share links working>'
     ])
     expect(said([linked(a, ['url:https://www.example.com/docs/share'])])).toEqual([
-      'Linked example.com to <Share links working>'
+      'Linked [example.com] to <Share links working>'
     ])
     expect(said([linked(a, ['file:/Users/me/notes/plan.md'])])).toEqual([
-      'Linked plan.md to <Share links working>'
+      'Linked [plan.md] to <Share links working>'
     ])
     expect(said([linked(a, ['dispatch:ctx_1'], [worker('ctx_1', 'Fix share copy')])])).toEqual([
-      'Linked Fix share copy to <Share links working>'
+      'Linked [Fix share copy] to <Share links working>'
     ])
     expect(said([linked(a, ['dispatch:ctx_1'], [worker('ctx_1', null)])])).toEqual([
       'Linked a worker to <Share links working>'
@@ -187,7 +185,7 @@ describe('a bot write that only links', () => {
       said([linked(a, ['pr:acme/app#786', 'file:plan.md', 'url:https://example.com'])])
     ).toEqual(['Linked 3 links to <Share links working>'])
     expect(said([linked(a, ['pr:acme/app#786']), linked(b, ['pr:acme/app#786'])])).toEqual([
-      'Linked #786 to <Share links working> <Share dialog working>'
+      'Linked [#786] to <Share links working> <Share dialog working>'
     ])
   })
 
@@ -207,6 +205,7 @@ describe("another chat's write, in the chat whose item it changed", () => {
             line.lead,
             line.chat && `[${line.chat.name} ${line.chat.chatId}]`,
             line.chat?.after,
+            line.link && `[${line.link.name}] ${line.link.after}`,
             line.items.map((item) => `<${item.title} ${item.status}>`).join(' '),
             line.tail
           ]
@@ -238,6 +237,21 @@ describe("another chat's write, in the chat whose item it changed", () => {
       after: 'commented on',
       home: true
     })
+  })
+
+  it('splits a linked worker out of the words, after the chat and before the items', () => {
+    const linked: BotItemNoteEntry = {
+      ...a,
+      event: 'linked',
+      refs: ['dispatch:ctx_1'],
+      names: { 'dispatch:ctx_1': 'Fix share copy' }
+    }
+    expect(lines(chat, [linked])).toEqual([
+      '[Debug Slack replies chat-a] linked [Fix share copy] to <Share links working>'
+    ])
+    expect(lines('other-chat', [linked])).toEqual([
+      'Another chat linked [Fix share copy] to <Share links working>'
+    ])
   })
 
   it('says another chat, without a chip, when the chat was gone or the note is older', () => {

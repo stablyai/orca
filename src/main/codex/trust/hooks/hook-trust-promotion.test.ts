@@ -24,6 +24,11 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: getPathMock
@@ -316,6 +321,44 @@ describe('codex hook trust write-back promotion', () => {
         computeTrustKey(runtimeUserStopEntry())
       )?.enabled
     ).toBe(false)
+  })
+
+  it('keeps a SessionEnd hook disabled in ~/.codex when an older Orca left its in-Orca approval unrecorded', async () => {
+    mkdirSync(systemCodexDir(), { recursive: true })
+    writeFileSync(
+      join(systemCodexDir(), 'hooks.json'),
+      JSON.stringify({
+        hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: USER_HOOK_COMMAND }] }] }
+      })
+    )
+    const systemEntry: CodexTrustEntry = {
+      ...systemUserStopEntry(),
+      eventLabel: 'session_end'
+    }
+    const systemTomlPath = join(systemCodexDir(), 'config.toml')
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent('', [{ ...systemEntry, enabled: false }])
+    )
+    const service = new CodexHookService()
+    await service.install()
+    // An older Orca could not record session_end approvals in its version 1 provenance.
+    simulateCodexApproval({
+      ...runtimeUserStopEntry(),
+      eventLabel: 'session_end',
+      groupIndex: 0,
+      enabled: true
+    })
+    writeFileSync(
+      join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'),
+      `${JSON.stringify({ version: 1, entries: {} })}\n`
+    )
+
+    await service.install()
+
+    expect(readHookTrustEntries(systemTomlPath).get(computeTrustKey(systemEntry))?.enabled).toBe(
+      false
+    )
   })
 
   it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', async () => {

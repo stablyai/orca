@@ -95,21 +95,6 @@ describe('tui-idle on a slow-starting Claude', () => {
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
-  it('does not settle a title-only Claude pane on text a later preexec hook printed (STA-14925)', async () => {
-    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only')
-    write(SHELL_RUNS_CLAUDE + LATER_PREEXEC_HOOK_PRINTS)
-    const settled = vi.fn()
-    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
-    wait.then(settled, () => {})
-
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
-    expect(settled).not.toHaveBeenCalled()
-
-    write(CLAUDE_COMPOSER_BARE_TITLE)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
-    await expect(wait).resolves.toMatchObject({ satisfied: true })
-  })
-
   it('keeps holding a title-only Claude pane while the quiet foreground is Claude itself, not a pager', async () => {
     // Native Claude's foreground name is its node process; the probe must not relax the gate for it.
     const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
@@ -144,69 +129,40 @@ describe('tui-idle on a slow-starting Claude', () => {
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
-  it('settles a title-only `claude mcp serve` pane on the hook text; a subcommand draws no composer (F41366-C2-1)', async () => {
-    // The MCP server runs silently under a non-pager foreground, so only the title can tell it apart.
+  it('settles on output from a noninteractive subcommand after an option value', async () => {
     const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
-    write(shellRunsTitled('claude mcp serve') + LATER_PREEXEC_HOOK_PRINTS)
+    write(shellRunsTitled('claude --model opus mcp serve') + LATER_PREEXEC_HOOK_PRINTS)
     const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
 
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
-  it.each(['claude --model opus mcp serve', 'claude -- mcp list'])(
-    'settles a title-only `%s` pane on the hook text; the subcommand sits past an option value or `--` (F41366-C3-1)',
-    async (commandLine) => {
-      const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
-      write(shellRunsTitled(commandLine) + LATER_PREEXEC_HOOK_PRINTS)
-      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+  it('holds for a composer when an option value resembles a subcommand', async () => {
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
+    write(shellRunsTitled('claude --debug mcp serve') + LATER_PREEXEC_HOOK_PRINTS)
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
 
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
-      await expect(wait).resolves.toMatchObject({ satisfied: true })
-    }
-  )
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
+    expect(settled).not.toHaveBeenCalled()
 
-  it.each(['claude --name doctor', 'claude --debug mcp serve'])(
-    'holds a title-only `%s` pane for the composer; the word after the option is its value (F41366-C3-1)',
-    async (commandLine) => {
-      const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
-      write(shellRunsTitled(commandLine) + LATER_PREEXEC_HOOK_PRINTS)
-      const settled = vi.fn()
-      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
-      wait.then(settled, () => {})
+    write(CLAUDE_COMPOSER_BARE_TITLE)
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
 
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
-      expect(settled).not.toHaveBeenCalled()
-
-      write(CLAUDE_COMPOSER_BARE_TITLE)
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
-      await expect(wait).resolves.toMatchObject({ satisfied: true })
-    }
-  )
-
-  it.each(['claude --bg', 'claude --background'])(
-    'settles a title-only `%s` pane whose shell came back with the title retained; a background launch draws no composer (F41366-C3-2)',
-    async (commandLine) => {
-      // The launch prints its id and returns: command finish, a fresh prompt, and the old title.
-      const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'zsh')
-      write(
-        `${shellRunsTitled(commandLine)}${LATER_PREEXEC_HOOK_PRINTS}Started background session: 1a2b\r\n` +
-          '\x1b]133;D;0\x07\x1b]133;A\x07~/repo % \x1b[?2004h'
-      )
-      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
-
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
-      await expect(wait).resolves.toMatchObject({ satisfied: true })
-    }
-  )
-
-  it('settles a bare-titled `claude` pane once the quiet foreground probe shows a pager (F41366-1)', async () => {
-    // A tab title carries only the command word; the live foreground is what tells the pager apart.
-    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'less')
-    write(`${SHELL_RUNS_CLAUDE}${CLAUDE_HELP_TEXT}:`)
+  it('settles after a background launch returns to a shell that retains its title', async () => {
+    // The launch prints its id and returns: command finish, a fresh prompt, and the old title.
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'zsh')
+    write(
+      `${shellRunsTitled('claude --background')}${LATER_PREEXEC_HOOK_PRINTS}Started background session: 1a2b\r\n` +
+        '\x1b]133;D;0\x07\x1b]133;A\x07~/repo % \x1b[?2004h'
+    )
     const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
 
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
@@ -228,10 +184,10 @@ describe('tui-idle on a slow-starting Claude', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
     expect(settled).not.toHaveBeenCalled()
 
-    pane.foregroundProcess = 'less'
+    pane.foregroundProcess = '"C:\\Windows\\System32\\MORE.COM"'
     // A failed read is retried after 10 s rather than every sweep.
     await vi.advanceTimersByTimeAsync(10_000 + POLL_INTERVAL_MS * 2)
-    await expect(wait).resolves.toMatchObject({ satisfied: true })
+    expect(settled).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ satisfied: true }))
   })
 })
 

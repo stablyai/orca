@@ -33,7 +33,7 @@ afterEach(() => {
 const native = process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
 
 /** Without the built helper, the same removal the helper performs once it holds the lock. */
-async function fakeLock(filename: string) {
+export async function fakeLease(filename: string) {
   return {
     held: () => true,
     close: async () => {},
@@ -177,7 +177,7 @@ export async function profile(
   const launch = (
     version = '1.0.1',
     owns = true,
-    lock = native ? acquireJournalLegacyFileLock : fakeLock,
+    lock = native ? acquireJournalLegacyFileLock : fakeLease,
     eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
   ) =>
     new JournalLegacyRetirement(

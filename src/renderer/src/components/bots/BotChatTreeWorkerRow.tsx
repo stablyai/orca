@@ -130,7 +130,8 @@ export function botChatTreeWorkerOpen(
           dispatchId,
           title: worker.title,
           worktreeId: worktreeId ?? null,
-          chatSessionId: null
+          chatSessionId: null,
+          host: worker.host
         },
         botTarget(bot)
       )

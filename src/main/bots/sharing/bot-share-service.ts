@@ -13,6 +13,7 @@ import {
 import type { SkillCloudOperation } from '../../../shared/skills/sharing/skill-cloud-contract'
 import { BOT_SHARE_ERRORS } from '../../../shared/bots/bot-share-errors'
 import type { BotShareCandidates, BotShareSelection, NotedCandidate } from './bot-package-export'
+import { restoredPicks, savedPicks } from './bot-share-outside-picks'
 import type {
   BotCloudShare,
   BotCloudVersion,
@@ -32,6 +33,7 @@ import { buildBotPackageContent } from './bot-package-content'
 import { archiveRawFiles } from './bot-package-content-files'
 import { prepareRecipientContent, reviewOf, type BotRecipientContent } from './bot-share-recipient'
 import { BotShareReviews } from './bot-share-reviews'
+import { listedShareOwner } from './bot-share-stop'
 import { botSharePartFiles } from './bot-share-part-view'
 import type { BotShareable } from './bot-share-sources'
 import type { BotSharePicks } from '../../../shared/bots/bot-share-picks'
@@ -57,21 +59,25 @@ export class BotShareService {
     }
   ) {}
 
-  /** The candidate the owner reviews. Signed out, it still builds, with a new package id. With
+  /** The candidate the owner reviews. A local preview uses a temporary package id until publish. With
    *  `last`, it is built from the picks and note the bot was last published with, when there are any. */
   async prepare(
     bot: Bot,
     selection: BotShareSelection,
-    options: { setupNote?: string; last?: boolean } = {}
+    options: { setupNote?: string; last?: boolean; localOnly?: boolean } = {}
   ): Promise<BotSharePrepared> {
-    const last = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
-    const found = await this.deps.client.findPackageId(botPackageName(bot.id))
+    const saved = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
+    const found = options.localOnly
+      ? null
+      : await this.deps.client.findPackageId(botPackageName(bot.id))
+    const shareable = await this.deps.readShareable(bot)
+    const last = saved && restoredPicks(saved, shareable)
     const candidate = await this.deps.candidates.prepare({
       bot,
-      shareable: await this.deps.readShareable(bot),
+      shareable,
       selection: last?.selection ?? selection,
       setupNote: last?.setupNote ?? options.setupNote,
-      packageId: (found.status === 'ok' && found.value) || randomUUID()
+      packageId: (found?.status === 'ok' && found.value) || randomUUID()
     })
     return last ? { candidate, last } : { candidate }
   }
@@ -275,12 +281,13 @@ export class BotShareService {
     return { status: 'ok', value: { share: share.value, version: version.value } }
   }
 
-  /** Stops the link; false when it was already stopped. With the bot on this host, its stored picks
-   *  go too, so sharing it again starts from the defaults. */
+  /** Stops the link; false when it was already stopped. When the live listing shows the link is
+   *  this bot's, its stored picks go too, so sharing it again starts from the defaults. */
   async stop(shareId: string, botId?: string): Promise<SkillCloudOperation<boolean>> {
+    const owner = await listedShareOwner(this.deps.client, shareId, botId)
     const stopped = await this.deps.client.revokeShare(shareId)
-    if (stopped.status === 'ok' && botId) {
-      await this.deps.picks?.forget(botId).catch(() => undefined)
+    if (stopped.status === 'ok' && stopped.value && owner) {
+      await this.deps.picks?.forget(owner).catch(() => undefined)
     }
     return stopped
   }
@@ -296,16 +303,7 @@ export class BotShareService {
   /** What the link now serves was built from these picks and this note: Update link starts there.
    *  A failed write only costs the next dialog its starting picks. */
   private async remember(bot: Bot, candidate: NotedCandidate): Promise<void> {
-    const selection: BotSharePicks['selection'] = {}
-    for (const part of ['skills', 'tools', 'schedules', 'eventSuggestions', 'memory'] as const) {
-      const names = candidate.selection[part]
-      if (names) {
-        selection[part] = [...names]
-      }
-    }
-    await this.deps.picks
-      ?.set(bot.id, { selection, setupNote: candidate.content.bot.setupNote ?? '' })
-      .catch(() => undefined)
+    await this.deps.picks?.set(bot.id, savedPicks(candidate)).catch(() => undefined)
   }
 
   /** The reviewed candidate with the note on screen; it stays reviewable until a publish succeeds. */

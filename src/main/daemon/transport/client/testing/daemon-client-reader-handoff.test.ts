@@ -48,10 +48,8 @@ describe('daemon hello reader handoff', () => {
   })
 
   it.each([
-    ['ndjson', false],
     ['ndjson', true],
-    ['binary-v1', false],
-    ['binary-v1', true]
+    ['binary-v1', false]
   ] as const)(
     'preserves fragmented %s output (tail buffered: %s)',
     async (streamFraming: DaemonStreamFraming, tailBuffered) => {

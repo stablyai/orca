@@ -5,7 +5,12 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { testState, createStore, makeRepo } from '../../../persistence/persistence-test-harness'
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  makeRepo
+} from '../../../persistence/persistence-test-harness'
 import type { Store } from '../../../persistence/loading-store/store'
 import { RuntimeManagedWorktreeQueries } from '../catalog/runtime-managed-worktree-queries'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -59,7 +64,8 @@ describe('runtime detected-worktree listing sweeps missing local metadata', () =
     mkdirSync(repoPath, { recursive: true })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
