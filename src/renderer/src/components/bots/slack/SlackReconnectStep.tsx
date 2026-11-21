@@ -100,6 +100,15 @@ export function SlackReconnectStep({
   const pasteRef = useRef<HTMLDivElement>(null)
   const pasteId = useId()
   const offered = offer !== null && hostName !== null
+  // Whether the field holds a token now: an offer arriving then opens the disclosure on it.
+  const [hasToken, setHasToken] = useState(false)
+  const [wasOffered, setWasOffered] = useState(offered)
+  if (offered !== wasOffered) {
+    setWasOffered(offered)
+    if (offered && hasToken) {
+      setPasting(true)
+    }
+  }
   const kept = t(
     'bots.slack.reconnect.kept',
     'Orca Cloud keeps the new token encrypted, so your next bots here need one click.'
@@ -193,11 +202,7 @@ export function SlackReconnectStep({
             error={error}
             onSubmit={onSubmit}
             // A token already in the paste-only field stays in view when an offer arrives.
-            onTokenChange={(token) => {
-              if (!offered && token) {
-                setPasting(true)
-              }
-            }}
+            onTokenChange={(token) => setHasToken(token !== '')}
             // A refused paste comes back open, with focus on the field and its error; the
             // paste-only step focuses the field.
             autoFocusField={offered ? error !== null : true}

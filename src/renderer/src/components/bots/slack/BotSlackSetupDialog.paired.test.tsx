@@ -290,21 +290,87 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
     openDialog()
 
-    const typing = await screen.findByLabelText('Configuration refresh token')
+    const typing = await screen.findByLabelText<HTMLInputElement>('Configuration refresh token')
     expect(document.activeElement).toBe(typing)
     fireEvent.change(typing, { target: { value: 'xoxe-typed' } })
+    typing.setSelectionRange(4, 4)
     act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
 
     await screen.findByRole('button', { name: 'Use it' })
-    const field = screen.getByLabelText('Configuration refresh token')
-    // The same field, still focused: typing goes on where it was.
+    const field = screen.getByLabelText<HTMLInputElement>('Configuration refresh token')
+    // The same field, still focused with its caret: typing goes on where it was.
     expect(field).toBe(typing)
     expect(document.activeElement).toBe(field)
+    expect(field.selectionStart).toBe(4)
     expect(field).toHaveProperty('value', 'xoxe-typed')
     expect(field.closest('[hidden]')).toBeNull()
     expect(
       screen.getByRole('button', { name: /Paste a token instead/ }).getAttribute('aria-expanded')
     ).toBe('true')
+
+    // The kept token goes through the inline Reconnect, to the server.
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue({ ok: false, error: 'invalid_grant' })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    await waitFor(() =>
+      expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-typed' })
+    )
+    expect(mocks.hosts.local.saveGrant).not.toHaveBeenCalled()
+  })
+
+  it('opens no empty disclosure when a typed token was cleared before the offer arrived', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    const signedIn = useAppStore.getState().orcaProfileAuthStatus
+    useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    openDialog()
+
+    const field = await screen.findByLabelText('Configuration refresh token')
+    fireEvent.change(field, { target: { value: 'xoxe-typed' } })
+    fireEvent.change(field, { target: { value: '' } })
+    act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
+
+    await screen.findByRole('button', { name: 'Use it' })
+    expect(
+      screen.getByRole('button', { name: /Paste a token instead/ }).getAttribute('aria-expanded')
+    ).toBe('false')
+  })
+
+  it('keeps the typed token and its focus when this desktop’s offer goes away', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Paste a token instead/ }))
+    const typing = screen.getByLabelText('Configuration refresh token')
+    fireEvent.change(typing, { target: { value: 'xoxe-typed' } })
+    expect(document.activeElement).toBe(typing)
+    act(() =>
+      useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    )
+
+    await screen.findByText('Paste a new token to reconnect.')
+    const field = screen.getByLabelText('Configuration refresh token')
+    expect(field).toBe(typing)
+    expect(document.activeElement).toBe(field)
+    expect(field).toHaveProperty('value', 'xoxe-typed')
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+  })
+
+  it('leaves focus on a control that stays when this desktop’s offer goes away', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    const about = screen.getByRole('button', { name: 'About Slack tokens' })
+    act(() => about.focus())
+    act(() =>
+      useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    )
+
+    await screen.findByText('Paste a new token to reconnect.')
+    // The field shows now, but does not take focus from what the user was on.
+    expect(screen.getByRole('button', { name: 'About Slack tokens' })).toBe(about)
+    expect(document.activeElement).toBe(about)
   })
 
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {
