@@ -29,6 +29,7 @@ import {
   verifyWorktreePreparationLockAtPath
 } from './worktree-preparation-lock'
 import { addLockedWorktreePreparation } from './worktree-preparation-add'
+import { cloneWorktreeCheckoutFiles } from './worktree-checkout-clone'
 
 export async function prepareWorktreeCreateCheckout(
   repoPath: string,
@@ -89,6 +90,13 @@ export async function prepareWorktreeCreateCheckout(
         }
         const workers = await checkoutWorkersArgs
         options.signal?.throwIfAborted()
+        await cloneWorktreeCheckoutFiles({
+          repoPath,
+          worktreePath,
+          commit: materializationBase,
+          options
+        })
+        await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
         // Materialize with reset to defer user post-checkout hooks until submission.
         await gitExecFileAsync(
           [

@@ -484,6 +484,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
   experimentalWslHosts?: boolean
+  /** Experimental (macOS): fill new prepared workspaces with APFS clones of the project's files. */
+  experimentalCopyOnWriteCheckouts?: boolean
   /** Declined the add-project offer to run a `\\wsl.localhost` project's distro as a host. */
   wslHostOfferDismissed?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */

@@ -305,6 +305,7 @@ export function buildDefaultSettings(args: {
     experimentalNewWorktreeCardStyle: true,
     experimentalEphemeralVms: false,
     experimentalWslHosts: false,
+    experimentalCopyOnWriteCheckouts: false,
     experimentalOrchestrationPanel: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.

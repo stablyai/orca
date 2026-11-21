@@ -6,6 +6,8 @@ import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-se
 import { getAppRailSearchEntry } from '../../app-rail/app-rail-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
 import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
+import { getCopyOnWriteCheckoutsSearchEntry } from './copy-on-write-checkouts-search'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 
 export const getExperimentalSearchEntry = createLocalizedCatalog(
   () =>
@@ -192,6 +194,7 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...Object.values(getExperimentalSearchEntry()),
+    ...(isMacUserAgent() ? [getCopyOnWriteCheckoutsSearchEntry()] : []),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]

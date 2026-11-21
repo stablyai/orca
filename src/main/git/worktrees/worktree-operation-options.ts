@@ -27,6 +27,8 @@ export type GitWorktreeExecOptions = {
   spawnOnWorkerThread?: boolean
   canStart?: () => boolean
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
+  /** Fill prepared checkouts with APFS clones of the repo's files (experimental setting). */
+  copyOnWriteCheckout?: boolean
 }
 
 export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {

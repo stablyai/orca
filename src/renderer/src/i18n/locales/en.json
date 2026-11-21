@@ -14838,6 +14838,15 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "copyOnWriteCheckouts": {
+          "toggleLabel": "Toggle copy-on-write workspaces",
+          "title": "Copy-on-write workspaces",
+          "description": "New workspaces share disk space with the project's files until you change them. Git still checks every file, so each workspace matches a normal checkout. Only works when the workspace is on the same APFS disk as the project.",
+          "keywordApfs": "apfs",
+          "keywordClone": "clone",
+          "keywordDisk": "disk space",
+          "keywordWorktree": "worktree"
         }
       },
       "right": {
