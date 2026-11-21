@@ -1,6 +1,7 @@
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { GEMINI_ACP_DIALECT } from '../acp/acp-dialects/gemini-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { deliverGeminiInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
@@ -57,6 +58,8 @@ export const GEMINI_LAUNCH_SPEC: AcpLaunchSpec = {
     kind: 'unavailable',
     reason: 'Gemini lists its models only inside a signed-in session'
   },
+  instructions: deliverGeminiInstructions,
+  instructionsInWorkspace: true,
   transcriptImport: null,
   sessionHistory: GEMINI_SESSION_HISTORY,
   // No session/close or delete: a naming task's session would stay in the user's Gemini history.
