@@ -1,8 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
-export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
+const getNotificationsCatalog = createLocalizedCatalog(() => [
   {
     title: translate(
       'auto.components.settings.notifications.search.25f58f061f',
@@ -214,18 +216,6 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('settings.notifications.dockUnreadBadge.label', 'Unread count on Dock icon'),
-    description: translate(
-      'settings.notifications.dockUnreadBadge.description',
-      'Show how many workspaces have unread activity on the Dock icon.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.dock', 'dock'),
-      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.badge', 'badge'),
-      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.unread', 'unread')
-    ]
-  },
-  {
     title: translate('settings.notifications.perfNotices.disk.label', 'Disk almost full'),
     description: translate(
       'settings.notifications.perfNotices.disk.description',
@@ -265,3 +255,25 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+const getDockBadgeCatalog = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.notifications.dockUnreadBadge.label', 'Unread count on Dock icon'),
+    description: translate(
+      'settings.notifications.dockUnreadBadge.description',
+      'Show how many workspaces have unread activity on the Dock icon.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.dock', 'dock'),
+      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.badge', 'badge'),
+      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.unread', 'unread')
+    ]
+  }
+])
+
+export function getNotificationsPaneSearchEntries(): ReturnType<typeof getNotificationsCatalog> {
+  // Only the macOS desktop app shows the Dock row.
+  return getRendererAppPlatform() === 'darwin' && !isWebClientLocation()
+    ? [...getNotificationsCatalog(), ...getDockBadgeCatalog()]
+    : getNotificationsCatalog()
+}

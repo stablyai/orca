@@ -17,7 +17,7 @@ import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-con
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
+import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 
 export type UnreadBadgeCountSources = {
   worktreeBuckets: Readonly<Record<string, readonly Worktree[]>>
@@ -30,11 +30,14 @@ export type UnreadBadgeCountSources = {
   /** null unless the sidebar hides workspaces created from other devices. */
   hiddenOtherDevicePairings: ReadonlyMap<string, string> | null
   tabsByWorktree?: Readonly<Record<string, readonly Pick<TerminalTab, 'id'>[]>>
-  unifiedTabsByWorktree?: Readonly<Record<string, readonly Pick<Tab, 'id' | 'contentType'>[]>>
+  unifiedTabsByWorktree?: Readonly<
+    Record<string, readonly (Pick<Tab, 'id' | 'contentType'> & { entityId?: string })[]>
+  >
   unreadTerminalTabs?: Readonly<Record<string, StoredAgentAttentionUnread>>
+  unreadAgentCompletionPanes: Readonly<Record<string, StoredAgentAttentionUnread>>
 }
 
-/** Folder rows also need a live tab marker; worktree rows count their flag alone. */
+/** Folder rows also need a live tab or completion marker; worktree rows count their flag alone. */
 export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
   const { visibleHostIds, defaultHostId } = sources
   // Preserve the existing id-only count while narrowing it to visible hosts.
@@ -60,7 +63,7 @@ export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
 function countUnreadFolderRows(sources: UnreadBadgeCountSources): number {
   const { projectGroups, visibleHostIds, defaultHostId, hiddenOtherDevicePairings } = sources
   const unread = sources.folders.filter(
-    (folder) => folder.isUnread && hasLiveTabMarker(sources, folderWorkspaceKey(folder.id))
+    (folder) => folder.isUnread && workspaceHasLiveMarker(sources, folderWorkspaceKey(folder.id))
   )
   if (unread.length === 0) {
     return 0

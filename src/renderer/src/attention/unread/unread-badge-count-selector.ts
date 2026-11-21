@@ -4,9 +4,10 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { sameBucketRecords } from './unread-bucket-record-equality'
 import { getUnreadBadgeCount } from './unread-badge-count'
-import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
+import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   selectFolderWorkspaces,
@@ -28,6 +29,7 @@ type UnreadBadgeCountState = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
+  | 'unreadAgentCompletionPanes'
 >
 
 /** The worktree fields the count reads (`id` embeds `repoId`), so equality over them is a sound cache key. */
@@ -47,23 +49,42 @@ function sameBadgeWorktree(previous: Worktree, next: Worktree): boolean {
   )
 }
 
+const unreadFoldersCache = new WeakMap<readonly FolderWorkspace[], readonly FolderWorkspace[]>()
+
+function unreadFolders(folders: readonly FolderWorkspace[]): readonly FolderWorkspace[] {
+  let unread = unreadFoldersCache.get(folders)
+  if (!unread) {
+    unread = folders.filter((folder) => folder.isUnread)
+    unreadFoldersCache.set(folders, unread)
+  }
+  return unread
+}
+
 function sameFolderAttention(
   previous: UnreadBadgeCountState,
   next: UnreadBadgeCountState
 ): boolean {
+  const sameMarkers =
+    previous.unreadTerminalTabs === next.unreadTerminalTabs &&
+    previous.unreadAgentCompletionPanes === next.unreadAgentCompletionPanes
   if (
+    sameMarkers &&
     previous.tabsByWorktree === next.tabsByWorktree &&
-    previous.unifiedTabsByWorktree === next.unifiedTabsByWorktree &&
-    previous.unreadTerminalTabs === next.unreadTerminalTabs
+    previous.unifiedTabsByWorktree === next.unifiedTabsByWorktree
   ) {
     return true
   }
-  for (const folder of selectFolderWorkspaces(next)) {
-    if (!folder.isUnread) {
+  for (const folder of unreadFolders(selectFolderWorkspaces(next))) {
+    const key = folderWorkspaceKey(folder.id)
+    // Why: title batches replace the tab maps but keep other workspaces' buckets.
+    if (
+      sameMarkers &&
+      previous.tabsByWorktree[key] === next.tabsByWorktree[key] &&
+      previous.unifiedTabsByWorktree[key] === next.unifiedTabsByWorktree[key]
+    ) {
       continue
     }
-    const key = folderWorkspaceKey(folder.id)
-    if (hasLiveTabMarker(previous, key) !== hasLiveTabMarker(next, key)) {
+    if (workspaceHasLiveMarker(previous, key) !== workspaceHasLiveMarker(next, key)) {
       return false
     }
   }
@@ -105,6 +126,7 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
         tabsByWorktree: state.tabsByWorktree,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
         unreadTerminalTabs: state.unreadTerminalTabs,
+        unreadAgentCompletionPanes: state.unreadAgentCompletionPanes,
         projectGroups: state.projectGroups,
         repoMap: getIndexedRepoMap(state.repos),
         visibleHostIds: getVisibleWorkspaceHostIdSet(state),
