@@ -112,6 +112,7 @@ export function useBotItemsClosedPages(
     setPages({ ...pages, base: read, items: carriedPages(pages, read, named) })
   }
   const generation = useRef(0)
+  const pendingMore = useRef(0)
   const latest = useRef(read)
   useEffect(() => {
     latest.current = read
@@ -124,16 +125,18 @@ export function useBotItemsClosedPages(
       return
     }
     const mine = ++generation.current
+    // A Show more still out is dropped by this read, so its page is read here too.
+    const want = depth + pendingMore.current
     void (async () => {
       const items: BotItem[] = []
       let cursor = read.nextClosedCursor ?? null
-      for (let page = 0; page < depth && cursor; page++) {
+      for (let page = 0; page < want && cursor; page++) {
         const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
         items.push(...next.items)
         cursor = next.nextClosedCursor ?? null
       }
       if (generation.current === mine) {
-        setPages({ base: read, chats, depth, items, cursor })
+        setPages({ base: read, chats, depth: want, items, cursor })
       }
     })().catch((error: unknown) => {
       console.warn('[bots] items: reading Closed pages again failed', error)
@@ -161,7 +164,10 @@ export function useBotItemsClosedPages(
       return { items: NONE, more: false }
     }
     const mine = ++generation.current
-    const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
+    pendingMore.current += 1
+    const next = await readMoreClosedItems({ hostId, id }, cursor, chats).finally(() => {
+      pendingMore.current -= 1
+    })
     const now = latest.current
     const since =
       now && now !== read ? botItemsNamedSince(now, read) : new Map<string, BotItem | null>()
@@ -218,7 +224,10 @@ export function useBotItemsClosedPages(
         }
       })
     }
-    return { items: next.items, more: Boolean(next.nextClosedCursor) }
+    // Dropped for a read of the depth again (which reads this page too): nothing shows from it yet.
+    return generation.current === mine
+      ? { items: next.items, more: Boolean(next.nextClosedCursor) }
+      : { items: NONE, more: true }
   }, [read, cursor, hostId, id, chats])
 
   return {
