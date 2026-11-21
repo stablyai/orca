@@ -85,14 +85,6 @@ describe('useBotSoulDescription', () => {
     expect(readFile).not.toHaveBeenCalled()
   })
 
-  it('shows a SOUL.md save at once, without remounting', async () => {
-    readFile.mockResolvedValue({ content: soul('Old purpose') })
-    const { result } = renderHook(() => useBotSoulDescription(local()))
-    await waitFor(() => expect(result.current).toBe('Old purpose'))
-    await act(() => writeBotHomeFile(local(), 'SOUL.md', soul('New purpose'), OVERWRITE))
-    expect(result.current).toBe('New purpose')
-  })
-
   it("takes a save only on its own host's SOUL.md at its own folder", async () => {
     readFile.mockResolvedValue({ content: soul('Mine') })
     const here = renderHook(() => useBotSoulDescription(local()))
@@ -154,15 +146,6 @@ describe('useBotSoulDescription', () => {
     // The same path saved on the server is another file.
     act(() => editorSaved({ id: 'server-tab', runtimeEnvironmentId: 'env-1' }, soul('Server tab')))
     expect(result.current).toBe('Edited in the tab')
-  })
-
-  it('reads again when Orca regains focus, for an edit made outside it', async () => {
-    readFile.mockResolvedValueOnce({ content: soul('Before') })
-    const { result } = renderHook(() => useBotSoulDescription(local()))
-    await waitFor(() => expect(result.current).toBe('Before'))
-    readFile.mockResolvedValueOnce({ content: soul('Changed in another app') })
-    act(() => void window.dispatchEvent(new Event('focus')))
-    await waitFor(() => expect(result.current).toBe('Changed in another app'))
   })
 
   it('keeps only the newest of overlapping reads', async () => {

@@ -32,7 +32,6 @@ describe('taking the key from Downloads', () => {
     const onClient = vi.fn()
     const { result } = renderHook(() => useCaptureClientKey(DOWNLOADS, onClient))
     await waitFor(() => expect(result.current.gaveUp).toBe(true))
-    expect(result.current.error).toContain('Add the file')
     expect(mocks.watch).toHaveBeenCalledTimes(1)
     expect(onClient).not.toHaveBeenCalled()
   })

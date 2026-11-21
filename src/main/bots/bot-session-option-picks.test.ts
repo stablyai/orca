@@ -33,10 +33,10 @@ function harness(bot: Bot = makeTestBot({ agent: 'claude', folderWorkspaceId: HO
       }
     }
   }
-  return { bots, host, saved: () => saved }
+  return { bots, host }
 }
 
-const haikuPick = (sessionId?: string): NativeChatSessionOptionSettingsMutation => ({
+const haikuPick = (sessionId: string): NativeChatSessionOptionSettingsMutation => ({
   type: 'apply-picks',
   agent: 'claude',
   picks: [
@@ -46,26 +46,10 @@ const haikuPick = (sessionId?: string): NativeChatSessionOptionSettingsMutation 
       value: 'claude-haiku-5-5'
     }
   ],
-  ...(sessionId ? { sessionId } : {})
+  sessionId
 })
 
 describe("a model pick in a bot's conversation", () => {
-  it('is kept on the bot and is not left for the owner’s chat default', async () => {
-    const { bots, host, saved } = harness()
-
-    // `true` tells the settings write not to touch the owner's nativeChatSessionOptions.
-    expect(await keepSessionPicksOnBot(bots, haikuPick('bot-chat'), host)).toBe(true)
-    expect(saved().launch).toEqual({ model: 'claude-haiku-5-5' })
-  })
-
-  it('leaves a pick in any other chat, or from a client that names none, to the chat default', async () => {
-    const { bots, host } = harness()
-
-    expect(await keepSessionPicksOnBot(bots, haikuPick('plain-chat'), host)).toBe(false)
-    expect(await keepSessionPicksOnBot(bots, haikuPick(), host)).toBe(false)
-    expect(bots.update).not.toHaveBeenCalled()
-  })
-
   it('saves nothing when the bot already runs the picked model', async () => {
     const { bots, host } = harness(
       makeTestBot({

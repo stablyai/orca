@@ -33,8 +33,9 @@ beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'orca-connector-events-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
+  await ConnectorTurnEvents.settled()
   rmSync(userDataPath, { recursive: true, force: true })
 })
 
@@ -52,7 +53,7 @@ describe('ConnectorTurnEvents', () => {
     expect(head?.batch[0]).toEqual({ kind: 'snapshot', conversations: [] })
   })
 
-  it('keeps 200 turn ends in all, never trimming the head in flight', () => {
+  it('keeps 200 turn ends in all, never trimming the head in flight', async () => {
     const events = new ConnectorTurnEvents(userDataPath, 'ada')
     for (let turn = 1; turn <= 50; turn++) {
       events.observe(turnEnded(turn))
@@ -61,13 +62,15 @@ describe('ConnectorTurnEvents', () => {
     for (let turn = 51; turn <= 300; turn++) {
       events.observe(turnEnded(turn))
     }
+    await ConnectorTurnEvents.settled()
     const { account, turnEnds: stored } = z
-      .object({ account: z.string(), turnEnds: z.array(z.unknown()) })
+      .object({ account: z.string(), turnEnds: z.array(z.object({ turnId: z.number() })) })
       .parse(JSON.parse(readFileSync(join(userDataPath, 'connector-turn-outbox.json'), 'utf8')))
     expect(account).toBe('ada')
-    expect(stored).toHaveLength(200)
-    expect(stored[0]).toMatchObject({ turnId: 1 })
-    expect(stored.at(-1)).toMatchObject({ turnId: 300 })
+    expect(stored.map(({ turnId }) => turnId)).toEqual([
+      ...Array.from({ length: 50 }, (_, index) => index + 1),
+      ...Array.from({ length: 150 }, (_, index) => index + 151)
+    ])
   })
 
   it('asks for a snapshot once the caps drop an event, until the next snapshot arrives', () => {
@@ -90,18 +93,15 @@ describe('ConnectorTurnEvents', () => {
     ])
   })
 
-  it('keeps a chat turn’s origin through a restart, so Orca-typed turns stay unmirrored', () => {
-    new ConnectorTurnEvents(userDataPath, 'ada').observe({ ...turnEnded(1), origin: 'local' })
-    expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toEqual([
-      expect.objectContaining({ turnId: 1, origin: 'local' })
-    ])
-  })
-
-  it('keeps a turn end’s pull request links through a restart', () => {
+  it('keeps a turn end’s origin and pull request links through a restart', () => {
     const links = [{ url: 'https://github.com/org/repo/pull/7', title: 'Pull request #7' }]
-    new ConnectorTurnEvents(userDataPath, 'ada').observe({ ...turnEnded(1), links })
+    new ConnectorTurnEvents(userDataPath, 'ada').observe({
+      ...turnEnded(1),
+      origin: 'local',
+      links
+    })
     expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toEqual([
-      expect.objectContaining({ turnId: 1, links })
+      expect.objectContaining({ turnId: 1, origin: 'local', links })
     ])
   })
 
@@ -170,6 +170,128 @@ describe('ConnectorTurnEvents', () => {
         },
         { conversation, paneKey: 'tab:2', agent: 'claude', working: false, prompt: null }
       ]
+    })
+  })
+
+  describe('a long answer', () => {
+    const ended = (text: string) =>
+      ({
+        kind: 'turn-ended',
+        conversation,
+        worktreeId: 'wt',
+        paneKey: 'tab:1',
+        turnId: 5,
+        at: 6,
+        stopReason: 'success',
+        lastAssistantMessage: text
+      }) as const
+    const sent = (events: ConnectorTurnEvents) => {
+      const [event] = events.next(1)?.batch ?? []
+      return event?.kind === 'turn-ended' ? (event.lastAssistantMessage ?? '') : ''
+    }
+    const NOTE = '\n\n_… cut short here. The full answer is in Orca._'
+
+    it('goes whole to a cloud that lists answers.long, and cut to 8 KB to one that doesn’t', () => {
+      const answer = 'a'.repeat(20_000)
+      const newer = new ConnectorTurnEvents(userDataPath, 'ada')
+      newer.useCloudFeatures(new Set(['answers.long']))
+      newer.observe(ended(answer))
+      expect(sent(newer)).toBe(answer)
+
+      const older = new ConnectorTurnEvents(userDataPath, 'grace')
+      older.useCloudFeatures(new Set(['workers']))
+      older.observe(ended(answer))
+      expect(sent(older)).toBe(`${'a'.repeat(8_137)}${NOTE}`)
+    })
+
+    it('is cut for the cloud it finally reaches, when that one takes less than the one it was written for', () => {
+      const events = new ConnectorTurnEvents(userDataPath, 'ada')
+      events.useCloudFeatures(new Set(['answers.long']))
+      events.observe(ended('a'.repeat(20_000)))
+      events.useCloudFeatures(new Set(['workers']), 2)
+      expect(sent(events)).toBe(`${'a'.repeat(8_137)}${NOTE}`)
+    })
+
+    it('is cut the same way through /replies, for a cloud that takes neither it nor reply events', async () => {
+      const posted: string[] = []
+      const rows = [
+        {
+          account: 'ada',
+          deliveryId: 'd1',
+          conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' },
+          sessionId: 'chat-1',
+          epoch: 'e',
+          messageId: 'm-d1',
+          queued: false,
+          fill: {
+            outcome: 'answered' as const,
+            answerDeliveryId: 'd1',
+            prose: 'a'.repeat(20_000),
+            filledAt: 40
+          }
+        }
+      ]
+      const replies = (features: string[]) => {
+        const events = new ConnectorTurnEvents(userDataPath, 'ada', undefined, {
+          journal: () => ({
+            read: async () => rows,
+            fillOutcomes: async () => false,
+            sent: async () => {}
+          }),
+          onOwed: () => {},
+          post: async (reply) => {
+            posted.push(reply.text)
+            return { ok: true, value: { status: 'queued' } }
+          },
+          hostName: () => 'build-box'
+        })
+        events.useCloudFeatures(new Set(features), 1)
+        events.useReplyFlush(() => {})
+        return events.drainReplies()
+      }
+      await replies(['workers'])
+      await replies(['workers', 'answers.long'])
+      expect(posted).toEqual([`${'a'.repeat(8_137)}${NOTE}`, 'a'.repeat(20_000)])
+    })
+
+    it('never goes over 32 KB', () => {
+      const events = new ConnectorTurnEvents(userDataPath, 'ada')
+      events.useCloudFeatures(new Set(['answers.long']))
+      events.observe(ended('a'.repeat(50_000)))
+      expect(sent(events)).toBe(`${'a'.repeat(32_713)}${NOTE}`)
+    })
+  })
+
+  describe('what a turn is doing', () => {
+    const activity = (text: string, paneKey = 'tab:1') =>
+      ({ kind: 'activity', conversation, worktreeId: 'wt', paneKey, turnId: 5, text }) as const
+
+    it('goes only to a cloud that lists turn.activity', () => {
+      const older = new ConnectorTurnEvents(userDataPath, 'ada')
+      older.useCloudFeatures(new Set(['workers']))
+      older.observe(activity('Running pnpm test'))
+      expect(older.next(1)).toBeNull()
+
+      const newer = new ConnectorTurnEvents(userDataPath, 'ada')
+      newer.useCloudFeatures(new Set(['turn.activity']))
+      newer.observe(activity('Running pnpm test'))
+      expect(newer.next(1)?.batch).toEqual([
+        { kind: 'activity', conversation, paneKey: 'tab:1', turnId: 5, text: 'Running pnpm test' }
+      ])
+    })
+
+    it('keeps only each chat’s newest unsent word, and owes no snapshot for the rest', () => {
+      const events = new ConnectorTurnEvents(userDataPath, 'ada')
+      events.useCloudFeatures(new Set(['turn.activity']))
+      events.observe(activity('one'))
+      events.observe(activity('other chat', 'tab:2'))
+      events.observe(activity('two'))
+      events.observe(activity('three'))
+      expect(events.next(1)?.batch.map((event) => 'text' in event && event.text)).toEqual([
+        'other chat',
+        'three'
+      ])
+      expect(events.needsSnapshot).toBe(false)
     })
   })
 

@@ -6,6 +6,7 @@ import {
   type BotItemLinkKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
+import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
 
@@ -39,8 +40,11 @@ export type BotItemSetInput = {
   note?: string
   /** With Canceled, which needs it: the reason. */
   reason?: string
-  /** With a status move, written as the bot's comment; with Needs you, the question. */
+  /** With a status move, written as the agent's comment; with Needs you, the question. With `ask`, only
+   *  the readable fallback a host without asks would keep; this host builds its own from the ask. */
   comment?: string
+  /** With Needs you: the decisions, their choices and their context. */
+  ask?: BotItemAsk
 }
 
 /** What a write did. */
@@ -72,6 +76,29 @@ export function assertBotItemText(
       `${field} is ${value.length} characters; the limit is ${limit}. Put the details in a file and link it.`
     )
   }
+}
+
+/** A status move's comment data. A Needs you question is marked `answerable`: this host records answers,
+ *  so a recorded answer or the owner's reply closes it, and a later unrelated comment never counts as
+ *  its answer. With an ask it holds the
+ *  decisions and a host-built `text` spelling them out for readers without the ask; the sent `comment`
+ *  (an older host's fallback) is not kept. */
+export function botItemCommentData(
+  comment: string | undefined,
+  ask: BotItemAsk | undefined,
+  question: boolean
+): { text: string; ask?: BotItemAsk; answerable?: true } {
+  const answerable = question ? { answerable: true as const } : {}
+  if (!ask) {
+    return { text: comment ?? '', ...answerable }
+  }
+  const parsed = BotItemAskSchema.safeParse(ask)
+  if (!parsed.success) {
+    throw new BotItemError('invalid_argument', parsed.error.issues[0]?.message ?? 'Invalid --ask.')
+  }
+  const text = botItemAskText(parsed.data)
+  assertBotItemText('text', text)
+  return { text, ask: parsed.data, ...answerable }
 }
 
 /** Each link once, first spelling kept: what an add checks and then stores. */

@@ -125,10 +125,8 @@ function renderSection(saved: Bot, openPicture = true) {
 describe('Bot picture', () => {
   it('shows each step at once and saves only the last one', async () => {
     vi.useFakeTimers()
-    const { update, announced, step, settle } = renderSection(bot())
+    const { update, announced, step, settle, unmount } = renderSection(bot())
     expect(announced()).toBe('Mascot 2 of 19')
-    expect(screen.getByText("Changes your bot's picture in Slack too.")).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Shuffle picture' })).toBeNull()
 
     step('Next picture')
     step('Next picture')
@@ -137,8 +135,9 @@ describe('Bot picture', () => {
     expect(update).not.toHaveBeenCalled()
 
     await settle()
+    expect(update).toHaveBeenCalledExactlyOnceWith({ avatar: mascotAvatar('F1') })
+    unmount()
     expect(update).toHaveBeenCalledTimes(1)
-    expect(update).toHaveBeenCalledWith({ avatar: mascotAvatar('F1') })
   })
 
   it('saves a pending step when Settings closes', () => {
@@ -183,22 +182,6 @@ describe('Bot picture', () => {
     )
   })
 
-  it('keeps an emoji picture so stepping back restores it', async () => {
-    vi.useFakeTimers()
-    const { update, step, settle, rerender, announced } = renderSection(bot({ avatar: '🦊' }))
-    expect(announced()).toBe('Current picture')
-
-    step('Next picture')
-    await settle()
-    expect(update).toHaveBeenLastCalledWith({ avatar: mascotAvatar('A1') })
-    rerender(bot({ avatar: mascotAvatar('A1') }))
-
-    step('Previous picture')
-    expect(screen.getByRole('group', { name: 'Picture' }).textContent).toContain('🦊')
-    await settle()
-    expect(update).toHaveBeenLastCalledWith({ avatar: '🦊' })
-  })
-
   it('keeps a retired mascot as the current picture, so stepping back restores it', async () => {
     vi.useFakeTimers()
     const { update, step, settle, rerender, announced, shown } = renderSection(
@@ -217,15 +200,6 @@ describe('Bot picture', () => {
     expect(update).toHaveBeenLastCalledWith({ avatar: mascotAvatar('S2') })
   })
 
-  it('saves once when Settings closes after the step was saved', async () => {
-    vi.useFakeTimers()
-    const { update, step, settle, unmount } = renderSection(bot())
-    step('Next picture')
-    await settle()
-    unmount()
-    expect(update).toHaveBeenCalledTimes(1)
-  })
-
   it('ends on the upload when the owner steps back to it while it is still sending', async () => {
     let finish: (saved: Bot) => void = () => {}
     mocks.uploadBotAvatar.mockImplementationOnce(
@@ -239,7 +213,12 @@ describe('Bot picture', () => {
     fireEvent.change(input, {
       target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] }
     })
-    await waitFor(() => expect(mocks.uploadBotAvatar).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'TkVX'
+      )
+    )
     vi.useFakeTimers()
 
     step('Next picture')
@@ -370,44 +349,15 @@ describe('Bot picture', () => {
     expect(announced()).toBe('Mascot 1 of 19')
     mocks.readBotAvatarPng.mockImplementation(async () => 'UE5H')
   })
-
-  it('sends an uploaded image as the bot picture', async () => {
-    renderSection(bot())
-    const input = document.querySelector('input[type="file"]')
-    if (!input) {
-      throw new Error('no file input')
-    }
-    fireEvent.change(input, {
-      target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] }
-    })
-    await waitFor(() =>
-      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'bot-1' }),
-        'TkVX'
-      )
-    )
-  })
 })
 
 describe('BotAgentSettings', () => {
-  it('asks before switching, says what carries over, then starts the Home Chat on the new agent', async () => {
+  it('asks before switching and starts the Home Chat on the new agent', async () => {
     const { update } = renderSection(bot())
 
     await act(async () => mocks.picked.agent?.('codex'))
 
-    const asked = mocks.confirm.mock.calls[0]?.[0]
-    expect(asked).toMatchObject({
-      title: 'Switch Scout to Codex?',
-      description:
-        "Scout's Home Chat starts fresh on Codex. The current conversation stays in history.",
-      confirmLabel: 'Switch to Codex'
-    })
-    render(<>{asked?.details}</>)
-    expect(screen.getByText('Kept: soul, memory, automations, connectors')).toBeTruthy()
-    expect(screen.getByText('Not kept: the current conversation')).toBeTruthy()
-    expect(
-      screen.getByText('Slack threads already running stay on Claude Code until they finish')
-    ).toBeTruthy()
+    expect(mocks.confirm).toHaveBeenCalledOnce()
     expect(update).toHaveBeenCalledWith({ agent: 'codex', launch: null })
     expect(mocks.openBotChat).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-1' }))
   })

@@ -73,6 +73,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
+    onClientEvent: (listener, options) => this.onClientEvent(listener, options),
     setTimer: unrefTimer,
     now: Date.now
   })

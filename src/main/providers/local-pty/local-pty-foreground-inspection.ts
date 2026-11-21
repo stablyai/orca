@@ -293,10 +293,7 @@ export async function confirmLocalPtyForegroundProcess(
   }
 }
 
-export async function confirmLocalPtyShellForeground(
-  id: string,
-  options?: { noLiveDescendants?: boolean }
-): Promise<boolean> {
+export async function confirmLocalPtyShellForeground(id: string): Promise<boolean> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return false
@@ -306,7 +303,7 @@ export async function confirmLocalPtyShellForeground(
     ptyShellPath.get(id),
     process.platform === 'win32'
       ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(proc) }
-      : { noLiveDescendants: options?.noLiveDescendants === true }
+      : {}
   )
   return ptyProcesses.get(id) === proc && confirmed
 }

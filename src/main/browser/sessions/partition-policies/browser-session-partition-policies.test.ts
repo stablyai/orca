@@ -74,6 +74,9 @@ vi.mock('electron', () => ({
     }
   }
 }))
+vi.mock('../../cookies/session-restore/browser-session-cookie-restore', () => ({
+  restoreBrowserRoutePartitionSessionCookies: async () => {}
+}))
 vi.mock('../../desktop-browser-bridge/remote-cli-driven-workspaces', () => ({
   isRemoteCliDrivenGuest: mocks.isRemoteCliDrivenGuest
 }))

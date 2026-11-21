@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
@@ -30,14 +30,29 @@ const bot: Bot = {
 }
 const workspaceId = 'folder:home-1'
 
-const tree = vi.hoisted((): { current: BotChatTree | null } => ({ current: null }))
+const tree = vi.hoisted(() => {
+  const listeners = new Set<() => void>()
+  const snapshot: { current: BotChatTree | null } = { current: null }
+  return {
+    snapshot,
+    listeners,
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }
+  }
+})
 const opened = vi.hoisted(() => vi.fn())
-vi.mock('./use-bot-chat-tree', () => ({ useBotChatTree: () => tree.current }))
+vi.mock('./use-bot-chat-tree', async () => {
+  const { useSyncExternalStore } = await import('react')
+  const useTree = () => useSyncExternalStore(tree.subscribe, () => tree.snapshot.current)
+  return { useBotChatTree: useTree, useBotOwnChatTree: useTree }
+})
 vi.mock('./bot-workspace', () => ({ useBotForWorkspace: () => bot }))
 const host = vi.hoisted(() => ({ offline: false }))
 vi.mock('@/lib/bot-host-views', () => ({ useBotHostOffline: () => host.offline }))
 vi.mock('./use-bot-now', () => ({
-  useBotNow: () => ({ needs: [], stoppedForSignIn: [], work: [], needsYou: 0, working: 0 }),
+  useBotNow: () => ({ needs: [], stoppedForSignIn: [], needsYou: 0, working: 0 }),
   useBotNeedsYouCount: () => 0
 }))
 vi.mock('./bot-session-open', () => ({ openBotSession: opened }))
@@ -84,7 +99,10 @@ function showTree(patch: Partial<BotChatTree>): void {
     retry: vi.fn(),
     ...patch
   }
-  tree.current = value
+  tree.snapshot.current = value
+  for (const listener of tree.listeners) {
+    listener()
+  }
 }
 
 /** Makes the chat's tab the front one on the bot's page, so its row is the active one. */
@@ -119,11 +137,7 @@ function frontTab(chatId: string): void {
 }
 
 function renderPanel(): void {
-  render(
-    <TooltipProvider>
-      <BotChatsPanel />
-    </TooltipProvider>
-  )
+  render(<BotChatsPanel />, { wrapper: TooltipProvider })
 }
 
 beforeEach(() => {
@@ -142,9 +156,11 @@ afterEach(() => {
 describe('the Chats tab', () => {
   it('starts every chat folded, whatever the sidebar has open, and unfolds to five workers', () => {
     useAppStore.getState().setBotChatFold('local', 'bot-1', 'rollout', 'open')
-    showTree({ chats: [rollout] })
+    showTree({ chats: [{ ...rollout, running: [worker('r1', 'needs-you')] }] })
     renderPanel()
     expect(screen.queryByText('Worker r1')).toBeNull()
+    expect(screen.getByRole('img', { name: '1 waiting' })).toBeTruthy()
+    expect(screen.queryByText(/running/)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Unfold Connector fix rollout' }))
 
@@ -172,20 +188,6 @@ describe('the Chats tab', () => {
     expect(screen.queryByText('Worker r1')).toBeNull()
   })
 
-  it('says on a folded row how many workers wait on the owner, also when none runs', () => {
-    showTree({
-      chats: [
-        chat('waiting', {
-          running: [worker('w1', 'needs-you'), worker('w2', 'needs-you')],
-          runningTotal: 2
-        })
-      ]
-    })
-    renderPanel()
-    expect(screen.getByText('2 waiting')).toBeTruthy()
-    expect(screen.queryByText(/running/)).toBeNull()
-  })
-
   it("shows Activity's header while the host is offline, its actions off and its gear opening settings in Activity", () => {
     host.offline = true
     useAppStore.setState({ rightSidebarTab: 'bot-chats' })
@@ -206,25 +208,19 @@ describe('the Chats tab', () => {
     expect(useAppStore.getState().rightSidebarTab).toBe('bot-activity')
   })
 
-  it('says it is loading until the first read lands', () => {
+  it('shows loading, offers retry on failure and renders the chat once retry succeeds', () => {
+    const retry = vi.fn()
     showTree({ state: 'loading' })
     renderPanel()
     expect(screen.getByText('Loading chats…')).toBeTruthy()
-  })
 
-  it('offers a retry when the read failed', () => {
-    const retry = vi.fn()
-    showTree({ state: 'failed', retry })
-    renderPanel()
+    act(() => showTree({ state: 'failed', retry }))
     expect(screen.getByText(/Couldn't read this bot's chats/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
-  })
 
-  it('sends an older host to Activity, where its work still shows', () => {
-    showTree({ state: 'unsupported' })
-    renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'See its work in Items' }))
-    expect(useAppStore.getState().rightSidebarTab).toBe('bot-activity')
+    act(() => showTree({ chats: [rollout] }))
+    expect(screen.getByRole('button', { name: /^Connector fix rollout · Side chat/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 })

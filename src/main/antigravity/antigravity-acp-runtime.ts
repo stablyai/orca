@@ -95,8 +95,6 @@ function pin(): ManagedRuntimePin | null {
 }
 
 export const ANTIGRAVITY_ACP_COMMAND = COMMAND
-export const ANTIGRAVITY_ACP_VERSION = VERSION
-
 export const ANTIGRAVITY_ACP_RUNTIME: ManagedRuntime = {
   label: 'Antigravity',
   root: (dataDirectory) => join(dataDirectory, 'agent-runtimes', 'antigravity'),

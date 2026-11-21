@@ -1,7 +1,7 @@
 // The open item in the list's place: the back row with its place in the list and ↓ ↑ to the next and
 // previous item, over the item itself. Esc, and Back's chord (Cmd+[ / Alt+Left), go back from anywhere
-// in it, and typing anywhere in it goes to the comment box. The row stays up across steps, so a
-// clicked arrow keeps focus; offline only the item is off.
+// in it, and typing or dictating anywhere in it goes to the comment box. The row stays up across
+// steps, so a clicked arrow keeps focus; offline only the item is off.
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,32 +14,42 @@ import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-ke
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { BotItemView } from './BotItemView'
 import type { BotItemCommentBoxHandle } from './BotItemCommentBox'
 import { typeIntoBotItemComment } from './bot-item-comment-typing'
+import { registerDictationInputOwner } from '../../dictation/dictation-insertion-target'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
+import { BotAvatar } from '../BotAvatar'
 import type { BotItemWalkState } from './use-bot-item-walk'
 
 export function BotItemPane({
   bot,
   uid,
+  listed,
   walk,
   offline,
-  onBack
+  onBack,
+  named = false
 }: {
   bot: Bot
   uid: string
+  /** The item's list row: its header shows from it while the item reads. */
+  listed?: BotItem
   walk: BotItemWalkState
   offline: boolean
   onBack: () => void
+  /** Opened from a group's list: the back row names whose item it is. */
+  named?: boolean
 }): React.JSX.Element {
   return (
-    <BotItemPaneFrame walk={walk} offline={offline} onBack={onBack}>
+    <BotItemPaneFrame walk={walk} offline={offline} onBack={onBack} owner={named ? bot : null}>
       {(comment) => (
         <BotItemView
           key={uid}
           bot={bot}
           uid={uid}
+          listed={listed}
           takeFocus={takeFocus}
           commentRef={comment}
           onGone={walk.markGone}
@@ -55,11 +65,14 @@ export function BotItemPaneFrame({
   walk,
   offline,
   onBack,
+  owner = null,
   children
 }: {
   walk: BotItemWalkState
   offline: boolean
   onBack: () => void
+  /** Whose item it is, named after Back. */
+  owner?: Bot | null
   children: (comment: React.RefObject<BotItemCommentBoxHandle | null>) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -69,6 +82,12 @@ export function BotItemPaneFrame({
   // Open: focus here, so Esc works while the item reads; the item takes it once it shows.
   useEffect(() => {
     root.current?.focus({ preventScroll: true })
+  }, [])
+  useEffect(() => {
+    const pane = root.current
+    return pane
+      ? registerDictationInputOwner(pane, { focusInput: () => comment.current?.focus() })
+      : undefined
   }, [])
   return (
     <div
@@ -96,8 +115,14 @@ export function BotItemPaneFrame({
       <div className="flex items-center gap-1 px-1.5 pb-1 text-xs text-muted-foreground">
         <Button variant="ghost" size="xs" onClick={onBack}>
           <ArrowLeft />
-          {t('bots.items.tab', 'Items')}
+          {t('bots.items.tab', 'Home')}
         </Button>
+        {owner ? (
+          <span className="flex min-w-0 items-center gap-1.5 px-1 text-foreground">
+            <BotAvatar bot={owner} className="size-4 shrink-0 rounded-full text-[9px]" />
+            <span className="min-w-0 truncate">{owner.name}</span>
+          </span>
+        ) : null}
         {walk.place ? (
           <BotItemStepper root={root} walk={walk} offline={offline} place={walk.place} />
         ) : null}

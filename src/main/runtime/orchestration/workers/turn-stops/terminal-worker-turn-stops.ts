@@ -17,6 +17,8 @@ import {
   type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { firstWithin } from '../approvals/first-within'
+import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
@@ -77,10 +79,10 @@ export class TerminalWorkerTurnStops {
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
     const lastOutput =
       (reason === 'finished' && stop.row.lastAssistantMessage) ||
-      (await this.deps
-        .readScreen(stopped.handle)
-        .then((view) => redactWorkerTerminalView(view).tail.join('\n'))
-        .catch(() => undefined))
+      (await this.readStopScreen(
+        stopped.handle,
+        reason === 'needs-input' && stop.row.agentType === 'claude'
+      ))
     const before = this.stillStopped(stop)
     // One report per approval; the screen shows Claude's own reason for asking.
     const approval =
@@ -109,6 +111,18 @@ export class TerminalWorkerTurnStops {
     if (approval && sent) {
       this.deps.markApprovalReported(approval.approvalId)
     }
+  }
+
+  /** A prompt's dialog can paint after its hook posts, as a background subagent's did. */
+  private async readStopScreen(handle: string, awaitDialog: boolean): Promise<string | undefined> {
+    const read = () =>
+      this.deps.readScreen(handle).then((view) => redactWorkerTerminalView(view).tail)
+    const dialog = awaitDialog
+      ? await firstWithin(this.deps.setTimer, () =>
+          read().then((tail) => (showsClaudeDialog(tail) ? tail : null))
+        )
+      : null
+    return (dialog ?? (await read().catch(() => undefined)))?.join('\n')
   }
 
   private stillStopped(stop: PreparedStop) {

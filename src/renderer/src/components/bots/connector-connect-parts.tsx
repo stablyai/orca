@@ -223,7 +223,9 @@ export function ConnectorSetupHeader({
             </span>
           </DialogTitle>
           <DialogDescription asChild>
-            <div className="break-words">{line ?? <BotHowToAsk text={intro} />}</div>
+            <div className="break-words">
+              {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
+            </div>
           </DialogDescription>
         </div>
       </div>

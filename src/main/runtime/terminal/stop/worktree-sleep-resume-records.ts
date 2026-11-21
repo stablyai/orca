@@ -45,9 +45,10 @@ export async function captureWorktreeSleepResumeRecords(args: {
   /** Read after each presence probe, so a conversation started during it is the one captured. */
   readRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
   readSavedRecord?: (paneKey: string) => Promise<SleepingAgentSessionRecord | undefined>
+  /** `savedRecord` null: read and absent. */
   readIdentity?: (
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord
+    savedRecord?: SleepingAgentSessionRecord | null
   ) => ReturnType<typeof paneAgentIdentity>
   checkAgentPresence:
     | ((paneKey: string, exitedSince?: number) => Promise<AgentProcessVerdict | null>)
@@ -71,7 +72,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         .catch(() => null)
       const savedRecord = await args.readSavedRecord?.(paneKey)
       const identity = args.readIdentity
-        ? args.readIdentity(paneKey, savedRecord)
+        ? args.readIdentity(paneKey, savedRecord ?? (args.readSavedRecord ? null : undefined))
         : paneAgentIdentity({
             paneKey,
             row: args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey),
@@ -81,7 +82,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
           })
       if (
         identity?.ended ||
-        identity?.processTopology === 'shared' ||
+        identity?.executionHost === 'shared' ||
         (presence === 'exited' && !identity?.status.paneSleep)
       ) {
         retiredPaneKeys.push(paneKey)
@@ -128,6 +129,23 @@ export async function captureWorktreeSleepResumeRecords(args: {
   return capture
 }
 
+/** Whether the record's pane still exists, bound to the stopped terminal or to none. */
+function paneStillHeldBy(
+  session: WorkspaceSessionState,
+  record: SleepingAgentSessionRecord,
+  ptyId: string
+): boolean {
+  const tabId = record.tabId ?? parsePaneKey(record.paneKey)?.tabId
+  const row = tabId && session.tabsByWorktree?.[record.worktreeId]?.find((tab) => tab.id === tabId)
+  if (!row) {
+    return false
+  }
+  const layout = session.terminalLayoutsByTabId?.[row.id]
+  const leafId = parsePaneKey(record.paneKey)?.leafId
+  const bound = layout ? (leafId ? layout.ptyIdsByLeafId?.[leafId] : undefined) : row.ptyId
+  return !bound || bound === ptyId
+}
+
 /** The session with the stopped panes' records replaced, or null when nothing changes. */
 export function applyWorktreeSleepResumeRecords(
   session: WorkspaceSessionState,
@@ -146,6 +164,10 @@ export function applyWorktreeSleepResumeRecords(
       }
     }
     for (const record of entry?.records ?? []) {
+      // A tab close or another terminal took the pane while the stop ran: its saved state is theirs.
+      if (!paneStillHeldBy(session, record, ptyId)) {
+        continue
+      }
       // Only a terminal main can't tell about keeps an earlier capture's recipe for the same session.
       const previous = next[record.paneKey]
       const keptLaunchConfig =

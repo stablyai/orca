@@ -141,6 +141,24 @@ export type ClaudeAccountSelectionChange = {
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
 }
 
+/** What a server did with its running Claude terminals when its account switched. */
+export type ClaudeHostRunningSessionsMove = {
+  /** Restarting on the new account, each resuming its conversation. */
+  restarting: number
+  /** Running Claude terminals that may still be on the previous account. */
+  notMoved: number
+}
+
+/** `runningSessions` is absent from older servers, and from hosts whose window moves its own. */
+export type ClaudeAccountSelectResult = ClaudeRateLimitAccountsState & {
+  runningSessions?: ClaudeHostRunningSessionsMove
+}
+
+/** Moves a host's running Claude sessions after a switch; a host without a window reports them. */
+export type ClaudeAccountSelectedHandler = (
+  change: ClaudeAccountSelectionChange
+) => Promise<ClaudeHostRunningSessionsMove | undefined>
+
 export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null
   wsl: Record<string, string | null>

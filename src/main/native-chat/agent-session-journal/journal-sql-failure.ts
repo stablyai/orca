@@ -34,7 +34,7 @@ type JournalSourceContent = 'journalCorrupt' | 'journalWrittenByNewerOrca'
 const SOURCE_CONTENT = Symbol('journal source content diagnosis')
 
 /** Only the original-source preparation transport supplies this marker. */
-function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
+export function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
   if (error instanceof Error && SOURCE_CONTENT in error) {
     const content = error[SOURCE_CONTENT]
     if (content === 'journalCorrupt' || content === 'journalWrittenByNewerOrca') {
@@ -42,6 +42,11 @@ function journalSqlSourceContent(error: unknown): JournalSourceContent | undefin
     }
   }
   return undefined
+}
+
+/** The original journal's own content failed, not the transport or this process's lifecycle. */
+export function isJournalSqlSourceContentFailure(error: unknown): boolean {
+  return journalSqlSourceContent(error) !== undefined
 }
 
 export function journalSqlSourceFailure(error: unknown): JournalSqlFailure {

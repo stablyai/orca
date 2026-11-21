@@ -50,6 +50,8 @@ export function useMobileNativeChatComposerMenu(input: {
   onSlashMenuDemand?: (open: boolean) => void
   /** A picked skill; a send carries its file while its token stays, and treats a leading one as chat. */
   onPickSkill?: (skill: { token: string; path?: string }) => void
+  /** An Orca command row was picked; it outranks an earlier skill pick of the same token. */
+  onPickOrcaCommand?: (token: string) => void
   editing?: boolean
   interactionModeSupported?: boolean
   admitsInteractionMode?: (mode: AgentSessionInteractionMode) => boolean
@@ -201,6 +203,9 @@ export function useMobileNativeChatComposerMenu(input: {
     }
     if (row.kind === 'command' && input.refuseCommand?.(row.token)) {
       return
+    }
+    if (row.kind === 'command' && row.orcaOwned) {
+      input.onPickOrcaCommand?.(row.token)
     }
     const enterGoalMode = input.goalMode?.enter
     const changeMode = input.onPickInteractionMode

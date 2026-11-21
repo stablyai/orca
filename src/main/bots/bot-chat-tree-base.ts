@@ -26,7 +26,7 @@ import {
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { botChatRecordRow } from '../runtime/rpc/methods/bots-chats'
+import { botChatRecordEmpty, botChatRecordRow } from '../runtime/rpc/methods/bots-chats'
 import { automationRuns, type BotActivityHost } from './bot-activity-host'
 import { isBotBackgroundRun, type BotBackgroundRuns } from './bot-background-run-records'
 import { BotDispatchPlacement } from './bot-chat-dispatches'
@@ -94,6 +94,7 @@ export function botChatRecordShown(record: AgentSessionConversationView): string
     record.conversationCommand ?? null,
     record.lastTurn ?? null,
     record.provider,
+    record.providerHandleChain.length > 0,
     // An unturned chat lists by when its record last changed.
     record.lastTurn ? null : record.updatedAt
   ])
@@ -112,6 +113,8 @@ export type BotChatBaseChat = {
   /** The pane whose status is this chat's: its lineage's live session. */
   paneKey: string
   closed: boolean
+  /** A side chat nobody has written in yet; it lists only while its tab is open. */
+  empty: boolean
 }
 
 export type BotChatBaseContext = { db: OrchestrationDb; backgroundRuns: BotBackgroundRuns }
@@ -167,7 +170,8 @@ export function botChatBaseChat(
     lastActiveAt: row.lastActivityAt,
     ...(preview ? { preview } : {}),
     paneKey: structuredAgentSessionStatusPaneKey(live?.sessionId ?? row.id),
-    closed
+    closed,
+    empty: !origin && record.sessionId === row.id && botChatRecordEmpty(record)
   }
 }
 
@@ -300,8 +304,9 @@ export function overlayBotChats(
     unseen: ReadonlySet<string>
   }
 ): BotChatFacts[] {
+  const shown = chats.filter((chat) => !chat.empty || live.tabbed.has(chat.chatId))
   return [
-    ...chats.map((chat): BotChatFacts => {
+    ...shown.map((chat): BotChatFacts => {
       const status = live.rowByPaneKey.get(chat.paneKey)
       return {
         chatId: chat.chatId,

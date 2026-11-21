@@ -54,6 +54,7 @@ import { createNewIssueDraftSlice } from './slices/task-creation/new-issue-draft
 import { createFeedbackDraftSlice } from './slices/feedback/feedback-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/runtime-host-updates/remote-server-updates'
+import { createAgentCliUpdatesSlice } from './slices/runtime-host-updates/agent-cli-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminals/quick-commands/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-sessions/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-sessions/structured-chat-slept-at'
@@ -155,6 +156,7 @@ export const useAppStore = create<AppState>()(
               ...createFeedbackDraftSlice(...a),
               ...createTaskCreationDraftsSlice(...a),
               ...createRemoteServerUpdatesSlice(...a),
+              ...createAgentCliUpdatesSlice(...a),
               ...createTerminalQuickCommandHostsSlice(...a),
               ...createStructuredSessionLaunchDirectorySlice(...a),
               ...createStructuredChatSleptAtSlice(...a),

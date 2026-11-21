@@ -17,11 +17,8 @@ import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorReach } from './connector-reach'
 import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
-import {
-  CONNECTOR_PATHS,
-  ConnectorReplyResponse,
-  type ConnectorCloudFeature
-} from '../../shared/connectors/connector-cloud-contract'
+import { postConnectorOutboxReply } from './connector-replies'
+import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
 
 // Past this, a held call goes ahead without the hello and gets the cloud's own refusal.
 const HOLD_HELLO_WAIT_MS = 10_000
@@ -262,11 +259,7 @@ export class ConnectorCloud {
         // This account's own transport, fenced at the wire: never another account's.
         post: async (body) =>
           this.activeAccount() === account
-            ? await this.transportFor(account).call(
-                CONNECTOR_PATHS.replies,
-                body,
-                ConnectorReplyResponse
-              )
+            ? await postConnectorOutboxReply(this.transportFor(account), body)
             : SIGNED_OUT,
         hostName: () => this.options.machine.hostName()
       })

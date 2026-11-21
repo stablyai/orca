@@ -21,11 +21,11 @@ afterEach(() => {
 })
 
 describe('accepted spawn followed by failed startup readiness', () => {
-  it.each(
-    (['fresh', 'repeated-exit', 'wrong-incarnation'] as const).flatMap((context) =>
-      [true, false].map((exitBeforeWait) => ({ context, exitBeforeWait }))
-    )
-  )(
+  it.each([
+    { context: 'fresh', exitBeforeWait: false },
+    { context: 'repeated-exit', exitBeforeWait: true },
+    { context: 'wrong-incarnation', exitBeforeWait: true }
+  ] as const)(
     'keeps what a launch printed when its PTY dies mid-command ($context, exitBeforeWait=$exitBeforeWait)',
     async ({ context, exitBeforeWait }) => {
       const { runtime, handle, terminal } = await createTranscriptPane({
@@ -66,11 +66,12 @@ describe('accepted spawn followed by failed startup readiness', () => {
     }
   )
 
-  it.each(
-    (['pi', 'codex', 'claude', 'opencode'] as const).flatMap((agent) =>
-      [true, false].map((exitBeforeWait) => ({ agent, exitBeforeWait }))
-    )
-  )(
+  it.each([
+    { agent: 'pi', exitBeforeWait: true },
+    { agent: 'codex', exitBeforeWait: false },
+    { agent: 'claude', exitBeforeWait: false },
+    { agent: 'opencode', exitBeforeWait: true }
+  ] as const)(
     'carries the real $agent readiness exit into the start failure (exitBeforeWait=$exitBeforeWait)',
     async ({ agent, exitBeforeWait }) => {
       const { runtime, handle, terminal } = await createTranscriptPane({

@@ -166,7 +166,7 @@ describe('docs replace', () => {
 })
 
 describe('docs comment', () => {
-  it('anchors a comment to quoted text by its doc positions, in its tab', async () => {
+  it('anchors a comment in its tab and reports when Google does not save it', async () => {
     const { api, writes } = await docsApi()
     await commentOnDoc(api, { ref: DOC, text: 'Typo', on: 'recieve' })
     // "My essay\n" is 1–9, so "I recieve" starts at 10 and "recieve" at 12.
@@ -180,10 +180,7 @@ describe('docs comment', () => {
     await expect(commentOnDoc(api, { ref: DOC, text: 'x', on: 'the' })).rejects.toThrow(
       'is in the doc 2 times'
     )
-  })
 
-  it('says so when Google answers but keeps no comment', async () => {
-    const { api } = await docsApi()
     commentState = 'ALL_FAILED_UNKNOWN_REASON'
     try {
       await expect(commentOnDoc(api, { ref: DOC, text: 'Typo', on: 'recieve' })).rejects.toThrow(
@@ -221,26 +218,93 @@ describe('docs create and append', () => {
     expect(writes()[0]?.raw).toContain('Content-Type: text/markdown\r\n\r\n# Notes\n- one')
   })
 
-  it('appends after the last paragraph, in the doc’s first tab', async () => {
+  it('appends styled Markdown after the last paragraph in the first tab', async () => {
     const { api, writes } = await docsApi()
-    await appendDoc(api, { ref: DOC, markdown: '## Next\n- ship' })
+    const markdown = [
+      '## Next',
+      '',
+      'Some **bold** and *italic* with `code` and a [link](https://acme.dev).',
+      'wrapped line',
+      '',
+      '- ship',
+      '  - nested',
+      '1. first',
+      '```',
+      'const a = **1**',
+      '```',
+      '---',
+      '| a | b |',
+      '|---|---|',
+      '| 1 | 2 |'
+    ].join('\n')
+    await appendDoc(api, { ref: DOC, markdown })
     const requests = requestsOf(writes()[0]?.body)
-    // The last paragraph ends at 55 with its newline at 54; a new paragraph starts after it.
-    expect(requests[0]).toEqual({
-      insertText: { location: { index: 54, tabId: 't.0' }, text: '\nNext\nship' }
-    })
-    expect(requests).toContainEqual({
+    const range = (startIndex: number, endIndex: number) => ({ startIndex, endIndex, tabId: 't.0' })
+    const text =
+      '\nNext\nSome bold and italic with code and a link. wrapped line\nship\n\tnested\nfirst\nconst a = **1**\n| a | b |\n| 1 | 2 |'
+    expect(requests.slice(0, 4)).toEqual([
+      { insertText: { location: { index: 54, tabId: 't.0' }, text } },
+      {
+        updateParagraphStyle: {
+          range: range(55, 170),
+          paragraphStyle: { namedStyleType: 'NORMAL_TEXT' },
+          fields: 'namedStyleType'
+        }
+      },
+      { deleteParagraphBullets: { range: range(55, 170) } },
+      {
+        updateTextStyle: {
+          range: range(55, 170),
+          textStyle: {},
+          fields: 'bold,italic,link,weightedFontFamily'
+        }
+      }
+    ])
+    expect(requests[4]).toEqual({
       updateParagraphStyle: {
-        range: { startIndex: 55, endIndex: 59, tabId: 't.0' },
+        range: range(55, 59),
         paragraphStyle: { namedStyleType: 'HEADING_2' },
         fields: 'namedStyleType'
       }
     })
-    expect(requests.at(-1)).toEqual({
-      createParagraphBullets: {
-        range: { startIndex: 60, endIndex: 64, tabId: 't.0' },
-        bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE'
+    expect(requests.slice(5, 10)).toEqual([
+      { updateTextStyle: { range: range(65, 69), textStyle: { bold: true }, fields: 'bold' } },
+      { updateTextStyle: { range: range(74, 80), textStyle: { italic: true }, fields: 'italic' } },
+      {
+        updateTextStyle: {
+          range: range(86, 90),
+          textStyle: { weightedFontFamily: { fontFamily: 'Roboto Mono' } },
+          fields: 'weightedFontFamily'
+        }
+      },
+      {
+        updateTextStyle: {
+          range: range(97, 101),
+          textStyle: { link: { url: 'https://acme.dev' } },
+          fields: 'link'
+        }
+      },
+      {
+        updateTextStyle: {
+          range: range(135, 150),
+          textStyle: { weightedFontFamily: { fontFamily: 'Roboto Mono' } },
+          fields: 'weightedFontFamily'
+        }
       }
-    })
+    ])
+    expect(requests.slice(10)).toEqual([
+      {
+        createParagraphBullets: {
+          range: range(129, 134),
+          bulletPreset: 'NUMBERED_DECIMAL_ALPHA_ROMAN'
+        }
+      },
+      {
+        createParagraphBullets: {
+          range: range(116, 128),
+          bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE'
+        }
+      }
+    ])
   })
 })

@@ -41,6 +41,15 @@ import {
   extendWorktreeIdByTabId,
   type WorkspaceTabOwnerCatalog
 } from '../../../../../shared/workspace-session/workspace-session-host-records'
+import type {
+  WorkspaceSessionEntriesPatch,
+  WorkspaceSessionEntriesPatchResult
+} from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import {
+  windowAcknowledgedSessionEntries,
+  type AcknowledgedWorkspaceSessionEntries
+} from './workspace-session-acknowledged-entries'
+import { patchHostSlice, routedSessionHostIds } from './workspace-session-host-entries-write'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -61,9 +70,14 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   contestedPrimaryHostBySessionKey?: Record<string, ExecutionHostId>
 }
 
-type SessionApi = {
+export type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+  /** Absent on clients whose session store takes whole fields only (the paired web client). */
+  patchEntries?: (
+    args: WorkspaceSessionEntriesPatch,
+    hostId?: ExecutionHostId
+  ) => Promise<WorkspaceSessionEntriesPatchResult>
 }
 
 type DurableSessionApi = SessionApi & {
@@ -230,13 +244,15 @@ function splitWorkspaceSessionForWrite(
 export function patchWorkspaceSessionByHost(
   api: SessionApi,
   patch: WorkspaceSessionPatch,
-  state: HostPersistenceState
+  state: HostPersistenceState,
+  acknowledged?: AcknowledgedWorkspaceSessionEntries
 ): { localWrite: Promise<void>; written: Promise<void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
+  acknowledged?.retainHosts(routedSessionHostIds(state, slices))
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
-  const localWrite = api.patch(local)
+  const localWrite = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged)
   const hostWrites = nonLocalHostSessionEntries(slices).map(([hostId, slice]) =>
-    api.patch(slice, hostId).catch((err: unknown) => {
+    patchHostSlice(api, slice, hostId, acknowledged).catch((err: unknown) => {
       console.warn(`[session] host partition patch failed for ${hostId}:`, err)
       throw err
     })
@@ -272,6 +288,8 @@ export function buildWorkspaceSessionHostSnapshots(
 ): WorkspaceSessionHostSnapshot[] {
   // Why 'replace': quit snapshots are applied as full partition sets.
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
+  // They replace main's copy, including when the unload is vetoed and the window stays.
+  windowAcknowledgedSessionEntries.forget()
   return [
     { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
     ...nonLocalHostSessionEntries(slices).map(([hostId, hostState]) => ({

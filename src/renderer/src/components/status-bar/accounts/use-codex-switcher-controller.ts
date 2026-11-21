@@ -82,7 +82,6 @@ export function useCodexSwitcherController(
     runtimeTarget,
     codexAccountSyncKey,
     EMPTY_CODEX_ACCOUNTS,
-    false,
     !hasActiveRuntimeEnvironment
   )
   const {

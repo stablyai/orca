@@ -7,7 +7,10 @@ import {
   isUnreadableError,
   writeSecureFile
 } from '../../shared/secure-storage/secure-file'
-import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
+import {
+  encryptedCredentialProtection,
+  type SecretAtRestProtection
+} from '../../shared/secure-storage/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
 
 type EncryptedApiKeyFileStore = {
@@ -106,7 +109,10 @@ export function createEncryptedApiKeyFileStore({
       return null
     }
     try {
-      return decodeApiKeyEnvelope(readFileSync(path)).kind === 'plaintext' ? 'plaintext' : 'sealed'
+      const envelope = decodeApiKeyEnvelope(readFileSync(path))
+      return envelope.kind === 'plaintext'
+        ? 'plaintext'
+        : encryptedCredentialProtection(envelope.payload)
     } catch {
       return null
     }

@@ -24,6 +24,7 @@ import {
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
+import { readAgentPaneKeys, splitSnapshotByOwner } from './popover/resource-owner-split'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -150,6 +151,16 @@ export function useResourceUsageDerivedModel({
     ]
   )
 
+  // Why: open-only and keyed to the 2 s snapshot and daemon inventory; agent status is read here
+  // rather than subscribed because it churns many times a second.
+  const ownerSplit = useMemo(
+    () =>
+      open && resourceSnapshot
+        ? splitSnapshotByOwner(resourceSnapshot, sessions, readAgentPaneKeys())
+        : null,
+    [open, resourceSnapshot, sessions]
+  )
+
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
     if (!open || !workspaceSessionReady) {
@@ -169,22 +180,16 @@ export function useResourceUsageDerivedModel({
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
     ? getResourceCommitMetricCopy(t)
     : null
-  const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
-    useMemo(() => {
-      const memory = resourceSnapshot?.totalMemory ?? 0
-      const cpu = resourceSnapshot?.totalCpu ?? 0
-      const privateMemory = resourceSnapshot?.totalPrivateMemory
-      return {
-        totalMemory: memory,
-        totalCpu: cpu,
-        memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
-        totalPrivateMemory: privateMemory,
-        commitToneClass: getCommitPressureToneClass({
-          privateMemory,
-          hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
-        })
-      }
-    }, [resourceSnapshot])
+  const { totalPrivateMemory, commitToneClass } = useMemo(() => {
+    const privateMemory = resourceSnapshot?.totalPrivateMemory
+    return {
+      totalPrivateMemory: privateMemory,
+      commitToneClass: getCommitPressureToneClass({
+        privateMemory,
+        hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
+      })
+    }
+  }, [resourceSnapshot])
   const commitBadgeLabel =
     commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
 
@@ -194,16 +199,6 @@ export function useResourceUsageDerivedModel({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines(
     {
-      memoryLabel: resourceSnapshot
-        ? [
-            `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
-            commitBadgeLabel && commitMetricCopy
-              ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
-              : null
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        : memBadgeLabel,
       sessionCount: triggerSessionCount,
       spaceScanReady
     },
@@ -219,13 +214,11 @@ export function useResourceUsageDerivedModel({
 
   return {
     unifiedRepos,
+    ownerSplit,
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
     commitMetricCopy,
-    totalMemory,
-    totalCpu,
-    memBadgeLabel,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,

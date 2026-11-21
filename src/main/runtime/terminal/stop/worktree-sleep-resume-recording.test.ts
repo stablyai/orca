@@ -126,6 +126,10 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
           server.forgetAgentExit(PANE_KEY)
         }
       }
+      if (scenario === 'live' || scenario === 'working') {
+        // A running pane's saved live checkpoint is not proof it still owns that conversation.
+        expect(runtime.quitResumeRecordsFor(fixture.getSession())).toEqual([])
+      }
       try {
         await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
         const record = fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]
@@ -231,15 +235,31 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
   it.each([
     ['quit', ['0'], false],
     ['quit without command marks', ['unmarked'], false],
+    ['a shell nested in the live Codex finishing a command', ['nested'], true],
+    ['a nested shell finishing a command, then quit', ['nested', '0'], false],
     ['suspended', ['148'], true],
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],
     ['macOS suspended, then another command', ['146', '0'], true],
-    ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true]
+    ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true],
+    ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
+    // A restored receipt whose launch already finished leaves the quit to the shell-alone proof.
+    ['macOS suspended, resumed (fg), a listing, then quit', ['146', 'fg', 'listing', '0'], false],
+    // A stop-like status is no proof: an agent that exits 146 for real is gone at that mark.
+    ['quit with a stop-like exit status', ['exit146'], false],
+    ['quit, then sleep while its exit proof still runs', ['quit-then-sleep'], false],
+    ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false],
+    ['quit of an agent no Orca launch held (typed at the prompt)', ['typed'], false],
+    ['quit of a typed agent on Windows, whose host gives no shell proof', ['typed-windows'], false]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
+    const platform = process.platform
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
     const tick = () => vi.setSystemTime(Date.now() + 1_000)
+    // The host's word on the pane's shell: alone unless a nested shell marked a command.
+    let shellAlone: boolean | null = true
+    let stopped = false
+    let proofGate: Promise<void> = Promise.resolve()
     const fixture = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         sleepingAgentSessionsByPaneKey: { [PANE_KEY]: SLEPT }
@@ -258,6 +278,10 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       isPlaced: () => true,
       readSavedRecord: (paneKey) => fixture.getSession().sleepingAgentSessionsByPaneKey?.[paneKey],
       confirmProcessExit: async () => true,
+      confirmShellAlone: async () => {
+        await proofGate
+        return shellAlone
+      },
       retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
     })
     const clears: AgentStatusClearIpcPayload[] = []
@@ -280,6 +304,19 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     const wake = async (ptyId: string) => {
       tick()
       live.add(ptyId)
+      // The window saves the woken terminal into the pane's layout; a sleep checkpoints only the
+      // pane its stopped terminal still holds.
+      const session = fixture.getSession()
+      const layout = session.terminalLayoutsByTabId?.['host-tab']
+      if (layout) {
+        fixture.setSession({
+          ...session,
+          terminalLayoutsByTabId: {
+            ...session.terminalLayoutsByTabId,
+            'host-tab': { ...layout, ptyIdsByLeafId: { [HEADLESS_LEAF_ID]: ptyId } }
+          }
+        })
+      }
       const binding = { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, incarnationId: ptyId }
       await runtime.syncWindowGraph(1, {
         tabs: [
@@ -324,6 +361,30 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
         tick()
         if (status === 'unmarked') {
           await server.reconcilePaneProcessExit(PANE_KEY)
+        } else if (status === 'typed-windows') {
+          Object.defineProperty(process, 'platform', { value: 'win32' })
+          shellAlone = null
+          server.retireProcessAuthority(PANE_KEY, { confirmedExit: true, launchRetired: true })
+          await new Promise((resolve) => setImmediate(resolve))
+          Object.defineProperty(process, 'platform', { value: platform })
+        } else if (status === 'typed') {
+          // The runtime's notice for a mark that finds no launch held.
+          server.retireProcessAuthority(PANE_KEY, { confirmedExit: true, launchRetired: true })
+          await new Promise((resolve) => setImmediate(resolve))
+        } else if (status === 'quit-then-sleep') {
+          let release = (): void => {}
+          proofGate = new Promise((resolve) => {
+            release = resolve
+          })
+          shellAlone = true
+          runtime.onPtyData('pty-3', '\x1b]133;C\x07\x1b]133;D;0\x07', Date.now())
+          // The sleep starts before the process table answers; it must read the quit it proves.
+          const slept = sleep()
+          await new Promise((resolve) => setImmediate(resolve))
+          release()
+          expect(await slept).toBeUndefined()
+        } else if (status === 'fg') {
+          stopped = false
         } else if (status === 'listing') {
           // An inventory refresh (`orca worktree ps`) re-mints the restored surface's receipt.
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected receipt minter the listing path calls.
@@ -337,7 +398,17 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
             'pty-3'
           )
         } else {
-          runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${status}\x07`, Date.now())
+          stopped ||= status === '148' || status === '146'
+          shellAlone = status === 'unproven' ? null : status !== 'nested' && !stopped
+          const code =
+            status === 'exit146'
+              ? '146'
+              : status === 'nested' || status === 'unproven'
+                ? '0'
+                : status
+          runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${code}\x07`, Date.now())
+          // Let the host's shell-alone answer land.
+          await new Promise((resolve) => setImmediate(resolve))
         }
       }
       expect(clears.filter((clear) => 'paneKey' in clear && clear.refusedResume)).toEqual(

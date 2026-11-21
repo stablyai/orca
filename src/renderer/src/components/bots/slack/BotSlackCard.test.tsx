@@ -72,15 +72,6 @@ function openActions(): void {
 }
 
 describe('BotSlackCard', () => {
-  it('heads an installed card with the installer as Slack names them', async () => {
-    renderCard({ ...installed, teamName: 'Globex', installerName: 'Alice' })
-    expect(await screen.findByText('installed by Alice')).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Slack' })).toBeDefined()
-    // All is well, so no status.
-    expect(screen.queryByText('Connected')).toBeNull()
-    expect(screen.getByText('Sam Lee')).toBeDefined()
-  })
-
   it('turns the status into one Update in Slack link when the app is out of date', async () => {
     renderCard({ ...installed, updateNeeded: true })
     expect(await screen.findByRole('button', { name: 'Update in Slack' })).toBeDefined()
@@ -124,15 +115,10 @@ describe('BotSlackCard', () => {
     }
   })
 
-  it('falls back to the installer id when the cloud has no name', async () => {
-    renderCard(installed)
-    expect(await screen.findByText('installed by U07')).toBeDefined()
-  })
-
   it('removes from Slack only after the confirm, which carries the note', async () => {
     renderCard(installed)
     confirm.mockResolvedValueOnce(false)
-    await screen.findByText('installed by U07')
+    expect(await screen.findByText('installed by U07')).toBeDefined()
     openActions()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from T05…' }))
     await waitFor(() => expect(confirm).toHaveBeenCalledOnce())
@@ -158,8 +144,10 @@ describe('BotSlackCard', () => {
   })
 
   it('opens and closes the row from its name', async () => {
-    cleanup()
-    api.state.mockReset().mockResolvedValue({ ok: true, value: installed })
+    api.state.mockReset().mockResolvedValue({
+      ok: true,
+      value: { ...installed, teamName: 'Globex', installerName: 'Alice' }
+    })
     Object.assign(window, {
       api: withBotConnectorRuntime({ botSlack: api, shell: { openUrl: vi.fn() } })
     })
@@ -174,6 +162,13 @@ describe('BotSlackCard', () => {
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(await screen.findByRole('button', { name: 'Add people' })).toBeDefined()
+    expect(await screen.findByText('installed by Alice')).toBeDefined()
+    expect(screen.getByText('Sam Lee')).toBeDefined()
+    expect(screen.queryByText('Connected')).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Add people' })).toBeNull()
   })
 
   it('shows one workspace of several: its own state and only its own people', async () => {

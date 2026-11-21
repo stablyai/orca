@@ -300,6 +300,10 @@ describe('failing looks', () => {
         .runs.slice(-2)
         .map((run) => run.alerted)
     ).toEqual([true, undefined])
+    // The host's turn-end notice follows the same rule.
+    const [first, second] = store.get('b1').runs.slice(-2)
+    expect(store.lookTurnIsQuiet(first!.sessionId, 'failure', true)).toBe(false)
+    expect(store.lookTurnIsQuiet(second!.sessionId, 'failure', true)).toBe(true)
   })
 
   it("starts no look for a usage-limited look's owed slot while Orca continues that look's chat", async () => {
@@ -519,7 +523,7 @@ describe('a look on a sleeping host', () => {
       result: null
     }))
 
-  it('never starts in a dark wake, and catches the slot up once the host is awake', async () => {
+  it('waits for a settled full wake, then catches the slot up once', async () => {
     const { runner, store, sessions, setNow, host } = harness({
       turn: success
     })
@@ -531,8 +535,15 @@ describe('a look on a sleeping host', () => {
     expect(sessions.startConversation).not.toHaveBeenCalled()
     expect(store.get('b1').runs).toHaveLength(0)
 
-    // Opened at 9:40, past the hour a missed slot used to wait: it still runs, once.
     host.setSettled(true)
+    host.setFullWake(false)
+    setNow(at(8, 10))
+    await runner.tick()
+    expect(sessions.startConversation).not.toHaveBeenCalled()
+    expect(store.get('b1').runs).toHaveLength(0)
+
+    // Opened at 9:40, past the hour a missed slot used to wait: it still runs, once.
+    host.setFullWake(true)
     setNow(at(9, 40))
     await runner.tick()
     await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
@@ -591,20 +602,6 @@ describe('a look on a sleeping host', () => {
     // It slept and never finished: missed, not "stopped after 10 min".
     expect(store.get('b1').runs[0]?.error).toBe(LOOK_FAILURES.asleep)
     expect(host.holds).toEqual({ taken: 1, released: 1 })
-  })
-
-  it('never starts in a dark wake that outlasts the settle, and catches the slot up in full wake', async () => {
-    const { runner, store, sessions, setNow, host } = harness({ turn: success })
-    armedLastWeek(store)
-    host.setFullWake(false)
-    setNow(at(8, 10))
-    await runner.tick()
-    expect(sessions.startConversation).not.toHaveBeenCalled()
-    host.setFullWake(true)
-    setNow(at(8, 20))
-    await runner.tick()
-    await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
-    expect(sessions.startConversation).toHaveBeenCalledTimes(1)
   })
 
   it('takes a look back, slot and all, when the host leaves full wake while its session is made', async () => {

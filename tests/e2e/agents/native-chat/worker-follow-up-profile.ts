@@ -1,9 +1,7 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import {
-  journalDomainDatabasePath,
-  openJournalDomainDatabase
-} from '../../../../src/main/native-chat/agent-session-journal/database/journal-domain-database'
+import { openJournalDomainDatabase } from '../../../../src/main/native-chat/agent-session-journal/database/journal-domain-database'
+import { journalDomainDatabasePath } from '../../../../src/main/native-chat/agent-session-journal/database/journal-host-database'
 import { OrchestrationDb } from '../../../../src/main/runtime/orchestration/db/orchestration-db'
 import {
   agentSessionRecordFixture,

@@ -7,7 +7,7 @@ import { join } from 'node:path'
 // Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
+  codexDaemonSocketPathExceedsLimit: () => false
 }))
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({

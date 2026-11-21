@@ -54,6 +54,7 @@ const mutations = [
   'markWorkerStartUnknown',
   'beginWorkerStop',
   'settleWorkerStop',
+  'settleDeadWorkerTerminalReleases',
   'markWorkerStopUnknown',
   'unbindOtherRunsForCoordinator',
   'recordAttemptObservation',

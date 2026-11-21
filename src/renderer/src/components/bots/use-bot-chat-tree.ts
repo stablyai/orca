@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import {
+  botOwnChatTree,
   orderBotChats,
   type BotChatTreeChat,
   type BotChatTreeRead,
@@ -38,7 +39,7 @@ export type BotChatTree = {
   workspaceChats: Record<string, string>
   /** Reads the chat's next 8 finished workers onto its list. */
   loadMore: (chatId: string) => void
-  /** Whether the chats have been read; an older host without the read stays `unsupported`. */
+  /** Whether the chats have been read. */
   state: BotHostReadState
   retry: () => void
 }
@@ -121,4 +122,15 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
     state,
     retry
   }
+}
+
+/** The bot's chats as its own lists show them (Chats tab, sidebar, chat picker), group room sessions'
+ *  workers under Home Chat (`botOwnChatTree`). What needs the owner reads `useBotChatTree`. */
+export function useBotOwnChatTree(bot: Bot | null): BotChatTree {
+  const tree = useBotChatTree(bot)
+  const own = useMemo(
+    () => botOwnChatTree({ chats: tree.chats, workspaceChats: tree.workspaceChats }),
+    [tree.chats, tree.workspaceChats]
+  )
+  return own.chats === tree.chats ? tree : { ...tree, ...own }
 }

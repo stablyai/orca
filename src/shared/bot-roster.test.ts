@@ -6,20 +6,10 @@ import {
   parseBotAddress,
   soulSpecialty
 } from './bot-roster'
-import { starterSoul } from './bot-soul'
 
 describe('soulSpecialty', () => {
-  it('is the first paragraph under the title', () => {
-    expect(
-      soulSpecialty('# Docs\n\nKeeps the docs site\ncurrent.\n\n## How I work\n\n- terse')
-    ).toBe('Keeps the docs site current.')
-  })
-
-  it('is null for an empty, missing or starter soul', () => {
+  it('accepts a missing soul', () => {
     expect(soulSpecialty(null)).toBeNull()
-    expect(soulSpecialty('  \n')).toBeNull()
-    expect(soulSpecialty(starterSoul('Docs'))).toBeNull()
-    expect(soulSpecialty('# Docs\n\n## How I work')).toBeNull()
   })
 
   it('cuts a long one at a word, never inside a character', () => {

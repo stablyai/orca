@@ -139,7 +139,8 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
-  kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+  /** `replaced` stops a restarted pane's old PTY without retiring the pane. */
+  kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }) => Promise<void>
   /** Whether Agent Sleep may stop this terminal now (main refuses while orchestration mail or a pending
    *  Dispatch waits), and the handle its pane answers to, kept on the sleep record across restarts. */
   sleepAdmitted: (
@@ -281,6 +282,8 @@ export type PtyApi = {
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
   /** Out-of-band byte-drop signal; restore the model snapshot instead of waiting on pty:data. */
   onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void) => () => void
+  /** Hidden PTYs that printed output main dropped (throttled, batched); bytes are not included. */
+  onHiddenOutputActivity: (callback: (event: { ids: string[] }) => void) => () => void
   /** Covers only PTYs whose bytes transit local main. */
   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void) => () => void
   /** Title-only replay snapshot for (re)attach; attention facts never replay. */

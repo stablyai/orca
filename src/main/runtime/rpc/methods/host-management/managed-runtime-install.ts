@@ -20,10 +20,13 @@ import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-pla
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { isAbsolute } from 'node:path'
 import {
-  CLAUDE_MANAGED_RUNTIME,
-  onManagedClaudeUse,
-  rememberManagedClaudeRelease
-} from '../../../../claude/managed-runtime/claude-managed-runtime'
+  isManagedAgentCli,
+  MANAGED_AGENT_CLI_IDS,
+  managedAgentCli,
+  onManagedAgentUse,
+  rememberManagedAgentRelease,
+  type ManagedAgentCliId
+} from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
@@ -36,8 +39,9 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
   if (existing) {
     return existing
   }
-  const installation =
-    agent === 'claude' ? claudeInstallation(runtime) : acpInstallation(agent, runtime)
+  const installation = isManagedAgentCli(agent)
+    ? agentCliInstallation(agent, runtime)
+    : acpInstallation(agent, runtime)
   installations.set(agent, installation)
   return installation
 }
@@ -88,28 +92,32 @@ function acpInstallation(agent: string, runtime: OrcaRuntimeService): ManagedRun
   })
 }
 
-/** Claude chats run the user's own install when the host has one, so Orca's copy is the fallback. */
-function claudeInstallation(runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
+/** These chats run the user's own install when the host has one, so Orca's copy is the fallback. */
+function agentCliInstallation(
+  agent: ManagedAgentCliId,
+  runtime: OrcaRuntimeService
+): ManagedRuntimeInstallation {
+  const managedRuntime = managedAgentCli(agent).runtime
   const findExternal = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
-    if (hasExplicitTuiLaunchCommand(settings, 'claude')) {
+    if (hasExplicitTuiLaunchCommand(settings, agent)) {
       return true
     }
-    const env = await resolveHostStructuredAgentLaunchEnvironment('claude', settings)
+    const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const homePath = env.HOME ?? env.USERPROFILE
-    const resolved = await resolveCliCommandAsync('claude', {
+    const resolved = await resolveCliCommandAsync(agent, {
       pathEnv: env.PATH ?? env.Path ?? null,
       ...(homePath ? { homePath } : {})
     })
     // A WSL host can't run a Windows-drive copy, so it isn't the user's own install there.
     return isAbsolute(resolved) && !WINDOWS_DRIVE_MOUNT.test(resolved)
   }
-  return new ManagedRuntimeInstallation('claude', CLAUDE_MANAGED_RUNTIME, {
+  return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory: getProfileUserDataPath(),
     findExternal,
-    onRelease: rememberManagedClaudeRelease,
-    // No launch gate tracks Claude processes; stopping its chats first is the closest fence.
-    fence: (work) => stopStructuredAgentChats('claude', CLAUDE_MANAGED_RUNTIME.label).then(work)
+    onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
+    // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
+    fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work)
   })
 }
 
@@ -117,7 +125,7 @@ function claudeInstallation(runtime: OrcaRuntimeService): ManagedRuntimeInstalla
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
   const agents = [
     ...ACP_LAUNCH_SPECS.filter((spec) => spec.managedRuntime).map((spec) => spec.agent),
-    'claude'
+    ...MANAGED_AGENT_CLI_IDS
   ]
   for (const agent of agents) {
     try {
@@ -155,11 +163,11 @@ export function startManagedRuntimeAutoUpdates(): void {
     }
   }, AUTO_UPDATE_FIRST_CHECK_MS).unref()
   // Use is the signal a copy matters; the release lookup itself is cached for an hour.
-  onManagedClaudeUse(() => {
+  onManagedAgentUse((agent) => {
     const now = Date.now()
-    if (now - (lastUseCheck.get('claude') ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
-      lastUseCheck.set('claude', now)
-      checkForUpdate('claude')
+    if (now - (lastUseCheck.get(agent) ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
+      lastUseCheck.set(agent, now)
+      checkForUpdate(agent)
     }
   })
 }

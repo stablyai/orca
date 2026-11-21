@@ -190,7 +190,7 @@ function describeFailedTurnHold(recipient: string, limit: UsageLimitHold | undef
   const why = {
     off: 'automatic continue is off in Settings',
     cancelled: 'automatic continue was cancelled for this chat',
-    failed: 'automatic continue gave up after repeated limits'
+    failed: 'automatic continue gave up on this chat'
   }[limit.state]
   return `Queued. ${recipient} stopped at its usage limit and Orca will not continue it on its own (${why}); delivery waits until a person continues the chat.`
 }

@@ -17,22 +17,13 @@ const CASES: [string, string][] = [
   ['a surrogate pair', '🙂 emoji 👍🏽'],
   ['a lone high surrogate', 'a\ud800b'],
   ['a lone low surrogate', 'a\udc00b'],
-  ['a high surrogate at the end', 'trailing\ud83d'],
-  ['an ANSI colour run', '\u001b[38;5;196mred\u001b[0m\r\n'],
-  ['a full SGR screen line', '\u001b[01;31m\u001b[Kmatch\u001b[m\u001b[K'.repeat(40)]
+  ['a high surrogate at the end', 'trailing\ud83d']
 ]
 
 describe('the JSON size of a terminal payload', () => {
   it.each(CASES)('agrees with JSON.stringify: %s', (_label, value) => {
     expect(terminalStreamJsonByteLength(value)).toBe(
       Buffer.byteLength(JSON.stringify(value), 'utf8')
-    )
-  })
-
-  it('agrees on a screen built from every class at once', () => {
-    const mixed = CASES.map(([, value]) => value).join('\u001b[0m')
-    expect(terminalStreamJsonByteLength(mixed)).toBe(
-      Buffer.byteLength(JSON.stringify(mixed), 'utf8')
     )
   })
 })

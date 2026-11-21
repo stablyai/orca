@@ -149,14 +149,20 @@ export function BotShareUpdatedLine({
 }
 
 /** Orca Cloud didn't answer, so whether the bot has a link is unknown; Publish waits on Retry. */
-export function BotShareOfflineRow({ onRetry }: { onRetry: () => void }): React.JSX.Element {
+export function BotShareOfflineRow({
+  error,
+  onRetry
+}: {
+  error: string | null
+  onRetry: () => void
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <SettingsInsetGroup>
       <div className="flex min-h-11 items-center gap-2.5 py-2 pr-2.5 pl-3 text-sm">
         <CloudOff className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 font-medium">
-          {t('bots.share.cantReachCloud', 'Can’t reach Orca Cloud')}
+          {error ?? t('bots.share.linkStatusUnavailable', 'Couldn’t check the share link')}
         </span>
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
           {t('settings.bots.retry', 'Retry')}

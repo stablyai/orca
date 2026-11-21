@@ -5,7 +5,9 @@ import { makeTestBot } from './bot.test-fixture'
 describe('a Look around edit', () => {
   it('changes only the fields it names, so quick edits keep each other', () => {
     const bot = makeTestBot({ id: 'b1', agent: 'claude' })
-    const first = applyBotUpdates(bot, { lookAround: { weekdaysOnly: false } })
+    const edit = BotUpdate.parse({ botId: 'b1', updates: { lookAround: { weekdaysOnly: false } } })
+    expect(edit.updates).toEqual({ lookAround: { weekdaysOnly: false } })
+    const first = applyBotUpdates(bot, edit.updates)
     const second = applyBotUpdates(first, { lookAround: { focus: 'CI on main' } })
     expect(second.lookAround).toEqual({
       on: true,
@@ -13,12 +15,6 @@ describe('a Look around edit', () => {
       weekdaysOnly: false,
       focus: 'CI on main'
     })
-  })
-
-  it('travels as just the changed field', () => {
-    expect(
-      BotUpdate.parse({ botId: 'b1', updates: { lookAround: { on: false } } }).updates
-    ).toEqual({ lookAround: { on: false } })
   })
 
   it('stamps when Look around and Tidy-up are turned back on, and keeps it through other edits', () => {

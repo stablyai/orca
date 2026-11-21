@@ -163,6 +163,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
         )
       }
     : null
+  const hostName =
+    (server ? server.name : controller.hostName) || t('bots.items.thisComputer', 'The computer')
   if (itemsOnPhone && hostId) {
     const closePanel = () => setBotPanel(null)
     const panelTreeActions: BotChatTreeActions = {
@@ -185,10 +187,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               routeBot={routeBot}
               client={client}
               online={connState === 'connected'}
-              hostName={
-                (server ? server.name : controller.hostName) ||
-                t('bots.items.thisComputer', 'The computer')
-              }
+              hostName={hostName}
               hostId={hostId}
               worktreeId={worktreeId}
               hostKey={hostBotsKey(hostId, executionHost)}
@@ -235,6 +234,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     <MobileBotSheet
       hostKey={hostBotsKey(hostId ?? '', executionHost)}
       treeActions={treeActions}
+      online={connState === 'connected'}
+      hostName={hostName}
       visible={showBotSheet}
       onClose={() => setShowBotSheet(false)}
       routeBot={routeBot}

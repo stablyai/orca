@@ -274,7 +274,15 @@ describe('usage-limit row over time', () => {
   it('turns auto-continue on in place while waiting, even with no published state', () => {
     const openSettingsPage = vi.fn()
     const updateSettings = vi.fn(async () => {})
-    useAppStore.setState({ openSettingsPage, openSettingsTarget: vi.fn(), updateSettings })
+    useAppStore.setState({
+      openSettingsPage,
+      openSettingsTarget: vi.fn(),
+      updateSettings,
+      settings: {
+        ...useAppStore.getState().settings!,
+        nativeChatAutoContinueAfterUsageLimit: false
+      }
+    })
     const view = render(row({ resetsAt: start + HOUR, auto: null }))
     fireEvent.click(
       screen.getByRole('button', { name: 'Continue automatically when limits reset' })

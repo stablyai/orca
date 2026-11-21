@@ -20,7 +20,10 @@ import {
   guestNativePathEnv,
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
-import { managedClaudeCommand } from '../../claude/managed-runtime/claude-managed-runtime'
+import {
+  isManagedAgentCli,
+  managedAgentCommand
+} from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -94,8 +97,8 @@ export function resolveStructuredAgentCommand(
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
     // The user's own install wins; Orca's copy serves hosts that have none.
     const managed =
-      agent === 'claude' && !stock.command && (resolved === null || !isAbsolute(resolved))
-        ? managedClaudeCommand()
+      isManagedAgentCli(agent) && !stock.command && (resolved === null || !isAbsolute(resolved))
+        ? managedAgentCommand(agent)
         : null
     if (managed) {
       return { command: managed, prefixArgs: [] }

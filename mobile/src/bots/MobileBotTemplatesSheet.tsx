@@ -1,13 +1,16 @@
 // The phone's bot templates, from New bot's "Start from a template": search, category pills, then the
 // desktop page's rows; a tap opens the template's detail, whose Use template… prefills New bot.
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import { Plus, Search } from 'lucide-react-native'
+import { ScrollView, View } from 'react-native'
+import { Plus } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
-import { TextField } from '../components/composer-input/TextField'
+import { MobileSearchField } from '../components/controls/MobileSearchField'
+import { MobileNoMatchState } from '../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { FilterChip } from '../components/nav-bar/FilterChip'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { templateProposal, type BotProposal } from '../../../src/shared/bots/bot-proposal'
@@ -55,15 +58,12 @@ export function MobileBotTemplatesSheet(props: {
     })
   }
   const pill = (value: BotTemplateCategory | null, text: string) => (
-    <Pressable
+    <FilterChip
       key={value ?? 'all'}
+      label={text}
+      active={category === value}
       onPress={() => setCategory(value)}
-      style={[styles.pill, category === value && styles.pillOn]}
-      accessibilityRole="button"
-      accessibilityState={{ selected: category === value }}
-    >
-      <Text style={[styles.pillText, category === value && styles.pillTextOn]}>{text}</Text>
-    </Pressable>
+    />
   )
 
   return (
@@ -73,23 +73,29 @@ export function MobileBotTemplatesSheet(props: {
         onClose={props.onClose}
         contentScrollable
       >
-        <Text style={styles.title}>{t('bots.templates.title', 'Bot templates')}</Text>
-        <TextField
+        <SheetHeader title={t('bots.templates.title', 'Bot templates')} onClose={props.onClose} />
+        <MobileSearchField
           value={query}
           onChangeText={setQuery}
           placeholder={t('bots.templates.search', 'Search templates')}
-          accessibilityLabel={t('bots.templates.search', 'Search templates')}
-          leading={<Search size={16} color={colors.textMuted} />}
-          autoCorrect={false}
         />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pills}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          style={styles.pills}
+          contentContainerStyle={styles.pillRow}
+        >
           {pill(null, t('bots.templates.allCategories', 'All'))}
           {BOT_TEMPLATE_CATEGORIES.map((entry) => pill(entry, label(entry)))}
         </ScrollView>
         {groups.length === 0 ? (
-          <Text style={styles.empty}>
-            {t('bots.templates.noMatch', 'No templates match “{{query}}”', { query: query.trim() })}
-          </Text>
+          <MobileNoMatchState
+            message={t('bots.templates.noMatch', 'No templates match “{{query}}”', {
+              query: query.trim()
+            })}
+            onClear={() => setQuery('')}
+          />
         ) : null}
         {groups.map((group, index) => (
           <View key={group.category}>
@@ -132,24 +138,6 @@ export function MobileBotTemplatesSheet(props: {
 }
 
 const styles = themedStyleSheet(() => ({
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  pills: { flexGrow: 0, marginTop: spacing.sm },
-  pill: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginRight: spacing.xs
-  },
-  pillOn: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-  pillText: { fontSize: 13, color: colors.textSecondary },
-  pillTextOn: { color: colors.bgBase },
-  empty: { fontSize: 13, color: colors.textMuted, padding: spacing.md, textAlign: 'center' }
+  pills: { flexGrow: 0, marginTop: spacing.xs },
+  pillRow: { gap: spacing.sm }
 }))

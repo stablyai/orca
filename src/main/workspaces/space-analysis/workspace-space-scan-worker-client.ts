@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import type { Worker } from 'node:worker_threads'
-import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
+import { spawnHeavyWorker } from '../../utility-worker-host/heavy-worker-spawn'
+import type { HostedWorkerThread } from '../../utility-worker-host/utility-worker-host-protocol'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-disk-space/workspace-space-types'
@@ -18,12 +18,12 @@ const WORKER_FILENAME = 'workspace-space-scan-worker-entry.js'
 const WORKER_TIMEOUT_MS = 5 * 60_000
 const IDLE_TEARDOWN_MS = 60_000
 
-function createWorker(): Worker {
+function createWorker(): HostedWorkerThread {
   const path = resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME)
   if (!existsSync(path)) {
     throw new Error(`Workspace space scan worker entry not found: ${path}`)
   }
-  return spawnWorkerThread(path, { name: 'orca-workspace-space-scan' })
+  return spawnHeavyWorker(path, { name: 'orca-workspace-space-scan' })
 }
 
 let queue: WorkerThreadRequestQueue<

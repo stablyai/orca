@@ -53,6 +53,10 @@ describe('startHostBotRefresh', () => {
     // A second ready is the stream replaying after a reconnect.
     run.emit({ type: 'ready', subscriptionId: 's' })
     expect(run.refresh).toHaveBeenCalledTimes(3)
+    run.appState.currentState = 'background'
+    run.emit({ type: 'botsChanged' })
+    expect(run.refresh).toHaveBeenCalledTimes(3)
+    run.appState.currentState = 'active'
     run.onChange('active')
     expect(run.refresh).toHaveBeenCalledTimes(4)
     run.stop()
@@ -68,15 +72,6 @@ describe('startHostBotRefresh', () => {
     expect(run.refresh).toHaveBeenCalledTimes(2)
     run.emit({ type: 'botsChanged' })
     expect(run.refresh).toHaveBeenCalledTimes(3)
-    run.stop()
-  })
-
-  it('waits in the background for the foreground re-read', () => {
-    const run = harness()
-    run.emit({ type: 'ready', subscriptionId: 's' })
-    run.appState.currentState = 'background'
-    run.emit({ type: 'botsChanged' })
-    expect(run.refresh).toHaveBeenCalledTimes(1)
     run.stop()
   })
 

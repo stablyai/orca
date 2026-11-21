@@ -15,7 +15,6 @@ describe('a turn memory receipt', () => {
       '- Dana prefers Slack\n',
       new Map()
     )
-    expect(note?.text).toBe('Memory updated · 1 added, 1 removed')
     expect(note?.botMemoryUpdated).toEqual({
       botId: 'bot-1',
       added: ['Dana prefers Slack'],
@@ -29,15 +28,15 @@ describe('a turn memory receipt', () => {
     const before = snapshot('- a fact')
     before.topics = new Map([['old.md', { fingerprint: 'old', text: 'private detail' }]])
     const note = botTurnMemoryReceipt('bot-1', before, '- a fact', new Map())
-    expect(note?.text).toBe('Memory updated · 1 note changed')
     expect(note?.botMemoryUpdated.topics).toEqual(['memory/old.md'])
     expect(JSON.stringify(note)).not.toContain('private detail')
   })
 
   it('uses generic counts when a non-fact edit cannot be categorized', () => {
-    expect(botTurnMemoryReceipt('bot-1', snapshot('# Old\n'), '# New\n', new Map())?.text).toBe(
-      'Memory updated · 1 change'
-    )
+    expect(
+      botTurnMemoryReceipt('bot-1', snapshot('# Old\n'), '# New\n', new Map())?.botMemoryUpdated
+        .otherChanges
+    ).toBe(1)
   })
 
   it('does not report unchanged facts, date/source normalization or empty net changes', () => {

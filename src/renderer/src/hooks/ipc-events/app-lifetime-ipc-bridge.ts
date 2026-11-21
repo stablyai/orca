@@ -39,6 +39,7 @@ import { registerRuntimeClientIpcBridge } from './runtime-events/runtime-client-
 import { registerSessionTabIpcBridge } from './session-tabs/session-tab-ipc-bridge'
 import { registerSettingsAndSidebarIpcBridge } from '../app-commands/settings-sidebar-ipc-bridge'
 import { registerQuitAndStopAllSessionsIpcBridge } from './native-app/quit-and-stop-all-sessions-ipc-bridge'
+import { registerBackgroundWorkerPausedIpcBridge } from './native-app/background-worker-paused-ipc-bridge'
 import { registerTabLifecycleIpcBridge } from './session-tabs/tab-lifecycle-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal/terminal-presentation-ipc-bridge'
 import { registerTerminalTabMountIpcBridge } from './terminal/terminal-tab-mount-ipc-bridge'
@@ -139,6 +140,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerQuitAndStopAllSessionsIpcBridge(unsubs)
+  registerBackgroundWorkerPausedIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerPreflightWslRetryIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)

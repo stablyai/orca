@@ -12,14 +12,15 @@ export type PhoneBotItems = {
   read: BotItemsListRead | null
   /** Closed items read past the first page. */
   items: BotItem[]
-  /** The latest read failed: `read` is the last good one, or null if none landed. */
-  failed: boolean
+  /** Null while the latest read landed; why it failed otherwise (empty when nothing said why), with
+   *  `read` the last good one, or null if none landed. */
+  error: string | null
   retry: () => void
   /** Reads the next Closed page; null when there is none. */
   loadMoreClosed: (() => Promise<void>) | null
 }
 
-type Shown = { key: string; read: BotItemsListRead; failed: boolean }
+type Shown = { key: string; read: BotItemsListRead; error: string | null }
 type Pages = {
   key: string
   /** The list read these pages continue. */
@@ -46,7 +47,7 @@ export function usePhoneBotItems({
 }): PhoneBotItems {
   const key = `${botId}\n${chatId ?? ''}`
   const [shown, setShown] = useState<Shown | null>(null)
-  const [failedFirst, setFailedFirst] = useState<string | null>(null)
+  const [failedFirst, setFailedFirst] = useState<{ key: string; error: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [pages, setPages] = useState<Pages | null>(null)
   const generation = useRef(0)
@@ -61,11 +62,12 @@ export function usePhoneBotItems({
         return
       }
       if (answer.kind === 'read') {
-        setShown({ key, read: answer.value, failed: false })
+        setShown({ key, read: answer.value, error: null })
         setFailedFirst(null)
       } else {
-        setShown((last) => (last?.key === key ? { ...last, failed: true } : last))
-        setFailedFirst(key)
+        const error = answer.message ?? ''
+        setShown((last) => (last?.key === key ? { ...last, error } : last))
+        setFailedFirst({ key, error })
       }
     })
     return () => {
@@ -121,7 +123,7 @@ export function usePhoneBotItems({
     read,
     // While the depth is read again, the old rows stay up.
     items: ownPages?.items ?? [],
-    failed: shown?.key === key ? shown.failed : failedFirst === key,
+    error: shown?.key === key ? shown.error : failedFirst?.key === key ? failedFirst.error : null,
     retry: () => setAttempt((value) => value + 1),
     loadMoreClosed: cursor ? loadMoreClosed : null
   }

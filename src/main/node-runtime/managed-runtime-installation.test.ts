@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { runProcess } from '@orca/process-host'
 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +14,7 @@ import {
   type ManagedRuntimePin
 } from './managed-runtime-release'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
+import { getTarProgram } from '../../shared/archives/zip-extractor-command'
 
 vi.mock('./managed-runtime-release', async (importOriginal) => {
   const actual = await importOriginal<typeof ReleaseModule>()
@@ -227,3 +229,55 @@ it('updates only an installed copy that is behind, keeping the release running c
   await settled()
   expect((await readdir(root)).sort()).toEqual(['2.0', '3.0'])
 })
+
+it.each([
+  { executables: ['bin/agent'], installedVersion: '3.0' },
+  { executables: ['bin/agent', 'bin/helper'], installedVersion: null }
+])(
+  'installs a tar.gz package only when it has every required executable: $executables',
+  async ({ executables, installedVersion }) => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+    roots.push(dataDirectory)
+    const packed = join(dataDirectory, 'packed')
+    await mkdir(join(packed, 'bin'), { recursive: true })
+    await mkdir(join(packed, 'share'))
+    await writeFile(join(packed, 'bin', 'agent'), 'agent bytes', { mode: 0o755 })
+    await writeFile(join(packed, 'share', 'notes.txt'), 'notes')
+    const archivePath = join(dataDirectory, 'agent.tar.gz')
+    const packing = await runProcess({
+      program: getTarProgram(),
+      args: ['-czf', archivePath, '-C', packed, 'bin', 'share']
+    })
+    expect(packing.code).toBe(0)
+    const archive = await readFile(archivePath)
+    const root = join(dataDirectory, 'agent-runtimes', 'agent')
+    const runtime: ManagedRuntime = {
+      label: 'Agent',
+      root: () => root,
+      pin: () => ({
+        version: '3.0',
+        url: 'https://example.test/3.0/agent.tar.gz',
+        archiveSha256: sha256(archive),
+        archiveBytes: archive.length,
+        format: 'tar.gz',
+        executables
+      })
+    }
+    const installation = new ManagedRuntimeInstallation('agent', runtime, {
+      dataDirectory,
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher: async () => new Response(archive)
+    })
+    installation.install()
+    await vi.waitFor(
+      async () =>
+        expect(['succeeded', 'failed']).toContain((await installation.status()).operation?.phase),
+      { timeout: 10_000 }
+    )
+    expect(await installation.status()).toMatchObject({ installedVersion })
+    if (installedVersion) {
+      expect(await readFile(join(root, '3.0', 'share', 'notes.txt'), 'utf8')).toBe('notes')
+    }
+  }
+)

@@ -222,3 +222,157 @@ it("holds a Claude turn's opener, kept under its echo's alias, sent turns before
   const { snapshot } = await reads.operationWindow({ turnIds: ['queued-turn'] })
   expect(snapshot.items.map((item) => item.itemId)).toContain('orca:queued')
 })
+
+it('carries a tool row too large for one reply with its output cut, keeping its size and digest', async () => {
+  const { f, reads } = await chat(1)
+  const output = 'x'.repeat(65 * 1024 * 1024)
+  await f.run({
+    kind: 'item',
+    identity: identity('huge-read'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Read',
+      input: {},
+      state: 'completed',
+      output: { head: output, byteLength: 68_157_440, digest: 'whole', truncated: false }
+    }
+  })
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
+  const tool = snapshot.items.find((item) => item.body.kind === 'tool-call')
+  expect(tool?.body).toMatchObject({
+    output: {
+      head: 'x'.repeat(16 * 1024),
+      byteLength: 68_157_440,
+      digest: 'whole',
+      truncated: true
+    }
+  })
+})
+
+it('cuts only as many of the largest rows as the window needs to fit one reply', async () => {
+  const { f, reads } = await chat(1)
+  for (const id of ['read-a', 'read-b', 'read-c']) {
+    await f.run({
+      kind: 'item',
+      identity: identity(id),
+      options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+      body: {
+        kind: 'tool-call',
+        name: 'Read',
+        input: {},
+        state: 'completed',
+        output: {
+          head: 'y'.repeat(12 * 1024 * 1024),
+          byteLength: 12_582_912,
+          digest: id,
+          truncated: false
+        }
+      }
+    })
+  }
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
+  const outputs = snapshot.items.flatMap((item) =>
+    item.body.kind === 'tool-call' && item.body.output ? [item.body.output] : []
+  )
+  expect(outputs.map((output) => output.truncated).toSorted()).toEqual([false, false, true])
+})
+
+it('preserves large tool input with clipped or omitted output', async () => {
+  const { f, reads } = await chat(1)
+  await f.run({
+    kind: 'item',
+    identity: identity('huge-write'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Write',
+      input: { content: 'i'.repeat(34 * 1024 * 1024) },
+      state: 'completed',
+      output: {
+        head: 'o'.repeat(34 * 1024 * 1024),
+        byteLength: 35_651_584,
+        digest: 'out',
+        truncated: false
+      }
+    }
+  })
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
+  const tool = snapshot.items.find((item) => item.body.kind === 'tool-call')
+  expect(tool?.body).toMatchObject({
+    input: { content: 'i'.repeat(34 * 1024 * 1024) },
+    output: { head: 'o'.repeat(16 * 1024), byteLength: 35_651_584, truncated: true }
+  })
+
+  const { snapshot: withoutOutput } = await reads.operationWindow({
+    afterSequence: 0,
+    withoutToolOutput: true
+  })
+  const toolWithoutOutput = withoutOutput.items.find((item) => item.body.kind === 'tool-call')
+  expect(toolWithoutOutput?.body).toMatchObject({
+    output: { head: '', byteLength: 35_651_584, truncated: true }
+  })
+})
+
+it('refuses a row past a whole reply that cutting cannot shrink, before decoding it', async () => {
+  const { f, reads } = await chat(1)
+  await f.run({
+    kind: 'item',
+    identity: identity('huge-input'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Write',
+      input: { content: 'i'.repeat(65 * 1024 * 1024) },
+      state: 'completed'
+    }
+  })
+  await expect(
+    reads.operationWindow({ afterSequence: 0, withoutToolOutput: true })
+  ).rejects.toThrow(/exceeds 67108864 bytes/)
+})
+
+it('refuses a window whose rows cannot be cut to fit one reply, before decoding them', async () => {
+  const { f, reads } = await chat(1)
+  for (const id of ['write-a', 'write-b', 'write-c']) {
+    await f.run({
+      kind: 'item',
+      identity: identity(id),
+      options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+      body: {
+        kind: 'tool-call',
+        name: 'Write',
+        input: { content: 'w'.repeat(25 * 1024 * 1024) },
+        state: 'completed'
+      }
+    })
+  }
+  await expect(reads.operationWindow({ afterSequence: 0 })).rejects.toThrow(
+    /operation window \(\d+ bytes after cutting\) exceeds 67108864 bytes/
+  )
+})
+
+it('sizes small tool rows without their output when the reader asks for none', async () => {
+  const { f, reads } = await chat(1)
+  for (let index = 0; index < 1_100; index += 1) {
+    await f.run({
+      kind: 'item',
+      identity: identity(`read-${index}`),
+      options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+      body: {
+        kind: 'tool-call',
+        name: 'Read',
+        input: {},
+        state: 'completed',
+        output: {
+          head: 'r'.repeat(60 * 1024),
+          byteLength: 61_440,
+          digest: `${index}`,
+          truncated: false
+        }
+      }
+    })
+  }
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0, withoutToolOutput: true })
+  expect(snapshot.items.filter((item) => item.body.kind === 'tool-call')).toHaveLength(1_100)
+})

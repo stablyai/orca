@@ -2,6 +2,7 @@ import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
 import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
 import { JOURNAL_CONNECTOR_REPLIES_SCHEMA } from '../connector-replies/journal-connector-replies-schema'
+import { ensureJournalRetirePending } from './journal-retire-pending'
 import { ensureJournalTextTailTable } from './journal-text-tail-schema'
 
 export const JOURNAL_DOMAIN_SCHEMA_VERSION = 2
@@ -25,6 +26,7 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
   ensureJournalStoredOutputColumn(db)
   ensureJournalTextTailTable(db)
   db.exec(JOURNAL_CONNECTOR_REPLIES_SCHEMA)
+  ensureJournalRetirePending(db, (run) => runJournalTransaction(db, run))
 }
 
 /** Added without a user_version change: released builds name their columns and never read it. */

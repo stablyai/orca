@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
 import { fetchWslMovedProjects } from '../../repos/wsl-moved-projects'
 import type { WslMovedProject } from '../../../../../shared/wsl-move/wsl-moved-project'
@@ -75,22 +75,21 @@ describe('the startup read of moved projects', () => {
     return store
   }
 
-  it('forgets hidden keys of projects no longer moved', async () => {
+  it('prunes hidden keys only after successfully reading moved projects', async () => {
     const store = storeHiding([REPO_KEY, FOLDER_KEY])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => warn.mockRestore())
+
+    listWslMoved.mockRejectedValueOnce(new Error('journal unreadable'))
+    await fetchWslMovedProjects(store.setState, store.getState)
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY, FOLDER_KEY])
+    expect(savedHiddenKeys()).toBeUndefined()
+
     listWslMoved.mockResolvedValueOnce([ubuntuFolder])
     await fetchWslMovedProjects(store.setState, store.getState)
     expect(store.getState().wslMovedProjects).toEqual([ubuntuFolder])
     expect(store.getState().hiddenWslMovedProjectKeys).toEqual([FOLDER_KEY])
     expect(savedHiddenKeys()).toEqual([FOLDER_KEY])
-  })
-
-  it('keeps hidden keys when the read fails', async () => {
-    const store = storeHiding([REPO_KEY])
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    listWslMoved.mockRejectedValueOnce(new Error('journal unreadable'))
-    await fetchWslMovedProjects(store.setState, store.getState)
-    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
-    expect(savedHiddenKeys()).toBeUndefined()
   })
 
   // A web client runs the same startup read, but its list is always empty.

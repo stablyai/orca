@@ -29,6 +29,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
+    isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
@@ -101,14 +102,19 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    {
-      id: 'quickCommands',
-      label: t('session.header.quickCommands', 'Quick commands'),
-      icon: SquareChevronRight,
-      disabled: tabActionsDisabled,
-      closeBeforePress: true,
-      onPress: handleOpenQuickCommands
-    }
+    // Desktop hides quick commands where there is no repo to run them in.
+    ...(!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute
+      ? [
+          {
+            id: 'quickCommands',
+            label: t('session.header.quickCommands', 'Quick commands'),
+            icon: SquareChevronRight,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenQuickCommands
+          }
+        ]
+      : [])
   ]
   const textSizeSheet = showNativeChat
     ? 'chat'

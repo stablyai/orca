@@ -40,14 +40,12 @@ const due = (prev: GoogleSetupRun | null, next: GoogleSetupRun): string[] =>
 const answer = (values: string[]) => ({ values, at: 2 })
 
 describe('the setup cards a run change calls for', () => {
-  it('opens a new run with the path card, even over an earlier one', () => {
-    expect(due(null, run())).toEqual(['path'])
-    expect(due(run({ id: 'old', state: 'done' }), run())).toEqual(['path'])
-  })
+  it('opens the path card, asks for services and then shows progress', () => {
+    const started = run()
+    expect(due(null, started)).toEqual(['path'])
 
-  it('asks for services after the path, then shows progress', () => {
     const pathed = run({ answers: { path: answer(['guide-here']) }, mode: 'guide-here' })
-    expect(due(run(), pathed)).toEqual(['services'])
+    expect(due(started, pathed)).toEqual(['services'])
     const serviced = run({
       ...pathed,
       answers: { ...pathed.answers, services: answer(['gmail']) }
@@ -81,8 +79,11 @@ describe('the setup cards a run change calls for', () => {
     expect(due(run(), run(active))).toEqual([])
   })
 
-  it('asks the owner to sign in once the app key is in, or the team file is', () => {
-    expect(due(run(), run({ steps: { client: { status: 'done', at: 2, by: 'bot' } } }))).toEqual([
+  it('asks for recovery when the key is missing and sign-in when a key is available', () => {
+    const open = run({ steps: { client: { status: 'active', at: 2 } } })
+    const missing = run({ ...open, keyMissed: { at: 3 } })
+    expect(due(open, missing)).toEqual(['progress'])
+    expect(due(missing, run({ steps: { client: { status: 'done', at: 4, by: 'bot' } } }))).toEqual([
       'connect'
     ])
     const imported = run({
@@ -92,17 +93,16 @@ describe('the setup cards a run change calls for', () => {
     expect(due(run(), imported)).toEqual(['connect'])
   })
 
-  it('ends with the connected card, and nothing for a stopped run', () => {
-    expect(due(run(), run({ state: 'done' }))).toEqual(['connected'])
-    expect(due(run({ state: 'done' }), run({ state: 'done' }))).toEqual([])
-    expect(due(run(), run({ state: 'cancelled' }))).toEqual([])
-  })
-
-  it('shows a stopped setup once, with a fresh progress card', () => {
-    expect(due(run(), run({ state: 'failed', lastError: 'quota' }))).toEqual(['progress'])
-    expect(due(run({ state: 'failed' }), run({ state: 'failed', revision: 2 }))).toEqual([])
-    // Continue picks the same run up again; its cards are already in the chat.
-    expect(due(run({ state: 'failed' }), run())).toEqual([])
+  it('writes one card when a run finishes or fails, and none when cancelled or resumed', () => {
+    const started = run()
+    const done = run({ state: 'done' })
+    const failed = run({ state: 'failed', lastError: 'quota' })
+    expect(due(started, done)).toEqual(['connected'])
+    expect(due(done, { ...done, revision: 2 })).toEqual([])
+    expect(due(started, failed)).toEqual(['progress'])
+    expect(due(failed, { ...failed, revision: 2 })).toEqual([])
+    expect(due(failed, started)).toEqual([])
+    expect(due(started, run({ state: 'cancelled' }))).toEqual([])
   })
 
   it("starts over after the owner's choices, which it keeps", () => {
@@ -115,11 +115,6 @@ describe('the setup cards a run change calls for', () => {
     expect(due(run({ id: 'old' }), run({ id: 'new', mode: 'unchosen', answers: kept }))).toEqual([
       'path'
     ])
-  })
-
-  it('shows Make a new key at the bottom once the key goes missing', () => {
-    const open = run({ steps: { client: { status: 'active', at: 2 } } })
-    expect(due(open, run({ ...open, keyMissed: { at: 3 } }))).toEqual(['progress'])
   })
 })
 

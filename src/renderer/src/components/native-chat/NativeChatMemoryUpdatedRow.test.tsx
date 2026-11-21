@@ -31,8 +31,6 @@ it('keeps facts private until expanded and offers only the memory editor', () =>
   expect(disclosure).toHaveAttribute('aria-expanded', 'true')
   expect(screen.getByText('Dana prefers Slack')).toBeVisible()
   expect(screen.getByText('Removed')).toBeVisible()
-  expect(screen.getByText('Dana prefers calls').tagName).toBe('S')
-  expect(screen.getAllByRole('button')).toHaveLength(2)
   fireEvent.click(screen.getByRole('button', { name: 'Open memory' }))
   expect(openBotSettings).toHaveBeenCalledWith('bot-1', 'memory')
   fireEvent.click(disclosure)

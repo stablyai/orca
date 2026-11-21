@@ -135,6 +135,10 @@ export function resolveWorktreeCreateParent(
           state.activeWorkspaceExecutionHostId ?? undefined
         )
       : undefined
+  // A bot's or group's home parents only its own workers' workspaces, never one made while it is open.
+  if (activeFolder && isHome(activeFolder, [...readBots(), ...readBotGroups()])) {
+    return { pickedDisplayName, staleBeforeCreate: Boolean(requestedParentWorktreeId) }
+  }
   const activeFolderRow = activeFolder ? getFolderWorkspaceWorktree(activeFolder) : undefined
   const childStore = lineageStoreKeyOfRow({ id: '', hostId: executionHostId })
   const folderStore = activeFolderRow ? lineageStoreKeyOfRow(activeFolderRow) : undefined
@@ -154,10 +158,8 @@ export function resolveWorktreeCreateParent(
     }
   }
   return {
-    // A bot's or group's home parents only its own workers' workspaces, never one made while it is open.
     parentWorkspace:
-      activeScope?.type === 'folder' &&
-      !(activeFolder && isHome(activeFolder, [...readBots(), ...readBotGroups()]))
+      activeScope?.type === 'folder'
         ? folderWorkspaceKey(activeScope.folderWorkspaceId)
         : undefined,
     pickedDisplayName,

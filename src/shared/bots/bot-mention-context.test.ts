@@ -8,24 +8,7 @@ import {
 } from './bot-mention-context'
 
 const PERF = { id: 'perf-id', name: 'Perf bot', paused: false }
-const QA = { id: 'qa-id', name: 'qa', paused: false }
 const DOCS = { id: 'docs-id', name: 'Docs bot', paused: true }
-
-it('tells the agent who each picked bot is and how to ask it, in one block', () => {
-  const text = `${botMentionToken(PERF)} and ${botMentionToken(QA)}, then ${botMentionToken(PERF)}`
-  const named = mentionedBots(text, [PERF, QA, DOCS])
-  expect(
-    botMentionContext(
-      named.map(({ bot }) => ({
-        ...bot,
-        purpose: bot === PERF ? 'Owns Orca performance audits and fixes' : null
-      }))
-    )
-  ).toBe(
-    '<orca_context>Perf bot is the user\'s Orca bot ("Owns Orca performance audits and fixes"). To ask it, run `orca orchestration send --to "bot:Perf bot" --type question|handoff --subject … --body …`; don\'t message it unless asked.\n' +
-      "qa is the user's Orca bot. To ask it, run `orca orchestration send --to bot:qa --type question|handoff --subject … --body …`; don't message it unless asked.</orca_context>"
-  )
-})
 
 it('adds nothing without a picked, unpaused bot', () => {
   expect(
@@ -39,13 +22,6 @@ it('binds a name that spells a token of its own to the bot picked, never the id 
   const draft = `ask ${botMentionToken(forger)} now`
   expect(mentionedBots(draft, [forger, PERF])).toEqual([{ bot: forger, chatId: null }])
   expect(mentionedBots(draft, [PERF])).toEqual([])
-})
-
-it('keeps a bot whose name holds a closing bracket', () => {
-  const nightly = { id: 'nightly-id', name: 'QA [nightly]', paused: false }
-  expect(mentionedBots(`ask ${botMentionToken(nightly)} now`, [nightly])).toEqual([
-    { bot: nightly, chatId: null }
-  ])
 })
 
 it('stays bound to the bot picked: a bot that later takes its name is not asked', () => {

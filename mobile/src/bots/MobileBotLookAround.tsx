@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { Text, View } from 'react-native'
 import {
   botLookAround,
   LOOK_AROUND_EVERY_CHOICES,
@@ -10,6 +9,7 @@ import {
   type BotUpNext
 } from '../../../src/shared/bots/bot-look-around'
 import { ListRow } from '../components/list/ListGroup'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { MobileStateButton } from '../components/feedback/MobileStateView'
 import { TextField } from '../components/composer-input/TextField'
 import {
@@ -19,7 +19,7 @@ import {
 } from '../host-screen/workspace-options/workspace-option-rows'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { SheetBot } from './bot-sheet-operations'
@@ -115,21 +115,17 @@ export function MobileLookAroundSection(props: {
   )
 }
 
-function FocusField(props: { initial: string; save: SaveLookAround; onDone: () => void }) {
+function FocusField(props: {
+  focus: string
+  onChange: (focus: string) => void
+  onDone: () => void
+}) {
   const t = useMobileTranslation()
-  const [focus, setFocus] = useState(props.initial)
-  const done = () => {
-    const typed = focus.trim()
-    if (typed !== props.initial) {
-      props.save({ focus: typed })
-    }
-    props.onDone()
-  }
   return (
     <View style={pageStyles.focus}>
       <TextField
-        value={focus}
-        onChangeText={setFocus}
+        value={props.focus}
+        onChangeText={props.onChange}
         maxLength={LOOK_AROUND_FOCUS_MAX_LENGTH}
         placeholder={t(
           'bots.lookAround.focusPlaceholder',
@@ -137,7 +133,7 @@ function FocusField(props: { initial: string; save: SaveLookAround; onDone: () =
         )}
         autoFocus
         returnKeyType="done"
-        onSubmitEditing={done}
+        onSubmitEditing={props.onDone}
       />
       <Text style={[optionStyles.optionRowDetail, pageStyles.hint]}>
         {t(
@@ -145,7 +141,6 @@ function FocusField(props: { initial: string; save: SaveLookAround; onDone: () =
           'Optional. Leave it empty and it looks for anything waiting on you.'
         )}
       </Text>
-      <MobileStateButton label={t('bots.lookAround.save', 'Save')} onPress={done} />
     </View>
   )
 }
@@ -164,22 +159,29 @@ export function MobileLookAroundPage(props: {
     return true
   })
   const setting = botLookAround(props.bot)
+  // Compared with the value as the page opened, so an untouched field never undoes a newer edit.
+  const [initialFocus] = useState(setting.focus)
+  const [focus, setFocus] = useState(initialFocus)
+  const saveFocus = () => {
+    const typed = focus.trim()
+    if (typed !== initialFocus) {
+      props.save({ focus: typed })
+    }
+    props.onBack()
+  }
   const title =
     props.page === 'every'
       ? t('bots.lookAround.every', 'How often')
       : t('bots.lookAround.focus', 'Look for')
   return (
     <>
-      <Pressable
-        style={optionStyles.optionBack}
-        onPress={props.onBack}
-        accessibilityRole="button"
-        accessibilityLabel={t('bots.lookAround.back', 'Back to Settings')}
-      >
-        <ChevronLeft size={16} color={colors.textSecondary} />
-        <Text style={optionStyles.optionBackText}>{t('bots.sheet.settings', 'Settings')}</Text>
-      </Pressable>
-      <Text style={[optionStyles.filterModalTitle, optionStyles.optionPageTitle]}>{title}</Text>
+      <SheetHeader
+        title={title}
+        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        {...(props.page === 'focus'
+          ? { trailing: { label: t('bots.lookAround.save', 'Save'), onPress: saveFocus } }
+          : {})}
+      />
       {props.page === 'every' ? (
         <ChoiceRows
           choices={LOOK_AROUND_EVERY_CHOICES.map((id) => ({
@@ -193,7 +195,7 @@ export function MobileLookAroundPage(props: {
           }}
         />
       ) : (
-        <FocusField initial={setting.focus} save={props.save} onDone={props.onBack} />
+        <FocusField focus={focus} onChange={setFocus} onDone={saveFocus} />
       )}
     </>
   )

@@ -8,12 +8,15 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import { zstdCompressSync } from 'node:zlib'
+import { spawnProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
@@ -21,6 +24,34 @@ import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-ac
 const ROLLOUT = 'rollout-2026-11-14T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
 const OTHER = 'rollout-2026-11-14T11-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.jsonl'
 const DAY = join('2026', '11', '14')
+
+// Holds a thread lock the way Codex does: flock on macOS and Linux, LockFileEx on Windows.
+async function holdThreadLock(lock: string): Promise<() => Promise<void>> {
+  const windows = process.platform === 'win32'
+  const holder = spawnProcess({
+    program: windows ? 'powershell.exe' : '/usr/bin/perl',
+    args: windows
+      ? [
+          '-NoProfile',
+          '-Command',
+          "$l = [IO.File]::Open($env:LOCK, 'OpenOrCreate', 'ReadWrite', 'ReadWrite, Delete'); $l.Lock(0, 1); [Console]::Out.WriteLine('locked'); [void][Console]::In.ReadLine()"
+        ]
+      : [
+          '-MFcntl=:flock',
+          '-e',
+          'open(my $l, "+>>", $ARGV[0]) or die; flock($l, LOCK_EX) or die; $| = 1; print "locked\\n"; <STDIN>',
+          lock
+        ],
+    env: { ...process.env, LOCK: lock },
+    stdio: 'pipe'
+  })
+  const closed = new Promise((resolve) => holder.once('close', resolve))
+  await createInterface({ input: holder.stdout })[Symbol.asyncIterator]().next()
+  return async () => {
+    holder.stdin.end()
+    await closed
+  }
+}
 
 const roots: string[] = []
 function fixture(platform: NodeJS.Platform = 'linux') {
@@ -195,16 +226,62 @@ describe('shareCodexAccountHistory', () => {
     expect(lstatSync(join(f.account, 'sessions')).isSymbolicLink()).toBe(false)
   })
 
-  it('waits while a Codex in the home holds a thread lock', async () => {
+  it('waits while a Codex holds a thread lock, and shares once only a stale lock is left', async () => {
     const f = fixture()
+    const lock = join(f.account, 'thread-writer-locks', '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.lock')
     mkdirSync(join(f.account, 'thread-writer-locks'))
-    writeFileSync(join(f.account, 'thread-writer-locks', '0199a1b2.lock'), '')
+    writeFileSync(lock, '')
     writeFileSync(join(f.account, 'sessions', DAY, OTHER), 'account only\n')
+    const release = await holdThreadLock(lock)
 
-    expect(await f.share()).toBe('busy')
-
+    try {
+      expect(await f.share()).toBe('busy')
+    } finally {
+      await release()
+    }
     expect(lstatSync(join(f.account, 'sessions')).isSymbolicLink()).toBe(false)
-    expect(existsSync(join(f.store, 'sessions', DAY, OTHER))).toBe(false)
+
+    expect(await f.share()).toBe('shared')
+    expect(readFileSync(join(f.store, 'sessions', DAY, OTHER), 'utf8')).toBe('account only\n')
+  })
+
+  it('clears stale copies of one thread lock in both homes, so no two files can guard it', async () => {
+    const f = fixture()
+    const name = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.lock'
+    for (const home of [f.account, f.store]) {
+      mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
+      writeFileSync(join(home, 'thread-writer-locks', name), '')
+    }
+
+    expect(await f.share()).toBe('shared')
+
+    expect(lstatSync(join(f.account, 'thread-writer-locks')).isSymbolicLink()).toBe(true)
+    expect(existsSync(join(f.store, 'thread-writer-locks', name))).toBe(false)
+  })
+
+  it('keeps history apart while a thread lock the merge kept beside the store copy is held', async () => {
+    const f = fixture()
+    const kept = join(f.account, 'thread-writer-locks.orca-profile-merge')
+    const lock = join(kept, '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.lock')
+    mkdirSync(join(f.store, 'thread-writer-locks'))
+    symlinkSync(
+      join(f.store, 'thread-writer-locks'),
+      join(f.account, 'thread-writer-locks'),
+      'junction'
+    )
+    mkdirSync(kept)
+    writeFileSync(lock, '')
+    const release = await holdThreadLock(lock)
+
+    try {
+      expect(await f.share()).toBe('busy')
+    } finally {
+      await release()
+    }
+    expect(lstatSync(join(f.account, 'sessions')).isSymbolicLink()).toBe(false)
+
+    expect(await f.share()).toBe('shared')
+    expect(existsSync(lock)).toBe(false)
   })
 })
 

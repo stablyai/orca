@@ -112,7 +112,7 @@ function readOfP(headSha: string, final = false): PRRefreshOutcome {
     dataHeadRepo: { owner: 'acme', repo: 'repo' },
     stack: undefined,
     mergeable: 'MERGEABLE',
-    stackMergeQueueRequired: undefined,
+    stackMergeMetadata: undefined,
     confirmedContainedHeadOid: null,
     headDivergedFromMergedPRAtOid: null,
     conflictSummary: undefined

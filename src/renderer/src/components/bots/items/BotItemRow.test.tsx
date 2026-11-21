@@ -25,41 +25,20 @@ function rowText(item: BotItem): string {
       onAction={() => {}}
     />
   )
-  return container.querySelector('button[title]')?.textContent ?? ''
+  return container.querySelector('[data-bot-item-open]')?.textContent ?? ''
 }
 
-it('draws an In progress row with running workers as one line', () => {
-  const working = makeTestBotItem(3, {
-    title: 'Hold mail while paused',
-    links: [
-      {
-        kind: 'dispatch',
-        ref: 'ctx_d1',
-        latest: null,
-        title: 'Worker',
-        state: 'working',
-        host: null,
-        startedAt: 1,
-        settledAt: null,
-        report: null,
-        pr: null
-      }
-    ]
-  })
-
-  const text = rowText(working)
-  expect(text).toContain('Hold mail while paused')
-  expect(text).not.toMatch(/worker/i)
-})
-
-it('keeps the bot’s question as a Needs you row’s second line', () => {
+it('keeps a Needs you row to one line, its question in the row’s description', () => {
   const asking = makeTestBotItem(6, {
     title: 'Decide: paused mail',
     status: 'needs_you',
     question: { eventId: 'e2', text: 'Hold mail while paused?' }
   })
 
-  expect(rowText(asking)).toContain('Hold mail while paused?')
+  expect(rowText(asking)).not.toContain('Hold mail while paused?')
+  const open = document.querySelector('[data-bot-item-open]')
+  const description = document.getElementById(open?.getAttribute('aria-describedby') ?? '')
+  expect(description?.textContent).toBe('Hold mail while paused?')
 })
 
 function renderMenuRow(): { trigger: HTMLElement; menuOpen: () => boolean } {
@@ -108,7 +87,7 @@ function movePointer(x: number, y: number): void {
   })
 }
 
-it('closes a pointer-opened ⋯ menu only once the pointer leaves the row and the menu', () => {
+it('closes the ⋯ menu on pointer exit only when opened by pointer', () => {
   const { trigger, menuOpen } = renderMenuRow()
   act(() => {
     trigger.dispatchEvent(
@@ -124,19 +103,10 @@ it('closes a pointer-opened ⋯ menu only once the pointer leaves the row and th
 
   movePointer(150, 200)
   expect(menuOpen()).toBe(false)
-})
 
-it('keeps a keyboard-opened ⋯ menu open when the pointer leaves', () => {
-  const { trigger, menuOpen } = renderMenuRow()
   fireEvent.keyDown(trigger, { key: 'Enter' })
   expect(menuOpen()).toBe(true)
 
   movePointer(150, 200)
   expect(menuOpen()).toBe(true)
-})
-
-it('shows the item number before the title', () => {
-  expect(rowText(makeTestBotItem(35, { title: 'Show item numbers' }))).toMatch(
-    /^#35Show item numbers/
-  )
 })

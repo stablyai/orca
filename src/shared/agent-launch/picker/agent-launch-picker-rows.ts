@@ -52,6 +52,10 @@ export type NewTabAgentMenuRow = (
   | { kind: 'terminal'; agent: TuiAgent }
 ) & { executionHostId?: ExecutionHostId }
 
+export function agentMenuRowSupportsChat(row: NewTabAgentMenuRow): boolean {
+  return row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)
+}
+
 export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
   Partial<Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>>
 

@@ -39,9 +39,10 @@ export type RuntimeConstructionDependencies = {
   onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
+  /** `savedRecord` null: the caller already read it and found none. */
   getPaneAgentIdentity?: (
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord
+    savedRecord?: SleepingAgentSessionRecord | null
   ) => ReturnType<typeof paneAgentIdentity>
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
@@ -71,17 +72,19 @@ export type RuntimeConstructionDependencies = {
     connectionId: string | null
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
+  /** `launchRetired`: a command finished after an earlier mark already retired the launch. */
   retireAgentHookCompatibilityAuthority?: (
     paneKey: string,
-    options?: { confirmedExit?: boolean }
+    options?: { confirmedExit?: boolean; launchRetired?: true }
   ) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
+  /** `settleForSleep`: only settle the pane's exit proofs for a sleep capture (a fresh one for a
+   *  pane whose agent may have ended unseen); answers null without probing. */
   checkHookAgentPresence?: (
     paneKey: string,
     exitedSince?: number,
-    /** A sleep capture also releases checkpoints a tmux client shows; other reads skip that probe. */
-    options?: { sleepCapture?: true }
+    options?: { settleForSleep?: true }
   ) => Promise<'live' | 'unverifiable' | 'exited' | null>
   reconcileAgentStatusForEndedProcess?: (
     paneKeys: Iterable<string>,

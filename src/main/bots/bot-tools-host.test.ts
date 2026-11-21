@@ -135,16 +135,13 @@ describe("a bot's own tools", () => {
     expect(readFileSync(calls, 'utf8')).toContain('mcp logout notion')
   })
 
-  it('reports no sign-in for a tool this host never started one for', () => {
-    expect(botToolSignInStatus('bot-1', 'notion')).toBe('none')
-  })
-
-  it('reads pending from the moment Connect starts, never an earlier try, until this one ends', async () => {
+  it('reports no sign-in before Connect and keeps a retry pending until it ends', async () => {
     const cli = cliFor('codex')
     await writeBotToolServers(cli.folder, [NOTION])
     // Stands in for a Codex that exits before naming a page.
     cli.command = process.execPath
     cli.prefixArgs = ['-e', 'setTimeout(() => {}, 300)']
+    expect(botToolSignInStatus('bot-slow', 'notion')).toBe('none')
     await expect(connectBotTool('bot-slow', 'notion', async () => cli)).rejects.toThrow()
     expect(botToolSignInStatus('bot-slow', 'notion')).toBe('failed')
 

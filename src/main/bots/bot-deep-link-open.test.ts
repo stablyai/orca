@@ -23,13 +23,6 @@ function storeWith(externalConversations: unknown[]) {
 }
 
 describe('openBotDeepLink', () => {
-  it('hands a bare link to the renderer to open the bot’s Home', async () => {
-    expect(await openBotDeepLink(storeWith([CHAT_LINK]), { botId: 'bot_1' })).toEqual({
-      kind: 'home',
-      botId: 'bot_1'
-    })
-  })
-
   it('hands the conversation’s chat to the renderer by its session', async () => {
     expect(await openBotDeepLink(storeWith([CHAT_LINK]), LINK)).toEqual({
       kind: 'chat',
@@ -49,7 +42,12 @@ describe('openBotDeepLink', () => {
     })
   })
 
-  it('hands a conversation this computer lacks, or an older Orca’s terminal link, to the renderer to find', async () => {
+  it('falls back to Home for bare, missing and older terminal links', async () => {
+    expect(await openBotDeepLink(storeWith([CHAT_LINK]), { botId: 'bot_1' })).toEqual({
+      kind: 'home',
+      botId: 'bot_1'
+    })
+
     const missing = { kind: 'home', botId: 'bot_1', conversation: LINK.conversation }
     expect(
       await openBotDeepLink(storeWith([{ ...CHAT_LINK, externalId: 'T1:C1:2' }]), LINK)

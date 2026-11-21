@@ -51,9 +51,13 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
   protected terminalPaneLifecycle: {
-    retireSavedRecord?(paneKey: string, exitedAt: number): void
+    /** Answers the record that was saved when the agent quit. */
+    retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
     confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
+    /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
+     *  where the host gives none (remote, Windows), so a command mark stands as on main. */
+    confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -66,20 +70,22 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     this.terminalPaneLifecycle = lifecycle
   }
 
-  /** Which agent conversation this pane holds; see paneAgentIdentity. */
+  /** Which agent conversation this pane holds; see paneAgentIdentity. A null `savedRecord` was
+   *  already read and found absent, so it isn't read again. */
   paneAgentIdentity(
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord,
-    worktreeId = savedRecord?.worktreeId
+    passedRecord?: SleepingAgentSessionRecord | null,
+    worktreeId = passedRecord?.worktreeId
   ): PaneAgentIdentity | null {
+    let savedRecord = passedRecord ?? undefined
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
     const legacy = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
     const row = legacy ?? this.getTmuxSelectedStatus(resolved)
-    if (!row) {
-      savedRecord ??= this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
+    if (!row && passedRecord === undefined) {
+      savedRecord = this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
     }
     worktreeId ??= savedRecord?.worktreeId
     const exit =
@@ -101,27 +107,21 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
           !row.agentPresence.ended
             ? { suspended: true as const }
             : {}),
-          processTopology: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
+          // A shared host's conversation never leaves a saved record, so one is the pane's.
+          executionHost: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
         }
       : null
   }
 
-  protected recordPaneAgentExit(paneKey: string, endedPresence: AgentProcessPresence): void {
+  protected recordPaneAgentExit(
+    paneKey: string,
+    endedPresence: AgentProcessPresence,
+    status = this.paneAgentIdentity(paneKey)?.status
+  ): void {
     const paneKeys = this.paneKeysWithAliases(paneKey)
     const exitedAt = Date.now()
-    const status = this.paneAgentIdentity(paneKey)?.status
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
     this.retirePaneResume(paneKeys, status, exitedAt)
-  }
-
-  /** A shared server's client left the pane; its conversation lives on there, never resumed here.
-   *  `releasedAt` bounds which saved record retires; one saved later is a newer conversation. */
-  protected releaseSharedPaneConversation(
-    paneKey: string,
-    status: PaneAgentIdentity['status'],
-    releasedAt = Date.now()
-  ): void {
-    this.retirePaneResume(this.paneKeysWithAliases(paneKey), status, releasedAt)
   }
 
   private paneKeysWithAliases(paneKey: string): Set<string> {
@@ -136,8 +136,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     exitedAt: number
   ): void {
     for (const key of paneKeys) {
-      const saved = this.terminalPaneLifecycle?.readSavedRecord?.(key)
-      this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+      const saved = this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
       const agent = status?.agentType ?? saved?.agent
       const providerSession = status?.providerSession ?? saved?.providerSession
       if (agent && providerSession) {
@@ -173,12 +172,11 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
 
   /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */
   protected preservesStoppingAgent(paneKey: string): boolean {
-    const identity = this.paneAgentIdentity(paneKey)
+    // A saved record never rests in sleep, so only a stopping pane reads one.
+    const stopping = this.terminalPaneLifecycle?.isStopping(paneKey) === true
+    const identity = this.paneAgentIdentity(paneKey, stopping ? undefined : null)
     return (
-      identity !== null &&
-      !identity.ended &&
-      (identity.status.paneSleep !== undefined ||
-        this.terminalPaneLifecycle?.isStopping(paneKey) === true)
+      identity !== null && !identity.ended && (identity.status.paneSleep !== undefined || stopping)
     )
   }
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {

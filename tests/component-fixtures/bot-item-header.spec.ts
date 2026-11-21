@@ -62,6 +62,7 @@ test('a running worker chip shows its details card on focus, and Tab reaches its
 
 test('the description, chat and done-means scroll away under the header', async ({ page }) => {
   await open(page, 'frozenTop')
+  await scrollTo(page, 'top')
   const description = page.getByText('Finish the share dialog from the design thread')
   await expect(description).toBeInViewport()
   await scrollTo(page, 'bottom')

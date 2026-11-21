@@ -84,9 +84,9 @@ function harness(
   const stored = new Map<string, string>()
   const history = createBotMemoryHistory(
     {
-      read: (id) => stored.get(id) ?? null,
-      write: (id, text) => void (text === null ? stored.delete(id) : stored.set(id, text)),
-      bots: () => [...stored.keys()]
+      read: async (id) => stored.get(id) ?? null,
+      write: async (id, text) => void (text === null ? stored.delete(id) : stored.set(id, text)),
+      bots: async () => [...stored.keys()]
     },
     () => now
   )
@@ -191,8 +191,8 @@ describe('Tidy-up', () => {
     await tick()
 
     expect(files.get(MEMORY)).toBe(`${INDEX}\n`)
-    expect(rows()).toHaveLength(1)
-    expect(rows()[0]).toMatchObject({ by: { kind: 'tidy-up' }, undoable: true })
+    expect(await rows()).toHaveLength(1)
+    expect((await rows())[0]).toMatchObject({ by: { kind: 'tidy-up' }, undoable: true })
     expect(files.get(ARCHIVE)).toBe(
       [
         '# Archive',
@@ -237,7 +237,7 @@ describe('Tidy-up', () => {
 
     expect(files.get(MEMORY)).toBe(BEFORE)
     expect(files.has(RELEASE)).toBe(false)
-    expect(rows()).toEqual([])
+    expect(await rows()).toEqual([])
     expect(runs()[0].error).toBe(
       "The last tidy-up filed a line MEMORY.md doesn't have; new facts go in MEMORY.md, so nothing changed."
     )
@@ -248,7 +248,7 @@ describe('Tidy-up', () => {
     await tick()
 
     expect(files.get(MEMORY)).toBe(BEFORE)
-    expect(rows()).toEqual([])
+    expect(await rows()).toEqual([])
     expect(runs()[0].error).toBe(
       "The last tidy-up's changes couldn't be saved, so nothing changed."
     )
@@ -323,7 +323,7 @@ describe('Tidy-up', () => {
 
     expect(last()).toMatchObject({
       chats: 1,
-      rowId: rows()[0].id,
+      rowId: (await rows())[0].id,
       learned: ['releases go out on Wednesdays'],
       replaced: ['releases go out on Tuesdays'],
       filed: [],
@@ -518,14 +518,8 @@ describe('Tidy-up on a sleeping host', () => {
     h.setNow(h.now() + ASLEEP_RETRY_AFTER_MS)
     await h.tick()
     expect(h.runs()[1].error).toBeUndefined()
-    expect(h.rows()).toHaveLength(1)
+    expect(await h.rows()).toHaveLength(1)
     expect(h.through()).toBeDefined()
-  })
-
-  it('holds the host awake while it waits for the reply, and lets go after', async () => {
-    const { host, tick } = harness()
-    await tick()
-    expect(host.holds).toEqual({ taken: 1, released: 1 })
   })
 
   it('never catches up a night it was not on for: a new or re-enabled Tidy-up waits for the night', async () => {
@@ -592,14 +586,6 @@ describe('Tidy-up on a sleeping host', () => {
     expect(h.through()).toBeUndefined()
   })
 
-  it('never holds back Tidy now, whatever the power', async () => {
-    const { host, setNow, tidyNow, runs } = harness()
-    host.setFullWake(false)
-    setNow(NIGHT + 11 * HOUR)
-    expect(await tidyNow()).toEqual({ started: true })
-    expect(runs()).toHaveLength(1)
-  })
-
   it('records a run cut short by a short reported suspend as missed', async () => {
     const ctx: { h?: ReturnType<typeof harness> } = {}
     const h = harness({
@@ -645,12 +631,14 @@ describe('Tidy-up on a sleeping host', () => {
     expect(h.runs()).toHaveLength(0)
   })
 
-  it('never withdraws Tidy now at delivery, whatever the power', async () => {
+  it('delivers Tidy now from a dark wake even if the host suspends before delivery', async () => {
     const ctx: { h?: ReturnType<typeof harness> } = {}
     const h = harness({ chats: [], beforeAppend: () => ctx.h!.host.suspend() })
     ctx.h = h
+    h.host.setFullWake(false)
     h.setNow(NIGHT + 11 * 60 * 60_000)
     expect(await h.tidyNow()).toEqual({ started: true })
+    expect(h.runs()).toHaveLength(1)
     expect(h.delivered).toHaveLength(1)
   })
 

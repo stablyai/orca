@@ -1,5 +1,4 @@
 import { settlePaneShellForeground } from './pane-agent-shell-lifecycle'
-import { isJobStopStatus } from '../../../../../../shared/terminal/output/terminal-osc133-command-finished'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
@@ -182,14 +181,9 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.handleCommandFinished = (bestEffortExitCode: number | null): void => {
     session.clearCommandInferredPaneAgentAfterPtySideEffects()
     session.visibleForegroundSamplePending = false
+    const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()
     // Commands can change HEAD/index; nudge git UI immediately instead of waiting for polling.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
-    if (isJobStopStatus(bestEffortExitCode)) {
-      session.deferredCommandFinishedStatusDrop = null
-      session.deferredConfirmedShellReconcile = null
-      return
-    }
-    const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     const inferenceResult = session.flushPendingInterruptInference()

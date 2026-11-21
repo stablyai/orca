@@ -16,7 +16,7 @@ import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../shared/agent-session/identity/orca-session-address'
-import { capUtf8 } from '../connector-cloud/connector-turn-events'
+import { capAnswer } from '../connector-cloud/connector-snapshot'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
 import type { ConnectorBotPostBody } from '../connector-cloud/connector-replies'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
@@ -145,7 +145,7 @@ export async function deliverBotRunResult(
     )
     const error = COPY.failed(ended.outcome)
     await resultNote.leave(deps, result, 'couldNotFinish', ended.message.trim() || error)
-    return { status: 'dispatch_failed', error }
+    return { status: 'dispatch_failed', error: ended.error ?? error }
   }
   const message = ended.message.trim()
   const completed: BotRunCompletion = {
@@ -159,7 +159,7 @@ export async function deliverBotRunResult(
     return { ...completed, error: COPY.notInThread }
   }
   if (message && !isQuietBotResult(message) && resultsTo === 'thread' && target.threadPost) {
-    const text = capUtf8(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
+    const text = capAnswer(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
     const posted = await deps.replyInThread(
       target.threadPost,
       `run-result:${result.run.id}`,
@@ -198,7 +198,7 @@ export async function deliverBotRunResult(
       return { ...completed, error: COPY.chatFailed }
     }
   }
-  const text = capUtf8(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
+  const text = capAnswer(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
   const postId = result.run.id
   // The ref where the host saved one; the id or key where it saved only that.
   const place = resultPlaceValue(resultsTo)

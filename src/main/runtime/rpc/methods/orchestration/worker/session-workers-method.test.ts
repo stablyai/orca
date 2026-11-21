@@ -4,6 +4,7 @@ import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-t
 import { createOrchestrationWorkerReleaseHarness } from './testing/worker-release.test-support'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { structuredAgentSessionStatusPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { readConnectorWorkerActivity } from './connector-worker-activity'
 import {
   sessionWorkerActivity,
   sessionWorkerState,
@@ -83,6 +84,51 @@ describe('orchestration.sessionWorkers', () => {
       question: 'Which branch?'
     })
     expect((await sessionWorkers())[0]).toMatchObject({ dispatchId, pendingQuestion: true })
+  })
+})
+
+describe('connector conversations’ open workers', () => {
+  function fromConnector(dispatchId: string, session: string): void {
+    h.db.db
+      .prepare(
+        `UPDATE dispatch_contexts SET creator_orca_session_id = ?, creator_turn_source = 'connector'
+          WHERE id = ?`
+      )
+      .run(session, dispatchId)
+  }
+
+  function rootDispatch(spec: string, handle: string): string {
+    const task = h.db.createTask({ spec, runId: h.activeRunId })
+    return createRootDispatch(h.db, task.id, handle).id
+  }
+
+  it('reads every chat in one pass, leaving out settled workers and other starts', async () => {
+    const open = await h.startWorker()
+    fromConnector(open.dispatchId, CHAT)
+    const finished = rootDispatch('finished', 'term_finished')
+    fromConnector(finished, CHAT)
+    h.db.db.prepare(`UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?`).run(finished)
+    createdByChat(rootDispatch('typed in Orca', 'term_typed'))
+    const asking = rootDispatch('asks', 'term_asking')
+    fromConnector(asking, 'chat-session-2')
+    h.db.createQuestion({
+      runId: h.activeRunId,
+      dispatchId: asking,
+      askerHandle: `dispatch:${asking}`,
+      question: 'Which branch?'
+    })
+
+    const read = await readConnectorWorkerActivity(h.runtime, [
+      CHAT,
+      'chat-session-2',
+      'chat-session-3'
+    ])
+    // The harness publishes no agent status, so the host cannot confirm either runs.
+    expect(Object.fromEntries(read)).toEqual({
+      [CHAT]: [{ state: 'unverifiable', activity: 'unknown', pendingQuestion: false }],
+      'chat-session-2': [{ state: 'unverifiable', activity: 'unknown', pendingQuestion: true }],
+      'chat-session-3': []
+    })
   })
 })
 

@@ -57,7 +57,8 @@
       "currentWorktree": "mevcut worktree",
       "messages_one": "{{count}} mesaj",
       "messages_other": "{{count}} mesaj",
-      "resumeSession": "Ajan oturumuna devam et"
+      "resumeSession": "Ajan oturumuna devam et",
+      "continueInCli": "CLI'de Devam Et"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Sunucuya ulaşılamadı",
@@ -186,7 +187,18 @@
       "webView": "Web sitesinin masaüstü görünümünü göster"
     },
     "loadFailure": {
-      "retry": "Yeniden dene"
+      "retry": "Yeniden dene",
+      "connectionNotSecure": "Bağlantı güvenli değil",
+      "certificateNameMismatch": "Sertifika {{value0}} ile eşleşmiyor.",
+      "certificateDateInvalid": "{{value0}} için sertifika, geçerli tarih ve saatte geçerli değil.",
+      "certificateAuthorityInvalid": "Orca, {{value0}} için sertifikayı veren yetkiliye güvenmiyor.",
+      "certificateVerificationFailed": "Orca, {{value0}} için sertifikayı doğrulayamadı.",
+      "proceedUnsafe": "Yine de Devam Et (Güvenli Değil)",
+      "connecting": "Bağlanıyor…",
+      "certificateChallengeExpired": "Bu sertifika onayının süresi doldu. Yeni bir onay istemek için sayfayı yeniden deneyin.",
+      "certificateChallengeChanged": "Sertifika isteği değişti. Sayfayı yeniden deneyin ve yeni uyarıyı inceleyin.",
+      "certificateProceedFailed": "Orca bu sertifika isteğini onaylayamadı. Sayfayı yeniden deneyin ve tekrar deneyin.",
+      "certificateChallengeUnavailable": "Bu sertifika isteği artık kullanılamıyor. Yeni bir istek için sayfayı yeniden deneyin."
     }
   },
   "chat": {
@@ -220,7 +232,8 @@
     "contextUsage": {
       "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
       "title": "Bağlam",
-      "estimated": "Son yanıta göre tahmin edilmiştir."
+      "estimated": "Son yanıta göre tahmin edilmiştir.",
+      "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",
@@ -607,10 +620,6 @@
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Ajana devredildi",
-      "startedAgent": "Ajan başlatıldı"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Ek yanıtı okunamıyor. Tekrar deneyin.",
       "incompleteReply": "Ek değişti veya yanıtı eksikti. Kapatıp tekrar deneyin.",
@@ -658,7 +667,7 @@
       "confirm": "Geri dön",
       "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",
       "historyNotPaginated": "Bu eski Codex sohbetinde önceki bir mesaja dönülemiyor. Buraya geri dön özelliğini kullanmak için yeni bir sohbet başlatın.",
-      "busy": "Ajan boşta olduğunda ve sohbette sizden yanıt bekleyen bir işlem kalmadığında kullanılabilir.",
+      "busy": "Sohbet boştayken kullanılabilir",
       "staleEpoch": "Sohbet değişti. Son mesajları inceleyip yeniden deneyin.",
       "invalidTarget": "Sohbette bu mesaja dönülemiyor. Hiçbir şey değiştirilmedi.",
       "historyLimit": "Bu sohbet geri dönülemeyecek kadar uzun. Hiçbir şey değiştirilmedi.",
@@ -936,7 +945,9 @@
       "label": "Kurulum betiği",
       "run": "Çalıştır",
       "runSetupCommand": "Kurulum komutunu çalıştır",
-      "skip": "Atla"
+      "skip": "Atla",
+      "waitForSetup": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+      "waitForSetupSaveFailed": "Kurulum başlangıç davranışı kaydedilemedi."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Bağlan",
@@ -1638,7 +1649,10 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
       "unpin": "Sabitlemeyi Kaldır",
-      "rename": "Yeniden adlandır"
+      "rename": "Yeniden adlandır",
+      "markRead": "Okundu Olarak İşaretle",
+      "markUnread": "Okunmadı Olarak İşaretle",
+      "moveToStatus": "Duruma Taşı"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Kontroller: Başarısız",
@@ -2203,6 +2217,7 @@
       "providerUnavailable": "Hizmet meşgul olduğu için {{agent}} yanıt veremedi. Başka bir model seçin veya biraz bekleyip yeniden gönderin.",
       "providerSafetyStopped": "{{agent}}, bir güvenlik kontrolünden sonra bu yanıtı durdurdu. İsteğinizi gözden geçirip yeniden gönderin.",
       "providerResponseFailed": "{{agent}} bu yanıtı tamamlayamadı. Daha fazla bilgi için ayrıntıları açın.",
+      "providerResponseFailedQuoted": "{{agent}} bu yanıtı tamamlayamadı: {{detail}}.",
       "selectedModel": "seçilen modeli",
       "providerRejected": "{{agent}} bu mesajı kabul etmedi.",
       "providerRejectedQuoted": "{{agent}} bu mesajı kabul etmedi: {{detail}}.",
@@ -2464,6 +2479,11 @@
       "sendReviewNotes": "İnceleme Notlarını Gönder",
       "shortcut": "Kısayol",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
       "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
@@ -2784,6 +2804,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Bu mesaj bulunamadı."
+    },
+    "browserProfile": {
+      "default": "Varsayılan"
     }
   },
   "settings": {

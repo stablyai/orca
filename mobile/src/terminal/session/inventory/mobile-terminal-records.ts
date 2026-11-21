@@ -187,7 +187,10 @@ function mobileSessionTabEqual(
         browserLoadErrorsEqual(a.loadError, b.loadError) &&
         a.canGoBack === b.canGoBack &&
         a.canGoForward === b.canGoForward &&
-        a.faviconUrl === b.faviconUrl
+        a.faviconUrl === b.faviconUrl &&
+        a.browserProfileId === b.browserProfileId &&
+        a.certificateFailure?.challengeId === b.certificateFailure?.challengeId &&
+        a.certificateFailure?.canProceed === b.certificateFailure?.canProceed
       )
     case 'agent-session':
       return (

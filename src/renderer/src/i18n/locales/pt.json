@@ -3350,7 +3350,6 @@
             "27a74f91f0": "Nada em execução agora",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nome",
-            "1fedf94eae": "Carga combinada de CPU. Valores acima de 100% significam que mais de um núcleo está trabalhando ao mesmo tempo.",
             "e7cf14ec78": "Sessões de terminal indisponíveis. A lista pode estar desatualizada.",
             "93b0de3c21": "Reiniciar",
             "f85af9cda6": "Snapshots de recursos e sessões de terminal estão indisponíveis.",
@@ -3760,8 +3759,6 @@
                   "terminalSessionCount_one": "{{count}} sessão de terminal",
                   "terminalSessionCount_other": "{{count}} sessões de terminal",
                   "terminalSessionCount_many": "{{count}} sessões de terminal",
-                  "memoryUnavailable": "memória indisponível",
-                  "tooltipSummary": "Gerenciador de Recursos - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Verificação de espaço pronta",
                   "sessionsGroupedByWorkspace": "As sessões de terminal são agrupadas por espaço de trabalho.",
                   "noTerminalSessions": "Nenhuma sessão de terminal ainda.",
@@ -11032,10 +11029,8 @@
             "f61af83316": "Nova Pasta",
             "37c875d827": "Novo Arquivo",
             "b3e288bf41": "Falha ao baixar '{{value0}}'.",
-            "f729bcd97d": "Falha ao baixar a pasta '{{value0}}'.",
             "1a3df04ae1": "Abrir",
             "bce4d4e44f": "'{{value0}}' baixado",
-            "a4029c996b": "Pasta '{{value0}}' baixada",
             "e26010014a": "Ignorado pelo .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copiar Caminho Relativo",
@@ -11753,7 +11748,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos os hosts",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH do projeto",
@@ -11802,7 +11796,6 @@
           "219ebf1961": "Nome da branch",
           "folderPathIdentity": "Branch / caminho da pasta",
           "cli": "CLI do Orca",
-          "workspaceOptions": "Opções do espaço de trabalho",
           "host": "Host",
           "optionsActiveFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
           "optionsActiveFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
@@ -21137,6 +21130,7 @@
         "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
         "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
         "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+        "providerResponseFailedQuoted": "{{agent}} não conseguiu concluir esta resposta: {{detail}}.",
         "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
         "selectedModel": "o modelo selecionado",
         "providerRejected": "{{agent}} não aceitou esta mensagem.",
@@ -21207,7 +21201,6 @@
         "thenSendAgain": "Depois, envie sua mensagem novamente.",
         "runCommandWhenDone": "Execute /{{command}} quando terminar.",
         "commandAfterAnswer": "Responda à pergunta ou ao pedido de aprovação do agente e execute /{{command}}.",
-        "cliTooOld": "A versão {{installedVersion}} de {{agent}} é antiga demais para chats. Atualize para a versão {{minimumVersion}} ou mais recente.",
         "conversationOpenElsewhere": "O Codex ainda está mantendo esta conversa aberta. Tente novamente em instantes ou feche outros terminais do Codex.",
         "conversationOpenInTerminal": "{{agent}} já está executando esta conversa em outro terminal. Saia do {{agent}} lá ou feche esse terminal para continuar aqui.",
         "modelUnavailableUpdate": "{{agent}} não conseguiu usar {{detail}}. Atualize o {{agent}} para {{minimumVersion}} ou posterior para mantê-lo após reiniciar, ou selecione outro modelo e envie novamente.",
@@ -21323,7 +21316,7 @@
       "rewind": {
         "unsupported": "Este chat não permite voltar a uma mensagem anterior.",
         "historyNotPaginated": "Este chat antigo do Codex não permite voltar a uma mensagem anterior. Inicie um novo chat para usar Voltar até aqui.",
-        "busy": "Disponível quando o agente estiver ocioso e não houver nada neste chat aguardando sua resposta.",
+        "busy": "Disponível quando o chat estiver ocioso",
         "staleEpoch": "A conversa mudou. Confira as mensagens mais recentes e tente novamente.",
         "invalidTarget": "Não é possível voltar a esta mensagem na conversa. Nada foi alterado.",
         "historyLimit": "Esta conversa é longa demais para voltar a uma mensagem anterior. Nada foi alterado.",
@@ -21350,14 +21343,7 @@
         "unreported": "O uso de contexto não está disponível para esta sessão."
       },
       "agentMessage": {
-        "messageFrom": "Mensagem de",
         "unnamedSender": "um agente",
-        "messageFromCoordinator": "Mensagem do coordenador",
-        "startedWorker": "Worker iniciado",
-        "handedOffToAgent": "Entregue a um agente",
-        "startedAgent": "Agente iniciado",
-        "taskFromCoordinator": "Tarefa do coordenador",
-        "updateFromWorker": "Atualização do worker",
         "senderReplaced": "{{name}} não está mais em execução em seu terminal; outro agente está em execução nele agora. Abra esse terminal pela barra lateral se precisar dele.",
         "senderAmbiguous": "O Orca não consegue identificar em qual terminal {{name}} está em execução. Abra-o pela barra lateral.",
         "senderNotRunning": "{{name}} não está mais em execução. Inicie um novo agente pela barra lateral para continuar o trabalho.",
@@ -23182,9 +23168,7 @@
     "updateFailed": "Falha ao atualizar campo do projeto"
   },
   "mediaPreview": {
-    "unavailable": "Não foi possível reproduzir este arquivo de mídia. O arquivo pode estar indisponível ou usar um codec incompatível.",
-    "openFailed": "Não foi possível abrir este arquivo no aplicativo padrão.",
-    "openDefault": "Abrir no aplicativo padrão"
+    "unavailable": "Não foi possível reproduzir este arquivo de mídia. O arquivo pode estar indisponível ou usar um codec incompatível."
   },
   "workspace": {
     "branchChoice": {
@@ -23635,7 +23619,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Alternar worktree",
+      "worktreePalette": "Buscar tudo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Próximo worktree",
       "workspaceCreate": "Criar worktree",
@@ -23748,6 +23732,9 @@
       "45347db2a3": "Navegação entre abas",
       "aab2837fa5": "Comandos Rápidos",
       "3492a954c8": "Painéis do terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Alternar worktree"
     }
   },
   "gpuFallback": {
@@ -24809,8 +24796,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
-      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
-      "lookDueNow": "Previsto agora · {{every}}"
+      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo"
     },
     "palette": {
       "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",

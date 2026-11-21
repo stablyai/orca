@@ -85,6 +85,9 @@ export function useBotPictureSetting(
   upload: (png: string, after: number) => void
   /** Puts back the picture the last upload replaced. */
   undo: () => void
+  /** The mascot's tile color shown; null is its own sky blue. */
+  color: string | null
+  pickColor: (color: string | null) => void
 } {
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
@@ -260,7 +263,31 @@ export function useBotPictureSetting(
     })
   }
 
-  useSaveOnClose(commit)
+  // The color saves on its own, the latest pick after a pause; until it lands it is shown as picked.
+  const [pickedColor, setPickedColor] = useState<{ color: string | null } | null>(null)
+  const colorTimer = useRef<{ timer: ReturnType<typeof setTimeout>; save: () => void } | null>(null)
+  const saveColor = (color: string | null): void => {
+    colorTimer.current = null
+    void update({ avatarColor: color }).finally(() =>
+      setPickedColor((picked) => (picked?.color === color ? null : picked))
+    )
+  }
+  const pickColor = (color: string | null): void => {
+    setPickedColor({ color })
+    if (colorTimer.current) {
+      clearTimeout(colorTimer.current.timer)
+    }
+    const save = (): void => saveColor(color)
+    colorTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save }
+  }
+
+  useSaveOnClose(() => {
+    commit()
+    if (colorTimer.current) {
+      clearTimeout(colorTimer.current.timer)
+      colorTimer.current.save()
+    }
+  })
 
   // A picture set elsewhere (the CLI, another window) is adopted while nothing is pending here.
   useEffect(() => {
@@ -295,6 +322,8 @@ export function useBotPictureSetting(
     },
     pick,
     upload,
-    undo
+    undo,
+    color: pickedColor ? pickedColor.color : (bot.avatarColor ?? null),
+    pickColor
   }
 }

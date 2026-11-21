@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -26,7 +26,14 @@ const TEN_MINUTES_AGO = '2026-11-16T11:50:00.000Z'
 
 let root = ''
 
+const home = vi.hoisted(() => ({ path: '' }))
+vi.mock('node:os', async (importOriginal) => {
+  const os = await importOriginal<{ homedir: () => string }>()
+  return { ...os, homedir: () => home.path || os.homedir() }
+})
+
 afterEach(() => {
+  home.path = ''
   if (root) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -338,4 +345,50 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       expect(result).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })
     }
   )
+
+  it('ignores the home folder as a project, while a real project still keeps its history', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
+    home.path = root
+    const workspaces = join(root, 'workspaces')
+    for (const repo of ['app', 'api']) {
+      mkdirSync(join(workspaces, repo), { recursive: true })
+      mkdirSync(join(root, 'repos', repo), { recursive: true })
+    }
+    const deleted: ChatHistoryTarget[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
+    const store = {
+      getSettings: () => ({
+        workspaceDir: workspaces,
+        nestWorkspaces: true,
+        workspaceDirHistory: []
+      }),
+      getRepos: () =>
+        ['app', 'api'].map((id) => ({
+          id,
+          path: join(root, 'repos', id),
+          displayName: id,
+          badgeColor: '',
+          addedAt: 0
+        })),
+      getAllWorktreeMeta: () => ({}),
+      // Fresh profiles list home as a project; `api`'s workspaces folder is a real folder project.
+      getFolderWorkspaces: () => [{ folderPath: root }, { folderPath: join(workspaces, 'api') }]
+    } as unknown as RuntimeStore
+
+    await sweepDeletedWorkspaceChatHistory({
+      store,
+      now: NOW,
+      listSessions: async () => [
+        session('app-gone.jsonl', join(workspaces, 'app', 'gone')),
+        session('api-gone.jsonl', join(workspaces, 'api', 'gone'))
+      ],
+      isEnabled: () => true,
+      deleteSessions: async (targets) => {
+        deleted.push(...targets)
+        return { deleted: targets.length, failed: 0, freedBytes: 0 }
+      }
+    })
+
+    expect(deleted.map((target) => basename(target.filePath))).toEqual(['app-gone.jsonl'])
+  })
 })

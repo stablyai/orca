@@ -24,7 +24,7 @@ const bot: Pick<Bot, 'id' | 'name' | 'members' | 'hostId'> = {
   members: []
 }
 
-function turnOn(target: Pick<Bot, 'id' | 'name' | 'members' | 'hostId'>): Promise<boolean> {
+function mountTurnOn() {
   const { result } = renderHook(() => useTurnOnBotGoogle(), {
     wrapper: ({ children }) => (
       <ConfirmationDialogContext.Provider value={mocks.confirm}>
@@ -32,7 +32,7 @@ function turnOn(target: Pick<Bot, 'id' | 'name' | 'members' | 'hostId'>): Promis
       </ConfirmationDialogContext.Provider>
     )
   })
-  return result.current(target)
+  return result.current
 }
 
 beforeEach(() => {
@@ -49,9 +49,9 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-function renderRow(google: boolean): void {
+function renderConnectedRow(): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only id, name, members and google.
-  const row = { ...bot, google } as Bot
+  const row = { ...bot, google: true } as Bot
   render(
     <ConfirmationDialogContext.Provider value={mocks.confirm}>
       <BotGoogleCard bot={row} />
@@ -60,18 +60,9 @@ function renderRow(google: boolean): void {
 }
 
 describe('the Google row in a bot’s connectors', () => {
-  it('shows only once Google is added to the bot, with no switch', () => {
-    renderRow(false)
-    expect(screen.queryByText('Google')).toBeNull()
-    cleanup()
-    renderRow(true)
-    expect(screen.getByText('Google')).toBeTruthy()
-    expect(screen.queryByRole('switch')).toBeNull()
-  })
-
   it('removes Google from the bot after a confirm, like other connectors', async () => {
     mocks.confirm.mockResolvedValue(true)
-    renderRow(true)
+    renderConnectedRow()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Google actions' }), {
       button: 0,
       ctrlKey: false
@@ -87,15 +78,22 @@ describe('the Google row in a bot’s connectors', () => {
 })
 
 describe('turning Google on for a bot', () => {
-  it('needs no confirm when only the owner can ask', async () => {
+  it('reports a refused write and lets the owner retry without confirmation', async () => {
+    const turnOn = mountTurnOn()
+    mocks.setBotGoogle.mockRejectedValueOnce(new Error('no account'))
+    await expect(turnOn(bot)).resolves.toBe(false)
     await expect(turnOn(bot)).resolves.toBe(true)
     expect(mocks.confirm).not.toHaveBeenCalled()
-    expect(mocks.setBotGoogle).toHaveBeenCalledWith(expect.objectContaining({ id: 'b1' }), true)
+    expect(mocks.setBotGoogle.mock.calls).toEqual([
+      [expect.objectContaining({ id: 'b1' }), true],
+      [expect.objectContaining({ id: 'b1' }), true]
+    ])
   })
 
   it('names who else can then use the owner’s Google, and stays off when declined', async () => {
     mocks.confirm.mockResolvedValue(false)
     const shared = { ...bot, members: [{ id: 'U1', name: 'Bob', source: 'slack' }] }
+    const turnOn = mountTurnOn()
     await expect(turnOn(shared)).resolves.toBe(false)
     expect(mocks.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -104,10 +102,5 @@ describe('turning Google on for a bot', () => {
       })
     )
     expect(mocks.setBotGoogle).not.toHaveBeenCalled()
-  })
-
-  it('reports failure when the host refuses', async () => {
-    mocks.setBotGoogle.mockRejectedValue(new Error('no account'))
-    await expect(turnOn(bot)).resolves.toBe(false)
   })
 })

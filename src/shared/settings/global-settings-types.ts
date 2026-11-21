@@ -77,6 +77,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorAutoSave: boolean
   /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
   updateDelayDays?: number
+  automaticUpdates?: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
   /** Inline git blame after the cursor line; the status-bar item is separate. */

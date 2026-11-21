@@ -65,6 +65,7 @@
       "messages_one": "{{count}} mensagem",
       "messages_other": "{{count}} mensagens",
       "resumeSession": "Retomar sessão de agente",
+      "continueInCli": "Continuar na CLI",
       "hidePreview": "Oculta as mensagens recentes.",
       "showPreview": "Mostra as mensagens recentes.",
       "you": "Você"
@@ -207,7 +208,18 @@
       "timedOut": "A transmissão do navegador expirou."
     },
     "loadFailure": {
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "connectionNotSecure": "A conexão não é segura",
+      "certificateNameMismatch": "O certificado não corresponde a {{value0}}.",
+      "certificateDateInvalid": "O certificado de {{value0}} não é válido na data e hora atuais.",
+      "certificateAuthorityInvalid": "O Orca não confia na autoridade que emitiu o certificado de {{value0}}.",
+      "certificateVerificationFailed": "O Orca não conseguiu verificar o certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar Assim Mesmo (Inseguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprovação de certificado expirou. Tente novamente a página para solicitar uma nova.",
+      "certificateChallengeChanged": "A solicitação de certificado foi alterada. Tente novamente a página e revise o novo aviso.",
+      "certificateProceedFailed": "O Orca não conseguiu aprovar esta solicitação de certificado. Tente novamente a página.",
+      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova."
     }
   },
   "chat": {
@@ -241,7 +253,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
       "title": "Contexto",
-      "estimated": "Estimado a partir da última resposta."
+      "estimated": "Estimado a partir da última resposta.",
+      "deferredNote": "Carregado sob demanda. Não conta no total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",
@@ -662,15 +675,6 @@
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregue a um agente",
-      "startedAgent": "Agente iniciado",
-      "startedWorker": "Worker iniciado",
-      "taskFromCoordinator": "Tarefa do coordenador",
-      "messageFromCoordinator": "Mensagem do coordenador",
-      "updateFromWorker": "Atualização do worker",
-      "messageFrom": "Mensagem de"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "A resposta do anexo não pode ser lida. Tente novamente.",
       "incompleteReply": "O anexo foi alterado ou a resposta estava incompleta. Feche-o e tente novamente.",
@@ -718,7 +722,7 @@
       "confirm": "Voltar",
       "unsupported": "Este chat não permite voltar a uma mensagem anterior.",
       "historyNotPaginated": "Este chat antigo do Codex não permite voltar a uma mensagem anterior. Inicie um novo chat para usar Voltar até aqui.",
-      "busy": "Disponível quando o agente estiver ocioso e não houver nada neste chat aguardando sua resposta.",
+      "busy": "Disponível quando o chat estiver ocioso",
       "staleEpoch": "A conversa mudou. Confira as mensagens mais recentes e tente novamente.",
       "invalidTarget": "Não é possível voltar a esta mensagem na conversa. Nada foi alterado.",
       "historyLimit": "Esta conversa é longa demais para voltar a uma mensagem anterior. Nada foi alterado.",
@@ -1047,7 +1051,9 @@
       "label": "Script de configuração",
       "run": "Executar",
       "runSetupCommand": "Executar comando de configuração",
-      "skip": "Pular"
+      "skip": "Pular",
+      "waitForSetup": "Esperar a configuração terminar antes de iniciar o agente",
+      "waitForSetupSaveFailed": "Falha ao salvar o comportamento de inicialização da configuração."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Conectar",
@@ -1823,7 +1829,10 @@
       "sleep": "Suspender",
       "unpin": "Desafixar",
       "rename": "Renomear",
-      "deleteFailed": "Falha ao excluir \"{{name}}\""
+      "deleteFailed": "Falha ao excluir \"{{name}}\"",
+      "markRead": "Marcar como Lido",
+      "markUnread": "Marcar como Não Lido",
+      "moveToStatus": "Mover para Status"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -2637,6 +2646,7 @@
       "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
       "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
       "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+      "providerResponseFailedQuoted": "{{agent}} não conseguiu concluir esta resposta: {{detail}}.",
       "selectedModel": "o modelo selecionado",
       "providerRejected": "{{agent}} não aceitou esta mensagem.",
       "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",
@@ -2904,6 +2914,11 @@
       "sendReviewNotes": "Enviar Notas de Revisão",
       "shortcut": "Atalho",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "Prompt CMD",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
@@ -3259,6 +3274,9 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
+    },
+    "browserProfile": {
+      "default": "Padrão"
     }
   },
   "settings": {

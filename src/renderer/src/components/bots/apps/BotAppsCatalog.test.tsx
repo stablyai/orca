@@ -149,51 +149,10 @@ describe('Add to <bot>', () => {
     expect(calls('bots.composio.connect')).toHaveLength(0)
   })
 
-  it('lists an MCP catalog entry in its category, and Add adds it by URL and signs in', async () => {
-    answer({
-      ...tools,
-      'bots.tools.add': () => ({ tool: signInTool('sentry') }),
-      'bots.tools.connect': orcaConnect
-    })
-    open()
-    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Sentry' }))
-
-    expect(await screen.findByText('Finish in your browser')).toBeTruthy()
-    expect(calls('bots.tools.add')[0]?.[2]).toEqual({
-      botId: 'bot-1',
-      source: 'https://mcp.sentry.dev/mcp',
-      name: 'sentry'
-    })
-    expect(screen.getByText('Sign in to Sentry and allow access.')).toBeTruthy()
-  })
-
-  it('retries a failed MCP add by adding again, not by signing in to a tool that was never added', async () => {
-    let adds = 0
-    answer({
-      ...tools,
-      'bots.tools.add': () => {
-        adds += 1
-        if (adds === 1) {
-          throw new Error('Could not write the bot’s tools.')
-        }
-        return { tool: signInTool('sentry') }
-      },
-      'bots.tools.connect': orcaConnect
-    })
-    open()
-    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Sentry' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
-
-    expect(await screen.findByText('Finish in your browser')).toBeTruthy()
-    expect(calls('bots.tools.add')).toHaveLength(2)
-    expect(calls('bots.tools.connect')).toHaveLength(1)
-  })
-
-  it('retries a failed MCP sign-in by signing in again to the tool it already added', async () => {
-    let connects = 0
+  it('retries an MCP app at the failed step without adding it twice', async () => {
     let added = false
+    let adds = 0
+    let connects = 0
     answer({
       ...tools,
       'bots.tools.list': () => ({
@@ -201,6 +160,10 @@ describe('Add to <bot>', () => {
         inherited: []
       }),
       'bots.tools.add': () => {
+        adds += 1
+        if (adds === 1) {
+          throw new Error('Could not write the bot’s tools.')
+        }
         added = true
         return { tool: signInTool('sentry') }
       },
@@ -215,11 +178,25 @@ describe('Add to <bot>', () => {
     open()
     fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Add Sentry' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    const retryAdd = await screen.findByRole('button', { name: 'Try again' })
+    expect(calls('bots.tools.connect')).toHaveLength(0)
+    fireEvent.click(retryAdd)
+
+    await waitFor(() => expect(calls('bots.tools.connect')).toHaveLength(1))
+    const retrySignIn = await screen.findByRole('button', { name: 'Try again' })
+    expect(calls('bots.tools.add')).toHaveLength(2)
+    expect(calls('bots.tools.add').at(-1)?.[2]).toEqual({
+      botId: 'bot-1',
+      source: 'https://mcp.sentry.dev/mcp',
+      name: 'sentry'
+    })
+    fireEvent.click(retrySignIn)
 
     expect(await screen.findByText('Finish in your browser')).toBeTruthy()
-    expect(calls('bots.tools.add')).toHaveLength(1)
+    expect(screen.getByText('Sign in to Sentry and allow access.')).toBeTruthy()
     expect(calls('bots.tools.connect')).toHaveLength(2)
+    expect(calls('bots.tools.add')).toHaveLength(2)
   })
 
   it('keeps an added app in All apps and its category, with Manage in place of Add', async () => {

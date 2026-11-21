@@ -40,25 +40,20 @@ beforeEach(() => {
 })
 
 describe('openBotSettings', () => {
-  it('opens the view in the bot’s panel from outside Settings, after switching to its page', () => {
-    openBotSettings('bot-1', 'look-around')
+  it('opens Memory History in the bot’s panel after switching to its page', () => {
+    openBotSettings('bot-1', 'memory-history')
     expect(openBotHome).toHaveBeenCalledWith(bot)
     expect(useAppStore.getState()).toMatchObject({
       activeView: 'terminal',
       rightSidebarTab: 'bot-activity',
       rightSidebarOpen: true
     })
-    expect(readBotSettingsPlace('panel')).toEqual({ botId: 'bot-1', page: 'look-around' })
-    expect(readBotSettingsPlace('page')).toBeNull()
-  })
-
-  it('opens Memory on its History', () => {
-    openBotSettings('bot-1', 'memory-history')
     expect(readBotSettingsPlace('panel')).toEqual({
       botId: 'bot-1',
       page: 'memory',
       memoryTab: 'history'
     })
+    expect(readBotSettingsPlace('page')).toBeNull()
   })
 
   it('opens the view in Settings › Bots from Settings', () => {

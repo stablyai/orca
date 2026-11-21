@@ -32,7 +32,7 @@ export function BotSlackSection({
         />
       </p>
       <BotWhoCanAskInsetList bot={bot} service={people} />
-      <BotSlackPostAs bot={bot} slack={slack} setupState={setupState} />
+      <BotSlackPostAs bot={bot} slack={slack} setupState={setupState} className="mt-3 px-3" />
     </div>
   )
 }

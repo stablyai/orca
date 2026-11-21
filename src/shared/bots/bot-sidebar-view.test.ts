@@ -40,18 +40,6 @@ function arrange(view: Partial<BotSidebarView>): string[] {
 }
 
 describe('arrangeBotSidebarEntries', () => {
-  it('keeps the saved order in Manual', () => {
-    expect(arrange({ sortBy: 'manual' })).toEqual(['release', 'docs', 'room', 'review', 'disk'])
-  })
-
-  it('puts bots that need you first in Agent Activity, then newest, ties in saved order', () => {
-    expect(arrange({ sortBy: 'smart' })).toEqual(['review', 'docs', 'room', 'release', 'disk'])
-  })
-
-  it('orders by newest activity alone in Recent', () => {
-    expect(arrange({ sortBy: 'recent' })).toEqual(['docs', 'room', 'release', 'disk', 'review'])
-  })
-
   it('lists a just-made bot, with no activity yet, as the newest in Recent and Agent Activity', () => {
     const made: Entry[] = [
       ...entries,

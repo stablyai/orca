@@ -16,7 +16,8 @@ import { BotItemsTables } from './bot-items-tables'
 export type BotItemListQuery = {
   botId: string
   statuses: readonly BotItemStatus[]
-  chatId?: string
+  /** Only these chats' items, counts included. */
+  chatIds?: readonly string[]
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
   limit: number
@@ -51,14 +52,14 @@ export class BotItemsReads extends BotItemsTables {
     items: BotItemRecord[]
     counts: Partial<Record<BotItemStatus, number>>
   } {
-    const chat = query.chatId !== undefined ? ' AND chat_id = ?' : ''
+    const chat = query.chatIds ? ' AND chat_id IN (SELECT value FROM json_each(?))' : ''
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
     const scope = `owner_bot_id = ?${chat}${link}`
     const scopeArgs = [
       query.botId,
-      ...(query.chatId !== undefined ? [query.chatId] : []),
+      ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
       ...(query.link ? [query.link.kind, query.link.ref] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}

@@ -52,10 +52,19 @@ export const BackendBootstrapSchema = z
       userData: z.string().min(1)
     }),
     appPath: z.string().min(1),
-    isPackaged: z.boolean()
+    isPackaged: z.boolean(),
+    // Linux only: lets the backend stop once main is gone.
+    desktopOwner: z
+      .object({
+        pid: z.number().int().positive(),
+        startTicks: z.string().regex(/^\d{1,20}$/),
+        pidNamespace: z.string().min(1).max(64)
+      })
+      .optional()
   })
   .strip()
 export type BackendBootstrap = z.infer<typeof BackendBootstrapSchema>
+export type BackendDesktopOwner = NonNullable<BackendBootstrap['desktopOwner']>
 export const BACKEND_CAPABILITIES = [
   'usage',
   'usage.catalog',

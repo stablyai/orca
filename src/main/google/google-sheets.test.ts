@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { googleJson } from './google-api.test-fixture'
 import { filesApi, route } from './google-files.test-fixture'
-import { appendSheet, cellsForInput, readSheet, upsertSheet, writeSheet } from './google-sheets'
+import { appendSheet, readSheet, upsertSheet, writeSheet } from './google-sheets'
 
 let cleanup = (): void => {}
 afterEach(() => cleanup())
@@ -28,7 +28,7 @@ async function sheetsApi(routes: Parameters<typeof filesApi>[0] = []) {
 }
 
 describe('sheets read', () => {
-  it('shows the first tab with no tab or range, and names every tab', async () => {
+  it('defaults to the first tab and names the available tabs for an unknown one', async () => {
     const { api, sent } = await sheetsApi([
       route('GET', `${VALUES}'Q4'`, () =>
         googleJson(200, { range: "'Q4'!A1:Z1000", values: [['Name', 'Email'], ['Ada']] })
@@ -40,6 +40,7 @@ describe('sheets read', () => {
     expect(view.origin).toEqual({ row: 1, column: 1 })
     expect(view.nextRange).toBeUndefined()
     expect(sent[1]?.url.pathname).toBe(`${VALUES}'Q4'`)
+    await expect(readSheet(api, { ref: ID, tab: 'Q5' })).rejects.toThrow('Its tabs: Q4, Archive.')
   })
 
   it('holds back whole rows past the answer’s size and names the next range', async () => {
@@ -54,33 +55,35 @@ describe('sheets read', () => {
     expect(view.origin).toEqual({ row: 5, column: 2 })
     expect(view.nextRange).toBe(`B${5 + view.values.length}:C404`)
   })
-
-  it('refuses a tab that isn’t there, naming the ones that are', async () => {
-    const { api } = await sheetsApi()
-    await expect(readSheet(api, { ref: ID, tab: 'Q5' })).rejects.toThrow('Its tabs: Q4, Archive.')
-  })
 })
 
 describe('sheets writes', () => {
-  it('keeps text that would start a formula as text unless formulas are asked for', () => {
-    expect(cellsForInput([['=SUM(A1:A2)', '-5', '+1 555', '@ada', 42, null]], false)).toEqual([
-      ["'=SUM(A1:A2)", '-5', "'+1 555", "'@ada", 42, null]
-    ])
-    expect(cellsForInput([['=SUM(A1:A2)']], true)).toEqual([['=SUM(A1:A2)']])
-  })
-
-  it('writes typed-in values to the tab and range named', async () => {
+  it('writes typed values to the chosen range and escapes formulas unless requested', async () => {
     const { api, writes } = await sheetsApi([
       route('PUT', `${VALUES}'Q4'!B2`, () => googleJson(200, { updatedRange: "'Q4'!B2" }))
     ])
-    const view = await writeSheet(api, { ref: ID, tab: 'Q4', range: 'B2', values: [[1200]] })
+    const view = await writeSheet(api, {
+      ref: ID,
+      tab: 'Q4',
+      range: 'B2',
+      values: [['=SUM(A1:A2)', '-5', '+1 555', '@ada', 1200, null]]
+    })
     expect(view).toMatchObject({ done: 'Wrote 1 row', ranges: ["'Q4'!B2"] })
     expect(writes()[0]?.url.searchParams.get('valueInputOption')).toBe('USER_ENTERED')
     expect(writes()[0]?.body).toEqual({
       range: "'Q4'!B2",
       majorDimension: 'ROWS',
-      values: [[1200]]
+      values: [["'=SUM(A1:A2)", '-5', "'+1 555", "'@ada", 1200, null]]
     })
+
+    await writeSheet(api, {
+      ref: ID,
+      tab: 'Q4',
+      range: 'B2',
+      values: [['=SUM(A1:A2)']],
+      formulas: true
+    })
+    expect(writes()[1]?.body).toMatchObject({ values: [['=SUM(A1:A2)']] })
   })
 
   it('appends rows as new rows', async () => {

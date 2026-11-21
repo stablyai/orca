@@ -99,7 +99,9 @@ async function service(): Promise<ArtifactCloudService> {
 
 // The wait is scheduled after the 429 body is read; advance only once it exists.
 async function untilRetryScheduled(): Promise<void> {
-  for (let turn = 0; turn < 1000 && vi.getTimerCount() === 0; turn++) {
+  // Real disk I/O runs first, so bound this by wall time; vi.waitUntil would advance the fake clock.
+  const deadline = performance.now() + 10_000
+  while (vi.getTimerCount() === 0 && performance.now() < deadline) {
     await new Promise((resolve) => setImmediate(resolve))
   }
   expect(vi.getTimerCount()).toBe(1)

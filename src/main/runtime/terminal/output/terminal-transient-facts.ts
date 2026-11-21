@@ -1,7 +1,6 @@
 import type { OrchestrationMailboxForegroundObservation } from '../../orchestration/mailbox/terminal-pointer/mailbox-pointer-state'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 import type { PtyTransientFact } from '../../../providers/pty/events'
-import { isJobStopStatus } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -34,7 +33,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId, !isJobStopStatus(fact.exitCode))
+        this.retirePtyAgentLaunchAuthority(ptyId, true)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode
@@ -64,7 +63,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.tailPendingAnsi = ''
-      pty.commandPaint = undefined
+      pty.commandPaint?.noteGap()
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''

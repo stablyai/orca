@@ -23,6 +23,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/bots/tool-relay/bot-tool-relay.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
+  // A failed write must surface as Node's async stream 'error', as on Electron main's stdio.
+  'src/main/startup/process-failure/main-process-error-guards.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/network/websocket/ws-inbound-message-queue.test.ts',

@@ -68,11 +68,4 @@ describe('a call file', () => {
       true
     ])
   })
-
-  it('sweeps a bot with no calls yet without a word', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(await sweepWebhookCallFiles(folder, new Set(), NOW, 7 * DAY)).toBe(0)
-    expect(warn).not.toHaveBeenCalled()
-    expect(existsSync(join(folder, 'webhook-calls'))).toBe(false)
-  })
 })

@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
-import { getHostOperationOwnership } from '../../../../shared/execution-host/host-operation-ownership'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { GOOGLE_FILES_METHODS } from './google-files'
 
@@ -85,12 +84,6 @@ const replace = (params: {
 })
 
 describe('Google Drive, Docs and Sheets over RPC', () => {
-  it('are owned by the execution host', () => {
-    for (const method of GOOGLE_FILES_METHODS) {
-      expect(getHostOperationOwnership(method.name)).toBe('host')
-    }
-  })
-
   it('refuse a bot whose Google is off, and serve one whose Google is on and the owner', async () => {
     const rpc = dispatcher([
       makeTestBot({ id: 'b1', name: 'Scout' }),

@@ -5914,6 +5914,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -5964,6 +5965,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6003,6 +6005,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6058,6 +6061,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6087,6 +6091,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": true,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6137,6 +6142,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6188,6 +6194,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]

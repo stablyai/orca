@@ -1,6 +1,7 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
+import { botItemAnswerOf } from '../../shared/bots/bot-item-ask'
 import {
   botItemCommentImages,
   botItemEventId,
@@ -63,21 +64,32 @@ export function botItemChangeMail(
     imagesBefore += event.kind === 'commented' ? botItemCommentImages(event.data).length : 0
     return `- ${itemName(item)}: ${what} (event ${botItemEventId(event.id)})${said}`
   })
-  const commentedOn = new Set(
-    lines.flatMap(({ event, item }) => (event.kind === 'commented' ? [item.uid] : []))
-  )
-  // The owner's comment on a Needs you item is their answer, and moves it to In progress with it.
-  const answered = (event: BotItemEventRecord, item: BotItemRecord) =>
+  const commentedOn = (answers: boolean) =>
+    new Set(
+      lines.flatMap(({ event, item }) =>
+        event.kind === 'commented' && isAnswer(event) === answers ? [item.uid] : []
+      )
+    )
+  const repliedOn = commentedOn(false)
+  const answeredOn = commentedOn(true)
+  // The owner's reply or recorded answer on a Needs you item moves it to In progress with it.
+  const movedWith = (on: Set<string>, event: BotItemEventRecord, item: BotItemRecord) =>
     actor?.kind === 'owner' &&
-    commentedOn.has(item.uid) &&
+    on.has(item.uid) &&
     event.kind === 'status' &&
     statusOf(event.data.from) === 'needs_you' &&
     statusOf(event.data.to) === 'working'
-  const replied = lines.some(({ event, item }) => answered(event, item))
+  const movedByReply = (event: BotItemEventRecord, item: BotItemRecord) =>
+    movedWith(repliedOn, event, item) || movedWith(answeredOn, event, item)
+  const replied = lines.some(({ event, item }) => movedWith(repliedOn, event, item))
   const tos = lines.flatMap(({ event, item }) =>
-    event.kind === 'status' && !answered(event, item) ? [statusOf(event.data.to)] : []
+    event.kind === 'status' && !movedByReply(event, item) ? [statusOf(event.data.to)] : []
   )
+  const answered = lines.some(({ event }) => isAnswer(event))
   const next = [
+    answered
+      ? 'Your owner answered your question: carry on with that answer; the item is In progress again.'
+      : null,
     replied
       ? "Your owner replied to your question, so the item moved to In progress. If your question still stands, set it to Needs you again with only what's left."
       : null,
@@ -127,7 +139,7 @@ export function botItemMailImages(changes: readonly { event: BotItemEventRecord 
 function changeWords(event: BotItemEventRecord): string | null {
   switch (event.kind) {
     case 'commented':
-      return 'commented'
+      return isAnswer(event) ? `answered your question ${str(event.data.answers)}` : 'commented'
     case 'status': {
       const note = str(event.data.note)
       const words = statusWords(statusOf(event.data.from), statusOf(event.data.to))
@@ -154,6 +166,10 @@ export function botItemRequestMail(item: {
     subject: `New item: ${inlineUntrusted(item.title)}`,
     body: `An item was added for you: "${inlineUntrusted(item.title)}".${doneMeans}\nRead it with \`orca bot item show ${item.uid}\`, then do it and keep the item current. If show says it was never made, add it yourself if it is still wanted.`
   }
+}
+
+function isAnswer(event: BotItemEventRecord): boolean {
+  return event.kind === 'commented' && botItemAnswerOf(event.data) !== null
 }
 
 function str(value: unknown): string | null {

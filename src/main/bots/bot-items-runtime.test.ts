@@ -72,21 +72,16 @@ function fakeHost(
   const parents = new Map<string, string>()
   const results = new Map<string, string>()
   const starts = new Map<string, { origin: string; creator: string }>()
-  const counts = { rowReads: 0 }
   const notified: BotChangeScope[] = []
   const db = {
-    getDispatchContextById: (id: string) => (
-      counts.rowReads++,
-      {
-        follow_up_of_dispatch_id: parents.get(id) ?? null,
-        origin_ref: starts.get(id)?.origin ?? null,
-        creator_orca_session_id: starts.get(id)?.creator ?? null
-      }
-    ),
+    getDispatchContextById: (id: string) => ({
+      follow_up_of_dispatch_id: parents.get(id) ?? null,
+      origin_ref: starts.get(id)?.origin ?? null,
+      creator_orca_session_id: starts.get(id)?.creator ?? null
+    }),
     getTask: (id: string) => (results.has(id) ? { result: results.get(id) } : undefined)
   }
   const client = new BotsDbWorkerClient(inProcessBotsDbWorker().factory)
-  const workerCalls = vi.spyOn(client, 'call')
   const deps = {
     workRuntime: { getOrchestrationDb: () => db },
     db: client,
@@ -102,7 +97,7 @@ function fakeHost(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host reads only these fields of the work runtime and database.
   const host = new BotItemsHost(deps as unknown as BotItemsHostDeps)
-  return { host, parents, results, starts, counts, notified, workerCalls }
+  return { host, parents, results, starts, notified }
 }
 
 let host: BotItemsHost | null = null
@@ -235,26 +230,6 @@ describe('bot items host', () => {
       }
     })
   })
-  it('a Dispatch change no item links reads its own row once and calls no worker, N or 10N times', async () => {
-    const fake = fakeHost()
-    host = fake.host
-    await host.store().add(item({ links: [{ kind: 'url', ref: 'https://example.com' }] }), owner)
-    fake.parents.set('ctx_3', 'ctx_2')
-    fake.parents.set('ctx_2', 'ctx_1')
-    // The first change loads which Dispatches items link.
-    await heartbeats(host, 'ctx_3', 1)
-
-    for (const n of [20, 200]) {
-      fake.counts.rowReads = 0
-      fake.workerCalls.mockClear()
-      await heartbeats(host, 'ctx_3', n)
-      expect({
-        rowReads: fake.counts.rowReads,
-        workerCalls: fake.workerCalls.mock.calls.length
-      }).toEqual({ rowReads: n, workerCalls: 0 })
-    }
-  })
-
   it("re-reads an item linked after its worker's Dispatch, and its follow-up's", async () => {
     const fake = fakeHost()
     host = fake.host

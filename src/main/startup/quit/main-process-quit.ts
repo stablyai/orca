@@ -23,7 +23,6 @@ import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-rep
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
@@ -34,12 +33,14 @@ import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-no
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
 import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
+import { ConnectorTurnEvents } from '../../connector-cloud/connector-turn-events'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
+import { closeBrowserExtensionProfileStateStore } from '../../browser/extensions/profile-storage/browser-extension-profile-state-store'
 import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
 import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
 
@@ -143,7 +144,6 @@ function installWillQuitHandler(): void {
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
-    setUnreadDockBadgeCount(0)
     // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.
     const refMaintenanceShutdown = settleWithinMs(
       Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(
@@ -181,6 +181,9 @@ function installWillQuitHandler(): void {
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
+    // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
+    const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
+    const botMemoryHistoryFlush = state.runtime?.bots.memory.historySettled() ?? Promise.resolve()
     const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
@@ -283,6 +286,8 @@ function installWillQuitHandler(): void {
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
+      { name: 'connector-turn-ends', promise: connectorTurnEndsFlush },
+      { name: 'bot-memory-history', promise: botMemoryHistoryFlush },
       { name: 'state', promise: storeFlush }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
@@ -301,7 +306,12 @@ function installWillQuitHandler(): void {
         /* swallow — telemetry must never prevent app.quit() */
       })
       // Last before quitting, so it saves every extension write accepted during teardown.
-      .then(() => closeBrowserExtensionProfileDocumentStores())
+      .then(() =>
+        Promise.all([
+          closeBrowserExtensionProfileDocumentStores(),
+          closeBrowserExtensionProfileStateStore()
+        ])
+      )
       .then(() => {
         daemonDisconnectDone = true
         app.quit()

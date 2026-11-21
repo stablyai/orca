@@ -15,7 +15,7 @@ import { useBotChatItems, type BotItemsRead } from './use-bot-items'
 import { useBotItemsClosedPages, type BotItemsClosedPage } from './use-bot-items-closed-pages'
 
 export type BotItemsShownList = {
-  /** The bot's read, or the filtered chat's; null while that chat's first read is out. */
+  /** The bot's read, or the filtered chats'; null while that chat's first read is out. */
   read: BotItemsRead | null
   chatRead: ReturnType<typeof useBotChatItems>
   /** Every loaded item, before the filter. */
@@ -38,10 +38,10 @@ export function useBotItemsShownList(
   now: number,
   seenEventId: string
 ): BotItemsShownList {
-  // One chat shown: its own read, so its counts and Closed pages are the chat's, not the first page's.
-  const chatRead = useBotChatItems(bot, filter.chatId)
-  const read = filter.chatId === null ? botRead : chatRead.read
-  const closedPages = useBotItemsClosedPages(bot, read, filter.chatId)
+  // Some chats shown: their own read, so counts and Closed pages are theirs, not the first page's.
+  const chatRead = useBotChatItems(bot, filter.chatIds)
+  const read = filter.chatIds === null ? botRead : chatRead.read
+  const closedPages = useBotItemsClosedPages(bot, read, filter.chatIds)
   const items = useMemo(
     () => mergeBotItemsByUid(read?.items ?? [], closedPages.items),
     [read, closedPages.items]

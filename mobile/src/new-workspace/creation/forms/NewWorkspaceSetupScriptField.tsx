@@ -14,7 +14,9 @@ export function NewWorkspaceSetupScriptField({
   decision,
   runSetup,
   onDecisionChange,
-  onRunSetupChange
+  onRunSetupChange,
+  waitForSetup,
+  onWaitForSetupChange
 }: {
   command: string
   source: string | null
@@ -23,6 +25,9 @@ export function NewWorkspaceSetupScriptField({
   runSetup: boolean
   onDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
+  /** Null hides the switch: the host reports no setup script an agent could wait for. */
+  waitForSetup: boolean | null
+  onWaitForSetupChange: (wait: boolean) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -30,6 +35,12 @@ export function NewWorkspaceSetupScriptField({
     'components.newWorkspaceSetupScriptField.runSetupCommand',
     'Run setup command'
   )
+  const waitLabel = t(
+    'components.newWorkspaceSetupScriptField.waitForSetup',
+    'Wait for setup to complete before starting agent'
+  )
+  // As desktop: the choice only matters when setup runs, so it stays visible but inert otherwise.
+  const setupRuns = runPolicy === 'ask' ? decision === 'run' : runSetup
   return (
     <View style={styles.setupStack}>
       <View style={styles.setupHeader}>
@@ -76,6 +87,24 @@ export function NewWorkspaceSetupScriptField({
           />
         </ListGroup>
       )}
+      {waitForSetup !== null ? (
+        <ListGroup>
+          <ListRow
+            key="waitForSetup"
+            title={waitLabel}
+            wrapTitle
+            disabled={!setupRuns}
+            accessory={
+              <MobileSwitch
+                value={waitForSetup}
+                onValueChange={onWaitForSetupChange}
+                disabled={!setupRuns}
+                accessibilityLabel={waitLabel}
+              />
+            }
+          />
+        </ListGroup>
+      ) : null}
       <View style={styles.codeBlock}>
         <Text style={styles.code}>{command}</Text>
       </View>

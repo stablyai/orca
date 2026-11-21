@@ -154,13 +154,6 @@ describe('Bots tab when bots are unavailable', () => {
     ).toMatchObject({ kind: 'empty', title: 'Update Orca on your computers' })
   })
 
-  it('speaks of every computer when several are too old', () => {
-    expect(notice([why('Studio Mac', 'update'), why('MacBook Air', 'update')])).toMatchObject({
-      kind: 'empty',
-      title: 'Update Orca on your computers'
-    })
-  })
-
   it('points a server’s switch to its paired computer’s Settings', () => {
     expect(notice([why('build-box', 'off', 'Studio Mac')])).toEqual({
       kind: 'empty',

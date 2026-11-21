@@ -16,8 +16,9 @@ export const JOURNAL_CONNECTOR_REPLY_OUTCOMES = [
 ] as const
 export type JournalConnectorReplyOutcome = (typeof JOURNAL_CONNECTOR_REPLY_OUTCOMES)[number]
 
-// The prose a row keeps until it is sent: the turn-end cap.
-export const JOURNAL_CONNECTOR_REPLY_PROSE_BYTES = 8 * 1024
+// The prose a row keeps until it is sent: the most any cloud takes (its long-answer cap); one sent
+// to a cloud that takes less is cut to that as it goes.
+export const JOURNAL_CONNECTOR_REPLY_PROSE_BYTES = 32 * 1024
 
 export type JournalConnectorReplyKey = { account: string; deliveryId: string }
 

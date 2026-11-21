@@ -277,7 +277,10 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   view={continuation.view}
                 >
                   <NativeChatHostSetupContext.Provider value={setup}>
-                    <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
+                    <NativeChatWorkerApprovalTimeline
+                      party={workerApprovalParty}
+                      target={props.target}
+                    >
                       {(timedRows) => (
                         <NativeChatSubagentTranscripts
                           find={surface.find}

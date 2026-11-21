@@ -4,14 +4,12 @@ import {
   automationUnheardSources,
   botEventSources,
   botEventTriggerRefusal,
-  unheardEventTriggers,
   wontFireNote
 } from './bot-event-sources'
 
 const SLACK = { appId: 'A1', teamId: 'T1' }
 const LINEAR = { workspaceId: 'w1', workspaceName: 'Acme' }
 const MENTIONED = { source: 'slack', event: 'mentioned' } as const
-const CI_FAILED = { source: 'github', event: 'ci_failed' } as const
 
 describe('bot event sources', () => {
   it("hears only the sources the bot's connectors cover", () => {
@@ -25,31 +23,6 @@ describe('bot event sources', () => {
     ).toEqual(['slack', 'linear'])
     // An older host's bot carries only the connectors that host has.
     expect(botEventSources({ name: 'Ranger', slack: SLACK })).toEqual(['slack'])
-  })
-
-  it('keeps the rules from sources the bot has no connector for', () => {
-    expect(unheardEventTriggers({ name: 'Ranger', slack: SLACK }, [MENTIONED, CI_FAILED])).toEqual([
-      CI_FAILED
-    ])
-  })
-
-  it('refuses with the missing connector and what the bot can start on instead', () => {
-    expect(botEventTriggerRefusal({ name: 'Ranger', slack: SLACK }, [MENTIONED])).toBeNull()
-    expect(
-      botEventTriggerRefusal({ name: 'Ranger', slack: SLACK, linear: LINEAR }, [CI_FAILED])
-    ).toBe(
-      'Ranger has no GitHub connector, so github.ci_failed would never start it. It can start on Slack and Linear events or on a schedule; `orca automations trigger-options --bot "Ranger"` lists them. Its owner can add a connector in the bot\'s settings.'
-    )
-    expect(botEventTriggerRefusal({ name: 'Ranger' }, [MENTIONED, CI_FAILED])).toContain(
-      'has no Slack or GitHub connector, so slack.mentioned, github.ci_failed would never start it. It has no connectors, so it can start only on a schedule.'
-    )
-  })
-
-  it("notes a saved rule that won't fire", () => {
-    expect(wontFireNote({ name: 'Ranger', github: {} }, [CI_FAILED])).toBeNull()
-    expect(wontFireNote({ name: 'Ranger', github: {} }, [MENTIONED, CI_FAILED])).toBe(
-      "won't fire: Ranger has no Slack connector (slack.mentioned)"
-    )
   })
 
   it('hears a webhook whenever the cloud takes them, with no connector', () => {

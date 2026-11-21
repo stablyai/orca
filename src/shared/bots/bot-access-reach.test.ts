@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  botAccessConfirm,
   botAccessAdvice,
   botAccessReach,
-  botReachLineText,
   googleReachAreas,
-  botAccessSummary,
-  botPermissionNotes,
   botStartingPermission
 } from './bot-access-reach'
 
@@ -33,32 +31,6 @@ describe('botStartingPermission', () => {
     expect(botStartingPermission({ agent: 'claude' }, 'full-access').mode).toBe('full-access')
     expect(botStartingPermission({ agent: 'claude' }, 'own').mode).toBeNull()
     expect(botStartingPermission({ agent: 'claude' }, null).mode).toBeNull()
-  })
-})
-
-describe('botPermissionNotes', () => {
-  it('names a sandbox only for Codex', () => {
-    expect(botPermissionNotes('codex', { mode: 'ask', fellBackFrom: null })).toEqual([
-      'codexAsk',
-      'whoeverAskedApproves'
-    ])
-    expect(botPermissionNotes('codex', { mode: 'auto', fellBackFrom: null })).toEqual([
-      'codexOwnSandbox',
-      'whoeverAskedApproves'
-    ])
-    expect(botPermissionNotes('codex', { mode: 'full-access', fellBackFrom: null })).toEqual([
-      'codexNoSandbox'
-    ])
-    expect(botPermissionNotes('claude', { mode: 'auto', fellBackFrom: null })).toEqual([
-      'whoeverAskedApproves'
-    ])
-  })
-
-  it('says why a mode fell back, and that whoever asked can approve', () => {
-    expect(botPermissionNotes('grok', { mode: 'ask', fellBackFrom: 'accept-edits' })).toEqual([
-      'permissionFellBack',
-      'whoeverAskedApproves'
-    ])
   })
 })
 
@@ -115,18 +87,45 @@ describe('botAccessAdvice', () => {
   })
 })
 
-describe('botAccessSummary', () => {
-  it('names up to three people, then counts', () => {
-    expect(botAccessSummary([]).who).toEqual({ id: 'summaryOnlyYou', values: {} })
-    expect(botAccessSummary(['Bea']).who).toEqual({ id: 'summaryOne', values: { person: 'Bea' } })
-    expect(botAccessSummary(['Bea', 'Cy', 'Dee']).who).toEqual({
-      id: 'summarySome',
-      values: { people: 'Bea, Cy', last: 'Dee' }
+describe('botAccessConfirm', () => {
+  const at = (mode: 'ask' | 'auto' | 'full-access' | null) => ({ mode, fellBackFrom: null })
+
+  it('is amber for Ask or Auto without Google: computer, who approves, the connector', () => {
+    for (const mode of ['ask', 'auto'] as const) {
+      expect(botAccessConfirm({ permission: at(mode), connector: 'slack', google: false })).toEqual(
+        {
+          tone: 'medium',
+          rows: [
+            { kind: 'computer' },
+            { kind: 'approves' },
+            { kind: 'connector', connector: 'slack' }
+          ]
+        }
+      )
+    }
+  })
+
+  it('is red for Full access, with no approvals, and one Google row for any area', () => {
+    expect(
+      botAccessConfirm({ permission: at('full-access'), connector: 'github', google: true })
+    ).toEqual({
+      tone: 'high',
+      rows: [
+        { kind: 'computer' },
+        { kind: 'no-approvals' },
+        { kind: 'google' },
+        { kind: 'connector', connector: 'github' }
+      ]
     })
-    expect(botAccessSummary(['A', 'B', 'C', 'D']).who).toEqual({
-      id: 'summaryMany',
-      values: { count: 4 }
-    })
+  })
+
+  it('is red when Google reaches or the starting mode can’t be read', () => {
+    expect(
+      botAccessConfirm({ permission: at('ask'), connector: 'linear', google: true }).tone
+    ).toBe('high')
+    const unknown = botAccessConfirm({ permission: at(null), connector: 'linear', google: false })
+    expect(unknown.tone).toBe('high')
+    expect(unknown.rows[1]).toEqual({ kind: 'may-skip-approvals' })
   })
 })
 
@@ -152,37 +151,6 @@ describe('googleReachAreas', () => {
         ])
       ])
     ).toEqual(['drive'])
-  })
-
-  it('names Drive alone when Docs and Sheets aren’t ready', () => {
-    const areas = googleReachAreas([
-      {
-        status: 'connected',
-        services: [
-          { service: 'drive', state: 'ready' },
-          { service: 'docs', state: 'api-disabled' },
-          { service: 'sheets', state: 'needs-permission' }
-        ]
-      }
-    ])
-    expect(areas).toEqual(['drive'])
-    const text = botAccessReach({
-      agent: 'claude',
-      permission: { mode: 'ask', fellBackFrom: null },
-      connector: null,
-      google: areas
-    })
-      .filter((line) => line.kind === 'google')
-      .map(
-        (line) =>
-          botReachLineText(line, {
-            name: 'Reviewer',
-            agentLabel: 'Claude',
-            place: { computer: 'this computer' },
-            mode: () => ({ label: '', description: '' })
-          }).title
-      )
-    expect(text).toEqual(['Use your Drive files'])
   })
 
   it('reaches nothing through an account that needs reconnecting', () => {

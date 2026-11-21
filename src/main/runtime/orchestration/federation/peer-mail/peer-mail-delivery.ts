@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
 import {
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY
+  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
+  PeerMailMessageType,
   PeerMailRelayPayload,
   PeerMailSender
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
@@ -68,8 +70,8 @@ export function peerMailMessageId(
 export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
   selector: string,
-  /** The mail reaches a bot there, or asks a question, which only a newer Orca admits. */
-  toBot = false
+  toBot = false,
+  type?: z.infer<typeof PeerMailMessageType>
 ): Promise<OrchestrationWorkerServer> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
@@ -102,6 +104,22 @@ export async function requirePeerMailServer(
       { ...NOTHING_SENT, server: server.name }
     )
   }
+  if (
+    type &&
+    type !== 'status' &&
+    type !== 'handoff' &&
+    !status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY) &&
+    !(
+      type === 'question' &&
+      status.data.capabilities?.includes(ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY)
+    )
+  ) {
+    throw new OrchestrationError(
+      'server_mail_unsupported',
+      `Server ${server.name} runs an older Orca that cannot receive --type ${type} agent mail. Nothing was sent. Update Orca on ${server.name}, or send it again as --type status, which it accepts.`,
+      { ...NOTHING_SENT, server: server.name }
+    )
+  }
   return server
 }
 
@@ -121,7 +139,7 @@ export async function deliverPeerMail(
     senderLabel: string
     subject: string
     body?: string
-    type?: 'status' | 'handoff' | 'question'
+    type?: z.infer<typeof PeerMailMessageType>
     priority?: 'normal' | 'high' | 'urgent'
     threadId?: string
     chat?: string

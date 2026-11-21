@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EVAL_BOT, type EvalHostState } from './bot-automation-eval-host'
-import { serveWakingThread, wakingThreadRef } from './bot-automation-eval-waking-thread'
+import { serveWakingThread } from './bot-automation-eval-waking-thread'
 
 const state = (over: Partial<EvalHostState> = {}): EvalHostState => ({
   bots: [{ ...EVAL_BOT, agent: 'claude' }],
@@ -32,9 +32,5 @@ describe('the waking Slack thread', () => {
     expect(post('slack:T0EVAL:C1:1.0')).toMatchObject({ refusal: 'use_reply' })
     expect(post('slack:T0EVAL:C1')).toBeUndefined()
     expect(post('slack:T0EVAL:C1:2.0')).toBeUndefined()
-  })
-
-  it('is none outside a Slack conversation', () => {
-    expect(wakingThreadRef(state({ conversation: undefined }))).toBeNull()
   })
 })

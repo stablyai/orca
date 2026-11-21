@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -225,9 +226,9 @@ export function fetchProviderAccountsSnapshot(
 export async function selectClaudeProviderAccount(
   target: RuntimeClientTarget,
   selection: ProviderAccountSelection
-): Promise<ClaudeRateLimitAccountsState> {
+): Promise<ClaudeAccountSelectResult> {
   if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
+    return callRuntimeRpc<ClaudeAccountSelectResult>(
       target,
       'accounts.selectClaude',
       { accountId: selection.accountId },

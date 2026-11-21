@@ -236,10 +236,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()
-    for (const timer of this.assistantMessageRetryTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.assistantMessageRetryTimers.clear()
+    this.clearAllAssistantMessageRetries()
     this.hookSilenceRechecks.clear()
     this.programStatusFacetRepublishes.clear()
     this.clearAllTranscriptPolls()

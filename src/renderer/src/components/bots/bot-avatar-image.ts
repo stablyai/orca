@@ -4,7 +4,7 @@ import { readBotAvatarPng } from '@/lib/bot-catalog'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
-import { BOT_MASCOT_URLS } from './bot-mascots'
+import { botMascotSrc } from './bot-mascot-color'
 
 // Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
 const uploads = new Map<string, { version: string; src: Promise<string | null> }>()
@@ -27,8 +27,11 @@ function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
 }
 
 /** The picture's URL; null shows the emoji or initial. */
-export function useBotAvatarSrc(bot: Pick<Bot, 'id' | 'avatar'> & BotOnHost): string | null {
+export function useBotAvatarSrc(
+  bot: Pick<Bot, 'id' | 'avatar' | 'avatarColor'> & BotOnHost
+): string | null {
   const parsed = parseBotAvatar(bot.avatar)
+  const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
   const [upload, setUpload] = useState<{ key: string; src: string | null } | null>(null)
   const { hostId, id } = bot
@@ -46,8 +49,8 @@ export function useBotAvatarSrc(bot: Pick<Bot, 'id' | 'avatar'> & BotOnHost): st
       live = false
     }
   }, [hostId, id, uploadKey])
-  if (parsed?.kind === 'mascot') {
-    return BOT_MASCOT_URLS[parsed.id]
+  if (mascotSrc) {
+    return mascotSrc
   }
   return uploadKey && upload?.key === uploadKey ? upload.src : null
 }

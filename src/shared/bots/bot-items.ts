@@ -1,5 +1,6 @@
 // Bot items: what a bot is doing for its owner and what it needs from them. One list per host; each
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
+import type { BotItemAsk } from './bot-item-ask'
 
 export const BOT_ITEM_STATUSES = ['planned', 'working', 'needs_you', 'done', 'canceled'] as const
 export type BotItemStatus = (typeof BOT_ITEM_STATUSES)[number]
@@ -18,7 +19,8 @@ export const BOT_ITEM_ERROR_CODES = [
   'not_owner',
   'items_read_only',
   'items_unavailable',
-  'item_changed'
+  'item_changed',
+  'question_closed'
 ] as const
 export type BotItemErrorCode = (typeof BOT_ITEM_ERROR_CODES)[number] | 'invalid_argument'
 
@@ -112,6 +114,23 @@ export type BotItemLinkView =
   | { kind: 'url'; ref: string; issue?: BotItemIssue }
   | { kind: 'file'; ref: string }
 
+/** One link per worker: a bot can link several steps of one follow-up chain, and each step reads as the
+ *  chain's newest Dispatch, so all but the first are the same worker again. */
+export function botItemLinksOnePerChain(links: readonly BotItemLinkView[]): BotItemLinkView[] {
+  const chains = new Set<string>()
+  return links.filter((link) => {
+    if (link.kind !== 'dispatch') {
+      return true
+    }
+    const chain = link.latest ?? link.ref
+    if (chains.has(chain)) {
+      return false
+    }
+    chains.add(chain)
+    return true
+  })
+}
+
 export type BotItemActor =
   | { kind: 'bot'; botId: string; chatId: string }
   | { kind: 'owner'; device?: string }
@@ -168,8 +187,11 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
-  /** Needs you: the bot's comment asking the owner, the row's second line. */
-  question: { eventId: string; text: string } | null
+  /** Needs you: the agent's comment asking the owner, the row's second line. `ask`: its decisions and
+   *  choices when it gave them, so the open question's card never waits on its event's page.
+   *  `answerable`: asked on a host that takes answers, so its card records one. A recorded answer or
+   *  the owner's reply (which moves the item on) closes it; a later unrelated comment never counts. */
+  question: { eventId: string; text: string; ask?: BotItemAsk; answerable?: true } | null
   closeNote: string | null
   links: BotItemLinkView[]
   version: number

@@ -24,6 +24,8 @@ export type EndedProcessReconciliationOptions = {
   confirmedExit?: boolean
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
+  /** One pane's identity, already read while its row stayed unchanged. */
+  known?: { paneKey: string; identity: ReturnType<AgentHookServerCleanup['paneAgentIdentity']> }
 }
 
 export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
@@ -129,22 +131,24 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+      let identity =
+        options?.known?.paneKey === resolvedPaneKey ? options.known.identity : undefined
+      const identityOf = () =>
+        identity === undefined ? (identity = this.paneAgentIdentity(resolvedPaneKey)) : identity
       const endedPresence =
         options?.endedPresence ??
-        // A proved process gets its exit from the presence probe, not a possibly newer row; a
-        // shared server (tmux, OpenCode) outlives the command that finished at the pane's shell.
+        // A process the presence probe reaches gets its exit from the probe, not a possibly newer
+        // row (WSL/SSH have no probe, so their mark stands); a shared server (tmux, OpenCode)
+        // outlives the command that finished at the pane's shell.
         (options?.confirmedExit &&
-        !previous?.agentPresence?.process &&
-        this.paneAgentIdentity(resolvedPaneKey)?.processTopology !== 'shared'
+        (!previous?.agentPresence?.process || previous.connectionId !== null) &&
+        identityOf()?.executionHost !== 'shared'
           ? previous
             ? endedPresenceOf(previous)
-            : {
-                agent: this.paneAgentIdentity(resolvedPaneKey)?.status.agentType ?? 'unknown',
-                ended: true
-              }
+            : { agent: identityOf()?.status.agentType ?? 'unknown', ended: true }
           : undefined)
       if (endedPresence) {
-        this.recordPaneAgentExit(paneKey, endedPresence)
+        this.recordPaneAgentExit(paneKey, endedPresence, identityOf()?.status)
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         untouched.push(resolvedPaneKey)

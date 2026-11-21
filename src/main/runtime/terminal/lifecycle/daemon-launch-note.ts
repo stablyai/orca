@@ -2,7 +2,16 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
-import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from '../records/runtime-terminal-state-records'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   holdLaunch,
   recordReattachedLaunch,
@@ -33,6 +42,27 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       this.ptyController?.setLaunchNote?.(pty.ptyId, {
         arm: { launchToken: evidence.token, launchConfig: evidence.config }
       })
+    }
+  }
+
+  protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
+
+  /** A command finished with no launch held; an earlier mark (a nested shell's) or an agent typed
+   *  at the prompt may have left an agent's exit unproven. Runs per mark, so indexed reads only. */
+  protected noticeLaunchlessCommandMark(ptyId: string, confirmedExit: boolean | undefined): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || !confirmedExit) {
+      return
+    }
+    const recorded = pty.paneKey
+    const paneKeys = new Set(recorded && parsePaneKey(recorded) ? [recorded] : [])
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
+        paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
+      }
+    }
+    for (const paneKey of paneKeys) {
+      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey, { launchRetired: true })
     }
   }
 

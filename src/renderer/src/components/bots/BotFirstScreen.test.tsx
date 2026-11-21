@@ -58,21 +58,6 @@ const linearRead: NativeChatBlock = {
 }
 
 describe('a new bot’s first screen', () => {
-  it('says who it is and lists what it finds as it reads', () => {
-    render(
-      <BotFirstScreen
-        firstScreen={{ phase: 'starting', turn: turn([...repoList, linearRead]), refused: null }}
-        isVisible
-      />
-    )
-    expect(screen.getByText('Juno')).toBeTruthy()
-    expect(screen.getByText('Your new bot · runs your Claude Code')).toBeTruthy()
-    expect(screen.getByText('Getting to know your setup…')).toBeTruthy()
-    expect(screen.getByText('Found 2 projects: orca, relay')).toBeTruthy()
-    expect(screen.getByText('Linear: reading your open issues…')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-  })
-
   it('offers Try again when its first turn ended without a word', () => {
     render(
       <BotFirstScreen

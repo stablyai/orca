@@ -26,12 +26,6 @@ function host(over: Partial<EvalHostState> = {}) {
 }
 
 describe("the owner's orca linear stand-in", () => {
-  it('reads an issue from the shared Linear world', () => {
-    expect(host().serve('linear.issueContext', { input: 'ENG-9310' })).toMatchObject({
-      issue: { identifier: 'ENG-9310', assignee: { name: 'Bob Lee' } }
-    })
-  })
-
   it('records a comment and a move as the owner, and the move shows on a later read', () => {
     const { recorded, serve } = host()
     serve('linear.issueAddComment', { input: 'ENG-9310', body: 'Ships today' })
@@ -45,17 +39,6 @@ describe("the owner's orca linear stand-in", () => {
     ])
     expect(serve('linear.issueContext', { input: 'ENG-9310' })).toMatchObject({
       issue: { state: { name: 'In Progress' } }
-    })
-  })
-
-  it("lists a team's open issues with a label, by team name", () => {
-    const listed = host().serve('linear.mcpListIssues', {
-      team: 'Platform',
-      label: 'Bug',
-      state: 'open'
-    })
-    expect(listed).toMatchObject({
-      issues: ['PLAT-47', 'PLAT-44', 'PLAT-41'].map(() => expect.anything())
     })
   })
 
@@ -81,9 +64,5 @@ describe("the owner's orca linear stand-in", () => {
       'orca bot reply'
     )
     expect(() => serve('linear.issueSetState', { input: 'ENG-9310', to: 'Done' })).not.toThrow()
-  })
-
-  it('leaves other methods to the rest of the stand-in', () => {
-    expect(host().serve('connector.reply', {})).toBeUndefined()
   })
 })

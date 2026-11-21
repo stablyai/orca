@@ -14,7 +14,18 @@ const mocks = vi.hoisted(() => ({
   openAutomation: vi.fn(),
   manageConnectors: vi.fn(),
   reviewAccess: vi.fn(),
-  openWorker: vi.fn()
+  openWorker: vi.fn(),
+  awaiting: new Map<string, { itemId: string; text: string }>(),
+  skip: vi.fn(() => Promise.resolve()),
+  toastError: vi.fn()
+}))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('../native-chat/prompts/use-structured-agent-session-async-question-skip', () => ({
+  useStructuredAgentSessionAsyncQuestionSkip: (_target: unknown, sessionId: string) => ({
+    skippedThrough: undefined,
+    awaiting: mocks.awaiting.get(sessionId),
+    save: mocks.skip
+  })
 }))
 vi.mock('./use-bot-session-prompt', async () => {
   const { useSyncExternalStore } = await import('react')
@@ -43,7 +54,6 @@ vi.mock('./use-bot-host-label', () => ({ useBotHostLabel: () => null }))
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import type { BotSessionActivityRow } from '../../../../shared/bots/bot-activity-model'
-import type { BotToolSignInStatus } from '../../../../shared/bot-tool-sign-in'
 import type { BotConnectorEntry } from './bot-connector-entries'
 import type { BotItem } from '../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../shared/bots/bot-item.test-fixture'
@@ -188,6 +198,7 @@ function footer(): string | null {
 
 beforeEach(() => {
   mocks.prompts.clear()
+  mocks.awaiting.clear()
   for (const mock of Object.values(mocks)) {
     if (typeof mock === 'function') {
       mock.mockClear()
@@ -233,6 +244,28 @@ describe('Needs you', () => {
     expect(mocks.respond).not.toHaveBeenCalled()
   })
 
+  it('shows the question a chat waits on without a prompt, and Skips it by its row', () => {
+    mocks.awaiting.set('t3', { itemId: 'ask-row', text: 'File the follow-up?' })
+    renderNeeds([{ kind: 'session', key: 'thread:t3', row: thread('t3', 'Review') }])
+
+    expect(screen.getByText('File the follow-up?')).toBeTruthy()
+    expect(screen.queryByText('Waiting for you')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Skip: Review' }))
+    expect(mocks.skip).toHaveBeenCalledWith('ask-row')
+    expect(mocks.openSession).not.toHaveBeenCalled()
+  })
+
+  it('tells a Skip the host did not save', async () => {
+    mocks.skip.mockRejectedValueOnce(new Error('offline'))
+    mocks.awaiting.set('t3', { itemId: 'ask-row', text: 'File the follow-up?' })
+    renderNeeds([{ kind: 'session', key: 'thread:t3', row: thread('t3', 'Review') }])
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Skip: Review' }))
+    })
+    expect(mocks.toastError).toHaveBeenCalledWith('Something went wrong. Try again.')
+  })
+
   it('shows a question and opens its chat; the Home chat opens as Home', () => {
     mocks.prompts.set('t2', prompt({ kind: 'question', question: 'Which branch?', options: [] }))
     mocks.prompts.set('chat-1', prompt({ kind: 'question', question: 'Ship it?', options: [] }))
@@ -260,31 +293,6 @@ describe('Needs you', () => {
     expect(mocks.openAutomation).toHaveBeenLastCalledWith('a2', 'run-9')
   })
 
-  it('asks for a first sign-in for an app never signed in, and to sign in again only once lost', () => {
-    const app = (name: string, signIn: BotToolSignInStatus): BotNeedView => ({
-      kind: 'connector',
-      key: `connector:app:${name}`,
-      connector: {
-        kind: 'app',
-        key: `app:${name}`,
-        title: { service: `${name[0]!.toUpperCase()}${name.slice(1)}`, name: null },
-        needsOwner: true,
-        tool: { name, detail: `https://${name}.example/mcp`, remote: false, signIn },
-        app: null,
-        problem: undefined
-      }
-    })
-    renderNeeds([
-      app('vercel', { state: 'signed-out' }),
-      app('notes', { state: 'lost' }),
-      app('acme', { state: 'signed-out', problem: 'unreachable' })
-    ])
-
-    expect(screen.getByText('Vercel needs you to sign in.')).toBeTruthy()
-    expect(screen.getByText('Notes needs you to sign in again.')).toBeTruthy()
-    expect(screen.getByText('Acme needs you to sign in again or fix it.')).toBeTruthy()
-  })
-
   it('titles an item’s worker ask with the item, naming the worker and the tool it asks for', () => {
     renderNeeds([
       workerAsk('d-wake', 'Webhook wake-up', { tool: { name: 'Bash', input: 'git push origin' } }),
@@ -299,9 +307,11 @@ describe('Needs you', () => {
     expect(screen.getByText('Worker: Webhook wake-up')).toBeTruthy()
     expect(screen.getByText('git push origin')).toBeTruthy()
     // No item and no tool: its own title, and what any approval says.
-    expect(screen.getByRole('button', { name: 'Open: Rotate fix' }).textContent).toBe(
-      'Rotate fixPermission needed'
-    )
+    const rotate = screen.getByRole('button', { name: 'Open: Rotate fix' })
+    expect(rotate.textContent).toBe('Rotate fix')
+    expect(
+      document.getElementById(rotate.getAttribute('aria-describedby') ?? '')?.textContent
+    ).toBe('Permission needed')
   })
 
   it('says where a worker with nowhere to open runs, with no action', () => {
@@ -348,14 +358,6 @@ describe('Needs you folds long lists', () => {
     expect(shownActions()).toHaveLength(8)
   })
 
-  it('lists every row offline, when the footer is off with the rest of the panel', () => {
-    const update = renderNeeds(asks(8))
-
-    update(asks(8), true)
-    expect(shownActions()).toHaveLength(8)
-    expect(footer()).toBeNull()
-  })
-
   it('keeps its order apart from approvals, which come first and never fold', () => {
     renderNeeds([
       asking(1),
@@ -380,29 +382,6 @@ describe('Needs you folds long lists', () => {
     expect(shownActions()).toEqual([3, 4, 5, 6, 7, 8, 9].map((n) => `Open: Ask ${n}`))
     expect(footer()).toBe('Show 2 more')
   })
-
-  it('brings up a folded question once it turns into an approval', () => {
-    renderNeeds(asks(8))
-    expect(screen.queryByRole('button', { name: 'Open: Ask 8' })).toBeNull()
-
-    setPrompt(8, APPROVAL)
-    expect(shownActions()[0]).toBe('Open: Ask 8')
-    expect(footer()).toBe('Show 3 more')
-  })
-
-  it('folds sign-in-stopped automations with the rest', () => {
-    renderNeeds(
-      [
-        { kind: 'connector', key: 'connector:linear:w1', connector: LINEAR },
-        asking(1),
-        asking(2),
-        asking(3)
-      ],
-      ['a1', 'a2', 'a3'].map((id) => automationRow(id, `Run ${id}`, `run-${id}`))
-    )
-
-    expect(footer()).toBe('Show 2 more')
-  })
 })
 
 describe('Needs you keeps keyboard focus', () => {
@@ -411,20 +390,13 @@ describe('Needs you keeps keyboard focus', () => {
     document.activeElement?.textContent ??
     null
 
-  it('keeps focus on its row when another row sorts first', () => {
-    renderNeeds(asks(8))
-    act(() => screen.getByRole('button', { name: 'Open: Ask 3' }).focus())
-
-    setPrompt(6, APPROVAL)
-    expect(shownActions()[0]).toBe('Open: Ask 6')
-    expect(focused()).toBe('Open: Ask 3')
-  })
-
   it('keeps the focused row shown when a sort pushes it past the cap, until focus leaves', () => {
     renderNeeds(asks(7))
     act(() => screen.getByRole('button', { name: 'Open: Ask 5' }).focus())
 
+    expect(shownActions()).not.toContain('Open: Ask 7')
     setPrompt(7, APPROVAL)
+    expect(shownActions()[0]).toBe('Open: Ask 7')
     expect(screen.getByRole('button', { name: 'Open: Ask 5' })).toBeTruthy()
     expect(focused()).toBe('Open: Ask 5')
     expect(footer()).toBe('Show 1 more')
@@ -446,6 +418,8 @@ describe('Needs you keeps keyboard focus', () => {
     const update = renderNeeds(asks(8))
     act(() => screen.getByRole('button', { name: 'Show 3 more' }).focus())
     update(asks(8), true)
+    expect(shownActions()).toHaveLength(8)
+    expect(footer()).toBeNull()
     expect(document.activeElement).toBe(screen.getByTestId('panel'))
   })
 

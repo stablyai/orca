@@ -20,6 +20,8 @@ export type MobileNativeChatTurnRow = {
   opensTurn?: true
   /** An automation's row opened the turn. */
   inAutomationTurn?: true
+  /** The turn said something or did something others see. */
+  inActingTurn?: true
   activeTurnIsWorking: boolean
   trailingRun: boolean
   workRun?: readonly NativeChatMessage[]
@@ -32,9 +34,6 @@ export type MobileNativeChatTurnRow = {
   reasoningIsLive: boolean
   reasoningExpanded: boolean
   onToggleReasoning: (key: string) => void
-  // Pass roster disclosure only to roster rows so toggles cannot rerender every transcript row.
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup: (groupId: string) => void
   // Hold expanded user messages above recycled rows so scrolling away cannot collapse them.
   userMessageOpen: boolean
   onToggleUserMessage: (messageId: string) => void

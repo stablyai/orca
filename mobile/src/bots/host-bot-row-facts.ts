@@ -15,7 +15,8 @@ import type { botGroupStatusOf } from '../../../src/shared/bots/bot-group-status
 import type { botFoldLiveStatus } from '../../../src/shared/bots/bot-sidebar-workspaces'
 
 export type MobileBotAvatarSource =
-  | { kind: 'mascot'; id: BotMascotId }
+  /** `color` is its tile's, drawn behind the transparent picture; absent, the mascots' own sky blue. */
+  | { kind: 'mascot'; id: BotMascotId; color?: string }
   | { kind: 'image'; uri: string }
   | { kind: 'text'; text: string }
 
@@ -78,12 +79,14 @@ export type MobileBotChatLineFacts = {
 
 /** An upload shows once its bytes are read; until then, like a missing picture, the emoji or initial. */
 export function mobileBotAvatarSource(
-  bot: Pick<Bot, 'name' | 'avatar'>,
+  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor'>,
   uploadUri: string | undefined
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
   if (parsed?.kind === 'mascot') {
-    return { kind: 'mascot', id: parsed.id }
+    return bot.avatarColor
+      ? { kind: 'mascot', id: parsed.id, color: bot.avatarColor }
+      : { kind: 'mascot', id: parsed.id }
   }
   if (parsed?.kind === 'upload' && uploadUri) {
     return { kind: 'image', uri: uploadUri }

@@ -275,7 +275,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,
-    isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
+    isWaitingForMail: (mailbox) => this.messageWaiters.has(mailbox),
     notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
     isChatMailbox: (mailbox) =>
       typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',

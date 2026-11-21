@@ -59,7 +59,8 @@
       "messages_many": "{{count}} mensajes",
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
-      "resumeSession": "Reanudar sesión de agente"
+      "resumeSession": "Reanudar sesión de agente",
+      "continueInCli": "Continuar en la CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "No se pudo contactar con el host",
@@ -190,7 +191,18 @@
       "webView": "Mostrar vista de escritorio del sitio web"
     },
     "loadFailure": {
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "connectionNotSecure": "La conexión no es segura",
+      "certificateNameMismatch": "El certificado no coincide con {{value0}}.",
+      "certificateDateInvalid": "El certificado de {{value0}} no es válido en la fecha y hora actuales.",
+      "certificateAuthorityInvalid": "Orca no confía en la autoridad que emitió el certificado de {{value0}}.",
+      "certificateVerificationFailed": "Orca no pudo verificar el certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar (no seguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
+      "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo.",
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva."
     }
   },
   "chat": {
@@ -224,7 +236,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
       "title": "Contexto",
-      "estimated": "Estimado a partir de la última respuesta."
+      "estimated": "Estimado a partir de la última respuesta.",
+      "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
@@ -642,10 +655,6 @@
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregado a un agente",
-      "startedAgent": "Agente iniciado"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
       "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
@@ -693,7 +702,7 @@
       "confirm": "Rebobinar",
       "unsupported": "Este chat no puede volver a un mensaje anterior.",
       "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
-      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "busy": "Disponible cuando el chat esté inactivo",
       "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
       "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
       "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
@@ -974,7 +983,9 @@
       "label": "Script de configuración",
       "run": "Ejecutar",
       "runSetupCommand": "Ejecutar comando de configuración",
-      "skip": "Omitir"
+      "skip": "Omitir",
+      "waitForSetup": "Esperar a que termine el setup antes de iniciar el agente",
+      "waitForSetupSaveFailed": "Error al guardar el comportamiento de inicio"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Conectar",
@@ -1679,7 +1690,12 @@
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "sleep": "Suspender",
       "unpin": "Desanclar",
-      "rename": "Cambiar nombre"
+      "rename": "Cambiar nombre",
+      "markRead": "Marcar como leído",
+      "markUnread": "Marcar como no leído",
+      "muteNotifications": "Silenciar notificaciones",
+      "unmuteNotifications": "Reactivar notificaciones",
+      "moveToStatus": "Mover al estado"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fallidos",
@@ -2271,6 +2287,7 @@
       "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
       "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
       "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+      "providerResponseFailedQuoted": "{{agent}} no pudo terminar esta respuesta: {{detail}}.",
       "selectedModel": "el modelo seleccionado",
       "providerRejected": "{{agent}} no aceptó este mensaje.",
       "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
@@ -2534,6 +2551,11 @@
       "sendReviewNotes": "Enviar notas de revisión",
       "shortcut": "Atajo",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
@@ -2854,6 +2876,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."
+    },
+    "browserProfile": {
+      "default": "Predeterminado"
     }
   },
   "settings": {

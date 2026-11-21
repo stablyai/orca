@@ -88,15 +88,31 @@ const needingOwner = (entries: ReturnType<typeof botConnectorEntries>) =>
   entries.filter((entry) => entry.needsOwner).map((entry) => entry.key)
 
 describe('botConnectorEntries', () => {
-  it('lists Orca connectors and Composio apps in one list, keeping an app connected both ways twice', () => {
-    expect(kinds(botConnectorEntries(bot, sources()))).toEqual([
+  it('lists both connections to Slack and omits a sign-in still under way', () => {
+    const entries = botConnectorEntries(
+      bot,
+      sources({
+        composio: {
+          status: { key: 'ok', limit: null, added: true },
+          connections: {
+            connections: [
+              slackOnComposio,
+              { ...slackOnComposio, id: 'ca-pending', status: 'pending' }
+            ],
+            pending: []
+          },
+          error: null
+        }
+      })
+    )
+    expect(kinds(entries)).toEqual([
       'slack:T1',
       'linear:org-1',
       'google',
       'webhooks',
       'composio:ca-slack'
     ])
-    expect(needingOwner(botConnectorEntries(bot, sources()))).toEqual([])
+    expect(needingOwner(entries)).toEqual([])
   })
 
   it('counts each connector that needs the owner, for the tab badge', () => {
@@ -120,20 +136,6 @@ describe('botConnectorEntries', () => {
     expect(needingOwner(entries)).toEqual(['linear:org-1', 'composio:ca-slack'])
   })
 
-  it('leaves out a sign-in still under way', () => {
-    const entries = botConnectorEntries(
-      bot,
-      sources({
-        composio: {
-          status: { key: 'ok', limit: null, added: true },
-          connections: { connections: [{ ...slackOnComposio, status: 'pending' }], pending: [] },
-          error: null
-        }
-      })
-    )
-    expect(kinds(entries)).not.toContain('composio:ca-slack')
-  })
-
   it('keeps known apps listed when the key is refused, each needing the owner', () => {
     const entries = botConnectorEntries(
       bot,
@@ -151,7 +153,7 @@ describe('botConnectorEntries', () => {
     })
   })
 
-  it('shows one Composio row to fix when its sign-ins were never read, never no connectors', () => {
+  it('shows a recovery row after a failed read only for a bot using Composio', () => {
     const unread = botConnectorEntries(
       { ...bot, slack: null, linearWorkspaces: [], google: false },
       sources({
@@ -167,9 +169,7 @@ describe('botConnectorEntries', () => {
       ['composio', true]
     ])
     expect(unread.at(-1)).toMatchObject({ kind: 'composio-problem', problem: 'unread' })
-  })
 
-  it('adds no Composio row for a bot that never used Composio', () => {
     const entries = botConnectorEntries(
       bot,
       sources({

@@ -142,6 +142,25 @@ describe('fresh worker composer readiness', () => {
     await expect(pending).resolves.toBeNull()
     expect(h.unsubscribe).toHaveBeenCalledOnce()
   })
+
+  it('accepts the inline zcode-app-cli composer after its scrollback-wiping takeover', async () => {
+    vi.useFakeTimers()
+    const h = fixture()
+    const pending = waitForWorktreeStartupDraft(h.host, 'term-1', 'zcode', {
+      timeoutMs: 45_000,
+      requireComposerMarker: true
+    })
+    const data = readFileSync(
+      join(__dirname, '../../__fixtures__', 'zcode-app-cli-composer-ready.txt'),
+      'utf8'
+    )
+    // Split inside the frame start, beyond the 7-byte carry other anchors keep.
+    const split = data.indexOf('\x1b[?2026h\x1b[2J') + 10
+    h.emit(data.slice(0, split))
+    h.emit(data.slice(split))
+    await vi.advanceTimersByTimeAsync(45_000)
+    await expect(pending).resolves.toBe('pty-1')
+  })
 })
 
 describe('OpenCode submit readiness', () => {

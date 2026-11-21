@@ -4,12 +4,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import { readMoreClosedItems, type BotItemsRead } from './use-bot-items'
+import { readMoreClosedItems, useStableBotItemChats, type BotItemsRead } from './use-bot-items'
 
 type Pages = {
-  /** The list read these pages continue, and its chat: another chat starts from its first page. */
+  /** The list read these pages continue, and its chats: other chats start from their first page. */
   base: BotItemsRead
-  chatId: string | null
+  chats: readonly string[] | null
   depth: number
   items: BotItem[]
   cursor: string | null
@@ -31,11 +31,12 @@ const NONE: readonly BotItem[] = []
 export function useBotItemsClosedPages(
   bot: BotRef,
   read: BotItemsRead | null,
-  chatId: string | null
+  chatIds: readonly string[] | null
 ): BotItemsClosedPages {
   const { hostId, id } = bot
+  const chats = useStableBotItemChats(chatIds)
   const [kept, setPages] = useState<Pages | null>(null)
-  const pages = kept?.chatId === chatId ? kept : null
+  const pages = kept?.chats === chats ? kept : null
   const generation = useRef(0)
 
   const depth = pages?.depth ?? 0
@@ -49,12 +50,12 @@ export function useBotItemsClosedPages(
       const items: BotItem[] = []
       let cursor = read.nextClosedCursor ?? null
       for (let page = 0; page < depth && cursor; page++) {
-        const next = await readMoreClosedItems({ hostId, id }, cursor, chatId)
+        const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
         items.push(...next.items)
         cursor = next.nextClosedCursor ?? null
       }
       if (generation.current === mine) {
-        setPages({ base: read, chatId, depth, items, cursor })
+        setPages({ base: read, chats, depth, items, cursor })
       }
     })().catch((error: unknown) => {
       console.warn('[bots] items: reading Closed pages again failed', error)
@@ -63,7 +64,7 @@ export function useBotItemsClosedPages(
         setPages(null)
       }
     })
-  }, [read, depth, current, hostId, id, chatId])
+  }, [read, depth, current, hostId, id, chats])
 
   const cursor = current ? pages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
   const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
@@ -71,13 +72,13 @@ export function useBotItemsClosedPages(
       return { items: NONE, more: false }
     }
     const mine = ++generation.current
-    const next = await readMoreClosedItems({ hostId, id }, cursor, chatId)
+    const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
     if (generation.current === mine) {
       setPages((prev) => {
-        const same = prev?.base === read && prev.chatId === chatId
+        const same = prev?.base === read && prev.chats === chats
         return {
           base: read,
-          chatId,
+          chats,
           depth: (same ? prev.depth : 0) + 1,
           items: [...(same ? prev.items : []), ...next.items],
           cursor: next.nextClosedCursor ?? null
@@ -85,7 +86,7 @@ export function useBotItemsClosedPages(
       })
     }
     return { items: next.items, more: Boolean(next.nextClosedCursor) }
-  }, [read, cursor, hostId, id, chatId])
+  }, [read, cursor, hostId, id, chats])
 
   return {
     // While the depth is read again, the old rows stay up; the list's own copies win by uid.

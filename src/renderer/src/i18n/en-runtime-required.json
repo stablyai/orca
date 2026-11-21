@@ -17,6 +17,10 @@
       }
     }
   },
+  "agentCliUpdate": {
+    "heading_one": "{{count}} CLI update available",
+    "heading_other": "{{count}} CLI updates available"
+  },
   "agentLaunch": {
     "opencode": {
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -1493,17 +1497,24 @@
   },
   "bots": {
     "access": {
-      "account": "Their {{connector}} account: {{identity}}",
       "adviceHeading": "Before you share",
       "codexAsk": "Codex sandbox: read-only until a request is approved.",
       "codexNoSandbox": "No Codex sandbox.",
       "codexOwnSandbox": "Codex uses its configured sandbox.",
       "confirm": "Give access",
-      "controlMany": "They can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "controlNone": "Anyone you add can control {{name}} remotely, using its access on {{computer}}.",
-      "controlOne": "{{person}} can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "descriptionMany": "They will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "descriptionOne": "{{person}} will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
+      "confirmApproveMany": "They can approve its prompts",
+      "confirmApproveOne": "{{person}} can approve its prompts",
+      "confirmComputer": "Run commands and change files",
+      "confirmGitHub": "Comment and push on GitHub as you",
+      "confirmGoogle": "Use your Google account",
+      "confirmLinear": "Update Linear issues as you",
+      "confirmMaySkipApprovals": "May act without asking first",
+      "confirmNoApprovals": "Acts without asking first",
+      "confirmWarning": "They’ll act as you on {{computer}}.",
+      "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "executionComputer": "the computer this agent runs on",
       "fixAsk": "Start new conversations in Ask for approval",
       "fixAskAction": "Switch",
       "fixAskConfirm": "Start new conversations in Ask for approval?",
@@ -1538,20 +1549,20 @@
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
       "reachSlack": "Post in Slack as @{{name}}",
-      "removeAnyTime": "You can remove them from Who can ask at any time.",
       "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
       "summaryMany": "You and {{count}} other people can ask {{name}}.",
       "summaryOne": "You and {{person}} can ask {{name}}.",
       "summaryOnlyYou": "Only you can ask {{name}}.",
       "summarySome": "You, {{people}} and {{last}} can ask {{name}}.",
+      "there": "there",
       "thisComputer": "this computer",
+      "thisServer": "this server",
       "titleMany": "Give {{count}} people access to {{name}}?",
       "titleOne": "Give {{person}} access to {{name}}?",
       "trust": "Add only people you’d trust at your keyboard.",
       "undo": "Undo",
       "whoCanAsk": "Who can ask {{name}}",
-      "whoeverAskedApproves": "If it asks, whoever asked can approve.",
-      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do."
+      "whoeverAskedApproves": "If it asks, whoever asked can approve."
     },
     "accessRequest": {
       "decideFailed": "Couldn’t save your answer. Try again.",
@@ -1592,12 +1603,20 @@
     "groups": {
       "allBotsCount": "All bots · {{count}}",
       "correctMention": "Correct mention",
+      "items": {
+        "outsideRoom_one": "{{count}} more outside this room",
+        "outsideRoom_other": "{{count}} more outside this room",
+        "outsideThread_one": "{{count}} more outside this thread",
+        "outsideThread_other": "{{count}} more outside this thread",
+        "outside_one": "{{count}} more outside this group",
+        "outside_other": "{{count}} more outside this group"
+      },
       "mentionedCount": "{{count}} mentioned",
       "unavailableBot": "Unavailable bot"
     },
     "items": {
-      "activity": {
-        "you": "You"
+      "ask": {
+        "closed": "That question closed before your answer went. Your answer is kept on the item."
       },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
@@ -1608,7 +1627,8 @@
         "inHours_other": "In {{count}} hours",
         "later": "Later today",
         "monday": "Monday",
-        "tomorrow": "Tomorrow"
+        "tomorrow": "Tomorrow",
+        "week": "In a week"
       },
       "stale": {
         "confirm_one": "Cancel {{count}} stale item?",
@@ -2143,7 +2163,7 @@
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "cliMissingInWslDistro": "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
-        "cliTooOld": "{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
+        "cliTooOld": "Your {{agent}} CLI on {{host}} is {{installedVersion}}. Chats need {{minimumVersion}} or newer.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
@@ -2195,6 +2215,7 @@
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
         "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+        "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
         "providerRetryLastError": "Last error: {{detail}}.",
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
@@ -3264,6 +3285,8 @@
   },
   "updates": {
     "failure": {
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
+      "automaticInstallTerminalBusy": "Some terminals would end on restart. Orca will try again on a later update check.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
       "invalidReleaseTag": "\"{{tag}}\" is not a valid release tag.",
       "linuxPackageExternallyManaged": "This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.",
@@ -3277,6 +3300,7 @@
       "linuxPackageNoSudo": "No sudo command was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.",
       "linuxPackageNotRegular": "The downloaded package is no longer a valid file in the update cache. Download the update again, or get it from the official release page.",
       "linuxPackageReadFailed": "Orca could not read the downloaded package. Download the update again, or get it from the official release page.",
+      "macStagingTimeout": "macOS is still preparing the update. If this persists, quit and reopen Orca.",
       "rateLimitedInMinute": "GitHub rate limit reached. Try again in about a minute.",
       "rateLimitedInMinuteSignedOut": "GitHub rate limit reached. Try again in about a minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",

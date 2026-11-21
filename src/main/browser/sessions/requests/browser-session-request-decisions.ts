@@ -2,6 +2,7 @@ import {
   reportBrowserSessionWebRequest,
   type ObservedWebRequestDetails
 } from './browser-session-web-request-observer'
+import { holdBrowserSessionWebRequest } from './browser-session-web-request-owner'
 
 /**
  * Electron allows one session.webRequest listener per event, so request decisions owned by other
@@ -115,15 +116,15 @@ export function decideBrowserSessionRequestHeaders(
   }
 }
 
-const headersReceivedSessions = new WeakSet<Electron.Session>()
-const requestLifecycleSessions = new WeakSet<Electron.Session>()
+const WEB_URLS = { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
+const releaseHeadersReceived = new WeakMap<Electron.Session, () => void>()
+const releaseRequestLifecycle = new WeakMap<Electron.Session, () => void>()
 
 /** Shared completion handlers also release enforcement state for cache hits and failed requests. */
 export function installBrowserSessionRequestLifecycle(session: Electron.Session): void {
-  if (requestLifecycleSessions.has(session)) {
+  if (releaseRequestLifecycle.has(session)) {
     return
   }
-  requestLifecycleSessions.add(session)
   const finished = (
     event: 'onCompleted' | 'onErrorOccurred',
     details: ObservedWebRequestDetails
@@ -135,15 +136,29 @@ export function installBrowserSessionRequestLifecycle(session: Electron.Session)
       warn(event, error)
     }
   }
-  const filter = { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
-  session.webRequest.onCompleted(filter, (details) => finished('onCompleted', details))
-  session.webRequest.onErrorOccurred(filter, (details) => finished('onErrorOccurred', details))
+  const releaseCompleted = holdBrowserSessionWebRequest(
+    session,
+    'onCompleted',
+    (details) => finished('onCompleted', details),
+    WEB_URLS
+  )
+  const releaseErrorOccurred = holdBrowserSessionWebRequest(
+    session,
+    'onErrorOccurred',
+    (details) => finished('onErrorOccurred', details),
+    WEB_URLS
+  )
+  releaseRequestLifecycle.set(session, () => {
+    releaseCompleted()
+    releaseErrorOccurred()
+  })
 }
 
 export function removeBrowserSessionRequestLifecycle(session: Electron.Session): void {
-  if (requestLifecycleSessions.delete(session)) {
-    session.webRequest.onCompleted(null)
-    session.webRequest.onErrorOccurred(null)
+  const release = releaseRequestLifecycle.get(session)
+  if (release) {
+    releaseRequestLifecycle.delete(session)
+    release()
     decider?.requestLifecycleStopped?.(session)
   }
 }
@@ -153,28 +168,34 @@ export function removeBrowserSessionRequestLifecycle(session: Electron.Session):
  * webRequest, or content blocking that acts on responses) and removed when extensions turn off.
  */
 export function installBrowserSessionHeadersReceived(session: Electron.Session): void {
-  if (headersReceivedSessions.has(session)) {
+  if (releaseHeadersReceived.has(session)) {
     return
   }
-  headersReceivedSessions.add(session)
-  session.webRequest.onHeadersReceived(
-    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
-    (details, callback) => {
-      reportBrowserSessionWebRequest(session, 'onHeadersReceived', details)
-      let response: Electron.HeadersReceivedResponse | null = null
-      try {
-        response = decider?.headersReceived(session, details) ?? null
-      } catch (error) {
-        warn('onHeadersReceived', error)
-      }
-      callback(response ?? {})
-    }
+  releaseHeadersReceived.set(
+    session,
+    holdBrowserSessionWebRequest(
+      session,
+      'onHeadersReceived',
+      (details, callback) => {
+        reportBrowserSessionWebRequest(session, 'onHeadersReceived', details)
+        let response: Electron.HeadersReceivedResponse | null = null
+        try {
+          response = decider?.headersReceived(session, details) ?? null
+        } catch (error) {
+          warn('onHeadersReceived', error)
+        }
+        callback(response ?? {})
+      },
+      WEB_URLS
+    )
   )
 }
 
 /** Every response otherwise waits on main, so drop the handler once nothing needs it. */
 export function removeBrowserSessionHeadersReceived(session: Electron.Session): void {
-  if (headersReceivedSessions.delete(session)) {
-    session.webRequest.onHeadersReceived(null)
+  const release = releaseHeadersReceived.get(session)
+  if (release) {
+    releaseHeadersReceived.delete(session)
+    release()
   }
 }

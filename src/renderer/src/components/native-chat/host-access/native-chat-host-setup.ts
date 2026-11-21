@@ -11,6 +11,11 @@ import {
   agentSessionInstallCommand,
   agentSessionSignInCommand
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  agentSessionUnresolvedFailureRows,
+  isAgentSessionSetupFailureKind
+} from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -19,6 +24,8 @@ import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
 } from './native-chat-host-command-terminal'
+import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
+import { useNativeChatCliUpdate } from './native-chat-cli-update'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -38,8 +45,18 @@ function isNativeChatSignInFailureKind(
 }
 
 /** Failure kinds a host setup step can fix; rows check this before subscribing to the setup context. */
-export function isNativeChatSetupFailureKind(kind: string | undefined): boolean {
-  return kind === 'modelNotSelected' || kind === 'cliMissing' || isNativeChatSignInFailureKind(kind)
+export const isNativeChatSetupFailureKind = isAgentSessionSetupFailureKind
+
+/** Whether a later successful turn resolved the setup failure this row reports. */
+export function isNativeChatFailureRowResolved(
+  setup: NativeChatHostSetup | null,
+  rowId: string | undefined
+): boolean {
+  return (
+    rowId !== undefined &&
+    setup?.unresolvedFailureRows !== undefined &&
+    !setup.unresolvedFailureRows.has(rowId)
+  )
 }
 
 export type NativeChatSignIn = {
@@ -58,8 +75,12 @@ type NativeChatInstall = {
 export type NativeChatHostSetup = {
   signIn: NativeChatSignIn | null
   install: NativeChatInstall | null
+  /** The user's own CLI update on the chat's host; null for agents Orca can't update. */
+  update?: AgentCliUpdateView | null
   /** The chat's host, so setup links open Settings on it. */
   host?: RuntimeClientTarget
+  /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
+  unresolvedFailureRows?: ReadonlySet<string>
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -144,6 +165,7 @@ type NativeChatHostSetupInput = {
   account: AgentSessionAccountKind | undefined
   failure: unknown
   startFailures: readonly { kind: string }[]
+  journalItems: readonly AgentJournalRenderItem[]
   /** After a recheck reads the host's agents, so the chat can retry what the install fixed. */
   onRechecked: () => void
 }
@@ -279,6 +301,23 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const terminal = useNativeChatHostCommandTerminal(input)
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
-  const { target } = input
-  return useMemo(() => ({ signIn, install, host: target }), [signIn, install, target])
+  const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
+  const { target, journalItems } = input
+  // Keyed by its ids so a streamed reply leaves the set, and the rows reading it, alone.
+  const unresolvedKey = useMemo(
+    // Sent messages too: a refused one's line can offer the fix.
+    () => agentSessionUnresolvedFailureRows(journalItems, { sentMessages: true }).join('\n'),
+    [journalItems]
+  )
+  const unresolvedFailureRows = useMemo(() => new Set(unresolvedKey.split('\n')), [unresolvedKey])
+  return useMemo(
+    () => ({
+      signIn,
+      install,
+      update,
+      host: target,
+      unresolvedFailureRows
+    }),
+    [signIn, install, update, target, unresolvedFailureRows]
+  )
 }

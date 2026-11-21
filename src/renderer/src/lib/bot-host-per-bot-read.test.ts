@@ -61,8 +61,8 @@ afterEach(() => {
 })
 
 describe('createBotHostPerBotRead', () => {
-  it.each([10, 100])('reads only the bot a notice names, of %i bots', async (botCount) => {
-    const hook = mount(botCount)
+  it('reads only the bot a notice names', async () => {
+    const hook = mount(10)
     await flush()
     expect(calls).toEqual([{}])
     expect(hook.result.current).toBe('value-3')

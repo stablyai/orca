@@ -183,7 +183,7 @@ export function MobileBotRowStatus({
   /** The row's background, when it isn't the page's (a grouped panel). */
   surface?: string
 }) {
-  return dot ? (
+  return dot && dot !== 'active' && dot !== 'done' ? (
     <View style={[styles.status, surface ? { backgroundColor: surface } : null]}>
       <AgentSpinner status={dot} />
     </View>

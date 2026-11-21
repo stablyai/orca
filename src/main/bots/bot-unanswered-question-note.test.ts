@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { createBotUnansweredQuestionNote } from './bot-unanswered-question-note'
@@ -13,9 +13,8 @@ function host(
   looks: { look?: string; tidyUp?: string } = {}
 ) {
   const ended = new Map<string, number>()
-  const getBotConversationActsFor = vi.fn((sessionId: string) =>
+  const getBotConversationActsFor = (sessionId: string) =>
     records[sessionId] ? { actsFor: records[sessionId] } : undefined
-  )
   const note = createBotUnansweredQuestionNote({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the note reads only this method.
     getOrchestrationDb: () => ({ getBotConversationActsFor }) as unknown as OrchestrationDb,
@@ -40,18 +39,17 @@ function host(
     }
     return turns
   }
-  return { noted, getBotConversationActsFor }
+  return noted
 }
 
 describe('the note on questions the owner left unanswered', () => {
-  it('rides turns 5 and 10 of an owner chat, reading its acts-for once', async () => {
-    const { noted, getBotConversationActsFor } = host({ home: OWNER })
+  it('rides every fifth turn of an owner chat', async () => {
+    const noted = host({ home: OWNER })
     expect(await noted('home', 12)).toEqual([5, 10])
-    expect(getBotConversationActsFor).toHaveBeenCalledTimes(1)
   })
 
   it("never rides a teammate's chat, a Look around or Tidy-up run, or an unrecorded chat", async () => {
-    const { noted } = host(
+    const noted = host(
       { 'sam-thread': TEAMMATE, look: OWNER, tidy: OWNER },
       { look: 'look', tidyUp: 'tidy' }
     )

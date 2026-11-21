@@ -285,7 +285,7 @@ export async function resolvePRForBranchOutcome(input: {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
 
-  const { mergeable, stack, stackMergeQueueRequired, conflictSummary } = await derivePRRefreshData({
+  const { mergeable, stack, stackMergeMetadata, conflictSummary } = await derivePRRefreshData({
     data,
     dataRepo,
     repoPath,
@@ -303,7 +303,7 @@ export async function resolvePRForBranchOutcome(input: {
     dataHeadRepo,
     stack,
     mergeable,
-    stackMergeQueueRequired,
+    stackMergeMetadata,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
     conflictSummary

@@ -210,6 +210,7 @@ export type SendRecipientWarning = {
     | 'recipient_run_mismatch'
     | 'recipient_delivery_held'
     | 'recipient_delivery_unknown'
+    | 'stale_task_id'
   recipient: string
   message: string
 }

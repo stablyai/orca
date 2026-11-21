@@ -56,37 +56,10 @@ function row(overrides: Partial<Parameters<typeof WorkerActivityRow>[0]> = {}): 
 }
 
 describe('WorkerActivityRow', () => {
-  it('shows the title, run time and, without a known workspace, what started it', () => {
-    row()
-    expect(screen.getByText('ranger-hello')).toBeInTheDocument()
-    expect(screen.getByText('41s')).toBeInTheDocument()
-    expect(screen.getByText('Started by your chat')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Stop ranger-hello' })).not.toBeInTheDocument()
-  })
-
-  it('shows no run time for a worker that exited without a recorded end', () => {
-    row({ worker: { ...WORKER, state: 'stopped', settledAt: null } })
-    expect(screen.queryByText(/\d+s$/)).not.toBeInTheDocument()
-  })
-
   it('stops a running worker through the host', () => {
     row({ running: true, dot: 'working', worker: { ...WORKER, state: 'working', settledAt: null } })
     fireEvent.click(screen.getByRole('button', { name: 'Stop ranger-hello' }))
     expect(stopOrchestrationWorker).toHaveBeenCalledWith('ctx_1')
-  })
-
-  it('names the coordinator an open ask waits on', () => {
-    row({
-      running: true,
-      worker: {
-        ...WORKER,
-        state: 'working',
-        activity: 'done',
-        pendingQuestion: true,
-        settledAt: null
-      }
-    })
-    expect(screen.getByText('Asked Bot builder a question')).toBeInTheDocument()
   })
 
   it('offers no Stop where this computer cannot stop it', () => {

@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { createAgentTrustOwnershipLedger } from './agent-trust-ownership-ledger'
+import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
 
 // Why resolve, not realpath: removal runs after the worktree directory is gone.
 const antigravityTrustOwnership = createAgentTrustOwnershipLedger(
-  'antigravity-workspace-trust-created.json',
+  () => join(getOrcaUserDataPath(), 'antigravity-workspace-trust-created.json'),
   (projectPath) => resolve(projectPath)
 )
 

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  chatFoldSummary,
-  chatIsGoing,
   normalizeBotChatFolds,
   orderBotChats,
   withBotChatFold,
@@ -56,40 +54,6 @@ describe('orderBotChats', () => {
       'running',
       'closed'
     ])
-  })
-})
-
-describe('chatIsGoing', () => {
-  it('is going while a chat replies, waits on the owner or has running workers', () => {
-    expect(chatIsGoing(chat('a'))).toBe(false)
-    expect(chatIsGoing(chat('a', { finishedTotal: 3 }))).toBe(false)
-    expect(chatIsGoing(chat('a', { live: 'replying' }))).toBe(true)
-    expect(chatIsGoing(chat('a', { live: 'needs-you' }))).toBe(true)
-    expect(chatIsGoing(chat('a', { runningTotal: 2 }))).toBe(true)
-  })
-})
-
-describe('chatFoldSummary', () => {
-  it('counts only live workers, never lifetime totals, and is empty when nothing runs', () => {
-    const worker = (state: 'running' | 'needs-you') => ({
-      key: state,
-      title: '',
-      state,
-      startedAt: 0
-    })
-    expect(chatFoldSummary(chat('a', { finishedTotal: 799, failedTotal: 25 }))).toBeNull()
-    expect(
-      chatFoldSummary(
-        chat('a', {
-          running: [worker('needs-you'), worker('running'), worker('running')],
-          runningTotal: 3,
-          finishedTotal: 11
-        })
-      )
-    ).toBe('1 waiting · 2 running')
-    expect(chatFoldSummary(chat('a', { running: [worker('running')], runningTotal: 1 }))).toBe(
-      '1 running'
-    )
   })
 })
 

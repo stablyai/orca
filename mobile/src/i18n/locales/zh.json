@@ -63,6 +63,7 @@
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
       "resumeSession": "恢复智能体会话",
+      "continueInCli": "在 CLI 中继续",
       "hidePreview": "隐藏最近的消息",
       "showPreview": "显示最近的消息",
       "you": "你"
@@ -203,7 +204,18 @@
       "webView": "显示电脑版网站"
     },
     "loadFailure": {
-      "retry": "重试"
+      "retry": "重试",
+      "connectionNotSecure": "连接不安全",
+      "certificateNameMismatch": "证书与 {{value0}} 不匹配",
+      "certificateDateInvalid": "{{value0}} 的证书在当前日期和时间无效",
+      "certificateAuthorityInvalid": "Orca 不信任签发 {{value0}} 证书的机构",
+      "certificateVerificationFailed": "Orca 无法验证 {{value0}} 的证书",
+      "proceedUnsafe": "仍然继续(不安全)",
+      "connecting": "正在连接…",
+      "certificateChallengeExpired": "此证书审批已过期，请重试该页面以请求新的审批",
+      "certificateChallengeChanged": "证书请求已更改，请重试该页面并查看新的警告",
+      "certificateProceedFailed": "Orca 无法批准此证书请求，请重试该页面后再试，",
+      "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求"
     }
   },
   "chat": {
@@ -242,7 +254,8 @@
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
-      "estimated": "根据上一次响应的估算值。"
+      "estimated": "根据上一次响应的估算值。",
+      "deferredNote": "按需加载，不计入已用总量。"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -646,17 +659,6 @@
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
     },
-    "agentMessage": {
-      "startedWorker": "已启动工作者",
-      "reopenedWorker": "已重新打开工作者",
-      "sentFollowUpToWorker": "已向工作者发送后续消息",
-      "handedOffToAgent": "已移交给智能体",
-      "startedAgent": "已启动智能体",
-      "taskFromCoordinator": "来自协调者的任务",
-      "messageFromCoordinator": "来自协调者的消息",
-      "updateFromWorker": "来自工作者的更新",
-      "messageFrom": "消息来自"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "无法读取附件响应。请重试。",
       "incompleteReply": "附件已更改或响应不完整。请关闭后重试。",
@@ -704,7 +706,7 @@
       "confirm": "回溯",
       "unsupported": "此聊天无法返回到更早的消息。",
       "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
-      "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+      "busy": "聊天空闲时可用",
       "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
       "invalidTarget": "对话无法返回到此消息。未做任何更改。",
       "historyLimit": "此对话过长，无法回溯。未做任何更改。",
@@ -1080,7 +1082,9 @@
       "label": "设置脚本",
       "run": "执行",
       "runSetupCommand": "执行设置命令",
-      "skip": "跳过"
+      "skip": "跳过",
+      "waitForSetup": "等待设置完成后再启动代理",
+      "waitForSetupSaveFailed": "保存设置启动行为失败"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "连接",
@@ -1872,7 +1876,12 @@
       "deleteFailed": "无法删除“{{name}}”",
       "sleep": "休眠",
       "unpin": "取消固定",
-      "rename": "重命名"
+      "rename": "重命名",
+      "markRead": "标记为已读",
+      "markUnread": "标记为未读",
+      "muteNotifications": "静音通知",
+      "unmuteNotifications": "取消静音通知",
+      "moveToStatus": "移至状态"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "检查项：未通过",
@@ -2693,6 +2702,7 @@
       "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
       "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
       "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
       "selectedModel": "所选模型"
     },
     "fileReader": {
@@ -2918,6 +2928,11 @@
       "sendReviewNotes": "发送评审备注",
       "shortcut": "快捷键",
       "terminal": "终端",
+      "terminalWithShell": "终端: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "命令提示符",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
       "urlPrompt": "输入 URL，或留空以新建标签页",
@@ -3317,6 +3332,10 @@
       "next": "下一个标签页",
       "previous": "上一个标签页",
       "hint": "显示所有标签页"
+    },
+    "browserProfile": {
+      "title": "配置文件",
+      "default": "默认"
     }
   },
   "settings": {

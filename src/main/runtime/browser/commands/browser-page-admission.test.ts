@@ -79,6 +79,33 @@ it('does not execute an admitted page command before restored load, and propagat
   expect(action).toHaveBeenCalledOnce()
 })
 
+it('stops a page that is still loading instead of waiting for the load it ends', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a guest that never finishes loading is all the admission gate reads.
+  native.guest = Object.assign(new EventEmitter(), {
+    id: 12,
+    isDestroyed: () => false,
+    isLoadingMainFrame: () => true
+  }) as unknown as Electron.WebContents
+  const stop = vi.fn(() => ({ url: 'https://example.test/slow', title: 'Slow' }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only target resolution and the bridge's stop are reached.
+  const host = {
+    getAgentBrowserBridge: () => ({
+      getRegisteredTabs: () => new Map([['loading-page', 12]]),
+      getRegisteredPageWebContentsId: () => 12,
+      getActivePageId: () => 'loading-page',
+      stop
+    }),
+    getRuntimeBrowserPageRegistry: () => ({ getPage: () => undefined }),
+    getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } })
+  } as unknown as RuntimeBrowserCommandHost
+  const commands = new RuntimeBrowserCommands(host)
+  await expect(commands.browserStop({ page: 'loading-page' })).resolves.toEqual({
+    url: 'https://example.test/slow',
+    title: 'Slow'
+  })
+  expect(stop).toHaveBeenCalledWith(undefined, 'loading-page')
+})
+
 it('runs production reload after a failed cold restore, then admits an ordinary command', async () => {
   const pageId = 'recovery-page'
   const attach = (id: number) => {

@@ -42,7 +42,13 @@ export type BotItemWalkState = {
   close: () => { uid: string; walk: BotItemWalk | null } | null
 }
 
-export function useBotItemWalk(list: BotItemsShownList, botKey: string): BotItemWalkState {
+/** What a walk reads of its list: one bot's, or a group's merged. */
+export type BotItemWalkList = Pick<
+  BotItemsShownList,
+  'groups' | 'closedTotal' | 'loadMoreClosed' | 'closedEnded'
+>
+
+export function useBotItemWalk(list: BotItemWalkList, botKey: string): BotItemWalkState {
   const [current, setCurrent] = useState<Open | null>(() => {
     const kept = openByBot.get(botKey)
     return kept ? { ...kept, restored: true } : null

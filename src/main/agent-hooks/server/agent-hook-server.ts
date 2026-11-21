@@ -1,17 +1,13 @@
 import type { ClaudePermissionHolds } from './claude-permission-hook-hold'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { parseFormEncodedBody } from '../../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import {
-  cliWriterTopology,
-  tmuxCliWriterEvent,
-  type CliWriterObservation
-} from './cli-writer-observation'
+import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ClaudeSessionContinuationTracker,
   resolvePaneClaudeContinuation
@@ -107,16 +103,47 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
   }
 
+  /** A sleep settles every pane's exit proofs together, so their fresh process-table reads
+   *  coalesce into one; the capture's own presence reads then find them answered. */
+  async settleExitProofForSleep(paneKey: string): Promise<null> {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    if (!this.forgetUnowedExitProof(resolved)) {
+      await this.unprovenExits.settled(resolved, true)
+    }
+    return null
+  }
+
+  /** A pane's agent that now reports a process its presence probe can check, became a shared
+   *  host's, or already ended is owed no shell proof. Only a local row's process is probed; a WSL
+   *  guest's PID is not main's to check. */
+  private exitProofOwed(resolved: string): boolean {
+    const identity = this.paneAgentIdentity(resolved)
+    return (
+      identity?.ended === false &&
+      identity.executionHost !== 'shared' &&
+      !(
+        this.state.lastStatusByPaneKey.get(resolved)?.connectionId === null &&
+        this.hasVerifiableAgentProcess(resolved)
+      )
+    )
+  }
+
+  private forgetUnowedExitProof(resolved: string): boolean {
+    if (!this.unprovenExits.has(resolved) || this.exitProofOwed(resolved)) {
+      return false
+    }
+    this.unprovenExits.forget(resolved)
+    return true
+  }
+
   /** Include retained exits proven at or after `exitedSince`. */
   async checkAgentPresenceSince(
     paneKey: string,
-    exitedSince: number,
-    options?: { sleepCapture?: true }
+    exitedSince: number
   ): Promise<AgentProcessVerdict | null> {
-    const [verdict] = await Promise.all([
-      this.checkAgentPresence(paneKey),
-      this.observeTmuxHostedWriter(paneKey, options?.sleepCapture === true)
-    ])
+    // A quit whose shell-alone proof is still running must be read as that proof decides.
+    await this.unprovenExits.settled(this.resolvePaneKeyAlias(paneKey))
+    const verdict = await this.checkAgentPresence(paneKey)
     // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {
       return verdict
@@ -132,37 +159,21 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     return exit !== undefined && exit.at >= exitedSince ? 'exited' : null
   }
 
-  /** Legacy hooks cannot say a tmux server hosts them; the pane's foreground client can, before
-   *  a sleep captures the conversation as the pane's own. Other presence reads never probe. */
-  private async observeTmuxHostedWriter(paneKey: string, sleepCapture: boolean): Promise<void> {
-    if (!sleepCapture) {
+  /** A prompt's mark with no launch held: an agent typed there, or one an earlier mark left
+   *  unproven, may have ended. Only a hook row or a tracked pane can hold one, so the mark of a
+   *  plain shell, which lands on every prompt, skips the saved-record read. */
+  protected noticeLaunchlessCommandMark(resolved: string): void {
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    if (!this.unprovenExits.has(resolved) && !row) {
       return
     }
-    const resolved = this.resolvePaneKeyAlias(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main stores enriched accepted rows in the base-typed cache.
-    const row = this.state.lastStatusByPaneKey.get(resolved) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    const binding = row?.providerSession
-    const read = this.readPaneTmuxHost
-    if (!row) {
-      return this.releaseTmuxHostedCheckpoint(resolved)
-    }
-    if (!read || !binding || row.connectionId !== null || cliWriterTopology(row) !== 'pane-owned') {
+    if (!this.exitProofOwed(resolved)) {
+      this.unprovenExits.forget(resolved)
       return
     }
-    const presence = row.agentPresence
-    const hosted = await read({
-      paneKey: resolved,
-      worktreeId: row.worktreeId,
-      ...(presence?.process && !presence.ended ? { process: presence.process } : {})
-    }).catch(() => false)
-    if (hosted && this.state.lastStatusByPaneKey.get(resolved) === row) {
-      const hostedRow = tmuxCliWriterEvent(row)
-      if (this.writeLegacyStatusRow(hostedRow)) {
-        this.commitStatusRowMutation(row, hostedRow)
-      }
-    }
+    // Main retired a local pane's record when its shell came back; a POSIX host now proves that,
+    // and Windows and WSL, which give no proof, let the mark stand. SSH retires it in the window.
+    this.unprovenExits.onCommandFinished(resolved, isLocalHookConnectionId(row?.connectionId))
   }
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
@@ -238,6 +249,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       paneKey
     )
     if (next) {
+      // The conversation moved, not its host: the row keeps its executionHost.
       this.applyNormalizedStatus(
         {
           ...row,

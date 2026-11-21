@@ -326,6 +326,10 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   foldedJournalPosition?: AgentJournalPosition
   /** Private presentation row; raw host messages never publish this fold-only marker. */
   unpairedToolResults?: true
+  /** Presentation only: drawn inside the row with this id, about the same Dispatch or run. */
+  mergedInto?: string
+  /** Presentation only: the earlier rows this one stands for (`mergedInto` it), newest first. */
+  mergedEvents?: readonly NativeChatMessage[]
 } & NativeChatBotMessageCardFields
 
 /** Split reasoning and its answer share the provider's row identity. */

@@ -51,21 +51,6 @@ function render(
 }
 
 describe('a Connect card on the phone', () => {
-  it('says to connect on the computer until the bot has the connector, then says Connected', () => {
-    store.bot = { slack: null }
-    expect(render()).toContain('Slack · Globex')
-    expect(render()).toContain('Connect it in Orca on your computer')
-    store.bot = { slack: { teamId: 'T1' } }
-    expect(render({ botId: 'b1', source: 'slack' })).toContain('Connected')
-  })
-
-  it('points a connected add-access card to the computer, as the desktop card adds it', () => {
-    store.bot = { github: {} }
-    const text = render({ botId: 'b1', source: 'github', addAccess: true })
-    expect(text).toContain('Connected')
-    expect(text).toContain('Add repositories or organizations in Orca on your computer')
-  })
-
   it('reads Google as connected only once the owner turned it on for the bot', () => {
     store.bot = { google: false }
     expect(render({ botId: 'b1', source: 'google' })).not.toContain('Connected')

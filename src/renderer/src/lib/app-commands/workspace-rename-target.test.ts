@@ -20,17 +20,9 @@ describe('workspaceRenameUnsupportedReason', () => {
     ).toBeNull()
   })
 
-  it('says why on a bot’s or group’s page, and for a bot no list shows', () => {
+  it('explains why bot pages and hidden workspaces cannot be renamed', () => {
     expect(
       workspaceRenameUnsupportedReason({ section: 'bots', entryKey: 'local/bot', hostDown: false })
-    ).toMatch(/isn’t a worktree/)
-    expect(
-      workspaceRenameUnsupportedReason({
-        section: 'bots',
-        entryKey: 'local/bot',
-        chatId: 'chat',
-        hostDown: false
-      })
     ).toMatch(/isn’t a worktree/)
     expect(workspaceRenameUnsupportedReason({ section: 'none', reason: 'bot-hidden' })).toMatch(
       /isn’t listed/

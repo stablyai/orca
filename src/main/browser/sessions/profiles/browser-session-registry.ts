@@ -43,7 +43,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../../extensions/profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
-import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
+import * as sessionCookies from '../../cookies/session-restore/browser-session-cookie-restore'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -270,7 +270,7 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
-    trackBrowserSessionCookies(profile)
+    sessionCookies.trackBrowserSessionCookies(profile)
     this.onProfilesChanged?.()
     return profile
   }
@@ -328,6 +328,7 @@ class BrowserSessionRegistry {
 
       const sess = session.fromPartition(this.defaultPartition)
       await sess.clearStorageData({ storages: ['cookies'] })
+      await sessionCookies.clearBrowserSessionCookieSnapshots('default')
       return true
     } catch {
       return false

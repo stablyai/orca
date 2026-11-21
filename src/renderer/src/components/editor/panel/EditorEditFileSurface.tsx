@@ -1,5 +1,4 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
 import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
@@ -169,11 +168,7 @@ export function EditorEditFileSurface({
           mimeType={fileContent.mimeType ?? 'video/mp4'}
           filePath={activeFile.filePath}
           playbackCacheKey={pdfViewStateKey}
-          canOpenLocally={
-            !activeFile.externalSshTargetId &&
-            !activeFile.runtimeEnvironmentId &&
-            getConnectionIdForFile(activeFile.worktreeId, activeFile.filePath) === null
-          }
+          source={fileContent.byteSource}
         />
       )
     }

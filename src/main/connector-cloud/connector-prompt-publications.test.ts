@@ -124,7 +124,7 @@ function fixture(prompt: ConnectorPrompt = P, count = 1, working = false, audien
     chatTurnWaiting: () => false,
     runningTurnReported: () => false,
     workLinks: async () => [],
-    workerActivity: async () => null,
+    workerActivities: async () => null,
     setTimer: () => ({ cancel: () => {} }),
     now: Date.now
   })

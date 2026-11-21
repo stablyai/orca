@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from '../scroll/native-chat-autoscroll'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
 import { nativeChatScrollOffsetWithin } from '../virtualization/use-native-chat-viewport-align'
 
@@ -9,9 +8,12 @@ const NOT_THE_CONVERSATION = '[data-native-chat-typing-redirect-ignore="true"]'
 
 export function NativeChatNewRowsMarker({
   marker: { arriving, onArrived, onDismiss },
+  readerAtEnd,
   onReveal
 }: {
   marker: NativeChatNewRowsMarkerState
+  /** Only a reader who was following the end is taken to the marker; anyone else keeps their place. */
+  readerAtEnd: () => boolean
   /** Scrolls a transcript element to the top of the view, and stops following the end. */
   onReveal: (element: HTMLElement) => void
 }): React.JSX.Element {
@@ -24,6 +26,9 @@ export function NativeChatNewRowsMarker({
       return
     }
     onArrived()
+    if (!readerAtEnd()) {
+      return
+    }
     const marker = ref.current
     const row = marker?.closest<HTMLElement>('[data-index]')
     const scroller = row?.closest<HTMLElement>('[data-native-chat-scroll]')
@@ -31,17 +36,13 @@ export function NativeChatNewRowsMarker({
       return
     }
     const top = nativeChatScrollOffsetWithin(marker, scroller)
-    // Preserve a reader parked above new rows; replies can still be short while paced rendering catches up.
-    if (
-      top === null ||
-      top - (scroller.scrollTop + scroller.clientHeight) > NATIVE_CHAT_BOTTOM_THRESHOLD_PX
-    ) {
+    if (top === null) {
       return
     }
     // Reveal the prompt’s row unless it would leave the marker too low in the viewport.
     const intoRow = top - (nativeChatScrollOffsetWithin(row, scroller) ?? top)
     onReveal(intoRow < scroller.clientHeight / 2 ? row : marker)
-  }, [arriving, onArrived, onReveal])
+  }, [arriving, onArrived, onReveal, readerAtEnd])
 
   useEffect(() => {
     const pane = ref.current?.closest('[data-native-chat-root]')

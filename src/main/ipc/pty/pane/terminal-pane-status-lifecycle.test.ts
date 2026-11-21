@@ -3,14 +3,22 @@ import type { AgentHookServer } from '../../../agent-hooks/server/agent-hook-ser
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { bindTerminalPaneStatusLifecycle } from './terminal-pane-status-lifecycle'
 
-const { setTerminalPaneLifecycle, getProviderForPty } = vi.hoisted(() => ({
+const { setTerminalPaneLifecycle, getProviderForPty, confirmRootShellAlone } = vi.hoisted(() => ({
   setTerminalPaneLifecycle: vi.fn<AgentHookServer['setTerminalPaneLifecycle']>(),
-  getProviderForPty: vi.fn()
+  getProviderForPty: vi.fn(),
+  confirmRootShellAlone: vi.fn()
 }))
 vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: { setTerminalPaneLifecycle, pruneUnplacedSleepingPanes: () => {} }
 }))
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
+vi.mock('../../../memory/pty-registry', () => ({
+  getRegisteredPtyPid: (ptyId: string) => (ptyId === 'pty-1' ? 4242 : null)
+}))
+vi.mock('../../../runtime/terminal/lifecycle/run-terminal-shell-alone', () => ({
+  confirmRootShellAloneFromProcessTable: confirmRootShellAlone,
+  paneAgentProcess: () => () => true
+}))
 
 const platform = process.platform
 afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
@@ -47,14 +55,14 @@ it.each([
     false
   ],
   [
-    'intervening command retired the launch',
+    'a typed agent with no launch held, its shell alone',
     'darwin',
     true,
     'zsh',
     undefined,
     'gone',
     false,
-    false
+    true
   ],
   ['successor launch during inspection', 'darwin', true, 'zsh', undefined, 'held', true, false],
   [
@@ -93,13 +101,18 @@ it.each([
     Object.defineProperty(process, 'platform', { value: os })
     const launch = { agentArgs: '', agentEnv: {} }
     let currentLaunch = evidence === 'held' ? launch : evidence === 'gone' ? null : undefined
+    const proveShellAlone = async () => {
+      if (replaced) {
+        currentLaunch = { agentArgs: '--resume next', agentEnv: {} }
+      }
+      return shellAlone
+    }
+    // POSIX reads the PTY's root shell from the process table, whatever the provider says.
+    confirmRootShellAlone.mockImplementation(async (rootPid: number) =>
+      rootPid === 4242 ? proveShellAlone() : false
+    )
     getProviderForPty.mockReturnValue({
-      confirmShellForeground: async () => {
-        if (replaced) {
-          currentLaunch = { agentArgs: '--resume next', agentEnv: {} }
-        }
-        return shellAlone
-      },
+      confirmShellForeground: os === 'win32' ? proveShellAlone : async () => true,
       // Windows answers from its job census; a foreground name alone is not that census.
       inspectProcess: async () => ({
         foregroundProcess: foreground,
@@ -110,7 +123,8 @@ it.each([
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this exit probe only reads these two runtime capabilities.
     const runtime = {
       resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),
-      getLaunchStatementForPaneKey: () => currentLaunch
+      terminalRunFacts: { readLastInputAt: () => null },
+      getLaunchStatementForPty: () => currentLaunch
     } as unknown as OrcaRuntimeService
     bindTerminalPaneStatusLifecycle(runtime, undefined)
     const lifecycle = setTerminalPaneLifecycle.mock.lastCall![0]
@@ -119,3 +133,29 @@ it.each([
     ).toBe(expected)
   }
 )
+
+it('does not count a shell-alone proof once input reached the PTY while it ran', async () => {
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
+  let typed = false
+  let lastInputAt = 1
+  // The user sends `codex resume <id>` (desktop, CLI or mobile) after the table was read but
+  // before the proof returns; a terminal's automatic query reply is not recorded as input.
+  confirmRootShellAlone.mockImplementation(async () => {
+    if (typed) {
+      lastInputAt += 1
+    }
+    return true
+  })
+  getProviderForPty.mockReturnValue({})
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proof only resolves the pane and reads its input facts.
+  const runtime = {
+    resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),
+    terminalRunFacts: { readLastInputAt: () => lastInputAt }
+  } as unknown as OrcaRuntimeService
+  bindTerminalPaneStatusLifecycle(runtime, undefined)
+  const lifecycle = setTerminalPaneLifecycle.mock.lastCall![0]
+  const paneKey = 'tab:11111111-1111-4111-8111-111111111111'
+  expect(await lifecycle.confirmShellAlone?.(paneKey, 'codex')).toBe(true)
+  typed = true
+  expect(await lifecycle.confirmShellAlone?.(paneKey, 'codex')).toBe(false)
+})

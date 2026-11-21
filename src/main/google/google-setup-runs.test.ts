@@ -31,7 +31,7 @@ function runs() {
 }
 
 describe('Google setup runs', () => {
-  it('records each step, who did it, and what the bot learned, and keeps it across a restart', () => {
+  it('persists setup progress and lets the bot move to a new browser page after restart', () => {
     const { store, reopen } = runs()
     store.apply('ivy', 'owner', { action: 'start', browserPageId: 'page-1' })
     store.apply('ivy', 'bot', { action: 'step', step: 'account', status: 'done' })
@@ -47,14 +47,12 @@ describe('Google setup runs', () => {
     expect(run).toMatchObject({ account: 'dana@acme.com', kind: 'work', browserPageId: 'page-1' })
     expect(currentGoogleSetupStep(run)).toBe('apis')
     expect(run.revision).toBe(5)
-    expect(reopen().get('ivy')).toEqual(run)
-  })
-
-  it('has the bot pick up a running setup rather than restart it', () => {
-    const { store } = runs()
-    const first = store.apply('ivy', 'owner', { action: 'start', mode: 'guide-here' })
-    expect(store.apply('ivy', 'bot', { action: 'start', mode: 'do-it-for-me' })).toEqual(first)
-    expect(store.apply('ivy', 'owner', { action: 'start' }).id).not.toBe(first.id)
+    const restarted = reopen()
+    expect(restarted.get('ivy')).toEqual(run)
+    expect(
+      restarted.apply('ivy', 'bot', { action: 'set', browserPageId: 'page-2' }).browserPageId
+    ).toBe('page-2')
+    expect(reopen().get('ivy')).toMatchObject({ id: run.id, browserPageId: 'page-2' })
   })
 
   it('lets the bot finish the steps it confirms, in every path', () => {
@@ -106,21 +104,6 @@ describe('Google setup runs', () => {
     expect(run.personStep).toBeUndefined()
   })
 
-  it('gives a handed-over step back to the bot only on the owner’s Take over', () => {
-    const { store } = runs()
-    store.apply('ivy', 'owner', { action: 'start' })
-    store.apply('ivy', 'bot', { action: 'need-user', step: 'client', note: 'Create the client.' })
-    const run = store.apply('ivy', 'owner', {
-      action: 'answer',
-      card: 'step',
-      values: ['take-over']
-    })
-    expect(run.steps.client?.status).toBe('active')
-    expect(
-      store.apply('ivy', 'bot', { action: 'step', step: 'client', status: 'done' }).steps.client
-    ).toMatchObject({ status: 'done', by: 'bot' })
-  })
-
   it('forgets a deleted bot’s run', () => {
     const { store, reopen } = runs()
     store.apply('ivy', 'owner', { action: 'start' })
@@ -131,9 +114,13 @@ describe('Google setup runs', () => {
     expect(reopen().get('kit')).not.toBeNull()
   })
 
-  it('keeps a run the bot starts read-only until the owner picks the path, even after it ends one', () => {
+  it('keeps the owner’s path when the bot starts during or after a run', () => {
     const { store } = runs()
-    store.apply('ivy', 'owner', { action: 'start', mode: 'guide-here' })
+    const first = store.apply('ivy', 'owner', { action: 'start' })
+    const ownerRun = store.apply('ivy', 'owner', { action: 'start', mode: 'guide-here' })
+    expect(ownerRun.id).not.toBe(first.id)
+    expect(store.apply('ivy', 'bot', { action: 'start', mode: 'do-it-for-me' })).toEqual(ownerRun)
+
     store.apply('ivy', 'bot', { action: 'fail', error: 'stuck' })
     expect(() => store.apply('ivy', 'bot', { action: 'start', mode: 'do-it-for-me' })).toThrow(
       'Your owner picks Do it for me'
@@ -227,7 +214,7 @@ describe('Google setup runs', () => {
     ).toThrow('Only your owner')
   })
 
-  it('credits the person with a step handed to them, and hands it back on Take over', () => {
+  it('credits the owner’s Done and hands back the named or current step on Take over', () => {
     const { store } = runs()
     store.apply('ivy', 'owner', { action: 'start' })
     store.apply('ivy', 'bot', { action: 'need-user', step: 'branding', note: 'Tick the box' })
@@ -243,6 +230,17 @@ describe('Google setup runs', () => {
         values: ['take-over', 'publish']
       }).steps.publish?.status
     ).toBe('active')
+
+    store.apply('ivy', 'bot', { action: 'need-user', step: 'client', note: 'Create the client.' })
+    const run = store.apply('ivy', 'owner', {
+      action: 'answer',
+      card: 'step',
+      values: ['take-over']
+    })
+    expect(run.steps.client?.status).toBe('active')
+    expect(
+      store.apply('ivy', 'bot', { action: 'step', step: 'client', status: 'done' }).steps.client
+    ).toMatchObject({ status: 'done', by: 'bot' })
   })
 
   it('reopens the sign-in step when the owner wants a different account', () => {
@@ -313,7 +311,7 @@ describe('Google setup recovery answers', () => {
     ).toEqual(run.steps)
   })
 
-  it('starts over keeping the account, path and services, from any state', () => {
+  it('keeps chosen setup inputs on restart and asks for a path again after import', () => {
     const { store } = runs()
     const first = store.apply('ivy', 'owner', { action: 'start', mode: 'unchosen' })
     store.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['guide-here'] })
@@ -342,19 +340,16 @@ describe('Google setup recovery answers', () => {
     })
     expect(run.projectId).toBeUndefined()
     expect(run.answers.path?.values).toEqual(['guide-here'])
-  })
 
-  it("starts an imported app's setup over from the path card", () => {
-    const { store } = runs()
     store.apply('ivy', 'owner', { action: 'start', mode: 'unchosen' })
     store.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['import'] })
-    const run = store.apply('ivy', 'owner', {
+    const imported = store.apply('ivy', 'owner', {
       action: 'answer',
       card: 'step',
       values: ['start-over']
     })
-    expect(run.answers.path).toBeUndefined()
-    expect(run.steps).toEqual({})
+    expect(imported.answers.path).toBeUndefined()
+    expect(imported.steps).toEqual({})
   })
 
   it('leaves Make a new key, Continue and Start over to the owner', () => {
@@ -369,14 +364,6 @@ describe('Google setup recovery answers', () => {
     expect(() =>
       store.apply('ivy', 'bot', { action: 'answer', card: 'step', values: ['resume'] })
     ).toThrow('No Google setup is running')
-  })
-
-  it('lets the bot move the setup to a new page, say after a restart closed the old one', () => {
-    const { store } = runs()
-    store.apply('ivy', 'owner', { action: 'start', mode: 'guide-here', browserPageId: 'page-1' })
-    expect(
-      store.apply('ivy', 'bot', { action: 'set', browserPageId: 'page-2' }).browserPageId
-    ).toBe('page-2')
   })
 
   it('lets the bot finish branding once it reads the policy box ticked, with no Done', () => {

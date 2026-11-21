@@ -6,6 +6,7 @@ import { parseInteractivePrompt } from '../../../../shared/native-chat/input/nat
 import { z } from 'zod'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../rpc/methods/terminal/terminal'
+import { agentStartupBlockedMessage } from '../wait/agent-startup-blocked-message'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
@@ -126,6 +127,26 @@ describe('TrustDialogStatusObserver', () => {
     })
   })
 
+  it('includes the Bypass Permissions hint only while its warning is readable', async () => {
+    const { runtime, handle, recording, write } = await pane(
+      'claude-2-1-316-startup-bypass-permissions'
+    )
+    await write(recording)
+    const reason = 'agent-startup-menu-prompt'
+    const prefix = `Agent startup blocked: ${reason}`
+    const hint = await agentStartupBlockedMessage(runtime, handle, reason)
+    expect(hint.startsWith(prefix)).toBe(true)
+    expect(hint).toContain('Bypass Permissions mode')
+    expect(hint).toContain('Settings > Agents > Permissions')
+    await expect(
+      agentStartupBlockedMessage(runtime, handle, 'codex-interactive-prompt')
+    ).resolves.toBe('Agent startup blocked: codex-interactive-prompt (agent-interactive-prompt)')
+
+    await expect(agentStartupBlockedMessage(runtime, 'missing-terminal', reason)).resolves.toBe(
+      prefix
+    )
+  })
+
   // The keys are aimed from the highlight the card was read off, so a card that no longer matches the screen must not write.
   it('writes a startup card choice only while the screen still reads as that card', async () => {
     const writes: string[] = []
@@ -148,6 +169,9 @@ describe('TrustDialogStatusObserver', () => {
       return response.ok && SEND_RESULT.parse(response.result).send.accepted
     }
     await write(recording)
+    await expect(
+      agentStartupBlockedMessage(runtime, handle, 'agent-startup-menu-prompt')
+    ).resolves.toBe('Agent startup blocked: agent-startup-menu-prompt')
     const stale = prompts.at(-1)
     // Up in the terminal: "Use this MCP server" is now two rows up from the highlight, not one.
     await write(

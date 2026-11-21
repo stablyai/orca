@@ -87,22 +87,53 @@ describe('Drive search and list', () => {
 })
 
 describe('Drive read', () => {
-  it('reads a Doc as Markdown and pages a long one through the same text', async () => {
+  it('pages a cached Doc export until its version changes or the cache expires', async () => {
     const text = `# Plan\n${'x'.repeat(20_000)}`
+    const initial = file(DOC_ID, 'Plan', 'application/vnd.google-apps.document')
+    let modifiedTime: string | undefined = initial.modifiedTime
+    let exported = text
     const { api, sent } = await apiWith([
-      meta(file(DOC_ID, 'Plan', 'application/vnd.google-apps.document')),
-      route('GET', `/drive/v3/files/${DOC_ID}/export`, () => bytesResponse(text, 'text/markdown'))
+      route('GET', `/drive/v3/files/${DOC_ID}`, () =>
+        googleJson(200, { ...initial, modifiedTime })
+      ),
+      route('GET', `/drive/v3/files/${DOC_ID}/export`, () =>
+        bytesResponse(exported, 'text/markdown')
+      )
     ])
-    const view = await readDrive(api, { ref: DOC_ID })
-    expect(view.source).toBe('Doc as Markdown')
-    expect(view.text.startsWith('# Plan')).toBe(true)
-    expect(view.nextOffset).toBe(view.text.length)
-    expect(view.part).toEqual({ from: 0, to: view.text.length, of: text.length })
-    expect(sent[1]?.url.searchParams.get('mimeType')).toBe('text/markdown')
-    // The next page continues the same text, converted once.
-    const next = await readDrive(api, { ref: DOC_ID, offset: view.nextOffset })
-    expect(view.text + next.text).toBe(text)
-    expect(sent.filter((request) => request.url.pathname.endsWith('/export'))).toHaveLength(1)
+    const exports = () => sent.filter((request) => request.url.pathname.endsWith('/export'))
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    try {
+      const view = await readDrive(api, { ref: DOC_ID })
+      expect(view.source).toBe('Doc as Markdown')
+      expect(view.text.startsWith('# Plan')).toBe(true)
+      expect(view.nextOffset).toBe(view.text.length)
+      expect(view.part).toEqual({ from: 0, to: view.text.length, of: text.length })
+      expect(exports()[0]?.url.searchParams.get('mimeType')).toBe('text/markdown')
+
+      clock.mockReturnValue(1_800_000_060_000)
+      const next = await readDrive(api, { ref: DOC_ID, offset: view.nextOffset })
+      expect(view.text + next.text).toBe(text)
+      expect(exports()).toHaveLength(1)
+
+      modifiedTime = '2026-11-03T11:00:00Z'
+      exported = '# Revised'
+      expect((await readDrive(api, { ref: DOC_ID })).text).toBe('# Revised')
+      expect(exports()).toHaveLength(2)
+
+      clock.mockReturnValue(1_800_000_420_000)
+      exported = '# Fresh export'
+      expect((await readDrive(api, { ref: DOC_ID })).text).toBe('# Fresh export')
+      expect(exports()).toHaveLength(3)
+
+      modifiedTime = undefined
+      exported = '# Unversioned'
+      expect((await readDrive(api, { ref: DOC_ID })).text).toBe('# Unversioned')
+      exported = '# New unversioned export'
+      expect((await readDrive(api, { ref: DOC_ID })).text).toBe('# New unversioned export')
+      expect(exports()).toHaveLength(5)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('reads every tab of a spreadsheet as a table', async () => {

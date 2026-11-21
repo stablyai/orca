@@ -12,26 +12,45 @@ import type {
   AgentStatusCacheIdentity,
   RefusedPaneResume
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { UnprovenAgentExits } from './unproven-agent-exits'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
+  protected abstract noticeLaunchlessCommandMark(resolvedPaneKey: string): void
+  protected readonly unprovenExits = new UnprovenAgentExits((paneKey) =>
+    this.confirmCommandFinishedExit(paneKey)
+  )
 
   retireProcessAuthority(
     paneKey: string,
-    options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'>
+    options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'> & { launchRetired?: true }
   ): void {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    if (options?.launchRetired) {
+      this.noticeLaunchlessCommandMark(resolved)
+      return
+    }
     const identity = this.paneAgentIdentity(paneKey)
-    const shared = identity?.processTopology === 'shared'
+    const shared = identity?.executionHost === 'shared'
+    // A command mark can come from a shell nested in a live agent; one with no process to probe
+    // ends only on the host's word that the pane's shell is alone.
+    const verifiable = this.hasVerifiableAgentProcess(paneKey)
+    const unprovable = identity?.ended === false && !shared && !verifiable
+    // A mark's exit status can't tell a quit from a stop (Ctrl-Z). A local process answers through
+    // its presence probe, a stopped one included; one the probe can't reach (SSH, WSL) lets the
+    // mark stand, as on main.
+    const awaitsHost = options?.confirmedExit === true && !verifiable
+    const probed = this.state.lastStatusByPaneKey.get(resolved)?.connectionId === null
+    const confirmedExit = options?.confirmedExit === true && verifiable && !probed
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
     const { untouched } = this.reconcileEndedProcess(
       paneKeys,
-      { ...options, preserveResumeIdentity: !options?.confirmedExit && !shared },
+      { confirmedExit, preserveResumeIdentity: !confirmedExit && !shared },
       (key) => this.clearRevokedPaneState(key)
     )
-    if (shared) {
-      this.releaseSharedPaneConversation(paneKey, identity.status)
-    }
+    // A stopped agent (Ctrl-Z) refuses the proof, and a later mark proves its quit.
+    this.unprovenExits.launchRetired(resolved, unprovable && awaitsHost, awaitsHost)
     for (const key of untouched) {
       this.clearTmuxInnerSubjects(key)
       this.clearPaneProcessState(key)
@@ -40,6 +59,26 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
+  }
+
+  private async confirmCommandFinishedExit(resolved: string): Promise<boolean> {
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    const identity = this.paneAgentIdentity(resolved)
+    const agent = identity?.status.agentType
+    const alone = await this.terminalPaneLifecycle?.confirmShellAlone?.(resolved, agent)
+    // A newer row may be the same conversation's; only a later proof can settle it.
+    if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
+      return false
+    }
+    if (alone === false) {
+      return false
+    }
+    this.reconcileEndedProcessForPaneKeys([resolved], {
+      preserveResumeIdentity: true,
+      confirmedExit: true,
+      known: { paneKey: resolved, identity }
+    })
+    return true
   }
 
   hasVerifiableAgentProcess(paneKey: string): boolean {
@@ -52,30 +91,30 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   /** Shells without command marks need the owning host's process-tree proof. */
   async reconcilePaneProcessExit(paneKey: string): Promise<void> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
-    // A verifiable process answers for itself (exited, stopped or live); the quiet shell proves nothing.
-    if (this.hasVerifiableAgentProcess(resolved)) {
-      await this.checkAgentPresence(resolved)
+    // A verifiable process answers for itself (exited, stopped or live); the quiet shell proves
+    // nothing. A command mark's proof owns a tracked pane; reconciling here would forget it.
+    const tracked = this.unprovenExits.has(resolved)
+    if (tracked || this.hasVerifiableAgentProcess(resolved)) {
+      await (tracked ? this.unprovenExits.settled(resolved) : this.checkAgentPresence(resolved))
       return
     }
     const row = this.state.lastStatusByPaneKey.get(resolved)
     const identity = this.paneAgentIdentity(resolved)
     const agent = identity?.status.agentType
-    const shared = identity?.processTopology === 'shared'
+    // An ended agent needs no proof.
     const confirmedExit =
-      identity &&
+      identity?.ended === false &&
+      identity.executionHost !== 'shared' &&
       agent &&
-      !shared &&
       (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
       return
     }
     this.reconcileEndedProcessForPaneKeys([resolved], {
       preserveResumeIdentity: true,
-      confirmedExit: confirmedExit === true
+      confirmedExit: confirmedExit === true,
+      known: { paneKey: resolved, identity }
     })
-    if (shared) {
-      this.releaseSharedPaneConversation(resolved, identity.status)
-    }
   }
 
   dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {
@@ -127,6 +166,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   dropStatusEntriesByTabPrefix(tabId: string): void {
     this.markTabClosedForAgentStatus(tabId)
     this.clearTmuxTabSubjects(tabId)
+    this.unprovenExits.forgetWhere((key) => paneCacheKeyMatchesTab(key, tabId))
     const paneKeysToClear = new Set<string>()
     const statusPaneKeysToClear = new Set<string>()
     const statusRowsToClear: EnrichedAgentHookEventPayload[] = []
@@ -246,6 +286,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
   ): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    this.unprovenExits.forget(resolvedPaneKey)
     if (options?.forgetAgentExit) {
       this.forgetAgentExit(paneKey)
     }

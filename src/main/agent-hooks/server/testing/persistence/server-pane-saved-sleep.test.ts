@@ -196,7 +196,7 @@ it.each(['claude', 'codex'] as const)(
   }
 )
 
-it('does not recover a saved Interrupted turn after its conversation exited', () => {
+it('does not recover a saved Interrupted turn after its conversation exited', async () => {
   const saved: SleepingAgentSessionRecord = {
     paneKey: PANE,
     worktreeId: 'wt-1',
@@ -215,11 +215,12 @@ it('does not recover a saved Interrupted turn after its conversation exited', ()
     ownsProcess: () => true,
     isStopping: () => false,
     isReversibleStop: () => false,
-    isPlaced: () => true
+    isPlaced: () => true,
+    confirmShellAlone: async () => true
   })
   try {
     server.retireProcessAuthority(PANE, { confirmedExit: true })
-    expect(server.paneAgentIdentity(PANE)?.ended).toBe(true)
+    await vi.waitFor(() => expect(server.paneAgentIdentity(PANE)?.ended).toBe(true))
     server.recordLaunchResumeIdentity({
       paneKey: PANE,
       worktreeId: 'wt-1',

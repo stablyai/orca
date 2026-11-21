@@ -9,6 +9,7 @@ const host = vi.hoisted((): { closed: string[] } => ({ closed: [] }))
 
 // The host's Closed list, newest first, paged by 50 after a cursor naming the last uid shown.
 vi.mock('./use-bot-items', () => ({
+  useStableBotItemChats: (chatIds: readonly string[] | null) => chatIds,
   readMoreClosedItems: async (_bot: unknown, cursor: string) => {
     const from = host.closed.indexOf(cursor) + 1
     const page = host.closed.slice(from, from + 50)

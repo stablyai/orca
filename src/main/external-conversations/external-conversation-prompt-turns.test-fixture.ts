@@ -85,7 +85,7 @@ export function mailStartedBot(
         writeLinkFact(store, link, { adoptedTurn }, workspace)
       },
       linkedFor: linked,
-      workerActivity: async () => null,
+      workerActivities: async () => null,
       emit: (event) => {
         events.push(event)
         forward?.(event)

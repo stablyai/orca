@@ -10,10 +10,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
-import { eventTriggerLine } from './AutomationBotEventsField'
 import { buildAutomationEditDraft } from './automation-edit-draft'
-import { botAutomationWhen } from '../../bots/bot-automation-when'
-import { automationNextRunLabel } from '../details/automation-when-label'
 import { botSchedulePatch } from './automation-bot-save'
 import { makeAutomation } from '../automations-page-fixtures'
 import { AUTOMATION_DEFAULT_TIME } from './automation-draft-model'
@@ -149,20 +146,6 @@ describe("a bot automation's events in the editor", () => {
     expect(screen.getByText('Never')).toBeTruthy()
   })
 
-  it('lists each event read-only and edits them in the bot’s chat', () => {
-    const { onClose } = renderSidebar(buildAutomationEditDraft(EVENT_AUTOMATION))
-
-    expect(
-      screen.getByText('When you’re mentioned in Slack · in 2 Slack channels · containing “deploy”')
-    ).toBeTruthy()
-    fireEvent.click(screen.getByText('Edit in chat'))
-
-    expect(onClose).toHaveBeenCalled()
-    expect(openBotHomeTab).toHaveBeenCalledWith(BOT, {
-      draft: 'Change the automation “Deploy pings”: '
-    })
-  })
-
   it('opens the bot’s chat from the When menu to set up an event', () => {
     renderSidebar(buildAutomationEditDraft(EVENT_AUTOMATION))
 
@@ -197,25 +180,6 @@ describe("a bot automation's events in the editor", () => {
     })
   })
 
-  it('says what starts it and when it next runs, in the list and detail', () => {
-    expect(
-      eventTriggerLine({ id: 'x', source: 'slack', event: 'reaction', subject: 'T:C:1' })
-    ).toBe('On a Slack reaction · in a thread in a Slack channel')
-    expect(
-      eventTriggerLine({
-        id: 'x',
-        source: 'slack',
-        event: 'reaction',
-        from: ['U0DANA'],
-        onOwnerMessage: true
-      })
-    ).toBe('On a Slack reaction · from 1 person · on your messages')
-    expect(botAutomationWhen(EVENT_AUTOMATION)).toBe(
-      'When you’re mentioned in Slack in 2 Slack channels'
-    )
-    expect(automationNextRunLabel(EVENT_AUTOMATION, 0)).toBe('Runs on events')
-  })
-
   it('saves "Only on events" as no schedule, and a picked schedule as new', () => {
     const daily = { rrule: 'FREQ=DAILY;BYHOUR=0;BYMINUTE=0', dtstart: 5 }
     const scheduled = makeAutomation({ rrule: daily.rrule, on: [MENTIONED] })
@@ -234,11 +198,12 @@ describe("a bot automation's events in the editor", () => {
 
   it('names the saved automation in the chat, not an unsaved rename, and hides Edit in chat without its bot', () => {
     const draft = { ...buildAutomationEditDraft(EVENT_AUTOMATION), name: 'Renamed' }
-    renderSidebar(draft)
+    const { onClose } = renderSidebar(draft)
     fireEvent.click(screen.getByText('Edit in chat'))
     expect(openBotHomeTab).toHaveBeenCalledWith(BOT, {
       draft: 'Change the automation “Deploy pings”: '
     })
+    expect(onClose).toHaveBeenCalled()
     cleanup()
 
     renderSidebar({

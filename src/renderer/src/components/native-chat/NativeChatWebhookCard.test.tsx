@@ -55,14 +55,6 @@ afterEach(() => {
 })
 
 describe('NativeChatWebhookCard', () => {
-  it('shows the hook from the host in its own bot’s chat, key masked', async () => {
-    renderCard(webhookSummaryFixture())
-    expect(await screen.findByText('Webhook · starts “Investigate Sentry alert”')).toBeTruthy()
-    expect(screen.getByText('No calls yet')).toBeTruthy()
-    expect(document.body.textContent).not.toContain('orcawh_')
-    expect(screen.getByRole('button', { name: 'Add signing secret…' })).toBeTruthy()
-  })
-
   it('says where the URL is in another bot’s chat, without the card', async () => {
     chat.botId = 'bot-2'
     renderCard(webhookSummaryFixture())
@@ -76,8 +68,13 @@ describe('NativeChatWebhookCard', () => {
 
   it('reveals the key on click until the owner hides it', async () => {
     const host = renderCard(webhookSummaryFixture())
-    fireEvent.click(await screen.findByRole('button', { name: 'Reveal' }))
-    await screen.findByText(KEY.url)
+    const reveal = await screen.findByRole('button', { name: 'Reveal' })
+    expect(screen.getByText('Webhook · starts “Investigate Sentry alert”')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add signing secret…' })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('orcawh_')
+    fireEvent.click(reveal)
+    const url = await screen.findByText(KEY.url)
+    expect(url.closest('[data-native-chat-secret][data-native-chat-find-skip]')).toBeTruthy()
     expect(host).toHaveBeenCalledWith(OWNER.target, 'webhooks.reveal', {
       hookId: 'wh_7Kx2pQ9mT4vB8nLc'
     })
@@ -145,13 +142,5 @@ describe('NativeChatWebhookCard', () => {
     await screen.findByText('No calls yet')
     expect(document.body.textContent).not.toContain('orcawh_')
     expect(host.mock.calls.filter(([, method]) => method === 'webhooks.reveal')).toHaveLength(1)
-  })
-
-  it('keeps the card out of transcript find', async () => {
-    renderCard(webhookSummaryFixture())
-    await screen.findByText('Webhook · starts “Investigate Sentry alert”')
-    expect(
-      document.querySelector('[data-native-chat-secret][data-native-chat-find-skip]')
-    ).toBeTruthy()
   })
 })

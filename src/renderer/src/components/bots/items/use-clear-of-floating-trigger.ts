@@ -4,6 +4,29 @@ import { useEffect, useState, type RefObject } from 'react'
 
 const GAP_PX = 8
 
+/** The element that lays `node` out: past wrappers with `display: contents`, which draw no box. */
+function layoutParentOf(node: HTMLElement): HTMLElement | null {
+  let parent = node.parentElement
+  while (parent && getComputedStyle(parent).display === 'contents') {
+    parent = parent.parentElement
+  }
+  return parent
+}
+
+/** Has `observer` watch the boxes in `column` other than the one holding `node`, and only those. */
+function watchColumnBoxes(
+  observer: ResizeObserver,
+  column: HTMLElement | null,
+  node: HTMLElement
+): void {
+  observer.disconnect()
+  for (const child of column?.children ?? []) {
+    if (!child.contains(node)) {
+      observer.observe(child)
+    }
+  }
+}
+
 /** How far `box` must rise to clear the floating terminal button; 0 when they don't overlap. */
 export function useClearOfFloatingTrigger(box: RefObject<HTMLElement | null>): number {
   const [lift, setLift] = useState(0)
@@ -37,11 +60,24 @@ export function useClearOfFloatingTrigger(box: RefObject<HTMLElement | null>): n
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(node)
+    // The box also moves without resizing: what sits above it in its column (Activity filling in once
+    // read, a notice) pushes it down, so those boxes are watched too, including ones added later.
+    const column = layoutParentOf(node)
+    // Its own observer, rewatched as boxes come and go in the column.
+    const resized = new ResizeObserver(measure)
+    watchColumnBoxes(resized, column, node)
+    const added = new MutationObserver(() => {
+      watchColumnBoxes(resized, column, node)
+      measure()
+    })
+    added.observe(column ?? node, { childList: true })
     // The button moves on a drag and on window resizes.
     window.addEventListener('resize', measure)
     window.addEventListener('pointerup', measure)
     return () => {
       observer.disconnect()
+      resized.disconnect()
+      added.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener('pointerup', measure)
     }

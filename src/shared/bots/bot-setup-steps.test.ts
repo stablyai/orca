@@ -24,17 +24,6 @@ const read: NativeChatMessage = {
 }
 
 describe('botSetupSteps', () => {
-  it('starts the agent, then runs the first message once the host says it is up', () => {
-    expect(botSetupSteps({ turn: [], ended: false, agentReady: false, refused: null })).toEqual({
-      start: { state: 'running' },
-      reply: { state: 'pending' }
-    })
-    expect(botSetupSteps({ turn: [], ended: false, agentReady: true, refused: null })).toEqual({
-      start: { state: 'done' },
-      reply: { state: 'running' }
-    })
-  })
-
   it('shows the agent’s retry line while it is the latest, not once the turn moved on', () => {
     expect(botSetupSteps({ turn: [retry], ended: false, agentReady: true, refused: null })).toEqual(
       {

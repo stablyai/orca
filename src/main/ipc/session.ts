@@ -16,6 +16,12 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
+import {
+  applyWorkspaceSessionEntriesPatch,
+  fieldsStoredDifferently,
+  type WorkspaceSessionEntriesPatch,
+  type WorkspaceSessionEntriesPatchResult
+} from '../../shared/workspace-session/workspace-session-entries-patch'
 
 export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
   // Why: renderer saves would change a fenced host's frozen source partition, or write back what a
@@ -60,20 +66,50 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   })
 
-  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+  const patchWindowSession = (
+    toPatch: (stored: WorkspaceSessionState) => WorkspaceSessionPatch,
+    hostId: string | null | undefined
+  ): WorkspaceSessionEntriesPatchResult['status'] => {
     if (isFenced(hostId)) {
-      return
+      return 'skipped'
     }
     const stored = store.getWorkspaceSession(hostId)
+    const args = toPatch(stored)
     const save = ORCA_LAYOUT_OWNER_IS_MAIN
       ? patchForMain(args, hostId)
       : windowSaveKeepingMainSleepRecords(stored, args, 'patch')
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
       noteWindowSessionSaveUnchanged(hostId)
-      return
+      return 'unchanged'
     }
     store.patchWorkspaceSession(save, hostId)
+    return 'applied'
+  }
+
+  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+    patchWindowSession(() => args, hostId)
   })
+
+  // Changed keys only: rebuilt into whole fields from the stored partition, then saved as a patch.
+  ipcMain.handle(
+    'session:patch-entries',
+    (
+      _event,
+      args: WorkspaceSessionEntriesPatch,
+      hostId?: string | null
+    ): WorkspaceSessionEntriesPatchResult => {
+      const status = patchWindowSession(
+        (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
+        hostId
+      )
+      if (status === 'skipped') {
+        return { status }
+      }
+      // Normalization, fences and main's sleep records can store something else, saved or not.
+      const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), args)
+      return normalizedFields.length > 0 ? { status, normalizedFields } : { status }
+    }
+  )
 
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.
   ipcMain.handle(

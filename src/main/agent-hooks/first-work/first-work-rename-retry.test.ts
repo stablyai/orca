@@ -38,6 +38,7 @@ import {
 } from './first-work-branch-rename'
 import {
   FIRST_WORK_RETRY_LOOKUP_DEADLINE_MS,
+  getFirstWorkRetryAvailability,
   retryFirstWorkRename,
   type FirstWorkRetryDeps
 } from './first-work-rename-retry'
@@ -103,6 +104,37 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('getFirstWorkRetryAvailability', () => {
+  it('keeps retry available when Git cannot read the branch', async () => {
+    gitExecFileAsyncMock.mockRejectedValue(new Error('fatal: unable to read HEAD'))
+    const { deps } = makeRetryDeps()
+
+    await expect(getFirstWorkRetryAvailability(WORKTREE_ID, undefined, deps)).resolves.toEqual({
+      available: true,
+      runningAttemptId: null
+    })
+  })
+
+  it('offers retry on a creature-named branch with no upstream', async () => {
+    const { deps } = makeRetryDeps()
+
+    await expect(getFirstWorkRetryAvailability(WORKTREE_ID, undefined, deps)).resolves.toEqual({
+      available: true,
+      runningAttemptId: null
+    })
+  })
+
+  it('hides retry on a detached HEAD', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'HEAD\n', stderr: '' })
+    const { deps } = makeRetryDeps()
+
+    await expect(getFirstWorkRetryAvailability(WORKTREE_ID, undefined, deps)).resolves.toEqual({
+      available: false,
+      runningAttemptId: null
+    })
+  })
 })
 
 describe('retryFirstWorkRename', () => {

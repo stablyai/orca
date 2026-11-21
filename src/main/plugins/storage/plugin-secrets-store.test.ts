@@ -17,6 +17,7 @@ const storageMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  app: { commandLine: { hasSwitch: () => false } },
   safeStorage: {
     isEncryptionAvailable: () => storageMocks.available,
     encryptString: storageMocks.encryptString,

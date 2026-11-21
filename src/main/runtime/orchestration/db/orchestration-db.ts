@@ -24,6 +24,7 @@ import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { revokeAgentSessionPublicationFences } from '../../agent-session/agent-session-publication-fence'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
+import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-release'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -47,17 +48,19 @@ class OrchestrationDbCore {
   /** Told when a paired server's answer for these Dispatches' workers changed; no row was written. */
   federatedWorkersListener: ((dispatchIds: readonly string[]) => void) | undefined
   private closed = false
+  private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
+    // First, so opening beside another connection's checkpoint waits rather than failing.
+    this.db.pragma('busy_timeout = 5000')
     // Before WAL and any table, so a new file returns free pages in bounded steps; an existing one needs a VACUUM.
     this.db.pragma('auto_vacuum = INCREMENTAL')
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
-    this.db.pragma('busy_timeout = 5000')
     // Truncate the WAL back to 8 MiB after a checkpoint, as the other app databases do; otherwise it stays at its high-water size.
     this.db.pragma('journal_size_limit = 8388608')
     // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
@@ -96,6 +99,8 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_question_threads_run ON question_threads(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_origin
         ON worker_terminal_resources(origin_dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_unreleased_minted
+        ON worker_terminal_resources(owner_dispatch_id) WHERE ${UNRELEASED_MINTED_WORKER_TERMINAL_SQL};
       CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_task
         ON attempt_observation_facts(task_id);
       CREATE INDEX IF NOT EXISTS idx_message_dispatch_provenance_dispatch
@@ -170,13 +175,26 @@ class OrchestrationDbCore {
     })
   }
 
+  /** Runs once, just before the connection closes; returns its removal. */
+  onClose(listener: () => void): () => void {
+    this.closeListeners.add(listener)
+    return () => this.closeListeners.delete(listener)
+  }
+
   close(): void {
     this.closed = true
+    for (const listener of this.closeListeners) {
+      listener()
+    }
+    this.closeListeners.clear()
     this.db.close()
   }
 }
 
 export type OrchestrationDb = OrchestrationDbCore & OrchestrationDbMethods
+
+/** Only the connection: what read queries need, so a reader thread's read-only one runs them too. */
+export type OrchestrationDbConnection = Pick<OrchestrationDb, 'db'>
 
 attachOrchestrationDbMethods(OrchestrationDbCore)
 

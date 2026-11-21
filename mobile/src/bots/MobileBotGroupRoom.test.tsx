@@ -40,6 +40,11 @@ vi.mock('./MobileBotGroupTurns', () => ({
 vi.mock('./MobileBotGroupPeerRequestLine', () => ({ MobileBotGroupPeerRequestLine: () => null }))
 vi.mock('./MobileBotGroupMembers', () => ({ MobileBotGroupMembers: () => null }))
 vi.mock('../components/sheets/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
+vi.mock('../components/nav-bar/NavBar', () => ({ NavBar: () => null }))
+vi.mock('../components/nav-bar/NavBarButton', () => ({ NavBarButton: () => null }))
+vi.mock('../session/native-chat/status/MobileNativeChatSendErrorBanner', () => ({
+  MobileNativeChatSendErrorBanner: () => null
+}))
 vi.mock('../session/native-chat/input/session-options/MobileNativeChatSessionOptionRows', () => ({
   ModelPill: () => null
 }))

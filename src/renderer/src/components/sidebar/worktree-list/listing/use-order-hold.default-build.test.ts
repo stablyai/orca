@@ -2,7 +2,6 @@
 import { afterEach, expect, it } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useOrderHeldWhileEngaged } from './use-order-hold'
 
 afterEach(() => {
@@ -17,7 +16,6 @@ function fire(target: EventTarget, type: string): void {
 }
 
 it('holds the bots order under the pointer in a shipped build, and releases it on leave or a mode switch', () => {
-  expect(ORCA_SIDEBAR_INPUTS_IS_MAIN).toBe(false)
   const list = document.createElement('div')
   list.setAttribute('data-bot-sidebar-list', '')
   const outside = document.createElement('div')

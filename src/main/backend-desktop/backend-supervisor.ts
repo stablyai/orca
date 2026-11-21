@@ -24,7 +24,7 @@ import {
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 
 export { captureBackendBootstrap } from './backend-bootstrap'
-import { capturedBootstrap } from './backend-bootstrap'
+import { capturedBootstrap, sendBackendBootstrap } from './backend-bootstrap'
 
 export class BackendSupervisor {
   private child: ReturnType<typeof utilityProcess.fork> | null = null
@@ -300,7 +300,7 @@ export class BackendSupervisor {
       }
       settleExit()
     })
-    child.postMessage({ type: 'bootstrap', config: capturedBootstrap }, [port2])
+    sendBackendBootstrap(child, port2, () => this.child === child)
     return ready
   }
 }

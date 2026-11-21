@@ -18,6 +18,8 @@ const ASK_QUESTION = 'cursor/ask_question'
 const CREATE_PLAN = 'cursor/create_plan'
 // Reports Cursor sends as requests; it ignores the reply, and plan updates already carry the todos.
 const REPORTS = ['cursor/update_todos', 'cursor/task', 'cursor/generate_image']
+// Cursor lists skills among its commands, tagging each skill's description with its scope.
+const SKILL_SCOPE_TAG = /\s*\((?:project |user |builtin )?skill\)$/
 // A refused question comes back as a permission request whose answers are all allow_once.
 const QUESTION_FALLBACK_SKIP = '__ask_question_skip__'
 
@@ -174,5 +176,9 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
         ? fallbackQuestionRequest(params)
         : undefined,
   settleRequest,
-  normalizeToolUpdate
+  normalizeToolUpdate,
+  skillDescription: ({ description }) => {
+    const untagged = description.replace(SKILL_SCOPE_TAG, '')
+    return untagged === description ? null : untagged
+  }
 }

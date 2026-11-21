@@ -34,10 +34,10 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
   },
   {
     id: 'worktree.palette',
-    title: 'Switch worktree',
+    title: 'Search everything',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
+    searchKeywords: ['shortcut', 'global', 'search', 'palette', 'switch worktree', 'jump'],
     defaultBindings: platformBindings(['Mod+K'])
   },
   {

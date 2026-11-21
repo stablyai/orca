@@ -23,6 +23,7 @@ import {
   type BotMember
 } from '../bot-types'
 import { isSettableBotAvatar, MAX_BOT_AVATAR_BYTES } from '../bot-avatar'
+import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
@@ -64,6 +65,8 @@ export const BotCreate = z.object({
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
   /** Absent, the bot gets a random mascot. */
   avatar: SettableBotAvatar.optional(),
+  /** Absent, the mascot's own sky blue. */
+  avatarColor: BotAvatarColorSchema.optional(),
   /** Workspaces the owner made it for: its first turn offers to take them over. */
   handOff: HandedWorkspaces.optional(),
   /** Made in Hand to bot: its first turn is the hand-over (`bots.takeOver`), sent once the workspace moved. */
@@ -123,6 +126,8 @@ export const BotUpdate = z.object({
       name: BotNameSchema.optional(),
       agent: z.enum(BOT_AGENTS).optional(),
       avatar: SettableBotAvatar.optional(),
+      /** null puts back the mascot's own sky blue. */
+      avatarColor: BotAvatarColorSchema.nullable().optional(),
       paused: z.boolean().optional(),
       sidebarOrder: z.number().int().nonnegative().optional(),
       /** null clears the override. */

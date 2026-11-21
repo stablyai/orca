@@ -86,9 +86,15 @@ describe('Google with no app on this computer', () => {
     expect(mocks.startGoogleSetupInChat).toHaveBeenCalledWith(NEW_BOT, 'settings')
   })
 
-  it('imports a team file picked through "Import file"', async () => {
-    mocks.pickClientFile.mockResolvedValue({ ok: true, text: TEAM_FILE })
+  it('shows a picker error and imports a valid file on retry', async () => {
+    mocks.pickClientFile
+      .mockResolvedValueOnce({ ok: false, message: 'This isn’t a Google app file.' })
+      .mockResolvedValueOnce({ ok: true, text: TEAM_FILE })
     renderNoApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('This isn’t a Google app file.')
+    expect(mocks.importGoogleApp).not.toHaveBeenCalled()
+
     fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
     await waitFor(() =>
       expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
@@ -107,13 +113,5 @@ describe('Google with no app on this computer', () => {
     await waitFor(() =>
       expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
     )
-  })
-
-  it('shows why a file was refused', async () => {
-    mocks.pickClientFile.mockResolvedValue({ ok: false, message: 'This isn’t a Google app file.' })
-    renderNoApp()
-    fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('This isn’t a Google app file.')
-    expect(mocks.importGoogleApp).not.toHaveBeenCalled()
   })
 })

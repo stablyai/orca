@@ -4341,7 +4341,6 @@
             "27a74f91f0": "Rien en cours d'exécution pour le moment",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nom",
-            "1fedf94eae": "Charge CPU cumulée. Une valeur supérieure à 100 % signifie que plusieurs cœurs travaillent simultanément.",
             "e7cf14ec78": "Sessions de terminal indisponibles. La liste est peut-être obsolète.",
             "93b0de3c21": "Redémarrer",
             "f85af9cda6": "Instantanés de ressources et sessions de terminal indisponibles.",
@@ -4747,8 +4746,6 @@
                   "terminalSessionCount_one": "{{count}} session de terminal",
                   "terminalSessionCount_other": "{{count}} sessions de terminal",
                   "terminalSessionCount_many": "{{count}} sessions de terminal",
-                  "memoryUnavailable": "mémoire indisponible",
-                  "tooltipSummary": "Gestionnaire de ressources - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Analyse Space prête",
                   "sessionsGroupedByWorkspace": "Les sessions de terminal sont regroupées par espace de travail.",
                   "noTerminalSessions": "Aucune session de terminal pour le moment.",
@@ -6237,7 +6234,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hôtes",
-          "showSection": "Afficher",
           "allHostsDetail": "Afficher tous les hôtes",
           "configuredSshHost": "SSH configuré",
           "projectSshHost": "SSH du projet",
@@ -6287,7 +6283,6 @@
           "219ebf1961": "Nom de branche",
           "folderPathIdentity": "Branche / chemin de dossier",
           "cli": "Orca CLI",
-          "workspaceOptions": "Options de l'espace de travail",
           "optionsActiveFilters_one": "Options de l’espace de travail ({{count}} filtre actif)",
           "optionsActiveFilters_other": "Options de l’espace de travail ({{count}} filtres actifs)",
           "optionsActiveFilters_many": "Options de l’espace de travail ({{count}} filtres actifs)",
@@ -13454,14 +13449,12 @@
             "7ac885bd2f": "Télécharger le dossier",
             "dd112c81d2": "Ouvrir dans le navigateur Orca",
             "1bb9be455c": "Ajouter comme projet...",
-            "0fec99bfd7": "Doublon",
+            "0fec99bfd7": "Dupliquer",
             "f61af83316": "Nouveau dossier",
             "37c875d827": "Nouveau fichier",
             "b3e288bf41": "Échec du téléchargement de « {{value0}} ».",
-            "f729bcd97d": "Échec du téléchargement du dossier « {{value0}} ».",
             "1a3df04ae1": "Ouvert",
             "bce4d4e44f": "« {{value0}} » téléchargé",
-            "a4029c996b": "Dossier « {{value0}} » téléchargé",
             "e26010014a": "Ignoré par .gitignore",
             "a06551beee": "Enter",
             "66a29dde82": "Copier le chemin relatif",
@@ -19186,7 +19179,6 @@
         "couldNotStart": "{{agent}} n'a pas pu démarrer.",
         "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
         "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
-        "cliTooOld": "{{agent}} {{installedVersion}} est trop ancien pour les conversations. Mettez-le à jour vers {{minimumVersion}} ou une version ultérieure.",
         "startTimedOut": "{{agent}} a mis trop de temps à démarrer (aucune réponse à {{method}} après {{seconds}} s).",
         "startTimedOutKeepsHappening": "Si cela se reproduit, l'ordinateur qui exécute ce chat est peut-être surchargé.",
         "notSignedIn": "{{agent}} n’est pas connecté.",
@@ -19223,6 +19215,7 @@
         "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
         "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
         "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+        "providerResponseFailedQuoted": "{{agent}} n’a pas pu terminer cette réponse : {{detail}}.",
         "modelUnavailable": "{{agent}} n'a pas pu utiliser {{detail}}. Choisissez un autre modèle, puis renvoyez le message.",
         "selectedModel": "le modèle sélectionné",
         "providerRejected": "{{agent}} n'a pas accepté ce message.",
@@ -19916,14 +19909,7 @@
         "unreported": "L'utilisation du contexte n'est pas disponible pour cette session."
       },
       "agentMessage": {
-        "messageFrom": "Message de",
         "unnamedSender": "un agent",
-        "messageFromCoordinator": "Message du coordinateur",
-        "startedWorker": "Worker démarré",
-        "handedOffToAgent": "Confié à un agent",
-        "startedAgent": "Agent démarré",
-        "taskFromCoordinator": "Tâche du coordinateur",
-        "updateFromWorker": "Nouvelles du worker",
         "senderReplaced": "{{name}} ne s’exécute plus dans son terminal ; un autre agent s’y exécute maintenant. Ouvrez ce terminal depuis la barre latérale si nécessaire.",
         "senderAmbiguous": "Orca ne peut pas déterminer dans quel terminal {{name}} s’exécute. Ouvrez-le depuis la barre latérale.",
         "senderNotRunning": "{{name}} ne s’exécute plus. Démarrez un nouvel agent depuis la barre latérale pour poursuivre son travail.",
@@ -20028,7 +20014,7 @@
       "rewind": {
         "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
         "historyNotPaginated": "Ce chat Codex plus ancien ne peut pas revenir à un message antérieur. Démarrez un nouveau chat pour utiliser « Revenir ici ».",
-        "busy": "Disponible une fois que l'agent est inactif et que plus rien dans ce chat n'attend votre action.",
+        "busy": "Disponible lorsque le chat est inactif",
         "staleEpoch": "La conversation a changé. Examinez les derniers messages et réessayez.",
         "invalidTarget": "La conversation ne peut pas revenir à ce message. Rien n'a été modifié.",
         "historyLimit": "Cette conversation est trop longue pour y revenir. Rien n'a été modifié.",
@@ -22608,9 +22594,7 @@
     }
   },
   "mediaPreview": {
-    "unavailable": "Impossible de lire ce fichier multimédia. Le fichier peut être indisponible ou utiliser un codec non pris en charge.",
-    "openFailed": "Impossible d’ouvrir ce fichier dans l’application par défaut.",
-    "openDefault": "Ouvrir dans l’application par défaut"
+    "unavailable": "Impossible de lire ce fichier multimédia. Le fichier peut être indisponible ou utiliser un codec non pris en charge."
   },
   "projectBoard": {
     "noColumnField": "Cette vue Board n'a pas de champ à sélection unique ni d'itération pour regrouper les éléments ; Orca les affiche donc sous forme de liste.",
@@ -23097,7 +23081,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Changer de worktree",
+      "worktreePalette": "Tout rechercher",
       "worktreeNavigateUp": "Worktree précédent",
       "worktreeNavigateDown": "Worktree suivant",
       "workspaceCreate": "Créer un worktree",
@@ -23209,6 +23193,9 @@
       "45347db2a3": "Navigation entre onglets",
       "aab2837fa5": "Commandes rapides",
       "3492a954c8": "Volets du terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Changer de worktree"
     }
   },
   "gpuFallback": {
@@ -24267,8 +24254,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
-      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
-      "lookDueNow": "Prévu maintenant · {{every}}"
+      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé"
     },
     "palette": {
       "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",

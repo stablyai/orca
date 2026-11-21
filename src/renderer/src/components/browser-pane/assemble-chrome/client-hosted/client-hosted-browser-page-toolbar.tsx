@@ -10,6 +10,7 @@ import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-p
 import BrowserAddressBar from '../address-bar/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../address-bar/use-browser-address-bar-edit-session'
 import { BrowserPageStateChips } from '../address-bar/browser-address-chips'
+import { BrowserPasswordSaveButton } from '../../passwords/BrowserPasswordSaveButton'
 import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicator'
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
@@ -89,12 +90,15 @@ export function ClientHostedBrowserPageToolbar({
             />
           }
           trailing={
-            <BrowserPageStateChips
-              browserPageId={browserPageId}
-              url={toDisplayUrl(browserTab.url)}
-              viewportPresetId={viewportPresetId}
-              isActive={isActive}
-            />
+            <>
+              <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
+              <BrowserPageStateChips
+                browserPageId={browserPageId}
+                url={toDisplayUrl(browserTab.url)}
+                viewportPresetId={viewportPresetId}
+                isActive={isActive}
+              />
+            </>
           }
           loading={loading}
           loadFailed={browserTab.loadError !== null}

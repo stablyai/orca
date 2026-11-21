@@ -72,6 +72,16 @@ export function findBotGroupRoomOfSession(
   return null
 }
 
+/** Every session that is or was a member of these rooms: the chats a group's items come from. */
+export function botGroupSessionIds(
+  rooms: readonly Pick<BotGroup, 'members' | 'formerSessionIds'>[]
+): string[] {
+  return rooms.flatMap((room) => [
+    ...room.members.map((member) => member.sessionId),
+    ...(room.formerSessionIds ?? [])
+  ])
+}
+
 /** Every room's members: the original room's, then each thread's. */
 export function botGroupRoomMembers(
   group: Pick<BotGroup, 'members' | 'threads'>

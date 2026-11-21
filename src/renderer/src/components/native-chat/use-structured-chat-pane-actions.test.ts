@@ -28,7 +28,6 @@ describe('canCloseChatPane', () => {
     mocks.isBotChatTab.mockReturnValueOnce(true)
 
     expect(canCloseChatPane(2, chatTab())).toBe(false)
-    expect(mocks.isBotChatTab).toHaveBeenCalledWith(expect.objectContaining({ entityId: 'chat-1' }))
   })
 
   it('keeps the close on other chats, except a pinned one in a single group', () => {

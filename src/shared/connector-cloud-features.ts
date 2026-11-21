@@ -46,6 +46,14 @@ export type ConnectorCloudFeature = (typeof CONNECTOR_CLOUD_FEATURES)[number]
  *  keeps it: without it this Orca sends those prompts nowhere. */
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
 
+/** The cloud takes a turn's answer up to maxLongAnswerBytes; without it this Orca keeps to
+ *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
+
+/** The cloud takes the `activity` event and shows what a running turn is doing. Its own constant,
+ *  as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
+
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'

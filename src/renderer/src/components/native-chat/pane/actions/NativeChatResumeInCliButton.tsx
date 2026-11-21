@@ -75,7 +75,6 @@ export function NativeChatResumeInCliButton({
   const pending = useNativeChatCliForkPending(
     executionHostScope ? { executionHostScope, sessionId: nativeChat.sessionId } : null
   )
-  const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
   const label = t(
     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
@@ -101,7 +100,7 @@ export function NativeChatResumeInCliButton({
               nativeChat
             })
             if (subject?.kind === 'chat') {
-              void runNativeChatCliFork({ subject, tab, agent, commandOverrides })
+              void runNativeChatCliFork({ subject, tab, agent })
             }
           }}
         >

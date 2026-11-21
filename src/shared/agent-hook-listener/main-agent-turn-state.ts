@@ -16,6 +16,8 @@ export type ClaudeLeadTurnState = {
   waitingToolUseId?: string
   /** End time retained while background work holds working, then repeated on all-clear done. */
   turnCompletedAt?: number
+  /** That end time, held because the turn's late prompt event has not said whether a task wakeup started it. */
+  unclassifiedTurnCompletedAt?: number
   /** Claude hook model. Later events that omit it keep the last reported value. */
   model?: string
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */

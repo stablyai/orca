@@ -55,7 +55,10 @@ describe('botGroupStatus', () => {
     expect(botGroupStatus(group, statuses, 2)).toBe('permission')
   })
 
-  it('shows working for a member turn and nothing for a clean finish', () => {
+  it('counts only room member turns and clears after a clean finish', () => {
+    expect(
+      botGroupStatus(group, new Map([entry('home-session', {}), entry('worker-session', {})]), 2)
+    ).toBeNull()
     expect(botGroupStatus(group, new Map([entry('bot-group-member-2', {})]), 2)).toBe('working')
     expect(
       botGroupStatus(
@@ -84,16 +87,12 @@ describe('botGroupStatus with threads', () => {
     ]
   }
 
-  it("shows a thread's work while the original room is idle", () => {
+  it("includes thread work and lets the thread's approval wait take precedence", () => {
     const statuses = new Map([entry('bot-group-member-t1', { state: 'working' })])
     expect(botGroupStatus(threaded, statuses, 2)).toBe('working')
-  })
 
-  it("lets a thread's approval wait beat the original room's work", () => {
-    const statuses = new Map([
-      entry('bot-group-member-1', { state: 'working' }),
-      entry('bot-group-member-t1', { state: 'blocked' })
-    ])
+    statuses.set(...entry('bot-group-member-1', { state: 'working' }))
+    statuses.set(...entry('bot-group-member-t1', { state: 'blocked' }))
     expect(botGroupStatus(threaded, statuses, 2)).toBe('permission')
   })
 })

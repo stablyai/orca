@@ -307,7 +307,8 @@ export function botStructuredSessionWiring(deps: {
         : deps.lookAround.botOfTidyUp(sessionId) !== null
           ? 'reply-only'
           : null,
-    quietTurnEnd: (sessionId, outcome) => deps.lookAround.lookTurnIsQuiet(sessionId, outcome),
+    quietTurnEnd: (sessionId, outcome, usageLimited) =>
+      deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
     isBotHome: (workspaceId) => botOfHomeWorkspace(bots(), workspaceId) !== null
   }
 }

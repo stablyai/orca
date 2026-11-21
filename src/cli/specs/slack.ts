@@ -5,6 +5,8 @@ const AS_BOT =
   "Run it from a bot's chat or one of its automation runs; it acts as that bot's own Slack app, only where the bot already is. GitHub and Linear are your owner's: use `gh` and `orca linear`."
 const PLACE =
   'A place or message is a ref from an earlier command (slack:T…:C…[:thread][:message]), a Slack link or a #name; output always shows the ref and a label. Quote #names in the shell.'
+const TO_PERSON =
+  'A person ref from `orca slack find @name` (slack:T…:user:U…) posts in a DM with them, opening one if needed.'
 const WOKEN = 'To answer the thread that woke you, use `orca bot reply`; a post there is refused.'
 export const TEXT_FILE =
   'Pass multiline text as a file with --text-file <path> (- reads stdin), not a heredoc: heredocs can hang the shell when macOS pipe memory is low.'
@@ -27,7 +29,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       AS_BOT,
       'Never picks one for you; pass the ref you mean to the next command.',
-      '@name looks a person up in the workspace of the conversation you answer; elsewhere, or for another workspace, pass --workspace with a ref from `orca bot connectors`.',
+      '@name looks a person up in the workspace of the conversation you answer; elsewhere, or for another workspace, pass --workspace with a ref from `orca bot connectors`. Pass their ref to `orca slack post` or `attach` to DM them.',
       '--search takes words and searches the whole workspace, as the person this run answers: the workspace of the Slack conversation you answer, or the one --workspace names (as `orca bot connectors` shows it, or its ref), which is needed anywhere else. --limit applies only with --search, 20 by default and at most 50.'
     ]
   },
@@ -55,13 +57,14 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['slack', 'post'],
-    summary: 'Post a message in a Slack channel or thread as this bot',
+    summary: 'Post a message in a Slack channel, thread or DM as this bot',
     usage: 'orca slack post <place> (<text> | --text-file <path|->) [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'ref', 'text', 'text-file'],
     positionalArgs: ['ref', 'text'],
     notes: [
       AS_BOT,
       PLACE,
+      TO_PERSON,
       `A message ref posts in its thread. ${WOKEN}`,
       POSTED_REF,
       TEXT_FILE,
@@ -71,7 +74,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['slack', 'attach'],
-    summary: 'Attach a file in a Slack channel or thread as this bot, with an optional comment',
+    summary: 'Attach a file in a Slack channel, thread or DM as this bot, with an optional comment',
     usage:
       'orca slack attach <place> --file <path> [--text <comment> | --text-file <path|->] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'ref', 'file', 'text', 'text-file'],
@@ -79,6 +82,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       AS_BOT,
       PLACE,
+      TO_PERSON,
       'Any size Slack takes. To attach in the thread that woke you, use `orca bot reply --file`; an attach there is refused.'
     ]
   },

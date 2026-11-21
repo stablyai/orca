@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
+import { useBotWorkerWorkspaceStatuses } from './use-bot-worker-statuses'
 import { useOrderHeldWhileEngaged } from '@/components/sidebar/worktree-list/listing/use-order-hold'
 import { getFolderWorkspaceChildWorktrees } from '../../../../shared/folder-workspace-child-worktrees'
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -31,19 +32,19 @@ export function useBotHomeWorkers(homes: readonly FolderWorkspace[]): {
       ),
     [homes, childrenByParent]
   )
-  const ids = useMemo(
-    () =>
-      homes.flatMap((home, index) => [
-        folderWorkspaceKey(home.id),
-        ...workersByHome[index]!.map((worker) => worker.id)
-      ]),
-    [homes, workersByHome]
+  const homeIds = useMemo(() => homes.map((home) => folderWorkspaceKey(home.id)), [homes])
+  const workerIds = useMemo(
+    () => workersByHome.flatMap((workers) => workers.map((worker) => worker.id)),
+    [workersByHome]
   )
-  const statuses = useWorktreeActivityStatuses(ids)
+  const own = useWorktreeActivityStatuses(homeIds)
+  const workerStatuses = useBotWorkerWorkspaceStatuses(workerIds)
   return homes.map((home, index) => ({
-    own: statuses.get(folderWorkspaceKey(home.id)) ?? 'inactive',
+    own: own.get(folderWorkspaceKey(home.id)) ?? 'inactive',
     workers: workersByHome[index]!,
-    workerStatuses: workersByHome[index]!.map((worker) => statuses.get(worker.id) ?? 'inactive')
+    workerStatuses: workersByHome[index]!.map(
+      (worker) => workerStatuses.get(worker.id) ?? 'inactive'
+    )
   }))
 }
 

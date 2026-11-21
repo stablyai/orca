@@ -214,8 +214,8 @@ export class LocalPtyProvider implements IPtyProvider {
     return confirmLocalPtyForegroundProcess(id)
   }
 
-  confirmShellForeground(id: string, options?: { noLiveDescendants?: boolean }): Promise<boolean> {
-    return confirmLocalPtyShellForeground(id, options)
+  confirmShellForeground(id: string): Promise<boolean> {
+    return confirmLocalPtyShellForeground(id)
   }
 
   async serialize(_ids: string[]): Promise<string> {
@@ -226,8 +226,7 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(opts?: { ptyIds?: readonly string[] }): Promise<PtyProcessInfo[]> {
-    const rows = await listLocalPtyProcesses()
-    return opts?.ptyIds ? rows.filter((row) => opts.ptyIds?.includes(row.id)) : rows
+    return listLocalPtyProcesses(opts?.ptyIds)
   }
 
   getDefaultShell(): Promise<string> {

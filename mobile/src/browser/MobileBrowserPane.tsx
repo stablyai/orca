@@ -23,6 +23,7 @@ import {
   type PinchGesture
 } from './screencast/mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './pane-view/browser-url'
+import { useMobileBrowserCertificateProceed } from './certificate/mobile-browser-certificate-proceed'
 import type { BrowserDialogState } from './screencast/mobile-browser-stream-events'
 import {
   browserGoBack,
@@ -41,6 +42,7 @@ type MobileBrowserPaneProps = {
   worktreeId: string
   tab: MobileBrowserTab
   screencastSupported: boolean | null
+  certificateTrustSupported: boolean
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
@@ -60,6 +62,7 @@ export function MobileBrowserPane({
   worktreeId,
   tab,
   screencastSupported,
+  certificateTrustSupported,
   keyboardLift,
   bottomInset,
   onToast
@@ -299,6 +302,12 @@ export function MobileBrowserPane({
     void navigateTo(tab.loadError?.validatedUrl || tab.url)
   }, [controlsDisabled, navigateTo, tab.loadError?.validatedUrl, tab.url])
 
+  const proceedCertificate = useMobileBrowserCertificateProceed(
+    client,
+    worktreeId,
+    tab.browserPageId
+  )
+
   const selectBrowserViewMode = useCallback(
     (mode: MobileBrowserViewMode) => {
       if (browserViewMode === mode) {
@@ -319,6 +328,7 @@ export function MobileBrowserPane({
       bottomInset={bottomInset}
       browserViewMode={browserViewMode}
       busy={busy}
+      certificateTrustSupported={certificateTrustSupported}
       controlsDisabled={controlsDisabled}
       dialog={dialog}
       error={error}
@@ -332,6 +342,7 @@ export function MobileBrowserPane({
       navigateToAddress={navigateToAddress}
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
+      proceedCertificate={proceedCertificate}
       reloadPage={reloadPage}
       retryFailedLoad={retryFailedLoad}
       renderedFrameSource={renderedFrameSource}

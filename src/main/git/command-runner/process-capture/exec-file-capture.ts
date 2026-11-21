@@ -6,12 +6,18 @@ import { nativeExecutableResolver } from '@orca/process-host/native-executable-r
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { createAbortError } from './abort-error'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { killAbandonedWorkerChildTree, killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { spawnedExecFile, workerExecFile } from './worker-exec-file'
-import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
+import {
+  canSpawnOnWorkerThread,
+  isAbandonedWorkerChildError,
+  isWorkerChildStdinWriteError,
+  type WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 
 export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
@@ -31,22 +37,6 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
 }
 
 export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
-
-function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
-  return options.encoding === 'buffer' || options.encoding === null ? Buffer.alloc(0) : ''
-}
-
-function isExecFileResultObject(
-  value: unknown
-): value is { stdout: string | Buffer; stderr: string | Buffer } {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Buffer.isBuffer(value) &&
-    'stdout' in value &&
-    'stderr' in value
-  )
-}
 
 /** A second, passive stderr listener: execFile still captures every byte. */
 function observeStderr(
@@ -83,7 +73,11 @@ export function execFileCapture(
     let child: ChildProcess | WorkerThreadChildProcess | null = null
     let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
     const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
-    const useWorker = options.spawnOnWorkerThread === true && process.platform === 'darwin'
+    // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
+    const useWorker =
+      process.platform === 'win32'
+        ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
+        : options.spawnOnWorkerThread === true && process.platform === 'darwin'
     const deadline =
       options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
@@ -239,8 +233,13 @@ export function execFileCapture(
             finish(createAbortError())
             return
           }
+          // execFile's error text; overflow ends the whole tree, or a hook holding the pipe blocks close.
+          const workerOptions =
+            process.platform === 'win32'
+              ? { ...captureOptions, errorCommand: [command, ...args].join(' '), onOverflow: stop }
+              : captureOptions
           child = useWorker
-            ? workerExecFile(command, args, captureOptions, complete)
+            ? workerExecFile(command, args, workerOptions, complete)
             : ownedPosixGroup
               ? spawnedExecFile(command, captureOptions, complete, () =>
                   spawnNativeProcess(
@@ -262,10 +261,16 @@ export function execFileCapture(
         return
       }
 
-      child.once('error', (error) => {
+      child.on('error', (error) => {
+        if (useWorker && isWorkerChildStdinWriteError(error)) {
+          return
+        }
         // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
+        // Plain captures still release admission then: the worker's pipes closed with it, and nothing else would.
         if (!useWorker && !child?.pid) {
           reportChildTerminated()
+        } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
+          void killAbandonedWorkerChildTree(child).then(reportChildTerminated)
         }
         if (!terminating) {
           finish(error)

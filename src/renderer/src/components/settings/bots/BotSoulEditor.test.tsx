@@ -31,17 +31,6 @@ function file(
 }
 
 describe('BotSoulEditor', () => {
-  it('saves on blur over the text it started from', async () => {
-    const soul = file('# Reviewer\n')
-    const { getByLabelText } = render(<BotSoulEditor file={soul} label="Soul" />)
-    const editor = getByLabelText('Soul')
-    fireEvent.change(editor, { target: { value: '# Reviewer\n\nReview PRs.\n' } })
-    fireEvent.blur(editor)
-    await waitFor(() =>
-      expect(soul.write).toHaveBeenCalledWith('# Reviewer\n\nReview PRs.\n', '# Reviewer\n')
-    )
-  })
-
   it('keeps typing done while a save is in flight', async () => {
     let finish: (value: BotHomeFileWrite) => void = () => {}
     const write = vi.fn(() => new Promise<BotHomeFileWrite>((resolve) => (finish = resolve)))
@@ -68,7 +57,10 @@ describe('BotSoulEditor', () => {
     fireEvent.blur(editor)
     fireEvent.change(editor, { target: { value: 'abc' } })
     fireEvent.blur(editor)
-    expect(write).toHaveBeenLastCalledWith('abc', 'ab')
+    expect(write.mock.calls).toEqual([
+      ['ab', 'a'],
+      ['abc', 'ab']
+    ])
     finish('saved')
   })
 

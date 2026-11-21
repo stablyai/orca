@@ -20,6 +20,8 @@ import {
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { callBots, findBot } from './bot'
+import { botItemAskFromFlags, botItemAskParams } from './bot-item-ask-flags'
+import { BOT_ITEM_ASK_BOOLEAN_FLAGS } from '../specs/bot-items'
 import {
   formatBotItemList,
   formatBotItemShow,
@@ -87,6 +89,8 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
   'bot item set': async (ctx) => {
     const { flags, cwd } = ctx
     const status = getOptionalStringFlag(flags, 'status')
+    const ask = botItemAskFromFlags(ctx, BOT_ITEM_ASK_BOOLEAN_FLAGS)
+    const comment = await readTextOrFileFlag(flags, cwd, 'comment', false)
     await write(ctx, 'bots.items.set', {
       item: itemId(flags),
       ...optional('title', getOptionalStringFlag(flags, 'title')),
@@ -95,7 +99,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(status ? { status: statusFlag(status) } : {}),
       ...optional('note', await readTextOrFileFlag(flags, cwd, 'note', false)),
       ...optional('reason', await readTextOrFileFlag(flags, cwd, 'reason', false)),
-      ...optional('comment', await readTextOrFileFlag(flags, cwd, 'comment', false))
+      ...(ask ? botItemAskParams(ask, comment) : optional('comment', comment))
     })
   },
   'bot item comment': async (ctx) => {

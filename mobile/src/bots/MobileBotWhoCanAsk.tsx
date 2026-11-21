@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import {
-  BOT_ACCESS_FROM_PHONE,
+  botAccessPlace,
   botAccessCopy,
   type BotAccessCopyId
 } from '../../../src/shared/bots/bot-access-copy'
@@ -37,6 +37,7 @@ export function MobileBotWhoCanAsk(props: {
 }) {
   const { bot } = props
   const name = bot.name
+  const place = botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
   const others = bot.members.map((member) => member.name || member.id)
   const permission = botStartingPermission(bot, null)
   const { who, control } = botAccessSummary(others)
@@ -61,7 +62,7 @@ export function MobileBotWhoCanAsk(props: {
           {botAccessCopy(who.id, { ...who.values, name })}
         </Text>
         <Text style={optionStyles.optionRowDetail}>
-          {botAccessCopy(control.id, { ...control.values, name, ...BOT_ACCESS_FROM_PHONE })}
+          {botAccessCopy(control.id, { ...control.values, name, ...place })}
         </Text>
       </View>
       {bot.members.length > 0 ? <ListGroup>{props.children}</ListGroup> : null}
@@ -96,7 +97,7 @@ export function MobileBotWhoCanAsk(props: {
             ))}
           </ListGroup>
           <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
-            {botAccessCopy('separateBot', BOT_ACCESS_FROM_PHONE)}
+            {botAccessCopy('separateBot', place)}
           </Text>
         </>
       ) : null}

@@ -33,6 +33,7 @@ import {
   type BotActivityHost
 } from './bot-activity-host'
 import type { BotChatTreeParams } from '../../shared/rpc-contract/bots-params'
+import type { Bot } from '../../shared/bot-types'
 
 export type BotChatTreeHost = BotActivityHost & {
   /** The chat records, which live in the chat host that opens lazily. */
@@ -62,6 +63,34 @@ function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatT
   }
 }
 
+async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
+  const store = await host.sessionRecords()
+  const inputs = readBotChatInputs(host, bot)
+  // The index keeps the base between reads; without one, a read builds it from every record.
+  const build = host.index
+    ? host.index.base(bot, inputs)
+    : buildBotChatBase(
+        { db: host.db(), backgroundRuns: host.backgroundRuns },
+        store,
+        inputs,
+        store?.listRecords() ?? []
+      )
+  return { store, inputs, build }
+}
+
+/** The bot's newest empty side chat on its agent whose tab is open, so New chat opens it again. */
+export async function openEmptyBotChat(host: BotChatTreeHost, bot: Bot): Promise<string | null> {
+  const { store, inputs, build } = await readBotChatBase(host, bot)
+  const tabbed = new Set((await host.chatTabs(inputs.workspaceId)).map((tab) => tab.sessionId))
+  const chat = orderedBaseChats(build.chats.values()).find(
+    (entry) =>
+      entry.empty &&
+      tabbed.has(entry.chatId) &&
+      store?.getRecord(entry.chatId)?.provider === bot.agent
+  )
+  return chat?.chatId ?? null
+}
+
 export async function readBotChatTree(
   host: BotChatTreeHost,
   params: BotChatTreeParams
@@ -84,17 +113,7 @@ export async function readBotChatTreeParts(
   if (!bot) {
     throw new Error('bot_not_found')
   }
-  const store = await host.sessionRecords()
-  const inputs = readBotChatInputs(host, bot)
-  // The index keeps the base between reads; without one, a read builds it from every record.
-  const build = host.index
-    ? host.index.base(bot, inputs)
-    : buildBotChatBase(
-        { db: host.db(), backgroundRuns: host.backgroundRuns },
-        store,
-        inputs,
-        store?.listRecords() ?? []
-      )
+  const { inputs, build } = await readBotChatBase(host, bot)
   const { rootOf } = build
   const rowByPaneKey = botStatusRowsByPaneKey(host)
   const tabs = await host.chatTabs(inputs.workspaceId).catch(() => [])

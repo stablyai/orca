@@ -83,25 +83,7 @@ describe('group mail roots', () => {
     )
   })
 
-  it('retires a stopped root and still offers the live one beside it', async () => {
-    const { groups, group, target, row, peer, notice } = await room(1)
-    await groups.stop(group.id)
-    const live = await groups.send({
-      groupId: group.id,
-      revision: groups.store.get(group.id).revision,
-      messageId: randomUUID(),
-      text: '@Scout after the stop'
-    })
-    peer('peer-live', live)
-    expect(groups.narrowMailBatch(target.sessionId, [row('peer-0'), row('peer-live')])).toEqual({
-      messages: [row('peer-live')],
-      ended: ['peer-0']
-    })
-    groups.reserveMailTurn(notice('live', ['peer-live']))
-    expect(groups.store.message('mail:live')?.rootRequestId).toBe(live.id)
-  })
-
-  it('reaches live mail behind a full page of stopped-root mail', async () => {
+  it('retires a full page of stopped mail and reserves the live root behind it', async () => {
     const { groups, group, target, row, peer, roots } = await room(1)
     for (let index = 0; index < 50; index += 1) {
       peer(`stopped-${index}`, roots[0])
@@ -176,11 +158,14 @@ describe('group mail roots', () => {
     })
     delivery.deliverForHandle('mailbox')
     await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
-    const sent = send.mock.calls[0][0].body.from?.orchestration
+    const input = send.mock.calls[0][0]
+    const sent = input.body.from?.orchestration
     expect(sent?.message === 'mail-notice' && sent.messages.map((mail) => mail.messageId)).toEqual([
       'mail-51'
     ])
-    expect(delivered.size).toBe(51)
+    expect(delivered).toEqual(new Set(inbox.map((mail) => mail.id)))
+    groups.reserveMailTurn(input)
+    expect(groups.store.message(`mail:${input.operationId}`)?.rootRequestId).toBe(live.id)
   })
 
   it('holds a worker report that arrives before its worker is recorded', async () => {

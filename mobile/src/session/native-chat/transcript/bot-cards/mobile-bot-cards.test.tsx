@@ -253,6 +253,9 @@ describe('new-bot offer card', () => {
     expect(card.text()).toContain('Takes over 2 workspaces')
     expect(card.text()).toContain('Dismiss')
     expect(card.text()).toContain('Edit')
+    expect(card.text()).not.toContain('Issues labelled 1.5')
+    await card.press('Release')
+    expect(card.text()).toContain('Issues labelled 1.5')
     await card.press('Create bot')
     expect(sent('bots.create')).toEqual([
       expect.objectContaining({ name: 'Release', fromOffer: { botId: 'atlas', offerId: 'o1' } })
@@ -318,14 +321,6 @@ describe('new-bot offer card', () => {
     expect(card.text()).toContain('Atlas runs an agent this app doesn’t know. Edit to pick one.')
     await card.press('Edit')
     expect(state.edits).toEqual([expect.not.objectContaining({ agent: expect.anything() })])
-  })
-
-  it('opens the details in place', async () => {
-    state.bots = [atlas]
-    const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
-    expect(card.text()).not.toContain('Issues labelled 1.5')
-    await card.press('Release')
-    expect(card.text()).toContain('Issues labelled 1.5')
   })
 })
 
@@ -419,16 +414,5 @@ describe('webhook card', () => {
     )
     expect(card.text()).toContain('Webhook “Deploy finished” is live.')
     expect(card.text()).not.toContain(hook.url)
-  })
-})
-
-describe('deferred cards', () => {
-  it('leave Google setup on the host line', async () => {
-    expect(
-      mobileNativeChatBotCard(
-        { googleSetup: { botId: 'atlas', runId: 'r1', card: 'connect' } },
-        context
-      )
-    ).toBeNull()
   })
 })

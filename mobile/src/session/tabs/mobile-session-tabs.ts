@@ -25,7 +25,9 @@ export type MobileBrowserTab = Pick<
   | 'canGoForward'
   | 'isActive'
 > &
-  Partial<Pick<RuntimeMobileSessionBrowserTab, 'faviconUrl'>>
+  Partial<
+    Pick<RuntimeMobileSessionBrowserTab, 'faviconUrl' | 'certificateFailure' | 'browserProfileId'>
+  >
 
 export type MobileSessionTabType = NonNullable<RuntimeMobileSessionTabsResult['activeTabType']>
 

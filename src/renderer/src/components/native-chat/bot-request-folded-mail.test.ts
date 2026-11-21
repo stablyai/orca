@@ -25,15 +25,4 @@ describe('folded bot-request mail', () => {
     expect(both.result.current).toBe(false)
     expect(renderHook(() => useFoldedIntoBotRequest(undefined)).result.current).toBe(false)
   })
-
-  it('re-renders only the rows whose notice a fold covers', () => {
-    let unrelatedRenders = 0
-    renderHook(() => {
-      unrelatedRenders += 1
-      return useFoldedIntoBotRequest(notice('other'))
-    })
-    const before = unrelatedRenders
-    act(() => foldBotRequestMail(['m3']))
-    expect(unrelatedRenders).toBe(before)
-  })
 })

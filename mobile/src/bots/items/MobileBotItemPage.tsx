@@ -3,7 +3,7 @@
 // box docked at the bottom. Back returns to the list.
 import { useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
-import { ChevronLeft, House, MessageSquare } from 'lucide-react-native'
+import { House, MessageSquare } from 'lucide-react-native'
 import {
   formatBotItemNumber,
   isBotItemLive,
@@ -15,6 +15,7 @@ import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tre
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -72,11 +73,15 @@ export function MobileBotItemPage({
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
   const jump = useJumpToEnd()
+  // The item's own title heads the page, so the header carries only the way back.
   const back = (
-    <Pressable onPress={onBack} accessibilityRole="button" hitSlop={8} style={styles.back}>
-      <ChevronLeft size={18} color={colors.textSecondary} />
-      <Text style={styles.backText}>{t('bots.items.tab', 'Items')}</Text>
-    </Pressable>
+    <SheetHeader
+      title=""
+      onBack={{
+        label: t('bots.panel.backTo', 'Back to {{name}}', { name: t('bots.items.tab', 'Items') }),
+        onPress: onBack
+      }}
+    />
   )
   const item = view.item
   if (!item) {
@@ -308,15 +313,6 @@ function ClampedDescription({ text }: { text: string }) {
 
 const styles = themedStyleSheet(() => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
-  back: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  backText: { fontSize: typography.bodySize, color: colors.textSecondary },
   scroll: { flex: 1 },
   content: { gap: spacing.sm, paddingBottom: spacing.lg },
   head: { paddingHorizontal: spacing.xs, gap: spacing.xs },

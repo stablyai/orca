@@ -47,3 +47,49 @@ export function mobileBotMascotAsset(id: BotMascotId): ImageSourcePropType {
       return require('../../../src/shared/bot-mascots/T1.webp')
   }
 }
+
+/** The mascot's light rim alone, drawn under it on a dark tile so a dark mascot doesn't sink into it. */
+export function mobileBotMascotRimAsset(id: BotMascotId): ImageSourcePropType {
+  switch (id) {
+    case 'A1':
+      return require('../../../src/shared/bot-mascots/A1-rim.webp')
+    case 'B1':
+      return require('../../../src/shared/bot-mascots/B1-rim.webp')
+    case 'D1':
+      return require('../../../src/shared/bot-mascots/D1-rim.webp')
+    case 'E1':
+      return require('../../../src/shared/bot-mascots/E1-rim.webp')
+    case 'F1':
+      return require('../../../src/shared/bot-mascots/F1-rim.webp')
+    case 'G1':
+      return require('../../../src/shared/bot-mascots/G1-rim.webp')
+    case 'H1':
+      return require('../../../src/shared/bot-mascots/H1-rim.webp')
+    case 'H2':
+      return require('../../../src/shared/bot-mascots/H2-rim.webp')
+    case 'I1':
+      return require('../../../src/shared/bot-mascots/I1-rim.webp')
+    case 'J1':
+      return require('../../../src/shared/bot-mascots/J1-rim.webp')
+    case 'K2':
+      return require('../../../src/shared/bot-mascots/K2-rim.webp')
+    case 'L2':
+      return require('../../../src/shared/bot-mascots/L2-rim.webp')
+    case 'M1':
+      return require('../../../src/shared/bot-mascots/M1-rim.webp')
+    case 'N1':
+      return require('../../../src/shared/bot-mascots/N1-rim.webp')
+    case 'O1':
+      return require('../../../src/shared/bot-mascots/O1-rim.webp')
+    case 'P3':
+      return require('../../../src/shared/bot-mascots/P3-rim.webp')
+    case 'Q1':
+      return require('../../../src/shared/bot-mascots/Q1-rim.webp')
+    case 'R3':
+      return require('../../../src/shared/bot-mascots/R3-rim.webp')
+    case 'S2':
+      return require('../../../src/shared/bot-mascots/S2-rim.webp')
+    case 'T1':
+      return require('../../../src/shared/bot-mascots/T1-rim.webp')
+  }
+}

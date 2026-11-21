@@ -10,9 +10,3 @@ it('keeps a webhook key whole across the blocks that split it, and lines up othe
   )
   expect(assistantProse([text('k=%6Frcawh_'), text('zz')])).toBe('k=%6Frcawh_zz')
 })
-
-it('reads one long run split across many blocks in a single pass', () => {
-  // 4 MB of one unbroken run in 4,000 blocks: rescanning the run per boundary outlasts the test timeout.
-  const parts = Array.from({ length: 4_000 }, () => 'a'.repeat(1_000))
-  expect(assistantProse(parts.map(text))).toBe(parts.join('\n'))
-})

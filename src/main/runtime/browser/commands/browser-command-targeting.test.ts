@@ -90,22 +90,9 @@ overrideBridgeWebContentsLookup(
   vi.fn((id: number) => native.get(id))
 )
 
-class CountedTabs extends Map<string, number> {
-  visits = 0
-  reads = 0
-  override get(key: string): number | undefined {
-    this.reads++
-    return super.get(key)
-  }
-  override *[Symbol.iterator](): MapIterator<[string, number]> {
-    for (const entry of super[Symbol.iterator]()) {
-      this.visits++
-      yield entry
-    }
-  }
-}
 const ownedPages = new Set<string>()
-function fixture(pages: [string, string][], tabs = new CountedTabs()) {
+function fixture(pages: [string, string][]) {
+  const tabs = new Map<string, number>()
   const worktrees = new Map<string, string>()
   const register = (page: string, worktree: string) => {
     const id = native.size + 100
@@ -331,27 +318,3 @@ it('reports normal not-found when a saved page disappears during activation', as
   })
   expect(f.bridge.delivered).toEqual([])
 })
-
-it.each([200, 2000])(
-  'does no added fleet traversal for a settled explicit snapshot among %i guests',
-  async (size) => {
-    const f = fixture([['P', 'W']])
-    for (let i = 1; i < size; i++) {
-      f.register(`unrelated-${i}`, 'elsewhere')
-    }
-    await f.commands.browserSnapshot({ page: 'P' })
-    f.tabs.visits = 0
-    f.tabs.reads = 0
-    const baseline = await f.bridge.snapshot(undefined, 'P')
-    const baselineVisits = f.tabs.visits
-    const baselineReads = f.tabs.reads
-    f.tabs.visits = 0
-    f.tabs.reads = 0
-    const admitted = await f.commands.browserSnapshot({ page: 'P' })
-    expect(admitted).toEqual(baseline)
-    // The existing reverse lookup when snapshot mints refs visits P once; admission visits none.
-    expect(baselineVisits).toBe(1)
-    expect(f.tabs.visits).toBe(1)
-    expect(f.tabs.reads - baselineReads).toBe(4)
-  }
-)

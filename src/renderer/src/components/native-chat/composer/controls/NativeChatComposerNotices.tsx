@@ -52,6 +52,20 @@ export function NativeChatPromptSlotNotices({
   )
 }
 
+function NoticeAction({
+  status,
+  ...action
+}: NonNullable<NativeChatComposerNotice['action']>): React.JSX.Element {
+  return status ? (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {status}
+      <NativeChatActionButton {...action} />
+    </span>
+  ) : (
+    <NativeChatActionButton {...action} />
+  )
+}
+
 function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.Element {
   const t = useTranslate()
   const isError = notice.kind === 'error'
@@ -87,7 +101,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         >
           {notice.content ?? notice.text}
         </p>
-        {notice.action ? <NativeChatActionButton {...notice.action} /> : null}
+        {notice.action ? <NoticeAction {...notice.action} /> : null}
         {notice.onDismiss ? (
           <Button
             type="button"

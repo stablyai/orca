@@ -95,7 +95,6 @@ export abstract class RuntimeConstructionServices extends RuntimeMailboxDelivery
 
   protected abstract handleGraphReloadTimeout(windowId: number): void
   protected abstract flushScheduledMobileSessionTabsChanged(worktreeId: string): void
-  protected abstract getMobileSessionWorktreeIdsForPty(ptyId: string): string[]
   abstract touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options?: {
@@ -118,6 +117,8 @@ export abstract class RuntimeConstructionServices extends RuntimeMailboxDelivery
   protected abstract clearWaitBlockedStamp(ptyId: string): void
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
+  protected abstract requestReattachedRepaint(ptyId: string): void
+  protected abstract confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean>
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string

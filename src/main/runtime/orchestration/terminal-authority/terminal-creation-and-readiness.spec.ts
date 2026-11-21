@@ -22,71 +22,63 @@ import { spawnedPtyEnv } from '../../terminal/launch/spawned-pty-env-fixtures'
 import '../../../../shared/agent-launch/startup/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
-  it.each([
-    ['exits', 0, true],
-    ['is suspended', 148, false]
-  ] as const)(
-    'retires inherited launch authority when the agent command %s',
-    async (_, status, exited) => {
-      const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
-      const retireAuthority = vi.fn()
-      const runtime = new OrcaRuntimeService(store, undefined, {
-        attestAgentHookCompatibilityAuthority: (candidate) => ({
-          paneKey: candidate.paneKey,
-          source: 'current_hook'
-        }),
-        retireAgentHookCompatibilityAuthority: retireAuthority
-      })
-      runtime.setPtyController({
-        spawn: committingSpawn(runtime, spawn),
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      runtime.setNotifier({
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-authority' }),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        focusTerminal: vi.fn(),
-        closeTerminal: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
-      runtime.attachWindow(1)
-      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  it('retires inherited launch authority when the agent command exits', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
+    const retireAuthority = vi.fn()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      attestAgentHookCompatibilityAuthority: (candidate) => ({
+        paneKey: candidate.paneKey,
+        source: 'current_hook'
+      }),
+      retireAgentHookCompatibilityAuthority: retireAuthority
+    })
+    runtime.setPtyController({
+      spawn: committingSpawn(runtime, spawn),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-authority' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
-      const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        command: 'codex',
-        launchAgent: 'codex',
-        launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
-      })
-      const spawnEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
-      const evidence = {
-        terminalHandle: terminal.handle,
-        paneKey: spawnEnv.ORCA_PANE_KEY,
-        launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
-      }
-
-      expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-      expect((await runtime.listTerminals()).terminals).toEqual([
-        expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
-      ])
-
-      runtime.onPtyData('pty-authority', `\x1b]133;D;${status}\x07`, 100)
-
-      expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY, {
-        confirmedExit: exited
-      })
-      expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
-      expect((await runtime.listTerminals()).terminals).toEqual([
-        expect.not.objectContaining({ agentIdentity: expect.anything() })
-      ])
+    const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      launchAgent: 'codex',
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+    })
+    const spawnEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
+    const evidence = {
+      terminalHandle: terminal.handle,
+      paneKey: spawnEnv.ORCA_PANE_KEY,
+      launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
     }
-  )
+
+    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
+    ])
+
+    runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
+
+    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY, { confirmedExit: true })
+    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.not.objectContaining({ agentIdentity: expect.anything() })
+    ])
+  })
 
   it('restores a retained coordinator handle after a late controller inventory', async () => {
     const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)

@@ -14,7 +14,6 @@ export function renderResourceUsageStatusTrigger(
     spaceScanReady,
     iconOnly,
     commitToneClass,
-    memBadgeLabel,
     triggerSessionCount,
     orphanCount,
     resourceManagerTooltipLines
@@ -24,7 +23,6 @@ export function renderResourceUsageStatusTrigger(
     spaceScanReady: boolean
     iconOnly: boolean
     commitToneClass: string | null
-    memBadgeLabel: string
     triggerSessionCount: number | null
     orphanCount: number
     resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
@@ -55,20 +53,10 @@ export function renderResourceUsageStatusTrigger(
                 aria-hidden="true"
               />
             ) : null}
-            <MemoryStick className="size-3 text-muted-foreground" />
+            {/* Why no memory total: it read as Orca's own usage; the tooltip names each owner. */}
+            <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
             {!iconOnly && (
               <>
-                {/* Tint only: the number stays the resident sum it has always been,
-                    and the tooltip names the commit figure that raised the tone. */}
-                <span
-                  className={cn(
-                    'text-[11px] font-medium tabular-nums',
-                    commitToneClass ?? 'text-muted-foreground'
-                  )}
-                >
-                  {memBadgeLabel}
-                </span>
-                <span className="text-muted-foreground/50">·</span>
                 <Terminal className="size-3 text-muted-foreground" />
                 <span className="text-[11px] tabular-nums text-muted-foreground">
                   {triggerSessionCount}

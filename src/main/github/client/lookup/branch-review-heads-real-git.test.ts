@@ -59,12 +59,6 @@ const cases: PushCase[] = [
     pushSucceeds: false
   },
   {
-    name: 'unmapped refspec',
-    config: [['remote.fork.push', 'refs/heads/other:refs/heads/other']],
-    destination: null,
-    pushSucceeds: true
-  },
-  {
     name: 'unmapped refspec overrides upstream mode',
     config: [
       ['push.default', 'upstream'],

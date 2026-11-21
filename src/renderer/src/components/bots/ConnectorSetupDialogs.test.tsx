@@ -120,7 +120,7 @@ describe('Add connector › Google', () => {
     }
   )
 
-  it('asks how to connect first when no account is set up, with Orca hosted not yet offered', async () => {
+  it('offers self-hosted setup and starts it in the bot’s chat on Continue', async () => {
     mocks.refreshGoogle.mockResolvedValue(googleView([]))
     render(<Harness />)
     fireEvent.click(screen.getByText('Add Google'))
@@ -132,12 +132,7 @@ describe('Add connector › Google', () => {
     expect(screen.getByText('Inbox helper opens Google Cloud and sets up the app')).toBeTruthy()
     expect(mocks.startGoogleSetupInChat).not.toHaveBeenCalled()
     expect(mocks.turnOnGoogle).not.toHaveBeenCalled()
-  })
 
-  it('Continue starts the setup in the bot’s chat and closes', async () => {
-    mocks.refreshGoogle.mockResolvedValue(googleView([]))
-    render(<Harness />)
-    fireEvent.click(screen.getByText('Add Google'))
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     expect(mocks.startGoogleSetupInChat).toHaveBeenCalledWith(bot, 'add-connector')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

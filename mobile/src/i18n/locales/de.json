@@ -57,7 +57,8 @@
       "currentWorktree": "Aktueller Worktree",
       "messages_one": "{{count}} Nachricht",
       "messages_other": "{{count}} Nachrichten",
-      "resumeSession": "Agentensitzung fortsetzen"
+      "resumeSession": "Agentensitzung fortsetzen",
+      "continueInCli": "In CLI fortsetzen"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Host nicht erreichbar",
@@ -186,7 +187,18 @@
       "webView": "Desktop-Ansicht der Website anzeigen"
     },
     "loadFailure": {
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "connectionNotSecure": "Die Verbindung ist nicht sicher",
+      "certificateNameMismatch": "Das Zertifikat stimmt nicht mit {{value0}} überein.",
+      "certificateDateInvalid": "Das Zertifikat für {{value0}} ist zum aktuellen Datum und zur aktuellen Uhrzeit nicht gültig.",
+      "certificateAuthorityInvalid": "Orca vertraut der Zertifizierungsstelle nicht, die das Zertifikat für {{value0}} ausgestellt hat.",
+      "certificateVerificationFailed": "Orca konnte das Zertifikat für {{value0}} nicht überprüfen.",
+      "proceedUnsafe": "Trotzdem fortfahren (unsicher)",
+      "connecting": "Verbindung wird hergestellt…",
+      "certificateChallengeExpired": "Diese Zertifikatsgenehmigung ist abgelaufen. Die Seite erneut laden, um eine neue anzufordern.",
+      "certificateChallengeChanged": "Die Zertifikatsanfrage hat sich geändert. Die Seite erneut laden und die neue Warnung prüfen.",
+      "certificateProceedFailed": "Orca konnte diese Zertifikatsanfrage nicht genehmigen. Die Seite neu laden und erneut versuchen.",
+      "certificateChallengeUnavailable": "Diese Zertifikatsanfrage ist nicht mehr verfügbar. Die Seite erneut laden, um eine neue anzufordern."
     }
   },
   "chat": {
@@ -220,7 +232,8 @@
     "contextUsage": {
       "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
       "title": "Kontext",
-      "estimated": "Anhand der letzten Antwort geschätzt."
+      "estimated": "Anhand der letzten Antwort geschätzt.",
+      "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
@@ -607,10 +620,6 @@
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
     },
-    "agentMessage": {
-      "handedOffToAgent": "An Agenten übergeben",
-      "startedAgent": "Agent gestartet"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
       "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
@@ -658,7 +667,7 @@
       "confirm": "Zurücksetzen",
       "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
       "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-      "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+      "busy": "Verfügbar, wenn der Chat inaktiv ist",
       "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
       "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
       "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
@@ -936,7 +945,9 @@
       "label": "Einrichtungsskript",
       "run": "Ausführen",
       "runSetupCommand": "Einrichtungsbefehl ausführen",
-      "skip": "Überspringen"
+      "skip": "Überspringen",
+      "waitForSetup": "Vor dem Start des Agenten auf den Abschluss der Einrichtung warten",
+      "waitForSetupSaveFailed": "Das Startverhalten bei der Einrichtung konnte nicht gespeichert werden."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Verbinden",
@@ -1638,7 +1649,10 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben",
-      "rename": "Umbenennen"
+      "rename": "Umbenennen",
+      "markRead": "Als gelesen markieren",
+      "markUnread": "Als ungelesen markieren",
+      "moveToStatus": "In Status verschieben"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -2203,6 +2217,7 @@
       "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
       "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
       "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "providerResponseFailedQuoted": "{{agent}} konnte diese Antwort nicht abschließen: {{detail}}.",
       "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
@@ -2464,6 +2479,11 @@
       "sendReviewNotes": "Review-Notizen senden",
       "shortcut": "Tastenkürzel",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD-Eingabeaufforderung",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
@@ -2784,6 +2804,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
+    },
+    "browserProfile": {
+      "default": "Standard"
     }
   },
   "settings": {

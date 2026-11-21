@@ -348,3 +348,117 @@ describe('orchestration.send to a settled Dispatch mailbox', () => {
     expect(stranded.count).toBe(0)
   })
 })
+
+describe("orchestration.send: a follow-up's report quoting a Task id", () => {
+  const harness = createOrchestrationRpcHarness()
+  let db: OrchestrationDb
+
+  afterEach(() => {
+    harness.cleanup()
+  })
+
+  /** A worker that reported task_first, then took a follow-up Task on the same terminal. */
+  function setupFollowUp() {
+    const setup = harness.setup()
+    db = setup.db
+    const first = db.createTask({ spec: 'first assignment' })
+    const firstDispatch = createRootDispatch(db, first.id, 'term_worker')
+    db.completeDispatch(firstDispatch.id)
+    const followUp = db.createTask({ spec: 'follow-up assignment' })
+    const followUpDispatch = createRootDispatch(db, followUp.id, 'term_worker')
+    db.db
+      .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
+      .run(firstDispatch.id, followUpDispatch.id)
+    const send = (params: Record<string, unknown>) =>
+      harness.call('orchestration.send', params, setup.ctx)
+    return { first, followUp, followUpDispatch, send }
+  }
+
+  const storedPayload = (result: unknown) => {
+    const id = z.object({ message: z.object({ id: z.string() }) }).parse(result).message.id
+    return z
+      .object({ taskId: z.string() })
+      .parse(JSON.parse(db.getMessageById(id)?.payload ?? '{}'))
+  }
+
+  it("settles the follow-up's Task when worker_done quotes the earlier Task, with a note", async () => {
+    const { first, followUp, followUpDispatch, send } = setupFollowUp()
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({
+        taskId: first.id,
+        dispatchId: followUpDispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(result).toMatchObject({
+      lifecycle: { action: 'completed', taskId: followUp.id, dispatchId: followUpDispatch.id },
+      warnings: [expect.objectContaining({ code: 'stale_task_id' })]
+    })
+    expect(db.getTask(followUp.id)?.status).toBe('completed')
+    expect(storedPayload(result).taskId).toBe(followUp.id)
+  })
+
+  it('names the follow-up Task on an escalation that quotes the earlier Task', async () => {
+    const { first, followUp, followUpDispatch, send } = setupFollowUp()
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'escalation',
+      subject: 'Blocked',
+      payload: JSON.stringify({ taskId: first.id, dispatchId: followUpDispatch.id })
+    })
+
+    expect(result).toMatchObject({
+      message: { type: 'escalation' },
+      warnings: [expect.objectContaining({ code: 'stale_task_id' })]
+    })
+    expect(result).not.toHaveProperty('lifecycle')
+    expect(storedPayload(result).taskId).toBe(followUp.id)
+  })
+
+  it('still rejects a worker_done quoting a Task outside its follow-up chain', async () => {
+    const { followUp, followUpDispatch, send } = setupFollowUp()
+    const unrelated = db.createTask({ spec: 'someone else' })
+    createRootDispatch(db, unrelated.id, 'term_other')
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({
+        taskId: unrelated.id,
+        dispatchId: followUpDispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(result).toMatchObject({
+      lifecycle: { action: 'rejected', code: 'task_dispatch_mismatch' }
+    })
+    expect(db.getTask(followUp.id)?.status).toBe('dispatched')
+    expect(db.getTask(unrelated.id)?.status).toBe('dispatched')
+  })
+
+  it('settles a matching Task id without a note', async () => {
+    const { followUp, followUpDispatch, send } = setupFollowUp()
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({
+        taskId: followUp.id,
+        dispatchId: followUpDispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(result).toMatchObject({ lifecycle: { action: 'completed', taskId: followUp.id } })
+    expect(result).not.toHaveProperty('warnings')
+  })
+})

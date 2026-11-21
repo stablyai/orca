@@ -8,6 +8,7 @@ import {
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
+import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { useNativeChatProvisionalLaunch } from '../../host-access/use-native-chat-provisional-launch'
 import type { useStructuredNativeChatSubmitReveal } from '../../pane/actions/use-structured-native-chat-submit-reveal'
@@ -88,6 +89,7 @@ export function useNativeChatStructuredPaneNotices({
           : undefined,
     failure: provisionalLaunch.failure,
     startFailures,
+    journalItems: controller.journalItems,
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
@@ -110,6 +112,11 @@ export function useNativeChatStructuredPaneNotices({
     {
       launch: installing ? { ...launch, lifecycle: null } : launch,
       agentLabel,
+      hostName: structuredAgentSessionHostPlace(
+        continuation.view.remoteHost,
+        continuation.view.hostLabel,
+        t
+      ),
       // Said once: on the pane when the failure took it, else in the composer's notices.
       sessionError:
         viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,

@@ -51,10 +51,11 @@ function run(automationId: string, status: AutomationRun['status'], at: number):
 function cardRows(
   automations: Automation[],
   runs: AutomationRun[],
-  extra: Partial<Pick<BotActivity, 'inProgress' | 'upNext'>> = {}
+  extra: Partial<Pick<BotActivity, 'inProgress' | 'upNext'>> = {},
+  bot = BOT
 ) {
   return botAutomationCardRows(
-    BOT,
+    bot,
     {
       automations: botAutomationRows(automations, runs),
       waits: [],
@@ -66,14 +67,14 @@ function cardRows(
 }
 
 describe('botAutomationCardRows', () => {
-  it('ranks failed, then running, then soonest next, then no next, then paused', () => {
+  it('ranks the card and chooses the running and next rows for the header', () => {
     const rows = cardRows(
       [
         automation('later', { nextRunAt: NOW + 5 * 60_000, createdAt: 1 }),
         automation('paused', { enabled: false, nextRunAt: NOW + 1, createdAt: 2 }),
         automation('soon', { nextRunAt: NOW + 60_000, createdAt: 3 }),
         automation('failed', { nextRunAt: NOW + 9 * 60_000, createdAt: 4 }),
-        automation('running', { nextRunAt: NOW + 8 * 60_000, createdAt: 5 }),
+        automation('running', { nextRunAt: NOW + 30_000, createdAt: 5 }),
         automation('overdue', { nextRunAt: NOW - 60_000, createdAt: 6 })
       ],
       [run('failed', 'dispatch_failed', NOW - 1000), run('running', 'dispatched', NOW - 1000)],
@@ -90,6 +91,9 @@ describe('botAutomationCardRows', () => {
       'automation:paused',
       'tidy-up'
     ])
+    expect(rows.find((row) => row.key === 'automation:running')?.mark).toEqual({ kind: 'running' })
+    expect(botRunningRow(rows)?.key).toBe('automation:running')
+    expect(botNextRun(rows)?.key).toBe('automation:soon')
   })
 
   it('never calls a past next run "next" and says how each newest run went', () => {
@@ -133,31 +137,18 @@ describe('botAutomationCardRows', () => {
     expect(byKey.get('automation:live')?.mark).toEqual({ kind: 'running' })
   })
 
-  it("names the soonest exact next run for the header, skipping Tidy memory's window", () => {
-    const rows = cardRows([automation('digest', { nextRunAt: NOW + 7_200_000 })], [], {
-      upNext: { state: { running: false, seenAt: 0, nextAt: NOW + 3_600_000 }, items: [] }
-    })
-
-    expect(botNextRun(rows)?.key).toBe('look-around')
-  })
-
-  it('never names a running automation as next, and gives it to the header as running', () => {
+  it('chooses an exact next run for the idle header ahead of a later automation', () => {
+    const lookAroundAt = NOW + 48 * 3_600_000
     const rows = cardRows(
-      [
-        automation('triage', { nextRunAt: NOW + 60_000 }),
-        automation('digest', { nextRunAt: NOW + 120_000 })
-      ],
-      [run('triage', 'dispatched', NOW - 60_000)],
-      { upNext: { state: { running: false, seenAt: 0 }, items: [] } }
+      [automation('digest', { nextRunAt: NOW + 72 * 3_600_000 })],
+      [],
+      { upNext: { state: { running: false, seenAt: 0, nextAt: lookAroundAt }, items: [] } },
+      { ...BOT, tidyUp: { on: true, every: 'night' } }
     )
 
-    const triage = rows.find((row) => row.key === 'automation:triage')
-    expect(triage?.mark).toEqual({ kind: 'running' })
-    expect(botNextRun(rows)?.key).toBe('automation:digest')
-    expect(botRunningRow(rows)?.key).toBe('automation:triage')
-  })
-
-  it('has no running row while nothing runs', () => {
-    expect(botRunningRow(cardRows([automation('digest')], []))).toBeNull()
+    const tidy = rows.find((row) => row.key === 'tidy-up')
+    expect(tidy?.nextAt).toBeLessThan(lookAroundAt)
+    expect(botNextRun(rows)?.key).toBe('look-around')
+    expect(botRunningRow(rows)).toBeNull()
   })
 })

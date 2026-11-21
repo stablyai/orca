@@ -14,7 +14,10 @@ import {
 import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
 import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
-import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
+import {
+  assertMobileTerminalShellSupported,
+  listMobileTerminalShellChoices
+} from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
 import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
@@ -57,6 +60,14 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
   ): RuntimePtyWorktreeRecord | null
 
   protected abstract hasLiveShellForRendererTab(worktreeId: string, tabId: string): boolean
+
+  /** The Windows shells a paired client may offer for a new terminal here; empty off Windows and over SSH. */
+  async listMobileSessionTerminalShellChoices(worktreeSelector: string) {
+    const settings = this.store?.getSettings()
+    return listMobileTerminalShellChoices(this.store, settings, worktreeSelector, (selector) =>
+      this.resolveTerminalWorkspaceLaunchScope(selector, undefined, { readOnly: true })
+    )
+  }
 
   protected async runCreateMobileSessionTerminal(
     worktreeSelector: string,

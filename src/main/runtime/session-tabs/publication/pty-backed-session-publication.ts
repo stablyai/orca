@@ -195,31 +195,11 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
   ): void {
     // All visible title/foreground/bind updates pass here; apply phone pane-title rules consistently.
     this.markPaneLiveTitlesDirty()
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (!hasPtyBackedTab) {
-        continue
-      }
+    // Copy: a touch can re-store a snapshot and rewrite this PTY's index entry.
+    for (const worktreeId of Array.from(
+      this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId)
+    )) {
       this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
-  }
-
-  protected getMobileSessionWorktreeIdsForPty(ptyId: string): string[] {
-    const worktreeIds: string[] = []
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (hasPtyBackedTab) {
-        worktreeIds.push(worktreeId)
-      }
-    }
-    return worktreeIds
   }
 }

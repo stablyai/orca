@@ -2,7 +2,7 @@
 // server Settings points at. That host keeps the sign-ins; this window sees emails and states only.
 import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -34,13 +34,39 @@ export type GoogleHostView =
 const keyOf = (target: RuntimeClientTarget): string =>
   target.kind === 'local' ? 'local' : `env:${target.environmentId}`
 
-const views = new Map<string, GoogleHostView>()
+/** A host's last status, which read produced it (reads are numbered in the order they start), and
+ *  whether a newer read has started and not answered yet. */
+type GoogleHostEntry = { view: GoogleHostView; read: number; pending: boolean }
+
+let readsStarted = 0
+const latestReadOf = new Map<string, number>()
+const views = new Map<string, GoogleHostEntry>()
 const listeners = new Set<() => void>()
-function publish(target: RuntimeClientTarget, view: GoogleHostView): void {
-  views.set(keyOf(target), view)
+function publish(target: RuntimeClientTarget, view: GoogleHostView, read: number): void {
+  const key = keyOf(target)
+  // A read that started later owns the status, even if this one answers after it.
+  if (latestReadOf.get(key) !== read) {
+    return
+  }
+  views.set(key, { view, read, pending: false })
+  notify()
+}
+function notify(): void {
   for (const listener of listeners) {
     listener()
   }
+}
+/** A read starts: the host's last status stays shown, marked as being read again. */
+function startRead(target: RuntimeClientTarget): number {
+  const key = keyOf(target)
+  const read = ++readsStarted
+  latestReadOf.set(key, read)
+  const entry = views.get(key)
+  if (entry && !entry.pending) {
+    views.set(key, { ...entry, pending: true })
+    notify()
+  }
+  return read
 }
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
@@ -63,6 +89,7 @@ export async function refreshGoogle(
   target: RuntimeClientTarget,
   options: { check?: boolean } = {}
 ): Promise<GoogleHostView> {
+  const read = startRead(target)
   let view: GoogleHostView
   try {
     view = (await supportsGoogle(target))
@@ -78,30 +105,53 @@ export async function refreshGoogle(
   } catch (error) {
     view = { status: 'failed', error: errorText(error) }
   }
-  publish(target, view)
+  publish(target, view, read)
   return view
 }
 
 /** The host's Google, read again each time something starts showing it (the host answers from memory). */
 export function useGoogleHost(target: RuntimeClientTarget, shown = true): GoogleHostView {
+  return useGoogleHostEntry(target, shown)?.view ?? { status: 'loading' }
+}
+
+function useGoogleHostEntry(
+  target: RuntimeClientTarget,
+  shown = true
+): GoogleHostEntry | undefined {
   const key = keyOf(target)
-  const view = useSyncExternalStore(subscribe, () => views.get(key))
+  const entry = useSyncExternalStore(subscribe, () => views.get(key))
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   useEffect(() => {
     if (shown) {
       void refreshGoogle(runtimeTargetForOwnerEnvironment(environmentId))
     }
   }, [environmentId, shown])
-  return view ?? { status: 'loading' }
+  return entry
 }
 
 /** What Google reaches through this bot: nothing unless it is on for it, then only the services
- *  ready on an account signed in here. */
-export function useBotGoogleReaches(bot: Pick<Bot, 'google'> & BotOnHost): GoogleReachArea[] {
-  const view = useGoogleHost(botTarget(bot))
-  return bot.google === true && view.status === 'ready'
-    ? googleReachAreas(view.google.accounts)
-    : []
+ *  ready on an account signed in here. `unknown`: it is on, and the latest read, started since this
+ *  mounted and answered, hasn't shown it reaches nothing (still reading, being read again, the read
+ *  failed, or only an older status says so), so it may reach anything. A fresh read of a server
+ *  without Google (`update-server`) reaches nothing. */
+export function useBotGoogleReach(bot: Pick<Bot, 'google'> & BotOnHost): {
+  areas: GoogleReachArea[]
+  unknown: boolean
+} {
+  // Reads already started may predate a sign-in or an update, so only a later one can say "nothing".
+  const [readsBeforeMount] = useState(() => readsStarted)
+  const entry = useGoogleHostEntry(botTarget(bot))
+  if (bot.google !== true) {
+    return { areas: [], unknown: false }
+  }
+  // "Nothing" holds only from the latest read; a newer one still reading may find access.
+  const current = entry !== undefined && entry.read > readsBeforeMount && !entry.pending
+  const view = entry?.view
+  if (view?.status === 'ready') {
+    const areas = googleReachAreas(view.google.accounts)
+    return { areas, unknown: areas.length === 0 && !current }
+  }
+  return { areas: [], unknown: !(current && view?.status === 'update-server') }
 }
 
 export async function importGoogleApp(

@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
+import { webhookCloudCalls } from '../webhooks/webhook-cloud-routes'
 import { ConnectorCloud } from './connector-cloud'
+import { ConnectorTurnEvents } from './connector-turn-events'
 import { FakeConnectorCloud } from './fake-connector-cloud.test-fixture'
 import { FAKE_BOT, fakeMachine, fakeSeam, type FakeSeam } from './fake-connector-seam.test-fixture'
 
@@ -50,8 +52,9 @@ beforeEach(() => {
   machine = fakeMachine(() => (enabled ? seam : null))
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
+  await ConnectorTurnEvents.settled()
   rmSync(userDataPath, { recursive: true, force: true })
 })
 
@@ -268,6 +271,7 @@ describe('ConnectorCloud', () => {
     cloud.connect()
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fake.events).toContainEqual(expect.objectContaining({ kind: 'turn-ended' }))
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(false)
     expect(cloud.cloudFeatures()).toBeNull()
   })
@@ -288,14 +292,28 @@ describe('ConnectorCloud', () => {
     expect(cloud.cloudFeatures()).not.toBeNull()
   })
 
-  it('holds the connection through a call that needs the cloud to know the bots, then lets it go', async () => {
+  it('registers the bot before minting its first webhook, then releases the connection', async () => {
+    const hooksPath = '/v1/connector/webhooks'
     machine.wanted = false
     machine.botList = [FAKE_BOT]
+    fake.holdBefore.add(CONNECTOR_PATHS.hello)
+    fake.forced.set(hooksPath, { status: 503 })
     const cloud = connectorCloud()
     cloud.connect()
-    const held = cloud.withConnection(async () => fake.hellos.length)
+    const request = { operationId: 'op-1', automationId: 'auto-1', botId: FAKE_BOT.id }
+    const mint = webhookCloudCalls(() => cloud).mint(request)
+
+    await vi.advanceTimersByTimeAsync(10)
+    expect(fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(1)
+    expect(fake.requestsTo(hooksPath)).toHaveLength(0)
+
+    fake.release(CONNECTOR_PATHS.hello)
     await vi.advanceTimersByTimeAsync(1_000)
-    await expect(held).resolves.toBe(1)
+    await expect(mint).resolves.toMatchObject({ ok: false, status: 503 })
+    expect(fake.registeredBots).toContain(FAKE_BOT.id)
+    expect(fake.requestsTo(hooksPath)).toMatchObject([
+      { body: { v: 1, ...request }, token: expect.any(String) }
+    ])
     await vi.advanceTimersByTimeAsync(10_000)
     expect(cloud.cloudFeatures()).toBeNull()
   })
@@ -354,11 +372,13 @@ describe('ConnectorCloud', () => {
     cloud.connect()
     await vi.advanceTimersByTimeAsync(10)
     cloud.accountChanged()
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(true)
 
     fake.signedIn.add('grace')
     account = 'grace'
     cloud.accountChanged()
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(false)
     await vi.advanceTimersByTimeAsync(10)
     expect(fake.minted.at(-1)?.account).toBe('grace')
@@ -366,6 +386,7 @@ describe('ConnectorCloud', () => {
     writeFileSync(outbox, JSON.stringify({ account: 'grace', turnEnds: [turnEnd] }))
     const restarted = connectorCloud()
     restarted.signOutStarted()
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(false)
   })
 
@@ -391,6 +412,7 @@ describe('ConnectorCloud', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
     expect(fake.minted.every((minted) => minted.account === 'ada')).toBe(true)
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(true)
   })
 })

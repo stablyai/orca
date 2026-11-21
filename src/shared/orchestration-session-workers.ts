@@ -38,6 +38,9 @@ export type OrchestrationSessionWorker = {
   /** The paired server a remote worker runs on, as the answering host names it. Absent from older hosts. */
   hostEnvironmentId?: string
   worktreeId: string | null
+  /** The mailbox address the worker sends from (its terminal or chat handle), so a chat can tell which
+   *  Dispatch a piece of mail came from. Absent from older hosts. */
+  address?: string | null
   /** The worker's terminal pane, when it runs in a terminal. */
   paneKey: string | null
   /** The worker's chat session, when it runs in a native chat. */

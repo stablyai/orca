@@ -27,7 +27,7 @@ const HOOKED = {
   ...EVENT_ONLY_SCHEDULE
 }
 
-function host(saved: Record<string, unknown> = HOOKED) {
+function host() {
   const calls: { method: string; params: unknown }[] = []
   const states = ['pending', 'live']
   const call = vi.fn(async (method: string, params?: unknown) => {
@@ -45,7 +45,7 @@ function host(saved: Record<string, unknown> = HOOKED) {
         return ok({ bots: [SCOUT], webhooks: true })
       case 'automation.create':
       case 'automation.update':
-        return ok({ automation: saved })
+        return ok({ automation: HOOKED })
       case 'automation.show':
         return ok({ automation: HOOKED })
       case 'webhooks.card':
@@ -95,7 +95,7 @@ async function output(run: () => Promise<void>): Promise<string> {
 }
 
 describe('orca webhooks', () => {
-  it('makes a hook with the automation and sends the owner to its card, with no wait', async () => {
+  it('announces a new hook once without waiting on its card', async () => {
     const { client, calls } = host()
     const printed = await output(() =>
       AUTOMATION_HANDLERS['automations create']!({
@@ -122,8 +122,21 @@ describe('orca webhooks', () => {
     })
     expect(printed).toContain(`The webhook ${HOOK} was made.`)
     expect(printed).toContain("Copy URL on the automation's card")
-    expect(calls.some(({ method }) => method === 'webhooks.card')).toBe(false)
     expect(printed).not.toContain('::orca-webhook')
+
+    const edited = await output(() =>
+      AUTOMATION_HANDLERS['automations edit']!({
+        client,
+        cwd: '/tmp',
+        json: false,
+        flags: new Map<string, string | boolean>([
+          ['id', 'a1'],
+          ['on', 'webhook.call contains=deploy']
+        ])
+      })
+    )
+    expect(edited).not.toContain('Copy URL')
+    expect(calls.some(({ method }) => method === 'webhooks.card')).toBe(false)
   })
 
   // A bot that read the URL from --json pasted it in place of the card.
@@ -160,40 +173,6 @@ describe('orca webhooks', () => {
       expect(text).not.toContain('https://')
       expect(text).not.toContain('orca-webhook')
     }
-  })
-
-  it('never waits on a hook, and says nothing for one an edit kept', async () => {
-    const kept = host()
-    const edited = await output(() =>
-      AUTOMATION_HANDLERS['automations edit']!({
-        client: kept.client,
-        cwd: '/tmp',
-        json: false,
-        flags: new Map<string, string | boolean>([
-          ['id', 'a1'],
-          ['on', 'webhook.call contains=deploy']
-        ])
-      })
-    )
-    expect(edited).not.toContain('Copy URL')
-    expect(kept.calls.some(({ method }) => method === 'webhooks.card')).toBe(false)
-
-    const paused = host({ ...HOOKED, enabled: false })
-    const created = await output(() =>
-      AUTOMATION_HANDLERS['automations create']!({
-        client: paused.client,
-        cwd: '/tmp',
-        json: false,
-        flags: new Map<string, string | boolean>([
-          ['name', 'Investigate'],
-          ['prompt', 'Look into it'],
-          ['bot', 'scout'],
-          ['on', 'webhook.call']
-        ])
-      })
-    )
-    expect(created).toContain(`The webhook ${HOOK} was made.`)
-    expect(paused.calls.some(({ method }) => method === 'webhooks.card')).toBe(false)
   })
 
   it('never asks for or prints a key, in any command or output', async () => {

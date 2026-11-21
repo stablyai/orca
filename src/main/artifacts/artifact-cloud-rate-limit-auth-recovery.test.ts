@@ -133,18 +133,14 @@ async function signIn(): Promise<{
   return { userDataPath, profileId, artifacts: new ArtifactCloudService(userDataPath, () => true) }
 }
 
-/** Runs fake time forward in small steps until `outcome` settles. */
-async function settle<T>(outcome: Promise<T>): Promise<T> {
-  let done = false
-  void outcome.then(
-    () => (done = true),
-    () => (done = true)
-  )
-  for (let step = 0; step < 10_000 && !done; step++) {
-    await vi.advanceTimersByTimeAsync(100)
+async function advanceRetryWait(): Promise<void> {
+  // The pending intent is written to disk before the retry timer is scheduled.
+  const deadline = performance.now() + 10_000
+  while (vi.getTimerCount() === 0 && performance.now() < deadline) {
+    await new Promise<void>((resolve) => setImmediate(resolve))
   }
-  expect(done).toBe(true)
-  return outcome
+  expect(vi.getTimerCount()).toBe(1)
+  await vi.advanceTimersByTimeAsync(5_000)
 }
 
 beforeEach(() => {
@@ -170,9 +166,9 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     const signin = await signIn()
     const cloudStub = stubCloud([() => limited(5), rejected, () => limited(5), created])
 
-    const outcome = await settle(
-      signin.artifacts.share(writeRequest).catch((caught: unknown) => caught)
-    )
+    const share = signin.artifacts.share(writeRequest).catch((caught: unknown) => caught)
+    await advanceRetryWait()
+    const outcome = await share
 
     expect(outcome).toMatchObject({
       statusCode: 429,
@@ -195,7 +191,9 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     const signin = await signIn()
     const cloudStub = stubCloud([() => limited(5), rejected, created])
 
-    const outcome = await settle(signin.artifacts.share(writeRequest))
+    const share = signin.artifacts.share(writeRequest).catch((caught: unknown) => caught)
+    await advanceRetryWait()
+    const outcome = await share
 
     expect(outcome).toMatchObject({ status: 'ok', value: { shareUrl: artifactBody().shareUrl } })
     expect(cloudStub.refreshes).toBe(1)
@@ -206,7 +204,12 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     ])
     expect(new Set(cloudStub.sent.map(({ key }) => key)).size).toBe(1)
     expect(
-      getArtifactShareRecord(signin.profileId, signin.userDataPath, writeRequest.sourceKey, scope)
+      await getArtifactShareRecord(
+        signin.profileId,
+        signin.userDataPath,
+        writeRequest.sourceKey,
+        scope
+      )
     ).toMatchObject({ slug: 'artifact-a', editToken: 'edit-secret' })
   })
 
@@ -222,9 +225,9 @@ describe('a rate-limited artifact request that needs a session refresh', () => {
     const changed = { ...writeRequest, content: '<h1>Changed</h1>' }
     const cloudStub = stubCloud([() => limited(5), created, rejected, () => limited(5)])
 
-    const outcome = await settle(
-      signin.artifacts.publish(changed).catch((caught: unknown) => caught)
-    )
+    const publish = signin.artifacts.publish(changed).catch((caught: unknown) => caught)
+    await advanceRetryWait()
+    const outcome = await publish
 
     expect(outcome).toMatchObject({ statusCode: 429, code: 'artifact_rate_limited' })
     expect(vi.getTimerCount()).toBe(0)

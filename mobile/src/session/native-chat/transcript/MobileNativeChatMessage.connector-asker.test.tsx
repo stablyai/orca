@@ -123,11 +123,19 @@ describe('mobile chat message indicators', () => {
   const texts = (tree: ReactTestRenderer): string[] =>
     tree.root.findAll((node) => String(node.type) === 'Text').map(textOf)
 
-  it('tags a Slack message with who asked and where, and opens the thread', () => {
+  it('mounts only the marks a row needs and opens the Slack source thread', () => {
+    const mounted = (tree: ReactTestRenderer, type: unknown): number =>
+      tree.root.findAll((node) => node.type === type).length
+    const plain = render(userMessage({}))
+    expect(mounted(plain, MobileNativeChatConnectorAskerTag)).toBe(0)
+    expect(mounted(plain, MobileNativeChatConnectorNoAccessNote)).toBe(0)
+    expect(mounted(plain, MobileNativeChatSentAsGoal)).toBe(0)
+    act(() => plain.unmount())
     const tree = render(userMessage({ asker: SAM }))
+    expect(mounted(tree, MobileNativeChatConnectorAskerTag)).toBe(1)
+    expect(mounted(tree, MobileNativeChatConnectorNoAccessNote)).toBe(0)
     const [tag] = labelled(tree, 'Sam Lee in Slack. Open in Slack')
     expect(tag).toBeDefined()
-    expect(textOf(tag!)).toBe('SLSam Lee·Slack')
     act(() => tag!.props.onPress())
     expect(openExternalLink).toHaveBeenCalledWith(SAM.url)
   })
@@ -160,23 +168,5 @@ describe('mobile chat message indicators', () => {
     act(() => toggle!.props.onPress())
     expect(texts(tree)).toContain('Only on main.')
     expect(labelled(tree, 'Alex Kim · Slack · no access')).toHaveLength(1)
-  })
-
-  it('says a message went as a goal', () => {
-    expect(texts(render(userMessage({ sentAs: 'goal' })))).toContain('Sent as goal')
-  })
-
-  // Each mark subscribes to the theme and language, so a row without one must not mount it.
-  it('mounts no mark on a plain row, and no fold on a tagged row without no-access lines', () => {
-    const mounted = (tree: ReactTestRenderer, type: unknown): number =>
-      tree.root.findAll((node) => node.type === type).length
-    const plain = render(userMessage({}))
-    expect(mounted(plain, MobileNativeChatConnectorAskerTag)).toBe(0)
-    expect(mounted(plain, MobileNativeChatConnectorNoAccessNote)).toBe(0)
-    expect(mounted(plain, MobileNativeChatSentAsGoal)).toBe(0)
-    act(() => plain.unmount())
-    const tagged = render(userMessage({ asker: SAM }))
-    expect(mounted(tagged, MobileNativeChatConnectorAskerTag)).toBe(1)
-    expect(mounted(tagged, MobileNativeChatConnectorNoAccessNote)).toBe(0)
   })
 })

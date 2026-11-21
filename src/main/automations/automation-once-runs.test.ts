@@ -255,7 +255,7 @@ describe('waits: automations that run once', () => {
           automation.id,
           undefined
         )
-      return { due, cancel, admit, dispatch, recordCancel }
+      return { due, cancel, admit, dispatch, recordCancel, automation }
     }
 
     it('lets the run admitted first win: it started, so it is not recorded as cancelled', async () => {
@@ -273,14 +273,16 @@ describe('waits: automations that run once', () => {
 
     it('never starts a wait whose cancel came first', async () => {
       const store = await createStore()
-      const { due, cancel, admit, recordCancel } = race(store, Date.now() + HOUR)
+      const { due, cancel, admit, recordCancel, automation } = race(store, Date.now() + HOUR)
 
       const cancelling = cancel()
       const running = due()
       admit()
       await Promise.all([running, cancelling])
 
-      expect(recordCancel).toHaveBeenCalledOnce()
+      expect(recordCancel).toHaveBeenCalledExactlyOnceWith(automation.bot?.botId, {
+        cancelledWait: { automationId: automation.id, at: Date.now() }
+      })
       expect(store.listAutomationRuns()).toEqual([])
     })
   })

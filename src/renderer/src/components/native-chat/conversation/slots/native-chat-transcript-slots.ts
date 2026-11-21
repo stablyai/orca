@@ -5,8 +5,8 @@ import type {
   NativeChatSubagentEntry
 } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatAutomationTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-automation-turns'
+import { nativeChatActingTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { isNativeChatOrcaCard } from '../../../../../../shared/native-chat/native-chat-orca-card'
-import { foldBotItemNotes } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
 import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
@@ -15,7 +15,6 @@ import {
   nativeChatTurnFoldRow
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 import { nativeChatMarkdownImageSources } from '../../markdown/native-chat-markdown-image-sources'
 import {
   estimateNativeChatRowHeight,
@@ -46,7 +45,7 @@ import {
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
-import { nativeChatQuietCardAnswerRows } from './native-chat-quiet-card-answer-rows'
+import { nativeChatShownRows } from './native-chat-quiet-turn-rows'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -86,6 +85,8 @@ export type NativeChatMessageSlot = {
   continuesTurn?: boolean
   /** Its turn opens with an automation's row, which stands for a quiet reply. */
   inAutomationTurn?: boolean
+  /** Its turn did something others see, such as changing an item or posting. */
+  inActingTurn?: boolean
   /** In a turn: whether this row holds its response actions, even when tools or thoughts follow:
    *  the last drawn response with words, else the last with images. Absent outside a turn. */
   endsResponse?: boolean
@@ -124,7 +125,6 @@ export function buildNativeChatTranscript(
   forkPoint: NativeChatSideChatForkPoint | null
 } {
   const {
-    messages: sourceMessages,
     imageSources = nativeChatMarkdownImageSources,
     unresolvedRowIds,
     typography,
@@ -146,15 +146,10 @@ export function buildNativeChatTranscript(
       .filter(([, status]) => status.workedSeconds != null)
       .map(([turnKey]) => turnKey)
   )
-  const messages = nativeChatGeneratedImageAnswers(
-    foldBotItemNotes(sourceMessages, turnKeys),
-    turnKeys,
-    settledTurnKeys,
-    imageSources
-  )
+  const { quiet, messages } = nativeChatShownRows(input, settledTurnKeys, imageSources)
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>
-    nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
+    nativeChatTurnFoldRow(message, turnKeys[index], receipts.get(message.id))
   )
   // Liveness follows the turn frontier, not a call’s stale running flag.
   const trailingRunIndex = messages.findLastIndex((message) =>
@@ -167,7 +162,7 @@ export function buildNativeChatTranscript(
   })
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
-  const quietCardAnswerRows = nativeChatQuietCardAnswerRows(input, messages, settledTurnKeys)
+  const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -194,7 +189,7 @@ export function buildNativeChatTranscript(
     }
   }
   for (const [index, message] of messages.entries()) {
-    if (quietCardAnswerRows.has(index)) {
+    if (quiet.rows.has(index)) {
       continue
     }
     pushHeadsBefore(message)
@@ -203,7 +198,7 @@ export function buildNativeChatTranscript(
     const bar = turnKey === undefined ? undefined : bars.get(turnKey)
     // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
     const status =
-      turnKey === undefined || bar?.index !== index
+      turnKey === undefined || bar?.index !== index || quiet.turns.has(turnKey)
         ? undefined
         : turnKey === liveTurnKey
           ? (turnStatuses.active ?? undefined)
@@ -222,6 +217,7 @@ export function buildNativeChatTranscript(
     const drawsRow =
       receipt !== undefined ||
       (!folded &&
+        message.mergedInto === undefined &&
         (isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
     if (
@@ -242,9 +238,8 @@ export function buildNativeChatTranscript(
         folded,
         drawsMessage: drawsRow,
         turnFolds: turnKey !== undefined && foldableTurnKeys.has(turnKey),
-        ...(turnKey !== undefined && automationTurns.has(turnKey)
-          ? { inAutomationTurn: true }
-          : {}),
+        ...(turnKey !== undefined && automationTurns.has(turnKey) && { inAutomationTurn: true }),
+        ...(turnKey !== undefined && actingTurns.has(turnKey) && { inActingTurn: true }),
         turnDiff,
         openedPullRequests,
         estimatedHeight: estimateNativeChatRowHeight(
@@ -254,7 +249,7 @@ export function buildNativeChatTranscript(
             hasStatus: status !== undefined,
             hasTurnDiff: turnDiff !== undefined,
             turnDiffFileCount: turnDiff?.files.length,
-            openedPullRequestCount: openedPullRequests?.length,
+            hasOpenedPullRequests: (openedPullRequests?.length ?? 0) > 0,
             folded
           },
           typography

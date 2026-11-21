@@ -65,13 +65,6 @@ it("reads each paired server's bots with the --on that reaches it, and says whic
   ])
 })
 
-it('reads only the servers asked for', async () => {
-  const runtime = servers({ 'env-air': { bots: [ENTRY] } })
-  const read = await readPairedBotRosters(runtime, new Set(['env-air']))
-  expect(read.map((roster) => roster.environmentId)).toEqual(['env-air'])
-  expect(runtime.callOrchestrationWorkerServer).toHaveBeenCalledTimes(1)
-})
-
 it('answers from the last read without waiting, reads again behind it, and keeps the last answer when a read fails', async () => {
   const answers: Record<string, unknown> = { 'env-air': { bots: [ENTRY] } }
   const runtime = servers(answers)
@@ -90,4 +83,6 @@ it('answers from the last read without waiting, reads again behind it, and keeps
     expect(runtime.callOrchestrationWorkerServer.mock.calls.length).toBeGreaterThan(calls + 1)
   })
   expect((await read(air))[0]?.bots?.[0]?.name).toBe(ENTRY.name)
+  const requested = runtime.callOrchestrationWorkerServer.mock.calls.map(([id]) => id)
+  expect(new Set(requested)).toEqual(air)
 })

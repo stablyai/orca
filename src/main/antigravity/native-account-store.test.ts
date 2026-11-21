@@ -277,6 +277,23 @@ describe('protected Antigravity account snapshots', () => {
     expect(h.backend.write).not.toHaveBeenCalled()
   })
 
+  it('removes the selected account after agy signs in to another one, unblocking launches', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    await expect(h.service.removeAccount(id)).rejects.toThrow('Switch agy to another account')
+    h.setNative(credential('b'))
+    await expect(h.service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(await h.service.removeAccount(id)).toMatchObject({
+      accounts: [],
+      activeAccountId: null,
+      selectedAccountId: null,
+      currentAccount: { subject: 'b' }
+    })
+    await h.service.prepareForLaunch()
+    expect(h.getNative()).toBe(credential('b'))
+  })
+
   it('follows a rewritten login with a new grant when Google names the same account', async () => {
     const h = harness()
     const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))

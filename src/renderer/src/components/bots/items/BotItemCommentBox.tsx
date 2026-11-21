@@ -2,7 +2,6 @@
 // composer, Enter sends and Shift+Enter adds a line; images paste, drop or attach as thumbnails with an
 // "Image #N" pill at the caret, other files as `@path` pills. Uploads go to the item's chat on the bot's
 // host, which then holds them as its own.
-// While the bot's question is open the box names it, since the question may have scrolled away.
 import {
   useCallback,
   useImperativeHandle,
@@ -12,8 +11,7 @@ import {
   useState,
   type Ref
 } from 'react'
-import { ArrowUp, CornerDownRight } from 'lucide-react'
-import { toast } from 'sonner'
+import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -51,9 +49,7 @@ import { imageReferencesToPromptMarkers } from '../../../../../shared/native-cha
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
-import { botErrorMessage } from '../bot-presentation'
 import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
-import { commentOnBotItem } from './use-bot-items'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -74,14 +70,18 @@ export function BotItemCommentBox({
   bot,
   item,
   attachTo,
-  onSent,
+  onSend,
+  hidden = false,
   ref
 }: {
   bot: Bot
   item: BotItem
   /** The bot's folder workspace and host, which file drops and uploads resolve against. */
   attachTo: BotItemCommentAttachTarget | null
-  onSent?: () => void
+  /** Takes the comment as the box empties: it shows and goes to the host from there. */
+  onSend: (text: string, paths: readonly string[]) => void
+  /** Behind the open question's card: files dropped on the pane are not taken into its hidden draft. */
+  hidden?: boolean
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -89,13 +89,12 @@ export function BotItemCommentBox({
   const ime = useImeEnterGestureOwnership()
   const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(scopeKey, ime.isComposing)
   const [caret, setCaret] = useState(draft.length)
-  const [sending, setSending] = useState(false)
   const { notices, setNotice } = useNativeChatComposerNotice()
   const box = useRef<HTMLDivElement | null>(null)
   const input = useRef<NativeChatComposerInput | null>(null)
   const composer = useRef<NativeChatComposerHandle | null>(null)
   const lift = useClearOfFloatingTrigger(box)
-  const dictation = useNativeChatDictation(input, sending)
+  const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   // Chat's picker and `@` list: workspace files from the bot's folder. A comment runs no commands,
@@ -148,7 +147,7 @@ export function BotItemCommentBox({
     terminalTabId: scopeKey,
     structuredWorktreeId: access.session ? attachTo?.worktreeId : undefined,
     structuredSession: access.session ?? undefined,
-    disabled: !access.session,
+    disabled: !access.session || hidden,
     attachResolvedPaths: attachments.attachResolvedPaths,
     pendingChips: attachments.pendingChips,
     setNotice
@@ -216,7 +215,7 @@ export function BotItemCommentBox({
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
   const empty = !draft.trim() && images.length === 0
   const send = (): void => {
-    if (empty || pending || sending) {
+    if (empty || pending) {
       return
     }
     if (!admitNativeChatPastedText(scopeKey, draft, setNotice)) {
@@ -230,17 +229,11 @@ export function BotItemCommentBox({
       sent.map((image) => image.id)
     ).trim()
     const paths = sent.map((image) => image.path)
-    setSending(true)
-    void commentOnBotItem(bot, item.uid, text, paths)
-      .then(() => {
-        if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
-          attachments.clearImageAttachments()
-        }
-        setNotice(null)
-        onSent?.()
-      })
-      .catch((error: unknown) => toast.error(botErrorMessage(error)))
-      .finally(() => setSending(false))
+    if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
+      attachments.clearImageAttachments()
+    }
+    setNotice(null)
+    onSend(text, paths)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
@@ -333,15 +326,6 @@ export function BotItemCommentBox({
         />
       ) : null}
       <NativeChatComposerNotices notices={notices} className="mb-1.5 px-1" />
-      {item.question ? (
-        <div className="mb-1.5 mt-0.5 flex min-w-0 items-center gap-1.5 px-1 text-2xs text-muted-foreground">
-          <CornerDownRight className="size-3 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">
-            {t('bots.items.comment.answering', 'Answering:')}{' '}
-            <b className="font-medium text-foreground/80">{item.question.text}</b>
-          </span>
-        </div>
-      ) : null}
       {images.length > 0 ? (
         // Two rows of chips, then they scroll, so the text and send button stay reachable.
         <div className="scrollbar-sleek mb-1 flex max-h-[128px] flex-wrap gap-2 overflow-y-auto px-1 pt-1">
@@ -358,7 +342,7 @@ export function BotItemCommentBox({
       ) : null}
       <div className="flex items-end gap-1">
         {access.session ? (
-          <NativeChatAttachButton disabled={sending} onAttach={fileDrops.pickAttachments} />
+          <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
         ) : (
           <span className="w-1" />
         )}
@@ -400,7 +384,7 @@ export function BotItemCommentBox({
           <NativeChatComposerPrimaryButton
             size="compact"
             aria-label={t('bots.items.comment.submit', 'Comment')}
-            disabled={empty || pending || sending}
+            disabled={empty || pending}
             onClick={send}
           >
             <ArrowUp className="size-3.5" />

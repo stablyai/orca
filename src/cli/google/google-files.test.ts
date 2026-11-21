@@ -7,6 +7,9 @@ import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
 import { COMMAND_SPECS } from '../specs'
 import { GOOGLE_FILES_HANDLERS } from './google-files'
+import { GOOGLE_READ_HANDLERS } from './google-read'
+
+const handlers = { ...GOOGLE_FILES_HANDLERS, ...GOOGLE_READ_HANDLERS }
 
 let cwd = ''
 let stdout: string[] = []
@@ -48,11 +51,11 @@ async function run(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test only use `call`.
   const client = { call } as unknown as RuntimeClient
   const context: HandlerContext = { client, cwd, flags: parsed.flags, json: false, rawArgs: argv }
-  await GOOGLE_FILES_HANDLERS[parsed.commandPath.join(' ')]?.(context)
+  await handlers[parsed.commandPath.join(' ')]?.(context)
   return call.mock.calls[0]
 }
 
-describe('orca drive|docs|sheets', () => {
+describe('Google file and calendar commands', () => {
   it('reads --tab as a name here though it is a switch elsewhere, and --formulas as a switch', async () => {
     const [method, params] =
       (await run([
@@ -75,9 +78,12 @@ describe('orca drive|docs|sheets', () => {
       formulas: true,
       values: [['=A1*2']]
     })
+    await expect(run(['sheets', 'append', 'SHEET', '--values', '["Ada",42]'])).rejects.toThrow(
+      'one row is [["Ada",42]]'
+    )
   })
 
-  it('takes old and new text as positionals, with --suggest anywhere', async () => {
+  it('takes replacements as positionals or from a pairs file', async () => {
     const [, params] =
       (await run(['docs', 'replace', 'DOC', '--suggest', 'recieve', 'receive'])) ?? []
     expect(params).toMatchObject({
@@ -87,18 +93,13 @@ describe('orca drive|docs|sheets', () => {
     })
     const [, cut] = (await run(['docs', 'replace', 'DOC', 'very ', ''])) ?? []
     expect(cut).toMatchObject({ pairs: [{ old: 'very ', new: '' }] })
-  })
 
-  it('reads a pairs file, and refuses values that are one row instead of rows', async () => {
     writeFileSync(join(cwd, 'fixes.json'), '[{"old":"teh","new":"the"}]')
-    const [, params] = (await run(['docs', 'replace', 'DOC', '--pairs-file', 'fixes.json'])) ?? []
-    expect(params).toMatchObject({ pairs: [{ old: 'teh', new: 'the' }] })
-    await expect(run(['sheets', 'append', 'SHEET', '--values', '["Ada",42]'])).rejects.toThrow(
-      'one row is [["Ada",42]]'
-    )
+    const [, fromFile] = (await run(['docs', 'replace', 'DOC', '--pairs-file', 'fixes.json'])) ?? []
+    expect(fromFile).toMatchObject({ pairs: [{ old: 'teh', new: 'the' }] })
   })
 
-  it('downloads with --download <file>, as gmail and slack read do, under the file’s name', async () => {
+  it('downloads Drive files and Gmail attachments without overwriting an existing file', async () => {
     const download = await run(['drive', 'read', '--download', 'FILE', '--out', 'saved.docx'], {
       file: { id: 'FILE', name: 'Plan', mimeType: 'x' },
       name: 'Plan.docx',
@@ -113,6 +114,20 @@ describe('orca drive|docs|sheets', () => {
     })
     expect(readFileSync(join(cwd, 'Plan.docx'), 'utf8')).toBe('PK')
     expect(stdout.join('\n')).toContain('Saved Plan.docx')
+
+    const attachment = {
+      ref: 'gmail:att:m1:1',
+      name: 'plan.pdf',
+      data: Buffer.from('%PDF').toString('base64')
+    }
+    const argv = ['gmail', 'read', '--download', attachment.ref]
+    expect(await run(argv, attachment)).toEqual([
+      'google.gmail.attachment',
+      expect.objectContaining({ ref: attachment.ref })
+    ])
+    expect(readFileSync(join(cwd, 'plan.pdf'), 'utf8')).toBe('%PDF')
+    expect(stdout.join('\n')).toContain('Saved plan.pdf to')
+    await expect(run(argv, attachment)).rejects.toThrow('already exists')
   })
 
   it('refuses a request too large for a paired server before sending it', async () => {
@@ -136,5 +151,23 @@ describe('orca drive|docs|sheets', () => {
     const [, share] =
       (await run(['drive', 'share', 'FILE', '--with', 'a@x.com, b@x.com', '--no-notify'])) ?? []
     expect(share).toMatchObject({ with: ['a@x.com', 'b@x.com'], role: 'reader', notify: false })
+  })
+
+  it('passes the account and page to the calendar list RPC', async () => {
+    const [method, params] =
+      (await run(
+        ['calendar', 'list', '--account', 'ada@acme.dev', '--from', '2026-11-09', '--page', 'p2'],
+        {
+          account: 'ada@acme.dev',
+          now: 0,
+          timeZone: 'UTC',
+          calendar: { id: 'primary', name: 'Ada' },
+          from: '2026-11-09T00:00:00Z',
+          to: '2026-11-10T00:00:00Z',
+          events: []
+        }
+      )) ?? []
+    expect(method).toBe('google.calendar.list')
+    expect(params).toMatchObject({ account: 'ada@acme.dev', from: '2026-11-09', pageToken: 'p2' })
   })
 })

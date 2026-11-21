@@ -9,6 +9,7 @@ import type { JournalRow } from './durable-rows/journal-row-schema'
 import { resolveJournalWriterStoreMutation } from './journal-writer-store-mutation'
 import { commitAgentSessionPublicationFence } from '../../runtime/agent-session/agent-session-publication-fence'
 import { markJournalChatForgotten } from './journal-forgotten-chats'
+import { absorbForgottenJournalLegacyChat } from './database/journal-legacy-compare'
 import { forgetJournalConnectorReplies } from './connector-replies/journal-connector-replies'
 
 export function applyJournalWriterStoreEffect(
@@ -34,6 +35,7 @@ export function applyJournalWriterStoreEffect(
   writeAgentSessionStoreRows(db, resolved.writes)
   if (input.kind === 'command' && input.command.kind === 'forget-idle' && resolved.value === true) {
     markJournalChatForgotten(db, input.command.sessionId)
+    absorbForgottenJournalLegacyChat(db, input.command.sessionId)
     // Its connector requests are owed an outcome still: the chat no longer has them.
     forgetJournalConnectorReplies(db, input.command.sessionId, Date.now())
   }

@@ -3,7 +3,6 @@ import type { BotGroup } from './bot-group'
 import {
   botGroupAudience,
   botGroupDraftAudience,
-  formatBotGroupAudience,
   botGroupMentionSegments,
   botGroupSingleRecipient,
   botGroupReplyDraft
@@ -80,28 +79,6 @@ describe('group mention segments', () => {
   })
 })
 
-describe('group audience label', () => {
-  const english = (_key: string, fallback: string, values?: { count: number }) =>
-    fallback.replace('{{count}}', String(values?.count ?? ''))
-  const label = (draft: string, replyMode: BotGroup['replyMode']) =>
-    formatBotGroupAudience(
-      botGroupDraftAudience(draft, room(replyMode), bots),
-      room(replyMode),
-      bots,
-      english
-    )
-
-  it('names the reply mode, the bots a draft reaches, or an invalid mention', () => {
-    expect(label('hi', { kind: 'all' })).toBe('All bots')
-    expect(label('hi', { kind: 'mentions' })).toBe('Only when mentioned')
-    expect(label('hi', { kind: 'bot', botId: 'sage' })).toBe('Sage')
-    expect(label('@Scout hi', { kind: 'all' })).toBe('Scout')
-    expect(label('@Scout @Sage hi', { kind: 'mentions' })).toBe('2 mentioned')
-    expect(label('@everyone hi', { kind: 'mentions' })).toBe('All bots · 3')
-    expect(label('@Nobody hi', { kind: 'all' })).toBe('Correct mention')
-  })
-})
-
 describe('non-overlapping mentions', () => {
   it('never reads an @ inside a matched name as a second mention', () => {
     const named = [
@@ -132,7 +109,7 @@ describe('everyone-like member names', () => {
     members: named.map((bot) => ({ botId: bot.id, sessionId: bot.id }))
   }
 
-  it('addresses a member whose name starts with Everyone, not the whole room', () => {
+  it('distinguishes @everyone from longer and ambiguous member names', () => {
     expect(botGroupAudience('@Everyone Helper review this', mentionsRoom, named)).toEqual([
       'helper'
     ])
@@ -140,9 +117,7 @@ describe('everyone-like member names', () => {
       'helper',
       'other'
     ])
-  })
 
-  it('refuses a member named exactly Everyone instead of broadcasting', () => {
     const exact = [{ id: 'everyone-bot', name: 'Everyone' }, named[1]]
     const exactRoom = {
       ...mentionsRoom,

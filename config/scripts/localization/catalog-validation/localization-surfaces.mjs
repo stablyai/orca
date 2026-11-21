@@ -15,6 +15,14 @@ export const LOCALIZATION_SURFACES = {
       path.join('src', 'shared', 'connectors', 'connector-message-asker-view.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-status-name.ts'),
       path.join('src', 'shared', 'agent-session', 'journal', 'agent-journal-typed-by.ts'),
+      path.join(
+        'src',
+        'shared',
+        'agent-session',
+        'lifecycle',
+        'accounts',
+        'agent-session-usage-account-label.ts'
+      ),
       USAGE_STATUS_COPY_ROOT
     ],
     runtimeRequiredPath: path.join('src', 'renderer', 'src', 'i18n', 'en-runtime-required.json'),
@@ -37,6 +45,14 @@ export const LOCALIZATION_SURFACES = {
       path.join('src', 'shared', 'bots', 'bot-item-status-name.ts'),
       path.join('src', 'shared', 'connectors', 'connector-message-asker-view.ts'),
       path.join('src', 'shared', 'agent-session', 'journal', 'agent-journal-typed-by.ts'),
+      path.join(
+        'src',
+        'shared',
+        'agent-session',
+        'lifecycle',
+        'accounts',
+        'agent-session-usage-account-label.ts'
+      ),
       USAGE_STATUS_COPY_ROOT
     ],
     runtimeRequiredPath: path.join('mobile', 'src', 'i18n', 'en-runtime-required.json'),

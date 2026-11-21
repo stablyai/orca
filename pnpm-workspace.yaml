@@ -128,6 +128,7 @@ patchedDependencies:
   minimatch@10.2.6: config/patches/minimatch@10.2.6.patch
   picomatch@4.0.4: config/patches/picomatch@4.0.4.patch
   picomatch@4.0.7: config/patches/picomatch@4.0.7.patch
+  '@radix-ui/react-menu@2.1.24': config/patches/@radix-ui__react-menu@2.1.24.patch
 permissions:
   agent-browser:
     skills: false

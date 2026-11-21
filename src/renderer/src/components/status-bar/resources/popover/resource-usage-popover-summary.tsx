@@ -10,7 +10,9 @@ import type {
   getResourceCommitMetricCopy,
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
-import { formatCpu, formatMemory } from './resource-usage-metrics'
+import { formatMemory } from './resource-usage-metrics'
+import type { ResourceOwnerSplit } from './resource-owner-split'
+import { resourceOwnerLabels, type ResourceOwnerKey } from './resource-owner-labels'
 
 export function renderResourceUsagePopoverHeader(
   {
@@ -130,18 +132,44 @@ export function renderSessionsOnlyErrorBanner(t: Translate = translate): React.J
   )
 }
 
+const OWNER_SWATCH_CLS = {
+  orca: 'bg-chart-2 dark:bg-chart-1',
+  agents: 'bg-chart-5 dark:bg-chart-2',
+  yourProcesses: 'bg-foreground/45'
+} as const
+
+const OWNERS = ['orca', 'agents', 'yourProcesses'] as const
+
+function OwnerSwatch({ owner }: { owner: ResourceOwnerKey }): React.JSX.Element {
+  return (
+    <span
+      className={cn('inline-block size-2 shrink-0 rounded-sm', OWNER_SWATCH_CLS[owner])}
+      aria-hidden
+    />
+  )
+}
+
+/** Each owner's share of their combined memory; shared pages make host-based shares unreliable. */
+function barWidths(split: ResourceOwnerSplit): Record<ResourceOwnerKey, number> {
+  const tracked = split.orca.memory + split.agents.memory + split.yourProcesses.memory
+  const pct = (bytes: number): number => (tracked > 0 ? (bytes / tracked) * 100 : 0)
+  return {
+    orca: pct(split.orca.memory),
+    agents: pct(split.agents.memory),
+    yourProcesses: pct(split.yourProcesses.memory)
+  }
+}
+
 export function renderResourceUsageSummary(
   {
-    totalCpu,
-    totalMemory,
+    ownerSplit,
     memoryMetricCopy,
     commitBadgeLabel,
     commitMetricCopy,
     commitToneClass,
     orphanCount
   }: {
-    totalCpu: number
-    totalMemory: number
+    ownerSplit: ResourceOwnerSplit
     memoryMetricCopy: ReturnType<typeof getResourceMemoryMetricCopy>
     commitBadgeLabel: string | null
     commitMetricCopy: ReturnType<typeof getResourceCommitMetricCopy> | null
@@ -150,32 +178,55 @@ export function renderResourceUsageSummary(
   },
   t: Translate = translate
 ): React.JSX.Element {
+  const labels = resourceOwnerLabels(t)
+  const widths = barWidths(ownerSplit)
+  const privateLabel = t('resourceManager.owner.privateBytes', 'Committed by Orca and terminals')
+  const showCommit = commitBadgeLabel !== null && commitMetricCopy !== null
   return (
-    <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <span className="font-medium text-foreground">{formatCpu(totalCpu)}</span>
-        <span className="font-medium text-foreground">
-          {formatMemory(totalMemory)}{' '}
-          <span className="font-normal text-muted-foreground">{memoryMetricCopy.summaryLabel}</span>
-        </span>
-        {commitBadgeLabel && commitMetricCopy && (
-          <span className={cn('font-medium', commitToneClass ?? 'text-foreground')}>
-            {commitBadgeLabel}{' '}
-            <span className="font-normal text-muted-foreground">
-              {commitMetricCopy.summaryLabel}
+    <div className="shrink-0 border-b border-border px-3 pt-2 pb-1.5 text-xs tabular-nums">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+        {OWNERS.map((owner) => (
+          <span key={owner} className="inline-flex items-baseline gap-1 whitespace-nowrap">
+            <span className="self-center">
+              <OwnerSwatch owner={owner} />
+            </span>
+            <span className="text-muted-foreground">{labels[owner]}</span>
+            <span className="font-medium text-foreground">
+              {formatMemory(ownerSplit[owner].memory)}
             </span>
           </span>
-        )}
-        {orphanCount > 0 && (
-          <span className="ml-auto shrink-0 text-status-warning-text" aria-live="polite">
-            {t(
-              'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
-              '{{count}} orphans',
-              { count: orphanCount, defaultValue_one: '{{count}} orphan' }
-            )}
-          </span>
-        )}
+        ))}
       </div>
+      <div
+        className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-foreground/[0.06]"
+        aria-hidden
+      >
+        {OWNERS.map((owner) => (
+          <span
+            key={owner}
+            className={cn('h-full', OWNER_SWATCH_CLS[owner])}
+            style={{ width: `${widths[owner]}%` }}
+          />
+        ))}
+      </div>
+      {(showCommit && commitToneClass) || orphanCount > 0 ? (
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-2xs text-muted-foreground">
+          {showCommit && commitToneClass && (
+            <span className={cn('whitespace-nowrap', commitToneClass)}>
+              {privateLabel} {commitBadgeLabel}
+            </span>
+          )}
+          {orphanCount > 0 && (
+            <span className="ml-auto shrink-0 text-status-warning-text" aria-live="polite">
+              {t(
+                'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
+                '{{count}} orphans',
+                { count: orphanCount, defaultValue_one: '{{count}} orphan' }
+              )}
+            </span>
+          )}
+        </div>
+      ) : null}
       <details className="mt-1.5 text-muted-foreground">
         <summary className="cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {t('resourceManager.metricDetails', 'Metric details')}
@@ -183,12 +234,16 @@ export function renderResourceUsageSummary(
         <div className="mt-1.5 space-y-1.5">
           <p>
             {t(
-              'auto.components.status.bar.ResourceUsageStatusSegment.1fedf94eae',
-              'Combined CPU load. Values above 100% mean more than one core is working at once.'
+              'resourceManager.owner.description',
+              "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory."
             )}
           </p>
           <p>{memoryMetricCopy.description}</p>
-          {commitBadgeLabel && commitMetricCopy ? <p>{commitMetricCopy.description}</p> : null}
+          {commitMetricCopy && showCommit ? (
+            <p>
+              {privateLabel} {commitBadgeLabel}. {commitMetricCopy.description}
+            </p>
+          ) : null}
         </div>
       </details>
     </div>

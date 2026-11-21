@@ -43,11 +43,15 @@ function setup(value: string, caret: number) {
   return { input: inputRef.current!, editor, press, caretAt }
 }
 
-it('Backspace right after a pill deletes the whole pill in one press', () => {
-  const { input, press, caretAt } = setup(`ab ${TOKEN} cd`, 5)
+it('deletes the whole pill in one Backspace and restores it on undo', () => {
+  const { input, editor, press, caretAt } = setup(`ab ${TOKEN} cd`, 5)
   press('Backspace')
   expect(input.value).toBe('ab  cd')
   expect(caretAt()).toBe(4)
+  act(() => {
+    editor.commands.undo()
+  })
+  expect(input.value).toBe(`ab ${TOKEN} cd`)
 })
 
 it('Delete right before a pill deletes the whole pill in one press', () => {
@@ -55,15 +59,6 @@ it('Delete right before a pill deletes the whole pill in one press', () => {
   press('Delete')
   expect(input.value).toBe('ab  cd')
   expect(caretAt()).toBe(4)
-})
-
-it('undo after Backspace gives the pill back', () => {
-  const { input, editor, press } = setup(`ab ${TOKEN} cd`, 5)
-  press('Backspace')
-  act(() => {
-    editor.commands.undo()
-  })
-  expect(input.value).toBe(`ab ${TOKEN} cd`)
 })
 
 it('one ArrowLeft or ArrowRight steps over a pill, not onto it', () => {

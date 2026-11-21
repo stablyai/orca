@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { settleContinuedLook } from './bot-look-around-continued'
-import { beginRun, endRun, suggest, upNextState, type SuggestInput } from './bot-look-around-state'
+import {
+  beginRun,
+  endRun,
+  suggest,
+  upNextItems,
+  upNextState,
+  type SuggestInput
+} from './bot-look-around-state'
 import { BotLookAroundStore } from './bot-look-around-store'
 
 const idea: SuggestInput = { title: 'Review #12', why: 'It waits on you', ask: 'Review #12' }
@@ -47,17 +54,20 @@ function stoppedLook(): BotLookAroundStore {
 }
 
 describe('a look continued past its usage limit', () => {
-  it('still takes the suggestions its continued turn makes', () => {
+  it('keeps suggestions from the continued turn and clears the failure when it succeeds', () => {
     const store = stoppedLook()
-    expect(suggest(store.get('b1'), 'look-1', idea, RESET + 1).outcome.ok).toBe(true)
-  })
-
-  it('is done, with no failure, once its continued turn succeeds', () => {
-    const store = stoppedLook()
+    store.update('b1', (state) => {
+      const next = suggest(state, 'look-1', idea, RESET + 1)
+      expect(next.outcome.ok).toBe(true)
+      return { state: next.state, result: undefined }
+    })
     settleContinuedLook(store, completion('look-1'), RESET + 60_000)
     const state = upNextState(store.get('b1'), undefined)
     expect(state.error).toBeUndefined()
     expect(state.lastLookedAt).toBe(RESET + 60_000)
+    expect(upNextItems(store.get('b1'), RESET + 60_000)).toEqual([
+      expect.objectContaining({ title: 'Review #12' })
+    ])
     expect(store.get('b1').runs[0]).toEqual({
       sessionId: 'look-1',
       startedAt: 1_000,

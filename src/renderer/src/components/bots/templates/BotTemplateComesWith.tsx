@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { BotAppBrandLogo, hasBotAppBrand } from '../apps/BotAppBrandLogo'
 import {
   BOT_CONNECTOR_NAMES,
   type BotTemplate,
@@ -134,7 +135,13 @@ export function BotTemplateComesWith({
       {template.connectors.map((kind) => (
         <Row
           key={kind}
-          icon={<Plug className="size-4" />}
+          icon={
+            hasBotAppBrand(kind) ? (
+              <BotAppBrandLogo app={{ id: kind }} size="xs" />
+            ) : (
+              <Plug className="size-4" />
+            )
+          }
           title={BOT_CONNECTOR_NAMES[kind]}
           // A new bot has no connectors yet: each is the one to act on, so it isn't muted.
           state={

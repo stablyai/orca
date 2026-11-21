@@ -311,56 +311,6 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
     })
 
-    it('does NOT reconcile when the process check could not confirm a shell', async () => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
-      vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-unconfirmed-shell'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          bindPaneAgentTitleMocks(
-            createDeps({ isVisibleRef: { current: false } }),
-            agentTitleMocks8
-          )
-        )
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-        launchConfig: { agentArgs: '', agentEnv: {} },
-        identity: { agentType: 'droid' }
-      }
-
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      // Run the full ladder; at 350ms the unavailable branch has not settled, so early assertions can falsely pass.
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-      await flushAsyncTicks()
-
-      // The unavailable branch really ran: it publishes an unproven foreground before settling.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: false
-      })
-      expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-    })
-
     it('disarms stale TUI modes in the emulator after a confirmed return to shell', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
@@ -507,7 +457,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
     })
 
-    it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {
+    it('retires stale routing after unavailable command-finish reads without reconciling', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
@@ -557,6 +507,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         shellForeground: false
       })
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+      expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
     })
 
     it('cancels deferred cleanup on a new command and retires identity at its later shell', async () => {

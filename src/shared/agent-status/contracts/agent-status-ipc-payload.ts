@@ -87,6 +87,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   turnEndDisposition?: TurnEndDisposition
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** A tmux or shared server, not this pane, runs this conversation: never the pane's resume. */
+  executionHost?: 'shared'
   /** Resume identity update only; the status-shaped fields are transport placeholders. */
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */

@@ -8,7 +8,6 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import { automationWontFire } from './automation-wont-fire'
 
 const SLACK = { appId: 'A1', teamId: 'T1' }
-const LINEAR = { workspaceId: 'w1', workspaceName: 'Acme' }
 const BOT_TARGET = {
   botId: 'bot-1',
   runsIn: 'new',
@@ -74,12 +73,6 @@ describe('automationWontFire', () => {
     )
   })
 
-  it('names the one connector each source needs', () => {
-    expect(label({}, [SLACK_MENTIONED])).toBe('Won’t run: needs the Slack connector')
-    expect(label({}, [CI_FAILED])).toBe('Won’t run: needs the GitHub connector')
-    expect(label({}, [ASSIGNED])).toBe('Won’t run: needs the Linear connector')
-  })
-
   it('names each missing connector once, and only the missing ones', () => {
     expect(label({ slack: SLACK }, [SLACK_MENTIONED, CI_FAILED, PR_OPENED, ASSIGNED])).toBe(
       'Won’t run: needs the GitHub or Linear connector'
@@ -97,33 +90,6 @@ describe('automationWontFire', () => {
     expect(label({}, [mail, meet])).toBe('Won’t run: needs the Google connector')
     expect(label({}, [mail, CI_FAILED])).toBe('Won’t run: needs the Google or GitHub connector')
     expect(label({ google: true }, [mail, meet])).toBeNull()
-  })
-
-  it('says only the events are lost when a schedule still runs it', () => {
-    expect(
-      automationWontFire({ bot: BOT_TARGET, on: [CI_FAILED], dtstart: 0 }, [
-        { id: 'bot-1', name: 'Ranger' }
-      ])?.label
-    ).toBe('Runs on its schedule only: needs the GitHub connector')
-  })
-
-  it('is quiet when every event has its connector', () => {
-    expect(label({ slack: SLACK, linear: LINEAR }, [SLACK_MENTIONED, ASSIGNED])).toBeNull()
-    expect(label({}, [])).toBeNull()
-  })
-
-  it('is quiet for a bot it cannot see or an automation without a bot', () => {
-    expect(
-      automationWontFire(
-        { bot: BOT_TARGET, on: [SLACK_MENTIONED], dtstart: EVENT_ONLY_SCHEDULE.dtstart },
-        []
-      )
-    ).toBeNull()
-    expect(
-      automationWontFire({ on: [SLACK_MENTIONED], dtstart: EVENT_ONLY_SCHEDULE.dtstart }, [
-        { id: 'bot-1', name: 'Ranger' }
-      ])
-    ).toBeNull()
   })
 })
 

@@ -16,12 +16,17 @@ export type WorkerThreadChildPort = {
 }
 
 function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
-  if (error instanceof Error) {
-    return 'code' in error && typeof error.code === 'string'
-      ? { message: error.message, code: error.code }
-      : { message: error.message }
+  if (!(error instanceof Error)) {
+    return { message: String(error) }
   }
-  return { message: String(error) }
+  const { code, errno, syscall, path }: NodeJS.ErrnoException = error
+  return {
+    message: error.message,
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof errno === 'number' ? { errno } : {}),
+    ...(typeof syscall === 'string' ? { syscall } : {}),
+    ...(typeof path === 'string' ? { path } : {})
+  }
 }
 
 export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
@@ -34,6 +39,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
+      discardingOutput?: boolean
     }
   >()
 
@@ -63,6 +69,9 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     children.set(id, state)
     const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
+      if (state.discardingOutput) {
+        return
+      }
       state.pendingOutputBytes += chunk.byteLength
       if (state.pendingOutputBytes >= OUTPUT_HIGH_WATER_BYTES) {
         child.stdout?.pause()
@@ -96,13 +105,53 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     })
   }
 
-  port.on('message', (request) => {
+  // Each launch waits a turn so cancels queued behind a slow CreateProcess can withdraw it first.
+  const queued = new Map<
+    number,
+    {
+      request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
+      early: WorkerThreadChildRequest[]
+    }
+  >()
+  let launching = false
+  const launchNext = (): void => {
+    const next = queued.values().next()
+    if (next.done) {
+      launching = false
+      return
+    }
+    queued.delete(next.value.request.id)
+    spawnChild(next.value.request)
+    for (const request of next.value.early) {
+      handle(request)
+    }
+    setImmediate(launchNext)
+  }
+
+  const handle = (request: WorkerThreadChildRequest): void => {
     if (request.type === 'spawn') {
-      spawnChild(request)
+      queued.set(request.id, { request, early: [] })
+      if (!launching) {
+        launching = true
+        setImmediate(launchNext)
+      }
+      return
+    }
+    const waiting = queued.get(request.id)
+    // Any stop of a launch that has not started withdraws it; nothing is created only to be killed.
+    if (waiting && (request.type === 'cancel-spawn' || request.type === 'kill')) {
+      queued.delete(request.id)
+      const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
+      port.postMessage({ type: 'exit', id: request.id, code: null, signal })
+      port.postMessage({ type: 'close', id: request.id, code: null, signal })
+      return
+    }
+    if (waiting) {
+      waiting.early.push(request)
       return
     }
     const state = children.get(request.id)
-    if (!state) {
+    if (!state || request.type === 'cancel-spawn') {
       return
     }
     const { child } = state
@@ -125,15 +174,27 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
           child.stdout?.resume()
           child.stderr?.resume()
         }
+      } else if (request.type === 'discard-output') {
+        state.discardingOutput = true
+        state.pendingOutputBytes = 0
+        child.stdout?.resume()
+        child.stderr?.resume()
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {
         child.stdin?.end()
       } else {
         child.kill(request.signal)
+        if (child.exitCode !== null || child.signalCode !== null) {
+          // Like execFile's kill: a descendant still holding an exited root's pipes must not keep close away.
+          child.stdout?.destroy()
+          child.stderr?.destroy()
+        }
       }
     } catch {
       // Races with exit; the exit/close events still reach the stand-in.
     }
-  })
+  }
+  port.on('message', handle)
+  port.postMessage({ type: 'ready' })
 }

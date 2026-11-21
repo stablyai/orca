@@ -133,6 +133,8 @@ export type AgentStatusEntry = {
   launchAttested?: boolean
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
+  /** A tmux or shared server, not this pane, runs this conversation: never the pane's resume. */
+  executionHost?: 'shared'
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** Live OSC 7501 facet never decides state; read through resolveProgramStatusPresentation beside the state owner. */

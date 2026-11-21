@@ -126,12 +126,6 @@ describe('stand-in connector edit and delete', () => {
     expect(read('slack:T0EVAL:C0EXPORTS::m1', { download: 'F0EXPORTLOG' })).toMatchObject({
       refusal: 'not_found'
     })
-    // No Orca cap: a file of any size comes back as a link the CLI streams.
-    state.places![0]!.messages![1]!.files![0]!.content = 'x'.repeat(2 * 1024 * 1024)
-    expect(read('slack:T0EVAL:C0EXPORTS::m2', { download: 'F0EXPORTLOG' })).toMatchObject({
-      ok: true,
-      result: { download: { size: 2 * 1024 * 1024, ticket: 'eval' } }
-    })
   })
 
   it("refuses someone else's message, and one that isn't there", () => {

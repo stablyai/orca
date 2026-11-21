@@ -47,6 +47,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
       retrySplit?: string
       /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
       wslUserAct?: true
+      /** Main's splits start under this handle; a window's split draws its own. */
+      preAllocatedHandle?: string
     } = {},
     // Internal creation evidence; RPC and preload callers never supply it.
     createdWorktree?: Worktree
@@ -79,7 +81,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
           env: opts.env,
           envToDelete: opts.envToDelete,
           activate: opts.activate,
-          ...(opts.wslUserAct ? { wslUserAct: true } : {})
+          ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+          ...(opts.preAllocatedHandle ? { preAllocatedHandle: opts.preAllocatedHandle } : {})
         }
       )
     }

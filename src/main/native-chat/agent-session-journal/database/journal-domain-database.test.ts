@@ -1,7 +1,5 @@
-import {
-  captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
@@ -21,10 +19,9 @@ import {
   createAgentSessionRecordTablesSql
 } from './journal-database-schema'
 import { openJournalDatabase } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
@@ -226,23 +223,6 @@ it('never reimports metadata or consults a broken original once the new file is 
   const before = hash(published)
   expect(await initializeJournalDomainDatabase(isolated)).toBe(published)
   expect(hash(published)).toBe(before)
-})
-
-it('accepts supported early schemas with no additive metadata tables without migrating their source', async () => {
-  const stateDirectory = directory()
-  const source = new Database(journalDatabasePath(stateDirectory))
-  source.exec(createJournalTablesSql())
-  source.exec(
-    `INSERT INTO journal_sessions VALUES('early','workspace','epoch'); PRAGMA user_version=3`
-  )
-  source.close()
-  const before = hash(journalDatabasePath(stateDirectory))
-  const current = open(await initializeJournalDomainDatabase(stateDirectory))
-  expect(
-    current.prepare('SELECT session_id,workspace_id,epoch FROM journal_chat_state').all()
-  ).toEqual([{ session_id: 'early', workspace_id: 'workspace', epoch: null }])
-  expect(current.prepare('SELECT record_json FROM agent_session_records').all()).toEqual([])
-  expect(hash(journalDatabasePath(stateDirectory))).toBe(before)
 })
 
 it('publishes complete metadata under competing initialization without replacing the winner or foreign files', async () => {

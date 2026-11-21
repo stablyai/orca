@@ -178,6 +178,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.providerFor(id).reportFocusLost?.(id)
   }
 
+  async requestRepaint(id: string): Promise<void> {
+    await this.providerFor(id).requestRepaint?.(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
@@ -207,11 +211,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
   }
-  async confirmShellForeground(
-    id: string,
-    options?: { noLiveDescendants?: boolean }
-  ): Promise<boolean> {
-    return (await this.providerFor(id).confirmShellForeground?.(id, options)) ?? false
+  async confirmShellForeground(id: string): Promise<boolean> {
+    return (await this.providerFor(id).confirmShellForeground?.(id)) ?? false
   }
 
   async serialize(ids: string[]): Promise<string> {

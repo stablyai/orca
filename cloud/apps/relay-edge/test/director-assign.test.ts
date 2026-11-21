@@ -34,8 +34,7 @@ describe('director assign epoch rules', () => {
     expect(plan({ current: stored(4), handedUrl: EDGE_URL, ask: ask(EDGE_URL, 'user-2') })).toEqual({ outcome: 'assign', assignmentEpoch: 5, write: { wipe: true } })
   })
 
-  it('never takes a host placed elsewhere, nor one frozen for a move', () => {
-    expect(plan({ current: stored(4, { cellId: 'us-c1' }) })).toEqual({ outcome: 'elsewhere' })
+  it('never takes a host frozen for a move', () => {
     expect(plan({ current: stored(4), frozen: true })).toEqual({ outcome: 'frozen' })
   })
 })

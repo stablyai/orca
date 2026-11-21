@@ -3,6 +3,7 @@ import type { BrowserTabIdentity } from '../browser-tab-identity'
 import { getBrowserProcessUserAgentIdentity } from '../browser-process-user-agent'
 import { decideBrowserSessionRequestHeaders } from '../../sessions/requests/browser-session-request-decisions'
 import { reportBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-observer'
+import { holdBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-owner'
 import {
   currentUserAgent,
   setUserAgentHeader,
@@ -71,8 +72,9 @@ export function installBrowserSessionUserAgentPolicy(
       setUserAgentHeader(headers, teamsRequestUserAgent(details.url, outgoingUserAgent))
     }
   }
-  sess.webRequest.onBeforeSendHeaders(
-    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+  return holdBrowserSessionWebRequest(
+    sess,
+    'onBeforeSendHeaders',
     (details, callback) => {
       reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
       applyUserAgentPolicy(details)
@@ -80,14 +82,7 @@ export function installBrowserSessionUserAgentPolicy(
       callback({
         requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
       })
-    }
+    },
+    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
   )
-  let disposed = false
-  return (): void => {
-    if (disposed) {
-      return
-    }
-    disposed = true
-    sess.webRequest.onBeforeSendHeaders(null)
-  }
 }

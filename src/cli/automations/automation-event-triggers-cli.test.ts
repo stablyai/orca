@@ -11,7 +11,7 @@ const RANGER = {
   slack: { appId: 'A1', teamId: 'T1' }
 }
 
-function host(automations: unknown[] = []) {
+function host(automations: { id: string }[] = []) {
   const writes: { method: string; params: unknown }[] = []
   const call = vi.fn(async (method: string, params?: unknown) => {
     const ok = (result: unknown) => ({
@@ -25,8 +25,11 @@ function host(automations: unknown[] = []) {
         return ok({ capabilities: [] })
       case 'bots.list':
         return ok({ bots: [RANGER] })
-      case 'automation.show':
-        return ok({ automation: { id: 'a1' } })
+      case 'automation.show': {
+        const id =
+          typeof params === 'object' && params !== null && 'id' in params ? params.id : 'a1'
+        return ok({ automation: automations.find((automation) => automation.id === id) ?? { id } })
+      }
       case 'automation.list':
         return ok({ automations })
       case 'automation.create':
@@ -140,18 +143,6 @@ describe('orca automations --on', () => {
     })
   })
 
-  it('asks nothing extra of the host for an edit without events', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, call } = host()
-
-    await run('automations edit', client, [
-      ['id', 'a1'],
-      ['disabled', true]
-    ])
-
-    expect(call.mock.calls.map(([method]) => method)).not.toContain('status.get')
-  })
-
   it('lists the events without a host', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { client, call } = host()
@@ -165,20 +156,6 @@ describe('orca automations --on', () => {
 
     expect(call).not.toHaveBeenCalled()
     expect(log.mock.calls[0]?.[0]).toContain('slack.reaction')
-  })
-
-  it('carries the notes in JSON too', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client } = host()
-
-    await AUTOMATION_HANDLERS['automations trigger-options']!({
-      client,
-      cwd: '/tmp',
-      flags: new Map([['source', 'slack']]),
-      json: true
-    })
-
-    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.guide).toContain('needs no automation')
   })
 
   it('refuses an event from a source the bot has no connector for, naming what it has', async () => {
@@ -211,7 +188,7 @@ describe('orca automations --on', () => {
   })
 })
 
-describe('orca automations list', () => {
+describe('orca automations list and show', () => {
   const automation = (id: string, on: unknown[]) => ({
     id,
     name: id,
@@ -224,36 +201,29 @@ describe('orca automations list', () => {
     nextRunAt: EVENT_ONLY_SCHEDULE.dtstart
   })
 
-  it("marks a saved rule whose connector the bot doesn't have", async () => {
+  it('reports event-only automations and rules whose connector is missing', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const heard = automation('heard', [{ id: 'on-1', source: 'slack', event: 'mentioned' }])
+    const scheduled = { ...automation('daily', []), rrule: 'FREQ=DAILY', dtstart: 1, nextRunAt: 2 }
     const { client } = host([
-      automation('heard', [{ id: 'on-1', source: 'slack', event: 'mentioned' }]),
-      automation('unheard', [{ id: 'on-2', source: 'linear', event: 'assigned' }])
+      heard,
+      automation('unheard', [{ id: 'on-2', source: 'linear', event: 'assigned' }]),
+      scheduled
     ])
 
-    await AUTOMATION_HANDLERS['automations list']!({
-      client,
-      cwd: '/tmp',
-      flags: new Map(),
-      json: true
-    })
+    await run('automations list', client, [])
+    await run('automations show', client, [['id', heard.id]])
 
-    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.wontFire).toEqual({
+    const [listed, shown] = log.mock.calls.map(([text]) => JSON.parse(String(text)).result)
+    const eventOnly = { id: heard.id, rrule: null, dtstart: null, nextRunAt: null, on: heard.on }
+    expect(listed.automations).toMatchObject([
+      eventOnly,
+      { id: 'unheard' },
+      { id: 'daily', rrule: 'FREQ=DAILY', dtstart: 1, nextRunAt: 2 }
+    ])
+    expect(listed.wontFire).toEqual({
       unheard: "won't fire: Ranger has no Linear connector (linear.assigned)"
     })
-  })
-
-  it('asks nothing more of the host when no automation has events', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, call } = host([automation('scheduled', [])])
-
-    await AUTOMATION_HANDLERS['automations list']!({
-      client,
-      cwd: '/tmp',
-      flags: new Map(),
-      json: false
-    })
-
-    expect(call.mock.calls.map(([method]) => method)).toEqual(['automation.list'])
+    expect(shown.automation).toMatchObject(eventOnly)
   })
 })

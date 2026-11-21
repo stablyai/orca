@@ -14,6 +14,7 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
+import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { itemBlocks } from './structured-agent-session-item-blocks'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
@@ -163,9 +164,9 @@ export type StructuredAgentSessionStatusProjection = {
   /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
-  /** The row of the newest async question still waiting for the person's next message; set by
-   *  the host's journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
-  openAsyncQuestion?: string
+  /** The newest async question still waiting for the person's next message; set by the host's
+   *  journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
+  openAsyncQuestion?: AgentSessionAwaitedQuestion
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;

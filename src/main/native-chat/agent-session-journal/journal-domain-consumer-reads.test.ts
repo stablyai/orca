@@ -640,27 +640,25 @@ async function endedTurnsFixture(turns: number) {
   return f
 }
 
-it.each([20, 200])(
-  'reads the ended-turn count without visiting the chat’s turn rows (%i turns)',
-  async (turns) => {
-    const f = await endedTurnsFixture(turns)
-    const prepared: string[] = []
-    const prepare = f.db.prepare.bind(f.db)
-    f.db.prepare = (sql: string) => (prepared.push(sql), prepare(sql))
+it('reads the ended-turn count without visiting the chat’s turn rows', async () => {
+  const turns = 20
+  const f = await endedTurnsFixture(turns)
+  const prepared: string[] = []
+  const prepare = f.db.prepare.bind(f.db)
+  f.db.prepare = (sql: string) => (prepared.push(sql), prepare(sql))
 
-    expect(await readsOf(f).endedTurnCount()).toBe(turns)
-    f.db.prepare = prepare
-    const plans = prepared.flatMap((sql) =>
-      f.db
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all(...['chat', 'epoch', 'journal_ended_turn_counts'].slice(0, sql.split('?').length - 1))
-        .map((row) => String(row.detail))
-    )
-    expect(plans.filter((detail) => /turn_marker|ended_turn/.test(detail))).toEqual([
-      'SEARCH journal_ended_turn_counts USING PRIMARY KEY (session_id=? AND epoch=?)'
-    ])
-  }
-)
+  expect(await readsOf(f).endedTurnCount()).toBe(turns)
+  f.db.prepare = prepare
+  const plans = prepared.flatMap((sql) =>
+    f.db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(...['chat', 'epoch', 'journal_ended_turn_counts'].slice(0, sql.split('?').length - 1))
+      .map((row) => String(row.detail))
+  )
+  expect(plans.filter((detail) => /turn_marker|ended_turn/.test(detail))).toEqual([
+    'SEARCH journal_ended_turn_counts USING PRIMARY KEY (session_id=? AND epoch=?)'
+  ])
+})
 
 it('keeps the ended-turn count equal to a recount through hides, removals, reopened turns and a first open', async () => {
   const f = await endedTurnsFixture(6)

@@ -437,7 +437,9 @@ describe('a conversation linked to a native chat', () => {
       const { host } = hostTestState()
       await attach()
       let state: 'working' | 'completed' = 'completed'
-      const read = vi.fn(async () => [{ state }])
+      const read = vi.fn(
+        async (sessionIds: readonly string[]) => new Map(sessionIds.map((id) => [id, [{ state }]]))
+      )
       const { events, ...linked } = linkedSeam(installedChats(host).chats, THREAD_BOT, { read })
       // The watch's first read says none run, in case an earlier process said they did.
       await eventually(() =>
@@ -451,7 +453,7 @@ describe('a conversation linked to a native chat', () => {
           }
         ])
       )
-      expect(read).toHaveBeenCalledWith(HOST_TEST_SESSION)
+      expect(read).toHaveBeenCalledWith([HOST_TEST_SESSION])
 
       state = 'working'
       await fromThread(linked)

@@ -59,7 +59,8 @@
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "resumeSession": "Reprendre la session d'agent"
+      "resumeSession": "Reprendre la session d'agent",
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -190,7 +191,18 @@
       "webView": "Afficher la version pour ordinateur du site"
     },
     "loadFailure": {
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "connectionNotSecure": "La connexion n'est pas sécurisée",
+      "certificateNameMismatch": "Le certificat ne correspond pas à {{value0}}.",
+      "certificateDateInvalid": "Le certificat de {{value0}} n'est pas valide à la date et à l'heure actuelles.",
+      "certificateAuthorityInvalid": "Orca ne fait pas confiance à l'autorité qui a émis le certificat de {{value0}}.",
+      "certificateVerificationFailed": "Orca n'a pas pu vérifier le certificat de {{value0}}.",
+      "proceedUnsafe": "Continuer quand même (non sécurisé)",
+      "connecting": "Connexion…",
+      "certificateChallengeExpired": "Cette approbation de certificat a expiré. Rechargez la page pour en demander une nouvelle.",
+      "certificateChallengeChanged": "La demande de certificat a changé. Rechargez la page et examinez le nouvel avertissement.",
+      "certificateProceedFailed": "Orca n'a pas pu approuver cette demande de certificat. Rechargez la page et réessayez.",
+      "certificateChallengeUnavailable": "Cette demande de certificat n'est plus disponible. Rechargez la page pour en demander une nouvelle."
     }
   },
   "chat": {
@@ -224,7 +236,8 @@
     "contextUsage": {
       "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
       "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse."
+      "estimated": "Estimation basée sur la dernière réponse.",
+      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",
@@ -642,10 +655,6 @@
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Confié à un agent",
-      "startedAgent": "Agent démarré"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
       "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
@@ -693,7 +702,7 @@
       "confirm": "Revenir",
       "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
       "historyNotPaginated": "Ce chat Codex plus ancien ne peut pas revenir à un message antérieur. Démarrez un nouveau chat pour utiliser « Revenir ici ».",
-      "busy": "Disponible une fois que l'agent est inactif et que plus rien dans ce chat n'attend votre action.",
+      "busy": "Disponible lorsque le chat est inactif",
       "staleEpoch": "La conversation a changé. Examinez les derniers messages et réessayez.",
       "invalidTarget": "La conversation ne peut pas revenir à ce message. Rien n'a été modifié.",
       "historyLimit": "Cette conversation est trop longue pour y revenir. Rien n'a été modifié.",
@@ -974,7 +983,9 @@
       "label": "Script de setup",
       "run": "Exécuter",
       "runSetupCommand": "Exécuter la commande de setup",
-      "skip": "Ignorer"
+      "skip": "Ignorer",
+      "waitForSetup": "Attendre la fin du setup avant de démarrer l'agent",
+      "waitForSetupSaveFailed": "Échec de l'enregistrement du comportement de démarrage de la configuration."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Se connecter",
@@ -1679,7 +1690,12 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
       "unpin": "Désépingler",
-      "rename": "Renommer"
+      "rename": "Renommer",
+      "markRead": "Marquer comme lu",
+      "markUnread": "Marquer comme non lu",
+      "muteNotifications": "Désactiver les notifications",
+      "unmuteNotifications": "Réactiver les notifications",
+      "moveToStatus": "Déplacer vers le statut"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -2272,6 +2288,7 @@
       "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
       "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
       "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+      "providerResponseFailedQuoted": "{{agent}} n’a pas pu terminer cette réponse : {{detail}}.",
       "selectedModel": "le modèle sélectionné",
       "providerRejected": "{{agent}} n'a pas accepté ce message.",
       "providerRejectedQuoted": "{{agent}} n'a pas accepté ce message : {{detail}}.",
@@ -2534,6 +2551,11 @@
       "sendReviewNotes": "Envoyer les notes de revue",
       "shortcut": "Raccourci",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "Invite CMD",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
@@ -2854,6 +2876,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "browserProfile": {
+      "default": "Par défaut"
     }
   },
   "settings": {

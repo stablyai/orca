@@ -57,7 +57,8 @@
       "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
-      "resumeSession": "에이전트 세션 재개"
+      "resumeSession": "에이전트 세션 재개",
+      "continueInCli": "CLI에서 계속"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -186,7 +187,18 @@
       "webView": "웹사이트를 데스크톱 화면으로 보기"
     },
     "loadFailure": {
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "connectionNotSecure": "연결이 안전하지 않습니다",
+      "certificateNameMismatch": "인증서가 {{value0}}과(와) 일치하지 않습니다.",
+      "certificateDateInvalid": "{{value0}}의 인증서가 현재 날짜와 시간에는 유효하지 않습니다.",
+      "certificateAuthorityInvalid": "Orca는 {{value0}}의 인증서를 발급한 인증 기관을 신뢰하지 않습니다.",
+      "certificateVerificationFailed": "Orca가 {{value0}}의 인증서를 확인하지 못했습니다.",
+      "proceedUnsafe": "계속(안전하지 않음)",
+      "connecting": "연결 중…",
+      "certificateChallengeExpired": "이 인증서 승인이 만료되었습니다. 페이지를 다시 시도해 새로 요청하세요.",
+      "certificateChallengeChanged": "인증서 요청이 변경되었습니다. 페이지를 다시 시도하고 새 경고를 확인하세요.",
+      "certificateProceedFailed": "Orca가 이 인증서 요청을 승인하지 못했습니다. 페이지를 다시 시도한 후 다시 요청하세요.",
+      "certificateChallengeUnavailable": "이 인증서 요청은 더 이상 사용할 수 없습니다. 페이지를 다시 시도해 새로 요청하세요."
     }
   },
   "chat": {
@@ -220,7 +232,8 @@
     "contextUsage": {
       "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
       "title": "컨텍스트",
-      "estimated": "마지막 응답 기준 추정치입니다."
+      "estimated": "마지막 응답 기준 추정치입니다.",
+      "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -603,10 +616,6 @@
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
     },
-    "agentMessage": {
-      "handedOffToAgent": "에이전트에게 넘김",
-      "startedAgent": "에이전트 시작됨"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
       "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
@@ -654,7 +663,7 @@
       "confirm": "되감기",
       "unsupported": "이 채팅은 이전 메시지로 돌아갈 수 없습니다.",
       "historyNotPaginated": "이 오래된 Codex 채팅은 이전 메시지로 돌아갈 수 없습니다. 여기로 되감기를 사용하려면 새 채팅을 시작하세요.",
-      "busy": "에이전트가 유휴 상태이고 이 채팅에서 사용자를 기다리는 항목이 없으면 사용할 수 있습니다.",
+      "busy": "채팅이 유휴 상태일 때 사용할 수 있습니다",
       "staleEpoch": "대화가 변경되었습니다. 최신 메시지를 확인하고 다시 시도하세요.",
       "invalidTarget": "대화가 이 메시지로 돌아갈 수 없습니다. 변경된 내용은 없습니다.",
       "historyLimit": "이 대화는 너무 길어 되돌아갈 수 없습니다. 변경된 내용은 없습니다.",
@@ -932,7 +941,9 @@
       "label": "설정 스크립트",
       "run": "실행",
       "runSetupCommand": "설정 명령 실행",
-      "skip": "건너뛰기"
+      "skip": "건너뛰기",
+      "waitForSetup": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+      "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "연결",
@@ -1634,7 +1645,12 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
       "unpin": "고정 해제",
-      "rename": "이름 변경"
+      "rename": "이름 변경",
+      "markRead": "읽음으로 표시",
+      "markUnread": "읽지 않은 것으로 표시",
+      "muteNotifications": "알림 음소거",
+      "unmuteNotifications": "알림 음소거 해제",
+      "moveToStatus": "상태로 이동"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",
@@ -2199,6 +2215,7 @@
       "providerUnavailable": "서비스가 혼잡하여 {{agent}}이(가) 응답하지 못했습니다. 다른 모델을 선택하거나 잠시 기다린 후 다시 보내세요.",
       "providerSafetyStopped": "{{agent}}이(가) 안전 검사 후 이 응답을 중단했습니다. 요청을 검토한 후 다시 보내세요.",
       "providerResponseFailed": "{{agent}}이(가) 이 응답을 완료하지 못했습니다. 자세한 내용을 열어 확인하세요.",
+      "providerResponseFailedQuoted": "{{agent}}이(가) 이 응답을 완료하지 못했습니다: {{detail}}.",
       "selectedModel": "선택한 모델",
       "providerRejected": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다.",
       "providerRejectedQuoted": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다: {{detail}}.",
@@ -2460,6 +2477,11 @@
       "sendReviewNotes": "리뷰 메모 보내기",
       "shortcut": "단축키",
       "terminal": "터미널",
+      "terminalWithShell": "터미널: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD 프롬프트",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
@@ -2780,6 +2802,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다."
+    },
+    "browserProfile": {
+      "default": "기본"
     }
   },
   "settings": {

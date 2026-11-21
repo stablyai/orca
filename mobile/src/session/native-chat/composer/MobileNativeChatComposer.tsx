@@ -31,6 +31,7 @@ import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-s
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
+import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
@@ -105,6 +106,13 @@ export function MobileNativeChatComposer({
     onAttachPastedText: structured?.onAttachPastedText
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
+  const orca = useMobileNativeChatOrcaCommands({
+    structured,
+    agent,
+    sendSurfaceId,
+    editing: editSession !== undefined,
+    clearDraft: () => onChangeText('')
+  })
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
@@ -125,11 +133,12 @@ export function MobileNativeChatComposer({
         recordMobileNativeChatSkillPick(sendSurfaceId, skill)
       }
     },
-    refuseCommand: editSession?.refuseCommand,
+    refuseCommand: editSession?.refuseCommand ?? orca.refusesPick,
+    onPickOrcaCommand: editSession ? undefined : orca.onPickCommand,
     editing: editSession !== undefined,
     goalMode: goal.menu,
     agent,
-    structuredCatalog: structured?.catalog,
+    structuredCatalog: orca.catalog,
     interactionModeSupported:
       editSession?.interactionModeSupported ??
       sessionOptions?.controller.snapshot.some((entry) => entry.id === 'interactionMode'),
@@ -188,7 +197,13 @@ export function MobileNativeChatComposer({
     intent?: MobileNativeChatSendIntent,
     keepFocus = false
   ): Promise<void> => {
-    if (!canSend || sendingRef.current || goal.consumeBareGoal(value, () => onChangeText(''))) {
+    if (
+      !canSend ||
+      sendingRef.current ||
+      // Before goal mode too, so an Orca command never becomes an objective.
+      orca.consume(value) ||
+      goal.consumeBareGoal(value, () => onChangeText(''))
+    ) {
       return
     }
     sendingRef.current = true
@@ -232,6 +247,7 @@ export function MobileNativeChatComposer({
       />
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
+        {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">

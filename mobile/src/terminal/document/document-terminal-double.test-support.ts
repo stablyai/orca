@@ -14,7 +14,8 @@ export function terminalDocumentDouble() {
       fontFamily: 'monospace',
       fontWeight: '300',
       fontWeightBold: '500',
-      lineHeight: 1
+      lineHeight: 1,
+      scrollback: 5000
     },
     buffer: {
       active: {

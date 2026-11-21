@@ -13,7 +13,11 @@ import {
 } from '../choices/agent-choice-reconciliation'
 import type { AgentSessionModelCatalogResult } from '../../agent-session/agent-session-wire'
 import type { AgentSessionModelOption } from '../../agent-session/options/model-catalog/agent-session-model-option'
-import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
+import {
+  agentMenuRowSupportsChat,
+  orderAgentLaunchPickerAgents,
+  type NewTabAgentMenuRow
+} from './agent-launch-picker-rows'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentChatPermissionMode } from '../permissions/agent-chat-permission-mode'
 import type { CurrentActionSelection } from '../../source-control/ai/recipes/source-control-action-selection'
@@ -196,7 +200,7 @@ export function agentPickerEntriesFromRows(
     (agent) => {
       const own = rows.filter((row) => row.agent === agent)
       const chatDefault = own.some((row) => row.kind === 'chat')
-      const chat = chatDefault || own.some((row) => row.kind === 'cli' && row.chat)
+      const chat = own.some(agentMenuRowSupportsChat)
       return {
         agent,
         label: label(agent),

@@ -179,44 +179,25 @@ it('a link in a group message opens the same destination popover as a chat tab',
 })
 
 it('typing while the transcript has focus lands in the room composer', () => {
-  const view = renderRoom()
-  const transcript = view.container.querySelector<HTMLElement>('[data-native-chat-scroll]')!
+  renderRoom()
+  const transcript = screen.getByRole('region', { name: 'Conversation' })
   act(() => transcript.focus())
   fireEvent.keyDown(transcript, { key: 'h' })
 
   expect(mocks.typed).toEqual(['h'])
 })
 
-it('right-click opens the chat menu, whose Find opens the find bar', async () => {
-  const view = renderRoom()
-  const transcript = view.container.querySelector<HTMLElement>('[data-native-chat-scroll]')!
-  fireEvent.contextMenu(transcript, { clientX: 10, clientY: 10 })
-
-  const findItem = await screen.findByRole('menuitem', { name: /Find in chat/ })
-  fireEvent.click(findItem)
-  expect(await screen.findByRole('search')).toBeTruthy()
-})
-
-it('Find in chat matches text in a group message', async () => {
+it('opens Find from the transcript menu and matches text in a room message', async () => {
   const view = renderRoom()
   const transcript = view.container.querySelector<HTMLElement>('[data-native-chat-scroll]')!
   fireEvent.contextMenu(transcript, { clientX: 10, clientY: 10 })
   fireEvent.click(await screen.findByRole('menuitem', { name: /Find in chat/ }))
 
+  expect(await screen.findByRole('search')).toBeTruthy()
   const input = await screen.findByRole('textbox', { name: 'Find in chat' })
   fireEvent.change(input, { target: { value: 'details' } })
   const status = await screen.findByText('1/1')
   expect(status.getAttribute('aria-live')).toBe('polite')
-})
-
-it('the room takes the chat appearance root and a labelled transcript, as a chat tab does', () => {
-  const view = renderRoom()
-  const root = view.container.querySelector<HTMLElement>('[data-native-chat-root]')!
-  expect(root.classList.contains('native-chat-appearance')).toBe(true)
-  expect(root.getAttribute('data-native-chat-working')).toBe('false')
-  expect(
-    screen.getByRole('region', { name: 'Conversation' }).hasAttribute('data-native-chat-scroll')
-  ).toBe(true)
 })
 
 it("the room's /resume opens its home workspace's Session History, across members' agents", () => {
@@ -224,7 +205,8 @@ it("the room's /resume opens its home workspace's Session History, across member
   expect(mocks.seen.composer).toEqual({ scope: 'workspace', worktreeId: 'folder:room-home' })
 })
 
-it("a member bot's file link resolves in its folder but opens in the room's workspace", () => {
+it('opens member files and images from the member folder in the room workspace', () => {
+  vi.stubGlobal('IntersectionObserver', undefined)
   renderRoom()
   fireEvent.click(screen.getByRole('link', { name: 'the report' }), {
     metaKey: true,
@@ -241,11 +223,7 @@ it("a member bot's file link resolves in its folder but opens in the room's work
       sourceTabId: 'room-tab'
     })
   )
-})
 
-it("a member bot's inline image opens in the room's workspace too", () => {
-  vi.stubGlobal('IntersectionObserver', undefined)
-  renderRoom()
   fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }), {
     metaKey: true,
     ctrlKey: true

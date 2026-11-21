@@ -1,4 +1,6 @@
 import { Text, View } from 'react-native'
+import { CalendarClock, Plus } from 'lucide-react-native'
+import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -11,6 +13,9 @@ import { sheetStyles } from './mobile-bot-sheet-styles'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { useBotAutomations } from './use-bot-automations'
 import { optionStyles } from './mobile-bot-option-styles'
+import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 function AutomationRow(props: {
   row: BotAutomationRow<BotAutomationView>
@@ -69,6 +74,7 @@ export function MobileBotAutomationsTab(props: {
   showToast: (message: string, durationMs?: number) => void
   onNewAutomation: (() => void) | null
 }) {
+  useMobileColorScheme()
   const t = useMobileTranslation()
   const { rows, saving, setAutomationEnabled, runNow } = useBotAutomations({
     client: props.client,
@@ -76,7 +82,7 @@ export function MobileBotAutomationsTab(props: {
     showToast: props.showToast
   })
   if (!rows) {
-    return <Text style={sheetStyles.empty}>{t('bots.activity.loading', 'Loading activity…')}</Text>
+    return <MobileStateView loading title={t('bots.activity.loading', 'Loading activity…')} />
   }
   return (
     <>
@@ -95,16 +101,25 @@ export function MobileBotAutomationsTab(props: {
           ))}
         </ListGroup>
       ) : (
-        <Text style={sheetStyles.empty}>
-          {t('bots.automations.empty', 'Ask in chat to set up an automation.')}
-        </Text>
+        <MobileStateView
+          icon={CalendarClock}
+          title={t('bots.automations.emptyTitle', 'No automations yet')}
+          message={t('bots.automations.empty', 'Ask in chat to set up an automation.')}
+        />
       )}
       {props.onNewAutomation ? (
-        <MobileBotTextButton
-          label={t('bots.automations.newAutomation', 'New automation')}
-          onPress={props.onNewAutomation}
-        />
+        <ListGroup style={styles.newAutomation}>
+          <ListRow
+            title={t('bots.automations.newAutomation', 'New automation')}
+            leading={<Plus size={18} color={colors.textMuted} />}
+            onPress={props.onNewAutomation}
+          />
+        </ListGroup>
       ) : null}
     </>
   )
 }
+
+const styles = themedStyleSheet(() => ({
+  newAutomation: { marginTop: spacing.sm }
+}))

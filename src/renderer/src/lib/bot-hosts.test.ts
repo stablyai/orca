@@ -12,14 +12,6 @@ afterEach(() => {
 })
 
 describe('botTarget', () => {
-  it('routes a bot to the host stamped on it', () => {
-    expect(botTarget({ hostId: 'local' })).toEqual({ kind: 'local' })
-    expect(botTarget({ hostId: 'runtime:env-1' })).toEqual({
-      kind: 'environment',
-      environmentId: 'env-1'
-    })
-  })
-
   it('hands out one target per host, so hooks keyed on it never resubscribe', () => {
     expect(botTarget({ hostId: 'runtime:env-1' })).toBe(botTarget({ hostId: 'runtime:env-1' }))
   })

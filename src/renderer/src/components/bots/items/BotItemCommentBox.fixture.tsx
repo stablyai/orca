@@ -63,6 +63,7 @@ export const pastedImage = defineFixture({
         worktreeId: folderWorkspaceKey(fixtureCos.folderWorkspaceId),
         runtimeEnvironmentId: null
       }}
+      onSend={() => {}}
     />
   )
 })
@@ -88,16 +89,16 @@ export const posted = defineFixture({
     <BotItemCommentCard
       bot={fixtureCos}
       item={item}
-      question={null}
-      onReply={() => {}}
-      event={{
-        id: 'e1',
-        kind: 'commented',
-        actor: { kind: 'owner' },
-        at: 1_700_000_000_000,
-        data: {
-          text: 'The dialog clips here [Image #1] on narrow windows.',
-          images: [{ path: '/home/me/.orca/attachments/image.png', name: 'image.png', bytes: 70 }]
+      entry={{
+        event: {
+          id: 'e1',
+          kind: 'commented',
+          actor: { kind: 'owner' },
+          at: 1_700_000_000_000,
+          data: {
+            text: 'The dialog clips here [Image #1] on narrow windows.',
+            images: [{ path: '/home/me/.orca/attachments/image.png', name: 'image.png', bytes: 70 }]
+          }
         }
       }}
     />

@@ -17,6 +17,7 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
+import { SESSION_TAB_SHELL_CHOICE_METHODS } from './session-tab-shell-choice-methods'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
@@ -59,6 +60,7 @@ export const SESSION_TAB_METHODS = [
   }),
   ...SESSION_TAB_MUTATION_METHODS,
   ...SESSION_TAB_CLOSE_METHODS,
+  ...SESSION_TAB_SHELL_CHOICE_METHODS,
   defineMethod({
     name: 'session.tabs.createTerminal',
     requires: terminalCreateFeatureRequirement,

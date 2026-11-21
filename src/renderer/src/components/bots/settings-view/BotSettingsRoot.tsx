@@ -118,7 +118,7 @@ function ScheduleGroup({
   return (
     <SettingsInsetGroup
       title={t('bots.settingsView.schedule', 'Schedule')}
-      foot={t('bots.settingsView.automationsFoot', 'Automations are in Items › Automations.')}
+      foot={t('bots.settingsView.automationsFoot', 'Automations are in Home › Automations.')}
     >
       <SettingsInsetRow
         icon={<Eye />}

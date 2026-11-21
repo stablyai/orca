@@ -58,7 +58,8 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       })
       return
     }
-    if (data.length > 0) {
+    // A cap sentinel carries no bytes but stands for output the PTY printed.
+    if (data.length > 0 || meta?.droppedOutput === true) {
       session.hasReceivedPtyOutput = true
       recordAgentHibernationPaneOutput(session.cacheKey)
       // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).

@@ -1,3 +1,4 @@
+import type { SessionPartyReader } from '../../addressing/session-party-reader'
 import type { FleetAgentStatusEvidence } from '../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { FleetSessionObservation } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import {
@@ -61,7 +62,9 @@ export function withSleptAgentWorkers(
 export function createSessionWorkerLivenessReader(
   db: OrchestrationDb | null | undefined,
   statuses: readonly FleetAgentStatusEvidence[],
-  records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+  records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
+  // A chat assignee's party, from the database unless a caller read its rows already.
+  parties: SessionPartyReader | null | undefined = db
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
   const resolveSession = createLineageRunningSessionResolver(records)
   let statusByPane: Map<string, FleetAgentStatusEvidence> | undefined
@@ -80,7 +83,7 @@ export function createSessionWorkerLivenessReader(
     const handle = worker.agentTerminalHandle
     const chat = chatAssigneeSessionId(handle)
     if (chat) {
-      const observed = observeChatAssignee(chat, db, records)
+      const observed = observeChatAssignee(chat, parties, records)
       return observed.status === 'live'
         ? live(observed.session.sessionId)
         : observed.status === 'exited'

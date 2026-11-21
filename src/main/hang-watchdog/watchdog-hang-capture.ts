@@ -8,6 +8,8 @@ type CaptureOwner = {
   stop?: (reason: 'recovery' | 'shutdown') => void
 }
 
+type CaptureParts = { js: boolean; native: boolean }
+
 export function createWatchdogHangCapture(options: {
   parentPid: number
   artifactDirectory?: string
@@ -16,7 +18,12 @@ export function createWatchdogHangCapture(options: {
   drain: (token: string) => Promise<void>
   onIdle: () => void
 }): {
-  capture: (record: HangObservation, detectedAt: number, showMenuBarIcon: boolean | null) => void
+  capture: (
+    record: HangObservation,
+    detectedAt: number,
+    showMenuBarIcon: boolean | null,
+    parts?: CaptureParts
+  ) => void
   recover: (id: string) => void
   shutdown: () => void
 } {
@@ -34,13 +41,14 @@ export function createWatchdogHangCapture(options: {
   const capture = (
     record: HangObservation,
     detectedAt: number,
-    showMenuBarIcon: boolean | null
+    showMenuBarIcon: boolean | null,
+    parts: CaptureParts = { js: true, native: true }
   ): void => {
     if (stopped || record.kind !== 'heartbeat-stall') {
       return
     }
     let nativeStarted: Promise<void> = Promise.resolve()
-    if (process.platform === 'darwin' && !nativeOwner) {
+    if (parts.native && process.platform === 'darwin' && !nativeOwner) {
       const owner: CaptureOwner = { id: record.id }
       nativeOwner = owner
       const captureId = createNativeHangCaptureId(record.detectedAt)
@@ -84,7 +92,7 @@ export function createWatchdogHangCapture(options: {
           idle()
         })
     }
-    if (!jsOwner) {
+    if (parts.js && !jsOwner) {
       const owner: CaptureOwner = { id: record.id }
       jsOwner = owner
       void (async () => {

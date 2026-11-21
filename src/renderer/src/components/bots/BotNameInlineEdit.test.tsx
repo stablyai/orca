@@ -26,11 +26,7 @@ const bot: Bot = {
 function edit(update: (updates: { name?: string }) => Promise<Bot | null>): HTMLInputElement {
   render(<BotNameInlineEdit bot={bot} update={update} className="" />)
   fireEvent.click(screen.getByRole('button', { name: 'Rename Bot builder' }))
-  const field = screen.getByRole('textbox', { name: 'Bot name' })
-  if (!(field instanceof HTMLInputElement)) {
-    throw new Error('not an input')
-  }
-  return field
+  return screen.getByRole<HTMLInputElement>('textbox', { name: 'Bot name' })
 }
 
 async function press(field: HTMLInputElement, key: string): Promise<void> {
@@ -42,15 +38,6 @@ async function press(field: HTMLInputElement, key: string): Promise<void> {
 
 describe('BotNameInlineEdit', () => {
   afterEach(cleanup)
-
-  it('Enter saves the trimmed name through the bot update', async () => {
-    const update = vi.fn(async () => ({ ...bot, name: 'Release bot' }))
-    const field = edit(update)
-    fireEvent.change(field, { target: { value: '  Release bot ' } })
-    await press(field, 'Enter')
-    expect(update).toHaveBeenCalledWith({ name: 'Release bot' })
-    expect(screen.queryByRole('textbox')).toBeNull()
-  })
 
   it('leaving the field saves too', async () => {
     const update = vi.fn(async () => ({ ...bot, name: 'Release bot' }))
@@ -68,31 +55,28 @@ describe('BotNameInlineEdit', () => {
     fireEvent.change(field, { target: { value: 'Release bot' } })
     await press(field, 'Escape')
     expect(update).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Rename Bot builder' })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Rename Bot builder' }))
   })
 
-  it('an empty name is refused and the saved name stays', async () => {
-    const update = vi.fn(async () => bot)
+  it('keeps the saved name after blank input or a refusal from the host', async () => {
+    const update = vi.fn(async () => null)
     const field = edit(update)
     fireEvent.change(field, { target: { value: '   ' } })
     await press(field, 'Enter')
     expect(update).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Rename Bot builder' }).textContent).toBe(
-      'Bot builder'
-    )
-  })
 
-  it('a name the bot update refuses leaves the field for the saved name', async () => {
-    const update = vi.fn(async () => null)
-    const field = edit(update)
-    fireEvent.change(field, { target: { value: 'Taken name' } })
-    await press(field, 'Enter')
-    expect(update).toHaveBeenCalledWith({ name: 'Taken name' })
+    const saved = screen.getByRole('button', { name: 'Rename Bot builder' })
+    expect(saved.textContent).toBe('Bot builder')
+    fireEvent.click(saved)
+    const retry = screen.getByRole<HTMLInputElement>('textbox', { name: 'Bot name' })
+    fireEvent.change(retry, { target: { value: 'Taken name' } })
+    await act(async () => fireEvent.keyDown(retry, { key: 'Enter' }))
+    expect(update).toHaveBeenCalledExactlyOnceWith({ name: 'Taken name' })
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.getByRole('button', { name: 'Rename Bot builder' })).toBeTruthy()
   })
 
-  it('focus moved on while the name saves stays where it went', async () => {
+  it('Enter saves the trimmed name without taking focus back when the write finishes', async () => {
     let finish: (saved: Bot) => void = () => {}
     const update = vi.fn(
       () =>
@@ -111,17 +95,15 @@ describe('BotNameInlineEdit', () => {
     if (!(field instanceof HTMLInputElement)) {
       throw new Error('not an input')
     }
-    fireEvent.change(field, { target: { value: 'Release bot' } })
-    await press(field, 'Enter')
+    fireEvent.change(field, { target: { value: '  Release bot ' } })
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' })
+    })
+    expect(update).toHaveBeenCalledExactlyOnceWith({ name: 'Release bot' })
     const next = screen.getByRole('button', { name: 'Next' })
     next.focus()
     await act(async () => finish({ ...bot, name: 'Release bot' }))
+    expect(screen.queryByRole('textbox')).toBeNull()
     expect(document.activeElement).toBe(next)
-  })
-
-  it('Escape puts focus back on the name', async () => {
-    const field = edit(vi.fn(async () => bot))
-    await press(field, 'Escape')
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Rename Bot builder' }))
   })
 })

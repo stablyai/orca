@@ -184,14 +184,6 @@ describe('botLinearSetupStep', () => {
 })
 
 describe('BotLinearSetupDialog', () => {
-  it('says Linear is coming soon while the cloud answers 404', async () => {
-    api.botLinear.state.mockResolvedValue({ ok: false, error: 'linear_off' })
-    renderDialog()
-
-    expect(await screen.findByText('Linear is coming soon.')).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-  })
-
   it('connects in one trip, then turns the bot on by itself and shows how to ask', async () => {
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([]) })
     const members = [
@@ -358,10 +350,14 @@ describe('BotLinearSetupDialog', () => {
     })
     mocks.readBots.mockReturnValue([
       inAcme('Scout'),
-      inAcme('Triage'),
-      // Paused bots do not answer, so they are not named.
+      inAcme('Triage', {
+        linearWorkspaces: undefined,
+        linear: { workspaceId: 'org-1', workspaceName: 'Acme', urlKey: 'acme' }
+      }),
       inAcme('Sleepy', { paused: true }),
-      { ...bot, id: 'elsewhere', name: 'Elsewhere' }
+      inAcme('Elsewhere', {
+        linearWorkspaces: [{ workspaceId: 'org-2', workspaceName: 'Beta', urlKey: 'beta' }]
+      })
     ])
     confirm.mockResolvedValue(false)
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([workspace()]) })

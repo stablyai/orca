@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('webhook host reads', () => {
-  it('reads a key once for every reader, and again for all of them after a change', async () => {
+  it('shares reads by key and refreshes after changes without rereading on early focus', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const host = vi.fn(async () => ({ hooks: [webhookSummaryFixture()] }))
     setWebhookHostTransportForTests(host)
@@ -41,29 +41,16 @@ describe('webhook host reads', () => {
     expect(await screen.findAllByText('bot-1: 1')).toHaveLength(2)
     await screen.findByText('bot-2: 1')
     expect(host).toHaveBeenCalledTimes(2)
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(host).toHaveBeenCalledTimes(2)
+
     await act(async () => notifyWebhooksChanged())
     await act(async () => vi.advanceTimersByTimeAsync(1000))
     expect(host).toHaveBeenCalledTimes(4)
-  })
 
-  it("reads again on the host's botsChanged, as a call's run starts or ends", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const host = vi.fn(async () => ({ hooks: [webhookSummaryFixture()] }))
-    setWebhookHostTransportForTests(host)
-    render(<HookCount botId="bot-1" />)
-    await screen.findByText('bot-1: 1')
     await act(async () => emitBotsChangedWindowEvent('local'))
     await act(async () => vi.advanceTimersByTimeAsync(1000))
-    expect(host).toHaveBeenCalledTimes(2)
-  })
-
-  it("doesn't read again on focus before a key is due", async () => {
-    const host = vi.fn(async () => ({ hooks: [webhookSummaryFixture()] }))
-    setWebhookHostTransportForTests(host)
-    render(<HookCount botId="bot-1" />)
-    await screen.findByText('bot-1: 1')
-    await act(async () => window.dispatchEvent(new Event('focus')))
-    expect(host).toHaveBeenCalledTimes(1)
+    expect(host).toHaveBeenCalledTimes(6)
   })
 
   // A saved-automation card waits for its hook's URL; once live, nothing keeps reading.

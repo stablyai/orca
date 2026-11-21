@@ -18,17 +18,21 @@ import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-
 export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
     (tabId: string, paneKey: string) =>
-      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId),
+      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId, {
+        revealInSidebar: false
+      }),
     [worktreeId, executionHostId]
   )
 }
 
-/** Open an agent's pane the way its sidebar row does, including before its tab hydrates. */
+/** Open an agent's pane the way its sidebar row does, including before its tab hydrates.
+ * A row passes revealInSidebar: false: it opens its own card, which is on screen. */
 export function activateWorktreeAgentPane(
   worktreeId: string,
   tabId: string,
   paneKey: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  options?: { revealInSidebar?: boolean }
 ): void {
   const state = useAppStore.getState()
   const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
@@ -45,6 +49,7 @@ export function activateWorktreeAgentPane(
     }
     if (
       activateAndRevealWorkspace(worktreeId, {
+        ...options,
         executionHostId: executionHostId ?? owner ?? undefined
       }) !== false
     ) {
@@ -79,7 +84,7 @@ export function activateWorktreeAgentPane(
     return
   }
   // Use shared activation for cross-repo reveal and navigation history.
-  if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
+  if (activateAndRevealWorkspace(worktreeId, { ...options, executionHostId }) === false) {
     return
   }
   const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []

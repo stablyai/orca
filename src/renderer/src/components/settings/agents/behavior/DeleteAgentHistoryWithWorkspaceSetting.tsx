@@ -6,6 +6,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { getLocalExecutionHostLabel } from '../../../../../../shared/execution-host/execution-host'
 import { Button } from '../../../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,10 @@ import { SettingsBadge, SettingsSwitchRow } from '../../form-controls/SettingsFo
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { useHostBooleanSetting } from '../../host-scope/use-host-boolean-setting'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { getDeleteAgentHistorySearchEntry } from './delete-agent-history-search'
+import { useCodexHistoryDiskUsage } from './use-codex-history-disk-usage'
+import { matchesSettingsSearch } from '../../search/settings-search'
 
 /** The host that owns the workspaces deletes their chat history, so the switch reads and writes that host. */
 export function DeleteAgentHistoryWithWorkspaceSetting({
@@ -50,8 +54,15 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
       { host: hostLabel }
     )
   })
+  const query = useAppStateValue((state) => state.settingsSearchQuery)
+  // The row stays mounted while search hides it, so the size is read only when it can be seen.
+  const diskUsage = useCodexHistoryDiskUsage(hostScope.target, matchesSettingsSearch(query, search))
   const [confirming, setConfirming] = useState(false)
   const enabled = setting.state === 'ready' && setting.enabled
+  const historySize =
+    diskUsage && diskUsage.rollouts > 0 && setting.state !== 'unsupported'
+      ? formatBytes(diskUsage.bytes)
+      : null
 
   return (
     <>
@@ -66,6 +77,44 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
                   'Recommended'
                 )}
               </SettingsBadge>
+              {historySize && diskUsage ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* Focusable so keyboard users reach the explanation too. */}
+                    <span
+                      tabIndex={0}
+                      className="inline-flex shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <SettingsBadge tone="muted" className="whitespace-nowrap">
+                        {diskUsage.complete
+                          ? t(
+                              'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryBadge',
+                              'Codex history: {{size}}',
+                              { size: historySize }
+                            )
+                          : t(
+                              'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryBadgeAtLeast',
+                              'Codex history: {{size}}+',
+                              { size: historySize }
+                            )}
+                      </SettingsBadge>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-72">
+                    {diskUsage.complete
+                      ? t(
+                          'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltip',
+                          'Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have.',
+                          { host: hostLabel }
+                        )
+                      : t(
+                          'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltipAtLeast',
+                          'Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have.',
+                          { host: hostLabel }
+                        )}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
             </span>
           }
           description={

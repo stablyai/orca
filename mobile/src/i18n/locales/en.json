@@ -402,6 +402,7 @@
       "messages_other": "{{count}} messages",
       "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
+      "continueInCli": "Continue in CLI",
       "hidePreview": "Hides the recent messages.",
       "showPreview": "Shows the recent messages.",
       "you": "You"
@@ -449,6 +450,25 @@
     },
     "resume": {
       "hostConnectionChanged": "Host connection changed. Retry resume."
+    },
+    "interrupted": {
+      "failed": "Couldn't resume the interrupted chats.",
+      "count_one": "{{count}} chat was interrupted",
+      "count_other": "{{count}} chats were interrupted",
+      "resumeAll": "Resume all",
+      "failedCount_one": "{{count}} chat couldn't resume",
+      "failedCount_other": "{{count}} chats couldn't resume"
+    },
+    "viewControls": {
+      "allAgents": "All agents",
+      "agentCount": "{{count}} agents",
+      "lastUpdated": "Last updated",
+      "created": "Created",
+      "agentsLabel": "Agents: {{agents}}",
+      "sortLabel": "Sort sessions: {{sort}}",
+      "agents": "Agents",
+      "sort": "Sort",
+      "noAgents": "No agents"
     }
   },
   "diagnostics": {
@@ -808,7 +828,12 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\""
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "markRead": "Mark Read",
+      "markUnread": "Mark Unread",
+      "muteNotifications": "Mute Notifications",
+      "unmuteNotifications": "Unmute Notifications",
+      "moveToStatus": "Move to Status"
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -1326,7 +1351,9 @@
       "hooks": "HOOKS",
       "run": "Run",
       "skip": "Skip",
-      "runSetupCommand": "Run setup command"
+      "runSetupCommand": "Run setup command",
+      "waitForSetup": "Wait for setup to complete before starting agent",
+      "waitForSetupSaveFailed": "Failed to save setup startup behavior."
     },
     "newWorkspaceSshConnectionField": {
       "label": "SSH Connection",
@@ -1611,6 +1638,24 @@
         "anotherComputer": "another computer",
         "fromVia": "From {{name}} via {{computer}}",
         "fromViaPhone": "From {{name}}, typed on {{phone}} via {{computer}}"
+      },
+      "fork": {
+        "pending": "Forking this chat…",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
+        "commandNothing": "There’s no response to fork yet.",
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "commandDescription": "Fork this chat from its latest response"
+      },
+      "usage": {
+        "description": "Show usage for this chat’s Codex account",
+        "sharedAccount": "Current shared account",
+        "failed": "Codex usage couldn’t be loaded. Try again.",
+        "codexVersion": "This Codex version doesn’t report usage. Update Codex.",
+        "apiKeyAuth": "Codex usage isn’t available with an API key. Sign in to Codex with a ChatGPT account to view usage.",
+        "title": "Codex usage",
+        "loading": "Loading Codex usage…",
+        "account": "Account used by this chat",
+        "retry": "Retry"
       }
     },
     "hostOfflineBanner": {
@@ -2029,7 +2074,19 @@
       "timedOut": "Browser stream timed out."
     },
     "loadFailure": {
-      "retry": "Retry"
+      "retry": "Retry",
+      "connectionNotSecure": "Connection isn't secure",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedNeedsHostUpdate": "Update Orca on this host to accept certificate warnings from your phone."
     }
   },
   "files": {
@@ -2110,7 +2167,8 @@
       "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
       "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
       "searchAll": "Search all",
-      "searchAllIn": "Search all of {{folder}}"
+      "searchAllIn": "Search all of {{folder}}",
+      "ignored": "Ignored by .gitignore"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
@@ -2315,7 +2373,12 @@
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close",
-      "agents": "Agents"
+      "agents": "Agents",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
+      "terminalWithShell": "Terminal: {{shell}}"
     },
     "tabStrip": {
       "newTab": "New tab",
@@ -2789,6 +2852,7 @@
       "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
       "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
       "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
       "selectedModel": "the selected model",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
@@ -3082,6 +3146,14 @@
       "terminalTitle": "Terminal text",
       "pointsAndColumns": "{{points}} · {{count}} columns",
       "moreTerminal": "More terminal settings"
+    },
+    "browserProfile": {
+      "title": "Profile",
+      "default": "Default",
+      "workspaceDefault": "Workspace default"
+    },
+    "orcaCommands": {
+      "desktopOnly": "Available in the desktop app"
     }
   },
   "chat": {
@@ -3101,7 +3173,8 @@
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",
-      "estimated": "Estimated from the last response."
+      "estimated": "Estimated from the last response.",
+      "deferredNote": "Loaded on demand. Not counted in the used total."
     },
     "composerAttachments": {
       "file": "File",
@@ -3545,15 +3618,16 @@
       "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update."
     },
     "agentMessage": {
-      "startedWorker": "Started worker",
-      "reopenedWorker": "Reopened worker",
-      "sentFollowUpToWorker": "Sent follow-up to worker",
-      "handedOffToAgent": "Handed off to agent",
-      "startedAgent": "Started agent",
-      "taskFromCoordinator": "Task from coordinator",
-      "messageFromCoordinator": "Message from coordinator",
-      "updateFromWorker": "Update from worker",
-      "messageFrom": "Message from"
+      "open": "Open {{name}}",
+      "row": {
+        "started": "Started",
+        "reopened": "Reopened",
+        "followedUp": "Sent follow-up to",
+        "handedOff": "Handed off to",
+        "task": "Task from",
+        "update": "Update from",
+        "message": "Message from"
+      }
     },
     "fork": {
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
@@ -3593,7 +3667,7 @@
       "confirm": "Rewind",
       "unsupported": "This chat can't go back to an earlier message.",
       "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
-      "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+      "busy": "Available when chat is idle",
       "staleEpoch": "The conversation changed. Review the latest messages and try again.",
       "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
       "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
@@ -3736,6 +3810,10 @@
         "noteChanged": "Note changed",
         "indexChanged": "MEMORY.md changed"
       }
+    },
+    "eventRow": {
+      "running": "Running",
+      "failed": "Failed"
     }
   },
   "sourceControl": {
@@ -4970,14 +5048,13 @@
       "workspaceDeleted": "This chat’s workspace was deleted on {{name}}."
     },
     "activity": {
-      "empty": "{{name}}’s workers, threads and runs show up here.",
-      "inProgress": "In progress",
-      "completed": "Completed",
       "readFailed": "Couldn’t load activity.",
       "loading": "Loading activity…",
       "unavailable": "Activity is unavailable on this host.",
       "retry": "Retry",
-      "lastRead": "Showing the last activity read."
+      "lastRead": "Showing the last activity read.",
+      "readFailedTitle": "Couldn’t load activity",
+      "unavailableTitle": "Activity unavailable"
     },
     "automations": {
       "couldNotFinish": "Couldn’t finish",
@@ -4987,7 +5064,8 @@
       "empty": "Ask in chat to set up an automation.",
       "newAutomation": "New automation",
       "runQueued": "Automation run queued.",
-      "runFailed": "Couldn’t start the run"
+      "runFailed": "Couldn’t start the run",
+      "emptyTitle": "No automations yet"
     },
     "settings": {
       "remove": "Remove",
@@ -5106,7 +5184,6 @@
       "runsOnHost": "Runs on {{host}}.",
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
-      "creating": "Creating…",
       "create": "Create",
       "fromTemplate": "Start from a template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
@@ -5137,7 +5214,6 @@
       "newBot": "New bot"
     },
     "groups": {
-      "connectToTheExecutionHostToOpenThisGroup": "Connect to the execution host to open this group.",
       "manageMembers": "Manage members",
       "newGroup": "New group",
       "cancel": "Cancel",
@@ -5198,10 +5274,10 @@
       "category": {
         "coding": "Coding",
         "releases": "Releases & CI",
-        "support": "Support & feedback",
+        "support": "Support & triage",
         "planning": "Planning & docs",
         "ops": "Ops",
-        "personal": "Personal follow-ups"
+        "personal": "Personal assistant"
       },
       "allCategories": "All"
     },
@@ -5292,7 +5368,8 @@
       "showMoreWorkers_one": "Show {{count}} more worker",
       "showMoreWorkers_other": "Show {{count}} more workers",
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
-      "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it."
+      "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
+      "readFailedTitle": "Couldn’t load chats"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -5310,7 +5387,8 @@
       "working": "{{count}} working",
       "itemsNeedYou": "Items, {{count}} need you",
       "chats": "Chats",
-      "files": "Files"
+      "files": "Files",
+      "backTo": "Back to {{name}}"
     },
     "items": {
       "chat": {
@@ -5369,7 +5447,8 @@
         "needsYou": "Needs you only",
         "label": "Filter items",
         "all": "All chats",
-        "remove": "Remove filter {{name}}"
+        "remove": "Remove filter {{name}}",
+        "clear": "Clear filter"
       },
       "tab": "Items",
       "field": {
@@ -5406,7 +5485,6 @@
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
-        "answering": "Answering:",
         "label": "Comment",
         "add": "Add a comment…",
         "submit": "Comment"
@@ -5495,8 +5573,7 @@
         "title": "No items yet",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "needsYou": "Nothing needs you.",
-        "filtered": "No items match.",
-        "short": "No items yet. When {{bot}} takes something on, it shows up here."
+        "filtered": "No items match."
       },
       "toast": {
         "markedDone": "Marked {{title}} done",
@@ -5528,6 +5605,10 @@
         "pickTitle": "Snooze until",
         "pickDay": "Snooze until which day?",
         "pickHour": "At what time?"
+      },
+      "readFailedTitle": "Couldn’t load items",
+      "ask": {
+        "youAnswered": "You answered:"
       }
     },
     "needs": {
@@ -5874,6 +5955,9 @@
             "cabdc2a9e0": "Claude sign-in credentials could not be read.",
             "a7517cccb6": "Claude usage is unavailable right now.",
             "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
+          },
+          "StatusBar": {
+            "c676918adc": "System default"
           }
         }
       }
@@ -5959,6 +6043,13 @@
           "noSubscriptionApiKeyBilling": "No subscription plan — API key billing",
           "claudeWaitingCredentialRotate": "Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.",
           "unknown": "Unknown error"
+        }
+      },
+      "codex": {
+        "session": {
+          "restart": {
+            "9f0b1c2d3e": "Codex account"
+          }
         }
       }
     }

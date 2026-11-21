@@ -19,7 +19,6 @@ import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../pty/shell-startup/git-bash'
-import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -239,10 +238,6 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
-
-  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
-    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
-  })
 
   ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
     resolveFloatingTerminalCwd(store, args)

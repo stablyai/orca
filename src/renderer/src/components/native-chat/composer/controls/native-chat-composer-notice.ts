@@ -14,7 +14,14 @@ export type NativeChatComposerNoticeContent = {
 
 export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
-  action?: { label: string; onClick: () => void; disabled?: boolean; primary?: boolean }
+  action?: {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+    primary?: boolean
+    /** Shown before the button, e.g. a failed run's chip. */
+    status?: React.ReactNode
+  }
   onDismiss?: () => void
 } & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
 

@@ -4543,7 +4543,6 @@
             "27a74f91f0": "現在何も実行されていません",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "名前",
-            "1fedf94eae": "合計の CPU 負荷。 100% を超える値は、複数のコアが同時に動作していることを意味します。",
             "e7cf14ec78": "ターミナルセッションは利用できません。リストは古い可能性があります。",
             "93b0de3c21": "再起動",
             "f85af9cda6": "リソースのスナップショットとターミナルセッションは利用できません。",
@@ -4934,8 +4933,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 件のターミナルセッション",
                   "terminalSessionCount_other": "{{count}} 件のターミナルセッション",
-                  "memoryUnavailable": "メモリ情報を取得できません",
-                  "tooltipSummary": "リソースマネージャー - {{memory}} - {{sessions}}",
                   "spaceScanReady": "容量スキャンの準備完了",
                   "sessionsGroupedByWorkspace": "ターミナルセッションはワークスペースごとにグループ化されます。",
                   "noTerminalSessions": "ターミナルセッションはまだありません。",
@@ -6322,7 +6319,6 @@
           "e029a2d775": "状態",
           "c2c7a45cda": "なし",
           "hosts": "ホスト",
-          "showSection": "表示",
           "allHostsDetail": "すべてのホストを表示",
           "configuredSshHost": "設定済み SSH",
           "projectSshHost": "プロジェクト SSH",
@@ -6335,7 +6331,6 @@
           "automation": "オートメーション",
           "folderPathIdentity": "ブランチ / フォルダーパス",
           "cli": "Orca CLI",
-          "workspaceOptions": "ワークスペースのオプション",
           "optionsActiveFilters_other": "ワークスペースのオプション（{{count}} 個のフィルターが有効）",
           "optionsFilterCount_other": "ワークスペースのオプション（{{count}} 個のフィルター）"
         },
@@ -13661,10 +13656,8 @@
             "f61af83316": "新規フォルダー",
             "37c875d827": "新規ファイル",
             "b3e288bf41": "「{{value0}}」のダウンロードに失敗しました。",
-            "f729bcd97d": "フォルダー「{{value0}}」のダウンロードに失敗しました。",
             "1a3df04ae1": "オープン",
             "bce4d4e44f": "「{{value0}}」をダウンロードしました",
-            "a4029c996b": "フォルダー「{{value0}}」をダウンロードしました",
             "e26010014a": ".gitignore によって無視される",
             "a06551beee": "入力",
             "66a29dde82": "相対パスをコピー",
@@ -19532,7 +19525,6 @@
         "couldNotStart": "{{agent}} を起動できませんでした。",
         "editSavedArguments": "設定 > Agent > 引数で編集してください。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
-        "cliTooOld": "{{agent}} {{installedVersion}} はチャットには古すぎます。{{minimumVersion}} 以降に更新してください。",
         "startTimedOut": "{{agent}} の起動に時間がかかりすぎました ({{seconds}} 秒経っても {{method}} に応答がありません)。",
         "startTimedOutKeepsHappening": "これが繰り返し起こる場合は、このチャットを実行しているコンピューターが過負荷になっている可能性があります。",
         "notSignedIn": "{{agent}} にサインインしていません。",
@@ -19571,6 +19563,7 @@
         "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
         "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
         "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+        "providerResponseFailedQuoted": "{{agent}} はこの応答を完了できませんでした: {{detail}}。",
         "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
         "selectedModel": "選択されたモデル",
         "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
@@ -20031,17 +20024,32 @@
         "answerNotApplied": "{{name}}: 回答がこのプロンプトに届きませんでした",
         "answerWorkerEnded": "{{name}} が終了したため、このプロンプトは閉じられました",
         "countdown": "誰も回答しない場合、Claude は {{time}} 後に自動的に拒否します。",
-        "allowedByYou": "あなたが許可しました",
-        "deniedByYou": "あなたが拒否しました",
-        "deniedByCoordinator": "コーディネーターが拒否しました",
-        "allowedByCoordinator": "コーディネーターが許可しました: {{reason}}",
-        "allowedInTerminal": "ワーカーのターミナルで許可されました",
-        "deniedInTerminal": "ワーカーのターミナルで拒否されました",
-        "answeredInChat": "ワーカーのチャットで回答されました",
-        "closedUnnamed": "回答が記録されないまま閉じられました",
-        "autoDenied": "2:00 経過後に Claude が自動的に拒否しました",
-        "workerEnded": "閉じられました · ワーカーが終了しました",
-        "answerInTerminal": "ワーカーのターミナルで回答してください"
+        "record": {
+          "showLess": "表示を減らす",
+          "showMore": "さらに表示",
+          "cancelled": "<tool>{{tool}}</tool> のリクエストはキャンセルされました",
+          "youAllowed": "あなたが <tool>{{tool}}</tool> を許可しました",
+          "youAllowedForSession": "あなたがこのセッションで <tool>{{tool}}</tool> を許可しました",
+          "youDenied": "あなたが <tool>{{tool}}</tool> を拒否しました",
+          "youAnswered": "あなたが <tool>{{tool}}</tool> に回答しました: {{answer}}",
+          "youAllowedFor": "あなたが <task>{{task}}</task> の <tool>{{tool}}</tool> を許可しました",
+          "youDeniedFor": "あなたが <task>{{task}}</task> の <tool>{{tool}}</tool> を拒否しました",
+          "coordinatorAllowed": "コーディネーターが <task>{{task}}</task> の <tool>{{tool}}</tool> を許可しました",
+          "coordinatorDenied": "コーディネーターが <task>{{task}}</task> の <tool>{{tool}}</tool> を拒否しました",
+          "allowedInTerminal": "<task>{{task}}</task> の <tool>{{tool}}</tool> はワーカーのターミナルで許可されました",
+          "deniedInTerminal": "<task>{{task}}</task> の <tool>{{tool}}</tool> はワーカーのターミナルで拒否されました",
+          "allowedInChat": "<task>{{task}}</task> の <tool>{{tool}}</tool> はワーカーのチャットで許可されました",
+          "deniedInChat": "<task>{{task}}</task> の <tool>{{tool}}</tool> はワーカーのチャットで拒否されました",
+          "autoDenied": "<task>{{task}}</task> の <tool>{{tool}}</tool> は 2:00 経過後に自動的に拒否されました",
+          "waitsInTerminal": "<task>{{task}}</task> の <tool>{{tool}}</tool> はワーカーのターミナルで回答を待っています",
+          "workerEnded": "<task>{{task}}</task> の <tool>{{tool}}</tool> は閉じられました: ワーカーが終了しました",
+          "closedUnnamed": "<task>{{task}}</task> の <tool>{{tool}}</tool> は回答が記録されないまま閉じられました",
+          "coordinatorReason": "コーディネーターの理由",
+          "coordinatorAllowedHere": "コーディネーターが <tool>{{tool}}</tool> を許可しました",
+          "coordinatorDeniedHere": "コーディネーターが <tool>{{tool}}</tool> を拒否しました",
+          "allowedUnnamed": "<tool>{{tool}}</tool> が許可されました",
+          "deniedUnnamed": "<tool>{{tool}}</tool> が拒否されました"
+        }
       },
       "launchPromptNotDelivered": "配信されませんでした — ターミナルを確認してください",
       "taskList": {
@@ -20206,17 +20214,8 @@
         "unreported": "このセッションではコンテキストの使用量を表示できません。"
       },
       "agentMessage": {
-        "messageFrom": "送信元:",
         "unnamedSender": "Agent",
         "goToAgent": "Agent に移動",
-        "messageFromCoordinator": "コーディネーターからのメッセージ",
-        "startedWorker": "ワーカーを開始しました",
-        "reopenedWorker": "ワーカーを再度開きました",
-        "sentFollowUpToWorker": "ワーカーにフォローアップを送信しました",
-        "handedOffToAgent": "Agentに引き継ぎました",
-        "startedAgent": "Agentを開始しました",
-        "taskFromCoordinator": "コーディネーターからのタスク",
-        "updateFromWorker": "ワーカーからの更新",
         "senderReplaced": "{{name}} はターミナルで実行されていません。現在は別の Agent が実行されています。必要に応じてサイドバーからターミナルを開いてください。",
         "senderAmbiguous": "Orca は {{name}} がどのターミナルで実行されているか判別できません。サイドバーから開いてください。",
         "senderNotRunning": "{{name}} は実行されていません。作業を続けるにはサイドバーから新規 Agent を起動してください。",
@@ -20326,7 +20325,7 @@
       "rewind": {
         "unsupported": "このチャットは以前のメッセージに戻れません。",
         "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
-        "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+        "busy": "チャットがアイドル状態のときに利用できます",
         "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
         "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
         "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
@@ -22972,7 +22971,6 @@
       "lastReading": "{{reading}} · {{time}} に取得",
       "noReading": "使用量は不明：未取得",
       "chatSeparate": "agy ターミナルのアカウントとは別です。",
-      "chatAccount": "チャット用アカウント",
       "chatBadgeSigningIn": "サインイン中",
       "chatBadgeSignedIn": "サインイン済み",
       "chatBadgeSignedOut": "未サインイン",
@@ -22987,8 +22985,6 @@
       "enterpriseFieldsShort": "プロジェクトとロケーションを入力してください。",
       "chatUseMethod": "もう一度サインインして {{method}} を使用",
       "signInEllipsis": "サインイン…",
-      "terminalInfoWindows": "agy を実行してサインインしてから、ここでログインを保存してください。別のアカウントを追加するには、agy で /logout を実行してもう一度サインインしてください。選択すると、ホストのデフォルトの agy 認証情報に適用されます。",
-      "terminalInfo": "agy を実行してサインインしてから、ここでログインを保存してください。別のアカウントを追加するには、agy で /logout を実行してもう一度サインインしてください。新しい agy セッションに適用されます。",
       "loadFailed": "agy のアカウントを読み込めませんでした",
       "loading": "アカウントを読み込み中…",
       "notSignedIn": "サインインしていません",
@@ -23343,9 +23339,7 @@
     }
   },
   "mediaPreview": {
-    "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。",
-    "openFailed": "既定のアプリでファイルを開けませんでした。",
-    "openDefault": "既定のアプリで開く"
+    "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。"
   },
   "projectBoard": {
     "noColumnField": "このボードビューにはグループ化に使える単一選択フィールドまたは反復フィールドがないため、代わりに Orca が項目を一覧表示します。",
@@ -23903,7 +23897,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "ワークツリーを切り替え",
+      "worktreePalette": "すべてを検索",
       "worktreeNavigateUp": "前のワークツリー",
       "worktreeNavigateDown": "次のワークツリー",
       "workspaceCreate": "ワークツリーを作成",
@@ -24017,6 +24011,9 @@
       "45347db2a3": "タブナビゲーション",
       "aab2837fa5": "クイックコマンド",
       "3492a954c8": "ターミナルペイン"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "ワークツリーを切り替え"
     }
   },
   "gpuFallback": {
@@ -25158,8 +25155,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "lookDueNow": "今すぐ実行予定 · {{every}}"
+      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後"
     },
     "palette": {
       "placeholder": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",

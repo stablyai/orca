@@ -35,13 +35,18 @@ function first(f: ReturnType<typeof domainLifecycleFixture>, sinceMs: number) {
   return result.kind === 'first-submitted-prompt' ? result.first : undefined
 }
 
-it('applies the creation bound before taking the earliest submission', async () => {
+it('applies the creation bound before taking the earliest submission and renders its bot mention', async () => {
   const f = domainLifecycleFixture(cleanup)
   await send(f, 'opener', 'Pre-creation opener', 50)
-  await send(f, 'qualifying', 'Fix the login form', 110)
+  await send(
+    f,
+    'qualifying',
+    'ask [Bot: Eng - Nora](bot:52fbc8b4-69a9-4cf9-89ef-72499d00c3d7) to fix the login form',
+    110
+  )
   expect(first(f, 100)).toMatchObject({
     kind: 'found',
-    prompt: 'Fix the login form',
+    prompt: 'ask @Eng - Nora to fix the login form',
     submittedAt: 110
   })
 })

@@ -25,6 +25,26 @@ export function registerProfileStateWriteBatchingTests(): void {
       }
     })
 
+    it('patches the session instead of resending it when an explicit flush finds nothing dirty', async () => {
+      const { store, authority, readState } = await fixture()
+      store.getWorkspaceSession().activeTabId = 'explicit-edit'
+      await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      expect(authority.captures.flat().map(({ domain }) => domain)).not.toContain(
+        'workspaceSession'
+      )
+      expect(readState().workspaceSession.activeTabId).toBe('explicit-edit')
+    })
+
+    it('saves an in-place session entry edit at a full checkpoint', async () => {
+      const { store, readState } = await fixture()
+      const [worktreeId, tabs] = Object.entries(store.getWorkspaceSession().tabsByWorktree)[0]!
+      tabs[0]!.title = 'checkpoint-edit'
+      await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+      expect(readState().workspaceSession.tabsByWorktree[worktreeId][0].title).toBe(
+        'checkpoint-edit'
+      )
+    })
+
     it('keeps a later flush ordered after an intervening durable mutation', async () => {
       const { store, authority, readState } = await fixture()
       const gate = authority.pause()

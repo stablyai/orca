@@ -40,10 +40,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       this.claudeAgentViews.clear()
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
-      for (const timer of this.assistantMessageRetryTimers.values()) {
-        clearTimeout(timer)
-      }
-      this.assistantMessageRetryTimers.clear()
+      this.clearAllAssistantMessageRetries()
       this.clearAllTranscriptPolls()
     }
     this.statusHooksEnabled = enabled

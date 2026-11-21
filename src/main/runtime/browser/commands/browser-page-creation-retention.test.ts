@@ -7,28 +7,21 @@ import {
   closeBrowserMemoryPage
 } from '../../../browser/guest-lifecycle/browser-page-memory'
 
-it('does not resurrect closed creation holds at N and 10N after late navigation completion', async () => {
-  for (const count of [2, 20]) {
-    const deadIds: string[] = []
-    for (let index = 0; index < count; index++) {
-      const pageId = `closed-create-${count}-${index}`
-      const test = rig()
-      const pending = test.create(pageId)
-      // Reply is emitted outside the initiating RPC context, as real ipcMain does.
-      test.reply()
-      const guest = await attach(pageId)
-      expect(reserveBrowserPageDiscard(pageId, guest)).toBe(false)
-      await test.started
-      closeBrowserMemoryPage(pageId)
-      test.finishNavigation()
-      await pending
-      deadIds.push(pageId)
-    }
-    for (const pageId of deadIds) {
-      const later = await attach(pageId)
-      expect(reserveBrowserPageDiscard(pageId, later)).toBe(true)
-    }
-  }
+it('does not resurrect a closed creation hold after late navigation completes', async () => {
+  const pageId = 'closed-create'
+  const test = rig()
+  const pending = test.create(pageId)
+  // Reply is emitted outside the initiating RPC context, as real ipcMain does.
+  test.reply()
+  const guest = await attach(pageId)
+  expect(reserveBrowserPageDiscard(pageId, guest)).toBe(false)
+  await test.started
+  closeBrowserMemoryPage(pageId)
+  test.finishNavigation()
+  await pending
+
+  const later = await attach(pageId)
+  expect(reserveBrowserPageDiscard(pageId, later)).toBe(true)
 })
 
 it('retires pending creator ownership but leaves an adopted rebound page held', async () => {

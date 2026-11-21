@@ -44,8 +44,10 @@ function deferred(): {
   return { promise, settle, fail }
 }
 
-it('steps in list order and stops at the ends', () => {
-  const view = renderHook(() => useBotItemWalk(list(null), 'bot-1'))
+it('steps in order, holds the current item while paging, and stops at the ends', async () => {
+  const page = deferred()
+  const loadMore = vi.fn(() => page.promise)
+  const view = renderHook(() => useBotItemWalk(list(loadMore), 'bot-2'))
   act(() => view.result.current.open('a'))
   expect(view.result.current.place).toEqual({ index: 1, total: 5 })
   expect(view.result.current.canStep(-1)).toBe(false)
@@ -54,13 +56,9 @@ it('steps in list order and stops at the ends', () => {
   act(() => view.result.current.step(1))
   expect(view.result.current.uid).toBe('b')
   expect(view.result.current.place).toEqual({ index: 2, total: 5 })
-})
+  act(() => view.result.current.step(1))
+  expect(view.result.current.uid).toBe('c1')
 
-it('reads the next Closed page for a step past the loaded ones, holding the item meanwhile', async () => {
-  const page = deferred()
-  const loadMore = vi.fn(() => page.promise)
-  const view = renderHook(() => useBotItemWalk(list(loadMore), 'bot-2'))
-  act(() => view.result.current.open('c1'))
   act(() => view.result.current.step(1))
   expect(loadMore).toHaveBeenCalledOnce()
   expect(view.result.current.uid).toBe('c1')

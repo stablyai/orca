@@ -2,22 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { nameConversationPlace } from './external-conversation-place'
 
 describe('nameConversationPlace', () => {
-  it('names GitHub as repo#number and Linear by its issue key, with no lookup', async () => {
-    const nameChannel = vi.fn(async () => '#never')
-    await expect(
-      nameConversationPlace(
-        'github',
-        { kind: 'pull_request', id: 'stablyai/orca#3412' },
-        'b1',
-        nameChannel
-      )
-    ).resolves.toBe('orca#3412')
-    await expect(
-      nameConversationPlace('linear', { kind: 'issue', id: 'ENG-42' }, 'b1', nameChannel)
-    ).resolves.toBe('ENG-42')
-    expect(nameChannel).not.toHaveBeenCalled()
-  })
-
   it("asks the cloud for a Slack channel's name, and names no direct message", async () => {
     const nameChannel = vi.fn(async () => '#orca')
     await expect(

@@ -56,6 +56,8 @@ export type JournalSqlStorePrepare = (
   context: JournalReceiptStage
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
+type JournalHistoryAsk = Omit<JournalDomainHistoryRequest, 'sessionId'>
+
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 export class SqlAgentSessionJournal extends SqlJournalAppends {
   private readonly goalAttachments: JournalGoalAttachmentInverse
@@ -209,6 +211,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         if (epoch === null) {
           throw new Error('a committed journal replacement has no physical epoch')
         }
+        this.database.rememberSessionEpoch(this.identity.sessionId, epoch)
         this.target = { ...this.target, epoch }
       }
       if (commit.goals) {
@@ -286,12 +289,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   /** One reader snapshot answers the page and, when asked, current work beside it. */
-  history(
-    request: Omit<JournalDomainHistoryRequest, 'sessionId'>,
-    work?: JournalDomainHistoryWork
-  ) {
+  history(request: JournalHistoryAsk, work?: JournalDomainHistoryWork, signal?: AbortSignal) {
     const sessionId = this.identity.sessionId
-    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work)
+    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work, signal)
   }
 
   readWork<K extends JournalWorkRead['kind']>(

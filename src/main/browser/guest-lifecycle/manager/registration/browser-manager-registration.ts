@@ -221,6 +221,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
+    // Saved site zoom and color scheme apply to every page of the profile, not only pane webviews.
+    this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
     return true
   }
 

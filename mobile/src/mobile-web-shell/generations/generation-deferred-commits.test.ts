@@ -25,6 +25,11 @@ describe('a resume reloads pages onto a waiting build only when all of them are 
     const covered = page()
     const visibleHold = deferred.hold('host', visible)
     const coveredHold = deferred.hold('host', covered)
+    visibleHold.answer(0, true)
+    coveredHold.answer(0, true)
+    expect(covered.askAgain).not.toHaveBeenCalled()
+    expect(visible.swap).not.toHaveBeenCalled()
+
     deferred.defer(STAGED)
     visibleHold.answer(1, true)
     coveredHold.answer(1, true)
@@ -79,13 +84,6 @@ describe('a resume reloads pages onto a waiting build only when all of them are 
     expect(only.askAgain).not.toHaveBeenCalled()
     hold.answer(6, true)
     expect(only.askAgain).toHaveBeenCalledOnce()
-  })
-
-  it('reloads nothing when no newer build waits', () => {
-    const deferred = createDeferredCommits()
-    const only = page()
-    deferred.hold('host', only).answer(1, true)
-    expect(only.askAgain).not.toHaveBeenCalled()
   })
 })
 

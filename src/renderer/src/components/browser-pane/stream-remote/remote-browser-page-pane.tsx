@@ -1,5 +1,5 @@
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
@@ -16,8 +16,6 @@ import { useBrowserPageChromeFocus } from '../assemble-chrome/focus/use-browser-
 import { useBrowserAddressBarEditSession } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
 import { useElementGuestFocus } from '../assemble-chrome/focus/browser-page-guest-focus'
 import { consumeBrowserPageDeferredNavigation } from '../navigate/browser-page-deferred-navigation'
-import { useMarkupMode, type MarkupCaptureContext } from '../annotate/capture/useMarkupMode'
-import { deliverMarkupToClipboard } from '../annotate/capture/markup-clipboard-delivery'
 import {
   isRemoteBrowserStreamBusy,
   remoteBrowserStreamNotice
@@ -38,6 +36,8 @@ import {
 import { useRemoteBrowserPageChromeChords } from './use-remote-browser-page-chrome-chords'
 import { useRemoteBrowserPagePointerHistory } from './use-remote-browser-page-pointer-history'
 import { useRemoteBrowserPageWheel } from './use-remote-browser-page-wheel'
+import { useRemoteBrowserPageMarkup } from './use-remote-browser-page-markup'
+import { useRemoteBrowserPageZoom } from './use-remote-browser-page-zoom'
 import {
   RemoteBrowserPageContextMenu,
   useRemoteBrowserPageContextMenu
@@ -160,7 +160,8 @@ export function RemoteBrowserPagePane({
 
   const {
     applyRemoteTabInfo,
-    prepareCertificateProceed,
+    abandonRemoteNavigation,
+    stopRemotePage,
     scheduleRemoteTabInfoRefresh,
     runRemoteNavigation,
     navigateToUrl,
@@ -210,7 +211,7 @@ export function RemoteBrowserPagePane({
     imageRef.current?.focus()
   }, [hasStreamFrame])
 
-  const { reconnectRemoteStream } = useRemoteBrowserPageStream({
+  const { reconnectRemoteStream, resyncRemoteViewport } = useRemoteBrowserPageStream({
     activeRuntimeEnvironmentId: runtimeEnvironmentId,
     browserPageId: browserTab.id,
     isActive,
@@ -261,6 +262,17 @@ export function RemoteBrowserPagePane({
     setPaneNotice
   })
 
+  const zoom = useRemoteBrowserPageZoom({
+    browserPageId: browserTab.id,
+    runtimeEnvironmentId,
+    onZoomed: resyncRemoteViewport,
+    lifecycle,
+    runtimeTarget,
+    runtimeWorktree,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    setPaneNotice
+  })
   useRemoteBrowserPageWheel({
     busy,
     imageRef,
@@ -278,7 +290,8 @@ export function RemoteBrowserPagePane({
     setPaneNotice,
     pendingRemoteWheelRef,
     remoteWheelFrameRef,
-    remoteWheelInFlightRef
+    remoteWheelInFlightRef,
+    requestZoom: zoom.requestZoom
   })
 
   const { contextMenu, setContextMenu, handleRemoteContextMenu } = useRemoteBrowserPageContextMenu({
@@ -297,32 +310,14 @@ export function RemoteBrowserPagePane({
     setPaneNotice
   })
 
-  // Why: markup snapshots the displayed screencast <img> (no injection), so it works on remote panes even though element-grab doesn't.
-  const markup = useMarkupMode({
-    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
-      const element = imageRef.current
-      if (!element || !remoteViewportRef.current) {
-        return null
-      }
-      // Why the image's box: the frame is letterboxed, and the pane's shape would distort it.
-      const rect = element.getBoundingClientRect()
-      if (rect.width <= 0 || rect.height <= 0) {
-        return null
-      }
-      return {
-        source: { kind: 'image', element },
-        cssWidth: rect.width,
-        cssHeight: rect.height,
-        outputScale: window.devicePixelRatio || 1
-      }
-    }, []),
-    onDeliver: deliverMarkupToClipboard
-  })
+  const markup = useRemoteBrowserPageMarkup(imageRef, remoteViewportRef)
 
   return (
     // Scope E2E controls per pane; a workspace may have several address bars.
     <div
       data-testid="remote-browser-pane"
+      // Zoom chords follow this attribute to the page; hosts without browser.zoom keep Orca's zoom.
+      data-browser-page-pane-id={zoom.requestZoom ? browserTab.id : undefined}
       className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
     >
       {contextMenu ? (
@@ -379,18 +374,22 @@ export function RemoteBrowserPagePane({
         addressBarEditSession={addressBarEditSession}
         busy={busy}
         loading={browserTab.loading}
-        loadFailed={browserTab.loadError !== null}
+        loadErrorCode={browserTab.loadError?.code ?? null}
         markup={markup}
         frameUrl={frameUrl}
         isActive={isActive}
         history={history}
         onBack={() => void runRemoteNavigation('browser.back')}
         onForward={() => void runRemoteNavigation('browser.forward')}
-        onReload={() => void runRemoteNavigation('browser.reload')}
+        onReload={(ignoreCache) =>
+          void runRemoteNavigation('browser.reload', undefined, ignoreCache)
+        }
+        onStop={() => void stopRemotePage()}
       />
       <RemoteBrowserPageViewport
         remoteViewportRef={remoteViewportRef}
         imageRef={imageRef}
+        feedbackBadgeRef={zoom.feedbackBadgeRef}
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
         busy={busy}
@@ -409,7 +408,7 @@ export function RemoteBrowserPagePane({
         onGoto={(url) => runRemoteNavigation('browser.goto', url)}
         onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
-        onBeforeProceedCertificate={prepareCertificateProceed}
+        onBeforeProceedCertificate={abandonRemoteNavigation}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}

@@ -235,6 +235,7 @@ function MobileNativeChatOverlayContent({
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
       usageLimit: controller.nativeChatUsageLimit,
+      unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
@@ -256,6 +257,7 @@ function MobileNativeChatOverlayContent({
       onClearSendError,
       runInTerminal,
       controller.nativeChatUsageLimit,
+      controller.nativeChatUnresolvedFailureRows,
       onOpenAccounts
     ]
   )

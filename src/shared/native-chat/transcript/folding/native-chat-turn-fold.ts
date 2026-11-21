@@ -1,4 +1,4 @@
-// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back or another reply; the journal has no answer marker.
+// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back, question or another reply; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 // Failed hooks never fail the turn: those that end it stay visible below the answer, earlier ones fold as work.
 
@@ -13,6 +13,8 @@ import {
 import { isStoppedBeforeStartBlock } from '../pending-sends/native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from './native-chat-trailing-run'
 import { isGeneratedImageOperation, isImageOperation } from '../images/native-chat-generated-image'
+import { hasNativeChatAskCall } from '../../input/questions/native-chat-ask-row'
+import type { NativeChatResolvedPrompt } from '../../input/questions/native-chat-resolution-receipt'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -39,6 +41,8 @@ export type NativeChatTurnFoldRow = {
   explainsTurn: boolean
   /** A person's steer or a Stop hook's send-back interrupts the turn, so the prose before this row is an answer too. */
   endsAnswer: boolean
+  /** The row puts a question to the person, who answers from the words that led up to it. */
+  asks: boolean
   /** How an agent's spoken reply ends; a row draws its tool calls after its words, so `work` means work followed them. */
   replyEnd: 'words' | 'work' | undefined
   /** A hook failed; it reports on the turn without ending it. */
@@ -60,14 +64,19 @@ function isFailedHookBlock(block: NativeChatBlock): boolean {
 export function nativeChatTurnFoldRow(
   message: NativeChatMessage,
   turnKey: string | undefined,
-  hasReceipt: boolean
+  receipt: NativeChatResolvedPrompt | undefined
 ): NativeChatTurnFoldRow {
   let facts = rowFacts.get(message)
   if (!facts) {
     facts = deriveTurnFoldRow(message, undefined, false)
     rowFacts.set(message, facts)
   }
-  return { ...facts, turnKey, draws: hasReceipt || facts.draws }
+  return {
+    ...facts,
+    turnKey,
+    draws: receipt !== undefined || facts.draws,
+    asks: receipt?.kind === 'question' || facts.asks
+  }
 }
 
 function deriveTurnFoldRow(
@@ -119,7 +128,8 @@ function deriveTurnFoldRow(
         (block) =>
           block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
       ),
-    failedHook: message.blocks.some(isFailedHookBlock)
+    failedHook: message.blocks.some(isFailedHookBlock),
+    asks: hasNativeChatAskCall(message.blocks)
   }
   const speaks =
     message.role === 'assistant' &&
@@ -142,7 +152,7 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Last assistant prose/system failure per turn, before each steer or send-back, and before another reply; no answer means fold all work. */
+/** Last assistant prose/system failure per turn, before each steer or send-back, leading into each question, and before another reply; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlySet<number> {
@@ -154,13 +164,13 @@ export function nativeChatTurnAnswerRows(
       continue
     }
     const answer = latest.get(row.turnKey)
+    const previous = previousDrawn.get(row.turnKey)
     if (row.endsAnswer && answer !== undefined) {
       answers.add(answer)
       latest.delete(row.turnKey)
     }
     if (row.draws) {
       // Back-to-back replies within a turn all stay visible; a reply that work follows folds.
-      const previous = previousDrawn.get(row.turnKey)
       if (previous !== undefined && rows[previous]?.replyEnd === 'words' && row.replyEnd) {
         answers.add(previous)
       }
@@ -171,6 +181,11 @@ export function nativeChatTurnAnswerRows(
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
     if (isCandidate) {
       latest.set(row.turnKey, index)
+    }
+    // Words lead into a question from its own row or the row drawn just before it.
+    const asker = row.asks ? latest.get(row.turnKey) : undefined
+    if (asker !== undefined && (asker === index || asker === previous)) {
+      answers.add(asker)
     }
   }
   for (const index of latest.values()) {

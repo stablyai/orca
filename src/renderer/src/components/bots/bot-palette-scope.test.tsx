@@ -522,6 +522,7 @@ describe('Cmd+K opening a bot or group from the palette', () => {
     mocks.offlineHosts = new Set()
     mocks.hostIds = ['local']
     openMocks.groups = []
+    mocks.openBotHomeTab.mockClear()
     openMocks.openGroup.mockClear()
     openMocks.taskRequests.mockReset()
     openMocks.taskRequests.mockImplementation(() => [])
@@ -558,9 +559,9 @@ describe('Cmd+K opening a bot or group from the palette', () => {
     )
     await typeQuery('triage')
     await choose(botRowId('b1'))
+    expect(mocks.openBotHomeTab).toHaveBeenCalledExactlyOnceWith(mocks.bots[0])
     mountOpenedPane('data-terminal-tab-id', 'term-b1').focus()
     await expectPaletteClosedWithBotsFolded()
-    expect(document.activeElement?.tagName).toBe('TEXTAREA')
   })
 
   it("keeps Bots folded after a group's room opens", async () => {

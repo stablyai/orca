@@ -254,14 +254,6 @@ it('leaves the document alone while an IME composition owns it', () => {
   }
 })
 
-it('makes the pill from the token when the draft is written with no editor insert', async () => {
-  const { input, pillNames } = setup('ask @Eng')
-  act(() => {
-    input.value = `ask ${TOKEN} `
-  })
-  await pillNames([NORA.name])
-})
-
 it('sends agent references next to a picked bot, the bot as its token', async () => {
   const { input, editor } = setup(`ask ${TOKEN} and `)
   act(() => input.setSelectionRange(input.value.length, input.value.length))

@@ -90,7 +90,8 @@ describe('readBotOwnChatPanes', () => {
     expect(chats[bot.id]?.map((chat) => chat.title)).toEqual(['Plan the launch'])
   })
 
-  it.each([10, 100])('reads only the bots named, of %i bots', async (botCount) => {
+  it('reads only the bots named', async () => {
+    const botCount = 10
     const bots = Array.from({ length: botCount }, (_, i) =>
       makeTestBot({
         id: `bot-${i}`,

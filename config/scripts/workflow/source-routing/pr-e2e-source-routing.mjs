@@ -263,8 +263,6 @@ export function selectPrE2eSpecs(
           'tests/e2e/desktop/computer-use/computer-driver.ts',
           'tests/e2e/desktop/computer-use/notepad-document.ts',
           'tests/e2e/desktop/computer-use/windows-fixture-actions.ts',
-          'tests/e2e/desktop/computer-use/windows-foreground-holder.ps1',
-          'tests/e2e/desktop/computer-use/windows-foreground-holder.ts',
           'tests/e2e/desktop/computer-use/windows-form-fixture.ts',
           'tests/e2e/desktop/computer-use/windows-ime-native-events.ts',
           'tests/e2e/desktop/computer-use/windows-semantic-controls-fixture.ps1',

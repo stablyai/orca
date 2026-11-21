@@ -48,7 +48,7 @@ function Crumb({
   const back = page
     ? t('bots.settingsView.backToSettings', 'Back to Settings')
     : host === 'panel'
-      ? t('bots.settingsView.backToItems', 'Back to Items')
+      ? t('bots.settingsView.backToItems', 'Back to Home')
       : t('bots.settingsView.backToBots', 'Back to Bots')
   const sep = (
     <span aria-hidden className="shrink-0 text-muted-foreground">

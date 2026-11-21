@@ -177,13 +177,6 @@ it('ends the pending search when the last bot disappears but its group remains',
   expect(screen.queryByRole('searchbox')).toBeNull()
   expect(mocks.onOpenBot).toHaveBeenCalledOnce()
 })
-it('offers expansion when every saved fold belongs to a hidden bot', () => {
-  useAppStore.setState({ collapsedGroups: new Set(['lineage:folder:session-home']) })
-  const { result } = renderHook(() => useBotCollapseAll([], [botEntry]))
-  expect(result.current?.allCollapsed).toBe(true)
-  act(() => result.current!.toggle())
-  expect(useAppStore.getState().collapsedGroups.has('lineage:folder:session-home')).toBe(false)
-})
 it('offers expansion for a hidden saved fold beside a childless visible bot', () => {
   const visible = { kind: 'bot' as const, id: 'childless', home: { id: 'childless-home' } }
   useAppStore.setState({

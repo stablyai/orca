@@ -6,7 +6,9 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { publishBots } from '@/lib/bot-catalog-snapshot'
+import { publishBots, setBotHostListing } from '@/lib/bot-catalog-snapshot'
+import type { Bot } from '../../../../shared/bot-types'
+import { resolveWorktreeCreateParent } from './worktrees/create/worktree-create-parent-pick'
 import {
   createTestStore,
   mockApi,
@@ -52,26 +54,7 @@ describe('createWorktree from a bot home', () => {
   }
 
   it("doesn't attach a new workspace to an open bot's home", async () => {
-    publishBots([
-      {
-        id: 'bot-1',
-        name: 'Ranger',
-        hostId: 'local',
-        folder: 'ranger',
-        folderWorkspaceId: 'bot-home',
-        agent: 'claude',
-        avatar: null,
-        paused: false,
-        notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
-        members: [],
-        slack: null,
-        chatSessionId: null,
-        linear: null,
-        github: null,
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ])
+    publishBots([makeBot()])
     try {
       const store = createParentPickStore()
       store.setState({
@@ -90,7 +73,56 @@ describe('createWorktree from a bot home', () => {
       publishBots([])
     }
   })
+
+  it("doesn't attach a new workspace to an open home on another machine", () => {
+    const botHost: ExecutionHostId = 'runtime:air'
+    setBotHostListing({
+      hosts: [
+        { hostId: 'local', state: 'live' },
+        { hostId: botHost, state: 'live' }
+      ],
+      updateNeeded: []
+    })
+    publishBots([makeBot()], undefined, botHost)
+    try {
+      const store = createParentPickStore()
+      store.setState({
+        activeWorkspaceKey: folderWorkspaceKey('bot-home'),
+        activeWorkspaceExecutionHostId: botHost,
+        folderWorkspaces: [makeFolderWorkspace({ id: 'bot-home', executionHostId: botHost })]
+      })
+
+      const parent = resolveWorktreeCreateParent(store.getState(), undefined, 'local')
+
+      expect(parent.parentWorkspace).toBeUndefined()
+      expect(parent.crossStoreParentRow).toBeUndefined()
+    } finally {
+      publishBots([], undefined, botHost)
+      setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
+    }
+  })
 })
+
+function makeBot(): Bot {
+  return {
+    id: 'bot-1',
+    name: 'Ranger',
+    hostId: 'local',
+    folder: 'ranger',
+    folderWorkspaceId: 'bot-home',
+    agent: 'claude',
+    avatar: null,
+    paused: false,
+    notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+    members: [],
+    slack: null,
+    chatSessionId: null,
+    linear: null,
+    github: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
 
 function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
   store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })

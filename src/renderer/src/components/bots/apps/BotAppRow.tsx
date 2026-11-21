@@ -110,17 +110,20 @@ export function BotAppRow({
 export function BotAppCaption({
   id,
   title,
-  count
+  count,
+  icon
 }: {
   id?: string
   title: string
   count?: number
+  icon?: React.ReactNode
 }): React.JSX.Element {
   return (
     <h3
       id={id}
       className="flex items-center gap-1.5 px-2 pt-3.5 pb-1 text-2xs font-semibold text-muted-foreground"
     >
+      {icon}
       <span className="min-w-0 truncate" title={title}>
         {title}
       </span>

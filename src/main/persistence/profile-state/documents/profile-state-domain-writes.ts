@@ -28,6 +28,12 @@ import {
 } from '../document-parts/profile-state-document-parts-storage'
 import { isProfileStateSplitDomain } from '../document-parts/profile-state-document-parts'
 import {
+  prepareProfileStateDomainPatches,
+  type PreparedProfileStateDomainPatch,
+  type ProfileStateDomainPatch
+} from './profile-state-domain-patches'
+import { isWorkspaceSessionDomain } from '../../workspace-session-domains'
+import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction,
   type PreparedProfileStateMutation
@@ -51,6 +57,22 @@ export type ProfileStateDomainTransaction = {
   replacements: readonly ProfileStateDomainMutation[]
   /** Enable selective run-row updates from Store's changed projection. */
   automationRunsAfter?: readonly unknown[]
+  /** Changed entries of split domains, applied to their stored copies in this transaction. */
+  patches?: readonly ProfileStateDomainPatch[]
+  /** The writer's patch support; only the writer worker sends patches. */
+  patching?: ProfileStateDomainPatching
+}
+
+function rejectPatch(): never {
+  throw new Error('Profile state patches can only be applied by the writer')
+}
+
+export type ProfileStateDomainPatching = {
+  prepare: (
+    db: Database.Database,
+    patch: PreparedProfileStateDomainPatch
+  ) => PreparedProfileStateMutation
+  remember: (db: Database.Database, mutations: readonly PreparedProfileStateMutation[]) => void
 }
 
 export type ProfileStateDomainWriteResult = {
@@ -88,9 +110,22 @@ export function writeProfileStateDomains(
 ): ProfileStateDomainTransactionResult {
   validateProfileStateDomainTransaction(transaction)
 
-  const prepared = transaction.replacements.map(prepareProfileStateDomainMutation)
+  const prepared = transaction.replacements.map((replacement) =>
+    prepareProfileStateDomainMutation(replacement)
+  )
+  const patches = prepareProfileStateDomainPatches(transaction.patches ?? [])
+  if (patches.some(({ domain }) => prepared.some((mutation) => mutation.domain === domain))) {
+    throw new Error('Profile state domain transaction patches a replaced domain')
+  }
+  const { patching } = transaction
+  const preparePatch = patching?.prepare ?? rejectPatch
+  if (patches.length > 0 && !patching) {
+    rejectPatch()
+  }
 
-  return withProfileStateWriteTransaction(db, () => {
+  const patched: PreparedProfileStateMutation[] = []
+  const result = withProfileStateWriteTransaction(db, () => {
+    patched.length = 0
     const actualRevision = readProfileStateRevision(db)
     if (actualRevision !== transaction.expectedRevision) {
       throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
@@ -155,6 +190,11 @@ export function writeProfileStateDomains(
       }
     }
     for (const mutation of prepared) {
+      admit(mutation)
+    }
+    for (const patch of patches) {
+      const mutation = preparePatch(db, patch)
+      patched.push(mutation)
       admit(mutation)
     }
     if (transaction.automationRunsAfter !== undefined) {
@@ -267,4 +307,10 @@ export function writeProfileStateDomains(
       changedDomains: updates.map(({ domain }) => domain)
     }
   })
+  // Whole session writes are cached too, so the next patch doesn't re-read what was just written.
+  patching?.remember(db, [
+    ...prepared.filter(({ domain }) => isWorkspaceSessionDomain(domain)),
+    ...patched
+  ])
+  return result
 }

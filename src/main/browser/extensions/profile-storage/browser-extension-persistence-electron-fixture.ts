@@ -13,6 +13,7 @@ import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/bro
 import { holdWebviewFirstLoadForExtensions } from '../profile-sessions/browser-extension-page-start'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
 import { closeBrowserExtensionProfileDocumentStores } from './browser-extension-profile-document-store'
+import { closeBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
 import { buildBrowserExtensionPageContextMenu } from '../context-menus/browser-extension-context-menu-host'
 import { recordActiveBrowserPage } from '../tabs-and-windows/browser-extension-tab-model'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
@@ -83,11 +84,14 @@ function capture(message: string): void {
       status[key] =
         key === 'commands' ? [...(Array.isArray(status[key]) ? status[key] : []), value] : value
       writeStatus()
-      // Why quit, not exit: will-quit flushes the extension state the second launch replays; sync
-      // storage saves last, as Orca's quit does.
+      // Saves extension state and sync storage last, as Orca's quit does, for the second launch.
       if (key === 'setup' && phase === 'first') {
         setTimeout(
-          () => void closeBrowserExtensionProfileDocumentStores().then(() => app.quit()),
+          () =>
+            void Promise.all([
+              closeBrowserExtensionProfileDocumentStores(),
+              closeBrowserExtensionProfileStateStore()
+            ]).then(() => app.quit()),
           300
         )
       }

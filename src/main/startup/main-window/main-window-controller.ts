@@ -254,7 +254,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
       })
   })
   logStartupMilestone('load-start')
-  loadMainWindow(window)
+  loadMainWindow(window, options.loadObserver)
   hostInitialization.resolve()
   return window
 }

@@ -22,21 +22,6 @@ describe('a page may reload onto a newer build only at a safe moment', () => {
     expect(safety.answer(false, never)).toBe(true)
   })
 
-  it('is not safe with an unsent draft the user typed', () => {
-    const safety = createPageSwapSafety(document)
-    document.body.innerHTML = '<textarea></textarea>'
-    type('textarea', 'half a reply')
-    expect(safety.answer(false, never)).toBe(false)
-  })
-
-  it('is not safe when React remounted the composer holding the typed draft', () => {
-    const safety = createPageSwapSafety(document)
-    document.body.innerHTML = '<textarea></textarea>'
-    type('textarea', 'half a reply')
-    document.body.innerHTML = '<div><textarea>half a reply</textarea></div>'
-    expect(safety.answer(false, never)).toBe(false)
-  })
-
   it('forgets a remounted draft once a new field took it over, or the page moved on', () => {
     const safety = createPageSwapSafety(document)
     document.body.innerHTML = '<textarea></textarea>'
@@ -59,6 +44,7 @@ describe('a page may reload onto a newer build only at a safe moment', () => {
     const safety = createPageSwapSafety(document)
     document.body.innerHTML = '<textarea></textarea><input disabled>'
     type('textarea', 'sent')
+    expect(safety.answer(false, never)).toBe(false)
     type('textarea', '')
     type('input', 'not editable')
     expect(safety.answer(false, never)).toBe(true)

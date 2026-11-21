@@ -84,17 +84,12 @@ describe('orchestration mailbox routing races', () => {
       }
       return page
     })
-    const migrate = db.routeUnreadDispatchMailboxToRunMailbox.bind(db)
-    const migrationSpy = vi
-      .spyOn(db, 'routeUnreadDispatchMailboxToRunMailbox')
-      .mockImplementation((...args) => migrate(...args))
     const arrivalSpy = vi.spyOn(harness.runtime, 'notifyMessageArrived')
 
     const response = await dispatchMailboxCheck(harness.runtime)
 
     expect(response).toMatchObject({ ok: false, error: { code: 'dispatch_inactive' } })
     expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toHaveLength(0)
-    expect(migrationSpy).toHaveBeenCalledTimes(4)
     expect(arrivalSpy).toHaveBeenCalledOnce()
     expect(arrivalSpy).toHaveBeenCalledWith(`run:${run.id}`, 'status')
     const coordinator = {

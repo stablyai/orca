@@ -130,6 +130,8 @@ function Settings(): React.JSX.Element {
               onChange={picture.pick}
               onUpload={picture.upload}
               onUndo={picture.undo}
+              color={picture.color}
+              onColorChange={picture.pickColor}
             />
             <p className="text-center text-xs text-muted-foreground">
               Changes your bot&apos;s picture in Slack too.
@@ -157,6 +159,18 @@ export const newIdle = defineFixture({
         '[role="dialog"] button.h-6, [role="dialog"] button[data-size="xs"]'
       )
       ?.focus()
+    await settle(600)
+  }
+})
+
+export const newColor = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: async () => {
+    document
+      .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Graphite"]')
+      ?.click()
     await settle(600)
   }
 })

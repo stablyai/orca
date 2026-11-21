@@ -17,33 +17,23 @@ import {
 
 // Every pane's acquisition shares this executor's process table: a burst of first hooks queues
 // behind four subprocess or proc reads instead of spawning one ps per pane at once.
-export function createHookProcessReadSlots(): PrioritySemaphore {
-  return new PrioritySemaphore(4)
-}
-
-/** Each leaf read holds a slot only while it runs; an expired attempt's queued reads give up. */
-export function hookProcessReadGate(
-  slots: PrioritySemaphore,
-  signal?: AbortSignal,
-  priority = 0
-): ProcessReadGate {
-  return async (read) => {
-    const release = await slots.acquire(priority, signal)
-    try {
-      return await read()
-    } finally {
-      release()
-    }
-  }
-}
+const MAX_ACTIVE_HOOK_ROOT_READS = 4
 
 /** Root evidence from this host's own processes, for panes whose PTY root `resolveRoot` names. */
 export function createLocalHookRootEvidenceReader(
   resolveRoot: HookPaneProcessIo['resolveRoot'],
-  slots = createHookProcessReadSlots()
+  slots = new PrioritySemaphore(MAX_ACTIVE_HOOK_ROOT_READS)
 ): HookRootEvidenceReader {
   return (request) => {
-    const gate = hookProcessReadGate(slots, request.signal)
+    // Each leaf read holds a slot only while it runs; an expired attempt's queued reads give up.
+    const gate: ProcessReadGate = async (read) => {
+      const release = await slots.acquire(0, request.signal)
+      try {
+        return await read()
+      } finally {
+        release()
+      }
+    }
     const io: HookPaneProcessIo = {
       resolveRoot,
       probe: (process) =>

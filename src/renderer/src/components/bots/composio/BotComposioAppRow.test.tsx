@@ -124,7 +124,7 @@ describe('the bot’s Composio sign-ins when Composio fails', () => {
 })
 
 describe('signing in to a Composio app from Add a connector', () => {
-  it('says the sign-in ended without a connection, and Try again starts another', async () => {
+  it('offers a retry after an unfinished sign-in or a failed Connect', async () => {
     let pending = true
     answer({
       'bots.composio.status': () => ({ key: 'ok', added: true, limit: null }),
@@ -134,38 +134,19 @@ describe('signing in to a Composio app from Add a connector', () => {
       })
     })
     const onRetry = vi.fn()
-    render(
-      <ComposioSignInWait
-        bot={bot}
-        app={notion}
-        connectError={null}
-        onDone={vi.fn()}
-        onRetry={onRetry}
-        onClose={vi.fn()}
-      />
-    )
+    const props = { bot, app: notion, onDone: vi.fn(), onRetry, onClose: vi.fn() }
+    const { rerender } = render(<ComposioSignInWait key="first" {...props} connectError={null} />)
     expect(await screen.findByText('Finish in your browser')).toBeTruthy()
-    // The host drops its wait: denied, failed, or past its time limit.
+    // The host drops its wait after the attempt ends.
     pending = false
     botsChanged()
     expect(await screen.findByText('Couldn’t sign in to Notion')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledOnce()
-  })
 
-  it('shows why when Connect itself fails', () => {
-    answer({})
-    render(
-      <ComposioSignInWait
-        bot={bot}
-        app={notion}
-        connectError="Composio refused the link"
-        onDone={vi.fn()}
-        onRetry={vi.fn()}
-        onClose={vi.fn()}
-      />
-    )
+    rerender(<ComposioSignInWait key="retry" {...props} connectError="Composio refused the link" />)
     expect(screen.getByText('Composio refused the link')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(onRetry).toHaveBeenCalledTimes(2)
   })
 })

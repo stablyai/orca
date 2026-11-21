@@ -32,15 +32,30 @@ export type BotItemGroupId = (typeof BOT_ITEM_GROUP_IDS)[number]
 export const BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT: ReadonlySet<BotItemGroupId> = new Set([
   'planned',
   'snoozed',
-  'stale'
+  'stale',
+  'closed'
 ])
 
 export type BotItemGroups = Record<BotItemGroupId, BotItem[]>
 
-/** The tab's filter: one chat (null: all), and only what needs the owner. */
-export type BotItemFilter = { chatId: string | null; needsYou: boolean }
+/** The tab's filter: these chats' items and these bots' (null: all), and only what needs the owner. A
+ *  bot's page picks one chat; a group's page its rooms' member sessions and some of its members. */
+export type BotItemFilter = {
+  chatIds: readonly string[] | null
+  botIds: readonly string[] | null
+  needsYou: boolean
+}
 
-export const BOT_ITEM_NO_FILTER: BotItemFilter = { chatId: null, needsYou: false }
+export const BOT_ITEM_NO_FILTER: BotItemFilter = { chatIds: null, botIds: null, needsYou: false }
+
+/** The one chat a filter keeps, as a bot's page picks it; null for every chat or several. */
+export function botItemFilterChat(filter: BotItemFilter): string | null {
+  return filter.chatIds?.length === 1 ? filter.chatIds[0]! : null
+}
+
+export function isBotItemFilterOn(filter: BotItemFilter): boolean {
+  return filter.chatIds !== null || filter.botIds !== null || filter.needsYou
+}
 
 /** The bot's stale setting in days; null: never. */
 export function botItemStaleDays(stale: BotItemsStale | undefined): number | null {
@@ -74,7 +89,8 @@ export function botItemGroupOf(
 export function filterBotItems(items: readonly BotItem[], filter: BotItemFilter): BotItem[] {
   return items.filter(
     (item) =>
-      (filter.chatId === null || item.chat.id === filter.chatId) &&
+      (filter.chatIds === null || filter.chatIds.includes(item.chat.id)) &&
+      (filter.botIds === null || filter.botIds.includes(item.owner.botId)) &&
       (!filter.needsYou || item.status === 'needs_you')
   )
 }
@@ -121,14 +137,21 @@ export function botNeedChat(
   }
 }
 
-/** Orca's asks a filter shows beside its items: a chat's own ask and its workers' asks. A sign-in or
- *  an access request is no chat's (`chatOf` null), so only an unfiltered or Needs-you-only list has it. */
+/** One bot's asks a filter shows beside its items: a chat's own ask and its workers' asks. A sign-in or
+ *  an access request is no chat's (`chatOf` null), so only a list of every chat has it. */
 export function filterBotNeeds<N>(
   needs: readonly N[],
   filter: BotItemFilter,
   chatOf: (need: N) => string | null
 ): readonly N[] {
-  return filter.chatId === null ? needs : needs.filter((need) => chatOf(need) === filter.chatId)
+  const { chatIds } = filter
+  if (chatIds === null) {
+    return needs
+  }
+  return needs.filter((need) => {
+    const chat = chatOf(need)
+    return chat !== null && chatIds.includes(chat)
+  })
 }
 
 export function groupBotItems(
@@ -136,6 +159,15 @@ export function groupBotItems(
   staleDays: number | null,
   now: number,
   seenEventId: string
+): BotItemGroups {
+  return groupBotsItems([{ items, staleDays, seenEventId }], now)
+}
+
+/** Several bots' items in one set of groups, a group's members' merged: each item grouped by its own
+ *  bot's stale setting and marked changed by its own bot's seen mark, then ordered as one bot's are. */
+export function groupBotsItems(
+  bots: readonly { items: readonly BotItem[]; staleDays: number | null; seenEventId: string }[],
+  now: number
 ): BotItemGroups {
   const groups: BotItemGroups = {
     needs_you: [],
@@ -145,10 +177,16 @@ export function groupBotItems(
     stale: [],
     closed: []
   }
-  for (const item of items) {
-    groups[botItemGroupOf(item, staleDays, now)].push(item)
+  const unseenUids = new Set<string>()
+  for (const { items, staleDays, seenEventId } of bots) {
+    for (const item of items) {
+      groups[botItemGroupOf(item, staleDays, now)].push(item)
+      if (isBotItemUnseen(item, seenEventId)) {
+        unseenUids.add(item.uid)
+      }
+    }
   }
-  const unseen = (item: BotItem) => Number(isBotItemUnseen(item, seenEventId))
+  const unseen = (item: BotItem) => Number(unseenUids.has(item.uid))
   const activity = (item: BotItem) => botItemActivityAt(item, now)
   for (const [id, rows] of Object.entries(groups)) {
     rows.sort(
@@ -158,6 +196,22 @@ export function groupBotItems(
     )
   }
   return groups
+}
+
+/** Several bots' loaded Closed items as one list in time order, newest first. Each bot pages its own,
+ *  so an item older than the oldest loaded item of a bot with more pages waits: that bot's next page
+ *  may hold newer ones. `more`: the bot has Closed pages not read yet. */
+export function botItemsClosedInTimeOrder(
+  bots: readonly { closed: readonly BotItem[]; more: boolean }[]
+): BotItem[] {
+  const tails = bots.flatMap(({ closed, more }) =>
+    more && closed.length > 0 ? [Math.min(...closed.map((item) => item.lastActivityAt))] : []
+  )
+  const cutoff = tails.length > 0 ? Math.max(...tails) : -Infinity
+  return bots
+    .flatMap(({ closed }) => closed)
+    .filter((item) => item.lastActivityAt >= cutoff)
+    .toSorted((a, b) => b.lastActivityAt - a.lastActivityAt || b.number - a.number)
 }
 
 /** The tab's badge: items in Needs you that aren't stale or snoozed. */

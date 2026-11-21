@@ -4,7 +4,7 @@ import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
-import { getZipExtractorCommand } from '../../shared/archives/zip-extractor-command'
+import { getTarProgram, getZipExtractorCommand } from '../../shared/archives/zip-extractor-command'
 import type { MainHttpClient } from '../network/http-client'
 import { isRetryableDownloadError, type HttpStatusError } from '../network/transient-download-error'
 import type { PinnedRuntimeArchive, PinnedRuntimeExecutable } from './pinned-runtime-materializer'
@@ -13,25 +13,27 @@ const MAX_RUNTIME_ARCHIVE_BYTES = 200 * 1024 * 1024
 export const RUNTIME_ARCHIVE_RETRY_DELAYS_MS = [1_000, 3_000, 9_000]
 
 /** Missing/misconfigured extractors need actionable errors; unset cwd means ENOENT/ENOTDIR identifies the program. */
+/** Without `member`, a tar.gz extracts whole. */
 export async function extractRuntimeArchive(
-  runtime: Pick<PinnedRuntimeExecutable, 'label' | 'member'>,
+  runtime: Pick<PinnedRuntimeExecutable, 'label'> & { member?: string },
   archivePath: string,
   extractDir: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs = 120_000
 ): Promise<ProcessResult> {
   const { label } = runtime
   const command = archivePath.endsWith('.zip')
     ? getZipExtractorCommand(archivePath, extractDir)
     : {
-        file: 'tar',
-        args: ['-xzf', archivePath, '-C', extractDir, runtime.member],
+        file: getTarProgram(),
+        args: ['-xzf', archivePath, '-C', extractDir, ...(runtime.member ? [runtime.member] : [])],
         label: 'tar'
       }
   try {
     return await runProcess({
       program: command.file,
       args: command.args,
-      timeoutMs: 120_000,
+      timeoutMs,
       signal
     })
   } catch (error) {
