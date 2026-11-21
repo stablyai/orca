@@ -62,9 +62,10 @@ export class AgentTranscriptPollScheduler<T> {
   }
 
   private settle(key: string, entry: TranscriptWakeup<T>): void {
-    if (this.inFlight.get(key) === entry) {
-      this.inFlight.delete(key)
+    if (this.inFlight.get(key) !== entry) {
+      return
     }
+    this.inFlight.delete(key)
     const current = this.entries.get(key)
     if (current?.dueWhileInFlight) {
       // A wake or newer hook came due mid-read; run again at the normal cadence instead of the sparse probe.

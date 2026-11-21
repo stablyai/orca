@@ -53,7 +53,13 @@ type RowIdentities = {
   worktrees: Map<string, string>
 }
 let rowCache: RowIdentities | undefined
-let cache: { inputs: unknown[]; contexts: Contexts } | undefined
+let cache:
+  | {
+      inputs: unknown[]
+      contexts: Contexts
+      statuses: VisibleOrchestrationState['agentStatusByPaneKey']
+    }
+  | undefined
 let builds = 0
 let aliasBuilds = 0
 let visits = 0
@@ -153,13 +159,18 @@ function terminalProvenance(state: VisibleOrchestrationState) {
 function projection(state: VisibleOrchestrationState): NonNullable<typeof cache> {
   const rows = rowIdentities(state)
   const terminals = terminalProvenance(state)
+  const statuses = state.agentStatusByPaneKey
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
-    state.agentStatusByPaneKey,
+    statuses?.orchestrationRevision,
     terminals,
     rows
   ]
-  if (cache && inputs.every((value, index) => value === cache?.inputs[index])) {
+  if (
+    cache &&
+    (statuses === cache.statuses || (cache.statuses && statuses?.sharesOwner(cache.statuses))) &&
+    inputs.every((value, index) => value === cache?.inputs[index])
+  ) {
     return cache
   }
   builds++
@@ -238,7 +249,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     previous &&
     Object.keys(previous).length === Object.keys(contexts).length &&
     Object.keys(contexts).every((key) => previous[key] === contexts[key])
-  cache = { inputs, contexts: equal ? previous : contexts }
+  cache = { inputs, statuses, contexts: equal ? previous : contexts }
   return cache
 }
 

@@ -8,6 +8,8 @@ import { buildBody, postHookEvent } from '../../server.test-fixtures'
 import type * as BrainMetadata from '../../../../../../shared/agent-hook-listener/providers/antigravity/antigravity-brain-metadata'
 import type * as BoundedFileReader from '../../../../../../shared/file-content/node-bounded-file-reader'
 import type * as PollScheduler from '../../../../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
+import { createPluginAgentStatusForwarder } from '../../../../../plugins/runtime/plugin-runtime-binding'
+import { pluginAgentStatusListener } from '../../../../../plugins/events/plugin-agent-status-event'
 
 const reads = vi.hoisted(() => ({
   members: 0,
@@ -98,14 +100,33 @@ afterEach(() => {
 })
 
 it.each([10, 100])(
-  'starts no transcript read for %s subagent panes after status hooks are disabled mid-read',
+  'retires reads for %s subagent panes when status hooks are disabled and reenabled mid-read',
   async (panes) => {
+    const emitEvent = vi.fn()
+    const terminals = Array.from({ length: panes === 10 ? 300 : 3000 }, (_, index) => ({
+      handle: `terminal-${index}`,
+      title: `Title ${index}`,
+      tabId: `tab-${index}`,
+      leafId: `${index.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`
+    }))
+    const listTerminals = vi.fn(async () => ({ terminals }))
+    server.subscribeEnrichedStatus(
+      pluginAgentStatusListener(
+        undefined,
+        createPluginAgentStatusForwarder({ listTerminals }, { emitEvent, wantsEvent: () => true })
+      )
+    )
     for (let i = 0; i < panes; i++) {
       const leaf = `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`
       const overrides = { paneKey: makePaneKey(`tab-${i}`, leaf), tabId: `tab-${i}` }
       const logs = join(dir, `root-${i}`, '.system_generated', 'logs')
       mkdirSync(logs, { recursive: true })
       mkdirSync(join(dir, `root-${i}`, '.system_generated', 'swarm'))
+      mkdirSync(join(dir, `root-${i}`, '.system_generated', 'subagents'))
+      writeFileSync(
+        join(dir, `root-${i}`, '.system_generated', 'subagents', `child-${i}.json`),
+        '{}'
+      )
       writeFileSync(
         join(dir, `root-${i}`, '.system_generated', 'swarm', 'members.json'),
         JSON.stringify({ members: {} })
@@ -126,12 +147,34 @@ it.each([10, 100])(
       }
     }
     await vi.waitFor(() => expect(reads.members).toBe(panes), { timeout: 10000 })
+    expect(emitEvent).toHaveBeenCalledWith(
+      'agent.status.changed',
+      expect.objectContaining({
+        terminalId: 'terminal-0',
+        title: 'Title 0',
+        sessionId: 'root-0'
+      })
+    )
+    listTerminals.mockClear()
+    emitEvent.mockClear()
     vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
     server.setStatusHooksEnabled(false)
+    server.setStatusHooksEnabled(true)
     reads.release()
     await vi.waitFor(() => expect(reads.finished).toBe(panes), { timeout: 10000 })
-    await vi.advanceTimersByTimeAsync(30_000)
     expect(reads).toMatchObject({ members: panes, descriptors: 0, files: 0 })
+    expect(server.getStatusSnapshot().some((row) => row.subagents?.length)).toBe(false)
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(
+      () =>
+        expect(server.getStatusSnapshot().filter((row) => row.subagents?.length)).toHaveLength(
+          panes
+        ),
+      { timeout: 10000 }
+    )
+    expect(reads.descriptors).toBe(panes)
+    expect(listTerminals).not.toHaveBeenCalled()
+    expect(emitEvent).not.toHaveBeenCalled()
   }
 )
 
@@ -203,13 +246,40 @@ it.each([100, 1000])(
     const afterIdle = reads.callbacks
     await vi.advanceTimersByTimeAsync(600_000)
     expect(reads.callbacks).toBe(afterIdle)
+    const { paneKey, tabId, root } = hooks[0]
+    await send(0, 'PreInvocation', { ...root, modelName: 'auto' })
+    vi.setSystemTime(Date.now() + 120_001)
+    server.ingestTerminalStatus({
+      paneKey,
+      tabId,
+      worktreeId: 'wt-1',
+      fromProgramStatus: true,
+      payload: { state: 'done', prompt: '', agentType: 'antigravity' }
+    })
+    expect(server.getStatusSnapshotForPane(paneKey)[0]?.state).toBe('done')
+    server.setStatusHooksEnabled(false)
+    server.setStatusHooksEnabled(true)
+    const completedCallbacks = reads.callbacks
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(reads.callbacks).toBe(completedCallbacks)
+    expect(server.getStatusSnapshotForPane(paneKey)[0]?.state).toBe('done')
+    await send(0, 'PreInvocation', { ...root, modelName: 'auto', initialNumSteps: 1 })
+    writeFileSync(
+      join(dir, 'root-0', '.system_generated', 'logs', 'transcript.jsonl'),
+      '{"source":"USER_EXPLICIT","type":"USER_INPUT"}\n{"model":"new-model","step_index":2}\n'
+    )
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(() =>
+      expect(server.getStatusSnapshotForPane(paneKey)[0]?.model).toBe('new-model')
+    )
+    const afterNewInvocation = reads.callbacks
     // A pane that has never run agy owns no transcript poll.
     server.ingestTerminalStatus({
       paneKey: makePaneKey('never', 'ffffffff-0000-4000-8000-000000000000'),
       payload: { state: 'done', prompt: '', agentType: 'claude' }
     })
     await vi.advanceTimersByTimeAsync(600_000)
-    expect(reads.callbacks).toBe(afterIdle)
+    expect(reads.callbacks).toBe(afterNewInvocation)
     for (let index = 0; index < panes; index++) {
       await send(index, 'PreInvocation', { ...hooks[index]!.root, modelName: 'auto' })
       await send(index, 'PreInvocation', { conversationId: 'unproven', lastUserInput: '' })

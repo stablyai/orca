@@ -15,7 +15,10 @@ import {
   isAntigravityHelperHeldDone,
   programStatusHookYieldEndsAt
 } from './program-status/hook-precedence'
-import { deferProgramStatusRecheck } from './program-status/program-status-recheck'
+import {
+  completeAntigravityProgramStatus,
+  deferProgramStatusRecheck
+} from './program-status/program-status-recheck'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
@@ -298,15 +301,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       newRun,
       !preservedProviderSession
     )
-    if (
-      applied &&
-      applied !== previous &&
-      payload.sessionBoundary === true &&
-      applied.payload.agentType === 'antigravity'
-    ) {
+    if (applied === previous || applied?.payload.agentType !== 'antigravity') {
+      return
+    }
+    if (payload.sessionBoundary === true) {
       this.clearTranscriptPoll(paneKey)
       this.state.antigravityChildWorkByPaneKey.delete(paneKey)
       this.state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+    } else if (event.fromProgramStatus && completeAntigravityProgramStatus(this.state, applied)) {
+      this.clearTranscriptPoll(paneKey)
     }
   }
 }

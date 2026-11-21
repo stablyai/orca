@@ -63,6 +63,9 @@ async function readBoundedJsonRecord(
   cache: AntigravityBrainCache,
   wanted: () => boolean = () => true
 ): Promise<Record<string, unknown> | undefined> {
+  if (!wanted()) {
+    return undefined
+  }
   try {
     const cached = cache.jsonFiles.get(filePath)
     const stats = await stat(filePath)
@@ -75,7 +78,14 @@ async function readBoundedJsonRecord(
     const { buffer, stats: readStats } = await readNodeFileWithinLimit(
       filePath,
       BRAIN_METADATA_MAX_BYTES,
-      { regularFileOnly: true }
+      {
+        regularFileOnly: true,
+        assertCurrent: () => {
+          if (!wanted()) {
+            throw new Error('Antigravity poll expired')
+          }
+        }
+      }
     )
     if (!wanted()) {
       return undefined

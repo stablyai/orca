@@ -12,6 +12,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
   titleRevision = 0
   /** Like titleRevision, but over every agent's session identity (the saved terminal names read it). */
   sessionRevision = 0
+  orchestrationRevision = 0
   private pending: Map<string, AgentStatusEntry | null> | null = null
   private operations: AgentStatusReplacement[] = []
   private moved = new Set<string>()
@@ -60,6 +61,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
     draft.sessionRevision = this.sessionRevision
+    draft.orchestrationRevision = this.orchestrationRevision
     draft.pending ??= new Map()
     for (const [key, value] of replacements) {
       const prior = draft.get(key)
@@ -88,6 +90,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
     draft.sessionRevision = this.sessionRevision
+    draft.orchestrationRevision = this.orchestrationRevision
     draft.pending ??= new Map()
     draft.refreshes = keys
     return draft
@@ -152,7 +155,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       entry && isAiVaultTitleAgent(entry.agentType) ? sessionFact(entry) : undefined
     const changes = this.changes()
     // A moved key changes iteration order, which picks between equal-priority panes of one tab.
-    const changedBy = (read: typeof fact) =>
+    const changedBy = (read: (entry: AgentStatusEntry | undefined) => unknown) =>
       changes.some(
         (change) =>
           !equal(read(change.previous), read(change.current)) ||
@@ -160,9 +163,19 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       )
     const titleRevision = this.titleRevision + Number(changedBy(fact))
     const sessionRevision = this.sessionRevision + Number(changedBy(sessionFact))
+    const orchestrationRevision =
+      this.orchestrationRevision +
+      Number(
+        changedBy((entry) =>
+          entry?.orchestration
+            ? [entry.paneKey, entry.connectionId, entry.worktreeId, entry.orchestration]
+            : undefined
+        )
+      )
     return () => {
       this.titleRevision = titleRevision
       this.sessionRevision = sessionRevision
+      this.orchestrationRevision = orchestrationRevision
       for (const [key, value] of this.operations) {
         if (value === null) {
           this.rows.delete(key)
@@ -185,6 +198,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     )
     captured.titleRevision = this.titleRevision
     captured.sessionRevision = this.sessionRevision
+    captured.orchestrationRevision = this.orchestrationRevision
     return captured
   }
 

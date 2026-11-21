@@ -9,6 +9,12 @@ import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
 import { i18n } from '@/i18n/i18n'
 import { createDashboardBoardProjection } from '../board/agent-board-projection'
 import { EMPTY_DASHBOARD_FILTERS } from '../board/agent-board-filtering'
+import { getAgentSessionIdsKey } from '../../right-sidebar/ai-vault/scanning/ai-vault-agent-session-refresh-key'
+import { selectPetAgentAnimation } from '../../pet/pet-agent-state'
+import {
+  selectVisibleAgentOrchestration,
+  visibleOrchestrationWorkForTest
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
 
 const NOW = 1_000_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -131,8 +137,20 @@ describe('dashboard incremental snapshot contract', () => {
     Object.defineProperty(before.cards[size - 1], 'task', { get: search })
     const project = createDashboardBoardProjection()
     const board = project(before.cards, false, 'task', EMPTY_DASHBOARD_FILTERS)
+    const readDerivatives = (state: AppState) => [
+      getAgentSessionIdsKey(state.agentStatusByPaneKey),
+      selectPetAgentAnimation(state),
+      selectVisibleAgentOrchestration(state)
+    ]
+    const derivatives = readDerivatives(store.getState())
+    const orchestration = visibleOrchestrationWorkForTest()
     const list = vi.spyOn(store.getState().agentStatusByPaneKey.projection, 'list')
     publish('b')
+    const current = store.getState()
+    const visits = vi.spyOn(current.agentStatusByPaneKey, 'values')
+    expect(readDerivatives(current)).toEqual(derivatives)
+    expect(visits).not.toHaveBeenCalled()
+    expect(visibleOrchestrationWorkForTest()).toEqual(orchestration)
     const next = read()
     expect(list.mock.calls).toEqual([['w0']])
     expect(

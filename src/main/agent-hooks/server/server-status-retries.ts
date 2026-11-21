@@ -181,10 +181,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
+    const server = this.server
+    const generation = this.statusHookGeneration
     return withHookTranscriptPoll(
       this.state,
       paneKey,
       poll.source,
+      () =>
+        this.server === server &&
+        this.statusHooksEnabled &&
+        this.statusHookGeneration === generation,
       (reads) => {
         // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
         const current = this.transcriptPollScheduler.peek(paneKey)
@@ -196,8 +202,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
         if (owner) {
           this.applyTranscriptPoll(paneKey, owner, reads)
         }
-      },
-      () => Boolean(this.server) && this.statusHooksEnabled
+      }
     )
   }
 

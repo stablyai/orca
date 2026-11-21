@@ -130,6 +130,10 @@ export type AgentHookAuthorityAttestation = Readonly<{
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
+export type EnrichedStatusListener = (
+  row: EnrichedAgentHookEventPayload,
+  previous?: EnrichedAgentHookEventPayload
+) => void
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void

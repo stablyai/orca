@@ -22,15 +22,20 @@ export async function withHookTranscriptPoll(
   state: HookListenerState,
   paneKey: string,
   source: 'codex' | 'antigravity',
-  consume: (reads: HookTranscriptPollReads) => void,
-  live?: () => boolean
+  live: () => boolean,
+  consume: (reads: HookTranscriptPollReads) => void
 ): Promise<void> {
+  if (!live()) {
+    return
+  }
   const reads =
     source === 'codex'
-      ? { codex: await readCodexTranscriptPoll(state, paneKey) }
+      ? { codex: await readCodexTranscriptPoll(state, paneKey, live) }
       : { antigravity: await readAntigravityTranscriptPoll(state, paneKey, live) }
   try {
-    consume(reads)
+    if (live()) {
+      consume(reads)
+    }
   } finally {
     reads.codex?.batch.release()
   }

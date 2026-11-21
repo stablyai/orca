@@ -55,6 +55,7 @@ export type AgentHookResultRetryHost = {
 }
 
 export class AgentHookResultRetryScheduler {
+  private generation = 0
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private readonly claudeHelperKills: ClaudeHelperKillPoller
@@ -78,6 +79,7 @@ export class AgentHookResultRetryScheduler {
   }
 
   clearAll(): void {
+    this.generation++
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
@@ -187,15 +189,14 @@ export class AgentHookResultRetryScheduler {
       return
     }
     // Why: rollout reads stay off the event loop; the next tick waits for this one.
-    return withHookTranscriptPoll(this.host.state, paneKey, poll.source, (reads) => {
+    const generation = this.generation
+    const live = () => this.host.isListening() && this.generation === generation
+    return withHookTranscriptPoll(this.host.state, paneKey, poll.source, live, (reads) => {
       // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
-      const current = this.transcriptPollScheduler.peek(paneKey)
       const owner = this.ownsTranscriptPoll(paneKey, poll)
         ? poll
-        : current?.source === poll.source && this.ownsTranscriptPoll(paneKey, current)
-          ? current
-          : undefined
-      if (owner) {
+        : this.transcriptPollScheduler.peek(paneKey)
+      if (owner?.source === poll.source && this.ownsTranscriptPoll(paneKey, owner)) {
         this.applyTranscriptPoll(paneKey, owner, reads)
       }
     })

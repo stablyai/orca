@@ -12,7 +12,8 @@ import type {
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload,
-  StatusDropListener
+  StatusDropListener,
+  EnrichedStatusListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { combinedAgentStatusEntries } from './combined-agent-status-entries'
@@ -42,12 +43,15 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
     this.clearStartupPromptClaims = clear
   }
 
-  protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
+  protected emitEnrichedStatus(
+    row: EnrichedAgentHookEventPayload,
+    previous?: EnrichedAgentHookEventPayload
+  ): void {
     const enriched = this.programStatusFacets.stitch(row)
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
-        listener(enriched)
+        listener(enriched, previous)
       } catch (err) {
         console.error('[agent-hooks] enriched status listener threw', err)
       }
@@ -172,7 +176,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
   }
 
   /** Enriched changes only; no replay. */
-  subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
+  subscribeEnrichedStatus(listener: EnrichedStatusListener): () => void {
     this.enrichedStatusListeners.add(listener)
     return () => {
       this.enrichedStatusListeners.delete(listener)

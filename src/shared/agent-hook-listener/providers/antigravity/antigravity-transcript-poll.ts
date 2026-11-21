@@ -56,6 +56,9 @@ export function hasAntigravityPollWork(
   event: AgentHookEventPayload
 ): boolean {
   const pane = state.antigravityChildWorkByPaneKey.get(event.paneKey)
+  if (event.payload.state === 'done' && !pane?.verifiedChildren.size) {
+    return false
+  }
   return Boolean(
     pane &&
     (pane.dirty ||
@@ -110,7 +113,7 @@ export async function readAntigravityTranscriptPoll(
   live: () => boolean = () => true
 ): Promise<AntigravityTranscriptPollReads | undefined> {
   const pane = state.antigravityChildWorkByPaneKey.get(paneKey)
-  if (!pane) {
+  if (!pane || !live()) {
     return undefined
   }
   const cache = pane.brainCache

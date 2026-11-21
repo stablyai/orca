@@ -171,8 +171,14 @@ async function readJsonlFirstRecordAsyncUnslotted(
   let handle: FileHandle | undefined
   try {
     handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
+    if (!batch.wanted()) {
+      return 'unreadable'
+    }
     if (!(await handle.stat()).isFile()) {
       return undefined
+    }
+    if (!batch.wanted()) {
+      return 'unreadable'
     }
     const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
@@ -216,13 +222,16 @@ async function readJsonlCursorBytesUnslotted(
   if (plan.length === 0) {
     return plan
   }
-  if (!batch.reserve(plan.length)) {
+  if (!batch.wanted() || !batch.reserve(plan.length)) {
     return 'deferred'
   }
   let handle: FileHandle | undefined
   try {
     // Why: open per read, never held, so a replaced rollout is always read at its current path.
     handle = await open(plan.filePath, 'r')
+    if (!batch.wanted()) {
+      return 'deferred'
+    }
     const buffer = Buffer.allocUnsafe(plan.length)
     const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
     return { ...plan, bytes: buffer.subarray(0, bytesRead) }

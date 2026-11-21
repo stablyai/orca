@@ -4,6 +4,7 @@ import { markAntigravityDoneRetried } from './hook-precedence'
 import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import type { PaneTimers } from './pane-timers'
 import type { HookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
+import type { EnrichedAgentHookEventPayload } from '../server-types'
 import {
   hasShedSubagentsField,
   type AgentHookSource
@@ -143,6 +144,40 @@ export function discardAntigravityDone(
   } else if (applied !== previous && !applied?.connectionId && incoming.antigravityHelpersDrained) {
     wakeAntigravityDone(state, 'antigravity', incoming.paneKey, rechecks)
   }
+}
+
+export function completeAntigravityProgramStatus(
+  state: HookListenerState,
+  row: EnrichedAgentHookEventPayload | undefined
+): boolean {
+  if (
+    row?.payload.agentType !== 'antigravity' ||
+    row.payload.state !== 'done' ||
+    row.connectionId ||
+    state.lastStatusByPaneKey.get(row.paneKey) !== row
+  ) {
+    return false
+  }
+  const pane = state.antigravityChildWorkByPaneKey.get(row.paneKey)
+  if (!pane || pane.verifiedChildren.size) {
+    return false
+  }
+  // Replace the poll owner while retaining the root cursor and last resolved model.
+  state.antigravityChildWorkByPaneKey.set(row.paneKey, {
+    ...pane,
+    rootStop: 'idle',
+    leadState: 'done',
+    leadStateStartedAt: row.stateStartedAt,
+    helpersIdleAt: undefined,
+    dirty: false
+  })
+  pane.commands?.clear()
+  pane.pendingLaunches.clear()
+  pane.expectedChildren.clear()
+  if (pane.rootTranscriptPath) {
+    state.antigravityCompletedTranscriptByPaneKey.set(row.paneKey, pane.rootTranscriptPath)
+  }
+  return true
 }
 
 export function reconcileAntigravityRelay(
