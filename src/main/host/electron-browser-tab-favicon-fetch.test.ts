@@ -66,6 +66,15 @@ describe('electronBrowserTabFaviconFetch', () => {
     }
   )
 
+  it('refuses an internal name when the proxy route can fall back to a direct one', async () => {
+    mountGuest(guestSession('PROXY proxy.example:8080; DIRECT', ['10.1.2.3']))
+
+    await expect(
+      electronBrowserTabFaviconFetch('page-1')?.('https://intranet.example/favicon.png', {})
+    ).rejects.toThrow('browser_tab_favicon_private_destination')
+    expect(manualFetch).not.toHaveBeenCalled()
+  })
+
   it('requests a name that resolves to a public address on a direct route', async () => {
     mountGuest(guestSession('DIRECT', ['93.184.216.34']))
 

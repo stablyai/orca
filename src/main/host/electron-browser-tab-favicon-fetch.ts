@@ -9,8 +9,12 @@ async function assertPublicDestination(session: Session, url: string): Promise<v
   if (isBlockedHost(hostname)) {
     throw new Error('browser_tab_favicon_private_destination')
   }
-  // A proxied route resolves the name on its far side; a lookup here would leave by this host's network.
-  if (isIP(hostname) !== 0 || (await session.resolveProxy(url)).trim() !== 'DIRECT') {
+  if (isIP(hostname) !== 0) {
+    return
+  }
+  // A proxy-only route resolves the name on its far side; a lookup here would leave by this host's network.
+  const routes = (await session.resolveProxy(url)).split(';')
+  if (!routes.some((route) => route.trim() === 'DIRECT')) {
     return
   }
   const { endpoints } = await session.resolveHost(hostname)
