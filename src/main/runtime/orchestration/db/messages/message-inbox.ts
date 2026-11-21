@@ -6,8 +6,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 import { runOwnsDirectMessageSql } from '../runs/run-coordinator-mail-routing'
 import { stampQuestionTakes, type MailTaker } from './mail-taker'
+import { MESSAGE_ID_UPDATE_BATCH_SIZE, unreadMailboxesOf } from './message-read-mailboxes'
 
-const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 
 function runBatchedMessageMutation(
@@ -15,11 +15,13 @@ function runBatchedMessageMutation(
   ids: string[],
   sqlForPlaceholders: (placeholders: string) => string,
   leadingBindings: string[] = [],
-  beforeBatch: (batch: string[]) => void = () => {}
+  beforeBatch: (batch: string[]) => void = () => {},
+  consuming = false
 ): void {
   if (ids.length === 0) {
     return
   }
+  const readMailboxes = consuming && db.mailReadListener ? unreadMailboxesOf(db, ids) : []
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
@@ -33,6 +35,13 @@ function runBatchedMessageMutation(
     db.db.exec(`ROLLBACK TO ${MESSAGE_MUTATION_SAVEPOINT}`)
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
     throw error
+  }
+  if (readMailboxes.length > 0) {
+    try {
+      db.mailReadListener?.(readMailboxes)
+    } catch {
+      // A listener fault cannot undo a committed read.
+    }
   }
 }
 
@@ -206,7 +215,8 @@ function markRead(db: OrchestrationDb, ids: string[], taker: MailTaker, delivere
            pointer_process_incarnation = NULL
        WHERE id IN (${placeholders})`,
     [],
-    (batch) => stampQuestionTakes(db, batch, taker)
+    (batch) => stampQuestionTakes(db, batch, taker),
+    true
   )
 }
 

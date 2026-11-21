@@ -21,6 +21,7 @@ import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/op
 import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
@@ -178,6 +179,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return 'no-terminal'
+    }
+    // Why: Agent Sleep is stopping this agent; its mail waits for the slept-agent wake, not this process.
+    if (this.intentionalPtyStops.isReversibleStopInFlight(ptyId)) {
+      return {
+        kind: 'asleep',
+        agentName: tuiAgentDisplayName(this.getPaneTerminalAgent(ptyId) ?? '') ?? 'The agent',
+        openTab: true,
+        waking: true
+      }
     }
     const hold = this.ptyDeliveryHold(ptyId)
     if (hold) {

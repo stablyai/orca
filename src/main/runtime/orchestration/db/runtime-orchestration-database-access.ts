@@ -20,6 +20,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
+  protected abstract publishSleepingMail(scope?: { mailboxes?: Iterable<string> }): void
 
   abstract hasLiveTerminalForPaneKey(
     paneKey: string,
@@ -88,6 +89,12 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailReadListener = (mailboxes) =>
+      queueMicrotask(() => {
+        if (this._orchestrationDb === db) {
+          this.publishSleepingMail({ mailboxes })
+        }
+      })
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
   }
 

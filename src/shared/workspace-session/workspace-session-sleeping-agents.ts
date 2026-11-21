@@ -98,6 +98,7 @@ export const sleepingAgentSessionRecordSchema = z
     updatedAt: z.number().finite().positive(),
     terminalTitle: z.string().optional(),
     lastAssistantMessage: z.string().optional(),
+    terminalHandle: z.string().min(1).max(200).optional(),
     interrupted: z.boolean().optional(),
     // A malformed value drops the field, never the record.
     mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional(),

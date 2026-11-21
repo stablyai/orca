@@ -107,7 +107,9 @@ it('wakes only the automatic sleeper owed deliverable mail, coalesces it, and re
     delivery.request(mailbox)
     await settled()
     expect(wake).toHaveBeenCalledTimes(3)
-    db.markAsRead([first.id, beyondBatch.id, ...burst.map((message) => message.id)])
+    db.markAsRead([first.id, beyondBatch.id, ...burst.map((message) => message.id)], {
+      kind: 'orca'
+    })
     const second = db.insertMessage({ runId: run.id, from: 'worker', to: mailbox, subject: 'more' })
     sleeping = { ...record, restoreOnTabOpenOnly: true }
     delivery.request(mailbox)
@@ -137,7 +139,7 @@ it('wakes only the automatic sleeper owed deliverable mail, coalesces it, and re
     await settled()
     expect(wake).toHaveBeenCalledTimes(5)
 
-    db.markAsRead([second.id])
+    db.markAsRead([second.id], { kind: 'orca' })
     const third = db.insertMessage({
       runId: run.id,
       from: 'worker',
@@ -148,7 +150,7 @@ it('wakes only the automatic sleeper owed deliverable mail, coalesces it, and re
       releaseSleep = resolve
     })
     delivery.request(mailbox)
-    db.markAsRead([third.id])
+    db.markAsRead([third.id], { kind: 'orca' })
     releaseSleep()
     await settled()
     expect(wake).toHaveBeenCalledTimes(5)
@@ -201,7 +203,7 @@ it('holds manual Sleep through the sender receipt and keeps its bell until mail 
       recipient: mailbox
     })
     expect(bell).toHaveBeenLastCalledWith(['folder:workspace'])
-    db.markAsRead([message.id])
+    db.markAsRead([message.id], { kind: 'orca' })
     runtime.withdrawStaleChatMail([mailbox])
     await settled()
     expect(bell).toHaveBeenLastCalledWith([])
@@ -251,7 +253,7 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
     delivery.request(mailbox)
     await settled()
     expect(wake).toHaveBeenCalledTimes(1)
-    db.markAsRead([message.id])
+    db.markAsRead([message.id], { kind: 'orca' })
     delivery.refresh(mailbox)
     expect(delivery.failedToWake(retained)).toBe(false)
     expect(delivery.heldWorktrees()).toEqual([])
@@ -273,7 +275,7 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
       })
       delivery.request(handle)
       await settled()
-      db.markAsRead([row.id])
+      db.markAsRead([row.id], { kind: 'orca' })
       delivery.refresh(handle)
     }
     expect(wake).toHaveBeenCalledTimes(21)
@@ -407,7 +409,7 @@ it('clears the original workspace hold and custody when another terminal replies
     })
     expect(bell).toHaveBeenLastCalledWith(['folder:workspace'])
     db.db.exec('BEGIN IMMEDIATE')
-    db.markAsRead([original.id])
+    db.markAsRead([original.id], { kind: 'orca' })
     db.db.exec('ROLLBACK')
     await settled()
     expect(await runtime.readSleepingMailHold(mailbox)).not.toBeNull()

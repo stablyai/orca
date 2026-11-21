@@ -202,6 +202,10 @@ export async function startLocalWorker(args: {
     failedStage = 'agent_readiness'
     // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
     const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
+    if (!structuredSession && !workerChat) {
+      // A reused slept agent resumes in place first; readiness and authority are its woken process's.
+      await runtime.wakeSleptAgentHandle(terminalHandle, { timeoutMs: params.timeoutMs ?? 60_000 })
+    }
     // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
     const wait = structuredSession
       ? await awaitStructuredWorkerSetupGate({
