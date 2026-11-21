@@ -42,15 +42,12 @@ function capturePlans(db: OrchestrationDb, read: () => unknown): string[] {
   const prepare = db.db.prepare.bind(db.db)
   vi.spyOn(db.db, 'prepare').mockImplementation((text: string) => {
     const statement = prepare(text)
-    return new Proxy(statement, {
-      get: (target, key) =>
-        key === 'all'
-          ? (...args: BindArgs) => {
-              calls.push({ text, args })
-              return target.all(...args)
-            }
-          : Reflect.get(target, key, target)
+    const all = statement.all.bind(statement)
+    vi.spyOn(statement, 'all').mockImplementation((...args: BindArgs) => {
+      calls.push({ text, args })
+      return all(...args)
     })
+    return statement
   })
   read()
   vi.restoreAllMocks()
