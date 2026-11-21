@@ -58,7 +58,11 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.router.onNotification(method, params)
       },
       onServerRequest: (request) => this.router.onServerRequest(request),
-      onUnhandledFrame: (kind, payload) => this.router.onUnhandledFrame(kind, payload),
+      onUnhandledFrame: (kind, payload) => {
+        if (!this.router.onUnhandledFrame(kind, payload)) {
+          console.warn(`[codex-shared-server] ${kind}`, this.pid ?? '')
+        }
+      },
       onClose: (error) => {
         // Unusable from here even before its exit is proven; new chats must not pick it.
         this.draining = true

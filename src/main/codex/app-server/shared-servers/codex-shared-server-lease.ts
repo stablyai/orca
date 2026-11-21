@@ -199,12 +199,6 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.dispatch(frame)
   }
 
-  unhandled(kind: string, payload: unknown): void {
-    if (this.state !== 'ended' && !this.shedding) {
-      this.guarded(() => this.handlers.onUnhandledFrame?.(kind, payload))
-    }
-  }
-
   /** Too far behind: drops its queue and ends it alone; it reopens its thread on its next send. */
   shed(): void {
     this.shedding = true
@@ -216,7 +210,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.guarded(() =>
       frame.kind === 'request'
         ? this.handlers.onServerRequest?.(frame.request)
-        : this.handlers.onNotification?.(frame.method, frame.params)
+        : frame.kind === 'unhandled'
+          ? this.handlers.onUnhandledFrame?.(frame.frameKind, frame.payload)
+          : this.handlers.onNotification?.(frame.method, frame.params)
     )
   }
 

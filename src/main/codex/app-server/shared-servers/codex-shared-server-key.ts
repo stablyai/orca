@@ -52,6 +52,12 @@ export async function codexSharedServerSpec(
   codexVersion: string | null = null
 ): Promise<CodexSharedServerSpec> {
   const generation = await launchGeneration(launch, codexVersion)
+  // A --config value may be a path Codex resolves from its folder, so such a launch keeps its own.
+  const cwd = launch.args.some(
+    (arg) => arg === '--config' || arg.startsWith('--config=') || arg.startsWith('-c')
+  )
+    ? launch.cwd
+    : homedir()
   const env = { ...launch.env }
   for (const key of PER_CHAT_ENV_KEYS) {
     delete env[key]
@@ -65,14 +71,15 @@ export async function codexSharedServerSpec(
         args: launch.args,
         env: Object.entries(env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
         envToDelete,
-        skillRoots
+        skillRoots,
+        cwd
       })
     )
     .digest('hex')
   return {
     key,
-    // Only the stock CLI is shared, and it runs the same from any folder. A worktree cwd would pin
-    // that folder (Windows can't delete it) for every chat on the server.
-    launch: { command: launch.command, args: launch.args, cwd: homedir(), env, envToDelete }
+    // Otherwise the stock CLI runs the same from any folder, and a worktree cwd would pin that
+    // folder (Windows can't delete it) for every chat on the server.
+    launch: { command: launch.command, args: launch.args, cwd, env, envToDelete }
   }
 }

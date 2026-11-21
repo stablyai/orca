@@ -31,10 +31,11 @@ async function environReadsForOneClose(processes: number): Promise<number> {
   proc.pids = Array.from({ length: processes }, (_, index) => BASE_PID + index + 1)
   proc.environReads = 0
   vi.useFakeTimers()
-  vi.spyOn(process, 'kill').mockReturnValue(true)
+  const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
   const stopped = stopCodexLeaseTaggedProcesses(SERVER_PID, 'lease-a', undefined, 'linux')
   await vi.runAllTimersAsync()
   expect(await stopped).toBe(false)
+  expect(kill).toHaveBeenCalledWith(TAGGED_PID, 'SIGKILL')
   return proc.environReads
 }
 

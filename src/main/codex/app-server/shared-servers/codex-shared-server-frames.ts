@@ -5,6 +5,8 @@ import { readCodexSubagentAnnouncements } from '../../structured/background-work
 export type CodexSharedServerFrame =
   | { kind: 'notification'; method: string; params: unknown }
   | { kind: 'request'; request: CodexAppServerServerRequest }
+  /** A frame Codex sent that no handler could read; journaled by the chat it reaches. */
+  | { kind: 'unhandled'; frameKind: string; payload: unknown }
 
 export function field(value: unknown, ...path: readonly string[]): unknown {
   let current = value
@@ -22,6 +24,9 @@ function stringOrNull(value: unknown): string | null {
 }
 
 export function codexSharedFrameParams(frame: CodexSharedServerFrame): unknown {
+  if (frame.kind === 'unhandled') {
+    return field(frame.payload, 'params') ?? frame.payload
+  }
   return frame.kind === 'notification' ? frame.params : frame.request.params
 }
 

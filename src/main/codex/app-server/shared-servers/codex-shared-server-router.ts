@@ -18,6 +18,30 @@ const SERVER_WIDE_REQUESTS: ReadonlySet<string> = new Set([
   'attestation/generate'
 ])
 
+/** Notifications Codex sends without a thread that are about the account or the server itself,
+ *  so every chat would have had its own copy. Any other threadless notification may carry one
+ *  chat's content in a shape the router can't read, so it reaches no chat. */
+const SERVER_WIDE_NOTIFICATIONS: ReadonlySet<string> = new Set([
+  'skills/changed',
+  'mcpServer/oauthLogin/completed',
+  'mcpServer/startupStatus/updated',
+  'account/updated',
+  'account/gatewayOAuth/changed',
+  'account/rateLimits/updated',
+  'account/login/completed',
+  'app/list/updated',
+  'remoteControl/status/changed',
+  'externalAgentConfig/import/progress',
+  'externalAgentConfig/import/completed',
+  'modelProvider/authRecoveryStarted',
+  'modelProvider/authRecoveryCompleted',
+  'deprecationNotice',
+  'configWarning',
+  'warning',
+  'windows/worldWritableWarning',
+  'windowsSandbox/setupCompleted'
+])
+
 /** Which chat owns each thread on one server, and where each frame goes. */
 export class CodexSharedServerRouter {
   private readonly owners = new Map<string, CodexSharedServerLease>()
@@ -170,14 +194,14 @@ export class CodexSharedServerRouter {
     this.unrouted.hold(threadId, frame)
   }
 
-  /** A frame Codex sent that no handler could read goes to its thread's chat, or to every chat
-   *  when it names none, so each still journals what its own server would have sent it. */
-  onUnhandledFrame(kind: string, payload: unknown): void {
-    const threadId = codexFrameThreadId(field(payload, 'params'))
+  /** A frame no handler could read goes only to the chat that owns the thread it names, in order
+   *  behind that chat's queue: raw content never reaches another chat. False when no chat took it. */
+  onUnhandledFrame(frameKind: string, payload: unknown): boolean {
+    const frame: CodexSharedServerFrame = { kind: 'unhandled', frameKind, payload }
+    const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
     const owner = threadId === null ? undefined : this.owners.get(threadId)
-    for (const lease of owner ? [owner] : this.leases()) {
-      lease.unhandled(kind, payload)
-    }
+    owner?.deliver(frame)
+    return owner !== undefined
   }
 
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
@@ -194,8 +218,20 @@ export class CodexSharedServerRouter {
       }
       return
     }
+    if (frame.kind !== 'notification' || !SERVER_WIDE_NOTIFICATIONS.has(frame.method)) {
+      console.warn('[codex-shared-server] threadless frame reached no chat', frameMethod(frame))
+      return
+    }
     for (const lease of this.leases()) {
       lease.deliver(frame)
     }
   }
+}
+
+function frameMethod(frame: CodexSharedServerFrame): string {
+  return frame.kind === 'notification'
+    ? frame.method
+    : frame.kind === 'request'
+      ? frame.request.method
+      : frame.frameKind
 }

@@ -130,8 +130,14 @@ export async function stopCodexLeaseTaggedProcesses(
     const targets = first.tagged(leaseId)
     if (targets.length > 0) {
       // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
+      // A bounded scan tags by ancestry, so only a fresh scan re-derives it; an unbounded one tags
+      // by each process's own environment, so reading just the targets' is the same check.
       const still = new Set(
-        await codexLeaseProcessesStillTagged(CODEX_SHARED_LEASE_ENV, targets, leaseId)
+        first.bounded
+          ? ((
+              await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform, watcherPid)
+            )?.tagged(leaseId) ?? [])
+          : await codexLeaseProcessesStillTagged(CODEX_SHARED_LEASE_ENV, targets, leaseId)
       )
       for (const pid of targets) {
         if (still.has(pid)) {

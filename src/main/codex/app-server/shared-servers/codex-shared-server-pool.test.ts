@@ -38,7 +38,7 @@ describe('shared Codex app-servers', () => {
     expect(servers[0]!.requests.filter((r) => r.method === 'initialize')).toHaveLength(1)
   })
 
-  it("gives a frame no handler could read to its thread's chat, or to every chat when it names none", async () => {
+  it("gives a thread's unreadable or unknown frames only to its chat, and other chats none", async () => {
     const { servers, pool } = fakeCodex()
     const a = chat()
     const b = chat()
@@ -56,14 +56,13 @@ describe('shared Codex app-servers', () => {
     )
     const threadA = await startThread(connA)
     const { handlers } = servers[0]!
-    handlers.onUnhandledFrame?.('frame:unclassified', {
-      method: 'x',
-      params: { threadId: threadA }
-    })
-    handlers.onUnhandledFrame?.('frame:invalid-json', '{not json')
+    handlers.onUnhandledFrame?.('frame:unclassified', { id: 'x', params: { threadId: threadA } })
+    handlers.onUnhandledFrame?.('frame:invalid-json', '{"text":"words from chat A')
+    handlers.onNotification?.('item/newKind/delta', { thread_id: threadA, text: 'private' })
 
-    expect(unreadA).toEqual(['frame:unclassified', 'frame:invalid-json'])
-    expect(unreadB).toEqual(['frame:invalid-json'])
+    expect(unreadA).toEqual(['frame:unclassified'])
+    expect(unreadB).toEqual([])
+    expect(b.notifications.map((n) => n.method)).not.toContain('item/newKind/delta')
   })
 
   it('starts a second server at 20 chats and never shares across account homes', async () => {
