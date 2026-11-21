@@ -24,7 +24,7 @@ function notShared(why: string): string {
     case 'command':
       return translate('bots.share.commandNotShared', 'Command · not shared')
     case 'link':
-      return translate('bots.share.linkNotShared', 'Has a link inside · not shared')
+      return translate('bots.share.symlinkNotShared', 'Has a symlink · not shared')
     case 'size':
       return translate('bots.share.tooLargeNotShared', 'Too large · not shared')
     case 'unreadable':

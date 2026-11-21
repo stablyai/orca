@@ -392,3 +392,21 @@ export const skillsLeftOut = defineFixture({
   render: flow(builder, null),
   interact: () => click('Skills')
 })
+/** Only skills that can't be shared: the Skills row reads None but still opens. */
+export const skillsAllLeftOut = defineFixture({
+  ...base,
+  setup: () =>
+    stub({
+      prepare: async () => {
+        const base = candidate()
+        return ok({
+          candidate: candidate({
+            bot: { ...base.bot, skills: [] },
+            available: { ...base.available, skills: [] },
+            leftOut: [{ kind: 'skill', name: 'deploy', why: 'link' }]
+          })
+        })
+      }
+    }),
+  render: flow(builder, null)
+})

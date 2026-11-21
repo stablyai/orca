@@ -197,8 +197,13 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
         <PartRow
           icon={<BookOpen />}
           title={t('bots.share.skills', 'Skills')}
+          // Opens to show skills that can't be shared, but only shareable ones count.
           empty={available.skills.length + skillsLeftOut === 0}
-          value={partValue(skills, available.skills.length + skillsLeftOut, t)}
+          value={
+            available.skills.length === 0
+              ? t('bots.share.none', 'None')
+              : partValue(skills, available.skills.length, t)
+          }
           onOpen={list('skills')}
         />
         <PartRow
