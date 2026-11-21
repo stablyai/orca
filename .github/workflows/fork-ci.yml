@@ -1,0 +1,83 @@
+name: Fork CI
+
+# orca-fork: rodrillet/orca's PR gate. Upstream's workflows are disabled in the fork (Actions API), so this
+# is the check every phase PR and every upstream sync PR must pass before it merges.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-ci-${{ inputs.ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  check:
+    if: github.repository == 'rodrillet/orca' && github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Typecheck
+        run: pnpm tc
+      # A sync PR brings a whole upstream release, which upstream already tested; check what the fork
+      # owns: its modules and every upstream file it touches (marked `fork:`), plus their tests.
+      - name: Fork-owned files
+        id: owned
+        run: |
+          {
+            git ls-files ':(glob)src/**/orca-fork/**'
+            git grep -l -e 'orca-fork:' -- src config .gitignore || true
+          } | sort -u > "$RUNNER_TEMP/fork-owned.txt"
+          cat "$RUNNER_TEMP/fork-owned.txt"
+      - name: Lint and format fork-owned files
+        run: |
+          mapfile -t files < <(grep -E '\.(ts|tsx|mjs|cjs|js)$' "$RUNNER_TEMP/fork-owned.txt")
+          if [ "${#files[@]}" -gt 0 ]; then
+            pnpm exec oxlint "${files[@]}"
+            pnpm exec oxfmt --check "${files[@]}"
+          fi
+      - name: Unit tests for fork-owned files
+        run: |
+          mapfile -t tests < <(
+            while read -r file; do
+              case "$file" in
+                *.test.ts|*.test.tsx) echo "$file" ;;
+                *.ts|*.tsx)
+                  base="${file%.*}"
+                  for candidate in "$base.test.ts" "$base.test.tsx"; do
+                    [ -f "$candidate" ] && echo "$candidate"
+                  done
+                  ;;
+              esac
+            done < "$RUNNER_TEMP/fork-owned.txt" | sort -u
+          )
+          if [ "${#tests[@]}" -gt 0 ]; then
+            pnpm test "${tests[@]}" --maxWorkers=4
+          fi
+      - name: Changed-code gate (PRs)
+        if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'sync/')
+        env:
+          ORCA_CODE_QUALITY_BASE: origin/${{ github.base_ref }}
+        run: pnpm check:changed --maxWorkers=4

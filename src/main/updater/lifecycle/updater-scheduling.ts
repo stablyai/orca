@@ -1,4 +1,5 @@
-import { app } from 'electron'
+// orca-fork: the custom build keeps upstream's updater off
+import { isUpdaterActive } from '../../orca-fork/fork-updater'
 import { isMacInstallRequested } from '../mac-install/updater-mac-install'
 import { withUpdaterSpan } from '../../observability/instrumentation'
 import {
@@ -69,7 +70,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
-    if (!app.isPackaged) {
+    if (!isUpdaterActive()) {
       this.sendStatus({ state: 'not-available' })
       return false
     }

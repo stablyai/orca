@@ -1,3 +1,5 @@
+// orca-fork: the custom build keeps upstream's updater off
+import { isUpdaterActive } from '../../orca-fork/fork-updater'
 import { app } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
 import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
@@ -17,7 +19,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   }
 
   protected getRemoteServerUpdateSupport(): RemoteServerUpdateSupport {
-    if (!app.isPackaged) {
+    if (!isUpdaterActive()) {
       return {
         installMode: this.updateInstallMode,
         automatic: false,

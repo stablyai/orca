@@ -1,0 +1,180 @@
+name: Fork build
+
+# orca-fork: builds the custom desktop (macOS arm64, ad-hoc signed, not notarized) and the matching
+# orca-server linux-arm64 tarball from one commit, and publishes both as one GitHub Release, so the
+# Mac and the VPS always run the same version. Runs on every push to main (a merged phase or sync).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to build (default main)
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-build-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  resolve:
+    if: github.repository == 'rodrillet/orca'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - id: resolve
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version-fork.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  # A merge can bring new upstream workflows; they stay off in the fork, as the ones before them.
+  upstream-workflows-off:
+    if: github.repository == 'rodrillet/orca'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows" \
+            -q '.workflows[] | select(.state == "active") | select(.path | test("/fork-[^/]+\\.yml$") | not) | .id' |
+            while read -r id; do
+              gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"
+            done
+
+  # The desktop bundles the server template for SSH hosts; the tarball ships its exact bytes.
+  template:
+    needs: resolve
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/qualified-orcad-template.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+      fast_runners: false
+
+  server:
+    needs: [resolve, template]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    env:
+      TARGET: linux-arm64-glibc
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-pnpm-store: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+      - name: Pack the tarball
+        run: |
+          pnpm build:packages
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" node config/scripts/orcad-distribution/server-artifact/pack-orcad-server-artifact.mjs --template out/orcad-template --target "$TARGET" --out-dir out/orca-server
+      - name: Start and pair on the runner
+        run: node config/scripts/orcad-distribution/server-artifact/smoke-orcad-server-artifact.mjs --archive out/orca-server/orca-server-linux-arm64.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orca-server-linux-arm64
+          path: out/orca-server/
+          if-no-files-found: error
+          retention-days: 14
+
+  mac:
+    needs: [resolve, template]
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      # No Developer ID in the fork: electron-builder ad-hoc signs the arm64 app.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      ORCA_BUILD_COMMIT: ${{ needs.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-pnpm-store: false
+      - uses: ./.github/actions/install-mobile-dependencies
+      - name: Build app
+        run: pnpm run build:release
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+      - name: Package (arm64 zip + dmg)
+        run: |
+          node config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs darwin-arm64
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac zip dmg --arm64 --publish never
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orca-macos-arm64
+          path: |
+            dist/*.zip
+            dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: [resolve, server, mac]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          cd artifacts
+          sha256sum -- * > SHA256SUMS
+          cat > notes.md <<EOF
+          Custom Orca build of upstream v$VERSION plus the fork's changes (commit $SHA).
+
+          - **Mac (Apple Silicon)**: \`orca-macos-arm64.zip\` or \`.dmg\`. Ad-hoc signed, not notarized:
+            first launch with right-click → Open, or \`xattr -dr com.apple.quarantine /Applications/Orca.app\`.
+            Keeps using \`~/Library/Application Support/orca\`; replacing the app never touches it.
+          - **VPS (linux arm64)**: \`orca-server-linux-arm64.tar.gz\`, same version as the desktop.
+          EOF
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" \
+            --title "Orca $VERSION (fork build ${{ github.run_number }})" --notes-file notes.md --latest \
+            -- $(ls | grep -v notes.md)

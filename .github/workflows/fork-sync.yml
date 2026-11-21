@@ -1,0 +1,124 @@
+name: Fork sync
+
+# orca-fork: keeps rodrillet/orca on upstream's newest release. Daily (and on demand) it merges the
+# latest stablyai/orca release tag into a sync/<tag> branch and opens a PR that auto-merges once Fork
+# CI passes; the push to main then runs Fork build. A conflict opens an issue instead.
+#
+# Needs the FORK_SYNC_TOKEN secret (a token with repo + workflow scopes): GITHUB_TOKEN can neither
+# push upstream's workflow changes nor start the PR's checks. Only this workflow reads it; it runs on
+# schedule/dispatch, never on pull_request, so no PR (least of all one from another fork) sees it.
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Upstream tag to merge (default the latest release)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'rodrillet/orca'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+      UPSTREAM: stablyai/orca
+    steps:
+      - name: Require a working sync token
+        env:
+          SYNC_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "$SYNC_TOKEN" ] && GH_TOKEN="$SYNC_TOKEN" gh api "repos/$GITHUB_REPOSITORY" -q .permissions.push | grep -qx true; then
+            exit 0
+          fi
+          title='Fork sync needs a working FORK_SYNC_TOKEN secret'
+          if [ -z "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --body "The FORK_SYNC_TOKEN secret is missing, expired or can't push to this repo, so upstream releases aren't being merged. Replace it with a token that has \`repo\` and \`workflow\` scopes (or a fine-grained token with Contents, Pull requests, Issues and Workflows write on this repo): \`gh auth token | gh secret set FORK_SYNC_TOKEN --repo $GITHUB_REPOSITORY\`."
+          fi
+          exit 1
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
+      - name: Pick the upstream release
+        id: pick
+        run: |
+          tag='${{ inputs.tag }}'
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --repo "$UPSTREAM" --json tagName -q .tagName)"
+          fi
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$tag:refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$tag" HEAD; then
+            echo "main already has $tag"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          elif gh pr list --repo "$GITHUB_REPOSITORY" --head "sync/$tag" --state open --json number -q '.[0].number' | grep -q .; then
+            echo "a sync PR for $tag is already open"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Merge it
+        id: merge
+        if: steps.pick.outputs.needed == 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          git config user.name 'orca-fork-sync'
+          git config user.email 'orca-fork-sync@users.noreply.github.com'
+          git switch -c "sync/$TAG"
+          if git merge --no-edit -m "Merge upstream $TAG into the fork" "$TAG"; then
+            echo "clean=true" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            echo "clean=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open the sync PR
+        if: steps.merge.outputs.clean == 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          git push origin "sync/$TAG"
+          url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "sync/$TAG" \
+            --title "Sync upstream $TAG" \
+            --body "Merges upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) into the fork. Merges itself when Fork CI passes; the push to main then builds the Mac app and the server tarball.")"
+          gh pr merge "$url" --auto --merge
+      - name: Report a conflict
+        if: steps.merge.outputs.clean == 'false'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          title="Upstream $TAG conflicts with the fork"
+          if [ -n "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
+            exit 0
+          fi
+          {
+            echo "Merging upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) into \`main\` conflicts in:"
+            echo
+            sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/conflicts.txt"
+            echo
+            echo 'Resolve locally:'
+            echo
+            echo '```sh'
+            echo "git fetch origin && git fetch https://github.com/$UPSTREAM.git tag $TAG"
+            echo "git switch -c sync/$TAG origin/main && git merge $TAG"
+            echo '# fix the files above (fork touch points are marked `orca-fork:`), then'
+            echo "git commit && git push -u origin sync/$TAG && gh pr create --fill"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/body.md"
