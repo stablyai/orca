@@ -106,6 +106,14 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       throwNoActiveSenderTerminal()
     }
 
+    const body = await readTextOrFileFlag(flags, cwd, 'body', false)
+    if (type === 'worker_done' && !body?.trim()) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'worker_done requires a nonblank completion summary in --body or --body-file.'
+      )
+    }
+
     // Preserve the env handle across remints for older runtimes' lifecycle ownership checks.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
@@ -117,7 +125,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       run: getOptionalStringFlag(flags, 'run'),
       on: getOptionalStringFlag(flags, 'on'),
       subject: getRequiredStringFlag(flags, 'subject'),
-      body: await readTextOrFileFlag(flags, cwd, 'body', false),
+      body,
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),

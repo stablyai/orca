@@ -44,3 +44,24 @@ it('sends a --body-file text as the message body unchanged', async () => {
   const send = callMock.mock.calls.find(([method]) => method === 'orchestration.send')
   expect(send?.[1]).toMatchObject({ body: BODY })
 })
+
+it.each(['', ' \t\n'])('rejects a blank worker completion before sending it (%j)', async (body) => {
+  callMock.mockReset().mockResolvedValue({ result: { message: { id: 'msg_1' } } })
+
+  await expect(
+    ORCHESTRATION_HANDLERS['orchestration send'](
+      orchestrationTestContext(
+        callMock,
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['subject', 'Done'],
+          ['type', 'worker_done'],
+          ['outcome', 'succeeded'],
+          ['body', body]
+        ]),
+        false
+      )
+    )
+  ).rejects.toMatchObject({ code: 'invalid_argument' })
+  expect(callMock).not.toHaveBeenCalled()
+})
