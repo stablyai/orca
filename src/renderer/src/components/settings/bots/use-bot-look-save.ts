@@ -91,7 +91,9 @@ export function useBotLookSave(
   key: string,
   update: (look: BotLookUpdate) => Promise<unknown>,
   delayMs: number,
-  hold?: BotLookHold
+  hold?: BotLookHold,
+  /** The bot's look as saved, so a pick of what it already shows sends nothing. */
+  saved: BotLookUpdate = {}
 ): { picked: BotLookUpdate | null; pick: (change: BotLookUpdate) => void; flush: () => void } {
   const [picked, setPicked] = useState<BotLookUpdate | null>(null)
   const timer = useRef<{
@@ -117,6 +119,15 @@ export function useBotLookSave(
     }
   }, [key])
   const pick = (change: BotLookUpdate): void => {
+    const shown: BotLookUpdate = {
+      avatarColor: saved.avatarColor,
+      avatarOutfit: saved.avatarOutfit,
+      ...picked
+    }
+    const fields = Object.keys(change) as (keyof BotLookUpdate)[]
+    if (fields.every((field) => (change[field] ?? null) === (shown[field] ?? null))) {
+      return
+    }
     const look = { ...timer.current?.look, ...change }
     setPicked((shown) => ({ ...shown, ...change }))
     if (timer.current) {

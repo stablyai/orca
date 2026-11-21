@@ -288,9 +288,8 @@ export function useBotPictureSetting(
     })
   }
 
-  const look = useBotLookSave(botRefKey(bot), update, BOT_PICTURE_SAVE_DELAY_MS, () =>
-    beginBotHostUpdate(bot.hostId)
-  )
+  const hold = () => beginBotHostUpdate(bot.hostId)
+  const look = useBotLookSave(botRefKey(bot), update, BOT_PICTURE_SAVE_DELAY_MS, hold, bot)
 
   useSaveOnClose(() => {
     commit()

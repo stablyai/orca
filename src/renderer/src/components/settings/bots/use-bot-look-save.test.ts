@@ -78,3 +78,24 @@ describe('saveBotLook', () => {
     expect(sent).toEqual([{ avatarOutfit: 'tie' }])
   })
 })
+
+describe('useBotLookSave picks of the look already shown', () => {
+  it('sends nothing for the saved outfit or a pick already waiting', () => {
+    const sent: BotLookUpdate[] = []
+    const update = (look: BotLookUpdate): Promise<unknown> => {
+      sent.push(look)
+      return Promise.resolve()
+    }
+    const { result } = renderHook(() =>
+      useBotLookSave('local:b5', update, 500, undefined, { avatarOutfit: 'tie' })
+    )
+    act(() => result.current.pick({ avatarOutfit: 'tie' }))
+    window.dispatchEvent(new Event('pagehide'))
+    expect(sent).toEqual([])
+
+    act(() => result.current.pick({ avatarOutfit: 'party' }))
+    act(() => result.current.pick({ avatarOutfit: 'party' }))
+    window.dispatchEvent(new Event('pagehide'))
+    expect(sent).toEqual([{ avatarOutfit: 'party' }])
+  })
+})
