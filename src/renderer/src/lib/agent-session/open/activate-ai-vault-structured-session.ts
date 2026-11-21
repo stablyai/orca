@@ -144,14 +144,21 @@ function openingPairedHostId(
 /** Whether the selection shows another host's copy; a local open only moves off a paired twin. */
 function selectsOtherHost(
   selected: ExecutionHostId | null,
-  wanted: ExecutionHostId | null
+  wanted: ExecutionHostId | null,
+  workspace: string
 ): boolean {
   if (wanted === null) {
     return false
   }
-  return wanted === LOCAL_EXECUTION_HOST_ID
-    ? parseExecutionHostId(selected)?.kind === 'runtime'
-    : selected !== wanted
+  if (wanted === LOCAL_EXECUTION_HOST_ID) {
+    return parseExecutionHostId(selected)?.kind === 'runtime'
+  }
+  if (selected !== null) {
+    return selected !== wanted
+  }
+  // An unstamped selection still names the wanted host when only that host has this workspace.
+  const owner = runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), workspace)
+  return !owner || toRuntimeExecutionHostId(owner) !== wanted
 }
 
 function presentDesktopStructuredSession(
@@ -165,7 +172,11 @@ function presentDesktopStructuredSession(
     const { activeWorktreeId, activeView, activeWorkspaceExecutionHostId } = useAppStore.getState()
     // Settings or another page may cover the chat's own workspace; its tab is selected but not shown.
     // A same-id twin on another host can be selected while the chat lives on this one.
-    const otherHostSelected = selectsOtherHost(activeWorkspaceExecutionHostId, pairedHostId)
+    const otherHostSelected = selectsOtherHost(
+      activeWorkspaceExecutionHostId,
+      pairedHostId,
+      workspace
+    )
     if (
       (activeWorktreeId !== workspace || activeView !== 'terminal' || otherHostSelected) &&
       !activateWslMovedWorkspace(workspace)

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { AppState } from '../../../store/types'
 import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -7,7 +7,7 @@ import {
   parseExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
-import { createResourceMergeCache } from './workspace-attribution/resource-merge-cache'
+import { createResourceMergeCache } from './workspace-attribution/resource-chat-row-groups'
 import {
   resolveResourceFolderWorkspace,
   resolveResourceWorkspaceHost,
@@ -119,7 +119,8 @@ export function useResourceUsageDerivedModel({
   // Keep duplicate workspace IDs in the catalog; gate host attribution where the resource identity is ambiguous.
   const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
 
-  const [mergeCache] = useState(createResourceMergeCache)
+  // A fresh cache per open, so a closed panel holds no rows.
+  const mergeCache = useMemo(() => (open ? createResourceMergeCache() : undefined), [open])
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
     () =>

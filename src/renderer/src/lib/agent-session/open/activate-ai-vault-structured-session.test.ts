@@ -94,6 +94,25 @@ describe('a chat its paired host opened', () => {
     expect(mocks.activate).toHaveBeenCalledWith('repo::/w', { executionHostId: 'runtime:studio' })
   })
 
+  it('leaves an already-shown workspace alone when only that host has it', async () => {
+    mocks.owner.mockReturnValue('studio')
+    useAppStore.setState({
+      activeWorktreeId: 'repo::/w',
+      activeView: 'terminal',
+      activeWorkspaceExecutionHostId: null
+    })
+    await answer(
+      { kind: 'history', structuredSession: { sessionId: 's1', workspaceId: 'repo::/w' } },
+      {
+        kind: 'opened',
+        target: { sessionId: 's1', worktreeId: 'repo::/w' },
+        tab: { id: 'tab-1', sessionId: 's1' }
+      }
+    )
+
+    expect(mocks.activate).not.toHaveBeenCalled()
+  })
+
   it('moves off a selected paired twin when the chat lives on this machine', async () => {
     useAppStore.setState({
       activeWorktreeId: 'repo::/w',

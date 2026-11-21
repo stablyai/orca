@@ -26,6 +26,11 @@ function jsonStringBytes(value: string | null | undefined): number {
   return value === null || value === undefined ? 4 : 2 + jsonStringContentBytes(value)
 }
 
+// A UTF-16 unit serializes to at most 6 bytes (a `\uXXXX` escape); reading only the length skips a scan.
+function jsonStringUpperBytes(value: string | null | undefined): number {
+  return value === null || value === undefined ? 4 : 2 + 6 * value.length
+}
+
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -74,26 +79,28 @@ function jsonBytes(value: unknown, limit: number): number {
 
 function sessionBytes(session: SessionMemory): number {
   return (
-    SESSION_OVERHEAD_BYTES + jsonStringBytes(session.sessionId) + jsonStringBytes(session.paneKey)
+    SESSION_OVERHEAD_BYTES +
+    jsonStringUpperBytes(session.sessionId) +
+    jsonStringUpperBytes(session.paneKey)
   )
 }
 
 function chatBytes(chat: ChatAgentMemory): number {
   return (
     CHAT_OVERHEAD_BYTES +
-    jsonStringBytes(chat.agentSessionId) +
-    jsonStringBytes(chat.agent) +
-    jsonStringBytes(chat.name)
+    jsonStringUpperBytes(chat.agentSessionId) +
+    jsonStringUpperBytes(chat.agent) +
+    jsonStringUpperBytes(chat.name)
   )
 }
 
 function rowBytes(worktree: WorktreeMemory): number {
   let bytes =
     ROW_OVERHEAD_BYTES +
-    jsonStringBytes(worktree.worktreeId) +
-    jsonStringBytes(worktree.worktreeName) +
-    jsonStringBytes(worktree.repoId) +
-    jsonStringBytes(worktree.repoName)
+    jsonStringUpperBytes(worktree.worktreeId) +
+    jsonStringUpperBytes(worktree.worktreeName) +
+    jsonStringUpperBytes(worktree.repoId) +
+    jsonStringUpperBytes(worktree.repoName)
   for (const session of worktree.sessions) {
     bytes += sessionBytes(session)
   }

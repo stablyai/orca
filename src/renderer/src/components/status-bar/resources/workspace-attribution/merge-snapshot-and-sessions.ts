@@ -4,7 +4,6 @@ import type {
   MemorySnapshot,
   WorktreeMemory
 } from '../../../../../../shared/diagnostics/process-stats-types'
-import { canonicalExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type {
@@ -27,15 +26,24 @@ import {
   resolveSnapshotSessionLabel
 } from './resource-session-labels'
 import {
-  cachedSampleRow,
-  rememberSampleRow,
-  reuseUnchangedGroups,
-  type ResourceMergeCache
-} from './resource-merge-cache'
+  localSamplePlacement,
+  pairedSamplePlacement,
+  placementInputs,
+  type SamplePlacement
+} from './resource-sample-placement'
+import {
+  chatRowGroupsFor,
+  isChatOnlySample,
+  type ChatRowGroup,
+  type ResourceMergeCache,
+  type SampleChatRows
+} from './resource-chat-row-groups'
+import { applyProjectTotals } from './resource-project-totals'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
+const LOCAL_SAMPLE = 'local'
 const NO_RUNTIME_PANE_TITLES = { runtimePaneTitlesByTabId: {} }
 function getUnattributedRepoName(t: Translate = translate): string {
   return t('auto.components.status.bar.mergeSnapshotAndSessions.unattributed', 'Unattributed')
@@ -49,9 +57,12 @@ export function mergeSnapshotAndSessions(
   cache?: ResourceMergeCache
 ): UnifiedProjectGroup[] {
   const repos = new Map<string, UnifiedProjectGroup>()
-  const worktreeRowsByRepo = new Map<string, Map<string, UnifiedWorktreeRow>>()
-  // Rows shared with the previous merge; later steps copy one before changing it.
-  const reusedRows = new Set<UnifiedWorktreeRow>()
+  // Row positions for groups built in this merge.
+  const rowIndexByRepo = new Map<string, Map<string, number>>()
+  // Groups still shared with a cached sample; they are copied before anything changes them.
+  const sharedRowIndexByRepo = new Map<string, ReadonlyMap<string, number>>()
+  // Rows built in this merge; any other row is copied before it changes.
+  const ownRows = new Set<UnifiedWorktreeRow>()
   const seenSessionIds = new Set<string>()
   // Include deferred wake hints so inactive restored sessions cannot become reclaimable orphans before their panes mount.
   const index = buildResourceSessionBindingIndex(ctx)
@@ -59,8 +70,21 @@ export function mergeSnapshotAndSessions(
   // Only the daemon inventory supplies ownership and incarnation evidence.
   const daemonSessionsById = new Map(daemonSessions.map((session) => [session.id, session]))
 
+  function ownGroup(repoId: string): UnifiedProjectGroup | undefined {
+    const group = repos.get(repoId)
+    const shared = sharedRowIndexByRepo.get(repoId)
+    if (!group || !shared) {
+      return group
+    }
+    const copy = { ...group, worktrees: [...group.worktrees] }
+    repos.set(repoId, copy)
+    rowIndexByRepo.set(repoId, new Map(shared))
+    sharedRowIndexByRepo.delete(repoId)
+    return copy
+  }
+
   function ensureRepo(repoId: string, repoName: string): UnifiedProjectGroup {
-    const existing = repos.get(repoId)
+    const existing = ownGroup(repoId)
     if (existing) {
       return existing
     }
@@ -73,63 +97,58 @@ export function mergeSnapshotAndSessions(
       worktrees: []
     }
     repos.set(repoId, next)
-    worktreeRowsByRepo.set(repoId, new Map())
+    rowIndexByRepo.set(repoId, new Map())
     return next
   }
 
-  function findWorktreeRow(
-    repo: UnifiedProjectGroup,
-    worktreeId: string
-  ): UnifiedWorktreeRow | undefined {
-    return worktreeRowsByRepo.get(repo.repoId)?.get(worktreeId)
-  }
-
   function appendWorktreeRow(repo: UnifiedProjectGroup, row: UnifiedWorktreeRow): void {
+    const rows = rowIndexByRepo.get(repo.repoId)!
+    if (!rows.has(row.worktreeId)) {
+      rows.set(row.worktreeId, repo.worktrees.length)
+    }
     repo.worktrees.push(row)
     repo.hasRemoteChildren ||= row.isRemote
-    const rows = worktreeRowsByRepo.get(repo.repoId)!
-    if (!rows.has(row.worktreeId)) {
-      rows.set(row.worktreeId, row)
+  }
+
+  function addChatRowGroup({ group, rowIndexById }: ChatRowGroup): void {
+    if (!repos.has(group.repoId)) {
+      repos.set(group.repoId, group)
+      sharedRowIndexByRepo.set(group.repoId, rowIndexById)
+      return
+    }
+    const repo = ownGroup(group.repoId)!
+    for (const row of group.worktrees) {
+      appendWorktreeRow(repo, row)
     }
   }
 
-  function ownRow(repo: UnifiedProjectGroup, row: UnifiedWorktreeRow): UnifiedWorktreeRow {
-    if (!reusedRows.delete(row)) {
+  /** The workspace's row, made safe to change in this merge; undefined when it has none yet. */
+  function rowToUpdate(repoId: string, worktreeId: string): UnifiedWorktreeRow | undefined {
+    const position = (sharedRowIndexByRepo.get(repoId) ?? rowIndexByRepo.get(repoId))?.get(
+      worktreeId
+    )
+    if (position === undefined) {
+      return undefined
+    }
+    const repo = ownGroup(repoId)!
+    const row = repo.worktrees[position]
+    if (ownRows.has(row)) {
       return row
     }
     const copy = { ...row, sessions: [...row.sessions], browsers: [...row.browsers] }
-    repo.worktrees[repo.worktrees.indexOf(row)] = copy
-    worktreeRowsByRepo.get(repo.repoId)!.set(row.worktreeId, copy)
+    repo.worktrees[position] = copy
+    ownRows.add(copy)
     return copy
   }
 
-  function ingestSampledWorktree(
-    wt: WorktreeMemory,
-    row: Pick<UnifiedWorktreeRow, 'worktreeId' | 'repoId' | 'repoName' | 'isRemote'> & {
-      worktreeName: string
-      hostLabel?: string
-      readOnly?: true
-      runtimeHostId?: string
-      unplaced?: true
-    }
-  ): void {
-    const repo = ensureRepo(row.repoId, row.repoName)
-    const placement = {
-      worktreeId: row.worktreeId,
-      worktreeName: row.worktreeName,
-      repoId: row.repoId,
-      repoName: row.repoName,
-      isRemote: row.isRemote,
-      hostLabel: row.hostLabel || undefined,
-      runtimeHostId: row.runtimeHostId,
-      unplaced: row.unplaced
-    }
-    const cached = cachedSampleRow(cache, wt, placement)
-    if (cached) {
-      reusedRows.add(cached)
-      appendWorktreeRow(repo, cached)
-      return
-    }
+  function appendNewRow(row: UnifiedWorktreeRow): UnifiedWorktreeRow {
+    ownRows.add(row)
+    appendWorktreeRow(ensureRepo(row.repoId, row.repoName), row)
+    return row
+  }
+
+  function ingestSampledWorktree(wt: WorktreeMemory, placement: SamplePlacement): void {
+    const { readOnly, ...rowPlacement } = placement
     const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
       seenSessionIds.add(s.sessionId)
       const tabId = index.ptyIdToTabId.get(s.sessionId) ?? null
@@ -139,18 +158,18 @@ export function mergeSnapshotAndSessions(
         incarnationId: daemonSession?.incarnationId,
         paneKey: s.paneKey,
         pid: s.pid,
-        label: resolveSnapshotSessionLabel(s, row.worktreeId, index, tabId),
+        label: resolveSnapshotSessionLabel(s, placement.worktreeId, index, tabId),
         bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
         agentOwnership: daemonSession?.agentOwnership ?? 'unknown',
         tabId,
         cpu: s.cpu,
         memory: s.memory,
         hasLocalSamples: true,
-        ...(row.readOnly ? { readOnly: true } : {})
+        ...(readOnly ? { readOnly: true } : {})
       }
     })
-    const built: UnifiedWorktreeRow = {
-      ...placement,
+    appendNewRow({
+      ...rowPlacement,
       cpu: wt.cpu,
       memory: wt.memory,
       history: wt.history,
@@ -158,54 +177,53 @@ export function mergeSnapshotAndSessions(
       sessions,
       chats: wt.chats,
       browsers: []
-    }
-    rememberSampleRow(cache, wt, built)
-    appendWorktreeRow(repo, built)
+    })
   }
 
-  // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
+  // ── Step 1: sampled workspaces. Chat-only rows come pre-grouped per sample; terminal rows are rebuilt.
+  const nextSampleRows = new Map<string, SampleChatRows>()
+  const inputs = placementInputs(ctx)
+  const placeLocal = (wt: WorktreeMemory): SamplePlacement | null => localSamplePlacement(ctx, wt)
   if (snapshot) {
-    for (const wt of snapshot.worktrees as readonly WorktreeMemory[]) {
-      const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
-      const repoId = worktree?.repoId ?? wt.repoId
-      const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-      // Reject local samples for runtime-hosted workspaces to prevent cross-host attribution.
-      if (runtimeHostId || stampedRuntimeHostId(ctx, wt.worktreeId)) {
-        continue
-      }
-      ingestSampledWorktree(wt, {
-        worktreeId: wt.worktreeId,
-        worktreeName: worktree?.displayName?.trim() || wt.worktreeName,
-        repoId,
-        repoName: (worktree && ctx.repoDisplayNameById.get(repoId)) || wt.repoName,
-        isRemote
-      })
+    for (const group of chatRowGroupsFor(
+      cache,
+      nextSampleRows,
+      LOCAL_SAMPLE,
+      snapshot.worktrees,
+      inputs,
+      placeLocal
+    )) {
+      addChatRowGroup(group)
     }
   }
-
+  for (const host of ctx.runtimeHostResources ?? []) {
+    const placePaired = (wt: WorktreeMemory): SamplePlacement =>
+      pairedSamplePlacement(ctx, host, wt)
+    for (const group of chatRowGroupsFor(
+      cache,
+      nextSampleRows,
+      host.hostId,
+      host.worktrees,
+      [...inputs, host.hostLabel],
+      placePaired
+    )) {
+      addChatRowGroup(group)
+    }
+  }
+  if (cache) {
+    cache.bySample = nextSampleRows
+  }
+  for (const wt of snapshot?.worktrees ?? []) {
+    const placement = isChatOnlySample(wt) ? null : localSamplePlacement(ctx, wt)
+    if (placement) {
+      ingestSampledWorktree(wt, placement)
+    }
+  }
   for (const host of ctx.runtimeHostResources ?? []) {
     for (const wt of host.worktrees) {
-      const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
-      const repoId = worktree?.repoId ?? wt.repoId
-      // A worktree stamped with a paired host belongs to that host alone, wherever its repo is tracked.
-      const ambiguous = ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ?? false
-      const recordHostId = stampedRuntimeHostId(ctx, wt.worktreeId)
-      const owned = recordHostId
-        ? recordHostId === canonicalExecutionHostId(host.hostId)
-        : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
-      // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
-      ingestSampledWorktree(wt, {
-        worktreeId: owned ? wt.worktreeId : `${host.hostId}|${wt.worktreeId}`,
-        worktreeName: (owned && worktree?.displayName?.trim()) || wt.worktreeName,
-        repoId: owned ? repoId : `${host.hostId}|${wt.repoId}`,
-        repoName: (owned && ctx.repoDisplayNameById.get(repoId)) || wt.repoName,
-        isRemote: true,
-        hostLabel: host.hostLabel,
-        readOnly: true,
-        runtimeHostId: host.hostId,
-        // A repo placed on this host isn't enough: an unlisted or duplicated worktree can't be selected.
-        unplaced: owned && !ambiguous && ctx.worktreeById?.has(wt.worktreeId) ? undefined : true
-      })
+      if (!isChatOnlySample(wt)) {
+        ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt))
+      }
     }
   }
 
@@ -246,13 +264,9 @@ export function mergeSnapshotAndSessions(
       continue
     }
 
-    const repo = ensureRepo(finalRepoId, finalRepoName)
-
-    let row = findWorktreeRow(repo, finalWorktreeId)
-    if (row) {
-      row = ownRow(repo, row)
-    } else {
-      row = {
+    const row =
+      rowToUpdate(finalRepoId, finalWorktreeId) ??
+      appendNewRow({
         worktreeId: finalWorktreeId,
         worktreeName: finalWorktreeName,
         repoId: finalRepoId,
@@ -264,9 +278,7 @@ export function mergeSnapshotAndSessions(
         isRemote,
         sessions: [],
         browsers: []
-      }
-      appendWorktreeRow(repo, row)
-    }
+      })
 
     row.sessions.push({
       sessionId: session.id,
@@ -290,12 +302,9 @@ export function mergeSnapshotAndSessions(
       continue
     }
     const repoName = ctx.repoDisplayNameById.get(worktree.repoId) || worktree.repoId
-    const repo = ensureRepo(worktree.repoId, repoName)
-    let row = findWorktreeRow(repo, worktreeId)
-    if (row) {
-      row = ownRow(repo, row)
-    } else {
-      row = {
+    const row =
+      rowToUpdate(worktree.repoId, worktreeId) ??
+      appendNewRow({
         worktreeId,
         worktreeName: worktree.displayName,
         repoId: worktree.repoId,
@@ -307,27 +316,16 @@ export function mergeSnapshotAndSessions(
         isRemote: resolveResourceWorkspaceHost(ctx, worktreeId, worktree.repoId).isRemote,
         sessions: [],
         browsers: []
-      }
-      appendWorktreeRow(repo, row)
-    }
+      })
     row.browsers = browsers
   }
 
-  // Only sampled rows contribute to project totals.
+  // Shared groups carry their totals.
   for (const repo of repos.values()) {
-    let cpuSum = 0
-    let memSum = 0
-    let anyLocal = false
-    for (const wt of repo.worktrees) {
-      if (wt.cpu !== null && wt.memory !== null) {
-        cpuSum += wt.cpu
-        memSum += wt.memory
-        anyLocal = true
-      }
+    if (!sharedRowIndexByRepo.has(repo.repoId)) {
+      applyProjectTotals(repo)
     }
-    repo.cpu = anyLocal ? cpuSum : null
-    repo.memory = anyLocal ? memSum : null
   }
 
-  return reuseUnchangedGroups(cache, [...repos.values()])
+  return [...repos.values()]
 }

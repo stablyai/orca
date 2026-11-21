@@ -1,11 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agentRegistrationMark,
   listAgentProcessRoots,
   noteAgentProcessChat,
   registerAgentProcess
 } from './agent-process-registry'
 
 describe('agent process registry', () => {
+  it('leaves a run registered during a sample out of that sample', () => {
+    const mark = agentRegistrationMark()
+    const release = registerAgentProcess(4141)
+    noteAgentProcessChat(4141, 'new-chat')
+
+    expect(listAgentProcessRoots(mark)).toEqual([])
+    expect(listAgentProcessRoots(agentRegistrationMark())).toEqual([
+      { pid: 4141, agentSessionId: 'new-chat' }
+    ])
+    release()
+  })
+
   it("keeps a reused pid's new chat when the old run's release arrives late", () => {
     const releaseOld = registerAgentProcess(4242)
     noteAgentProcessChat(4242, 'old-chat')

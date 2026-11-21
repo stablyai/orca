@@ -12,7 +12,11 @@ import { collectHostMemory } from './host-memory'
 import { getLocalDaemonPid } from './local-daemon-pid'
 import { enumerateHostProcesses } from './host-process-index'
 import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
-import { listAgentProcessRoots, readAgentProcessChat } from './agent-process-registry'
+import {
+  agentRegistrationMark,
+  listAgentProcessRoots,
+  readAgentProcessChat
+} from './agent-process-registry'
 import type { ProcIndex, ProcRow } from './process-index'
 import {
   createEmptyWorktreeMemoryBucket,
@@ -151,12 +155,13 @@ function addUsage(target: RowTotals, usage: UsageValues): void {
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
   const repoName = createRepoNameLookup(store)
+  const agentMark = agentRegistrationMark()
   const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
   const { hasPrivateMemory } = processIndex
   const appBuckets = bucketElectronMetrics(processIndex)
   const claimed = new Set<number>()
   const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
-  const agentTrees = listAgentProcessRoots().map((root) => ({
+  const agentTrees = listAgentProcessRoots(agentMark).map((root) => ({
     ...root,
     rows: claimProcessTree(processIndex, root.pid, claimed)
   }))
