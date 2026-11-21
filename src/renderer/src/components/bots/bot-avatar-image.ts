@@ -1,5 +1,5 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
 import { readBotHostState, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
@@ -7,205 +7,222 @@ import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botMascotSrc } from './bot-mascot-color'
 
-type Upload = {
+type Picture = {
   bot: BotRef
   version: string
   /** The successful read: a data URL, or null for none. */
   src?: string | null
   reading: boolean
-  /** The latest read failed: when, how many times in a row, and whether the host was offline then. */
+  /** The latest read failed: when (performance.now()) and how many times in a row. */
   failedAt: number | null
   failures: number
-  failedOffline: boolean
-  /** A face waiting skipped reading because the host was offline. */
-  skippedOffline: boolean
-  /** The retry after a failure while faces wait, or the forgetting of a failure no face waits on. */
+  /** Timed retries since the last success; rows stop after MAX_TIMED_RETRIES and read again as they mount. */
+  timedRetries: number
+  /** A retry while rows wait, or the forgetting of a failure no face waits on. */
   timer: ReturnType<typeof setTimeout> | null
-  /** Faces showing this version; each leaves as it unmounts. */
-  faces: Set<() => void>
 }
+type Face = { version: string; backoff: boolean; notify: () => void }
 
 const RETRY_MS = 10_000
 const MAX_RETRY_MS = 300_000
+const MAX_TIMED_RETRIES = 3
 
-// Each bot's versions (by botRefKey): the ones faces show, plus its last read. A version no face shows
-// is let go as another is asked for, and a failure no face waits on is let go after RETRY_MS.
-const uploads = new Map<string, Map<string, Upload>>()
+// Each bot's latest asked version only (by botRefKey), so a replaced picture is let go, as one cache slot
+// per bot always was. A failure no face waits on is let go after RETRY_MS.
+const pictures = new Map<string, Picture>()
+// Each bot's mounted faces; each leaves as it unmounts.
+const facesByBot = new Map<string, Set<Face>>()
+// Pictures rows wait on until their host comes back.
+const heldByHost = new Set<Picture>()
 
-const retryDelay = (upload: Upload): number =>
-  Math.min(RETRY_MS * 2 ** Math.max(0, upload.failures - 1), MAX_RETRY_MS)
-const hostOffline = (upload: Upload): boolean => readBotHostState(upload.bot.hostId) === 'offline'
+const retryDelay = (picture: Picture): number =>
+  Math.min(RETRY_MS * 2 ** Math.max(0, picture.failures - 1), MAX_RETRY_MS)
+const hostOffline = (picture: Picture): boolean =>
+  readBotHostState(picture.bot.hostId) === 'offline'
 
-function uploadOf(bot: BotRef, version: string): Upload {
-  const key = botRefKey(bot)
-  const versions = uploads.get(key) ?? new Map<string, Upload>()
-  uploads.set(key, versions)
-  for (const [other, upload] of versions) {
-    if (other !== version && upload.faces.size === 0) {
-      clearTimer(upload)
-      versions.delete(other)
-    }
+function facesOf(picture: Picture): Face[] {
+  const faces = facesByBot.get(botRefKey(picture.bot))
+  return faces ? [...faces].filter((face) => face.version === picture.version) : []
+}
+
+function clearTimer(picture: Picture): void {
+  if (picture.timer !== null) {
+    clearTimeout(picture.timer)
+    picture.timer = null
   }
-  const found = versions.get(version)
-  if (found) {
+}
+
+function forget(picture: Picture): void {
+  clearTimer(picture)
+  heldByHost.delete(picture)
+  const key = botRefKey(picture.bot)
+  if (pictures.get(key) === picture) {
+    pictures.delete(key)
+  }
+  watchHosts()
+}
+
+function pictureOf(bot: BotRef, version: string): Picture {
+  const key = botRefKey(bot)
+  const found = pictures.get(key)
+  if (found?.version === version) {
     return found
   }
-  const upload: Upload = {
+  if (found) {
+    forget(found)
+  }
+  const picture: Picture = {
     bot: { hostId: bot.hostId, id: bot.id },
     version,
     reading: false,
     failedAt: null,
     failures: 0,
-    failedOffline: false,
-    skippedOffline: false,
-    timer: null,
-    faces: new Set()
+    timedRetries: 0,
+    timer: null
   }
-  versions.set(version, upload)
-  return upload
+  pictures.set(key, picture)
+  return picture
 }
 
-function forget(upload: Upload): void {
-  const versions = uploads.get(botRefKey(upload.bot))
-  if (versions?.get(upload.version) === upload) {
-    versions.delete(upload.version)
-    if (versions.size === 0) {
-      uploads.delete(botRefKey(upload.bot))
-    }
+/** After a failure, rows waiting retry once the delay passes, a few times; other faces read as they mount. */
+function scheduleRetry(picture: Picture): void {
+  if (
+    picture.timer !== null ||
+    picture.failedAt === null ||
+    picture.timedRetries >= MAX_TIMED_RETRIES ||
+    !facesOf(picture).some((face) => face.backoff)
+  ) {
+    return
   }
-}
-
-function clearTimer(upload: Upload): void {
-  if (upload.timer !== null) {
-    clearTimeout(upload.timer)
-    upload.timer = null
-  }
+  const left = retryDelay(picture) - (performance.now() - picture.failedAt)
+  picture.timer = setTimeout(
+    () => {
+      picture.timer = null
+      picture.timedRetries += 1
+      if (pictures.get(botRefKey(picture.bot)) === picture && facesOf(picture).length > 0) {
+        admit(picture, false, true)
+      }
+    },
+    Math.max(0, left)
+  )
 }
 
 /** Starts a read unless one is running or done. `now`: a face that reads on every mount, as pictures
- *  outside long lists do. Otherwise not while the host is offline or soon after a failure. */
-function admit(upload: Upload, now: boolean): void {
-  if (upload.src !== undefined || upload.reading) {
+ *  outside long lists do. Otherwise not while the host is offline (it reads as the host comes back) or
+ *  until the delay after a failure has passed (`due`: it has). */
+function admit(picture: Picture, now: boolean, due = false): void {
+  if (picture.src !== undefined || picture.reading) {
     return
   }
   if (!now) {
-    if (hostOffline(upload)) {
-      upload.skippedOffline = true
+    if (hostOffline(picture)) {
+      heldByHost.add(picture)
+      watchHosts()
       return
     }
-    if (upload.failedAt !== null && Date.now() - upload.failedAt < retryDelay(upload)) {
+    if (
+      !due &&
+      picture.failedAt !== null &&
+      performance.now() - picture.failedAt < retryDelay(picture)
+    ) {
+      scheduleRetry(picture)
       return
     }
   }
-  upload.skippedOffline = false
-  upload.reading = true
-  clearTimer(upload)
-  watchHosts()
-  readBotAvatarPng(upload.bot).then(
-    (png) => settle(upload, png ? `data:image/png;base64,${png}` : null),
-    () => settle(upload, undefined)
+  clearTimer(picture)
+  heldByHost.delete(picture)
+  picture.reading = true
+  readBotAvatarPng(picture.bot).then(
+    (png) => settle(picture, png ? `data:image/png;base64,${png}` : null),
+    () => settle(picture, undefined)
   )
+  watchHosts()
 }
 
-function settle(upload: Upload, src: string | null | undefined): void {
-  upload.reading = false
+function settle(picture: Picture, src: string | null | undefined): void {
+  picture.reading = false
+  if (pictures.get(botRefKey(picture.bot)) !== picture) {
+    return
+  }
   if (src === undefined) {
-    upload.failedAt = Date.now()
-    upload.failures += 1
-    upload.failedOffline = hostOffline(upload)
-    // Faces still waiting retry once the delay passes; with none, the failure is forgotten then.
-    upload.timer = setTimeout(
-      () => {
-        upload.timer = null
-        if (upload.faces.size > 0) {
-          admit(upload, false)
-        } else {
-          forget(upload)
-        }
-      },
-      upload.faces.size > 0 ? retryDelay(upload) : RETRY_MS
-    )
+    picture.failedAt = performance.now()
+    picture.failures += 1
+    if (facesOf(picture).length === 0) {
+      picture.timer = setTimeout(() => forget(picture), RETRY_MS)
+    } else if (facesOf(picture).some((face) => face.backoff) && hostOffline(picture)) {
+      heldByHost.add(picture)
+      watchHosts()
+    } else {
+      scheduleRetry(picture)
+    }
   } else {
-    upload.src = src
-    upload.failedAt = null
-    upload.failures = 0
+    picture.src = src
+    picture.failedAt = null
+    picture.failures = 0
+    picture.timedRetries = 0
   }
-  upload.faces.forEach((face) => face())
-  watchHosts()
+  facesByBot.get(botRefKey(picture.bot))?.forEach((face) => face.notify())
 }
 
-// While a face waits on a read the host's state held up, a host coming back reads it at once.
+// While rows wait on a host that is offline, its coming back reads their pictures at once.
 let stopHosts: (() => void) | null = null
-function waiting(): Upload[] {
-  const found: Upload[] = []
-  uploads.forEach((versions) =>
-    versions.forEach((upload) => {
-      if (upload.faces.size > 0 && upload.src === undefined && !upload.reading) {
-        found.push(upload)
-      }
-    })
-  )
-  return found
-}
 function watchHosts(): void {
-  const any = waiting().some((upload) => upload.skippedOffline || upload.failedOffline)
-  if (any && !stopHosts) {
+  if (heldByHost.size > 0 && !stopHosts) {
     stopHosts = subscribeToBotChanges(() => {
-      for (const upload of waiting()) {
-        if ((upload.skippedOffline || upload.failedOffline) && !hostOffline(upload)) {
-          upload.failedAt = null
-          upload.failedOffline = false
-          admit(upload, false)
+      for (const picture of heldByHost) {
+        if (!hostOffline(picture)) {
+          heldByHost.delete(picture)
+          picture.failedAt = null
+          admit(picture, false)
         }
       }
       watchHosts()
     })
-  } else if (!any && stopHosts) {
+  } else if (heldByHost.size === 0 && stopHosts) {
     stopHosts()
     stopHosts = null
   }
 }
 
-function watch(bot: BotRef, version: string, face: () => void, now: boolean): () => void {
-  const upload = uploadOf(bot, version)
-  upload.faces.add(face)
-  if (upload.failedAt !== null && upload.faces.size === 1 && upload.timer !== null) {
-    // A failure kept only to be forgotten: a face waits on it again, so it retries after its delay.
-    clearTimer(upload)
-    const left = retryDelay(upload) - (Date.now() - upload.failedAt)
-    upload.timer = setTimeout(
-      () => {
-        upload.timer = null
-        if (upload.faces.size > 0) {
-          admit(upload, false)
-        }
-      },
-      Math.max(0, left)
-    )
+function watch(bot: BotRef, face: Face): () => void {
+  const key = botRefKey(bot)
+  const faces = facesByBot.get(key) ?? new Set<Face>()
+  facesByBot.set(key, faces)
+  faces.add(face)
+  const picture = pictureOf(bot, face.version)
+  if (picture.failedAt !== null && picture.timer !== null && facesOf(picture).length === 1) {
+    // A failure kept only to be forgotten: a face waits on it again.
+    clearTimer(picture)
   }
-  admit(upload, now)
-  watchHosts()
+  admit(picture, !face.backoff)
   return () => {
-    upload.faces.delete(face)
-    if (upload.faces.size === 0 && upload.src === undefined && !upload.reading) {
-      clearTimer(upload)
-      if (upload.failedAt === null) {
-        forget(upload)
+    faces.delete(face)
+    if (faces.size === 0) {
+      facesByBot.delete(key)
+    }
+    if (
+      pictures.get(key) === picture &&
+      picture.src === undefined &&
+      !picture.reading &&
+      facesOf(picture).length === 0
+    ) {
+      clearTimer(picture)
+      heldByHost.delete(picture)
+      watchHosts()
+      if (picture.failedAt === null) {
+        forget(picture)
       } else {
-        upload.timer = setTimeout(
-          () => forget(upload),
-          Math.max(0, RETRY_MS - (Date.now() - upload.failedAt))
-        )
+        const left = RETRY_MS - (performance.now() - picture.failedAt)
+        picture.timer = setTimeout(() => forget(picture), Math.max(0, left))
       }
     }
-    watchHosts()
   }
 }
 
 const noop = (): void => {}
 
 /** The picture's URL; null shows the emoji or initial. `backoff`: rows that mount as a list scrolls
- *  don't read while the host is offline or soon after a failed read, and read once it comes back. */
+ *  don't read while the host is offline (they read as it comes back) or soon after a failed read. */
 export function useBotAvatarSrc(
   bot: Pick<Bot, 'id' | 'avatar' | 'avatarColor'> & BotOnHost,
   backoff = false
@@ -214,14 +231,27 @@ export function useBotAvatarSrc(
   const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
   const { hostId, id } = bot
+  // The last picture this face showed, kept while another version takes the bot's one cache slot.
+  const [shown] = useState<{ version: string | null; src: string | null }>(() => ({
+    version: null,
+    src: null
+  }))
   const subscribe = useCallback(
-    (face: () => void) => (uploadKey ? watch({ hostId, id }, uploadKey, face, !backoff) : noop),
+    (notify: () => void) =>
+      uploadKey ? watch({ hostId, id }, { version: uploadKey, backoff, notify }) : noop,
     [hostId, id, uploadKey, backoff]
   )
-  const read = useCallback(
-    () => (uploadKey ? uploads.get(botRefKey({ hostId, id }))?.get(uploadKey)?.src : null) ?? null,
-    [hostId, id, uploadKey]
-  )
+  const read = useCallback((): string | null => {
+    if (!uploadKey) {
+      return null
+    }
+    const picture = pictures.get(botRefKey({ hostId, id }))
+    if (picture?.version === uploadKey && picture.src !== undefined) {
+      shown.version = uploadKey
+      shown.src = picture.src
+    }
+    return shown.version === uploadKey ? shown.src : null
+  }, [hostId, id, uploadKey, shown])
   const src = useSyncExternalStore(subscribe, read, read)
-  return mascotSrc ?? (uploadKey ? src : null)
+  return mascotSrc ?? src
 }
