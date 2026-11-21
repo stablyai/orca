@@ -179,8 +179,8 @@ export async function observeSkillPackage(
 }
 
 /** Throws what observeSkillPackage would for this folder's shape (links, special files, depth, counts,
- *  sizes by lstat), without reading or hashing any file. A file that changes before it is read can
- *  still fail the real observation. */
+ *  sizes by lstat), without reading or hashing its files (`skipDirectory` may read what it needs). A
+ *  file that can't be read, or changes before it is, can still fail the real observation. */
 export async function checkSkillPackageShape(
   packageRoot: string,
   limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,

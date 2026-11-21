@@ -158,9 +158,9 @@ export async function readShareSkills(
 const SHAPE_CHECKS_AT_ONCE = 4
 
 /** The skills the packager would take: one it refuses (a link or a special file inside, too big) is
- *  left out with why, so it never stops the others from going out with the default picks. Checked by
- *  shape only, nothing read, since this runs on every pick change; the picked ones are read once,
- *  when packed. */
+ *  left out with why, so it never stops the others from going out with the default picks. This runs
+ *  on every pick change, so it checks shape only: no asset is read or hashed (discovery still reads
+ *  each SKILL.md). Picked skills are read when packed, where one that can't be read is left out too. */
 async function packable(
   skills: BotShareSkill[],
   leftOut: BotShareLeftOut[]
@@ -192,7 +192,8 @@ async function packable(
   })
 }
 
-function unpackableWhy(error: unknown): 'link' | 'size' | 'unreadable' {
+/** Why the packager refused a skill folder, from its observer's error. */
+export function unpackableWhy(error: unknown): 'link' | 'size' | 'unreadable' {
   const code = error instanceof Error ? error.message : ''
   if (code === 'skill-package-link' || code === 'skill-path-escape') {
     return 'link'

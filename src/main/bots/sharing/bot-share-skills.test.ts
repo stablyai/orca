@@ -107,7 +107,11 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
 
     const shareable = await read()
     expect(shareable.skills.map((skill) => skill.name)).toEqual(['notes'])
-    expect(shareable.leftOut).toContainEqual({ kind: 'skill', name: 'deploy', why: 'link' })
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'skill',
+      name: 'deploy',
+      why: 'link'
+    })
 
     const candidates = new BotShareCandidates(join(root, 'candidates'))
     const summary = await candidates.prepare({
@@ -129,13 +133,17 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
 
     const shareable = await read()
     expect(shareable.skills).toEqual([])
-    expect(shareable.leftOut).toContainEqual({ kind: 'skill', name: 'deploy', why: 'link' })
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'skill',
+      name: 'deploy',
+      why: 'link'
+    })
   })
 
-  // A file no one can read stands in for a read: offering the skill and preparing without it must not
-  // open its files, only look at their shape.
+  // A file no one can read stands in for a read: listing the skill and preparing without it must not
+  // open its assets, only look at their shape.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    "reads no skill's files to list it, and none it isn't packing",
+    "reads no skill's assets to list it, and none of one it isn't packing",
     async () => {
       await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
       await write(project, '.agents/skills/deploy/big.md', 'Large reference\n')
@@ -154,7 +162,48 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
       expect(summary.bot.skills).toEqual([])
       expect(summary.available.skills.map((skill) => skill.name)).toEqual(['deploy'])
       await candidates.dispose()
-      await chmod(join(project, '.agents/skills/deploy/big.md'), 0o644)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    "leaves out a picked skill it can't read, and shares the rest by default",
+    async () => {
+      await write(home, 'skills/notes/SKILL.md', skillText('notes', 'Own skill'))
+      await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+      await write(project, '.agents/skills/deploy/big.md', 'Large reference\n')
+      await chmod(join(project, '.agents/skills/deploy/big.md'), 0o000)
+      // A nested SKILL.md no one can read: not admitted as a skill, so read as this one's document.
+      await write(project, '.agents/skills/guide/SKILL.md', skillText('guide', 'How to'))
+      await write(project, '.agents/skills/guide/part/SKILL.md', skillText('part', 'Nested'))
+      await chmod(join(project, '.agents/skills/guide/part/SKILL.md'), 0o000)
+
+      const shareable = await read()
+      expect(shareable.skills.map((skill) => skill.name)).toEqual(['deploy', 'guide', 'notes'])
+
+      const candidates = new BotShareCandidates(join(root, 'candidates'))
+      const summary = await candidates.prepare({
+        bot,
+        shareable,
+        selection: {},
+        packageId: 'package-1'
+      })
+      expect(summary.bot.skills.map((skill) => skill.name)).toEqual(['notes'])
+      expect(summary.files.map((file) => file.path)).toContain('skills/notes/SKILL.md')
+      expect(
+        summary.files.some(
+          (file) => !file.path.startsWith('skills/notes/') && file.path.startsWith('skills/')
+        )
+      ).toBe(false)
+      expect(summary.available.skills.map((skill) => skill.name)).toEqual(['notes'])
+      expect(summary.leftOut).toEqual(
+        expect.arrayContaining([
+          { kind: 'skill', name: 'deploy', why: 'unreadable' },
+          { kind: 'skill', name: 'guide', why: 'unreadable' }
+        ])
+      )
+      // The candidate keeps the bot's own view of its parts, for opening them.
+      expect(candidates.get(summary.candidateId)!.shareable.skills).toHaveLength(3)
+      await candidates.dispose()
     }
   )
 
