@@ -33,6 +33,8 @@ const Message = z.discriminatedUnion('action', [
   Identity.extend({ action: z.literal('end') })
 ])
 
+const SESSION_TTL_MS = 15000
+
 type PendingView = {
   requestId: string
   agentId?: string
@@ -53,21 +55,36 @@ type BridgeReply = { registered?: true; requestId?: string; agentId?: string; ex
 export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
-  private expiryTimer?: ReturnType<typeof setInterval>
+  private expiryTimer?: ReturnType<typeof setTimeout>
 
   subscribe(listener: (snapshot: ClaudeAgentViewSnapshot) => void): () => void {
     this.prune()
     this.listeners.add(listener)
     listener(this.snapshot())
-    this.expiryTimer ??= setInterval(() => this.prune(), 1000)
-    this.expiryTimer.unref()
+    this.armExpiry()
     return () => {
       this.listeners.delete(listener)
       if (this.listeners.size === 0) {
-        clearInterval(this.expiryTimer)
+        clearTimeout(this.expiryTimer)
         this.expiryTimer = undefined
       }
     }
+  }
+
+  // Wakes once at the earliest session expiry instead of polling every second.
+  private armExpiry(): void {
+    if (this.expiryTimer || this.listeners.size === 0 || this.sessions.size === 0) {
+      return
+    }
+    const earliest = Math.min(...[...this.sessions.values()].map((session) => session.seenAt))
+    this.expiryTimer = setTimeout(
+      () => {
+        this.expiryTimer = undefined
+        this.prune()
+      },
+      Math.max(0, earliest + SESSION_TTL_MS + 1 - Date.now())
+    )
+    this.expiryTimer.unref()
   }
 
   private snapshot(): ClaudeAgentViewSnapshot {
@@ -135,6 +152,7 @@ export class ClaudeAgentViewBridge {
           chord,
           seenAt: Date.now()
         })
+        this.armExpiry()
         this.publish()
       }
       const session = this.sessions.get(message.paneKey)
@@ -227,7 +245,7 @@ export class ClaudeAgentViewBridge {
       session.chord === shortcut.chord &&
       session.pending === pending &&
       pending.expiresAt >= Date.now() &&
-      Date.now() - session.seenAt <= 15000
+      Date.now() - session.seenAt <= SESSION_TTL_MS
     const timeout = setTimeout(() => finish({ status: 'timeout' }), 5500)
     const abort = () => finish({ status: 'unavailable' })
     args.signal?.addEventListener('abort', abort, { once: true })
@@ -261,7 +279,7 @@ export class ClaudeAgentViewBridge {
   private prune(): void {
     let changed = false
     for (const [paneKey, session] of this.sessions) {
-      if (Date.now() - session.seenAt > 15000) {
+      if (Date.now() - session.seenAt > SESSION_TTL_MS) {
         session.pending?.finish({ status: 'unavailable' })
         this.sessions.delete(paneKey)
         changed = true
@@ -270,5 +288,6 @@ export class ClaudeAgentViewBridge {
     if (changed) {
       this.publish()
     }
+    this.armExpiry()
   }
 }
