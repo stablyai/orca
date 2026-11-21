@@ -240,9 +240,10 @@ function BotItemGroup({
     focusUid ? items.findIndex((item) => item.uid === focusUid) : -1
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
-  // A group whose height changes (folding, Show more, rows coming or going while open, appearing or
+  // A group whose row count changes (folding, Show more, rows coming or going while open, appearing or
   // emptying) moves the groups below, even with the list's height unchanged (rows aging from one group
-  // into another): they measure again before it's painted. A folded group's count changes nothing.
+  // into another): they measure again before it's painted. A folded group's count changes nothing;
+  // other height changes reach them through the list's resize, a frame later.
   const drawnRows = open ? (id === 'needs_you' ? items.length : Math.min(shown, items.length)) : -1
   const present = items.length > 0 || (id === 'needs_you' && owner.outside.count > 0)
   useLayoutEffect(() => viewport.flush(), [drawnRows, present, viewport])

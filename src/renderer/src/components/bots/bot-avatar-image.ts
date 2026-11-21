@@ -30,6 +30,11 @@ export type BotAvatarRead = {
   skipFailed: boolean
 }
 
+/** A group's failures leaving (it folded or closed): pending reads stop holding them. */
+export function forgetBotAvatarFailures(failures: BotAvatarFailures): void {
+  uploads.forEach((upload) => upload.noted.delete(failures))
+}
+
 function noteFailure(failures: BotAvatarFailures, key: string, version: string): void {
   failures.delete(key)
   failures.set(key, version)

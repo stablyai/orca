@@ -10,13 +10,15 @@ import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } fro
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { botItemsDocumentHidden, type BotItemsViewport } from './bot-items-viewport'
+import {
+  DEFAULT_ROW_SIZES,
+  mixedGeometry,
+  readRowSizes,
+  uniformGeometry
+} from './bot-item-rows-geometry'
 import { focusFellToNothing } from '../use-needs-you-focus'
 import { BotItemFaceFailuresContext, useBotItemFaceFailures } from './bot-item-face-reads'
 
-/** A one-line row and its gap, and one that names its chat on a second line. Until a drawn row is
- *  read, their heights at the default font size; a larger font (Orca Web) makes them taller. */
-type RowSizes = { row: number; placed: number }
-const DEFAULT_ROW_SIZES: RowSizes = { row: 30, placed: 46 }
 /** Drawn past each edge of the panel, so a scroll shows rows already there. */
 const OVERSCAN_PX = 300
 /** Rows drawn while the panel's scroller isn't known yet. */
@@ -24,57 +26,6 @@ const FIRST_ROWS = 40
 /** A group this short (and never longer while shown) draws every row and keeps each in the Tab order,
  *  as a plain list would. */
 const ALL_ROWS = 50
-
-type Geometry = {
-  total: number
-  offset: (index: number) => number
-  height: (index: number) => number
-  /** The row at `y` px into the group, clamped to the rows. */
-  indexAt: (y: number) => number
-}
-
-function uniformGeometry(count: number, { row }: RowSizes): Geometry {
-  return {
-    total: count * row,
-    offset: (index) => index * row,
-    height: () => row,
-    indexAt: (y) => Math.min(Math.max(0, count - 1), Math.max(0, Math.floor(y / row)))
-  }
-}
-
-function mixedGeometry(tall: readonly boolean[], sizes: RowSizes): Geometry {
-  const offsets = [0]
-  for (const placed of tall) {
-    offsets.push(offsets.at(-1)! + (placed ? sizes.placed : sizes.row))
-  }
-  return {
-    total: offsets.at(-1)!,
-    offset: (index) => offsets[index] ?? 0,
-    height: (index) => (offsets[index + 1] ?? 0) - (offsets[index] ?? 0),
-    indexAt: (y) => {
-      let low = 0
-      let high = tall.length - 1
-      while (low < high) {
-        const middle = (low + high + 1) >> 1
-        if (offsets[middle]! <= y) {
-          low = middle
-        } else {
-          high = middle - 1
-        }
-      }
-      return Math.max(0, low)
-    }
-  }
-}
-
-/** The drawn rows' heights as laid out, or `was` where no row of a kind is drawn. */
-function readRowSizes(container: HTMLElement, was: RowSizes): RowSizes {
-  const heightOf = (selector: string, fallback: number): number =>
-    container.querySelector(selector)?.getBoundingClientRect().height || fallback
-  const row = heightOf(':scope > [data-bot-item-row]:not([data-bot-item-tall])', was.row)
-  const placed = heightOf(':scope > [data-bot-item-row][data-bot-item-tall]', was.placed)
-  return row === was.row && placed === was.placed ? was : { row, placed }
-}
 
 type Range = { start: number; end: number }
 /** A window's range, and the rows it drew there (uid and place), which an update finds again. */
@@ -299,6 +250,23 @@ export function BotItemRowsWindow({
   const [focused, setFocused] = useState<RowPick | null>(null)
   // Until a row is focused, the Tab stop is the group's first row, whichever that is now.
   const [stop, setStop] = useState<RowPick | null>(null)
+  // A short group keeps no focus state, so growing long takes the row holding focus from the page.
+  const seedFocus = useLatestHandler((): void => {
+    const active = document.activeElement
+    const uid = container.current?.contains(active)
+      ? active?.closest<HTMLElement>('[data-bot-item-row]')?.dataset.botItemRow
+      : undefined
+    const at = uid === undefined ? -1 : items.findIndex((item) => item.uid === uid)
+    if (uid !== undefined && at >= 0) {
+      setFocused((prev) => prev ?? { uid, at })
+      setStop((prev) => prev ?? { uid, at })
+    }
+  })
+  useLayoutEffect(() => {
+    if (!all) {
+      seedFocus()
+    }
+  }, [all, seedFocus])
   // The row an arrow moved to: drawn, then focused as it mounts (scrolled to, unless `quiet`).
   const [target, setTarget] = useState<(RowPick & { quiet?: boolean }) | null>(null)
   const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])

@@ -48,13 +48,23 @@ function listenTo(
   const run = (): void => {
     frame = null
     timer = null
-    onFrame()
+    if (!botItemsDocumentHidden()) {
+      onFrame()
+    }
   }
   const notify = (): void => {
+    // A hidden window measures as it shows again. One wrongly left `hidden` (after display wake) gets no
+    // frames, and one asked for just before may never come, so it measures on a timer instead.
+    if (botItemsDocumentHidden()) {
+      return
+    }
+    if (document.hidden && frame !== null) {
+      cancelAnimationFrame(frame)
+      frame = null
+    }
     if (frame !== null || timer !== null) {
       return
     }
-    // A window wrongly left `hidden` gets no frames, so it measures on a timer instead.
     if (document.hidden) {
       timer = setTimeout(run, 0)
     } else {

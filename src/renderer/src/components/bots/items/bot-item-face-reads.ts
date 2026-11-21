@@ -4,13 +4,14 @@
 // the group, so reopening it (or the panel) reads them again, and a host going away lets its go.
 import { createContext, useEffect, useState } from 'react'
 import { isBotHostLive, subscribeToLiveBotHosts } from '@/lib/bot-host-views'
-import type { BotAvatarFailures } from '../bot-avatar-image'
+import { forgetBotAvatarFailures, type BotAvatarFailures } from '../bot-avatar-image'
 
 export const BotItemFaceFailuresContext = createContext<BotAvatarFailures | null>(null)
 
 /** A group's failures; `enabled` while its rows show faces. */
 export function useBotItemFaceFailures(enabled: boolean): BotAvatarFailures {
   const [failures] = useState((): BotAvatarFailures => new Map())
+  useEffect(() => () => forgetBotAvatarFailures(failures), [failures])
   useEffect(() => {
     if (!enabled) {
       return

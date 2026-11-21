@@ -17,7 +17,14 @@ let liveSeen: readonly ExecutionHostId[] | null = null
 let liveSet: ReadonlySet<ExecutionHostId> = new Set()
 let stopCatalog: (() => void) | null = null
 
+// While the window is hidden rows keep the hosts as they were, so a host coming back reads nothing
+// until the window shows again.
+const hidden = (): boolean => document.hidden
+
 function currentLive(): ReadonlySet<ExecutionHostId> {
+  if (liveSeen !== null && stopCatalog !== null && hidden()) {
+    return liveSet
+  }
   const ids = readLiveBotHostIds()
   if (ids !== liveSeen) {
     liveSeen = ids
@@ -40,9 +47,22 @@ function onCatalog(): void {
   }
 }
 
+const onVisibility = (): void => {
+  if (!hidden()) {
+    onCatalog()
+  }
+}
+
 function listen(): () => void {
   currentLive()
-  stopCatalog ??= subscribeToBotChanges(onCatalog)
+  if (!stopCatalog) {
+    const stopBots = subscribeToBotChanges(onCatalog)
+    document.addEventListener('visibilitychange', onVisibility)
+    stopCatalog = () => {
+      stopBots()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }
   return () => {
     if (hostListeners.size === 0 && anyListeners.size === 0) {
       stopCatalog?.()
