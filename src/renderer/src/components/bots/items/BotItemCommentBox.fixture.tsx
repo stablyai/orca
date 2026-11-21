@@ -190,13 +190,13 @@ function stubPickerSources(): void {
   const runtime = window.api.runtime
   Reflect.set(window.api, 'runtime', {
     ...runtime,
-    call: async (request: { method: string }) =>
+    call: async (request: Parameters<typeof runtime.call>[0]) =>
       request.method === 'skills.discover'
         ? {
             ok: true,
             result: { skills: PICKER_SKILLS, sources: [PICKER_SKILL_SOURCE], scannedAt: 1 }
           }
-        : runtime.call(request as Parameters<typeof runtime.call>[0])
+        : runtime.call(request)
   })
 }
 
