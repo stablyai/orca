@@ -2,15 +2,33 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as OrcaRebaseReflog from './orca-rebase-reflog'
 import { gitPullRebaseFromBase } from './remote-rebase'
 import { continueRebase, readRebaseStopToken } from '../source-control/mutations/rebase-continue'
 import { takeOrcaRebaseProvenance } from '../source-control/mutations/orca-rebase-provenance'
+
+// Lets a case act as another Git that replaces the paused run right after the reflog proof passed.
+const afterReflogProof = vi.hoisted(() => ({ run: null as (() => void) | null }))
+vi.mock('./orca-rebase-reflog', async (importOriginal) => {
+  const actual = await importOriginal<typeof OrcaRebaseReflog>()
+  return {
+    ...actual,
+    headMovedOnlyByRebaseRun: async (
+      ...args: Parameters<typeof actual.headMovedOnlyByRebaseRun>
+    ) => {
+      const proven = await actual.headMovedOnlyByRebaseRun(...args)
+      afterReflogProof.run?.()
+      return proven
+    }
+  }
+})
 
 describe('Orca rebase provenance for hiding Pull afterwards', () => {
   const tempPaths: string[] = []
 
   afterEach(() => {
+    afterReflogProof.run = null
     for (const path of tempPaths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
@@ -90,6 +108,20 @@ describe('Orca rebase provenance for hiding Pull afterwards', () => {
 
     const result = await gitPullRebaseFromBase(repoPath, 'origin/main')
     expect(result.integratedUpstreamOid).toBeUndefined()
+  })
+
+  it('gives no proof to a run another Git swapped in after the reflog check, even with the same endpoints', async () => {
+    const { repoPath, git } = createPublishedFeatureBehindOrigin(true)
+    afterReflogProof.run = () => {
+      afterReflogProof.run = null
+      git('rebase', '--abort')
+      expect(() => git('rebase', 'origin/main')).toThrow()
+    }
+    await expect(gitPullRebaseFromBase(repoPath, 'origin/main')).rejects.toThrow()
+
+    const { incarnation } = await readRebaseStopToken(repoPath, {})
+    expect(incarnation).not.toBeNull()
+    expect(takeOrcaRebaseProvenance(repoPath, 'feature', incarnation)).toBeNull()
   })
 
   it('gives no proof for a paused run this rebase did not create, even with the same endpoints', async () => {

@@ -193,7 +193,7 @@ function reflogActionEnv(reflogAction: string): NodeJS.ProcessEnv {
 
 // A conflict stop keeps the proof with the run this spawn created: no rebase directory before it,
 // and every HEAD move since its start tagged with this spawn's reflog action. The proof is keyed by
-// the directory identity observed now, so only that run's Continue can claim it.
+// the directory identity observed before that check, so only that run's Continue can claim it.
 async function rememberPausedOrcaRebase(
   worktreePath: string,
   integratedUpstreamOid: string,
@@ -204,6 +204,11 @@ async function rememberPausedOrcaRebase(
   try {
     const { signal: _abortedSignal, ...readOptions } = options
     if ((await detectConflictOperation(worktreePath, readOptions)) !== 'rebase') {
+      return
+    }
+    // Captured before the reflog proof, so a run replaced after that check cannot inherit it.
+    const observed = await readRebaseRunIdentity(worktreePath, readOptions)
+    if (!observed) {
       return
     }
     if (
@@ -219,10 +224,9 @@ async function rememberPausedOrcaRebase(
     if (run.onto !== ownRun.onto || run.origHead !== ownRun.origHead) {
       return
     }
-    const observed = await readRebaseRunIdentity(worktreePath, readOptions)
     const branch = await readRebasingBranch(worktreePath, readOptions)
     const { incarnation } = await readRebaseStopToken(worktreePath, readOptions)
-    if (branch && observed && incarnation?.startsWith(`${observed}:`)) {
+    if (branch && incarnation?.startsWith(`${observed}:`)) {
       recordOrcaRebaseProvenance(worktreePath, { branch, integratedUpstreamOid, incarnation })
     }
   } catch {
