@@ -108,6 +108,8 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
+  /** The chat answers a Slack thread, so its reply is written in Slack's markup. */
+  agentRepliesInSlack?: true
   /** The verdict on the turn this notification reports, which picks its wording. */
   agentTurnOutcome?: AgentTurnOutcome
   /** Why a failed turn failed, typed: its body says so instead of the last message. */

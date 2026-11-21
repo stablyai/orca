@@ -134,6 +134,11 @@ export function beginLocalCommandSelection(
   }
 }
 
+/** Whether a probe selected a binary for this command; no filesystem check. */
+export function hasLocalCommandSelection(command: string): boolean {
+  return localCommandSelections.get(command)?.selected !== undefined
+}
+
 /** Native execution reuses preflight's selection without probing or replaying the operation. */
 export function resolveSelectedLocalCommand(
   command: string,

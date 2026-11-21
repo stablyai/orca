@@ -34,10 +34,7 @@ import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
-import {
-  MobileBotItemQuestionLines,
-  type MobileBotItemQuickReplyActions
-} from './MobileBotItemQuestionLines'
+import { MobileBotItemQuestionLines } from './MobileBotItemQuestionLines'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -254,14 +251,10 @@ function EntryIcon({ entry }: { entry: LineEntry }) {
 function CommentCard({
   item,
   entry,
-  quickReplies,
-  busy,
   attachments
 }: {
   item: BotItem
   entry: Extract<BotItemActivityEntry, { kind: 'comment' }>
-  quickReplies: MobileBotItemQuickReplyActions
-  busy: boolean
   attachments: MobileBotItemAttachmentSource
 }) {
   const t = useMobileTranslation()
@@ -270,13 +263,7 @@ function CommentCard({
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
   return (
-    <View
-      style={[
-        styles.card,
-        mine && styles.cardMine,
-        shape.decisions.length > 0 && styles.cardAsking
-      ]}
-    >
+    <View style={[styles.card, mine && styles.cardMine]}>
       <View style={styles.cardHead}>
         <Text style={styles.author}>{botItemActorName(event, item, t)}</Text>
         <View style={styles.spacer} />
@@ -287,13 +274,7 @@ function CommentCard({
         {text.trim() ? <MobileMarkdown content={text} /> : null}
       </MobileBotItemCommentAttachments>
       {shape.decisions.length > 0 ? (
-        <MobileBotItemQuestionLines
-          shape={shape}
-          waiting={waiting}
-          answers={entry.answers}
-          actions={quickReplies}
-          busy={busy}
-        />
+        <MobileBotItemQuestionLines shape={shape} waiting={waiting} answers={entry.answers} />
       ) : null}
     </View>
   )
@@ -302,16 +283,10 @@ function CommentCard({
 export function MobileBotItemActivity({
   item,
   events,
-  quickReplies,
-  busy = false,
   attachments
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
-  /** A quick reply is on its way or just landed: the quick replies wait for its outcome. */
-  busy?: boolean
-  /** What the waiting question's quick replies do. */
-  quickReplies: MobileBotItemQuickReplyActions
   attachments: MobileBotItemAttachmentSource
 }) {
   useMobileColorScheme()
@@ -321,14 +296,7 @@ export function MobileBotItemActivity({
     <View>
       {entries.map((entry) =>
         entry.kind === 'comment' ? (
-          <CommentCard
-            key={entry.key}
-            item={item}
-            entry={entry}
-            quickReplies={quickReplies}
-            busy={busy}
-            attachments={attachments}
-          />
+          <CommentCard key={entry.key} item={item} entry={entry} attachments={attachments} />
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>
@@ -394,8 +362,6 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   cardMine: { backgroundColor: colors.bgRaised },
-  // A question's chips end the card: more room under them.
-  cardAsking: { paddingBottom: spacing.lg + spacing.xxs },
   cardHead: {
     flexDirection: 'row',
     alignItems: 'center',

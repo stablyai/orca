@@ -3218,6 +3218,7 @@
       "skip": "Skip",
       "step": "Step {{step}}",
       "other": "Other…",
+      "recommended": "Recommended",
       "answerPlaceholder": "Type your answer",
       "optionPreview": "{{option}} preview",
       "previewPosition": "{{current}} of {{total}}",
@@ -3841,6 +3842,150 @@
         "removed": "Removed",
         "noteChanged": "Note changed",
         "indexChanged": "MEMORY.md changed"
+      },
+      "google": {
+        "ended": "This Google setup ended.",
+        "receipt": {
+          "change": "Change",
+          "dismissed": "✓ Dismissed",
+          "imported": "✓ You added your team’s file",
+          "chose": "✓ You chose {{what}}",
+          "signedInAs": "✓ Signed in as {{email}}",
+          "signedIn": "✓ Signed in",
+          "done": "✓ Done",
+          "takeOver": "✓ {{bot}} takes over from here"
+        },
+        "heading": "Connect Google",
+        "path": {
+          "title": "How should we set it up?",
+          "why": "You create your own Google app, so your sign-in stays on your computer.",
+          "doIt": "Do it for me",
+          "guideHere": "Guide me here",
+          "guideBrowser": "Guide me in my browser",
+          "doItNote": "{{bot}} clicks through it",
+          "guideHereNote": "You click, in Orca",
+          "guideBrowserNote": "You click, in your browser"
+        },
+        "notNow": "Not now",
+        "progress": {
+          "heading": "Setting up Google",
+          "done": "Done",
+          "waiting": "Waiting for you",
+          "working": "Working",
+          "you": "You"
+        },
+        "account": {
+          "title": "Which Google account should I use?",
+          "personal": "Personal account",
+          "work": "Work account",
+          "note": "Every Google Cloud page opens as the account you pick."
+        },
+        "services": {
+          "title": "Which Google services should I use?",
+          "note": "With any of these, I can find people by name. You can add more later."
+        },
+        "continue": "Continue",
+        "connect": {
+          "titleAccount": "Sign in to connect {{email}}",
+          "title": "Sign in to connect",
+          "onComputer": "Sign in to Google in Orca on your computer."
+        },
+        "movedDown": "Continued further down.",
+        "connected": {
+          "heading": "Google connected",
+          "canUse": "{{bot}} can use {{services}}."
+        },
+        "copied": "Copied. Send it to your Google admin.",
+        "action": {
+          "onComputer": "For “{{action}}”, use Orca on your computer.",
+          "makeNewKey": "Make a new key",
+          "importKey": "Import a key file",
+          "allow": "Allow {{services}}",
+          "signInAgain": "Sign in again",
+          "continueWithout": "Continue without them",
+          "keep": "Keep {{email}}",
+          "signInAs": "Sign in as {{email}}",
+          "turnOn": "Turn on",
+          "copyForAdmin": "Copy for your admin",
+          "checkAgain": "Check again",
+          "continue": "Continue",
+          "startOver": "Start over"
+        },
+        "otherAccount": "Switch account",
+        "letMe": "Let me do this one",
+        "step": {
+          "headingCount": "Your turn · {{n}} of {{total}}",
+          "watching": "Watching the page",
+          "onComputer": "Do this in Google Cloud on your computer.",
+          "account": "Sign in to Google",
+          "project": "Create a project",
+          "apis": "Turn on {{services}}",
+          "branding": "Set up Google’s sign-in screen",
+          "links": "Add your app’s links",
+          "publish": "Publish the app",
+          "client": "Create the app’s key",
+          "connect": "Connect and check"
+        },
+        "done": "Done",
+        "takeOver": "Take over from here",
+        "choice": {
+          "gmail": "Gmail",
+          "calendar": "Calendar",
+          "files": "Drive, Docs and Sheets",
+          "gmailDescription": "Search and read mail, write drafts, send when you say so",
+          "calendarDescription": "See, create and move events",
+          "filesDescription": "Find, read and edit files"
+        },
+        "notes": {
+          "project": {
+            "account": "Check the account at the top right is the one you want.",
+            "create": "Click <b>Create</b>. The name doesn’t matter."
+          },
+          "apis": {
+            "project": "Check the project at the top is the one you just made.",
+            "enable": "Click <b>Next</b>, then <b>Enable</b>."
+          },
+          "branding": {
+            "start": "Click <b>Get started</b>.",
+            "name": "App name <b>Orca</b>, and your email as the support email.",
+            "external": "Audience: <b>External</b>.",
+            "internal": "Audience: <b>Internal</b>.",
+            "either": "Audience: <b>External</b> for a Gmail account, <b>Internal</b> for a work account.",
+            "contact": "Your email as the contact email.",
+            "agree": "Tick <b>I agree to the Google API Services: User Data Policy</b>, then <b>Create</b>."
+          },
+          "links": {
+            "domain": "Under <b>App domain</b>, paste the home page and privacy policy links.",
+            "authorized": "Under <b>Authorized domains</b>, add the domain.",
+            "save": "Click <b>Save</b>."
+          },
+          "publish": {
+            "publish": "Click <b>Publish app</b>, then <b>Confirm</b>.",
+            "why": "A published app keeps you signed in past 7 days."
+          },
+          "client": {
+            "type": "Application type: <b>Desktop app</b>, then <b>Create</b>.",
+            "agent": "If you see <b>Use this client for an AI-powered agent</b>, tick it.",
+            "download": "Click <b>Download JSON</b>. Orca saves the key."
+          }
+        },
+        "blocker": {
+          "stoppedWhy": "Setup stopped: {{reason}}",
+          "stopped": "Setup stopped.",
+          "paused": "The setup paused at {{step}}. Everything so far is saved.",
+          "yourTurn": "Your turn: {{step}}.",
+          "noKey": "Orca needs the app’s key first.",
+          "keyGone": "This app’s key no longer works: it was removed in Google Cloud.",
+          "keyOtherProject": "The saved key is for project {{keyProject}}, not {{project}}.",
+          "otherAccount": "You signed in as {{signedIn}}; this setup was for {{wanted}}.",
+          "signedOut": "The sign-in for {{email}} ended.",
+          "needsPermission": "Almost there: allow {{services}}. Google shows a box for each one; tick them all.",
+          "apiOff": "{{services}} is turned off in Google Cloud.",
+          "adminBlocked": "Your company’s Google admin blocked {{services}}.",
+          "checkFailed": "Orca couldn’t check {{services}}."
+        },
+        "ownerStep": "Step {{step}} of 3",
+        "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}"
       }
     },
     "eventRow": {
@@ -5523,6 +5668,7 @@
         "submit": "Comment",
         "reply": "Reply in your own words",
         "replyTo": "Reply to {{name}}…",
+        "replyingTo": "Replying to:",
         "showLess": "Show less",
         "fileOnComputer": "Open {{name}} on your computer."
       },
@@ -5647,7 +5793,7 @@
       "readFailedTitle": "Couldn’t load items",
       "ask": {
         "recommended": "Recommended",
-        "typeAnswer": "Type your answer"
+        "notNow": "Not now"
       }
     },
     "needs": {
@@ -5661,6 +5807,163 @@
     },
     "chat": {
       "nothingToReport": "Nothing to report"
+    },
+    "waits": {
+      "cancel": "Cancel",
+      "cancelNamed": "Cancel waiting for {{name}}",
+      "noDeadline": "No deadline",
+      "until": "Until {{time}}"
+    },
+    "webhooks": {
+      "copiedUrl": "URL copied",
+      "copyFailed": "Couldn’t copy. Try again.",
+      "resume": "Resume",
+      "pause": "Pause",
+      "back": "Back to Webhooks",
+      "more": "More actions",
+      "orphanedNote": "{{bot}}’s Orca no longer lists this automation, so calls aren’t run.",
+      "url": "URL",
+      "copy": "Copy",
+      "copyUrl": "Copy URL",
+      "checksLabel": "Checks",
+      "starts": "Starts",
+      "onlyWhen": "Only when",
+      "editInChat": "Edit in chat",
+      "editDraft": "Change when “{{automation}}” runs: ",
+      "quotes": "Quotes",
+      "sample": {
+        "send": "Send a sample call",
+        "note": "A sample starts a real run.",
+        "sent": "Sample call sent"
+      },
+      "rotate": {
+        "open": "Rotate key…",
+        "title": "Rotate the key for “{{automation}}”?",
+        "confirm": "Rotate key",
+        "note": "The URL gets a new key. Update every sender with it.",
+        "overlap": "Keep the old key working for 24 hours",
+        "overlapNote": "Senders keep working while you update them.",
+        "stop": "Stop the old key now",
+        "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
+        "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled.",
+        "stopNote": "For a leaked key.",
+        "done": "Key rotated. Copy the new URL."
+      },
+      "secret": {
+        "changeOpen": "Change signing secret…",
+        "add": "Add signing secret…",
+        "generatedTitle": "Signing secret ready",
+        "done": "Done",
+        "generatedNote": "Copy it into {{sender}}’s webhook settings. From now on, calls must carry its signature.",
+        "copy": "Copy secret",
+        "copied": "Secret copied",
+        "changeTitle": "Change signing secret",
+        "addTitle": "Add signing secret",
+        "note": "Orca then accepts only calls signed with this secret, so a leaked URL alone can’t start “{{automation}}”.",
+        "sender": "Sender",
+        "modeGenerate": "Orca makes one",
+        "modePaste": "Paste the sender’s",
+        "generateNote": "Orca makes this secret. You copy it into {{sender}} next.",
+        "paste": "{{sender}} secret",
+        "pasteNote": "Use this when the sender gives you its own secret.",
+        "generate": "Generate secret",
+        "save": "Save",
+        "back": "Back to signing secret",
+        "saved": "Signing secret saved"
+      },
+      "delete": {
+        "open": "Delete hook…",
+        "title": "Delete the webhook for “{{automation}}”?",
+        "note": "Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.",
+        "confirm": "Delete webhook",
+        "done": "Webhook deleted"
+      },
+      "recentCalls": "Recent calls",
+      "showFewer": "Show fewer",
+      "showAll": "Show all",
+      "noCalls": "No calls yet.",
+      "cancel": "Cancel",
+      "lastCallLower": "last call {{ago}}",
+      "noCallsLower": "no calls yet",
+      "status": {
+        "on": "On",
+        "noCalls": "No calls yet",
+        "paused": "Paused",
+        "receiving": "Receiving"
+      },
+      "hookCount_one": "{{count}} hook",
+      "hookCount_other": "{{count}} hooks",
+      "name": "Webhooks",
+      "howToCallShort": "Any tool or script can POST to a hook’s URL. Each hook starts one automation.",
+      "hooks": "Hooks",
+      "addInChat": "Add in chat",
+      "setUpDraft": "Set up a webhook that ",
+      "resumed": "Webhook resumed",
+      "paused": "Webhook paused",
+      "resultsToChat": "results to Chat",
+      "resultsToThread": "results to the event's thread",
+      "resultsNowhere": "results not sent",
+      "resultsToPlace": "results to {{place}}",
+      "checks": {
+        "key": "The key in the URL or header",
+        "generated": "{{sender}} signature, with its signing secret",
+        "pasted": "{{sender}} signature, with your {{sender}} secret"
+      },
+      "where": {
+        "is": "is {{values}}",
+        "isNot": "isn’t {{values}}",
+        "contains": "contains {{values}}",
+        "exists": "is present",
+        "missing": "is missing",
+        "text": "the body contains “{{text}}”",
+        "subject": "it’s about {{subject}}",
+        "and": ", and "
+      },
+      "everyCall": "Every call",
+      "hostOffline": "{{bot}}’s computer is offline",
+      "hostNeedsUpdate": "Your Orca needs an update before {{bot}} can do this.",
+      "errors": {
+        "notFound": "This webhook was deleted.",
+        "unavailable": "Webhooks aren’t available right now."
+      },
+      "calls": {
+        "run": "run #{{number}}",
+        "chat": "Chat",
+        "runIn": "run #{{number}} in {{place}}",
+        "refused": "Refused ×{{count}}",
+        "refusedDetail": "wrong key or signature · nothing kept",
+        "overBudget": "Over budget ×{{count}}",
+        "overBudgetDetail": "too many calls · nothing kept",
+        "duplicate": "Duplicate ×{{count}}",
+        "duplicateDetail": "already received",
+        "sample": "sample",
+        "queued": "Queued",
+        "queuedDetail": "waiting for {{bot}}’s computer",
+        "delivered": "Delivered",
+        "deliveredDetail": "on {{bot}}’s computer",
+        "ignored": "Ignored",
+        "ignoredDetail": "didn’t match Only when",
+        "paused": "Paused",
+        "pausedDetail": "nothing started",
+        "cancelled": "Cancelled",
+        "cancelledDetail": "paused, rotated or deleted first",
+        "waiting": "Waiting",
+        "waitingDetail": "for the hourly run limit",
+        "started": "Started",
+        "folded": "Folded",
+        "foldedDetail": "counted, not shown to the run",
+        "refusedOne": "Refused",
+        "missed": "Skipped",
+        "missedDetail": "past the automation’s missed-run grace",
+        "unavailable": "Unavailable",
+        "completed": "Done",
+        "failed": "Failed",
+        "unverifiable": "Unverifiable",
+        "unverifiableDetail": "{{bot}}’s computer can’t be reached"
+      }
+    },
+    "errors": {
+      "generic": "Something went wrong. Try again."
     }
   },
   "mobileWebShell": {

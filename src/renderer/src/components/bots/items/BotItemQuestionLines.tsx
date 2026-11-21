@@ -1,6 +1,6 @@
 // A Needs you comment's question footer: under the body, each question line (`--ask`) with its quick
 // replies. While the item waits on it, the open line reads as a title and its recommended reply is
-// filled; the card's Needs you tag and outline carry the color.
+// filled; the card's Needs you tag carries the color.
 // One question: a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
 // in the comment box to add to first; Type your answer leads to the box. Several: one line at a time
 // (BotItemQuestionStep), answers held until the last. Answered, a line reads "Question → answer", muted,

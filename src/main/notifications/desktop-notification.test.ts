@@ -77,6 +77,18 @@ describe('Linux desktop notification admission', () => {
     await expect(delivered).resolves.toBe(true)
   })
 
+  it('reports an ordinary notification as undelivered when the Linux service stalls', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    runProcess.mockResolvedValue({ code: null, timedOut: true })
+    await expect(
+      deliverNativeNotification(
+        { source: 'agent-task-complete' },
+        { title: 'Done', body: '' },
+        settings
+      )
+    ).resolves.toEqual({ delivered: false, reason: 'not-displayed' })
+  })
+
   it('discards a pending notification when a replacement arrives during activation', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     const activation = Promise.withResolvers<{ code: number }>()

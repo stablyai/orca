@@ -110,7 +110,23 @@ function stub(bot: Bot = builder): void {
         status: 'local',
         skillsDir: `/Users/owner/globex/${String(id)}/.agents/skills`,
         skills: [{ name: 'electron', description: 'Launch and validate Electron apps' }]
-      }))
+      })),
+      ...(params.botId
+        ? {
+            own: {
+              skillsDir: '/Users/owner/.orca/bots/release-notes/skills',
+              skills: [
+                {
+                  name: 'release-notes-style',
+                  description: 'House style for release notes',
+                  folder: '/Users/owner/.orca/bots/release-notes/skills/release-notes-style',
+                  loadedBy: ['claude', 'agents']
+                }
+              ],
+              agentOnly: []
+            }
+          }
+        : {})
     }),
     'bots.memory.history': () => ({ rows: [] }),
     'bots.list': () => ({ bots: [bot] }),

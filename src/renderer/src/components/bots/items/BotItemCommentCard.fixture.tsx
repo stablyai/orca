@@ -104,7 +104,7 @@ function Pending(): React.JSX.Element {
   )
 }
 
-// The message that asks the owner something, while it waits: tagged, outlined, its question ruled off.
+// The message that asks the owner something, while it waits: tagged, its question ruled off.
 export const pending = defineFixture({ width: 340, render: () => <Pending /> })
 export const pendingWide = defineFixture({ width: 560, render: () => <Pending /> })
 
@@ -143,10 +143,9 @@ export const longOption = defineFixture({
   )
 })
 
-// Asked in prose, no quick replies: tagged and outlined, nothing to rule off.
-export const proseQuestion = defineFixture({
-  width: 340,
-  render: () => (
+// Asked in prose, no quick replies: tagged, nothing to rule off.
+function ProseQuestion(): React.JSX.Element {
+  return (
     <Feed>
       <Card
         event={{
@@ -162,26 +161,33 @@ export const proseQuestion = defineFixture({
       />
     </Feed>
   )
-})
+}
 
-// Answered: no tag, no outline; the line reads "Question → answer" as before.
-export const answered = defineFixture({
-  width: 340,
-  render: () => (
+export const proseQuestion = defineFixture({ width: 340, render: () => <ProseQuestion /> })
+export const proseQuestionWide = defineFixture({ width: 560, render: () => <ProseQuestion /> })
+
+// Answered: no tag; the line reads "Question → answer" as before.
+function Answered(): React.JSX.Element {
+  return (
     <Feed>
       <Card event={ask('q1', MERGE)} waiting={false} answers={[answer]} />
     </Feed>
   )
-})
+}
 
-// Two asking messages in one feed: each carries its own tag and outline.
-export const twoPending = defineFixture({
-  width: 560,
-  render: () => (
+export const answered = defineFixture({ width: 340, render: () => <Answered /> })
+export const answeredWide = defineFixture({ width: 560, render: () => <Answered /> })
+
+// Two asking messages in one feed: each carries its own tag.
+function TwoPending(): React.JSX.Element {
+  return (
     <Feed>
       <Card event={ask('q2', LONG, 9)} waiting />
       <Card event={plain} waiting={false} />
       <Card event={ask('q1', MERGE)} waiting />
     </Feed>
   )
-})
+}
+
+export const twoPending = defineFixture({ width: 560, render: () => <TwoPending /> })
+export const twoPendingNarrow = defineFixture({ width: 340, render: () => <TwoPending /> })

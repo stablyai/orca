@@ -49,6 +49,7 @@ import {
   type BotAppsRailProps,
   type BotAppsView
 } from './BotAppsRail'
+import { botMcpAppUrlTag } from '../../../../../shared/bots/bot-mcp-apps'
 import { BotAppsMineList, BotAppsNoMatch, DirectAppRow, type DirectRow } from './BotAppsRows'
 import { botToolApps } from './bot-tool-apps'
 
@@ -93,7 +94,9 @@ export function BotAppsCatalog({
   // A connector shows once it can be added, or once the bot has it; an MCP app always.
   const direct: DirectRow[] = DIRECT_APPS.flatMap((app): DirectRow[] => {
     if (app.route === 'mcp') {
-      return [{ app, name: app.name, added: toolApps.some((entry) => entry.app?.id === app.id) }]
+      const tool = toolApps.find((entry) => entry.app?.id === app.id)?.tool
+      const tag = tool && botMcpAppUrlTag(app, tool.detail)
+      return [{ app, name: app.name, added: tool !== undefined, tag: tag ?? undefined }]
     }
     const connector = state.catalog.find((entry) => entry.id === app.connector)
     if (!connector) {
@@ -175,16 +178,19 @@ export function BotAppsCatalog({
         preset={{
           name: app.id,
           title: app.name,
+          line: app.line,
           url: app.url,
+          variable: app.variable,
           logo: <BotAppBrandLogo app={app} size="lg" />
         }}
         onBack={back}
         onClose={close}
+        onManage={manage}
       />
     )
   }
   if (step?.kind === 'custom') {
-    return <CustomAppStep bot={bot} onBack={back} onClose={close} />
+    return <CustomAppStep bot={bot} onBack={back} onClose={close} onManage={manage} />
   }
   if (step?.kind === 'composio-account') {
     const { app } = step
