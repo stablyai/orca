@@ -192,6 +192,12 @@ orca orchestration reset --all
 
 `reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
 
+## Non-CLI agent apps
+
+Orca launches supervised workers through its supported agent integrations. A standalone chat or desktop agent app cannot register itself as a worker or bot.
+
+An external agent with shell access to the orca CLI can still delegate one-way: `orca orchestration send --to bot:<name> --type handoff` gives a bot the job as its owner's own (`orca bot list` names them), and `--type status` informs it with nothing expected back. Replies route to the sender's Orca mailbox, which a non-Orca app does not have, so read a handoff's result where the bot posts it — its chat or the connected service the job names. Peer registration and a public reply channel for non-CLI apps are proposed in [#45310](https://github.com/stablyai/orca/issues/45310).
+
 ## Choosing the right command
 
 Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.
