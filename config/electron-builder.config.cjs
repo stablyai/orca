@@ -490,6 +490,13 @@ module.exports = {
         'orca_menu_dead_key.node'
       )
       await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
+      const frostedGlassAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-frosted-glass',
+        'orca_frosted_glass.node'
+      )
+      await signMacStandaloneHelper(frostedGlassAddon, 'Frosted Glass', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {

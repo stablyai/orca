@@ -1,4 +1,5 @@
 import { publishSettingsUpdate } from './settings-update-effects'
+import { isWindowMaterial } from '../../../shared/app-lifecycle/windows/window-material'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -67,7 +68,7 @@ export function updateSettings(
     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
   }
   const windowMaterial = updates.windowMaterial
-  if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
+  if (isWindowMaterial(windowMaterial)) {
     // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.
     sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
   }

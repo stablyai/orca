@@ -1453,6 +1453,20 @@ html.native-shell .app-layout {
   background: var(--bg-titlebar, var(--card));
 }
 
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects]) {
+  --chat-minimum-canvas-opacity: 0.2;
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is(.bg-worktree-sidebar, .titlebar-left:not(.titlebar-left-floating)) {
+  background-color: color-mix(in srgb, var(--worktree-sidebar) 28%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is(.titlebar, .titlebar-left-floating, .bg-tab-bar) {
+  background-color: color-mix(in srgb, var(--tab-bar, var(--card)) 40%, transparent);
+}
+
 .titlebar-traffic-light-pad {
   width: calc(80px / var(--ui-zoom-factor, 1));
   flex-shrink: 0;

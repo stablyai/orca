@@ -1,6 +1,7 @@
-import type {
-  WindowMaterial,
-  WindowMaterialHost
+import {
+  isBlurredWindowMaterial,
+  type WindowMaterial,
+  type WindowMaterialHost
 } from '../../../../shared/app-lifecycle/windows/window-material'
 import { getRendererAppPlatform } from '../platform/renderer-app-platform'
 
@@ -35,7 +36,7 @@ let blurSuppressed: boolean | undefined
 export function syncWindowMaterialWithThemeBackground(themeBackgroundActive: boolean): void {
   if (
     getRendererAppPlatform() !== 'darwin' ||
-    activeWindowMaterial() !== 'blur' ||
+    !isBlurredWindowMaterial(activeWindowMaterial()) ||
     blurSuppressed === themeBackgroundActive
   ) {
     return

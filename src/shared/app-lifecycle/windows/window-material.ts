@@ -1,5 +1,5 @@
 /** What sits behind the main window's translucent surfaces: nothing, the desktop, or the blurred desktop. */
-export type WindowMaterial = 'off' | 'translucent' | 'blur'
+export type WindowMaterial = 'off' | 'translucent' | 'blur' | 'frosted'
 
 const WINDOW_MATERIAL_ARGUMENT_PREFIX = '--orca-window-material='
 
@@ -14,8 +14,12 @@ export type WindowMaterialSettings = {
 
 type WindowMaterialInputs = WindowMaterialSettings & { terminalBackgroundOpacity?: number }
 
-function isWindowMaterial(value: unknown): value is WindowMaterial {
-  return value === 'off' || value === 'translucent' || value === 'blur'
+export function isBlurredWindowMaterial(material: unknown): material is 'blur' | 'frosted' {
+  return material === 'blur' || material === 'frosted'
+}
+
+export function isWindowMaterial(value: unknown): value is WindowMaterial {
+  return value === 'off' || value === 'translucent' || isBlurredWindowMaterial(value)
 }
 
 /** The user's choice. Profiles from before `windowMaterial` carry it in the legacy blur switch,
@@ -39,7 +43,9 @@ const WINDOWS_BACKDROP_MIN_BUILD = 22621
 /** Materials each host can render: Windows has no unblurred transparency, Linux compositors own blur. */
 export function selectableWindowMaterials(host: WindowMaterialHost): readonly WindowMaterial[] {
   if (host.platform === 'darwin') {
-    return ['off', 'translucent', 'blur']
+    const materials = ['off', 'translucent', 'blur'] as const
+    // The untinted backdrop relies on the AppKit material layers in macOS 15.
+    return host.osRelease.startsWith('24.') ? [...materials, 'frosted'] : materials
   }
   if (host.platform === 'win32') {
     const build = Number(host.osRelease.split('.')[2])
@@ -56,6 +62,9 @@ export function hostWindowMaterial(
   const selectable = selectableWindowMaterials(host)
   if (selectable.includes(material)) {
     return material
+  }
+  if (material === 'frosted' && host.platform === 'darwin') {
+    return 'blur'
   }
   // Why only blur degrades: unblurred see-through never silently becomes a blur effect.
   return material === 'blur' && selectable.includes('translucent') ? 'translucent' : 'off'
