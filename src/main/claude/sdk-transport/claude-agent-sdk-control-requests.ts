@@ -55,6 +55,14 @@ export function claudeQueryAsyncCanceller(
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
+// enableRemoteControl sends `remote_control` but is absent from Query's declaration.
+function claudeQueryRemoteControlEnabler(query: Query): (() => Promise<unknown>) | null {
+  const enable = 'enableRemoteControl' in query ? query.enableRemoteControl : null
+  return typeof enable === 'function'
+    ? (): Promise<unknown> => Promise.resolve(enable.call(query, true))
+    : null
+}
+
 // renameSession sends `rename_session` with source 'host' (the CLI's user rename) but is absent
 // from Query's declaration.
 export function claudeQuerySessionRenamer(
@@ -214,6 +222,9 @@ export type ClaudeControlSurface = {
   mcp?: ClaudeMcpControls
   /** Stops or restarts the CLI generating prompt suggestions; a new process starts unpaused. */
   setPromptSuggestionsPaused?: (paused: boolean, options?: ClaudeControlOptions) => Promise<void>
+  /** Connects this session to Remote Control (claude.ai/code and the Claude mobile app); test
+   * connections leave it out. */
+  enableRemoteControl?: (options?: ClaudeControlOptions) => Promise<unknown>
 }
 
 type InterruptingQuery = {
@@ -317,6 +328,17 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
             new ClaudeControlRequestError(
               'get_settings',
               'this SDK exposes no get_settings request'
+            )
+          )
+    },
+    enableRemoteControl: (options) => {
+      const enable = claudeQueryRemoteControlEnabler(query)
+      return enable
+        ? runClaudeControl('remote_control', enable, options?.timeoutMs)
+        : Promise.reject(
+            new ClaudeControlRequestError(
+              'remote_control',
+              'this SDK exposes no remote_control request'
             )
           )
     }
