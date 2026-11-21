@@ -3,7 +3,10 @@ import {
   type ColdRestorePayload
 } from '../../history/restoration/cold-restore-payload-cache'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
-import { GET_SIZE_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  GET_SIZE_PROTOCOL_VERSION,
+  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
@@ -63,9 +66,19 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     return this.historyReader?.hasRestorableHistory(id) ?? false
   }
 
+  /** Whether an attach-only spawn fails on a missing session instead of creating one first. */
+  attachesWithoutCreating(): boolean {
+    return this.protocolVersion >= STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+  }
+
+  /** Whether a liveness probe asks about one session rather than listing every session. */
+  probesSessionDirectly(): boolean {
+    return !this.getSizeUnsupported && this.protocolVersion >= GET_SIZE_PROTOCOL_VERSION
+  }
+
   async probePtyLiveness(id: string): Promise<boolean | null> {
     try {
-      if (!this.getSizeUnsupported && this.protocolVersion >= GET_SIZE_PROTOCOL_VERSION) {
+      if (this.probesSessionDirectly()) {
         try {
           const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
             'getSize',

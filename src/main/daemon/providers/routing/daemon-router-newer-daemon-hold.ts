@@ -1,5 +1,6 @@
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/terminal/daemon/newer-daemon-hold'
-import type { PtyHeldSpawnRequest } from '../../../providers/pty/provider-contract'
+import type { PtyHeldSpawnRequest, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import {
   isHoldingForNewerProtocolDaemon,
   recheckNewerProtocolHold
@@ -8,7 +9,7 @@ import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import type { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
-import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
+import { SessionNotFoundError } from '../../protocol/daemon-errors'
 
 /** The saved id to hold, or null for a routed session, a new one, or no newer daemon. */
 export function heldSessionId(opts: PtyHeldSpawnRequest, routed: boolean): string | null {
@@ -29,15 +30,20 @@ function holdUnlessNewerDaemonsExited(): void {
 /**
  * The compatible daemon that runs a held saved id; undefined only after a definite miss once every
  * held newer daemon has exited, else a refusal. Each daemon is asked for this id first; only an
- * unanswered probe reads the full inventory, and an unknown answer never releases the hold.
+ * unanswered or listing-only probe reads the shared full inventory, and an unknown answer never releases the hold.
  */
 export async function resolveHeldOwner(
   sessionId: string,
   ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>,
   adapters: readonly DaemonPtyAdapter[]
 ): Promise<DaemonPtyAdapter | undefined> {
+  // A daemon that can only answer by listing every session is left to the shared inventory below.
   const verdicts = await Promise.all(
-    adapters.map((adapter) => adapter.probePtyLiveness(sessionId).catch(() => null))
+    adapters.map((adapter) =>
+      adapter.probesSessionDirectly()
+        ? adapter.probePtyLiveness(sessionId).catch(() => null)
+        : Promise.resolve(null)
+    )
   )
   if (verdicts.every((verdict) => verdict !== null)) {
     const live = adapters.filter((_, index) => verdicts[index] === true)
@@ -114,35 +120,49 @@ type DaemonRouterDispatch = {
   ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
 }
 
+/** Under the hold a saved id is only ever attached: a vanished or unattachable owner is the hold, never a new shell. */
+export async function attachHeldSession(
+  owner: DaemonPtyAdapter,
+  opts: PtySpawnOptions
+): Promise<PtySpawnResult> {
+  // Daemons before native attach-only emulate it by creating and then killing, which can run a shell.
+  if (!owner.attachesWithoutCreating()) {
+    throw new Error(NEWER_DAEMON_HOLD_ERROR)
+  }
+  try {
+    return await owner.spawn({ ...opts, attachOnly: true })
+  } catch (error) {
+    throw error instanceof SessionNotFoundError ? new Error(NEWER_DAEMON_HOLD_ERROR) : error
+  }
+}
+
 /** The router's spawn dispatch and its early hold, which share one owner lookup per held id. */
 export class DaemonRouterHeldSpawnGate {
   private readonly admissions = new HeldOwnerAdmissions()
 
   constructor(private readonly dispatch: () => DaemonRouterDispatch) {}
 
-  /** Where a spawn goes; under the hold a probed owner is only attached, so an exit meanwhile fails rather than duplicates. */
-  target = async <T extends PtyHeldSpawnRequest>(
-    opts: T
-  ): Promise<{ target: DaemonPtyAdapter; spawnOpts: T }> => {
+  /** Where a spawn goes and how it runs; a held saved id, routed or not, is only attached. */
+  target = async (
+    opts: PtySpawnOptions
+  ): Promise<{ target: DaemonPtyAdapter; spawn: () => Promise<PtySpawnResult> }> => {
     const router = this.dispatch()
     const routed = opts.sessionId ? router.sessionAdapters.get(opts.sessionId) : undefined
-    if (routed) {
-      return { target: routed, spawnOpts: opts }
-    }
     const heldId = heldSessionId(opts, false)
     if (heldId === null) {
-      const owner = await findLegacySessionOwner(
-        opts,
-        router.current,
-        router.legacy,
-        router.exitProof
-      )
-      return { target: owner ?? router.current, spawnOpts: opts }
+      const target =
+        routed ??
+        (await findLegacySessionOwner(opts, router.current, router.legacy, router.exitProof)) ??
+        router.current
+      return { target, spawn: () => target.spawn(opts) }
     }
-    const owner = this.admissions.take(heldId) ?? (await this.heldOwner(heldId, opts, router))
-    return owner
-      ? { target: owner, spawnOpts: { ...opts, attachOnly: true } }
-      : { target: router.current, spawnOpts: opts }
+    const owner =
+      routed ?? this.admissions.take(heldId) ?? (await this.heldOwner(heldId, opts, router))
+    if (!owner) {
+      // Every held newer daemon has exited since startup, so this is an ordinary start again.
+      return { target: router.current, spawn: () => router.current.spawn(opts) }
+    }
+    return { target: owner, spawn: () => attachHeldSession(owner, opts) }
   }
 
   refuse = heldSpawnRefusal(
@@ -161,16 +181,8 @@ export class DaemonRouterHeldSpawnGate {
     router: DaemonRouterDispatch
   ): Promise<DaemonPtyAdapter | undefined> {
     const { current, legacy, exitProof, ownerResolver } = router
-    let owner: DaemonPtyAdapter | undefined
-    try {
-      owner = await findLegacySessionOwner(opts, current, legacy, exitProof)
-    } catch (error) {
-      // Under the hold an owner no compatible daemon can vouch for may be the newer daemon's.
-      if (error instanceof TerminalSessionOwnerUnverifiedError) {
-        throw new Error(NEWER_DAEMON_HOLD_ERROR)
-      }
-      throw error
-    }
+    // An unverifiable older owner stays a retryable unverified error, not a hold whose Reopen stops jobs.
+    const owner = await findLegacySessionOwner(opts, current, legacy, exitProof)
     if (owner || legacy.length === 0) {
       return owner ?? (await resolveHeldOwner(sessionId, ownerResolver, [current]))
     }

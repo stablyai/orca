@@ -17,7 +17,10 @@ const { DaemonRouterHeldSpawnGate, heldSpawnRefusal, resolveHeldOwner } =
 const SAVED = 'repo1::/tmp/feature@@d3a0a65b'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only probes whether the current daemon runs the saved id.
-const current = { probePtyLiveness: async () => false } as unknown as DaemonPtyAdapter
+const current = {
+  probesSessionDirectly: () => true,
+  probePtyLiveness: async () => false
+} as unknown as DaemonPtyAdapter
 
 function gate(
   ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>,
@@ -54,9 +57,9 @@ function resolver(
 
 describe('a spawn while a newer daemon may still run saved sessions', () => {
   it('holds a saved id with no history instead of starting a second shell for it', async () => {
-    await expect(gate(resolver({ kind: 'absent' })).target({ sessionId: SAVED })).rejects.toThrow(
-      'terminal_held_by_newer_daemon'
-    )
+    await expect(
+      gate(resolver({ kind: 'absent' })).target({ cols: 80, rows: 24, sessionId: SAVED })
+    ).rejects.toThrow('terminal_held_by_newer_daemon')
     await expect(refusal({ kind: 'absent' })({ sessionId: SAVED })).rejects.toThrow(
       'terminal_held_by_newer_daemon'
     )
@@ -69,10 +72,21 @@ describe('a spawn while a newer daemon may still run saved sessions', () => {
   })
 
   it('attaches, never starts, a session the current daemon runs even when its inventory is unknown', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only probes the current daemon.
-    const running = { probePtyLiveness: async () => true } as unknown as DaemonPtyAdapter
-    await expect(
-      gate(resolver({ kind: 'unknown' }), running).target({ sessionId: SAVED })
-    ).resolves.toEqual({ target: running, spawnOpts: { sessionId: SAVED, attachOnly: true } })
+    const spawn = vi.fn(async () => ({ id: SAVED, isReattach: true }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold probes the current daemon, then attaches through it.
+    const running = {
+      probesSessionDirectly: () => true,
+      probePtyLiveness: async () => true,
+      attachesWithoutCreating: () => true,
+      spawn
+    } as unknown as DaemonPtyAdapter
+    const held = await gate(resolver({ kind: 'unknown' }), running).target({
+      cols: 80,
+      rows: 24,
+      sessionId: SAVED
+    })
+    await held.spawn()
+    expect(held.target).toBe(running)
+    expect(spawn).toHaveBeenCalledWith({ cols: 80, rows: 24, sessionId: SAVED, attachOnly: true })
   })
 })

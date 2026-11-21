@@ -3,6 +3,7 @@ import {
   serverHoldHost,
   type HeldPaneReopenOutcome
 } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
+import { wslDistroStoppedHoldStore } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -51,7 +52,11 @@ export function holdForNewerDaemon(
         }
         // Input and the banner wait for the attempt; a refusal re-holds the pane before it settles.
         return reconnect().finally(() => {
-          if (latestHolds.get(session) === hold) {
+          // Another hold (a newer daemon again, or a stopped WSL distro) keeps input off.
+          if (
+            latestHolds.get(session) === hold &&
+            !wslDistroStoppedHoldStore.getState().panes[session.cacheKey]
+          ) {
             terminal.options.disableStdin = false
           }
           dropTeardown()

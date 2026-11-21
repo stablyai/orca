@@ -976,7 +976,11 @@ export function createRemoteRuntimePtyTransport(
               ).snapshot
             : await activateHostSessionSurface(hostTabId, worktree, 'user', requestRemainingMs)
       } catch (error) {
-        if (request === 'list') {
+        // A newer-version hold is the host's answer, not an unknown outcome to poll past.
+        if (
+          request === 'list' ||
+          (error instanceof Error && error.message.includes(NEWER_DAEMON_HOLD_ERROR))
+        ) {
           throw error
         }
         // Activation failure proves no absence, including old-method errors; ambiguous activation may already have spawned and cannot be repeated blindly.

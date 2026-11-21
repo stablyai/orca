@@ -19,6 +19,7 @@ describe('a restore burst under a newer-daemon hold', () => {
     let probes = 0
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate only probes the current daemon here.
     const current = {
+      probesSessionDirectly: () => true,
       probePtyLiveness: async () => {
         probes += 1
         return true
@@ -35,7 +36,11 @@ describe('a restore burst under a newer-daemon hold', () => {
       exitProof,
       ownerResolver
     }))
-    const panes = Array.from({ length: N }, (_, i) => ({ sessionId: `wt@@pane-${i}` }))
+    const panes = Array.from({ length: N }, (_, i) => ({
+      cols: 80,
+      rows: 24,
+      sessionId: `wt@@pane-${i}`
+    }))
     await Promise.all(panes.map((opts) => gate.refuse(opts)))
     for (const opts of panes) {
       await expect(gate.target(opts)).resolves.toMatchObject({ target: current })

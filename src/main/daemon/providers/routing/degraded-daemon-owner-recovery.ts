@@ -4,6 +4,7 @@ import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import {
+  attachHeldSession,
   HeldOwnerAdmissions,
   heldSessionId,
   heldSpawnRefusal,
@@ -46,16 +47,16 @@ export class DegradedDaemonOwnerRecovery {
     if (opts.attachOnly && opts.sessionId) {
       return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
     }
-    const heldId = heldSessionId(
-      opts,
-      opts.sessionId !== undefined && this.routes.has(opts.sessionId)
-    )
-    const owner = heldId
-      ? (this.heldOwners.take(heldId) ?? (await this.resolveHeldOwner(heldId)))
-      : undefined
+    const heldId = heldSessionId(opts, false)
+    // A saved id routed to a daemon is attached under the hold too; one routed to the fallback is this run's own.
+    const routed = heldId ? this.routes.get(heldId) : undefined
+    const routedDaemon = this.daemonAdapters.find((adapter) => adapter === routed)
+    const owner =
+      heldId && (!routed || routedDaemon)
+        ? (routedDaemon ?? this.heldOwners.take(heldId) ?? (await this.resolveHeldOwner(heldId)))
+        : undefined
     if (owner) {
-      // Under the hold a probed owner is only attached; the fallback must never start one.
-      const attached = await owner.spawn({ ...opts, attachOnly: true })
+      const attached = await attachHeldSession(owner, opts)
       if (!attached.exitedBeforeSpawnReply) {
         this.recordRoute(attached.id, owner, attached.incarnationId)
       }
