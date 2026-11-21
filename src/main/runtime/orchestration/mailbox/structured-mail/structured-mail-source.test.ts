@@ -351,3 +351,35 @@ it('reads accepted item mail sent whole with its images, and not once an image w
     setAgentSessionAttachmentStore(null)
   }
 })
+
+it('sends Orca’s item mail to the thread only when it says every item came from there', () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    const run = db.createRun({
+      objective: 'items',
+      coordinatorHandle: 'term_c',
+      coordinatorPaneKey: null
+    })
+    const itemMail = (payload: Record<string, unknown>) =>
+      structuredMailSource({
+        db,
+        mailboxHandle: 'orca_session_id:22222222-2222-4222-8222-222222222222',
+        dispatchId: null,
+        senderSnapshot: () => ({ name: 'Orca', agent: null }),
+        batch: [
+          {
+            id: `m-${JSON.stringify(payload)}`,
+            from_handle: 'orca:items',
+            run_id: run.id,
+            type: 'status',
+            payload: JSON.stringify(payload),
+            created_at: '2026-01-01T00:00:00.000Z'
+          }
+        ]
+      }).senders[0]
+    expect(itemMail({ botItems: [], toConversation: true })).toMatchObject({ toConversation: true })
+    expect(itemMail({ botItems: [] })).not.toHaveProperty('toConversation')
+  } finally {
+    db.close()
+  }
+})

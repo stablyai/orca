@@ -212,6 +212,17 @@ export function chatMailPlace(
   return { place: conversationPlaceText(linked.link), answersThere: isConversationReport(mail) }
 }
 
+/** The conversation a chat is linked to now; none for a bot's own Chat, whose mail stays in Orca. */
+export function threadOfChat(
+  store: ExternalConversationLinkStore,
+  sessionId: string
+): ConversationKey | null {
+  const linked = [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)
+  return linked && linked.link.bot?.kind !== 'bot-chat'
+    ? { source: linked.link.source, externalId: linked.link.externalId }
+    : null
+}
+
 type LinkIndex = {
   byPane: Map<string, LinkedConversation>
   byConversation: Map<string, LinkedConversation>

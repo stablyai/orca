@@ -27,6 +27,7 @@ import {
 } from '../formatting/message-formatting'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { botItemMailImageBlocks } from './bot-item-mail-images'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-note-runs'
 import type { BotItemReportFact } from '../../../../../shared/bots/bot-item-report-hint'
 
 export type MailSourceMessage = Pick<
@@ -119,12 +120,14 @@ export function structuredMailSource(input: {
     const askAnswers = group.every(({ message }) =>
       answersConversationAsk(input.db, message, input.sessionId)
     )
+    // Orca's own item mail (only Orca sends as it), about items made from this chat's thread.
+    const itemsFromThread = group.every(({ message }) => itemMailFromThread(message))
     senders.push({
       ...sender,
       ...((accepted?.relation ?? relation) && agreed
         ? { relation: accepted?.relation ?? relation }
         : {}),
-      ...(workerReports || askAnswers ? { toConversation: true as const } : {})
+      ...(workerReports || askAnswers || itemsFromThread ? { toConversation: true as const } : {})
     })
   }
   return {
@@ -249,6 +252,20 @@ function recordedWorker(
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }
+
+function itemMailFromThread(message: MailSourceMessage): boolean {
+  if (message.from_handle !== BOT_ITEM_MAIL_SENDER || !message.payload) {
+    return false
+  }
+  try {
+    const payload: unknown = JSON.parse(message.payload)
+    return typeof payload === 'object' && payload !== null && 'toConversation' in payload
+      ? payload.toConversation === true
+      : false
+  } catch {
+    return false
+  }
+}
 
 function reportFact(message: MailSourceMessage): ReportFact {
   if (message.type !== 'worker_done') {

@@ -161,6 +161,7 @@ function itemsRuntime() {
     },
     botItems: host,
     getOrchestrationDb: () => db,
+    threadOfChat: () => null,
     ensureStructuredAgentSessionHost: async () => {}
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only bots, lookAround, botItems, the orchestration database and the runtime id, which the stub provides.

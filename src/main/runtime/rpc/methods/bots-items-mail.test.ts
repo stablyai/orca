@@ -73,14 +73,33 @@ function owed(actor: BotItemActor = { kind: 'owner' }): BotItemMail {
   }
 }
 
-function runtimeOf(db: OrchestrationDb, chats: Record<string, string | null>): OrcaRuntimeService {
+function runtimeOf(
+  db: OrchestrationDb,
+  chats: Record<string, string | null>,
+  threads: {
+    linked?: { source: string; externalId: string }
+    origins?: Record<string, unknown>
+  } = {}
+): OrcaRuntimeService {
   const bot = makeTestBot({ id: 'ranger', name: 'Ranger', chatSessionId: 'home-chat' })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: item mail reads only these.
   return {
     getOrchestrationDb: () => db,
     bots: { list: () => [bot] },
     notifyMessageArrived: () => {},
+    threadOfChat: () => threads.linked ?? null,
     botItems: {
+      // An item's first event is its making, with the thread it was made from (if any).
+      store: () => ({
+        events: async (uid: string) => [
+          {
+            id: 1,
+            itemUid: uid,
+            kind: 'made',
+            data: uid in (threads.origins ?? {}) ? { origin: threads.origins![uid] } : {}
+          }
+        ]
+      }),
       chatRootOf: (id: string) => id,
       chatSource: () => ({ kind: 'chat', title: null }),
       owningChat: ({ chatId }: { chatId: string }) =>
@@ -136,7 +155,8 @@ describe('item mail', () => {
     const runtime = {
       getOrchestrationDb: () => db,
       bots: { list: () => [makeTestBot({ id: 'ranger', name: 'Ranger' })] },
-      notifyMessageArrived: (to: string) => notified.push(to)
+      notifyMessageArrived: (to: string) => notified.push(to),
+      threadOfChat: () => null
     } as unknown as OrcaRuntimeService
 
     expect(await sendBotItemMail(runtime, owed())).toBe(true)
@@ -156,5 +176,38 @@ describe('item mail', () => {
       ]
     })
     expect(notified).toEqual([`orca_session_id:${CHAT}`])
+  })
+})
+
+describe('whose thread item mail goes to', () => {
+  const THREAD = { source: 'slack', externalId: 'slack:T1:C1:1.2' }
+  const other = { ...item, uid: 'other-uid', number: 5 }
+  const send = async (
+    threads: Parameters<typeof runtimeOf>[2],
+    items: BotItemRecord[] = [item]
+  ): Promise<unknown> => {
+    const db = new OrchestrationDb(':memory:')
+    dbs.push(db)
+    const mail = owed()
+    await sendBotItemMail(runtimeOf(db, {}, threads), {
+      ...mail,
+      changes: items.map((changed, index) => ({ ...mail.changes[index]!, item: changed }))
+    })
+    return JSON.parse(db.getMessageById('msg_item_e11')?.payload ?? '{}').toConversation
+  }
+
+  it('goes to the chat’s thread only when every item was made from that thread', async () => {
+    expect(await send({ linked: THREAD, origins: { 'item-uid': THREAD } })).toBe(true)
+    // Made from another thread, or (older items) from none: it stays in Orca.
+    expect(
+      await send({ linked: THREAD, origins: { 'item-uid': { ...THREAD, externalId: 'x' } } })
+    ).toBeUndefined()
+    expect(await send({ linked: THREAD })).toBeUndefined()
+    // Mixed: one item from the thread, one older.
+    expect(
+      await send({ linked: THREAD, origins: { 'item-uid': THREAD } }, [item, other])
+    ).toBeUndefined()
+    // The chat is linked to no thread now.
+    expect(await send({ origins: { 'item-uid': THREAD } })).toBeUndefined()
   })
 })

@@ -30,7 +30,11 @@ export async function addItem(
   const target = params.forBot
     ? botNamed(params.forBot, writer.bot, runtime.bots.list())
     : writer.bot
+  // The making chat's thread: an item's changes go back there only while its chat still is that one's.
+  const callerSession = sessionCallerOf(context.orchestrationCaller)?.sessionId
+  const origin = callerSession ? runtime.threadOfChat(callerSession) : null
   const fields = {
+    ...(origin ? { origin } : {}),
     title: params.title,
     ...(params.description !== undefined ? { description: params.description } : {}),
     ...(params.doneMeans !== undefined ? { doneMeans: params.doneMeans } : {}),

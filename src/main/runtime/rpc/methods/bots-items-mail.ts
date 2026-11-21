@@ -43,6 +43,33 @@ function noteBy(
   return { kind: 'chat', chatId: chat.id, title: chat.title, ...home }
 }
 
+/** Whether every changed item was made from the conversation the chat it mails is linked to now:
+ *  only then is the mail that thread's (Phase 1 §2). Older items name no origin and stay in Orca. */
+async function itemsFromConversation(
+  runtime: OrcaRuntimeService,
+  owed: BotItemMail,
+  sessionId: string
+): Promise<boolean> {
+  const conversation = runtime.threadOfChat(sessionId)
+  if (!conversation) {
+    return false
+  }
+  const store = runtime.botItems.store()
+  for (const uid of new Set(owed.changes.map(({ item }) => item.uid))) {
+    const [made] = await store.events(uid, 0, 1)
+    const origin = made?.kind === 'made' ? made.data.origin : undefined
+    if (
+      typeof origin !== 'object' ||
+      origin === null ||
+      !('source' in origin && origin.source === conversation.source) ||
+      !('externalId' in origin && origin.externalId === conversation.externalId)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 /** Stores the event's mail unless it is there already; true once nothing is owed. */
 export async function sendBotItemMail(
   runtime: OrcaRuntimeService,
@@ -63,6 +90,7 @@ export async function sendBotItemMail(
   const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
+  const toConversation = await itemsFromConversation(runtime, owed, sessionId)
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
       uid: item.uid,
@@ -71,7 +99,8 @@ export async function sendBotItemMail(
       kind: event.kind
     })),
     // Delivered as the chat's image blocks, as chat sends a pasted image.
-    ...(images.length > 0 ? { images } : {})
+    ...(images.length > 0 ? { images } : {}),
+    ...(toConversation ? { toConversation: true } : {})
   })
   db.insertMessage({
     id,

@@ -10,6 +10,7 @@ import {
 import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
+import type { ConversationKey } from '../external-conversations/external-conversation-types'
 
 /** A bot writing from one of its own chats; the author is always the caller's bot. */
 export type BotItemBotActor = Extract<BotItemActor, { kind: 'bot' }>
@@ -26,6 +27,8 @@ export type BotItemAddInput = {
   uid?: string
   /** Made by another bot, or another chat of this one, through a bot request. */
   madeBy?: BotItemMadeBy
+  /** The conversation the making chat was linked to: only that one hears of the item's changes. */
+  origin?: ConversationKey
   title: string
   description?: string
   doneMeans?: string
