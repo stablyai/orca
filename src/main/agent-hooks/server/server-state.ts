@@ -58,6 +58,8 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
      *  where the host gives none (remote, Windows), so a command mark stands as on main. */
     confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
+    /** The pane's agent ended, proven: its process gone, its shell alone, or its own end hook. */
+    agentExited?(paneKey: string): void
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -128,6 +130,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     const exitedAt = Date.now()
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
     this.retirePaneResume(paneKeys, status, exitedAt)
+    this.terminalPaneLifecycle?.agentExited?.(this.resolvePaneKeyAlias(paneKey))
   }
 
   private paneKeysWithAliases(paneKey: string): Set<string> {
