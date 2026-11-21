@@ -13,7 +13,10 @@ import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
-import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
+import {
+  openMarkdownExternalUrl,
+  resolveMarkdownHttpLinkDestination
+} from '../../markdown/link-routing/markdown-external-url-open'
 import { resolveMarkdownLinkTarget } from '../../markdown/link-routing/markdown-internal-links'
 import {
   fileUrlToAbsolutePath,
@@ -136,7 +139,10 @@ export async function handleMarkdownPreviewLinkClick({
       state: useAppStore.getState(),
       worktreeId: sourceRoutingWorktreeId,
       sourceOwner,
-      destination: 'orca'
+      destination: resolveMarkdownHttpLinkDestination(
+        useAppStore.getState().settings,
+        event.shiftKey
+      )
     })
     return
   }
