@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { useAppStore } from '@/store'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
@@ -19,7 +21,6 @@ export function useBotHostLabel(hostId: ExecutionHostId): string | null {
       : selectExecutionHostDisplayLabel(state, hostId)
   )
 }
-
 const NO_LABELS: ReadonlyMap<ExecutionHostId, string> = new Map()
 
 /**
@@ -50,4 +51,19 @@ export function useBotHostLabels(
         : new Map(remote.map((hostId, index) => [hostId, labels[index] ?? ''])),
     [remote, labels]
   )
+}
+
+/** The one server a paired web window is signed into. Null on the desktop, where host labels stay as they are. */
+export function usePairedWebServerLabel(): string | null {
+  return useAppStore((state) => {
+    const environmentId = getPairedWebClientEnvironmentId(state)
+    if (!environmentId) {
+      return null
+    }
+    const label = selectExecutionHostDisplayLabel(
+      state,
+      toRuntimeExecutionHostId(environmentId)
+    ).trim()
+    return label || null
+  })
 }
