@@ -148,6 +148,7 @@ export class HostTerminalPolicy {
 
   // Backs off 3s -> 6s -> 12s while the saved limit stays unchanged; any change resets it.
   private scheduleNextPoll(): void {
+    clearTimeout(this.timer)
     const delay = Math.min(BASE_POLL_MS * 2 ** this.unchangedPolls, MAX_POLL_MS)
     this.timer = setTimeout(() => void this.poll(), delay)
     this.timer.unref?.()
@@ -283,6 +284,9 @@ export class HostTerminalPolicy {
             if (replaced && !this.disposed) {
               this.revision += 1
               this.unchangedPolls = 0
+              if (this.timer) {
+                this.scheduleNextPoll()
+              }
               if (operation.isCurrent()) {
                 this.savedMaximum = maximum
                 this.setReadHealth(false)
