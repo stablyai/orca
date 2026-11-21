@@ -36,7 +36,10 @@ describe('which moved lines read as the owner deciding', () => {
     ],
     ['a longer name', '- 2026-11-03 Danae picked: #5900'],
     ['"user" is not the owner', '- 2026-11-03 user wants #5900 merged'],
-    ['someone else quoted', "- 2026-11-03 Reviewer: 'merge #5900'"]
+    ['someone else quoted', "- 2026-11-03 Reviewer: 'merge #5900'"],
+    ['another person after a comma', '- 2026-11-03 asked Dana about it, reviewer picked #5900'],
+    ['a role named owner', '- 2026-11-03 code owner approved #5900; co-owner picked it'],
+    ['a rule only mentioned', '- 2026-11-03 no owner rule yet for #5900 merges']
   ])('never offers a line with %s', (_why, line) => {
     expect(isCandidate(line)).toBe(false)
   })
@@ -57,8 +60,15 @@ describe('a later journal line that may replace a candidate', () => {
 
   it('is never a line from the same day or before, nor the candidate itself', () => {
     const sameDay = { line: '- 2026-11-03 PR #5900 reverted', date: '2026-11-03' }
+    expect(salvageSupersededBy(candidate, [])).toBeNull()
     const before = { line: '- 2026-11-01 PR #5900 dropped', date: '2026-11-01' }
     expect(salvageSupersededBy(candidate, [sameDay, before, candidate])).toBeNull()
+  })
+
+  it('names the latest of a chain of reversals', () => {
+    const first = { line: '- 2026-11-09 PR #5900 reverted', date: '2026-11-09' }
+    const last = { line: '- 2026-11-15 PR #5900 dropped again', date: '2026-11-15' }
+    expect(salvageSupersededBy(candidate, [last, first])).toBe(last.line)
   })
 
   it('needs the same work for a reversal', () => {
@@ -110,11 +120,42 @@ describe("a bot's salvage record", () => {
     expect(writes).toHaveLength(1)
   })
 
-  it('never writes over a record it cannot read', async () => {
-    const { io: file, writes } = io('{not json')
-    const store = new BotSalvageStore(file)
+  it.each([
+    ['holds no JSON', { read: async () => '{not json' }],
+    [
+      'cannot be read',
+      {
+        read: async () => {
+          throw new Error('EACCES')
+        }
+      }
+    ]
+  ])('never writes over a record that %s', async (_why, read) => {
+    const writes: string[] = []
+    const store = new BotSalvageStore({ ...read, write: async (t) => void writes.push(t) })
     await store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending'], 1)
     expect(writes).toEqual([])
+  })
+
+  it('saves lines again after a save failed, and keeps saving after it', async () => {
+    const writes: string[] = []
+    let fail = true
+    const store = new BotSalvageStore({
+      read: async () => null,
+      write: async (t) => {
+        if (fail) {
+          fail = false
+          throw new Error('ENOSPC')
+        }
+        writes.push(t)
+      }
+    })
+    const line = '- 2026-11-03 a #1 pending'
+    await expect(store.recordMoved('b1', '2026-11', [line], 1)).rejects.toThrow('ENOSPC')
+    expect((await store.get('b1')).sources).toEqual({})
+    await store.recordMoved('b1', '2026-11', [line], 2)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toContain('a #1 pending')
   })
 
   it('offers what expired once first, then the rest, oldest first, at most one proposal full', () => {

@@ -27,8 +27,8 @@ export function salvageLineHash(month: string, line: string): string {
 }
 
 const VERBS = ['picked', 'decided', 'prefers', 'chose', 'approved', 'wants']
-/** Not inside a word: a name or verb counts only as a whole word. */
-const EDGE = '\\p{L}\\p{N}_'
+/** Not inside a word: a name or verb counts only as a whole word ("co-owner" is not "owner"). */
+const EDGE = '\\p{L}\\p{N}_-'
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
@@ -40,11 +40,14 @@ export function salvageCandidateTest(ownerNames: readonly string[]): (text: stri
   const names = ['owner', ...ownerNames.map((name) => name.trim()).filter(Boolean)]
   const who = `(?:${names.map(escaped).join('|')})`
   const named = new RegExp(
-    `(?<![${EDGE}])${who}(?![${EDGE}])[^.;|\\n]{0,20}?(?<![${EDGE}])(?:${VERBS.join('|')})(?![${EDGE}])`,
+    // "code owner" is a role, not the owner. The words between stay in one clause: no stop,
+    // semicolon, comma, colon or "|", so "asked Dana, reviewer picked" is the reviewer's.
+    `(?<![${EDGE}])(?<!code )${who}(?![${EDGE}])[^.;,:|\\n]{0,20}?(?<![${EDGE}])(?:${VERBS.join('|')})(?![${EDGE}])`,
     'iu'
   )
   const quoted = new RegExp(`(?<![${EDGE}])${who}\\s*:\\s*["'\\u2018\\u201c]`, 'iu')
-  const rule = /\bowner rule\b/i
+  // A rule stated, not one merely mentioned ("no owner rule yet").
+  const rule = /\bowner rule\s*:/i
   return (text) => named.test(text) || quoted.test(text) || rule.test(text)
 }
 
@@ -77,7 +80,8 @@ export function salvageSupersededBy(
   const later = journal
     .filter(({ date, line }) => date !== null && date > candidate.date! && line !== candidate.line)
     .toSorted((a, b) => a.date!.localeCompare(b.date!))
-  const hit = later.find(
+  // The latest that qualifies, so a chain of reversals names where it ended.
+  const hit = later.findLast(
     ({ line }) =>
       (REVERSAL.test(line) && [...refsOf(line)].some((ref) => refs.has(ref))) ||
       wordSimilarity(words, keyWords(factText(line))) >= SALVAGE.overlap
