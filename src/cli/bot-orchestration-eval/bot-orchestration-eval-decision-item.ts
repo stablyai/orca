@@ -24,6 +24,13 @@ export function serveEvalDecisionItem(
     )
   }
   const comment = 'text' in input ? input.text : input.comment
+  // Like the real host, a set may change only the status; it then posts no comment.
+  if (!comment?.trim() && 'status' in input && input.status && !input.ask) {
+    seed.item.status = input.status
+    io.save(state)
+    io.record({ kind: 'write', method, params, result: {} })
+    return { item: seed.item }
+  }
   if (!comment?.trim()) {
     throw new RuntimeClientError(
       'invalid_argument',
