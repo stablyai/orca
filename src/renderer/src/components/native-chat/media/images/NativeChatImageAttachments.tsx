@@ -56,7 +56,11 @@ function useTranscriptImageSrc(
   const source = block?.url?.trim() || block?.path
   const filePath = block?.path ?? source ?? ''
   const external = renderableImageSource(source)
-  const [retry, setRetry] = useState({ key: 0, used: false })
+  const [retry, setRetry] = useState({ source, key: 0, used: false })
+  // The viewer steps through images with one hook: each image gets its own retry.
+  if (retry.source !== source) {
+    setRetry({ source, key: retry.key, used: false })
+  }
   const read = useLocalImageRead(
     active && !external && runtimeContext !== undefined ? source : undefined,
     filePath,
@@ -70,7 +74,7 @@ function useTranscriptImageSrc(
       return
     }
     const timer = setTimeout(
-      () => setRetry((current) => ({ key: current.key + 1, used: true })),
+      () => setRetry((current) => ({ ...current, key: current.key + 1, used: true })),
       IMAGE_READ_RETRY_MS
     )
     return () => clearTimeout(timer)
