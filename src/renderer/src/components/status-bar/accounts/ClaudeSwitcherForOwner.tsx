@@ -20,6 +20,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
+  claudeRowUsageId,
   getStatusBarPreferredWslDistro,
   shouldIncludeSettingsWslRuntime,
   toCodexStatusRuntimeTarget,
@@ -263,12 +264,7 @@ export function ClaudeSwitcherForOwner({
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
         ? { ...target, disabled: true }
         : target,
-    // Why: a saved row reads its usable duplicate's usage; only System default uses the host key.
-    inactiveUsage: inactiveClaudeAccounts.find(
-      (a) =>
-        a.accountId ===
-        (target.id ? (target.usageAccountId ?? target.id) : claudeInactiveUsageId(target))
-    ),
+    inactiveUsage: inactiveClaudeAccounts.find((a) => a.accountId === claudeRowUsageId(target)),
     // Why local only: the hidden sign-in runs on this device, not a remote server.
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
@@ -412,9 +408,7 @@ export function ClaudeSwitcherForOwner({
             openSettingsPage()
           }}
         >
-          {rows
-            .filter((row) => !row.target.needsSignIn || row.target.usableAccountId)
-            .map(renderRow)}
+          {rows.filter((row) => !signedOutRows.includes(row)).map(renderRow)}
           {signedOutRows.length > 0 ? (
             <>
               <AccountSwitchSignedOutHeading />
