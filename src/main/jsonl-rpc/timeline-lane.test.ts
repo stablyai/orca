@@ -51,41 +51,6 @@ async function rig() {
 }
 
 describe('JSON-lines timeline admission', () => {
-  it('admits the final tail with the host settlement budget when ordinary writes are full', async () => {
-    const journal = await openProviderTimelineRig({ agent: 'pi' })
-    const lane = new JsonlRpcTimelineLane({
-      sink: {
-        ...journal.sink,
-        tryAppendTransition: (transition) =>
-          transition.lifecycle
-            ? journal.sink.tryAppendTransition(transition)
-            : { accepted: false, reason: 'backpressure' }
-      },
-      sessionId: SESSION,
-      agent: 'pi',
-      generation: GENERATION,
-      namespace: NAMESPACE,
-      pauseReading: vi.fn(),
-      resumeReading: vi.fn(),
-      onInputAccepted: vi.fn(),
-      onFailed: vi.fn()
-    })
-    lanes.push(lane)
-    lane.apply([
-      {
-        type: 'item.update',
-        item: 'final',
-        body: { kind: 'status', tone: 'info', text: 'Final tail' }
-      }
-    ])
-    expect(await journal.rows()).toEqual([])
-    lane.finalize()
-    await lane.drained()
-    expect(await journal.rows()).toEqual([
-      expect.objectContaining({ body: { kind: 'status', tone: 'info', text: 'Final tail' } })
-    ])
-  })
-
   it('holds an entire parsed batch and accepts input only after journal admission', async () => {
     const test = await rig()
     test.lane.apply([
@@ -116,6 +81,8 @@ describe('JSON-lines timeline admission', () => {
     await vi.advanceTimersByTimeAsync(250)
     await test.lane.drained()
     expect(test.lane.openTurnId).not.toBeNull()
+    // Close the journal's projection repair timer; leave the lane alive to detect retry leaks.
+    await test.journal.journal.close()
     expect(vi.getTimerCount()).toBe(0)
   })
 

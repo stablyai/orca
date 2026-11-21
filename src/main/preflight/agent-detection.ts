@@ -2,35 +2,44 @@
 import type {
   PathSource,
   ShellHydrationFailureReason
-} from '../../shared/shell-path-hydration-types'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+} from '../../shared/shell/launch/shell-path-hydration-types'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
-import { _resetKnownHostsCache } from '../gitlab/gl-utils'
-import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
+import { _resetKnownHostsCache } from '../gitlab/projects/gitlab-known-host-probe'
+import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
+import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
-} from '../ipc/preflight-runtime-target'
+} from '../ipc/preflight/preflight-runtime-target'
 
 export type { PreflightRuntimeContext }
-import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
+import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
 import {
   execCommandInWslOrThrow,
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
   isCommandAvailable
-} from '../ipc/preflight-command-exec'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+} from '../ipc/preflight/preflight-command-exec'
+import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
+import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
-} from '../ipc/preflight-remote-windows-terminal-capabilities'
-import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
-import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { detectInstalledAgents } from './installed-agent-detection'
+} from '../ipc/preflight/preflight-remote-windows-terminal-capabilities'
+import { invalidateWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
+import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
+import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import {
+  detectInstalledAgents,
+  type InstalledAgentDetectionOptions
+} from './installed-agent-detection'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 export {
   detectInstalledAgents,
@@ -123,13 +132,14 @@ export type RefreshAgentsResult = {
 
 /** Refresh login-shell PATH so newly installed CLIs appear without restarting Orca. */
 export async function refreshShellPathAndDetectAgents(
-  context?: PreflightRuntimeContext
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions
 ): Promise<RefreshAgentsResult> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     // Discard cached guest PATH before detecting a newly installed WSL CLI.
     invalidateWslGuestEnvironment(wslTarget.distro)
-    const agents = await detectInstalledAgents(context)
+    const agents = await detectInstalledAgents(context, options)
     return {
       agents,
       addedPathSegments: [],
@@ -141,7 +151,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const agents = await detectInstalledAgents(context)
+  const agents = await detectInstalledAgents(context, options)
   return {
     agents,
     addedPathSegments: added,
@@ -172,7 +182,10 @@ async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
       ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status']))
+      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
+          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
+          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
+        }))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''
@@ -251,6 +264,10 @@ async function executePreflightCheck(
   context: PreflightRuntimeContext | undefined,
   wslTarget: WslPreflightTarget | null
 ): Promise<PreflightStatus> {
+  if (wslTarget) {
+    // Mounts and polls must not start a stopped distro (E9); window focus and retry clicks wake it.
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
   } else if (process.platform !== 'win32') {

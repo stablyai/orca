@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { Input } from '../../ui/input'
 
 type RepoTextDraft = { repoId: string; text: string }
@@ -33,34 +33,37 @@ export function RepoSettingsDraftInput({
     onTextChange(text)
   }
 
-  useEffect(() => {
-    setDraft((current) => {
-      if (current.repoId !== repoId) {
-        pendingStoreEchoesRef.current = []
-        composingRef.current = false
-        skipNextChangeRef.current = null
-        lastPersistedRef.current = storeValue
-        return { repoId, text: storeValue }
-      }
-      if (storeValue === current.text) {
-        pendingStoreEchoesRef.current = []
-        skipNextChangeRef.current = null
-        lastPersistedRef.current = storeValue
-        return current
-      }
-      const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
-      if (pendingEchoIndex !== -1) {
-        // Why: queued updateRepo calls can echo older input text after newer
-        // keystrokes; accepting that echo re-cancels active IME composition.
-        pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
-        return current
-      }
+  // Decide after commit, not in render or a setDraft updater: React may re-run both, and the echo queue is consumed.
+  const syncDraftFromStore = useEffectEvent((): void => {
+    if (draft.repoId !== repoId) {
+      pendingStoreEchoesRef.current = []
+      composingRef.current = false
+      skipNextChangeRef.current = null
+      lastPersistedRef.current = storeValue
+      // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
+      setDraft({ repoId, text: storeValue })
+      return
+    }
+    if (storeValue === draft.text) {
       pendingStoreEchoesRef.current = []
       skipNextChangeRef.current = null
       lastPersistedRef.current = storeValue
-      return { repoId, text: storeValue }
-    })
-  }, [repoId, storeValue])
+      return
+    }
+    const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
+    if (pendingEchoIndex !== -1) {
+      // Why: queued updateRepo calls can echo older input text after newer
+      // keystrokes; accepting that echo re-cancels active IME composition.
+      pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
+      return
+    }
+    pendingStoreEchoesRef.current = []
+    skipNextChangeRef.current = null
+    lastPersistedRef.current = storeValue
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
+    setDraft({ repoId, text: storeValue })
+  })
+  useEffect(() => syncDraftFromStore(), [repoId, storeValue])
 
   const text = draft.repoId === repoId ? draft.text : storeValue
 

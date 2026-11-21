@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 
 /** Per-PTY jobs preserve background children on clean shell exit; a separate kill-on-close host job must reap them on host death. Real Windows processes prove inherited ownership. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip

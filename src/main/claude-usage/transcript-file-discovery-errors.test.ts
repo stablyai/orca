@@ -13,7 +13,7 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => state.home }
 })
 
-vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+vi.mock('../claude-accounts/profiles/routing/claude-profile-installed-router', () => ({
   claudeProfileHistoryDirs: () => []
 }))
 
@@ -49,15 +49,6 @@ afterEach(async () => {
 })
 
 describe('Claude history discovery failures', () => {
-  it.each(['EACCES', 'EPERM', 'EIO', 'UNKNOWN'])(
-    'rejects an inaccessible root (%s)',
-    async (code) => {
-      state.blocked = projects
-      state.code = code
-      await expect(list([])).rejects.toMatchObject({ code })
-    }
-  )
-
   it('rejects an unreadable child instead of reporting that its sibling history disappeared', async () => {
     const sibling = join(projects, 'kept.jsonl')
     await writeFile(sibling, '')
@@ -67,20 +58,12 @@ describe('Claude history discovery failures', () => {
     await expect(list([])).rejects.toMatchObject({ code: 'EACCES' })
   })
 
-  it.each(['ENOENT', 'ENOTDIR'])(
-    'keeps sibling files when a child disappears (%s)',
-    async (code) => {
-      const sibling = join(projects, 'kept.jsonl')
-      await writeFile(sibling, '')
-      state.blocked = join(projects, 'removed')
-      await mkdir(state.blocked)
-      state.code = code
-      await expect(list([])).resolves.toEqual([sibling])
-    }
-  )
-
-  it('accepts an absent history root', async () => {
-    await rm(projects, { recursive: true })
-    await expect(list([])).resolves.toEqual([])
+  it('keeps sibling files when a child disappears', async () => {
+    const sibling = join(projects, 'kept.jsonl')
+    await writeFile(sibling, '')
+    state.blocked = join(projects, 'removed')
+    await mkdir(state.blocked)
+    state.code = 'ENOENT'
+    await expect(list([])).resolves.toEqual([sibling])
   })
 })

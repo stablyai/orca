@@ -1,0 +1,246 @@
+import { createHash } from 'node:crypto'
+import { afterEach, describe, expect, it } from 'vitest'
+import type Database from '../../../../sqlite/sync-database'
+import {
+  cleanupLegacyCompatibilityDispatcherHarnesses,
+  COORDINATOR_HANDLE,
+  counts,
+  createHarness,
+  escalationParams,
+  evidence,
+  request,
+  WORKER_HANDLE,
+  WORKER_PANE
+} from './testing/orchestration-legacy-compatibility-dispatcher-test-fixture'
+import { createRootDispatch } from '../../../orchestration/db/root-dispatch-test-fixture'
+
+afterEach(() => {
+  cleanupLegacyCompatibilityDispatcherHarnesses()
+})
+
+describe('legacy compatibility through RpcDispatcher', () => {
+  it('validates, infers, settles, and replays legacy worker completion exactly once', async () => {
+    const harness = createHarness()
+    const baseParams = {
+      from: WORKER_HANDLE,
+      to: COORDINATOR_HANDLE,
+      type: 'worker_done',
+      body: 'legacy result',
+      payload: JSON.stringify({ taskId: harness.taskId, dispatchId: harness.dispatchId })
+    }
+    const before = counts(harness.db)
+    const invalid = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.send',
+        { ...baseParams, subject: 'Completed', payload: JSON.stringify({ outcome: 'maybe' }) },
+        evidence('worker'),
+        'invalid-outcome'
+      )
+    )
+
+    expect(invalid).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(counts(harness.db)).toEqual(before)
+
+    const firstRequest = request(
+      'orchestration.send',
+      { ...baseParams, subject: 'Completed' },
+      evidence('worker'),
+      'completion'
+    )
+    const first = await harness.dispatcher.dispatch(firstRequest)
+    const replay = await harness.dispatcher.dispatch({ ...firstRequest, id: 'rpc_replay' })
+    const mismatch = await harness.dispatcher.dispatch({
+      ...firstRequest,
+      id: 'rpc_mismatch',
+      params: { ...baseParams, subject: 'Changed completion' }
+    })
+
+    expect(first).toMatchObject({
+      ok: true,
+      result: {
+        lifecycle: { action: 'settled', outcome: 'succeeded' },
+        legacyCompatibility: { replayed: false }
+      }
+    })
+    expect(replay).toMatchObject({
+      ok: true,
+      result: { legacyCompatibility: { replayed: true } }
+    })
+    expect(mismatch).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    expect(harness.db.getTask(harness.taskId)?.status).toBe('completed')
+    expect(harness.db.getDispatchContextById(harness.dispatchId)?.status).toBe('completed')
+    expect(counts(harness.db)).toEqual({
+      ...before,
+      messages: before.messages + 1,
+      legacy_compatibility_principals: before.legacy_compatibility_principals + 1,
+      legacy_operation_receipts: before.legacy_operation_receipts + 1
+    })
+    expect(harness.notify).toHaveBeenCalledOnce()
+  })
+
+  it('replays an A-era completion without touching a newer current attempt', async () => {
+    const harness = createHarness()
+    const payload = JSON.stringify({
+      taskId: harness.taskId,
+      dispatchId: harness.dispatchId
+    })
+    const completion = harness.db.insertMessage({
+      runId: harness.adoptedRunId,
+      from: WORKER_HANDLE,
+      to: COORDINATOR_HANDLE,
+      subject: 'Failed: pinned A treated this as complete',
+      body: 'persisted result',
+      type: 'worker_done',
+      payload,
+      senderPaneKey: WORKER_PANE,
+      deliveryContract: 'legacy_direct'
+    })
+    harness.db.settleWorkerReport({
+      taskId: harness.taskId,
+      dispatchId: harness.dispatchId,
+      outcome: 'succeeded',
+      result: 'persisted result'
+    })
+    harness.db.commitLegacyCompatibilityPrincipal({
+      runId: harness.adoptedRunId,
+      dispatchId: harness.dispatchId,
+      role: 'worker',
+      hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+      terminalHandle: WORKER_HANDLE,
+      paneKey: WORKER_PANE,
+      launchTokenHash: createHash('sha256').update('worker-token').digest('hex'),
+      processIncarnation: 'process-1'
+    })
+    // Recreate the pre-boundary state where A settled before a current attempt was persisted.
+    const sqlite = (harness.db as unknown as { db: Database.Database }).db
+    sqlite.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(harness.taskId)
+    const currentDispatch = createRootDispatch(
+      harness.db,
+      harness.taskId,
+      'term_current_worker',
+      'tab_current_worker:77777777-7777-4777-8777-777777777777',
+      'current-launch-hash'
+    )
+    const currentTaskBefore = harness.db.getTask(harness.taskId)
+    const currentDispatchBefore = harness.db.getDispatchContextById(currentDispatch.id)
+    const before = counts(harness.db)
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.send',
+        {
+          from: WORKER_HANDLE,
+          to: COORDINATOR_HANDLE,
+          subject: completion.subject,
+          body: completion.body,
+          type: 'worker_done',
+          payload
+        },
+        evidence('worker'),
+        'reconstruct-pinned-a-completion'
+      )
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        message: { id: completion.id },
+        lifecycle: { action: 'settled', outcome: 'succeeded', duplicate: true }
+      }
+    })
+    expect(harness.db.getTask(harness.taskId)).toEqual(currentTaskBefore)
+    expect(harness.db.getDispatchContextById(harness.dispatchId)?.status).toBe('completed')
+    expect(harness.db.getDispatchContextById(currentDispatch.id)).toEqual(currentDispatchBefore)
+    expect(counts(harness.db)).toEqual({
+      ...before,
+      legacy_operation_receipts: before.legacy_operation_receipts + 1
+    })
+  })
+
+  it('rejects invalid typed ACKs and consumes only the filtered legacy page', async () => {
+    const harness = createHarness()
+    await harness.dispatcher.dispatch(
+      request(
+        'orchestration.send',
+        {
+          ...escalationParams(harness),
+          type: 'worker_done',
+          subject: 'Completed',
+          payload: JSON.stringify({ taskId: harness.taskId, dispatchId: harness.dispatchId })
+        },
+        evidence('worker'),
+        'settle-for-mail'
+      )
+    )
+    const status = harness.db.insertMessage({
+      runId: harness.adoptedRunId,
+      from: COORDINATOR_HANDLE,
+      to: WORKER_HANDLE,
+      subject: 'status first',
+      type: 'status',
+      deliveryContract: 'legacy_direct'
+    })
+    const question = harness.db.insertMessage({
+      runId: harness.adoptedRunId,
+      from: COORDINATOR_HANDLE,
+      to: WORKER_HANDLE,
+      subject: 'question second',
+      type: 'question',
+      deliveryContract: 'legacy_direct'
+    })
+    const check = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.check',
+        { terminal: WORKER_HANDLE, types: 'question' },
+        evidence('worker'),
+        'question-check'
+      )
+    )
+    expect(check).toMatchObject({
+      ok: true,
+      result: {
+        messages: [{ id: question.id }],
+        legacyCompatibility: { ackMessageIds: [question.id] }
+      }
+    })
+
+    const invalid = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.check',
+        {
+          terminal: WORKER_HANDLE,
+          compatibilityAck: JSON.stringify({
+            messageIds: [question.id],
+            types: ['not-a-message-type']
+          })
+        },
+        evidence('worker'),
+        'invalid-ack'
+      )
+    )
+    expect(invalid).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(harness.db.getMessageById(status.id)?.read).toBe(0)
+    expect(harness.db.getMessageById(question.id)?.read).toBe(0)
+
+    const acknowledged = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.check',
+        {
+          terminal: WORKER_HANDLE,
+          compatibilityAck: JSON.stringify({
+            messageIds: [question.id],
+            types: ['question']
+          })
+        },
+        evidence('worker'),
+        'valid-ack'
+      )
+    )
+    expect(acknowledged).toMatchObject({
+      ok: true,
+      result: { acknowledged: [question.id], legacyCompatibility: { acknowledged: true } }
+    })
+    expect(harness.db.getMessageById(status.id)?.read).toBe(0)
+    expect(harness.db.getMessageById(question.id)?.read).toBe(1)
+  })
+})

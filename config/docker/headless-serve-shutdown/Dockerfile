@@ -12,6 +12,8 @@ RUN for attempt in 1 2 3 4 5; do \
     bash \
     ca-certificates \
     dbus-x11 \
+    fuse \
+    git \
     iproute2 \
     jq \
     libatk-bridge2.0-0 \

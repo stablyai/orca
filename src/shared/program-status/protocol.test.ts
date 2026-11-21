@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PROGRAM_STATUS_QUERY_REPLY, parseProgramStatusBody } from './protocol'
+import { parseProgramStatusBody } from './protocol'
 
 const b64 = (text: string): string => Buffer.from(text, 'utf8').toString('base64')
 
 describe('parseProgramStatusBody', () => {
-  it('recognizes the feature-detection query', () => {
-    expect(parseProgramStatusBody('?')).toEqual({ type: 'query' })
-    expect(PROGRAM_STATUS_QUERY_REPLY).toBe(
-      '\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\'
-    )
-  })
-
   it('parses the spec example with a base64 message', () => {
     const msg = 'Apply 3 to add, 1 to change, 0 to destroy?'
     expect(
@@ -44,6 +37,32 @@ describe('parseProgramStatusBody', () => {
     expect(parseProgramStatusBody(`state=clear:id=${'a'.repeat(129)}:id=ok`)).toBeNull()
   })
 
+  it('discards an over-limit text value even when it is also outside the value grammar', () => {
+    expect(parseProgramStatusBody(`state=done:title=${'t'.repeat(256)}!`)).toBeNull()
+    expect(parseProgramStatusBody(`state=done:msg=${'m'.repeat(2732)}!`)).toBeNull()
+    expect(parseProgramStatusBody(`state=done:title=${'t'.repeat(255)}!`)).toEqual({
+      type: 'report',
+      report: { id: null, state: 'done' }
+    })
+  })
+
+  it('measures key, app and encoded text caps in UTF-8 bytes', () => {
+    const idle = { type: 'report', report: { id: null, state: 'idle' } }
+    expect(parseProgramStatusBody(`state=idle:${'é'.repeat(8)}=v`)).toEqual(idle)
+    expect(parseProgramStatusBody(`state=idle:${'é'.repeat(8)}k=v`)).toBeNull()
+    expect(parseProgramStatusBody(`state=idle:app=${'é'.repeat(16)}`)).toEqual(idle)
+    expect(parseProgramStatusBody(`state=idle:app=${'é'.repeat(16)}a`)).toBeNull()
+    expect(parseProgramStatusBody(`state=idle:title=${'é'.repeat(128)}`)).toEqual(idle)
+    expect(parseProgramStatusBody(`state=idle:title=${'é'.repeat(128)}a`)).toBeNull()
+  })
+
+  it('caps the body at 4087 UTF-8 bytes', () => {
+    const atCap = `state=idle:x=${'é'.repeat(2037)}`
+    expect(Buffer.byteLength(atCap)).toBe(4087)
+    expect(parseProgramStatusBody(atCap)).not.toBeNull()
+    expect(parseProgramStatusBody(`${atCap}a`)).toBeNull()
+  })
+
   it('skips malformed pairs, trims whitespace, and lets the last repeat win', () => {
     expect(parseProgramStatusBody(' state = idle :junk:K=v:app=a:app=b:x=has space')).toEqual({
       type: 'report',
@@ -59,6 +78,16 @@ describe('parseProgramStatusBody', () => {
       type: 'report',
       report: { id: null, state: 'working' }
     })
+    expect(parseProgramStatusBody('state=working:progress=0050')).toMatchObject({
+      report: { progress: 50 }
+    })
+    expect(parseProgramStatusBody('state=blocked:progress=000')).toMatchObject({
+      report: { progress: 0 }
+    })
+    expect(parseProgramStatusBody('state=working:progress=0101')).toEqual({
+      type: 'report',
+      report: { id: null, state: 'working' }
+    })
     expect(parseProgramStatusBody('state=done:progress=50')).toEqual({
       type: 'report',
       report: { id: null, state: 'done' }
@@ -66,13 +95,6 @@ describe('parseProgramStatusBody', () => {
     expect(parseProgramStatusBody('state=blocked:kind=unknown')).toEqual({
       type: 'report',
       report: { id: null, state: 'blocked' }
-    })
-  })
-
-  it('treats an out-of-charset app as absent', () => {
-    expect(parseProgramStatusBody('state=idle:app=a,b')).toEqual({
-      type: 'report',
-      report: { id: null, state: 'idle' }
     })
   })
 

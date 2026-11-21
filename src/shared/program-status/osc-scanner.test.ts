@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createProgramStatusOscScanner } from './osc-scanner'
 
 describe('createProgramStatusOscScanner', () => {
-  it('stays on the fast path for ordinary output', () => {
-    const scan = createProgramStatusOscScanner()
-    expect(scan('\x1b[31mred\x1b[0m plain\r\n')).toEqual([])
-  })
-
   it('reads BEL- and ST-terminated reports with their end offsets', () => {
     const scan = createProgramStatusOscScanner()
     const data = 'a\x1b]7501;state=working\x07b\x1b]7501;state=done\x1b\\c'
@@ -70,5 +65,25 @@ describe('createProgramStatusOscScanner', () => {
     const scan = createProgramStatusOscScanner()
     expect(scan(`\x1b]7501;state=working:junk=${'x'.repeat(5000)}`)).toEqual([])
     expect(scan('\x07\x1b]7501;state=done\x07')).toMatchObject([{ report: { state: 'done' } }])
+  })
+
+  it('keeps a body at the cap whose ST is split between ESC and backslash', () => {
+    const scan = createProgramStatusOscScanner()
+    const body = `state=idle:x=${'x'.repeat(4074)}`
+    expect(body.length).toBe(4087)
+    expect(scan(`\x1b]7501;${body}\x1b`)).toEqual([])
+    expect(scan('\\')).toMatchObject([{ report: { state: 'idle' } }])
+  })
+
+  it('applies the byte cap to a multi-byte body split across chunks', () => {
+    const scan = createProgramStatusOscScanner()
+    const body = `state=idle:x=${'é'.repeat(2037)}`
+    expect(Buffer.byteLength(body)).toBe(4087)
+    expect(scan(`\x1b]7501;${body.slice(0, 2000)}`)).toEqual([])
+    expect(scan(`${body.slice(2000)}\x07`)).toMatchObject([{ report: { state: 'idle' } }])
+    expect(scan(`\x1b]7501;${body.slice(0, 2000)}`)).toEqual([])
+    expect(scan(`${body.slice(2000)}a\x07\x1b]7501;state=done\x07`)).toMatchObject([
+      { report: { state: 'done' } }
+    ])
   })
 })

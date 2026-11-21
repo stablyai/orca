@@ -1,0 +1,491 @@
+import '../../../pty-subprocess/testing/mock-descendant-sweep'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+  DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS
+} from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { DaemonPtyAdapter } from '../../../providers/adapter/daemon-pty-adapter'
+import { DaemonServer } from '../../../server/daemon-server'
+import { buildDurableCheckpointSnapshot } from '../../../providers/checkpointing/daemon-durable-history-snapshot'
+
+import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../sessions/daemon-session-scrollback-window'
+import { getHistorySessionDirName } from '../../storage/history-paths'
+import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
+import { HeadlessEmulator } from '../../../emulation/headless-emulator'
+import { HistoryManager } from '../../storage/history-manager'
+import { HistoryReader } from '../history-reader'
+import type { DaemonFileLog } from '../../../observability/daemon-file-log'
+import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
+
+const PREVIOUSLY_RECOVERABLE_LINE = 'LINE_01000'
+const OLDEST_WRITTEN_LINE = 'LINE_00001'
+const NEWEST_WRITTEN_LINE = `LINE_${String(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT).padStart(5, '0')}`
+const FRESH_AFTER_CHECKPOINT = 'FRESH_AFTER_CHECKPOINT'
+
+function numberedOutput(lineCount: number): string {
+  let output = ''
+  for (let index = 1; index <= lineCount; index += 1) {
+    output += `LINE_${String(index).padStart(5, '0')}\r\n`
+  }
+  return output
+}
+
+function snapshotText(snapshot: { scrollbackAnsi?: string; snapshotAnsi?: string }): string {
+  return `${snapshot.scrollbackAnsi ?? ''}${snapshot.snapshotAnsi ?? ''}`
+}
+
+function createMockSubprocess(): SubprocessHandle & {
+  emitData: (data: string) => void
+} {
+  let onData: ((data: string) => void) | undefined
+  let onExit: ((code: number) => void) | undefined
+  return {
+    pid: 4242,
+    getForegroundProcess: vi.fn(() => null),
+    write: vi.fn(),
+    resize: vi.fn(),
+    kill: vi.fn(() => setTimeout(() => onExit?.(0), 1)),
+    terminateOwnedTree: () => 'unavailable' as const,
+    forceKill: vi.fn(() => onExit?.(137)),
+    signal: vi.fn(),
+    onData(callback) {
+      onData = callback
+    },
+    onExit(callback) {
+      onExit = callback
+    },
+    dispose: vi.fn(),
+    emitData(data) {
+      onData?.(data)
+    }
+  }
+}
+
+function simulateAdapterCrash(adapter: DaemonPtyAdapter): void {
+  const internals = adapter as unknown as {
+    client: { disconnect: () => void }
+    stopCheckpointTimer: () => void
+  }
+  internals.stopCheckpointTimer()
+  internals.client.disconnect()
+}
+
+// Runs `emit` inside the first snapshot-including takePendingOutput RPC, i.e. while an overlay drains.
+function emitDuringFirstOverlayDrain(adapter: DaemonPtyAdapter, emit: () => void): void {
+  const internals = adapter as unknown as {
+    client: { request: (method: string, params?: unknown) => Promise<unknown> }
+  }
+  const request = internals.client.request.bind(internals.client)
+  let injected = false
+  vi.spyOn(internals.client, 'request').mockImplementation(async (method, params) => {
+    if (
+      method === 'takePendingOutput' &&
+      (params as { includeSnapshot?: boolean } | undefined)?.includeSnapshot &&
+      !injected
+    ) {
+      injected = true
+      emit()
+    }
+    return request(method, params)
+  })
+}
+
+describe('STA-4091 previously recoverable restore depth', () => {
+  describe('durable history', () => {
+    let dir: string
+    let manager: HistoryManager
+    let reader: HistoryReader
+
+    beforeEach(async () => {
+      dir = mkdtempSync(join(tmpdir(), 'orca-restore-depth-'))
+      manager = new HistoryManager(dir)
+      reader = new HistoryReader(dir)
+      await manager.openSession('restore-depth', { cwd: '/tmp', cols: 80, rows: 24 })
+    })
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true })
+    })
+
+    it('keeps that depth after a production compact of the live daemon window', async () => {
+      const live = new HeadlessEmulator({
+        cols: 80,
+        rows: 24,
+        scrollback: DAEMON_SESSION_SCROLLBACK_ROWS
+      })
+      try {
+        expect(live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))).toBe(true)
+        const liveSnapshot = live.getSnapshot()
+        expect(snapshotText(liveSnapshot)).not.toContain(PREVIOUSLY_RECOVERABLE_LINE)
+
+        expect(
+          await manager.appendIncrements('restore-depth', 1, [
+            { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
+          ])
+        ).toBe('ok')
+        const restoreInfo = await reader.detectColdRestore('restore-depth')
+        const durable = await buildDurableCheckpointSnapshot({
+          liveSnapshot,
+          restoreInfo,
+          pendingRecords: [],
+          isFirstTake: false
+        })
+        expect(await manager.checkpoint('restore-depth', durable)).toBe('committed')
+
+        const restore = await reader.detectColdRestore('restore-depth')
+        const text = snapshotText(restore ?? {})
+        expect(text).toContain(NEWEST_WRITTEN_LINE)
+        expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+        expect(text).toContain(OLDEST_WRITTEN_LINE)
+        expect(DAEMON_RESTORE_SCROLLBACK_ROWS).toBe(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT)
+      } finally {
+        live.dispose()
+      }
+    })
+  })
+
+  describe('adapter remount and restart', () => {
+    let dir: string
+    let historyDir: string
+    let server: DaemonServer
+    let adapter: DaemonPtyAdapter
+    let lastSubprocess: ReturnType<typeof createMockSubprocess>
+
+    beforeEach(async () => {
+      dir = mkdtempSync(join(tmpdir(), 'orca-restore-depth-adapter-'))
+      historyDir = join(dir, 'history')
+      const log: DaemonFileLog = { log: () => {}, close: () => {} }
+      server = new DaemonServer({
+        socketPath: getDaemonSocketPath(dir),
+        tokenPath: join(dir, 'test.token'),
+        log,
+        spawnSubprocess: () => {
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+      adapter = new DaemonPtyAdapter({
+        socketPath: getDaemonSocketPath(dir),
+        tokenPath: join(dir, 'test.token'),
+        historyPath: historyDir
+      })
+    })
+
+    afterEach(async () => {
+      adapter?.dispose()
+      await server?.shutdown()
+      rmSync(dir, { recursive: true, force: true })
+    })
+
+    it('restores that depth after a keepHistory restart compact', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'restart-depth',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+
+      await adapter.shutdown(id, { immediate: true, keepHistory: true })
+
+      const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      const text = snapshotText(restore ?? {})
+      expect(text).toContain(NEWEST_WRITTEN_LINE)
+      expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+      expect(text).toContain(OLDEST_WRITTEN_LINE)
+    })
+
+    it('uses the live window when durable history disappears after a prior drain', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'missing-history-after-drain',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const internals = adapter as unknown as { checkpointDirtySessions: () => Promise<void> }
+      await internals.checkpointDirtySessions()
+      rmSync(join(historyDir, getHistorySessionDirName(id), 'checkpoint.json'))
+      lastSubprocess.emitData('TAIL_AFTER_HISTORY_LOSS\r\n')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        const snapshot = await adapter.getBufferSnapshot(id)
+        const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
+        expect(text).toContain(NEWEST_WRITTEN_LINE)
+        expect(text).toContain('TAIL_AFTER_HISTORY_LOSS')
+        expect(text).not.toContain(OLDEST_WRITTEN_LINE)
+        const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
+          ignoreCleanEnd: true
+        })
+        expect(snapshotText(restored ?? {})).toContain(NEWEST_WRITTEN_LINE)
+        expect(snapshotText(restored ?? {})).toContain('TAIL_AFTER_HISTORY_LOSS')
+        expect(restored?.scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+        expect(warn).toHaveBeenCalledWith(
+          '[history] durable continuity unproven; using live snapshot:',
+          id
+        )
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('preserves durable depth after an incremental append and adapter crash', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'incremental-crash-depth',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const oldInternals = adapter as unknown as { checkpointDirtySessions: () => Promise<void> }
+      await oldInternals.checkpointDirtySessions()
+      const beforeCrash = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(beforeCrash?.pendingOutputSeq).toBe(2)
+      expect(snapshotText(beforeCrash ?? {})).toContain(OLDEST_WRITTEN_LINE)
+
+      simulateAdapterCrash(adapter)
+      adapter = new DaemonPtyAdapter({
+        socketPath: getDaemonSocketPath(dir),
+        tokenPath: join(dir, 'test.token'),
+        historyPath: historyDir
+      })
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
+      const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(restored ?? {})).toContain(OLDEST_WRITTEN_LINE)
+    })
+
+    it('uses the live window when a crashed adapter left a pending-output gap', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'incremental-gap-depth',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const oldInternals = adapter as unknown as {
+        client: { request: (method: string, params: unknown) => Promise<unknown> }
+      }
+      await oldInternals.client.request('takePendingOutput', {
+        sessionId: id,
+        includeSnapshot: false
+      })
+      simulateAdapterCrash(adapter)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      adapter = new DaemonPtyAdapter({
+        socketPath: getDaemonSocketPath(dir),
+        tokenPath: join(dir, 'test.token'),
+        historyPath: historyDir
+      })
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(reattach.snapshot).not.toContain(OLDEST_WRITTEN_LINE)
+      const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(restored ?? {})).not.toContain(OLDEST_WRITTEN_LINE)
+      expect(restored?.scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(warn).toHaveBeenCalledWith(
+        '[history] durable continuity unproven; using live snapshot:',
+        id
+      )
+    })
+
+    it('preserves durable depth when an empty incremental take precedes a warm reattach', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'empty-take-depth',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const oldInternals = adapter as unknown as { checkpointDirtySessions: () => Promise<void> }
+      await oldInternals.checkpointDirtySessions()
+      const beforeReattach = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(beforeReattach ?? {})).toContain(OLDEST_WRITTEN_LINE)
+
+      // The mock write marks history dirty without echoing any new PTY records.
+      adapter.write(id, 'noop')
+      await oldInternals.checkpointDirtySessions()
+
+      simulateAdapterCrash(adapter)
+      adapter = new DaemonPtyAdapter({
+        socketPath: getDaemonSocketPath(dir),
+        tokenPath: join(dir, 'test.token'),
+        historyPath: historyDir
+      })
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
+
+      // The first reattach compaction must prove continuity without flattening the deep checkpoint.
+      const newInternals = adapter as unknown as {
+        checkpointDirtySessions: () => Promise<void>
+      }
+      adapter.write(id, 'noop')
+      await newInternals.checkpointDirtySessions()
+
+      const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(restored ?? {})).toContain(OLDEST_WRITTEN_LINE)
+      expect(snapshotText(restored ?? {})).toContain(PREVIOUSLY_RECOVERABLE_LINE)
+      expect(restored?.scrollbackLines).toBeGreaterThan(DAEMON_SESSION_SCROLLBACK_ROWS)
+    })
+
+    it('reanchors from the live window after pending output overflows', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'overflow-reanchor',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+
+      const overflowLine = `BULK_${'x'.repeat(100)}\r\n`
+      lastSubprocess.emitData(overflowLine.repeat(20_000))
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const snapshot = await adapter.getBufferSnapshot(id)
+      const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
+      expect(text).toContain(FRESH_AFTER_CHECKPOINT)
+      const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(restore ?? {})).toContain(FRESH_AFTER_CHECKPOINT)
+    })
+
+    it('reanchors after a retryable durable checkpoint', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'checkpoint-retryable',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+      lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+
+      const internals = adapter as unknown as {
+        historyManager: HistoryManager
+        sessionsNeedingLiveCheckpoint: Set<string>
+      }
+      const checkpoint = vi
+        .spyOn(internals.historyManager, 'checkpoint')
+        .mockResolvedValueOnce('retryable')
+
+      const snapshot = await adapter.getBufferSnapshot(id)
+      const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
+      expect(text).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(true)
+
+      const recovered = await adapter.getBufferSnapshot(id)
+      expect(`${recovered?.scrollbackAnsi ?? ''}${recovered?.data ?? ''}`).toContain(
+        FRESH_AFTER_CHECKPOINT
+      )
+      const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
+        ignoreCleanEnd: true
+      })
+      expect(snapshotText(restore ?? {})).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(checkpoint.mock.calls.at(-1)?.[1].scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(false)
+
+      checkpoint.mockResolvedValueOnce('retryable')
+      const reattach = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: id,
+        cwd: '/tmp'
+      })
+      expect(reattach.isReattach).toBe(true)
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+    })
+
+    it('uses the post-drain sequence for output produced during an overlay', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'overlay-sequence',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+      await adapter.getBufferSnapshot(id)
+
+      emitDuringFirstOverlayDrain(adapter, () =>
+        lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+      )
+
+      const overlaid = await adapter.getBufferSnapshot(id)
+      const current = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
+      expect(`${overlaid?.scrollbackAnsi ?? ''}${overlaid?.data ?? ''}`).toContain(
+        FRESH_AFTER_CHECKPOINT
+      )
+      expect(overlaid?.seq).toBe(current?.seq)
+    })
+
+    it('keeps the attach-time sequence when output arrives during the reattach overlay', async () => {
+      const beforeAttach = 'BEFORE_ATTACH\r\n'
+      const duringOverlay = `${FRESH_AFTER_CHECKPOINT}\r\n`
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'reattach-overlay-sequence',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(beforeAttach)
+      await vi.waitFor(async () => {
+        const snapshot = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
+        expect(snapshot?.seq).toBe(beforeAttach.length)
+      })
+
+      let streamed = ''
+      const unsubscribe = adapter.onData(({ id: outputId, data }) => {
+        if (outputId === id) {
+          streamed += data
+        }
+      })
+      emitDuringFirstOverlayDrain(adapter, () => lastSubprocess.emitData(duringOverlay))
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+      await vi.waitFor(() => expect(streamed).toContain(duringOverlay))
+      unsubscribe()
+
+      // The overlay frame already shows the bytes the live stream delivers; counting both is a false gap.
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(reattach.providerSequence).toEqual({
+        value: beforeAttach.length,
+        generation: 'continued'
+      })
+    })
+  })
+})

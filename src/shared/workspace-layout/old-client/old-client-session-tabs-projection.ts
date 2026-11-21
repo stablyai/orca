@@ -1,28 +1,28 @@
 // Preserve session.tabs row/ID/group shapes for older phones/desktops. Runtime adds live handles/status/theme/drafts/certificate errors/document versions and publication fences.
 
-import { defaultAgentChatLabel } from '../../agent-session/agent-session-chat-label'
-import { resolveTerminalTabTitle } from '../../tab-title-resolution'
+import { defaultAgentChatLabel } from '../../agent-session/conversation-naming/agent-session-chat-label'
+import { resolveTerminalTabTitle } from '../tab-groups/tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../runtime-mobile-session-tab-contracts'
+} from '../../remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../runtime-session-contracts'
-import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
-import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
-import { diffTabRow, editorTabRow, reviewTabRow } from './old-client-session-editor-rows'
+} from '../../remote-runtime/session-graph/runtime-session-contracts'
+import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
+import { pruneGroupLayout } from '../../workspace-session/workspace-session-terminal-tab-close'
+import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
 import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
-import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import { groupsInLayoutOrder } from './old-client-group-order'
 import {
   BLANK_BROWSER_TAB_STATE,
   type DesktopLayoutView,
   type LayoutContentFacts
-} from '../workspace-layout-beside'
+} from '../persistence/workspace-layout-beside'
 import type {
   LayoutContentTab,
   LayoutTab,
@@ -154,12 +154,15 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       return row ? [row] : []
     }
     case 'conflict-review':
-    case 'check-details': {
-      const row = reviewTabRow({ ...tab, kind: tab.kind }, scope)
-      return row ? [row] : []
-    }
+    case 'git-graph':
+    case 'check-details':
+      // Virtual views have no file to read and no compatible session.tabs kind.
+      return []
     // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
+      return []
+    // Old clients have no room view; a room reopens from its sidebar row.
+    case 'room':
       return []
   }
 }
@@ -270,7 +273,7 @@ function agentSessionRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSess
   }
   return {
     type: 'agent-session',
-    id: agentSessionRowId(tab.entityId),
+    id: agentSessionRowId(tab.entityId, tab.id),
     title:
       tab.customTitle?.trim() ||
       scope.facts.tabLabels[scope.key]?.[tab.id] ||

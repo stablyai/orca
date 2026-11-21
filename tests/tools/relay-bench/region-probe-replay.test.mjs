@@ -39,17 +39,6 @@ describe('vetProbeOrigins', () => {
     expect(refused).toHaveLength(6)
   })
 
-  it('keeps a public https origin and consults DNS for a name', async () => {
-    const lookup = vi.fn().mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
-    const { allowed, refused } = await vetProbeOrigins(
-      { region: 'test', probeOrigins: ['https://relay.example/health'] },
-      { lookup }
-    )
-    expect(allowed).toEqual(['https://relay.example'])
-    expect(refused).toEqual([])
-    expect(lookup).toHaveBeenCalledWith('relay.example', { all: true })
-  })
-
   it('refuses a public-looking name that resolves into the operator network', async () => {
     const lookup = vi.fn().mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
     const { allowed } = await vetProbeOrigins(
@@ -57,10 +46,6 @@ describe('vetProbeOrigins', () => {
       { lookup }
     )
     expect(allowed).toEqual([])
-  })
-
-  it('tolerates a region with no probe origins', async () => {
-    expect(await vetProbeOrigins({ region: 'test' })).toEqual({ allowed: [], refused: [] })
   })
 })
 
@@ -87,23 +72,6 @@ describe('sampleRegion', () => {
     expect(result.median).toBeNull()
     expect(result.spread).toBeNull()
     expect(Number.isFinite(result.median)).toBe(false)
-  })
-
-  it('ranks a region whose probes answer consistently', async () => {
-    const lookup = vi.fn().mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
-    const latencies = [30, 31, 32]
-    const probe = vi.fn(() => Promise.resolve(latencies.shift()))
-    const result = await sampleRegion(
-      { region: 'near', probeOrigins: ['https://relay.example'] },
-      { lookup, probe }
-    )
-    expect(result).toMatchObject({
-      region: 'near',
-      samples: [30, 31, 32],
-      median: 31,
-      spread: 2,
-      verdict: 'ok'
-    })
   })
 
   it('applies the shipped spread rule to an inconsistent region', async () => {

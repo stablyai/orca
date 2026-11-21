@@ -27,7 +27,7 @@ try {
   await build({
     stdin: {
       contents:
-        "export { getPiAgentStatusExtensionSource } from './src/main/pi/agent-status-extension-source';",
+        "export { getPiAgentStatusExtensionSource } from './src/main/pi/managed-extensions/agent-status/agent-status-extension-source';",
       resolveDir: process.cwd()
     },
     bundle: true,

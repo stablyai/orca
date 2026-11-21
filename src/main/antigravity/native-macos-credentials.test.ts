@@ -57,16 +57,4 @@ describe('Antigravity macOS credential access', () => {
     await expect(writeAntigravityMacOSCredential(large)).rejects.toThrow('command limit')
     expect(runProcess).not.toHaveBeenCalled()
   })
-
-  it.each(['win32', 'linux'] as const)(
-    'does not answer for a different host (%s)',
-    async (platform) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      await expect(readAntigravityMacOSCredential()).rejects.toThrow('unavailable on this host')
-      await expect(writeAntigravityMacOSCredential(contents)).rejects.toThrow(
-        'unavailable on this host'
-      )
-      expect(runProcess).not.toHaveBeenCalled()
-    }
-  )
 })

@@ -1,4 +1,4 @@
-import type { MobileRelayPairingProvider } from '../runtime-rpc/runtime-rpc-pairing-types'
+import type { MobileRelayPairingProvider } from '../rpc/server/runtime-rpc-pairing-types'
 import type { DesktopRelayService } from './desktop-relay-service'
 
 type RelayProviderHost = {

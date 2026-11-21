@@ -1,0 +1,263 @@
+import { keybindingMatchesAction, matchKeybindingDigitIndex } from './matching'
+import type { KeybindingMatchOptions, KeybindingOverrides, PhysicalModifierToken } from './types'
+
+export type WindowShortcutInput = {
+  type?: string
+  key?: string
+  code?: string
+  alt?: boolean
+  meta?: boolean
+  control?: boolean
+  shift?: boolean
+  altKey?: boolean
+  metaKey?: boolean
+  ctrlKey?: boolean
+  shiftKey?: boolean
+  // Carry detector-generated double taps through main’s allowlisted action resolver.
+  doubleTapModifier?: PhysicalModifierToken
+}
+
+export type WindowShortcutAction =
+  | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
+  | { type: 'openSettings' }
+  | { type: 'forceReload' }
+  | { type: 'toggleWorktreePalette' }
+  | { type: 'toggleFloatingTerminal' }
+  | { type: 'toggleLeftSidebar' }
+  | { type: 'toggleRightSidebar' }
+  | { type: 'openQuickOpen' }
+  | { type: 'toggleQuickCommandsMenu' }
+  | { type: 'openNewWorkspace' }
+  | { type: 'openWorkspaceBoard' }
+  | { type: 'openTasks' }
+  | { type: 'toggleAgentDashboard' }
+  | { type: 'openLatestNotification' }
+  | { type: 'switchRecentTab' }
+  | { type: 'jumpToWorktreeIndex'; index: number }
+  | { type: 'jumpToTabIndex'; index: number }
+  | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
+  | { type: 'dictationKeyDown' }
+
+function platformPrimaryModifier(
+  input: Pick<WindowShortcutInput, 'meta' | 'control'>,
+  platform: NodeJS.Platform
+): boolean {
+  return platform === 'darwin' ? Boolean(input.meta) : Boolean(input.control)
+}
+
+export function isWindowShortcutModifierChord(
+  input: Pick<WindowShortcutInput, 'meta' | 'control' | 'alt'>,
+  platform: NodeJS.Platform
+): boolean {
+  return platformPrimaryModifier(input, platform) && !input.alt
+}
+
+export function matchesRecentTabSwitcherChord(
+  input: WindowShortcutInput,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  const control = Boolean(input.control ?? input.ctrlKey)
+  const meta = Boolean(input.meta ?? input.metaKey)
+  const alt = Boolean(input.alt ?? input.altKey)
+  if (input.code !== 'Tab' || !control || meta || alt) {
+    return false
+  }
+  // Shift reverses the held Ctrl+Tab interaction; gate the family on its unshifted binding.
+  return keybindingMatchesAction(
+    'tab.previousRecent',
+    {
+      key: input.key,
+      code: input.code,
+      alt,
+      meta,
+      control,
+      shift: false,
+      altKey: alt,
+      metaKey: meta,
+      ctrlKey: control,
+      shiftKey: false
+    },
+    platform,
+    keybindings,
+    options
+  )
+}
+
+function isControlKey(input: WindowShortcutInput): boolean {
+  return (
+    input.code === 'ControlLeft' ||
+    input.code === 'ControlRight' ||
+    input.code === 'Control' ||
+    input.key === 'Control'
+  )
+}
+
+function isTabKey(input: WindowShortcutInput): boolean {
+  return input.code === 'Tab' || input.key === 'Tab'
+}
+
+export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): boolean {
+  if (input.type !== 'keyUp' && input.type !== 'keyup') {
+    return false
+  }
+  if (isControlKey(input)) {
+    return true
+  }
+  const control = input.control ?? input.ctrlKey
+  // Some Electron surfaces release Tab after Control is already up; commit rather than strand the switcher.
+  return isTabKey(input) && control === false
+}
+
+export function nativeZoomCommandMatchesKeybindings(
+  direction: 'in' | 'out',
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  const primary =
+    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
+  const candidates =
+    direction === 'in'
+      ? [
+          { key: '=', code: 'Equal', shift: false },
+          { key: '+', code: 'Equal', shift: true },
+          { key: 'Add', code: 'NumpadAdd', shift: false }
+        ]
+      : [
+          { key: '-', code: 'Minus', shift: false },
+          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
+        ]
+
+  return candidates.some((candidate) =>
+    keybindingMatchesAction(
+      actionId,
+      { ...primary, alt: false, ...candidate },
+      platform,
+      keybindings,
+      options
+    )
+  )
+}
+
+export function resolveWindowShortcutAction(
+  input: WindowShortcutInput,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): WindowShortcutAction | null {
+  if (keybindingMatchesAction('worktree.history.back', input, platform, keybindings, options)) {
+    return {
+      type: 'worktreeHistoryNavigate',
+      direction: 'back'
+    }
+  }
+
+  if (keybindingMatchesAction('worktree.history.forward', input, platform, keybindings, options)) {
+    return {
+      type: 'worktreeHistoryNavigate',
+      direction: 'forward'
+    }
+  }
+
+  if (keybindingMatchesAction('floatingTerminal.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleFloatingTerminal' }
+  }
+
+  if (keybindingMatchesAction('zoom.in', input, platform, keybindings, options)) {
+    return { type: 'zoom', direction: 'in' }
+  }
+
+  if (keybindingMatchesAction('zoom.out', input, platform, keybindings, options)) {
+    return { type: 'zoom', direction: 'out' }
+  }
+
+  if (keybindingMatchesAction('zoom.reset', input, platform, keybindings, options)) {
+    return { type: 'zoom', direction: 'reset' }
+  }
+
+  if (keybindingMatchesAction('app.settings', input, platform, keybindings, options)) {
+    return { type: 'openSettings' }
+  }
+
+  if (keybindingMatchesAction('app.forceReload', input, platform, keybindings, options)) {
+    return { type: 'forceReload' }
+  }
+
+  if (keybindingMatchesAction('worktree.palette', input, platform, keybindings, options)) {
+    return { type: 'toggleWorktreePalette' }
+  }
+
+  if (keybindingMatchesAction('sidebar.left.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleLeftSidebar' }
+  }
+
+  if (keybindingMatchesAction('sidebar.right.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleRightSidebar' }
+  }
+
+  if (keybindingMatchesAction('worktree.quickOpen', input, platform, keybindings, options)) {
+    return { type: 'openQuickOpen' }
+  }
+
+  // Route workspace-create through main so contentEditable/browser guests cannot bypass it. Keep Shift for the former Create-from chord.
+  if (keybindingMatchesAction('workspace.create', input, platform, keybindings, options)) {
+    return { type: 'openNewWorkspace' }
+  }
+
+  if (keybindingMatchesAction('workspace.openBoard', input, platform, keybindings, options)) {
+    return { type: 'openWorkspaceBoard' }
+  }
+
+  if (keybindingMatchesAction('voice.dictation', input, platform, keybindings, options)) {
+    return { type: 'dictationKeyDown' }
+  }
+
+  if (keybindingMatchesAction('view.tasks', input, platform, keybindings, options)) {
+    return { type: 'openTasks' }
+  }
+
+  if (keybindingMatchesAction('dashboard.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleAgentDashboard' }
+  }
+
+  if (keybindingMatchesAction('notifications.openLatest', input, platform, keybindings, options)) {
+    return { type: 'openLatestNotification' }
+  }
+
+  if (keybindingMatchesAction('tab.previousRecent', input, platform, keybindings, options)) {
+    return { type: 'switchRecentTab' }
+  }
+
+  // Ranges have separate conflict scopes and may share a chord; workspace-first preserves deterministic historical precedence.
+  const worktreeIndex = matchKeybindingDigitIndex(
+    'workspace.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (worktreeIndex !== null) {
+    return { type: 'jumpToWorktreeIndex', index: worktreeIndex }
+  }
+
+  const tabIndex = matchKeybindingDigitIndex(
+    'tab.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (tabIndex !== null) {
+    return { type: 'jumpToTabIndex', index: tabIndex }
+  }
+
+  if (keybindingMatchesAction('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
+    return { type: 'toggleQuickCommandsMenu' }
+  }
+
+  // Only explicitly allowlisted actions may intercept; leave readline/terminal chords such as Ctrl+R/U/E to the renderer/PTTY.
+  return null
+}

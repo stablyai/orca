@@ -1,7 +1,7 @@
 // Match POSIX state verdicts using staged directory snapshots; avoid extra tar processes and reject symlinks/junctions throughout.
-import { PRIMARY_RUNTIME_METADATA_FILE } from '../../../shared/runtime-bootstrap'
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../shared/orcad-artifacts'
+import { PRIMARY_RUNTIME_METADATA_FILE } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
 import {
   ORCAD_FENCE_LOST_EXIT,
@@ -169,7 +169,15 @@ function renameWithRetry(from, to) {
 }
 
 const removeTree = (target) => fs.rmSync(target, { recursive: true, force: true, maxRetries: 5 })
-const removeTreeAsync = (target) => fs.promises.rm(target, { recursive: true, force: true, maxRetries: 5 })
+// Async rm retries each nested entry separately (multiplying per level); retry whole passes instead.
+async function removeTreeAsync(target) {
+  for (const delay of [0, 100, 200, 300, 400, 500]) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+    try { await fs.promises.rm(target, { recursive: true, force: true }); return } catch (error) {
+      if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error.code) || delay === 500) throw error
+    }
+  }
+}
 
 Object.assign(ops, {
   'snapshot-capture': withStateMutationLock(async (root, snapshotDir) => {

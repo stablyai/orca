@@ -1,12 +1,17 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
-import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import {
+  CHECK_COLOR,
+  CHECK_ICON,
+  checkPresentationKey
+} from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
+import type { CheckDetailsLoadState } from '@/components/github/github-checks-tab-state'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { ChecksTabCheckDetails } from './checks-tab-check-details'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function renderCheckRow({
   check,
@@ -52,13 +57,15 @@ export function ChecksTabCheckRow({
   onToggle: (check: PRCheckDetail) => void
   onRetry: (check: PRCheckDetail, key: string) => void
 }): React.JSX.Element {
-  const conclusion = getCheckConclusion(check)
+  const t = useTranslate()
+  const conclusion = checkPresentationKey(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-  const statusLabel = getCheckStatusLabel(check)
+  const statusLabel = getCheckStatusLabel(check, t)
   return (
     <div className="min-w-0">
       <button
+        ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
         type="button"
         onClick={() => onToggle(check)}
         aria-expanded={expanded}
@@ -74,7 +81,11 @@ export function ChecksTabCheckRow({
           )}
         />
         <Icon
-          className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
+          className={cn(
+            'size-3.5 shrink-0',
+            color,
+            conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
+          )}
         />
         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>

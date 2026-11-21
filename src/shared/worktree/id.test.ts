@@ -1,206 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import {
-  WORKTREE_ID_SEPARATOR,
-  composeWorktreeId,
-  getRepoIdFromWorktreeId,
-  getRepoMainWorktreeId,
-  getWorktreePathBasenameFromId,
-  splitWorktreeId,
-  splitWorktreeIdForFilesystem,
-  worktreeIdentityKey,
-  worktreeIdsEqual
-} from './id'
 
-describe('getRepoMainWorktreeId', () => {
-  it('round-trips through the id parsers on posix and Windows paths', () => {
-    for (const repo of [
-      { id: 'repo-123', path: '/abs/path' },
-      { id: 'repo-123', path: 'C:\\Users\\me\\repo' }
-    ]) {
-      const worktreeId = getRepoMainWorktreeId(repo)
-      expect(worktreeId).toBe(`${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`)
-      expect(splitWorktreeId(worktreeId)).toEqual({ repoId: repo.id, worktreePath: repo.path })
-    }
-  })
-})
+import { worktreeIdsShareCheckout } from './id'
 
-describe('composeWorktreeId', () => {
-  it('keeps the path spelling exactly as given', () => {
-    for (const path of [
-      '/srv/Repo/',
-      'C:\\Users\\me\\repo',
-      '//wsl$/Ubuntu/home/a',
-      '/private/tmp/x'
-    ]) {
-      expect(composeWorktreeId('repo-1', path)).toBe(`repo-1${WORKTREE_ID_SEPARATOR}${path}`)
-    }
-  })
-})
+const BASE_ID = 'folder-repo::/home/ada/notes'
+const INSTANCE_A = `${BASE_ID}::workspace:3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b`
+const INSTANCE_B = `${BASE_ID}::workspace:9e8d7c6b-5a49-4382-9170-6f5e4d3c2b1a`
 
-describe('getRepoIdFromWorktreeId', () => {
-  it('returns the repo id for a canonical worktree id', () => {
-    expect(getRepoIdFromWorktreeId('repo-123::/abs/path')).toBe('repo-123')
+describe('worktreeIdsShareCheckout', () => {
+  it('matches a folder workspace id with an instance of the same folder', () => {
+    expect(worktreeIdsShareCheckout(BASE_ID, INSTANCE_A)).toBe(true)
+    expect(worktreeIdsShareCheckout(INSTANCE_A, BASE_ID)).toBe(true)
   })
 
-  it('returns the whole input when there is no separator', () => {
-    expect(getRepoIdFromWorktreeId('just-a-repo-id')).toBe('just-a-repo-id')
+  it('matches two instances of one folder', () => {
+    expect(worktreeIdsShareCheckout(INSTANCE_A, INSTANCE_B)).toBe(true)
   })
 
-  it('returns the empty string for an empty input', () => {
-    expect(getRepoIdFromWorktreeId('')).toBe('')
-  })
-
-  it('returns an empty repo id for a bare separator', () => {
-    expect(getRepoIdFromWorktreeId('::')).toBe('')
-  })
-
-  it('returns an empty repo id for a leading separator', () => {
-    expect(getRepoIdFromWorktreeId('::path')).toBe('')
-  })
-
-  it('returns the repo id when only a trailing separator is present', () => {
-    expect(getRepoIdFromWorktreeId('repo::')).toBe('repo')
-  })
-
-  it('splits on the first separator when the path itself contains "::"', () => {
-    expect(getRepoIdFromWorktreeId('repo::a::b')).toBe('repo')
-  })
-})
-
-describe('splitWorktreeId', () => {
-  it('splits a canonical worktree id into repo id and path', () => {
-    expect(splitWorktreeId('repo-123::/abs/path')).toEqual({
-      repoId: 'repo-123',
-      worktreePath: '/abs/path'
-    })
-  })
-
-  it('returns null when there is no separator', () => {
-    expect(splitWorktreeId('just-a-repo-id')).toBeNull()
-  })
-
-  it('returns null for an empty input', () => {
-    expect(splitWorktreeId('')).toBeNull()
-  })
-
-  it('returns empty repo id and empty path for a bare separator', () => {
-    expect(splitWorktreeId('::')).toEqual({ repoId: '', worktreePath: '' })
-  })
-
-  it('returns an empty repo id when the separator is leading', () => {
-    expect(splitWorktreeId('::path')).toEqual({ repoId: '', worktreePath: 'path' })
-  })
-
-  it('returns an empty path when the separator is trailing', () => {
-    expect(splitWorktreeId('repo::')).toEqual({ repoId: 'repo', worktreePath: '' })
-  })
-
-  it('splits on the first separator when the path itself contains "::"', () => {
-    expect(splitWorktreeId('repo::a::b')).toEqual({ repoId: 'repo', worktreePath: 'a::b' })
-  })
-
-  it('preserves folder workspace instance suffixes in the literal parsed path', () => {
+  it('keeps repo ids exact on a shared path', () => {
+    expect(worktreeIdsShareCheckout(BASE_ID, 'other-repo::/home/ada/notes')).toBe(false)
     expect(
-      splitWorktreeId('repo::/folder::workspace:123e4567-e89b-12d3-a456-426614174000')
-    ).toEqual({
-      repoId: 'repo',
-      worktreePath: '/folder::workspace:123e4567-e89b-12d3-a456-426614174000'
-    })
-  })
-})
-
-describe('splitWorktreeIdForFilesystem', () => {
-  it('strips folder workspace instance suffixes from the parsed path', () => {
-    expect(
-      splitWorktreeIdForFilesystem('repo::/folder::workspace:123e4567-e89b-12d3-a456-426614174000')
-    ).toEqual({ repoId: 'repo', worktreePath: '/folder' })
-  })
-})
-
-describe('getWorktreePathBasenameFromId', () => {
-  it('returns the path basename for POSIX worktree ids', () => {
-    expect(getWorktreePathBasenameFromId('repo-123::/abs/path/nightly-checks')).toBe(
-      'nightly-checks'
-    )
-  })
-
-  it('returns the path basename for Windows worktree ids', () => {
-    expect(getWorktreePathBasenameFromId('repo-123::C:\\workspaces\\nightly-checks')).toBe(
-      'nightly-checks'
-    )
-  })
-
-  it('returns the real folder basename for folder workspace instance ids', () => {
-    expect(
-      getWorktreePathBasenameFromId(
-        'repo-123::/abs/project::workspace:123e4567-e89b-12d3-a456-426614174000'
+      worktreeIdsShareCheckout(
+        INSTANCE_A,
+        `other-repo::/home/ada/notes::workspace:${'0'.repeat(36)}`
       )
-    ).toBe('project')
+    ).toBe(false)
   })
 
-  it('returns null when no worktree path is available', () => {
-    expect(getWorktreePathBasenameFromId('repo-123')).toBeNull()
-    expect(getWorktreePathBasenameFromId('repo-123::')).toBeNull()
-  })
-})
-
-/** ID selectors must fold exactly the path spellings path: selectors fold (#16243). */
-describe('worktreeIdentityKey path-spelling parity for id: selectors (#16243)', () => {
-  const canonical = 'repo-123::/srv/workspaces/plugin'
-  const key = (worktreeId: string): string => worktreeIdentityKey(worktreeId)
-
-  it('folds the path spellings a `path:` selector already accepts', () => {
-    expect(key('repo-123::/srv/workspaces/plugin/')).toBe(key(canonical))
-    expect(key('repo-123::/srv//workspaces/plugin')).toBe(key(canonical))
-    expect(key('repo-123::/srv/workspaces/Café'.normalize('NFD'))).toBe(
-      key('repo-123::/srv/workspaces/Café'.normalize('NFC'))
-    )
+  it('falls back to strict equality for malformed and folder: ids', () => {
+    expect(worktreeIdsShareCheckout('folder:home-1', 'folder:home-1')).toBe(true)
+    expect(worktreeIdsShareCheckout('folder:home-1', 'folder:home-2')).toBe(false)
+    expect(worktreeIdsShareCheckout('folder:home-1', BASE_ID)).toBe(false)
+    expect(worktreeIdsShareCheckout('repo-only', 'repo-only')).toBe(true)
+    expect(worktreeIdsShareCheckout('repo-only', 'repo-other')).toBe(false)
   })
 
-  it('folds no more loosely than `path:` does', () => {
-    // A leading `//` is a UNC root, not a doubled separator.
-    expect(key('repo-123:://srv/workspaces/plugin')).not.toBe(key(canonical))
-    // Dot segments are not canonicalized, so `id:` and `path:` still agree on refusing them.
-    expect(key('repo-123::/srv/./workspaces/plugin')).not.toBe(key(canonical))
+  it('folds path spelling like worktreeIdsEqual', () => {
+    const left = 'repo::C:\\Users\\Ada\\Notes'
+    const right = 'repo::c:/users/ada/notes/::workspace:3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b'
+    expect(worktreeIdsShareCheckout(left, right)).toBe(true)
+    expect(worktreeIdsShareCheckout('repo::/home/Ada', 'repo::/home/ada')).toBe(false)
   })
 
-  // Windows checkouts can be recorded with either separator (#15598, #15616).
-  it('folds Windows separator and drive-letter case, as `path:` already does', () => {
-    const windows = 'repo-123::D:/Agentic/game2'
-    expect(key('repo-123::D:\\Agentic\\game2')).toBe(key(windows))
-    expect(key('repo-123::d:/agentic/game2')).toBe(key(windows))
-    // A backslash is a valid POSIX filename character, so a POSIX path never folds it.
-    expect(key('repo-123::/srv\\workspaces')).not.toBe(key('repo-123::/srv/workspaces'))
-    expect(key('repo-123::/srv/Workspaces')).not.toBe(key('repo-123::/srv/workspaces'))
-  })
-
-  it('keeps a UNC or WSL root distinct from a drive-letter location', () => {
-    expect(key('repo-123:://server/share/game2')).not.toBe(key('repo-123::D:/server/share/game2'))
-    expect(key('repo-123:://wsl.localhost/Ubuntu/home/dev/game2')).not.toBe(
-      key('repo-123::D:/home/dev/game2')
-    )
-    // The two UNC aliases Windows exposes for one WSL distro are the same location.
-    expect(key('repo-123:://wsl.localhost/Ubuntu/home/dev/game2')).toBe(
-      key('repo-123:://wsl$/Ubuntu/home/dev/game2')
-    )
-  })
-
-  it('never merges different repos, workspaces, or folder sessions', () => {
-    // STA-4343: the repo id stays exact, or a removal lands on a repo the caller never confirmed.
-    expect(key('repo-999::/srv/workspaces/plugin')).not.toBe(key(canonical))
-    expect(key('repo-123::/srv/workspaces/other')).not.toBe(key(canonical))
-    expect(key('repo-a::/srv/folder::workspace:123e4567-e89b-12d3-a456-426614174000')).not.toBe(
-      key('repo-a::/srv/folder::workspace:123e4567-e89b-12d3-a456-426614174001')
-    )
-  })
-
-  it('keys a malformed id as itself, so it only ever matches itself', () => {
-    for (const malformed of ['repo-a', 'repo-a::', '::/srv/a', '/srv/workspaces/plugin']) {
-      expect(key(malformed)).toBe(malformed)
-      expect(worktreeIdsEqual(malformed, malformed)).toBe(true)
-    }
-    expect(key('repo-a::')).not.toBe(key('repo-a::/'))
-    expect(worktreeIdsEqual('repo-a::', 'repo-a::/')).toBe(false)
-    expect(worktreeIdsEqual('::/srv/A/', '::/srv/A')).toBe(false)
+  it('keeps distinct git worktrees apart', () => {
+    expect(worktreeIdsShareCheckout('repo::/src/app', 'repo::/src/app-feature')).toBe(false)
   })
 })

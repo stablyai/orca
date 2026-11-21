@@ -1,4 +1,4 @@
-import type { MessageType, MessageRow, LegacyMailReceiptRow } from '../../types'
+import type { MessageType, MessageRow, LegacyMailReceiptRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 

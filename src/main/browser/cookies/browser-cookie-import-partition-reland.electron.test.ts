@@ -298,6 +298,7 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
   const root = mkdtempSync(join(tmpdir(), `orca-sta4300-${mode}-`))
   fixtureRoots.push(root)
   const importPath = join(root, 'browser-cookie-import.cjs')
+  const importEntryPath = join(root, 'cookie-import-entry.ts')
   const registryStubPath = join(root, 'browser-session-registry.cjs')
   const resultPath = join(root, 'result.json')
   const fixturePath = join(root, 'main.cjs')
@@ -344,6 +345,13 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
     registryStubPath,
     'exports.browserSessionRegistry = { clearPendingCookieImport() {}, setPendingCookieImport() {} }\n'
   )
+  writeFileSync(
+    importEntryPath,
+    [
+      `export { importCookiesFromBrowser } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/browser-cookie-import.ts'))}`,
+      `export { importCookiesFromFile } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/imports/import-cookie-file.ts'))}`
+    ].join('\n')
+  )
   await buildVite({
     configFile: false,
     logLevel: 'silent',
@@ -351,8 +359,8 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
       {
         name: 'stub-browser-session-registry',
         resolveId(source, importer) {
-          return source === '../browser-session-registry' &&
-            importer?.endsWith('browser-cookie-import.ts')
+          return source === '../../sessions/profiles/browser-session-registry' &&
+            importer?.replaceAll('\\', '/').endsWith('/cookies/chromium/finalize-import.ts')
             ? registryStubPath
             : null
         }
@@ -361,7 +369,7 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
     build: {
       emptyOutDir: false,
       lib: {
-        entry: join(process.cwd(), 'src/main/browser/cookies/browser-cookie-import.ts'),
+        entry: importEntryPath,
         formats: ['cjs'],
         fileName: () => 'browser-cookie-import.cjs'
       },

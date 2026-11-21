@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { RELAY_REMOTE_DIR } from '../install/remote-install-root'
 import {
   ORCAD_MACHINE_CLAIM_FILENAME,
   ORCAD_MACHINE_CLAIM_SCHEMA_VERSION,
   parseOrcadMachineClaim
 } from './orcad-machine-home'
 import { dfAvailableKb } from './remote-filesystem-space'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 /** Claim arbiter under ~/.orca-remote when hard links cannot elect an owner. */
 export const ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME = 'orcad-machine.arbiter'

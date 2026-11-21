@@ -4,12 +4,13 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript-api'
 
-export const HAPTICS_SEAM = 'src/platform/haptics.web.ts'
+export const HAPTICS_SEAM = 'src/platform/haptics/haptics.web.ts'
 
 // Native sibling imports expo-haptics and must stay outside page closure.
-export const HAPTICS_NATIVE = 'src/platform/haptics.ts'
+export const HAPTICS_NATIVE = 'src/platform/haptics/haptics.ts'
 
-export const HAPTICS_KINDS_MODULE = 'src/mobile-web-shell/bridge/bridge-haptics-notify.ts'
+export const HAPTICS_KINDS_MODULE =
+  'src/mobile-web-shell/bridge/native-capabilities/bridge-haptics-notify.ts'
 
 const KINDS_CONST = 'BRIDGE_HAPTICS_KINDS'
 const PUBLISH_FUNCTION = 'publishHapticsNotifier'
@@ -128,7 +129,7 @@ export function hapticsImportedNames(source, fileName = 'module.ts') {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !/(?:\.\.?\/)+platform\/haptics$/.test(statement.moduleSpecifier.text)
+      !/(?:\.\.?\/)+platform\/haptics\/haptics$/.test(statement.moduleSpecifier.text)
     ) {
       continue
     }
@@ -143,7 +144,7 @@ export function hapticsImportedNames(source, fileName = 'module.ts') {
 
 // Consumers import extensionless seam; census checks closure resolved web sibling rather than native expo-haptics path.
 export function hapticsSeamImporters(mobileDir, closure) {
-  const specifier = /(?:^|['"])(?:\.\.?\/)+platform\/haptics(?:\.web)?['"]$/
+  const specifier = /(?:^|['"])(?:\.\.?\/)+platform\/haptics\/haptics(?:\.web)?['"]$/
   return closure.local
     .filter((file) => file !== HAPTICS_SEAM && file !== HAPTICS_NATIVE)
     .filter((file) => {

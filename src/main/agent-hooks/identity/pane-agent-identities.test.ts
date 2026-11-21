@@ -1,0 +1,530 @@
+import { build } from 'esbuild'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Worker } from 'node:worker_threads'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+
+import { isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
+import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-support'
+import SyncDatabase from '../../sqlite/sync-database'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
+import { AgentIdentityWorkerClient } from './agent-identity-worker-client'
+import { AgentIdentityStore } from './agent-identity-worker-entry'
+import { REVERSE_LOOKUP_UNAVAILABLE } from './agent-identity-worker-protocol'
+import {
+  InProcessAgentIdentityClient,
+  ScriptedIdentityWorkers
+} from './agent-identity-client.test-fixtures'
+import {
+  PaneAgentIdentities,
+  type ProviderSessionSighting,
+  type SettledAgentIdentityPlace
+} from './pane-agent-identities'
+
+const directories: string[] = []
+const opened: { close(): void }[] = []
+const buildDir = mkdtempSync(join(tmpdir(), 'orca-agent-identity-worker-'))
+const workerEntry = join(buildDir, 'agent-identity-worker-entry.js')
+
+beforeAll(async () => {
+  await build({
+    entryPoints: ['src/main/agent-hooks/identity/agent-identity-worker-entry.ts'],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    external: ['electron'],
+    outfile: workerEntry,
+    logLevel: 'silent'
+  })
+})
+afterAll(() => rmSync(buildDir, { recursive: true, force: true }))
+afterEach(async () => {
+  for (const service of opened.splice(0)) {
+    service.close()
+  }
+  // A closed worker releases its database as it exits, so Windows needs retried passes.
+  await removeTempDirs(directories.splice(0))
+})
+
+function databasePath(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-agent-identities-'))
+  directories.push(directory)
+  return join(directory, 'agent-identities.db')
+}
+
+/** The real worker thread, as the hook server runs it. */
+function workerService(path: string): PaneAgentIdentities {
+  const identities = new PaneAgentIdentities(
+    () => path,
+    () => {},
+    () => new AgentIdentityWorkerClient(() => new Worker(workerEntry))
+  )
+  opened.push(identities)
+  return identities
+}
+
+function inProcessService(path: string, client: InProcessAgentIdentityClient) {
+  const settled: SettledAgentIdentityPlace[] = []
+  const identities = new PaneAgentIdentities(
+    () => path,
+    (places) => settled.push(...places),
+    () => client
+  )
+  opened.push(identities)
+  return { identities, settled }
+}
+
+function sighting(
+  options: Partial<ProviderSessionSighting> & { id: string; transcriptPath?: string }
+): ProviderSessionSighting {
+  return {
+    agent: options.agent ?? 'claude',
+    providerSession: {
+      key: 'session_id',
+      id: options.id,
+      ...(options.transcriptPath ? { transcriptPath: options.transcriptPath } : {})
+    },
+    connectionId: options.connectionId ?? null
+  }
+}
+
+describe('PaneAgentIdentities through the identity worker', () => {
+  it('names exact keys, never relinks, converges across workers and keeps newer files read-only', async () => {
+    const path = databasePath()
+    const identities = workerService(path)
+    const first = await identities.identify(sighting({ id: 'S1' }))
+    expect(isOrcaSessionId(first!)).toBe(true)
+    expect(await identities.identify(sighting({ id: 'S2' }))).not.toBe(first)
+    expect(await identities.identify(sighting({ id: 'S1', connectionId: 'wsl:Ubuntu' }))).not.toBe(
+      first
+    )
+    // The locator separates conversations only where resume uses it.
+    expect(await identities.identify(sighting({ id: 'S1', transcriptPath: '/t/x.jsonl' }))).toBe(
+      first
+    )
+    const pi = await identities.identify(sighting({ agent: 'pi', id: 'P', transcriptPath: '/a' }))
+    expect(
+      await identities.identify(sighting({ agent: 'pi', id: 'P', transcriptPath: '/b' }))
+    ).not.toBe(pi)
+    expect(await identities.identify(sighting({ id: 'S1', connectionId: 'ssh-target' }))).toBeNull()
+    // A second worker on the same file finds the committed link.
+    expect(await workerService(path).identify(sighting({ id: 'S1' }))).toBe(first)
+    expect(await workerService(path).isTerminalIdentity(first!)).toBe(true)
+
+    for (const service of opened.splice(0)) {
+      service.close()
+    }
+    const newer = new SyncDatabase(path)
+    // The closed services' workers release the file as they exit.
+    newer.pragma('busy_timeout = 5000')
+    newer.exec('PRAGMA user_version = 9')
+    newer.close()
+    const readOnly = workerService(path)
+    expect(await readOnly.identify(sighting({ id: 'S1' }))).toBe(first)
+    expect(await readOnly.identify(sighting({ id: 'unlinked' }))).toBeNull()
+  })
+})
+
+/** The real client and request queue over scripted worker threads, with fake time. */
+function scriptedService(
+  workers: ScriptedIdentityWorkers,
+  path: () => string | null = () => 'ids.db'
+) {
+  const settled: SettledAgentIdentityPlace[] = []
+  const identities = new PaneAgentIdentities(
+    path,
+    (places) => settled.push(...places),
+    () => new AgentIdentityWorkerClient(workers.factory)
+  )
+  opened.push(identities)
+  return { identities, settled }
+}
+
+function admit(identities: PaneAgentIdentities, place: string, providerSessionId: string): void {
+  identities.setPlace(
+    place,
+    place,
+    identities.assign(sighting({ id: providerSessionId }), undefined)
+  )
+}
+
+describe('PaneAgentIdentities demand and completion', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('times out a stuck operation; an expired click leaves the row demand to the next attempt', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    workers.answer = () => 'never'
+    const { identities, settled } = scriptedService(workers)
+    admit(identities, 'p', 'k')
+    const click = identities.identify(sighting({ id: 'k' }))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await click).toBeNull()
+    workers.answer = (request) =>
+      request.kind === 'identify' ? { id: request.id, ok: true, value: 'claude_k_answer' } : 'never'
+    // The owner's single wake retries the still-demanded row after the backoff.
+    await vi.advanceTimersByTimeAsync(30_001)
+    expect(settled.map((place) => place.identity.id)).toEqual(['claude_k_answer'])
+  })
+
+  it('never runs a second worker beside a retiring one, and fences answers to their owner', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    workers.holdExit = true
+    workers.serviceMs = 1
+    let path = 'a.db'
+    const { identities, settled } = scriptedService(workers, () => path)
+    admit(identities, 'p', 'k')
+    await vi.advanceTimersByTimeAsync(5)
+    identities.close()
+    admit(identities, 'q', 'j')
+    await vi.advanceTimersByTimeAsync(5)
+    expect(workers.live).toBe(1)
+    expect(workers.identifyPosts()).toBe(1)
+    workers.releaseExits()
+    await vi.advanceTimersByTimeAsync(5)
+    expect(workers.maxLive).toBe(1)
+    expect(workers.identifyPosts()).toBe(2)
+
+    // An answer accepted just before the owner closes is not handed to the waiting click.
+    workers.holdExit = false
+    workers.serviceMs = 0
+    const closing: PaneAgentIdentities = new PaneAgentIdentities(
+      () => path,
+      () => closing.close(),
+      () => new AgentIdentityWorkerClient(workers.factory)
+    )
+    opened.push(closing)
+    admit(closing, 'late-row', 'late')
+    const click = closing.identify(sighting({ id: 'late' }))
+    await vi.advanceTimersByTimeAsync(5)
+    expect(await click).toBeNull()
+
+    // A different store never reuses another store's answer for the same key.
+    admit(identities, 'r', 'k')
+    await vi.advanceTimersByTimeAsync(5)
+    const before = workers.identifyPosts()
+    path = 'b.db'
+    identities.syncAuthority()
+    admit(identities, 's', 'k')
+    await vi.advanceTimersByTimeAsync(5)
+    expect(workers.identifyPosts()).toBe(before + 1)
+    expect(workers.posts.at(-1)).toMatchObject({ kind: 'identify', path: 'b.db' })
+    expect(settled.at(-1)?.place).toBe('s')
+  })
+
+  it('settles a read-only miss as no id', async () => {
+    const path = databasePath()
+    const client = new InProcessAgentIdentityClient()
+    const key = { executionHost: 'local', wslDistro: '', agent: 'claude', locator: '' }
+    await client.identify(path, { ...key, providerSessionId: 'linked' })
+    // Moving the handler to another file closes this one, so it reopens at the newer version.
+    await client.identify(databasePath(), { ...key, providerSessionId: 'elsewhere' })
+    const newer = new SyncDatabase(path)
+    newer.exec('PRAGMA user_version = 9')
+    newer.close()
+    const { identities, settled } = inProcessService(path, client)
+    identities.setPlace('a', 'a', identities.assign(sighting({ id: 'unlinked' }), undefined))
+    expect(await identities.identify(sighting({ id: 'unlinked' }))).toBeNull()
+    expect(settled.map((place) => place.identity)).toEqual([expect.objectContaining({ id: null })])
+    expect(settled[0]?.identity.pending).toBeUndefined()
+  })
+})
+
+describe('PaneAgentIdentities authority', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("turns an ended store's answers pending everywhere and asks the next store", async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    // Each store mints its own id for the same conversation.
+    workers.answer = (request) =>
+      request.kind === 'identify'
+        ? {
+            id: request.id,
+            ok: true,
+            value: `claude_${request.path}_${request.key.providerSessionId}`
+          }
+        : {
+            id: request.id,
+            ok: true,
+            value:
+              request.kind === 'has' && request.orcaSessionId.startsWith(`claude_${request.path}`)
+          }
+    let path = 'storeA'
+    const settled: SettledAgentIdentityPlace[] = []
+    // Re-stamps each row as the hook server does, so the indexes follow every publication.
+    const identities: PaneAgentIdentities = new PaneAgentIdentities(
+      () => path,
+      (places) => {
+        settled.push(...places)
+        for (const place of places) {
+          identities.setPlace(place.place, place.paneKey, place.identity)
+        }
+      },
+      () => new AgentIdentityWorkerClient(workers.factory)
+    )
+    opened.push(identities)
+    admit(identities, 'row', 'S')
+    identities.assignCanonical('subject', 'pane', sighting({ id: 'S' }))
+    await vi.advanceTimersByTimeAsync(5)
+    const old = identities.canonicalIdentity('subject')!
+    expect(old.id).toBe('claude_storeA_S')
+    settled.length = 0
+
+    path = 'storeB'
+    identities.syncAuthority()
+    // Row, canonical subject and reverse index drop A's answer together, before B answers.
+    expect(settled.map((place) => [place.place, place.identity.pending]).sort()).toEqual([
+      ['\u0001subject', true],
+      ['row', true]
+    ])
+    expect(identities.isCurrent(old)).toBe(false)
+    expect(identities.assign(sighting({ id: 'S' }), old)).toMatchObject({ id: null, pending: true })
+    expect(identities.canonicalIdentity('subject')?.pending).toBe(true)
+    expect(identities.placesOf('claude_storeA_S')).toEqual([])
+    const asked = identities.isTerminalIdentity('claude_storeA_S')
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await asked).toBe(false)
+    expect(identities.canonicalIdentity('subject')?.id).toBe('claude_storeB_S')
+    expect(identities.placesOf('claude_storeB_S').map((place) => place.key)).toEqual([
+      'subject',
+      'row'
+    ])
+  })
+
+  it('keeps its answers when only the worker restarts on the same store', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    const { identities } = scriptedService(workers)
+    admit(identities, 'row', 'S')
+    await vi.advanceTimersByTimeAsync(1)
+    const carried = identities.assign(sighting({ id: 'S' }), undefined)!
+    expect(carried.id).toBe('claude_S')
+    // A stuck operation times out and its worker exits; the next operation starts another.
+    workers.answer = (request) => (request.kind === 'has' ? 'never' : 'never')
+    const stuck = identities.isTerminalIdentity('claude_unknown')
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await stuck).toBeUndefined()
+    expect(workers.live).toBe(0)
+    workers.answer = (request) => ({ id: request.id, ok: true, value: false })
+    await vi.advanceTimersByTimeAsync(30_000)
+    const asked = identities.isTerminalIdentity('claude_unknown')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await asked).toBe(false)
+    expect(workers.spawns).toBe(2)
+    expect(identities.isCurrent(carried)).toBe(true)
+    expect(identities.assign(sighting({ id: 'S' }), carried)).toBe(carried)
+    await expect(identities.identify(sighting({ id: 'S' }))).resolves.toBe('claude_S')
+    expect(workers.identifyPosts()).toBe(1)
+  })
+})
+
+describe('PaneAgentIdentities explicit retries', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function failingFor(workers: ScriptedIdentityWorkers, failing: Set<string>): void {
+    workers.serviceMs = 5
+    workers.answer = (request) =>
+      request.kind === 'identify' && failing.has(request.key.providerSessionId)
+        ? { id: request.id, ok: false, error: 'locked' }
+        : request.kind === 'identify'
+          ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
+          : { id: request.id, ok: true, value: false }
+  }
+
+  it('gives a click queued behind a failing one its own attempt, and joins a running one', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    failingFor(workers, new Set(['A']))
+    const { identities } = scriptedService(workers)
+    const clickA = identities.identify(sighting({ id: 'A' }))
+    await vi.advanceTimersByTimeAsync(1)
+    // Joins A's running attempt: its failure leaves no second "explicit" attempt behind.
+    const joinedA = identities.identify(sighting({ id: 'A' }))
+    const clickB = identities.identify(sighting({ id: 'B' }))
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await clickA).toBeNull()
+    expect(await joinedA).toBeNull()
+    // No event and no 30 s wake: B's attempt follows A's failure.
+    expect(await clickB).toBe('claude_B')
+    expect(workers.identifyPosts()).toBe(2)
+  })
+
+  it('revokes the grant of a click that expired unanswered; its row waits for the wake', async () => {
+    vi.useFakeTimers()
+    const workers = new ScriptedIdentityWorkers()
+    workers.holdExit = true
+    workers.answer = () => 'never'
+    const { identities } = scriptedService(workers)
+    const stuck = identities.identify(sighting({ id: 'A' }))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await stuck).toBeNull()
+    // The timed-out worker is still exiting: B's click cannot be sent before it expires.
+    admit(identities, 'rowB', 'B')
+    const clickB = identities.identify(sighting({ id: 'B' }))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(await clickB).toBeNull()
+    workers.answer = (request) =>
+      request.kind === 'identify'
+        ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
+        : 'never'
+    workers.releaseExits()
+    await vi.advanceTimersByTimeAsync(19_000)
+    expect(workers.identifyPosts()).toBe(1)
+    // The owner's single wake, 30 s after the failure, is the row's next attempt.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(workers.identifyPosts()).toBe(2)
+    expect(identities.assign(sighting({ id: 'B' }), undefined)?.id).toBe('claude_B')
+  })
+})
+
+it('answers unavailable when the worker cannot load, or is stopped while loading', async () => {
+  const path = databasePath()
+  const missing = join(buildDir, 'missing', 'agent-identity-worker-entry.js')
+  const workers: Worker[] = []
+  const exited = (worker: Worker) => worker.threadId === -1
+  let maxLive = 0
+  const spawn = () => {
+    const worker = spawnWorkerThread(missing, { name: 'orca-agent-identity' })
+    workers.push(worker)
+    maxLive = Math.max(maxLive, workers.filter((spawned) => !exited(spawned)).length)
+    return worker
+  }
+  const service = () => {
+    const identities = new PaneAgentIdentities(
+      () => path,
+      () => {},
+      () => new AgentIdentityWorkerClient(spawn)
+    )
+    opened.push(identities)
+    return identities
+  }
+  const failing = service()
+  expect(await failing.identify(sighting({ id: 'k' }))).toBeNull()
+  // A second click in the backoff waits for the failed worker's exit before another starts.
+  expect(await failing.identify(sighting({ id: 'k' }))).toBeNull()
+  expect(maxLive).toBe(1)
+  const stopping = service()
+  const click = stopping.identify(sighting({ id: 'k' }))
+  await vi.waitFor(() => expect(workers.length).toBe(3))
+  stopping.close()
+  expect(await click).toBeNull()
+  failing.close()
+  // No worker outlives its owner.
+  await vi.waitFor(() => expect(workers.every(exited)).toBe(true))
+})
+
+/** A newer build's read-only identity file with `links` links and only `indexSql`'s indexes. */
+function newerReadOnlyFile(links: number, indexSql: string[]) {
+  const path = databasePath()
+  const writable = new AgentIdentityStore(path)
+  const key = (index: number) => ({
+    executionHost: 'local',
+    wslDistro: '',
+    agent: 'claude',
+    providerSessionId: `session-${index}`,
+    locator: ''
+  })
+  const first = writable.identify(key(0))!
+  writable.close()
+  const db = new SyncDatabase(path)
+  db.exec('BEGIN')
+  for (let index = 1; index < links; index++) {
+    const id = `claude_00000000_0000_4000_8000_${String(index).padStart(12, '0')}`
+    db.prepare('INSERT INTO identities(orca_session_id, agent, created_at) VALUES (?, ?, 0)').run(
+      id,
+      'claude'
+    )
+    db.prepare(
+      `INSERT INTO provider_links(execution_host, wsl_distro, agent, provider_session_id, locator, orca_session_id)
+       VALUES ('local', '', 'claude', ?, '', ?)`
+    ).run(`session-${index}`, id)
+  }
+  db.exec('COMMIT')
+  for (const sql of indexSql) {
+    db.exec(sql)
+  }
+  db.exec('PRAGMA user_version = 2')
+  db.close()
+  return { path, first, key }
+}
+
+describe('AgentIdentityStore on a newer build read-only file', () => {
+  const cases: [string, string[], 'key' | 'unavailable', 'ids' | 'unavailable'][] = [
+    ['no index', [], 'unavailable', 'unavailable'],
+    [
+      'a partial index the query does not imply',
+      ["CREATE INDEX partial_alias ON provider_links(provider_session_id) WHERE agent = 'codex'"],
+      'unavailable',
+      'unavailable'
+    ],
+    [
+      'a NOCASE index',
+      ['CREATE INDEX nocase_links ON provider_links(orca_session_id COLLATE NOCASE)'],
+      'unavailable',
+      'unavailable'
+    ],
+    [
+      'a preferred name on the wrong column',
+      ['CREATE INDEX provider_links_by_orca_session ON provider_links(agent)'],
+      'unavailable',
+      'unavailable'
+    ],
+    [
+      "a newer build's composite indexes under its own names",
+      [
+        'CREATE INDEX newer_by_id ON provider_links(orca_session_id, agent)',
+        'CREATE INDEX newer_by_session ON provider_links(provider_session_id DESC, agent)'
+      ],
+      'key',
+      'ids'
+    ]
+  ]
+  const links = 2
+  it.each(cases)(
+    'with %s, searches by index or answers unavailable',
+    (_, indexSql, byId, bySession) => {
+      const { path, first, key } = newerReadOnlyFile(links, indexSql)
+      const store = new AgentIdentityStore(path)
+      opened.push(store)
+      expect(store.readOnly).toBe(true)
+
+      expect(store.providerKeyOf(first)).toEqual(
+        byId === 'key' ? key(0) : REVERSE_LOOKUP_UNAVAILABLE
+      )
+      expect(store.providerKeyOf('claude_missing')).toEqual(
+        byId === 'key' ? null : REVERSE_LOOKUP_UNAVAILABLE
+      )
+      expect(store.idsOfProviderSession('session-0')).toEqual(
+        bySession === 'ids' ? [first] : REVERSE_LOOKUP_UNAVAILABLE
+      )
+      // Every other lookup keeps working, and nothing is written.
+      expect(store.has(first)).toBe(true)
+      expect(store.lookup(key(0))).toBe(first)
+      expect(store.identify(key(links + 1))).toBeNull()
+    }
+  )
+
+  it('reclassifies when the schema changes on the same handle, and on reopen', () => {
+    const { path, first, key } = newerReadOnlyFile(100, [
+      'CREATE INDEX newer_by_id ON provider_links(orca_session_id, agent)'
+    ])
+    const store = new AgentIdentityStore(path)
+    opened.push(store)
+    expect(store.providerKeyOf(first)).toEqual(key(0))
+
+    const newer = new SyncDatabase(path)
+    newer.exec('DROP INDEX newer_by_id')
+    expect(store.providerKeyOf(first)).toEqual(REVERSE_LOOKUP_UNAVAILABLE)
+    newer.exec('CREATE INDEX later_by_id ON provider_links(orca_session_id)')
+    newer.close()
+    expect(store.providerKeyOf(first)).toEqual(key(0))
+
+    const reopened = new AgentIdentityStore(path)
+    opened.push(reopened)
+    expect(reopened.providerKeyOf(first)).toEqual(key(0))
+  })
+})

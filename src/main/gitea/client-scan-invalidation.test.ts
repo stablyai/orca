@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: vi.fn(async () => ({
     stdout: 'https://git.example.com/team/repo.git\n',
     stderr: ''
@@ -113,53 +114,44 @@ describe('Gitea scan invalidation after creation', () => {
     expect(listCalls).toBe(3)
   })
 
-  it.each(['before', 'after'] as const)(
-    'keeps fresh strict results when a pre-invalidation scan finishes %s its replacement',
-    async (completionOrder) => {
-      const oldResponse = Promise.withResolvers<Response>()
-      const freshResponse = Promise.withResolvers<Response>()
-      const oldStarted = Promise.withResolvers<void>()
-      const fetchMock = vi
-        .fn()
-        .mockImplementationOnce(() => {
-          oldStarted.resolve()
-          return oldResponse.promise
-        })
-        .mockImplementationOnce(() => freshResponse.promise)
-      vi.stubGlobal('fetch', fetchMock)
+  it('keeps fresh strict results when a stale scan finishes last', async () => {
+    const oldResponse = Promise.withResolvers<Response>()
+    const freshResponse = Promise.withResolvers<Response>()
+    const oldStarted = Promise.withResolvers<void>()
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        oldStarted.resolve()
+        return oldResponse.promise
+      })
+      .mockImplementationOnce(() => freshResponse.promise)
+    vi.stubGlobal('fetch', fetchMock)
 
-      const stale = getGiteaPullRequestForBranchOrThrow('/repo', branch)
-      await oldStarted.promise
-      const repo = await getGiteaRepoSlug('/repo')
-      if (!repo) {
-        throw new Error('Expected test repository')
-      }
-      invalidateGiteaPullRequestScanForRepo(repo)
-      const fresh = getGiteaPullRequestForBranchOrThrow('/repo', branch)
-      const concurrent = getGiteaPullRequestForBranchOrThrow('/repo', branch)
-      try {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-        expect(fetchMock).toHaveBeenCalledTimes(2)
-        if (completionOrder === 'before') {
-          oldResponse.resolve(Response.json([]))
-          expect(await stale).toBeNull()
-        }
-        freshResponse.resolve(Response.json([pullRequest]))
-        expect(await fresh).toMatchObject({ number: 7 })
-        expect(await concurrent).toMatchObject({ number: 7 })
-        if (completionOrder === 'after') {
-          oldResponse.resolve(Response.json([]))
-          expect(await stale).toBeNull()
-        }
-        expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({
-          number: 7
-        })
-        expect(fetchMock).toHaveBeenCalledTimes(2)
-      } finally {
-        oldResponse.resolve(Response.json([]))
-        freshResponse.resolve(Response.json([pullRequest]))
-        await Promise.all([stale, fresh, concurrent])
-      }
+    const stale = getGiteaPullRequestForBranchOrThrow('/repo', branch)
+    await oldStarted.promise
+    const repo = await getGiteaRepoSlug('/repo')
+    if (!repo) {
+      throw new Error('Expected test repository')
     }
-  )
+    invalidateGiteaPullRequestScanForRepo(repo)
+    const fresh = getGiteaPullRequestForBranchOrThrow('/repo', branch)
+    const concurrent = getGiteaPullRequestForBranchOrThrow('/repo', branch)
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      freshResponse.resolve(Response.json([pullRequest]))
+      expect(await fresh).toMatchObject({ number: 7 })
+      expect(await concurrent).toMatchObject({ number: 7 })
+      oldResponse.resolve(Response.json([]))
+      expect(await stale).toBeNull()
+      expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({
+        number: 7
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      oldResponse.resolve(Response.json([]))
+      freshResponse.resolve(Response.json([pullRequest]))
+      await Promise.all([stale, fresh, concurrent])
+    }
+  })
 })

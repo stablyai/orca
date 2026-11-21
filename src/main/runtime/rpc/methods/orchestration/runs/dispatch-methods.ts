@@ -1,62 +1,46 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { dispatchAccess } from '../access/run-access-rules'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
-  taskNotFoundError,
   taskNotStartableError
-} from '../../../../orchestration/task-dispatch-refusal'
-import { resolveRunScope } from './run-scope'
-import { DispatchParams, DispatchShowParams } from '../schemas'
+} from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
+import {
+  DispatchParams,
+  DispatchShowParams
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
-} from '../../../../orchestration/orchestration-party'
+} from '../../../../orchestration/addressing/orchestration-party'
 import {
   admitChatAssignee,
   chatAssigneeOf,
   refuseChatSelfAssignment
 } from '../chat-assignee-admission'
 import { sendChatTask } from '../chat-task-delivery'
-import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
+import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.dispatch',
     permission: 'workspace',
     params: DispatchParams,
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { task: 'task', to: 'party', run: 'run' },
+      rule: dispatchAccess
+    },
     handler: async (
       params,
-      {
-        orchestrationCompatibilityEvidence,
-        orchestrationCaller,
-        runtime,
-        legacyCoordinatorRunId,
-        revalidateLegacyCoordinator,
-        orchestrationMutation
-      }
+      { orchestrationCaller, runtime, revalidateLegacyCoordinator, orchestrationMutation },
+      { task }
     ) => {
       const db = runtime.getOrchestrationDb()
-      const task = db.getTask(params.task)
-      if (!task) {
-        throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
-      }
-      const run = resolveRunScope(runtime, {
-        runId: params.run,
-        callerTerminalHandle: params.from,
-        requireCurrentConsumer: true,
-        legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
-      })
-      if (task.run_id !== run.id) {
-        throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
-          taskId: task.id,
-          runId: run.id
-        })
-      }
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -98,8 +82,10 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         )
       }
 
-      const dispatchAuthority = chatAssignee ? null : runtime.getOrchestrationDispatchAuthority(to)
-      const assigneePaneKey = chatAssignee
+      // A structured worker's chat keeps the pane and process its custody is held under.
+      const sessionOnly = assigneeParty?.terminalHandle === null
+      const dispatchAuthority = sessionOnly ? null : runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey = sessionOnly
         ? undefined
         : (dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined)
       const processIncarnation =
@@ -140,7 +126,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         }
       }
 
-      if (params.inject && !chatAssignee && (!assigneePaneKey || !processIncarnation)) {
+      if (params.inject && !sessionOnly && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
           `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
@@ -154,11 +140,14 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         assigneePaneKey,
         launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
         processIncarnation,
+        hostScope: dispatchAuthority?.hostScope
+          ? JSON.stringify(dispatchAuthority.hostScope)
+          : null,
         creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
-      // Build after ctx to put its real id in heartbeats and attribute liveness to this Dispatch.
+      // Build after ctx so worker_done carries this Dispatch's real id.
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
@@ -179,8 +168,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               db,
               dispatch: ctx,
               from: params.from,
-              senderName: (party, reported) =>
-                runtime.orchestrationSenderNames.nameOf(party, reported)
+              senderSnapshot: (party, reported) =>
+                runtime.orchestrationSenderNames.snapshotOf(party, reported)
             })
             await sendChatTask({ db, dispatch: ctx, from, preamble })
           } else {
@@ -218,10 +207,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.dispatchShow',
     permission: 'workspace',
     params: DispatchShowParams,
+    access: { kind: 'reads', targets: { task: 'task' } },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {

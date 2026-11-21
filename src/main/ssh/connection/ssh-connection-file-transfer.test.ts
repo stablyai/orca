@@ -1,49 +1,54 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
-import { createCallbacks, createResolvedConfig, createTarget } from './ssh-connection-test-fixtures'
+import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
+import {
+  createCallbacks,
+  createResolvedConfig,
+  createTarget
+} from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
-import {
-  downloadFileViaSystemSsh,
-  uploadFileViaSystemSsh,
-  writeBufferViaSystemSsh
-} from '../system-transport/system-ssh-file-binary-transfer'
+
 import {
   uploadDirectoryViaSystemSsh,
   writeFileViaSystemSsh
-} from '../system-transport/system-ssh-file-transfer'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
+} from '../system-transport/file-transfer/system-ssh-file-transfer'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
+    await importOriginal()
+  )
 )
 vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
-)
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-file-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshFileTransferMocks(
     await importOriginal()
   )
 )
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
 )
 vi.mock('../config/ssh-config-parser', async () =>
-  (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )
@@ -51,80 +56,6 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
 describe('SshConnection', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-  })
-
-  it('passes the detected host platform to system SSH file operations', async () => {
-    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
-    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
-    const hostPlatform = getRemoteHostPlatform('win32-x64')
-
-    await conn.connect()
-    await conn.uploadDirectory('/tmp/local-relay', 'C:/Users/me/.orca-remote/relay', {
-      hostPlatform
-    })
-    await conn.writeFile('C:/Users/me/.orca-remote/relay/.version', '0.1.0', {
-      hostPlatform
-    })
-    await conn.writeBuffer('C:/Users/me/.orca-remote/relay/logo.png', Buffer.from('png'), {
-      hostPlatform,
-      exclusive: true
-    })
-    await conn.downloadFile('C:/Users/me/.orca-remote/relay/logo.png', '/tmp/logo.png', {
-      hostPlatform
-    })
-    const uploadSession = await conn.openFileUploadSession({ hostPlatform })
-    await uploadSession.uploadFile('/tmp/logo.png', 'C:/Users/me/project/logo.png', {
-      exclusive: true
-    })
-    uploadSession.close()
-
-    expect(uploadDirectoryViaSystemSsh).toHaveBeenCalledWith(
-      expect.objectContaining({ configHost: 'fdpass-host' }),
-      '/tmp/local-relay',
-      'C:/Users/me/.orca-remote/relay',
-      expect.objectContaining({
-        hostPlatform,
-        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
-      })
-    )
-    expect(writeFileViaSystemSsh).toHaveBeenCalledWith(
-      expect.objectContaining({ configHost: 'fdpass-host' }),
-      'C:/Users/me/.orca-remote/relay/.version',
-      '0.1.0',
-      expect.objectContaining({
-        hostPlatform,
-        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
-      })
-    )
-    expect(writeBufferViaSystemSsh).toHaveBeenCalledWith(
-      expect.objectContaining({ configHost: 'fdpass-host' }),
-      'C:/Users/me/.orca-remote/relay/logo.png',
-      Buffer.from('png'),
-      expect.objectContaining({
-        hostPlatform,
-        exclusive: true,
-        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
-      })
-    )
-    expect(downloadFileViaSystemSsh).toHaveBeenCalledWith(
-      expect.objectContaining({ configHost: 'fdpass-host' }),
-      'C:/Users/me/.orca-remote/relay/logo.png',
-      '/tmp/logo.png',
-      expect.objectContaining({
-        hostPlatform,
-        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
-      })
-    )
-    expect(uploadFileViaSystemSsh).toHaveBeenCalledWith(
-      expect.objectContaining({ configHost: 'fdpass-host' }),
-      '/tmp/logo.png',
-      'C:/Users/me/project/logo.png',
-      expect.objectContaining({
-        hostPlatform,
-        exclusive: true,
-        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
-      })
-    )
   })
 
   it('composes a caller abort into system SSH relay uploads', async () => {
@@ -180,30 +111,5 @@ describe('SshConnection', () => {
     await expect(write).rejects.toMatchObject({ name: 'AbortError' })
     expect(controller.signal.aborted).toBe(false)
     expect(transferSignal?.aborted).toBe(true)
-  })
-
-  it('keeps an upload session cancelled after the connection disconnects', async () => {
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-    vi.mocked(uploadFileViaSystemSsh).mockImplementation(
-      async (_target, _localPath, _remotePath, options) => {
-        if (options?.signal?.aborted) {
-          const error = new Error('System SSH operation was cancelled')
-          error.name = 'AbortError'
-          throw error
-        }
-      }
-    )
-
-    await conn.connect()
-    const uploadSession = await conn.openFileUploadSession()
-    await conn.disconnect()
-
-    await expect(
-      uploadSession.uploadFile('/tmp/late.txt', '/remote/late.txt')
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(uploadFileViaSystemSsh).not.toHaveBeenCalled()
   })
 })

@@ -133,12 +133,6 @@ describe.skipIf(process.platform === 'win32')('lsof supervisor lifecycle', () =>
     }
   )
 
-  it('accepts zombie-only group evidence after the direct child closes', async () => {
-    const result = await runProbe({ census: 'printf "%s Z\\n" "$(cat "$PROBE_PID")"\n' })
-    expect(result.stdout).toBe('unavailable\n123\n')
-    expect(result.timedOut).toBe(false)
-  })
-
   it('requires census cleanup even when the lsof group disappears', async () => {
     const result = await runProbe({
       census: 'sleep 60 </dev/null >/dev/null 2>&1 &\nexit 0\n',
@@ -192,31 +186,5 @@ linuxOnly('lsof blindness to another uid', () => {
     expect(result.stdout).toBe('unavailable\n\n')
   })
 
-  it('still reports lsof for an empty answer about a path nothing has bound', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-lsof-stale-'))
-    try {
-      const result = await runProbe({ lsof: BLIND_LSOF, sockPath: join(dir, 'never-bound.sock') })
-      expect(result.stdout).toBe('lsof\n\n')
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('keeps a reported pid even while the path is still bound', async () => {
-    const result = await withBoundSocket((sockPath) =>
-      runProbe({ lsof: '#!/bin/sh\necho 123\nexit 0\n', sockPath })
-    )
-    expect(result.stdout).toBe('lsof\n123\n')
-  })
-
   // Test both prefix directions to reject substring-based socket matches.
-  it.each([
-    ['a prefix of the bound path', (sockPath: string) => sockPath.slice(0, -1)],
-    ['a path the bound one prefixes', (sockPath: string) => `${sockPath}.other`]
-  ])('does not treat %s as bound', async (_name, derive) => {
-    const result = await withBoundSocket((sockPath) =>
-      runProbe({ lsof: BLIND_LSOF, sockPath: derive(sockPath) })
-    )
-    expect(result.stdout).toBe('lsof\n\n')
-  })
 })

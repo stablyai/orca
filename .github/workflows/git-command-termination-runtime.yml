@@ -3,7 +3,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - 'src/main/git/command-runner/spawned-command-tree-kill*'
+      - 'src/main/git/command-runner/process-capture/spawned-command-tree-kill*'
       - '.github/workflows/git-command-termination-runtime.yml'
   workflow_dispatch:
 permissions:
@@ -24,4 +24,4 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
       - name: Verify exited native child does not trigger taskkill
-        run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/git/command-runner/spawned-command-tree-kill.test.ts
+        run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/git/command-runner/process-capture/spawned-command-tree-kill.test.ts

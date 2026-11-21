@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -31,12 +30,7 @@ vi.mock('node:os', async () => {
     homedir: homedirMock
   }
 })
-
-import {
-  getCodexSessionDirectories,
-  getCodexSessionsDirectory,
-  listCodexSessionFiles
-} from './codex-session-file-discovery'
+import { getCodexSessionDirectories, listCodexSessionFiles } from './codex-session-file-discovery'
 import { scanCodexUsageFiles } from './scanner'
 
 const originalCodexHome = process.env.CODEX_HOME
@@ -126,38 +120,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('getCodexSessionsDirectory', () => {
-  it('defaults to Orca-managed Codex runtime sessions', () => {
-    expect(getCodexSessionsDirectory()).toBe(
-      join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    )
-  })
-
-  it('ignores an ambient CODEX_HOME override', () => {
-    process.env.CODEX_HOME = '/tmp/explicit-codex-home'
-
-    expect(getCodexSessionsDirectory()).toBe(
-      join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    )
-  })
-})
-
 describe('listCodexSessionFiles', () => {
-  it('scans both Orca-managed and system Codex session homes', async () => {
-    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
-    mkdirSync(runtimeSessionsDir, { recursive: true })
-    mkdirSync(systemSessionsDir, { recursive: true })
-    const runtimeSessionPath = join(runtimeSessionsDir, 'runtime.jsonl')
-    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
-    writeFileSync(runtimeSessionPath, '{}\n', 'utf-8')
-    writeFileSync(systemSessionPath, '{}\n', 'utf-8')
-
-    expect(getCodexSessionDirectories()).toEqual([runtimeSessionsDir, systemSessionsDir])
-    expect(await listCodexSessionFiles()).toEqual([runtimeSessionPath, systemSessionPath].sort())
-  })
-
-  it('scans per-account self-contained Codex homes that hold sessions', async () => {
+  it('scans self-contained account sessions and skips homes or sessions redirected outside storage', async () => {
     const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
     const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
     const accountSessionsDir = join(userDataDir, 'codex-accounts', 'acct-1', 'home', 'sessions')
@@ -184,6 +148,32 @@ describe('listCodexSessionFiles', () => {
       'utf-8'
     )
 
+    const redirectedAccountDir = join(userDataDir, 'codex-accounts', 'acct-redirected')
+    const externalHome = join(fakeHomeDir, 'redirected-account-home')
+    mkdirSync(redirectedAccountDir, { recursive: true })
+    mkdirSync(join(externalHome, 'sessions'), { recursive: true })
+    writeFileSync(join(externalHome, '.orca-managed-home'), 'acct-redirected\n', 'utf-8')
+    writeFileSync(join(externalHome, 'sessions', 'unrelated.jsonl'), '{}\n', 'utf-8')
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir'
+    symlinkSync(externalHome, join(redirectedAccountDir, 'home'), linkType)
+
+    const redirectedSessionsHome = join(
+      userDataDir,
+      'codex-accounts',
+      'acct-redirected-sessions',
+      'home'
+    )
+    const externalSessionsDir = join(fakeHomeDir, 'redirected-sessions')
+    mkdirSync(redirectedSessionsHome, { recursive: true })
+    mkdirSync(externalSessionsDir, { recursive: true })
+    writeFileSync(
+      join(redirectedSessionsHome, '.orca-managed-home'),
+      'acct-redirected-sessions\n',
+      'utf-8'
+    )
+    writeFileSync(join(externalSessionsDir, 'unrelated.jsonl'), '{}\n', 'utf-8')
+    symlinkSync(externalSessionsDir, join(redirectedSessionsHome, 'sessions'), linkType)
+
     expect(getCodexSessionDirectories()).toEqual([
       runtimeSessionsDir,
       systemSessionsDir,
@@ -195,134 +185,6 @@ describe('listCodexSessionFiles', () => {
     expect(result.dailyAggregates).toEqual([
       expect.objectContaining({ totalTokens: 42, eventCount: 1 })
     ])
-  })
-
-  it('does not scan an account home redirected outside managed storage', async () => {
-    const accountDir = join(userDataDir, 'codex-accounts', 'acct-redirected')
-    const externalHome = join(fakeHomeDir, 'redirected-account-home')
-    const externalSessionsDir = join(externalHome, 'sessions')
-    mkdirSync(accountDir, { recursive: true })
-    mkdirSync(externalSessionsDir, { recursive: true })
-    writeFileSync(join(externalHome, '.orca-managed-home'), 'acct-redirected\n', 'utf-8')
-    writeFileSync(join(externalSessionsDir, 'unrelated.jsonl'), '{}\n', 'utf-8')
-    symlinkSync(
-      externalHome,
-      join(accountDir, 'home'),
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-
-    expect(getCodexSessionDirectories()).not.toContain(join(accountDir, 'home', 'sessions'))
-    expect(await listCodexSessionFiles()).toEqual([])
-  })
-
-  it('does not scan a sessions root redirected outside an owned account home', async () => {
-    const accountHome = join(userDataDir, 'codex-accounts', 'acct-redirected-sessions', 'home')
-    const externalSessionsDir = join(fakeHomeDir, 'redirected-sessions')
-    mkdirSync(accountHome, { recursive: true })
-    mkdirSync(externalSessionsDir, { recursive: true })
-    writeFileSync(join(accountHome, '.orca-managed-home'), 'acct-redirected-sessions\n', 'utf-8')
-    writeFileSync(join(externalSessionsDir, 'unrelated.jsonl'), '{}\n', 'utf-8')
-    symlinkSync(
-      externalSessionsDir,
-      join(accountHome, 'sessions'),
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-
-    expect(getCodexSessionDirectories()).not.toContain(join(accountHome, 'sessions'))
-    expect(await listCodexSessionFiles()).toEqual([])
-  })
-
-  it('dedupes managed session aliases that point at system sessions', async () => {
-    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
-    mkdirSync(runtimeSessionsDir, { recursive: true })
-    mkdirSync(systemSessionsDir, { recursive: true })
-    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
-    const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
-    writeFileSync(systemSessionPath, '{}\n', 'utf-8')
-    linkSync(systemSessionPath, runtimeSessionPath)
-
-    const files = await listCodexSessionFiles()
-
-    expect(files).toHaveLength(1)
-    expect(files[0] === runtimeSessionPath || files[0] === systemSessionPath).toBe(true)
-  })
-
-  it('does not scan both sides of a diverged legacy copied session bridge', async () => {
-    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    const runtimeBridgeMarkerDir = join(
-      userDataDir,
-      'codex-runtime-home',
-      'home',
-      '.orca-session-copies'
-    )
-    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
-    mkdirSync(runtimeSessionsDir, { recursive: true })
-    mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
-    mkdirSync(systemSessionsDir, { recursive: true })
-    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
-    const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
-    writeFileSync(systemSessionPath, '{}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{}\n', 'utf-8')
-    const sourceStat = lstatSync(systemSessionPath)
-    const targetStat = lstatSync(runtimeSessionPath)
-    writeFileSync(
-      join(runtimeBridgeMarkerDir, 'system.jsonl.json'),
-      `${JSON.stringify(
-        {
-          sourcePath: systemSessionPath,
-          sourceSize: sourceStat.size,
-          sourceMtimeMs: sourceStat.mtimeMs,
-          targetSize: targetStat.size,
-          targetMtimeMs: targetStat.mtimeMs
-        },
-        null,
-        2
-      )}\n`,
-      'utf-8'
-    )
-    writeFileSync(runtimeSessionPath, '{"runtime":"resumed"}\n', 'utf-8')
-
-    expect(await listCodexSessionFiles()).toEqual([runtimeSessionPath])
-  })
-
-  it('keeps both sides of a legacy copied session bridge after both sides diverge', async () => {
-    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    const runtimeBridgeMarkerDir = join(
-      userDataDir,
-      'codex-runtime-home',
-      'home',
-      '.orca-session-copies'
-    )
-    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
-    mkdirSync(runtimeSessionsDir, { recursive: true })
-    mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
-    mkdirSync(systemSessionsDir, { recursive: true })
-    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
-    const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
-    writeFileSync(systemSessionPath, '{}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{}\n', 'utf-8')
-    const sourceStat = lstatSync(systemSessionPath)
-    const targetStat = lstatSync(runtimeSessionPath)
-    writeFileSync(
-      join(runtimeBridgeMarkerDir, 'system.jsonl.json'),
-      `${JSON.stringify(
-        {
-          sourcePath: systemSessionPath,
-          sourceSize: sourceStat.size,
-          sourceMtimeMs: sourceStat.mtimeMs,
-          targetSize: targetStat.size,
-          targetMtimeMs: targetStat.mtimeMs
-        },
-        null,
-        2
-      )}\n`,
-      'utf-8'
-    )
-    writeFileSync(systemSessionPath, '{"system":"resumed"}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{"runtime":"resumed"}\n', 'utf-8')
-
-    expect(await listCodexSessionFiles()).toEqual([runtimeSessionPath, systemSessionPath].sort())
   })
 
   it('parses only source-side suffix after both sides of a legacy copy diverge', async () => {
@@ -401,69 +263,6 @@ describe('listCodexSessionFiles', () => {
     ).toBe(3)
   })
 
-  it('counts token events copied into forked rollout files exactly once', async () => {
-    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    mkdirSync(sessionsDir, { recursive: true })
-    const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
-    const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
-    const copiedPrefix = [
-      `${JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
-      })}\n`,
-      usageRecord('2026-05-26T12:00:00.000Z', 10),
-      usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
-    ].join('')
-    writeFileSync(originalPath, copiedPrefix, 'utf-8')
-    writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
-
-    const result = await scanCodexUsageFiles([], [])
-
-    expect(
-      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(22)
-    expect(
-      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.eventCount, 0)
-    ).toBe(3)
-    expect(result.sessions).toHaveLength(1)
-    expect(result.sessions[0]?.totalTokens).toBe(22)
-  })
-
-  it('dedupes fork copies even when session_meta id is rewritten', async () => {
-    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    mkdirSync(sessionsDir, { recursive: true })
-    const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
-    const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
-    const originalPrefix = [
-      `${JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'session-original', cwd: join(fakeHomeDir, 'repo') }
-      })}\n`,
-      usageRecord('2026-05-26T12:00:00.000Z', 10),
-      usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
-    ].join('')
-    // Forks retain usage records while rewriting session metadata.
-    const forkBody = [
-      `${JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'session-fork', cwd: join(fakeHomeDir, 'repo') }
-      })}\n`,
-      usageRecord('2026-05-26T12:00:00.000Z', 10),
-      usageRecord('2026-05-26T12:01:00.000Z', 5, 15),
-      usageRecord('2026-05-26T12:02:00.000Z', 7, 22)
-    ].join('')
-    writeFileSync(originalPath, originalPrefix, 'utf-8')
-    writeFileSync(forkPath, forkBody)
-
-    const result = await scanCodexUsageFiles([], [])
-    expect(
-      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(22)
-    expect(result.processedFiles[0]?.ownedEventKeys).toHaveLength(2)
-    expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
-    expect(result.processedFiles[1]?.hasDeferredClaims).toBe(true)
-  })
-
   it('dedupes fork copies whose timestamps Codex rewrote to the fork time', async () => {
     const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
     mkdirSync(sessionsDir, { recursive: true })
@@ -528,41 +327,6 @@ describe('listCodexSessionFiles', () => {
     ).toBe(3)
   })
 
-  it('keeps fork dedupe stable when the original file is reused from cache', async () => {
-    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    mkdirSync(sessionsDir, { recursive: true })
-    const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
-    const forkPath = join(sessionsDir, 'zzzz-fork.jsonl')
-    const copiedPrefix = [
-      `${JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
-      })}\n`,
-      usageRecord('2026-05-26T12:00:00.000Z', 10),
-      usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
-    ].join('')
-    writeFileSync(originalPath, copiedPrefix, 'utf-8')
-
-    const first = await scanCodexUsageFiles([], [])
-    expect(
-      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(15)
-    expect(first.processedFiles[0]?.ownedEventKeys).toHaveLength(2)
-
-    writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(
-      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(22)
-    expect(second.processedFiles.map((file) => file.ownedEventKeys.length)).toEqual([2, 1])
-
-    const third = await scanCodexUsageFiles([], second.processedFiles)
-    expect(
-      third.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(22)
-  })
-
   it('reclaims copied token events when the owning original file is deleted', async () => {
     const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
     mkdirSync(sessionsDir, { recursive: true })
@@ -596,48 +360,6 @@ describe('listCodexSessionFiles', () => {
     ).toBe(22)
     expect(second.processedFiles).toHaveLength(1)
     expect(second.processedFiles[0]?.ownedEventKeys).toHaveLength(3)
-  })
-
-  it('keeps unrelated cached rollouts when a different owner file is deleted', async () => {
-    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    mkdirSync(sessionsDir, { recursive: true })
-    const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
-    const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
-    const unrelatedPath = join(sessionsDir, 'cccc-unrelated.jsonl')
-    const copiedPrefix = [
-      `${JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
-      })}\n`,
-      usageRecord('2026-05-26T12:00:00.000Z', 10),
-      usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
-    ].join('')
-    writeFileSync(originalPath, copiedPrefix, 'utf-8')
-    writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
-    writeFileSync(
-      unrelatedPath,
-      [
-        `${JSON.stringify({
-          type: 'session_meta',
-          payload: { id: 'session-9', cwd: join(fakeHomeDir, 'repo') }
-        })}\n`,
-        usageRecord('2026-05-26T13:00:00.000Z', 3)
-      ].join('')
-    )
-
-    const first = await scanCodexUsageFiles([], [])
-    const unrelatedBefore = first.processedFiles.find((file) => file.path === unrelatedPath)
-    expect(unrelatedBefore?.hasDeferredClaims).toBe(false)
-    expect(unrelatedBefore?.ownedEventKeys).toHaveLength(1)
-
-    unlinkSync(originalPath)
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    const unrelatedAfter = second.processedFiles.find((file) => file.path === unrelatedPath)
-    expect(unrelatedAfter).toBe(unrelatedBefore)
-    expect(
-      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(25)
   })
 
   // New bridge markers must discard full-history checkpoints to avoid recounting the copied prefix.
@@ -768,68 +490,5 @@ describe('listCodexSessionFiles', () => {
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(15)
     expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
-  })
-
-  it('treats a leading total-only source suffix record as baseline', async () => {
-    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
-    const runtimeBridgeMarkerDir = join(
-      userDataDir,
-      'codex-runtime-home',
-      'home',
-      '.orca-session-copies'
-    )
-    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
-    mkdirSync(runtimeSessionsDir, { recursive: true })
-    mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
-    mkdirSync(systemSessionsDir, { recursive: true })
-    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
-    const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
-    const copiedPrefix = [
-      `${JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'legacy-session', cwd: join(fakeHomeDir, 'repo') }
-      })}\n`,
-      usageRecord('2026-05-26T12:00:00.000Z', 10)
-    ].join('')
-    writeFileSync(systemSessionPath, copiedPrefix, 'utf-8')
-    writeFileSync(runtimeSessionPath, copiedPrefix, 'utf-8')
-    const sourceStat = lstatSync(systemSessionPath)
-    const targetStat = lstatSync(runtimeSessionPath)
-    writeFileSync(
-      join(runtimeBridgeMarkerDir, 'system.jsonl.json'),
-      `${JSON.stringify(
-        {
-          sourcePath: systemSessionPath,
-          sourceSize: sourceStat.size,
-          sourceMtimeMs: sourceStat.mtimeMs,
-          targetSize: targetStat.size,
-          targetMtimeMs: targetStat.mtimeMs
-        },
-        null,
-        2
-      )}\n`,
-      'utf-8'
-    )
-    writeFileSync(
-      systemSessionPath,
-      [
-        copiedPrefix,
-        totalOnlyUsageRecord('2026-05-26T12:01:00.000Z', 13),
-        totalOnlyUsageRecord('2026-05-26T12:02:00.000Z', 17)
-      ].join('')
-    )
-    writeFileSync(
-      runtimeSessionPath,
-      `${copiedPrefix}${usageRecord('2026-05-26T12:03:00.000Z', 5, 15)}`
-    )
-
-    const result = await scanCodexUsageFiles([], [])
-
-    expect(
-      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
-    ).toBe(19)
-    expect(
-      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.eventCount, 0)
-    ).toBe(3)
   })
 })

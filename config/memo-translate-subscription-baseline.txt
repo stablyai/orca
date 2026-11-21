@@ -1,0 +1,4 @@
+# Memoized components (<file>#<component>) in files that call translate() but that do not
+# subscribe to UI language changes. Each entry needs a note saying why it renders no
+# translated text. Prune after a fix: pnpm check:memo-translate-subscription-ratchet --prune
+

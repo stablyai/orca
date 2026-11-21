@@ -1,5 +1,5 @@
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { isCurrentPtyExit, ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import {
   getProviderForPty,
@@ -9,17 +9,17 @@ import {
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   PtyExitProof,
   PtyRetirementWithoutProof,
   type PtyRetirementEvidence
-} from '../../../pty-exit-proof'
+} from '../../../pty/process-retirement/pty-exit-proof'
 import {
   closeLegacyRelayPane,
   isLegacyRelayBridgedPty,
   stopLegacyRelayPaneAndWait
-} from '../../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000

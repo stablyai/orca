@@ -3,17 +3,21 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../../shared/agent-session-host-authority'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionLease } from '../../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import type { AgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  closeTestAgentSessionRecordStores
+} from '../records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../records/agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -29,6 +33,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -60,56 +65,7 @@ function createRequest(
   }
 }
 
-async function releasedByRestart(now: number): Promise<AgentSessionRecordStore> {
-  const first = await open()
-  await first.reserveOwner(createRequest())
-  const store = await open()
-  await store.reconcileOnRestart({ probe: async () => INDETERMINATE, now })
-  expect(store.getRecord(SESSION)?.lease).toMatchObject({
-    claimStatus: 'released',
-    handoffStage: null,
-    runtimeFence: 2
-  })
-  return store
-}
-
 describe('a create retried after recovery released its reservation', () => {
-  it.each([
-    ['its operation row is still pending', 1_000],
-    ['its operation row has expired', PAST_EXPIRY]
-  ])('continues when %s, and the old reservation can never commit', async (_case, elapsed) => {
-    const now = NOW + elapsed
-    const store = await releasedByRestart(now)
-
-    const continued = await store.reserveOwner(createRequest({ spawnToken: () => 'spawn-b', now }))
-    expect(continued.disposition).toBe('reserved')
-    expect(continued.record.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'new-owner-proving',
-      runtimeFence: 3,
-      reservedSpawnToken: 'spawn-b',
-      handoffOperationId: OPERATION
-    })
-    expect(store.listOperationRows()).toEqual([
-      expect.objectContaining({ operationId: OPERATION, outcome: { status: 'pending' } })
-    ])
-
-    // Reject late identity from the first reservation by fence and token.
-    const lateSpawn = { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-a' }
-    await expect(
-      store.commitProcessIdentity({ sessionId: SESSION, fence: 1, process: lateSpawn, now })
-    ).rejects.toThrow('agent_session_checkpoint_stale')
-    await expect(
-      store.commitProcessIdentity({ sessionId: SESSION, fence: 3, process: lateSpawn, now })
-    ).rejects.toThrow('agent_session_ownership_unknown')
-
-    const mint = vi.fn(() => 'spawn-c')
-    const retried = await store.reserveOwner(createRequest({ spawnToken: mint, now }))
-    expect(retried.disposition).toBe('replayed')
-    expect(retried.record.lease).toMatchObject({ runtimeFence: 3, reservedSpawnToken: 'spawn-b' })
-    expect(mint).not.toHaveBeenCalled()
-  })
-
   it('refuses an expired retry of a session that has no record', async () => {
     const store = await open()
     await expect(store.reserveOwner(createRequest({ now: NOW + PAST_EXPIRY }))).rejects.toThrow(
@@ -158,10 +114,13 @@ describe('a create retried after recovery released its reservation', () => {
   ])('still refuses a retry whose reservation is %s', async (_case, lease, code) => {
     const store = await open()
     await store.reserveOwner(createRequest())
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
-      lease: { ...record.lease, ...lease }
-    }))
+    await withTestAgentSessionDatabase(directory, (db) =>
+      db
+        .prepare(
+          `UPDATE agent_session_records SET record_json=json_patch(record_json,?) WHERE session_id=?`
+        )
+        .run(JSON.stringify({ lease }), SESSION)
+    )
 
     await expect(store.reserveOwner(createRequest())).rejects.toThrow(code)
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(1)

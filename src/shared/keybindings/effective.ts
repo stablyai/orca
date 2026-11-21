@@ -5,7 +5,14 @@ import type {
   KeybindingOverrides,
   TerminalShortcutPolicy
 } from './types'
-import { DEFINITIONS_BY_ID, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
+import {
+  DEFINITIONS_BY_ID,
+  KEYBINDING_DEFINITIONS,
+  getKeybindingPlatform,
+  getLegacySearchBindings,
+  isDigitIndexActionId
+} from './definitions'
+import { keybindingConflictIdentities } from './matching-key'
 import {
   normalizeKeybindingWithOptions,
   normalizeOptionsForAction,
@@ -25,12 +32,12 @@ export function getDefaultBindings(
   })
 }
 
-export function getEffectiveKeybindingsForAction(
+function getConfiguredBindings(
   actionId: KeybindingActionId,
   platform: NodeJS.Platform,
-  overrides?: KeybindingOverrides
+  overrides?: KeybindingOverrides,
+  definition = DEFINITIONS_BY_ID.get(actionId)
 ): string[] {
-  const definition = DEFINITIONS_BY_ID.get(actionId)
   const override = overrides?.[actionId]
   if (Array.isArray(override)) {
     // Canonicalize hand-edited digit overrides to <mods>+1 so display/conflicts agree across the range.
@@ -55,16 +62,125 @@ export function getEffectiveKeybindingsForAction(
   return definition ? getDefaultBindings(definition, platform) : []
 }
 
-export function getEffectiveKeybindingsForDefinition(
+export function keybindingConflictGroups(definition: KeybindingDefinition): readonly string[] {
+  return (
+    definition.conflictGroups ?? [definition.conflictGroup ?? definition.scope, definition.scope]
+  )
+}
+
+// Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
+export function keybindingMainProcessConflictGroups(
   definition: KeybindingDefinition,
+  scopes: Iterable<string>
+): Set<string> {
+  const groups = new Set(keybindingConflictGroups(definition))
+  if (isKeybindingInterceptedByMainProcess(definition)) {
+    for (const scope of scopes) {
+      if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
+        groups.add(scope)
+      }
+    }
+  }
+  return groups
+}
+
+function bindingIdentitiesOverlap(
+  left: KeybindingDefinition,
+  a: string,
+  right: KeybindingDefinition,
+  b: string,
+  platform: NodeJS.Platform
+): boolean {
+  return keybindingConflictIdentities(left.id, a, platform).some((identity) =>
+    keybindingConflictIdentities(right.id, b, platform).includes(identity)
+  )
+}
+
+export function bindingsOverlap(
+  left: KeybindingDefinition,
+  a: string,
+  right: KeybindingDefinition,
+  b: string,
+  platform: NodeJS.Platform
+): boolean {
+  return (
+    keybindingConflictGroups(left).some((group) =>
+      keybindingConflictGroups(right).includes(group)
+    ) && bindingIdentitiesOverlap(left, a, right, b, platform)
+  )
+}
+
+export function isDefaultKeybinding(
+  definition: KeybindingDefinition,
+  binding: string,
+  platform: NodeJS.Platform
+): boolean {
+  // Previous defaults retain intentional sharing when profiles inherit or save them.
+  return [
+    ...getDefaultBindings(definition, platform),
+    ...(getLegacySearchBindings(platform)[definition.id] ?? [])
+  ].some((ownDefault) => bindingsOverlap(definition, binding, definition, ownDefault, platform))
+}
+
+export function getEffectiveKeybindingsForAction(
+  actionId: KeybindingActionId,
   platform: NodeJS.Platform,
   overrides?: KeybindingOverrides
 ): string[] {
-  const override = overrides?.[definition.id]
-  if (Array.isArray(override)) {
-    return getEffectiveKeybindingsForAction(definition.id, platform, overrides)
+  const definition = DEFINITIONS_BY_ID.get(actionId)
+  return definition
+    ? getEffectiveKeybindingsForDefinition(definition, platform, overrides)
+    : getConfiguredBindings(actionId, platform, overrides)
+}
+
+const implicitBindings = new WeakMap<KeybindingOverrides, Map<NodeJS.Platform, string[]>>()
+const emptyOverrides: KeybindingOverrides = {}
+
+export function getEffectiveKeybindingsForDefinition(
+  definition: KeybindingDefinition,
+  platform: NodeJS.Platform,
+  overrides: KeybindingOverrides = emptyOverrides,
+  definitions: readonly KeybindingDefinition[] = KEYBINDING_DEFINITIONS
+): string[] {
+  const configured = getConfiguredBindings(definition.id, platform, overrides, definition)
+  if (!definition.implicitDefaultYields || Object.hasOwn(overrides, definition.id)) {
+    return configured
   }
-  return getDefaultBindings(definition, platform)
+  const cacheable =
+    definition === DEFINITIONS_BY_ID.get('terminal.toggleNativeChat') &&
+    definitions === KEYBINDING_DEFINITIONS
+  const cached = cacheable ? implicitBindings.get(overrides)?.get(platform) : undefined
+  if (cached) {
+    return cached
+  }
+  // Why: main routes its chords from the static registry, so plugin claims can't make them yield there.
+  const claimants = isKeybindingInterceptedByMainProcess(definition)
+    ? KEYBINDING_DEFINITIONS
+    : definitions
+  const groups = keybindingMainProcessConflictGroups(
+    definition,
+    claimants.map((other) => other.scope)
+  )
+  const effective = configured.filter(
+    (binding) =>
+      !claimants.some(
+        (other) =>
+          other.id !== definition.id &&
+          Object.hasOwn(overrides, other.id) &&
+          keybindingConflictGroups(other).some((group) => groups.has(group)) &&
+          getConfiguredBindings(other.id, platform, overrides, other).some(
+            (claim) =>
+              bindingIdentitiesOverlap(definition, binding, other, claim, platform) &&
+              !isDefaultKeybinding(other, claim, platform)
+          )
+      )
+  )
+  if (cacheable) {
+    const byPlatform = implicitBindings.get(overrides) ?? new Map()
+    byPlatform.set(platform, effective)
+    implicitBindings.set(overrides, byPlatform)
+  }
+  return effective
 }
 
 export function normalizeTerminalShortcutPolicy(
@@ -113,7 +229,6 @@ const MAIN_PROCESS_INTERCEPTED_ACTIONS: Partial<
   'sidebar.right.toggle': 'afterBrowserChords',
   'worktree.quickOpen': 'afterBrowserChords',
   'workspace.create': 'afterBrowserChords',
-  'workspace.delete': 'afterBrowserChords',
   'workspace.openBoard': 'afterBrowserChords',
   'view.tasks': 'afterBrowserChords',
   'dashboard.toggle': 'afterBrowserChords',

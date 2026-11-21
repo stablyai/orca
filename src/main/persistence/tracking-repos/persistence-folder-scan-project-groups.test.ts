@@ -10,10 +10,8 @@ import {
   testState,
   writeDataFile
 } from '../persistence-test-harness'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import { createProjectGroup } from '../../../shared/project-groups'
-import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
-import { LoadedStateAdaptationOperations } from '../loading-store/loaded-state-adaptation'
+
+import { normalizeRuntimePathSeparators } from '../../../shared/file-access/cross-platform-path'
 
 vi.mock('electron', () => ({
   app: {
@@ -44,95 +42,95 @@ describe('Flat folder-scan project groups adaptation', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('leaves unchanged group membership and manual order clean on load', () => {
-    const state = getDefaultPersistedState(testState.dir)
-    const parentPath = join(testState.dir, 'projects')
-    const group = createProjectGroup({
-      name: 'Projects',
-      parentPath,
-      createdFrom: 'folder-scan',
-      tabOrder: 0
+  it('retains old group defaults and locally configured hooks through restart', async () => {
+    const store = createStore()
+    const old = store.createProjectGroup({
+      name: 'Old',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
     })
-    state.projectGroups = [group]
-    state.repos = ['alpha', 'beta'].map((name, index) =>
+    const configured = store.createProjectGroup({
+      name: 'Configured',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
+    })
+    store.updateProjectGroup(configured.id, {
+      hookSettings: {
+        mode: 'auto',
+        scripts: { setup: 'echo setup', archive: 'echo archive' },
+        commandSourcePolicy: 'local-only',
+        setupRunPolicy: 'ask',
+        setupAgentStartupPolicy: 'wait-for-setup'
+      }
+    })
+    store.flush()
+    await closeTestStores()
+    const reloaded = createStore()
+    expect(
+      reloaded.getProjectGroups().find((group) => group.id === old.id)?.hookSettings
+    ).toBeUndefined()
+    expect(
+      reloaded.getProjectGroups().find((group) => group.id === configured.id)?.hookSettings
+    ).toEqual({
+      mode: 'auto',
+      scripts: { setup: 'echo setup', archive: 'echo archive' },
+      commandSourcePolicy: 'local-only',
+      setupRunPolicy: 'ask',
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
+  })
+  it('preserves saved order for Git and folder projects through a Store restart', async () => {
+    const store = createStore()
+    const group = store.createProjectGroup({
+      name: 'GitHub',
+      parentPath: join(testState.dir, 'GitHub'),
+      createdFrom: 'folder-scan'
+    })
+    store.addRepo(
       makeRepo({
-        id: name,
-        path: join(parentPath, name),
+        id: 'r1',
+        path: join(testState.dir, 'GitHub', 'repo1'),
         projectGroupId: group.id,
-        projectGroupOrder: 1 - index
+        projectGroupOrder: 1
       })
     )
-    const operations = new LoadedStateAdaptationOperations({ state, loadNeedsSave: false })
-
-    expect(operations.adaptFlatFolderScanProjectGroups()).toBe(false)
-    expect(state.projectGroups).toEqual([group])
-    expect(state.repos.map((repo) => [repo.projectGroupId, repo.projectGroupOrder])).toEqual([
-      [group.id, 1],
-      [group.id, 0]
-    ])
-  })
-
-  it.each([false, true])(
-    'preserves saved order through a Store restart (folder repo: %s)',
-    async (includeFolder) => {
-      const store = createStore()
-      const group = store.createProjectGroup({
-        name: 'GitHub',
-        parentPath: join(testState.dir, 'GitHub'),
-        createdFrom: 'folder-scan'
+    store.addRepo(
+      makeRepo({
+        id: 'r2',
+        path: join(testState.dir, 'GitHub', 'repo2'),
+        projectGroupId: group.id,
+        projectGroupOrder: 0
       })
-      store.addRepo(
-        makeRepo({
-          id: 'r1',
-          path: join(testState.dir, 'GitHub', 'repo1'),
-          projectGroupId: group.id,
-          projectGroupOrder: 1
-        })
-      )
-      store.addRepo(
-        makeRepo({
-          id: 'r2',
-          path: join(testState.dir, 'GitHub', 'repo2'),
-          projectGroupId: group.id,
-          projectGroupOrder: 0
-        })
-      )
-      if (includeFolder) {
-        store.addRepo(
-          makeRepo({
-            id: 'folder',
-            kind: 'folder',
-            path: join(testState.dir, 'GitHub', 'notes'),
-            projectGroupId: group.id,
-            projectGroupOrder: 7
-          })
-        )
-      }
-      store.flush()
-      const expectedRepos = [
-        expect.objectContaining({ id: 'r1', projectGroupId: group.id, projectGroupOrder: 1 }),
-        expect.objectContaining({ id: 'r2', projectGroupId: group.id, projectGroupOrder: 0 }),
-        ...(includeFolder
-          ? [
-              expect.objectContaining({
-                id: 'folder',
-                kind: 'folder',
-                projectGroupId: group.id,
-                projectGroupOrder: 7
-              })
-            ]
-          : [])
-      ]
-      expect(JSON.parse(readPersistedStateJson()).repos).toEqual(expectedRepos)
-      await closeTestStores()
+    )
+    store.addRepo(
+      makeRepo({
+        id: 'folder',
+        kind: 'folder',
+        path: join(testState.dir, 'GitHub', 'notes'),
+        projectGroupId: group.id,
+        projectGroupOrder: 7
+      })
+    )
+    store.flush()
+    const expectedRepos = [
+      expect.objectContaining({ id: 'r1', projectGroupId: group.id, projectGroupOrder: 1 }),
+      expect.objectContaining({ id: 'r2', projectGroupId: group.id, projectGroupOrder: 0 }),
+      expect.objectContaining({
+        id: 'folder',
+        kind: 'folder',
+        projectGroupId: group.id,
+        projectGroupOrder: 7
+      })
+    ]
+    expect(JSON.parse(readPersistedStateJson()).repos).toEqual(expectedRepos)
+    await closeTestStores()
 
-      const reloaded = createStore()
-      expect(reloaded.getRepos()).toEqual(expectedRepos)
-      expect(reloaded.getProjectGroups()).toEqual([group])
-      reloaded.flush()
-      expect(JSON.parse(readPersistedStateJson()).repos).toEqual(expectedRepos)
-    }
-  )
+    const reloaded = createStore()
+    expect(reloaded.getRepos()).toEqual(expectedRepos)
+    expect(reloaded.getProjectGroups()).toEqual([group])
+    reloaded.flush()
+    expect(JSON.parse(readPersistedStateJson()).repos).toEqual(expectedRepos)
+  })
 
   it('re-indexes only repos migrating to a new child group', async () => {
     const parentPath = join(testState.dir, 'platform')

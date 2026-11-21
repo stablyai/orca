@@ -1,11 +1,15 @@
-import { fetchManagedAccountUsage } from '../claude-fetcher'
-import { fetchCodexRateLimits } from '../codex-fetcher'
+import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
-import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../../shared/concurrency/abort-aware-delay'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return
+    }
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
@@ -21,7 +25,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
-    const signal = controller.signal
+    const signal = this.claudeUsageFetchSignal(controller.signal)
+    const readsByHome = this.claudeReadsByHome()
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -43,9 +48,10 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           continue
         }
         try {
-          const fresh = await fetchManagedAccountUsage(account, {
+          const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
+            readsByHome,
             signal
           })
           if (
@@ -132,7 +138,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             continue
           }
         }
-        const home = account.resolveHome()
+        const home = await account.resolveHome()
         if (home.kind === 'skip') {
           continue
         }
@@ -143,6 +149,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
+            readingAccount: account.readingAccount,
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
@@ -181,6 +188,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
       this.inactiveCodexFetchInFlight = false
       this.finishFetchCycle(controller)
     }
+  }
+
+  /** Unselected accounts on the selected login's home (System default, legacy accounts) reuse its reading. */
+  private claudeReadsByHome(): Map<string, Promise<ProviderRateLimits>> {
+    const reads = new Map<string, Promise<ProviderRateLimits>>()
+    const active = this.state.claude
+    const home = this.usageReadingAccounts.claude?.home
+    // Why idle only: a running refresh keeps the old reading in state until it lands.
+    if (!this.isFetching && home && (active?.status === 'ok' || active?.status === 'error')) {
+      reads.set(home, Promise.resolve(active))
+    }
+    return reads
   }
 
   evictInactiveClaudeCache(accountId: string): void {

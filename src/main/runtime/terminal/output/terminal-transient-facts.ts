@@ -1,27 +1,28 @@
+import { TerminalCommandPaint } from '../input/terminal-command-paint'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
-import type { PtyTransientFact } from '../../../providers/pty-provider-contract'
+import type { PtyTransientFact } from '../../../providers/pty/events'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
-} from '../../../../shared/terminal-side-effect-facts'
+} from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   detectAgentStatusFromTitle,
-  isCursorNativeAgentTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { isCursorNativeAgentTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+} from '../records/runtime-terminal-state-records'
+import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
-  protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
+  protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -32,7 +33,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId)
+        this.retirePtyAgentLaunchAuthority(ptyId, true)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode
@@ -62,7 +63,9 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.tailPendingAnsi = ''
-      pty.commandPaint = undefined
+      // Before any output, too: a gap ahead of the reattach fence still rules out its vouch.
+      pty.commandPaint ??= new TerminalCommandPaint()
+      pty.commandPaint.noteGap()
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''
@@ -188,6 +191,11 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       }
     }
     return null
+  }
+
+  /** The same title for main's synthetic title producer, which must see its own frames. */
+  getTrackedPtyTitle(ptyId: string): string | null {
+    return this.getTrackedRawTitleForPty(ptyId)
   }
 
   protected isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {

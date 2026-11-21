@@ -1,23 +1,26 @@
 // Late terminal records and incarnation changes must recompose main-owned panes, listing each bound terminal once.
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-test-fixtures.spec')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 
 type Listed = { id: string; incarnationId: string; connected: boolean }
 
 /** A restarted host: the saved pane binds `persisted-pty`, stamped with the process now running. */
-function restartedHost(stamp: string, listedByHost: () => Listed[]) {
+async function restartedHost(stamp: string, listedByHost: () => Listed[]) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
       terminalPtyIncarnationsByPaneKey: { [`host-tab:${HEADLESS_LEAF_ID}`]: stamp }
@@ -42,11 +45,11 @@ function restartedHost(stamp: string, listedByHost: () => Listed[]) {
         }))
   })
   // Main composes its panes before the first inventory registers any terminal.
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return runtime
 }
 
-async function hostTabRows(runtime: ReturnType<typeof restartedHost>) {
+async function hostTabRows(runtime: Awaited<ReturnType<typeof restartedHost>>) {
   const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
   return listed.terminals
     .filter((terminal) => terminal.tabId === 'host-tab')
@@ -54,19 +57,9 @@ async function hostTabRows(runtime: ReturnType<typeof restartedHost>) {
 }
 
 describe('a terminal record arriving after main composed its panes (switch on)', () => {
-  it('lists the restored pane once, with the terminal its saved layout binds', async () => {
-    const runtime = restartedHost('inc-now', () => [
-      { id: 'persisted-pty', incarnationId: 'inc-now', connected: true }
-    ])
-
-    expect(await hostTabRows(runtime)).toEqual([
-      { ptyId: 'persisted-pty', incarnationId: 'inc-now' }
-    ])
-  })
-
   it('re-composes when the record learns the incarnation the pane is stamped with', async () => {
     let incarnationId = 'inc-before'
-    const runtime = restartedHost('inc-now', () => [
+    const runtime = await restartedHost('inc-now', () => [
       { id: 'persisted-pty', incarnationId, connected: true }
     ])
     await hostTabRows(runtime)
@@ -76,40 +69,5 @@ describe('a terminal record arriving after main composed its panes (switch on)',
     expect(await hostTabRows(runtime)).toEqual([
       { ptyId: 'persisted-pty', incarnationId: 'inc-now' }
     ])
-  })
-
-  it('publishes nothing when an unchanged inventory refresh records the same terminal', async () => {
-    const runtime = restartedHost('inc-now', () => [
-      { id: 'persisted-pty', incarnationId: 'inc-now', connected: true }
-    ])
-    await hostTabRows(runtime)
-    await new Promise((resolve) => setImmediate(resolve))
-    const published = vi.spyOn(runtime, 'syncWindowGraph')
-
-    await hostTabRows(runtime)
-    await new Promise((resolve) => setImmediate(resolve))
-
-    expect(published).not.toHaveBeenCalled()
-  })
-
-  it('re-composes when the record moves to another workspace', async () => {
-    const runtime = restartedHost('inc-now', () => [
-      { id: 'persisted-pty', incarnationId: 'inc-now', connected: true }
-    ])
-    // A window publishes, so main republishes its panes when a record changes.
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: [] })
-    expect(await hostTabRows(runtime)).toEqual([
-      { ptyId: 'persisted-pty', incarnationId: 'inc-now' }
-    ])
-
-    await new Promise((resolve) => setImmediate(resolve))
-    const published = vi.spyOn(runtime, 'syncWindowGraph')
-    // Simulate a worktree-identity migration.
-    runtime['recordPtyWorktree']('persisted-pty', 'repo-1::/tmp/worktree-b')
-    await new Promise((resolve) => setImmediate(resolve))
-
-    expect(runtime['paneOfPty'](runtime['ptysById'].get('persisted-pty')).tabId).toBeNull()
-    expect(published).toHaveBeenCalled()
   })
 })

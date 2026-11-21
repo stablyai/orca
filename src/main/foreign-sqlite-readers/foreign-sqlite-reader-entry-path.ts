@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveWorkerThreadEntryPath, type WorkerEntryLayout } from '../worker-thread-entry-path'
+import {
+  resolveWorkerThreadEntryPath,
+  type WorkerEntryLayout
+} from '../worker-threads/worker-thread-entry-path'
 
 // Electron-free: the OpenCode scanner reaches this from plain-Node processes too.
 

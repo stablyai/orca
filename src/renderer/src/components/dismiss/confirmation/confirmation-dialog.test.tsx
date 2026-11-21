@@ -1,0 +1,257 @@
+// @vitest-environment happy-dom
+
+import '@testing-library/jest-dom/vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ setContextualToursBlockingSurfaceVisible: vi.fn() })
+}))
+
+import { ConfirmationDialogProvider } from './confirmation-dialog'
+import {
+  useConfirmationDialog,
+  type ConfirmationDialogOptions
+} from './confirmation-dialog-context'
+
+function Harness({
+  options,
+  onSettled
+}: {
+  options: ConfirmationDialogOptions
+  onSettled: (confirmed: boolean) => void
+}): React.JSX.Element {
+  const confirm = useConfirmationDialog()
+  return (
+    <button type="button" onClick={() => void confirm(options).then(onSettled)}>
+      ask
+    </button>
+  )
+}
+
+function renderDialog(options: ConfirmationDialogOptions): { onSettled: ReturnType<typeof vi.fn> } {
+  const onSettled = vi.fn()
+  render(
+    <ConfirmationDialogProvider>
+      <Harness options={options} onSettled={onSettled} />
+    </ConfirmationDialogProvider>
+  )
+  return { onSettled }
+}
+
+describe('ConfirmationDialogProvider', () => {
+  afterEach(cleanup)
+
+  it('focuses Cancel when the next queued question replaces a confirmed one', async () => {
+    const secondSettled = vi.fn()
+    function Queue(): React.JSX.Element {
+      const confirm = useConfirmationDialog()
+      return (
+        <button
+          onClick={() => {
+            void confirm({ title: 'First?', confirmLabel: 'Go' })
+            void confirm({ title: 'Second?', confirmLabel: 'Go' }).then(secondSettled)
+          }}
+        >
+          queue
+        </button>
+      )
+    }
+    render(
+      <ConfirmationDialogProvider>
+        <Queue />
+      </ConfirmationDialogProvider>
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'queue' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Go' }))
+    await screen.findByText('Second?')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(secondSettled).toHaveBeenCalledWith(false))
+  })
+
+  it('tells the cancel button apart from Escape', async () => {
+    const onCancelClicked = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Use your camera?',
+      confirmLabel: 'Allow',
+      onCancelClicked
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByText('Use your camera?')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onCancelClicked).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(onSettled).toHaveBeenCalledTimes(2))
+    expect(onCancelClicked).toHaveBeenCalledOnce()
+  })
+
+  it('lets a held Enter or a double-click press neither button of a guarded prompt', async () => {
+    const onCancelClicked = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Use your camera?',
+      confirmLabel: 'Allow',
+      ignoresOpeningGesture: true,
+      onCancelClicked
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const cancel = await screen.findByRole('button', { name: 'Cancel' })
+    await waitFor(() => expect(cancel).toHaveFocus())
+    // The Enter that made the page ask is still held: its repeats must not press either button.
+    for (const name of ['Cancel', 'Allow']) {
+      const button = screen.getByRole('button', { name })
+      expect(fireEvent.keyDown(button, { key: 'Enter', repeat: true })).toBe(false)
+    }
+    // A double-click's first click opened the prompt in the page; its second lands here.
+    fireEvent.click(cancel, { detail: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }), { detail: 2 })
+    expect(onSettled).not.toHaveBeenCalled()
+    expect(onCancelClicked).not.toHaveBeenCalled()
+
+    await userEvent.click(cancel)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onCancelClicked).toHaveBeenCalledOnce()
+  })
+
+  it('lets a press outside dismiss a prompt that guards only its buttons, but not a fully guarded one', async () => {
+    const onCancelClicked = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Give Pat access?',
+      confirmLabel: 'Give access',
+      cancelLabel: 'Reject',
+      ignoresOpeningGesture: 'buttons',
+      onCancelClicked
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const reject = await screen.findByRole('button', { name: 'Reject' })
+    await waitFor(() => expect(reject).toHaveFocus())
+    expect(fireEvent.keyDown(reject, { key: 'Enter', repeat: true })).toBe(false)
+    fireEvent.click(reject, { detail: 2 })
+    expect(onSettled).not.toHaveBeenCalled()
+
+    // A press outside: Radix answers it on the click that follows.
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onCancelClicked).not.toHaveBeenCalled()
+    cleanup()
+
+    const fully = renderDialog({
+      title: 'Use it?',
+      confirmLabel: 'Allow',
+      ignoresOpeningGesture: true
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByRole('dialog')
+    // A press outside: Radix answers it on the click that follows.
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    await act(async () => {})
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(fully.onSettled).not.toHaveBeenCalled()
+  })
+
+  it('runs the skip callback when confirmed with the box checked', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Delete artifact?',
+      confirmLabel: 'Delete',
+      dontAskAgain: { onConfirmed }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: "Don't ask again" }))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(onConfirmed).toHaveBeenCalledOnce()
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+  })
+
+  it('never saves the preference when the user backs out', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Delete artifact?',
+      confirmLabel: 'Delete',
+      dontAskAgain: { onConfirmed }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: "Don't ask again" }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onConfirmed).not.toHaveBeenCalled()
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+  })
+
+  it('dismisses a prompt its caller aborts and shows the next one', async () => {
+    const first = new AbortController()
+    const settled: [string, boolean][] = []
+    function TwoPrompts(): React.JSX.Element {
+      const confirm = useConfirmationDialog()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void confirm({ title: 'First?', confirmLabel: 'Go', signal: first.signal }).then((c) =>
+              settled.push(['first', c])
+            )
+            void confirm({ title: 'Second?', confirmLabel: 'Go' }).then((c) =>
+              settled.push(['second', c])
+            )
+          }}
+        >
+          ask both
+        </button>
+      )
+    }
+    render(
+      <ConfirmationDialogProvider>
+        <TwoPrompts />
+      </ConfirmationDialogProvider>
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask both' }))
+    expect(await screen.findByText('First?')).toBeInTheDocument()
+    act(() => first.abort())
+
+    expect(await screen.findByText('Second?')).toBeInTheDocument()
+    expect(settled).toEqual([['first', false]])
+  })
+
+  it('confirms typed fields with Enter and clears them for the next prompt', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Sign in',
+      confirmLabel: 'Sign in',
+      fields: {
+        inputs: [
+          { id: 'username', label: 'Username' },
+          { id: 'password', label: 'Password', type: 'password' }
+        ],
+        onConfirmed
+      }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() => expect(screen.getByLabelText('Username')).toHaveFocus())
+    await userEvent.keyboard('qa')
+    await userEvent.type(screen.getByLabelText('Password'), 'hunter2{Enter}')
+
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+    expect(onConfirmed).toHaveBeenCalledWith({ username: 'qa', password: 'hunter2' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByLabelText('Password')).toHaveValue('')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(onSettled).toHaveBeenLastCalledWith(false))
+    expect(onConfirmed).toHaveBeenCalledTimes(1)
+  })
+})

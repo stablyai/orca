@@ -1,15 +1,21 @@
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { classifyGhError } from '../../api/gh-error-classification'
 import {
-  ghExecFileAsync,
-  classifyGhError,
   ghRepoExecOptions,
   githubRepoContext,
   type LocalGitExecOptions
-} from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import type { GhExecOptions } from './../github-exec-scope'
+} from '../../repositories/github-repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import {
+  githubPRStackExecutionScope,
+  ownerRepoFromPullRequestUrl,
+  type GhExecOptions
+} from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import { getCachedGitHubPRStackSummary } from './../lookup/pr-stack-summary-cache'
 import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
   usersFromUnknown,
@@ -17,6 +23,25 @@ import {
   type MainWorkItem
 } from './../map/work-item-field-coercion'
 import { mapIssueWorkItem, mapPullRequestWorkItem } from './../map/work-item'
+import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
+import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
+
+async function withCompletePRChecks(
+  item: MainWorkItem,
+  repository: GitHubApiRepository | null,
+  number: number,
+  options: GhExecOptions
+): Promise<MainWorkItem> {
+  const source = repository ?? ownerRepoFromPullRequestUrl(item.url)
+  const rollup =
+    source && item.number === number
+      ? await readCompletePRCheckObservation(source, number, item.headSha, options)
+      : undefined
+  return {
+    ...item,
+    checksSummary: rollup === undefined ? undefined : summarizePRCheckRollup(rollup)
+  }
+}
 export async function fetchIssueWorkItem(
   repoPath: string,
   ownerRepo: GitHubApiRepository | null,
@@ -52,6 +77,33 @@ export async function fetchIssueWorkItem(
     ghOptions
   )
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
+}
+
+/** One REST call for hover previews; skips the review, check and merge metadata a full lookup adds. */
+export async function fetchWorkItemPreview(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<MainWorkItem | null> {
+  const ghOptions = {
+    ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+    ...githubHostExecOptions(ownerRepo)
+  }
+  const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
+  if (type === 'issue') {
+    const { stdout } = await ghExecFileAsync(['api', `${base}/issues/${number}`], ghOptions)
+    const item: Record<string, unknown> = JSON.parse(stdout)
+    // `#N` links point at /issues/N even when N is a PR.
+    if (!('pull_request' in item)) {
+      return mapIssueWorkItem(item)
+    }
+  }
+  const { stdout } = await ghExecFileAsync(['api', `${base}/pulls/${number}`], ghOptions)
+  const pull: Record<string, unknown> = JSON.parse(stdout)
+  return mapPullRequestWorkItem(pull, ownerRepo)
 }
 
 // REST pull data omits latestReviews; retain gh's reviewer fields.
@@ -115,20 +167,42 @@ export async function fetchPullRequestWorkItem(
         ghOptions
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
-      const mapped = mapPullRequestWorkItem(item, ownerRepo)
+      const mapped = await withCompletePRChecks(
+        mapPullRequestWorkItem(item, ownerRepo),
+        ownerRepo,
+        number,
+        ghOptions
+      )
       // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
+      const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
       try {
-        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        const [mergeMetadata, stack] = await Promise.all([
+          detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions, executionScope),
+          mapped.state === 'open'
+            ? getCachedGitHubPRStackSummary(ownerRepo, number, ghOptions, executionScope).catch(
+                () => undefined
+              )
+            : undefined
+        ])
+        // A stacked PR merges into the stack base, so its rules limit the methods. The queue flag
+        // stays on the immediate base: here it would offer auto-merge, which stacks refuse.
+        const { mergeMethodSettings } =
+          stack && stack.baseRefName !== baseRefName
+            ? await detectRepositoryMergeMetadata(
+                ownerRepo,
+                stack.baseRefName,
+                ghOptions,
+                executionScope
+              )
+            : mergeMetadata
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),
-          ...(mergeMetadata.mergeMethodSettings
-            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-            : {})
+          ...(mergeMethodSettings ? { mergeMethodSettings } : {})
         }
       } catch {
         return mapped
@@ -138,9 +212,11 @@ export async function fetchPullRequestWorkItem(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
-      const mapped = mapPullRequestWorkItem(
-        JSON.parse(stdout) as Record<string, unknown>,
-        ownerRepo
+      const mapped = await withCompletePRChecks(
+        mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo),
+        ownerRepo,
+        number,
+        ghOptions
       )
       const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
       return { ...mapped, ...reviewFields }
@@ -156,7 +232,12 @@ export async function fetchPullRequestWorkItem(
     ['pr', 'view', String(number), '--json', WORK_ITEM_PR_DETAIL_JSON_FIELDS],
     ghOptions
   )
-  return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
+  return withCompletePRChecks(
+    mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>),
+    null,
+    number,
+    ghOptions
+  )
 }
 
 export async function fetchPullRequestWorkItemFromCandidates(

@@ -37,7 +37,7 @@ export async function loadJiraClientModule(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These are the only session methods the proxy fixture exercises.
     proxySession: () => ({ resolveProxy: resolveProxyMock, setProxy: setProxyMock }) as never
   })
-  const { setSecretStore } = await import('../../../shared/secret-store')
+  const { setSecretStore } = await import('../../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => options.encryptionAvailable ?? false,
     encryptString: (value) => Buffer.from(value),
@@ -50,10 +50,9 @@ export async function loadJiraClientModule(
   })
 
   // Split modules must share one graph, request queue and credential cache per reset.
-  const [client, queue, api] = await Promise.all([
-    import('../client'),
-    import('../request-queue'),
-    import('../authenticated-request')
-  ])
+  // Why sequential: concurrent first imports can bypass Vitest's still-pending vi.doMock('os').
+  const client = await import('../client')
+  const queue = await import('../request-queue')
+  const api = await import('../authenticated-request')
   return { ...client, ...queue, ...api }
 }

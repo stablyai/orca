@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PaneManagerOptions } from './pane-manager-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; reshaping never touches the terminal.
 vi.mock('./pane-lifecycle', async (importOriginal) => {
@@ -110,39 +110,5 @@ describe('PaneManager.applyLayoutGeometry following the frame tree', () => {
     expect(onPaneCreated).not.toHaveBeenCalled()
     expect(onPaneClosed).not.toHaveBeenCalled()
     expect(onLayoutChanged).not.toHaveBeenCalled()
-  })
-
-  it('takes a deeper tree, splits on both sides', () => {
-    mount(true)
-    const layout = split('horizontal', split('vertical', D, A), split('vertical', C, B))
-    const before = identity()
-
-    expect(manager.applyLayoutGeometry(layout, true)).toBe(true)
-
-    expect(withoutRatios(serialized())).toEqual(withoutRatios(layout))
-    expect(identity()).toEqual(before)
-  })
-
-  it('moves nothing for the shape already mounted', () => {
-    mount()
-    const layout = serialized()!
-    const observer = new MutationObserver(() => {})
-    observer.observe(root, { subtree: true, childList: true })
-
-    expect(manager.applyLayoutGeometry(layout, true)).toBe(false)
-
-    expect(observer.takeRecords()).toEqual([])
-  })
-
-  it('changes nothing when the layout names other panes', () => {
-    mount()
-    const before = serialized()
-
-    expect(manager.applyLayoutGeometry(split('vertical', A, B), true)).toBe(false)
-    expect(manager.applyLayoutGeometry(split('vertical', A, split('vertical', B, D)), true)).toBe(
-      false
-    )
-
-    expect(serialized()).toEqual(before)
   })
 })

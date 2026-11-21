@@ -1,19 +1,33 @@
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
-import { useEffect } from 'react'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
-import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
-import type { Repo } from '../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
-import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
+import { useEffect, useRef } from 'react'
+import { translate } from '@/i18n/i18n'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import { knownUnreachableRuntimeHostError } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { GITLAB_WEB_RPC_METHODS } from '@/web/preload-api/gitlab/web-gitlab-routes'
 import {
-  getTaskPageRepoSourceContext,
-  isGitLabIssueFilter,
-  isGitLabMRFilter
-} from '../task-page-source-context'
+  gitLabApiFor,
+  type GitLabCapabilityChecks
+} from '@/runtime/repository-gitlab/gitlab-owner-api'
+import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
+import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab/gitlab-types'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
+import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
+
+// Rows and errors belong to the query that loaded them, so a changed filter never shows the previous filter's rows.
+export function gitLabListQueryKey(
+  view: string,
+  filter: string,
+  involvement: string | null,
+  reposKey: string
+): string {
+  return JSON.stringify([view, filter, view === 'mrs' ? involvement : null, reposKey])
+}
 
 function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
   return {
@@ -38,6 +52,16 @@ type GitLabLoadingInput = Pick<
   | 'setGitlabTodos'
   | 'setGitlabTodosLoading'
   | 'activeGitlabFilter'
+  | 'gitlabMRInvolvement'
+  | 'gitlabItems'
+  | 'gitlabError'
+  | 'gitlabLoading'
+  | 'displayedGitLabItems'
+  | 'gitlabListQueryKey'
+  | 'setGitlabListQueryKey'
+  | 'unreachableTaskSourceHostIds'
+  | 'unreachableTaskSourceHostKey'
+  | 'recheckUnreachableTaskSourceHosts'
 >
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
@@ -53,10 +77,29 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabView,
     setGitlabTodos,
     setGitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    gitlabListQueryKey,
+    setGitlabListQueryKey,
+    unreachableTaskSourceHostIds,
+    unreachableTaskSourceHostKey,
+    recheckUnreachableTaskSourceHosts
   } = model
+  const currentListQueryKey = gitLabListQueryKey(
+    gitlabView,
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    selectedReposKey
+  )
+  // Filter chips also bump the nonce; only a bump with the same query is Refresh.
+  const lastRefreshRef = useRef({ nonce: gitlabRefreshNonce, query: '' })
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
+    // Consumed before any early return, so a Refresh that loads nothing here is never replayed later.
+    const query = `${gitlabView}:${activeGitlabFilter ?? ''}:${gitlabMRInvolvement ?? ''}`
+    const userRefresh =
+      gitlabRefreshNonce !== lastRefreshRef.current.nonce && query === lastRefreshRef.current.query
+    lastRefreshRef.current = { nonce: gitlabRefreshNonce, query }
     if (taskSource !== 'gitlab') {
       return
     }
@@ -77,11 +120,14 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
+      setGitlabListQueryKey(currentListQueryKey)
       setGitlabLoading(false)
       setGitlabError(null)
       return
     }
     let stale = false
+    // One answer per runtime and capability for this refresh, so N projects on one server probe it once.
+    const capabilityChecks: GitLabCapabilityChecks = new Map()
     setGitlabLoading(true)
     setGitlabError(null)
     const fetchItems =
@@ -115,10 +161,11 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
           }
         : (repo: (typeof eligibleRepos)[0]) => {
             const selector = gitLabTaskRepoSelector(repo)
-            return gitLabApiFor(selector)
+            return gitLabApiFor(selector, { capabilityChecks })
               .listMRs({
                 ...selector,
                 state: activeMRFilter ?? 'opened',
+                ...(gitlabMRInvolvement ? { involvement: gitlabMRInvolvement } : {}),
                 page: 1,
                 perPage: 50
               })
@@ -138,9 +185,24 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
               })
           }
+    recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
+    const isOnUnreachableHost = (repo: Repo): boolean => {
+      const hostId = getTaskPageRepoSourceContext(repo, 'gitlab')?.hostId
+      return hostId !== undefined && unreachableTaskSourceHostIds.has(hostId)
+    }
     void mapSettledWithConcurrency(eligibleRepos, GITLAB_TASK_FETCH_CONCURRENCY, (repo) =>
       // Why: a stale selection's results are discarded below, so skip the repos not yet started.
-      stale ? Promise.resolve({ repo, items: [], error: undefined }) : fetchItems(repo)
+      stale
+        ? Promise.resolve({ repo, items: [], error: undefined })
+        : isOnUnreachableHost(repo)
+          ? Promise.reject(
+              knownUnreachableRuntimeHostError(
+                gitlabView === 'issues'
+                  ? GITLAB_WEB_RPC_METHODS.listIssues
+                  : GITLAB_WEB_RPC_METHODS.listMRs
+              )
+            )
+          : fetchItems(repo)
     )
       .then((results) => {
         if (stale) {
@@ -150,7 +212,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         const errs: string[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            errs.push(
+              readIpcErrorDetail(r.reason) ??
+                translate(
+                  'auto.components.TaskPage.gitlabLoadFailed',
+                  'Could not load GitLab work items. Refresh to try again.'
+                )
+            )
             continue
           }
           // Why the host: a twin's two rows share the id, so only the stamp names the row that answered.
@@ -168,6 +236,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
+        setGitlabListQueryKey(currentListQueryKey)
         // Show failures only when no usable rows remain; mixed selections may include non-GitLab repos.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
@@ -186,11 +255,14 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     taskSource,
     gitlabView,
     activeGitlabFilter,
+    gitlabMRInvolvement,
     gitlabRefreshNonce,
     selectedReposKey,
+    unreachableTaskSourceHostKey,
     setGitlabError,
     setGitlabItems,
-    setGitlabLoading
+    setGitlabLoading,
+    setGitlabListQueryKey
   ])
 
   // Todos are user-scoped and ignore repo/chip filters, so fetch them independently.
@@ -234,5 +306,11 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabTodosLoading,
     setGitlabTodos
   ])
+  if (gitlabView !== 'todos' && gitlabListQueryKey !== currentListQueryKey) {
+    model.gitlabItems = []
+    model.displayedGitLabItems = []
+    model.gitlabError = null
+    model.gitlabLoading = true
+  }
   return model
 }

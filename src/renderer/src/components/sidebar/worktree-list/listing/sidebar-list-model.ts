@@ -1,15 +1,17 @@
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
+  ImportedWorktreesCardCandidate,
+  NewExternalWorktreesInboxCandidate,
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { SidebarWorktreeFilters } from './use-filters'
@@ -45,4 +47,31 @@ export type SidebarListModel = {
   visibleScope: ReturnType<typeof useSidebarHostVisibleScope>
   externalWorktreeCards: ReturnType<typeof useSidebarExternalWorktreeCards>
   rowModel: ReturnType<typeof useSidebarSectionRows>
+}
+
+export type SectionRowsArgs = {
+  agentSendTargetWorktreeId?: string | null
+  groupBy: WorktreeGroupBy
+  sortBy: SortBy
+  projectOrderBy: ProjectOrderBy
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  defaultHostId: ExecutionHostId
+  worktrees: Worktree[]
+  repos: readonly Repo[]
+  repoMap: Map<string, Repo>
+  worktreeMap: Map<string, Worktree>
+  worktreeLineageById: Record<string, WorktreeLineage>
+  prCache: AppState['prCache'] | null
+  settings: AppState['settings']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  effectiveCollapsedGroups: Set<string>
+  projectGrouping: ProjectGroupingModel
+  visibleReposForRows: readonly Repo[]
+  visibleProjectGroupsForRows: readonly ProjectGroup[]
+  visibleFolderWorkspacesForRows: readonly FolderWorkspace[]
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
+  newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
+  filterRepoIds: readonly string[]
+  visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
+  workspaceHostScope: AppState['workspaceHostScope']
 }

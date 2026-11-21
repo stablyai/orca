@@ -1,7 +1,8 @@
 const STYLED_SCROLLBAR_CLASSES = new Set([
   'scrollbar-sleek',
   'scrollbar-editor',
-  'worktree-sidebar-scrollbar'
+  'worktree-sidebar-scrollbar',
+  'bot-sidebar-scrollbar'
 ])
 const VERTICAL_SCROLL_CLASSES = new Set([
   'overflow-auto',
@@ -265,8 +266,8 @@ function jsxElementReports(node) {
 
 function bindContext(createVisitors) {
   return (context) => {
-    // Every vertical scroll class and style names overflow; returning no visitors skips AST transfer.
-    if (!context.sourceCode.text.includes('overflow')) {
+    // Every vertical scroll class and style names overflow; empty visitors skip JS AST deserialization.
+    if (!context.sourceCode.text.includes('overflow') && !context.sourceCode.text.includes('\\')) {
       return {}
     }
     const visitors = createVisitors()
@@ -286,7 +287,7 @@ export default {
           for (const report of jsxElementReports(node)) {
             this.report({
               node: report.node,
-              message: `Vertical scroll container (${report.detail}) must use scrollbar-sleek, scrollbar-editor, or worktree-sidebar-scrollbar.`
+              message: `Vertical scroll container (${report.detail}) must use scrollbar-sleek, scrollbar-editor, worktree-sidebar-scrollbar, or bot-sidebar-scrollbar.`
             })
           }
         }

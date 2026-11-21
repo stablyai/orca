@@ -1,18 +1,31 @@
-import type { CommandSpec } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
 import { ACCOUNT_COMMAND_SPECS } from './account'
+import { AUTH_COMMAND_SPECS } from './auth'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'
 import { AUTOMATION_COMMAND_SPECS } from './automations'
 import { CORE_COMMAND_SPECS } from './core'
+import { CHAT_COMMAND_SPECS } from './chat'
 import { FILE_COMMAND_SPECS } from './file'
 import { PROJECT_COMMAND_SPECS } from './project'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
+import { withFullRecordFlag } from './orchestration-full-record-flag'
 import { COMPUTER_COMMAND_SPECS } from './computer'
 import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { MANAGED_SERVER_COMMAND_SPECS } from './managed-server'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
 import { AGENT_LAUNCH_COMMAND_SPECS } from './agent-launch'
-import { CONNECTOR_COMMAND_SPECS } from './connector'
+import { SLACK_COMMAND_SPECS } from './slack'
+import { GOOGLE_COMMAND_SPECS } from './google'
+import { GOOGLE_READ_COMMAND_SPECS } from './google-read'
+import { GOOGLE_FILES_COMMAND_SPECS } from './google-files'
+import { GOOGLE_WRITE_COMMAND_SPECS } from './google-write'
+import { BOT_COMMAND_SPECS } from './bot'
+import { BOT_ITEM_COMMAND_SPECS } from './bot-items'
+import { BOT_GOOGLE_SETUP_COMMAND_SPECS } from './bot-google-setup'
+import { BOT_COMPOSIO_COMMAND_SPECS } from './bot-composio'
+import { WEBHOOK_COMMAND_SPECS } from './webhooks'
+import { AGENT_CONVERSATION_COMMAND_SPECS } from './agent-conversations'
 import { DIAGNOSTICS_COMMAND_SPECS } from './diagnostics'
 import { SPEECH_COMMAND_SPECS } from './speech'
 import { TERMINAL_DAEMON_COMMAND_SPECS } from './terminal-daemon'
@@ -21,28 +34,47 @@ import { INTROSPECTION_COMMAND_SPECS } from './introspection'
 import { JIRA_COMMAND_SPECS } from './jira'
 import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
+import { VM_ENV_COMMAND_SPECS } from './vm-env'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
 import { SEARCH_COMMAND_SPECS } from './search'
 import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
 import { PORTS_COMMAND_SPECS } from './ports'
+import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './plugin'
+import { PAIR_COMMAND_SPECS } from './pair'
+import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
+import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
+import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
   ...REFERENCE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,
   ...ACCOUNT_COMMAND_SPECS,
+  ...AUTH_COMMAND_SPECS,
   ...PROJECT_COMMAND_SPECS,
   ...FILE_COMMAND_SPECS,
   ...AUTOMATION_COMMAND_SPECS,
+  ...WORKSPACE_CLEANUP_COMMAND_SPECS,
   ...BROWSER_BASIC_COMMAND_SPECS,
   ...BROWSER_ADVANCED_COMMAND_SPECS,
-  ...ORCHESTRATION_COMMAND_SPECS,
+  ...ORCHESTRATION_COMMAND_SPECS.map(withFullRecordFlag),
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
-  ...CONNECTOR_COMMAND_SPECS,
+  ...AGENT_CONVERSATION_COMMAND_SPECS,
+  ...CHAT_COMMAND_SPECS,
+  ...SLACK_COMMAND_SPECS,
+  ...GOOGLE_COMMAND_SPECS,
+  ...GOOGLE_READ_COMMAND_SPECS,
+  ...GOOGLE_FILES_COMMAND_SPECS,
+  ...GOOGLE_WRITE_COMMAND_SPECS,
+  ...BOT_COMMAND_SPECS,
+  ...BOT_ITEM_COMMAND_SPECS,
+  ...BOT_GOOGLE_SETUP_COMMAND_SPECS,
+  ...BOT_COMPOSIO_COMMAND_SPECS,
+  ...WEBHOOK_COMMAND_SPECS,
   ...DIAGNOSTICS_COMMAND_SPECS,
   ...SPEECH_COMMAND_SPECS,
   ...TERMINAL_DAEMON_COMMAND_SPECS,
@@ -52,9 +84,15 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...JIRA_COMMAND_SPECS,
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
+  ...VM_ENV_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
   ...SKILL_COMMAND_SPECS,
   ...SEARCH_COMMAND_SPECS,
   ...PROFILE_STATE_COMMAND_SPECS,
-  ...PORTS_COMMAND_SPECS
+  ...PORTS_COMMAND_SPECS,
+  ...PLUGIN_AUTHORING_COMMAND_SPECS,
+  ...PLUGIN_RUNTIME_COMMAND_SPECS,
+  ...PLUGIN_VIEW_COMMAND_SPECS,
+  ...PLUGIN_INSTALL_COMMAND_SPECS,
+  ...PAIR_COMMAND_SPECS
 ]

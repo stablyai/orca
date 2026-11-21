@@ -1,58 +1,54 @@
+import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault/scanning/ai-vault-scope-paths'
+import { toAiVaultProjectKey } from '../../../src/shared/ai-vault/scanning/ai-vault-project-key'
 import {
-  isRuntimePathAbsolute,
-  normalizeRuntimePathForComparison
-} from '../../../src/shared/cross-platform-path'
-import type { Worktree } from '../worktree/workspace-list-types'
-import {
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  boundedAiVaultScopeArgs,
+  type AiVaultListArgs,
   type AiVaultScope
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import type { ProjectHostSetup } from '../../../src/shared/project/project-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 
-// Derive locally because Metro cannot resolve renderer helpers; seed active/same-repo paths from worktree.ps.
-// scopePaths widen host discovery only; they are host-local prefixes, never device paths.
+type ScopeWorktree = Pick<Worktree, 'worktreeId' | 'path' | 'repoId' | 'priorWorktreeIds'>
+
+/** The host's project setups a Project scope reads; empty on hosts that don't list them. */
+export type MobileAiVaultProjectSetup = Pick<ProjectHostSetup, 'projectId' | 'repoId' | 'path'>
+
+/** Desktop's scope paths from worktree.ps rows; Project spans every repo the host files under the active repo's project. */
 export function deriveMobileAiVaultScopePaths(
   scope: AiVaultScope,
-  activeWorktree: Pick<Worktree, 'worktreeId' | 'path' | 'repoId'> | null,
-  liveWorktrees: readonly Pick<Worktree, 'worktreeId' | 'path' | 'repoId'>[]
+  activeWorktree: ScopeWorktree | null,
+  liveWorktrees: readonly ScopeWorktree[],
+  projectSetups: readonly MobileAiVaultProjectSetup[] = []
 ): string[] {
-  // All scope omits hints to retain host’s global recency list.
-  if (scope === 'all' || !activeWorktree) {
+  if (!activeWorktree) {
     return []
   }
-
-  const paths: string[] = []
-  const comparisonPaths = new Set<string>()
-  addScopePath(paths, comparisonPaths, activeWorktree.path)
-
-  // Workspace uses active path; Project includes same-repo siblings.
-  if (scope === 'project') {
-    for (const worktree of liveWorktrees) {
-      // RPC rejects oversized scopePaths; drop tail hints rather than fail scan because hints only widen discovery.
-      if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
-        break
-      }
-      if (worktree.repoId === activeWorktree.repoId) {
-        addScopePath(paths, comparisonPaths, worktree.path)
-      }
+  // Desktop's resolveActiveProjectKey: the repo's setup names its project, else the repo is its own.
+  const setup = projectSetups.find((candidate) => candidate.repoId === activeWorktree.repoId)
+  return deriveAiVaultScopeSessionPaths(
+    toScopePathWorktree(activeWorktree),
+    liveWorktrees.map(toScopePathWorktree),
+    {
+      scope,
+      activeProjectKey: toAiVaultProjectKey(setup?.projectId, activeWorktree.repoId),
+      projectHostSetupProjection: { setups: projectSetups }
     }
-  }
-
-  return paths
+  )
 }
 
-function addScopePath(
-  paths: string[],
-  comparisonPaths: Set<string>,
-  pathValue: string | undefined
-): void {
-  const trimmedPath = pathValue?.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
-    return
+/** The scope sent to the host: capped because older hosts reject oversized scopePaths; All keeps the recency scan. */
+export function mobileAiVaultScanScopeArgs(
+  scope: AiVaultScope,
+  scopePaths: readonly string[]
+): Pick<AiVaultListArgs, 'scopePaths' | 'scopeOnly'> {
+  return boundedAiVaultScopeArgs(scopePaths, scope !== 'all')
+}
+
+function toScopePathWorktree(worktree: ScopeWorktree) {
+  return {
+    id: worktree.worktreeId,
+    path: worktree.path,
+    repoId: worktree.repoId,
+    priorWorktreeIds: worktree.priorWorktreeIds
   }
-  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  if (comparisonPaths.has(comparisonPath)) {
-    return
-  }
-  comparisonPaths.add(comparisonPath)
-  paths.push(trimmedPath)
 }

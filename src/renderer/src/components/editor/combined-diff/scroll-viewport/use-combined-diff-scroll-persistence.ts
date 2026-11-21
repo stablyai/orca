@@ -1,8 +1,8 @@
 import { useLayoutEffect } from 'react'
 import type React from 'react'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import type { DiffSection } from '../../diff-section-types'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   readCombinedDiffViewMemory,
   rememberCombinedDiffView,

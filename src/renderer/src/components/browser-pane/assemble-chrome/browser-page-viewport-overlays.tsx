@@ -5,33 +5,37 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
-import { BrowserLinkStatusBubble } from './browser-link-status-bubble'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from './feedback/browser-page-feedback-badge'
+import { BrowserLinkStatusBubble } from './feedback/browser-link-status-bubble'
 import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
   BrowserPage as BrowserPageState
-} from '../../../../../shared/browser-workspace-types'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { useSshWorkspaceBrowserLoadFailureRoute } from '../use-ssh-workspace-browser-route'
+import { useSshWorkspaceBrowserLoadFailureRoute } from './profile-routing/use-ssh-workspace-browser-route'
 import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
-import BrowserFind from './BrowserFind'
+import BrowserFind from './find/BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+import { BrowserPasswordFillDropdown } from '../passwords/BrowserPasswordFillDropdown'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
-import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
-import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
+import type { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
+import type { useBrowserPageGrabAnnotations } from '../annotate/grab/use-browser-page-grab-annotations'
 
 export function BrowserPageViewportOverlays({
   markup,
-  browserZoomIndicatorState,
-  browserZoomPercent,
+  isActive,
+  feedbackBadgeRef,
   findOpen,
   setFindOpen,
   webviewRef,
@@ -50,13 +54,14 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer,
   browserOverlayViewport,
   worktreeId,
+  importProfileId,
   grab,
   annotationSend,
   grabAnnotations
 }: {
   markup: MarkupModeController
-  browserZoomIndicatorState: { ariaHidden: boolean; opacityClassName: string }
-  browserZoomPercent: number
+  isActive: boolean
+  feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   findOpen: boolean
   setFindOpen: Dispatch<SetStateAction<boolean>>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
@@ -75,6 +80,7 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer: HTMLDivElement | null
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  importProfileId: string | null
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
@@ -91,13 +97,24 @@ export function BrowserPageViewportOverlays({
         markupPortalContainer={markupPortalContainer}
         markupControlsContainer={markupControlsContainer}
         containerRef={containerRef}
-        webviewRef={webviewRef}
+        guestSurfaceRef={webviewRef}
         browserOverlayViewport={browserOverlayViewport}
         worktreeId={worktreeId}
         currentUrl={browserTab.url}
       />
-      <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
-      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
+      <BrowserPasswordFillDropdown
+        isActive={isActive}
+        browserPageId={browserTab.id}
+        containerRef={containerRef}
+        webviewRef={webviewRef}
+      />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={findOpen}
+        onClose={() => setFindOpen(false)}
+        webviewRef={webviewRef}
+      />
       <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
@@ -122,7 +139,13 @@ export function BrowserPageViewportOverlays({
           }}
         />
       ) : null}
-      {isBlankTab ? <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} /> : null}
+      {isBlankTab ? (
+        <BrowserNewTabPage
+          worktreeId={worktreeId}
+          onOpenUrl={navigateToUrl}
+          importProfileId={importProfileId}
+        />
+      ) : null}
     </>
   )
 }

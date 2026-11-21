@@ -4,10 +4,13 @@ export const PORT_SCAN_COMMAND_TIMEOUT_MS = 4_000
 // The fallback watchdog must follow Node's primary execFile timeout.
 export const WATCHDOG_GRACE_MS = 1_000
 
+export type DarwinPortScanOperation = 'listeners' | 'attribution'
+
 export type PortScanCommandRequest = {
   id: number
   command: string
   args: string[]
+  darwinOperation?: DarwinPortScanOperation
 }
 
 export type PortScanCommandResponse =

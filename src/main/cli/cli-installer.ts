@@ -1,19 +1,20 @@
 import { mkdir, unlink } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
 import {
   pruneAppImageExtractedRoots,
   removeAppImageInstalledPayloads
-} from './appimage-extraction-pruning'
-import { withAppImageRegistrationLock } from './appimage-registration-lock'
+} from './appimage/appimage-extraction-pruning'
+import { withAppImageRegistrationLock } from './appimage/appimage-registration-lock'
 import {
   isAppImageInstalledLauncherCurrent,
   isAppImageInstalledLauncherOwnedBySibling,
   resolveAppImageNamespacePath,
   resolveLegacyAppImageNamespacePath
-} from './appimage-extracted-root'
-import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
-import { CliPathRegistration } from './cli-path-registration'
+} from './appimage/appimage-extracted-root'
+import { isAppImageStableLauncherReady } from './appimage/appimage-stable-launcher'
+import { CliPathRegistration } from './command-paths/cli-path-registration'
+import { removeLinuxBareOrcaDispatcher } from './launchers/linux-bare-orca-dispatcher'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
@@ -164,6 +165,7 @@ export class CliInstaller extends CliPathRegistration {
   }
 
   private async removeUnlocked(): Promise<CliInstallStatus> {
+    await this.removeLinuxBareOrcaDispatcher()
     const status = await this.getStatus()
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       await this.removeLinuxAppImagePayloads()
@@ -202,6 +204,21 @@ export class CliInstaller extends CliPathRegistration {
 
     await this.removeLinuxAppImagePayloads()
     return this.getStatus()
+  }
+
+  // Removing the `orca` command also retires the bare-name dispatcher headless serve installed.
+  private async removeLinuxBareOrcaDispatcher(): Promise<void> {
+    if (this.platform !== 'linux' || this.commandPathOverride) {
+      return
+    }
+    try {
+      await removeLinuxBareOrcaDispatcher(this.homePath)
+    } catch (error) {
+      console.warn(
+        '[cli] Could not remove the bare orca dispatcher:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
   }
 
   private async removeLinuxAppImagePayloads(): Promise<void> {

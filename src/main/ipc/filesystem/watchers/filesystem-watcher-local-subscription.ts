@@ -1,7 +1,8 @@
 import type { WebContents } from 'electron'
-import { beginWatcherInstall } from '../../watcher-removal-gate'
-import type { LocalWatcherInstallToken } from './filesystem-watcher-lifecycle-state'
+import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
+
 import {
+  type LocalWatcherInstallToken,
   WATCHER_TEARDOWN_GRACE_MS,
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'
@@ -180,8 +181,14 @@ async function subscribeWhileRemovalAllowed(
     rootPath,
     worktreePath,
     cancelToken,
-    (listeners) =>
-      scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, subscribeLocalWatcher)
+    (listeners, waitForRetry) =>
+      scheduleLocalCapacityRetry(
+        rootKey,
+        worktreePath,
+        listeners,
+        subscribeLocalWatcher,
+        waitForRetry
+      )
   )
   watcherLifecycleState.pendingLocalInstallPromises.set(rootKey, installPromise)
   try {

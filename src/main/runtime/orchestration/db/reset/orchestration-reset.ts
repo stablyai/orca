@@ -1,11 +1,31 @@
-import { LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../orchestration-db'
+import { notifyPeerMailQueued } from '../../federation/peer-mail/peer-mail-waiters'
+import type { ResetRemovedWork } from '../../../../../shared/orchestration/orchestration-removed-work'
+import {
+  readRemovedWorkWatermark,
+  summarizeRemovedWorkSince
+} from './removed-orchestration-work-read'
+import { OWE_REMOTE_RUN_CANCELS_SQL } from '../remote-owned/remote-run-links'
 
-export function runResetTransaction(this: OrchestrationDb, statements: string): void {
+/** Returns the removed-work watermark, read inside the transaction so the reply counts only this reset. */
+export function runResetTransaction(
+  this: OrchestrationDb,
+  statements: string,
+  { removesDispatches = false }: { removesDispatches?: boolean } = {}
+): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    // Why unguarded: an error that ends the transaction must roll the whole reset back, not let the deletes autocommit.
+    const watermark = readRemovedWorkWatermark(this.db)
+    if (removesDispatches) {
+      // Their paired coordinator learns of it from its queue, which the reset keeps.
+      this.queueRemovedPeerRunDispatches('reset on the server running it')
+    }
     this.db.exec(statements)
     this.db.exec('COMMIT')
+    notifyPeerMailQueued(this.db)
+    return watermark
   } catch (error) {
     try {
       this.db.exec('ROLLBACK')
@@ -18,7 +38,9 @@ export function runResetTransaction(this: OrchestrationDb, statements: string): 
 
 export function resetAll(this: OrchestrationDb): void {
   // Keep receipts so a lost reset reply cannot replay the mutation.
-  this.runResetTransaction(`
+  this.runResetTransaction(
+    `
+    ${OWE_REMOTE_RUN_CANCELS_SQL}
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
@@ -28,7 +50,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM legacy_operation_receipts;
     DELETE FROM legacy_compatibility_principals;
     DELETE FROM legacy_adoptions;
-    DELETE FROM federation_relay_items;
+    DELETE FROM federation_relay_items WHERE NOT (direction = 'to_home' AND dispatch_id IN (SELECT conversation_id FROM peer_runs));
     DELETE FROM remote_dispatch_attachments;
     DELETE FROM federated_dispatches;
     DELETE FROM worker_terminal_archives;
@@ -36,20 +58,27 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
+    DELETE FROM worker_presence;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
     DELETE FROM messages;
+    DELETE FROM message_dispatch_provenance;
     DELETE FROM run_coordinator_handles;
     DELETE FROM runs;
+    DELETE FROM removed_orchestration_work;
     INSERT INTO runs (id, objective, home_database, consumer_generation, legacy)
       VALUES ('${LEGACY_RUN_ID}', 'Legacy orchestration state (inspect only)', 'this_database', 0, 1);
-  `)
+  `,
+    { removesDispatches: true }
+  )
   this.hasAnyDispatchContextsCache = undefined
 }
 
-export function resetTasks(this: OrchestrationDb): void {
-  // Messages survive; close threads so orphaned questions cannot masquerade as generic replies.
-  this.runResetTransaction(`
+export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined {
+  // Messages survive, and so do replies waiting for a paired Orca to pull them; close threads so orphaned questions cannot masquerade as generic replies.
+  const watermark = this.runResetTransaction(
+    `
+    ${OWE_REMOTE_RUN_CANCELS_SQL}
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
@@ -60,7 +89,7 @@ export function resetTasks(this: OrchestrationDb): void {
     DELETE FROM legacy_operation_receipts;
     DELETE FROM legacy_compatibility_principals;
     DELETE FROM legacy_adoptions;
-    DELETE FROM federation_relay_items;
+    DELETE FROM federation_relay_items WHERE kind <> 'peer_mail' AND NOT (direction = 'to_home' AND dispatch_id IN (SELECT conversation_id FROM peer_runs));
     DELETE FROM remote_dispatch_attachments;
     DELETE FROM federated_dispatches;
     DELETE FROM worker_terminal_archives;
@@ -68,10 +97,14 @@ export function resetTasks(this: OrchestrationDb): void {
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
+    DELETE FROM worker_presence;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
-  `)
+  `,
+    { removesDispatches: true }
+  )
   this.hasAnyDispatchContextsCache = undefined
+  return summarizeRemovedWorkSince(this.db, watermark)
 }
 
 export function resetMessages(this: OrchestrationDb): void {
@@ -81,6 +114,7 @@ export function resetMessages(this: OrchestrationDb): void {
     DELETE FROM question_threads;
     DELETE FROM deliveries;
     DELETE FROM messages;
+    DELETE FROM message_dispatch_provenance;
     DELETE FROM structured_pointer_operations;
   `)
 }

@@ -1,21 +1,32 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { useRuntimeHostStatusSelector } from '../../store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../store'
-import { useRuntimeSessionMirrorEnvironmentKeys } from '../use-runtime-session-mirror-environment-key'
-import { sessionTabsFreshnessKey } from './tracking'
-import { clearWebSessionTabsTrackingForEnvironment } from './tracking-lifecycle'
+import { useRuntimeSessionMirrorEnvironmentKeys } from './subscriptions/use-runtime-session-mirror-environment-key'
+import { sessionTabsFreshnessKey } from './state'
+import { clearWebSessionTabsTrackingForEnvironment } from './tracking/tracking-lifecycle'
 import {
   installGlobalSessionTabsSubscriptions,
   type GlobalSubscriptionRefs
-} from './global-session-subscription'
-import { installActiveSessionTabsSubscription } from './active-session-subscription'
-import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
+} from './subscriptions/global-session-subscription'
+import { installActiveSessionTabsSubscription } from './subscriptions/active-session-subscription'
+import { mirroredRuntimeEnvironmentIdForWorkspace } from './workspace-selection/mirrored-workspace-owner'
 import {
   createWarmWorktreeSessionSubscriptions,
   type WarmWorktreeSessionSubscriptions
-} from './warm-worktree-subscriptions'
+} from './subscriptions/warm-worktree-subscriptions'
 
 /** Mount the paired-runtime tab mirrors and the selected-worktree stream. */
+type RuntimeStatusEntry = RuntimeEnvironmentStatus | undefined
+const selectVerifiedRuntimeId = (entry: RuntimeStatusEntry): string | null =>
+  lastVerifiedRuntimeStatus(entry)?.runtimeId ?? null
+const selectConnectionGeneration = (entry: RuntimeStatusEntry): number =>
+  entry?.connectionGeneration ?? 0
+const selectHostContactEpoch = (entry: RuntimeStatusEntry): number => entry?.hostContactEpoch ?? 0
+
 export function useWebSessionTabsSync(): void {
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(null)
   const activeRuntimeWorktreeKeyRef = useRef<string | null>(null)
@@ -45,26 +56,19 @@ export function useWebSessionTabsSync(): void {
     mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
   )
   // Reconnect may replace runtime under the same environment ID; restart scoped streams from last answered identity. Probe-unverifiable status is null even while delivery continues.
-  const activeWorktreeRuntimeId = useAppStore((state) => {
-    const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
-    return environmentId
-      ? (lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
-          ?.runtimeId ?? null)
-      : null
-  })
-  const activeWorktreeRuntimeConnectionGeneration = useAppStore((state) => {
-    const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
-    return environmentId
-      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
-      : 0
-  })
+  const activeWorktreeRuntimeId = useRuntimeHostStatusSelector(
+    activeWorktreeRuntimeEnvironmentId || null,
+    selectVerifiedRuntimeId
+  )
+  const activeWorktreeRuntimeConnectionGeneration = useRuntimeHostStatusSelector(
+    activeWorktreeRuntimeEnvironmentId || null,
+    selectConnectionGeneration
+  )
   // Reconnect trigger only, not stream identity: outage-ended streams resend frames for the same connection.
-  const activeWorktreeRuntimeHostContactEpoch = useAppStore((state) => {
-    const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
-    return environmentId
-      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)
-      : 0
-  })
+  const activeWorktreeRuntimeHostContactEpoch = useRuntimeHostStatusSelector(
+    activeWorktreeRuntimeEnvironmentId || null,
+    selectHostContactEpoch
+  )
   const activeWorktreeRuntimePairingRevision = useAppStore((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     const environment = state.runtimeEnvironments.find(

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import { runProcess } from '@orca/process-host'
-import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
+import { findGitBash } from '../agent-hooks/installation/commands/testing/windows-git-bash-path.test-fixture'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -21,7 +21,6 @@ vi.mock('os', async () => {
 })
 
 import { CursorHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
@@ -40,13 +39,16 @@ type InstalledCursorHooks = {
 const EXPECTED_CURSOR_HOOK_STDOUT = {
   beforeSubmitPrompt: { continue: true },
   stop: {},
-  preToolUse: { permission: 'allow' },
+  preToolUse: {},
   postToolUse: {},
   postToolUseFailure: {},
-  beforeShellExecution: { permission: 'allow' },
-  beforeMCPExecution: { permission: 'allow' },
+  beforeShellExecution: {},
+  beforeMCPExecution: {},
   afterAgentResponse: {}
 } satisfies Record<CursorEvent, Record<string, unknown>>
+
+// Every event runs the same script with one of these three responses; one event per response covers the quoting.
+const RESPONSE_SHAPE_EVENTS = ['beforeSubmitPrompt', 'stop', 'preToolUse'] as const
 
 function readInstalledCursorHooks(homeDir: string): InstalledCursorHooks {
   return JSON.parse(
@@ -100,70 +102,6 @@ describe('CursorHookService', () => {
     removeTreeSync(homeDir)
   })
 
-  it('installs Cursor Agent hooks with the documented top-level command schema', () => {
-    const status = new CursorHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe(join(homeDir, '.cursor', 'hooks.json'))
-    expect(status.managedHooksPresent).toBe(true)
-
-    const config = JSON.parse(readFileSync(join(homeDir, '.cursor', 'hooks.json'), 'utf8')) as {
-      version?: number
-      hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
-    }
-    expect(config.version).toBe(1)
-    expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
-    for (const eventName of CURSOR_EVENTS) {
-      const definition = config.hooks[eventName]?.[0]
-      expect(definition?.command).toMatch(
-        process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
-      )
-      if (process.platform !== 'win32') {
-        expect(definition?.command).toContain(join(homeDir, '.orca'))
-      }
-      expect(definition?.hooks).toBeUndefined()
-    }
-
-    const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME),
-      'utf8'
-    )
-    expect(script).toContain('/hook/cursor')
-    expect(script).toContain('GROK_HOOK_EVENT')
-    if (process.platform === 'win32') {
-      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-    } else {
-      // Stdin avoids oversized curl command lines that trigger EDR.
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    }
-  })
-
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca cursor home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new CursorHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.cursor', 'hooks.json'), 'utf8')
-        ) as { hooks: Record<string, { command?: string }[]> }
-
-        for (const eventName of ['beforeSubmitPrompt', 'stop']) {
-          const command = config.hooks[eventName]?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        }
-      } finally {
-        removeTreeSync(spaceHome)
-      }
-    }
-  )
-
   it('preserves user-authored Cursor hook entries and removes stale managed entries', () => {
     const configPath = join(homeDir, '.cursor', 'hooks.json')
     mkdirSync(dirname(configPath), { recursive: true })
@@ -209,7 +147,7 @@ describe('CursorHookService', () => {
 
   // Execute the registered command: installer-shape checks missed invalid stdout (#15462).
   it(
-    'emits protocol-valid JSON on stdout for every managed event, including empty stdin (#15462)',
+    'emits protocol-valid JSON on stdout for every response shape, including empty stdin (#15462)',
     () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
@@ -219,6 +157,9 @@ describe('CursorHookService', () => {
       ]
 
       for (const eventName of CURSOR_EVENTS) {
+        requireRegisteredCommand(config, eventName)
+      }
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         for (const payloadFor of payloads) {
           const result = runRegisteredCursorHook(command, payloadFor(eventName))
@@ -233,6 +174,37 @@ describe('CursorHookService', () => {
     HOOK_CASE_TIMEOUT_MS
   )
 
+  it(
+    'rewrites only existing outdated managed entries on script refresh, without CLI detection',
+    async () => {
+      const configPath = join(homeDir, '.cursor', 'hooks.json')
+      mkdirSync(dirname(configPath), { recursive: true })
+      const oldScript = join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME)
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          hooks: {
+            beforeShellExecution: [
+              { command: '/usr/local/bin/user-hook' },
+              { command: `printf '{"permission":"allow"}'; # ${oldScript}` }
+            ]
+          }
+        })
+      )
+
+      await new CursorHookService().refreshManagedScripts()
+
+      const config = readInstalledCursorHooks(homeDir)
+      expect(Object.keys(config.hooks)).toEqual(['beforeShellExecution'])
+      expect(config.hooks.beforeShellExecution[0].command).toBe('/usr/local/bin/user-hook')
+      const command = config.hooks.beforeShellExecution[1]?.command ?? ''
+      expect(JSON.parse(runRegisteredCursorHook(command, '').stdout)).toEqual({})
+    },
+    // Spawns the installed hook through cmd.exe on Windows, which can exceed the default budget.
+    HOOK_CASE_TIMEOUT_MS
+  )
+
   it.each(['ordinary', 'spaced'] as const)(
     'emits protocol-valid JSON when the script is missing in a %s profile (#15462)',
     (profileKind) => {
@@ -243,7 +215,7 @@ describe('CursorHookService', () => {
       const config = readInstalledCursorHooks(installHome)
       unlinkSync(join(installHome, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
 
-      for (const eventName of CURSOR_EVENTS) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(command, '')
         expect(result.status, `${eventName} missing-script exit`).toBe(0)
@@ -262,7 +234,7 @@ describe('CursorHookService', () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
 
-      for (const eventName of ['beforeSubmitPrompt', 'preToolUse', 'stop'] as const) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(
           command,

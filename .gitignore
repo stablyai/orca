@@ -17,14 +17,20 @@ node_modules/
 node_modules
 
 dist/
+# The declarative sample ships its prebuilt bundle so it installs without a build step.
+!examples/plugins/hello-components/dist/
 dist-electron/
 out/
 /build/
 release/
+!config/scripts/release/
+!src/main/runtime/orchestration/terminal-authority/release/
 native/**/.build/
 native/windows-cli-launcher/target/
 native/windows-agent-hook/target/
 # node-gyp output for the Windows native addons; generated per host and ABI.
+native/windows-notifications/build/
+native/windows-notifications/bin/
 native/windows-registry/build/
 native/windows-registry/bin/
 native/windows-security/build/
@@ -95,13 +101,11 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/development.md
 !docs/styleguide/
 !docs/styleguide/**
-!docs/reference/
-!docs/reference/cross-platform-support.md
-!docs/reference/git-workflow.md
-!docs/reference/test-antipatterns.md
-!docs/reference/component-fixtures.md
+!docs/agents-md-refs/
+!docs/agents-md-refs/**
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
 
@@ -118,6 +122,9 @@ validation-screenshots/
 
 test-results/
 playwright-report/
+
+# Claude Code settings are machine-local.
+**/.claude/settings.local.json
 
 # Agent skills are installed per machine.
 /.claude/skills/

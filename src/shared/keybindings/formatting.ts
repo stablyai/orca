@@ -9,14 +9,17 @@ import type {
 } from './types'
 import { KEYBINDING_DEFINITIONS, isDigitIndexActionId, isKeybindingActionId } from './definitions'
 import { parseKeybinding } from './parser'
+import { getKeybindingConflictIdentity, keybindingConflictIdentities } from './matching-key'
 import {
   getEffectiveKeybindingsForAction,
   getEffectiveKeybindingsForDefinition,
-  isKeybindingInterceptedBeforeBrowserChords,
-  isKeybindingInterceptedByMainProcess
+  getDefaultBindings,
+  isDefaultKeybinding,
+  keybindingConflictGroups,
+  bindingsOverlap,
+  keybindingMainProcessConflictGroups
 } from './effective'
 import { isDoubleTapBinding } from './normalization'
-import { getKeybindingConflictIdentity, keybindingConflictIdentities } from './matching'
 
 function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
   switch (modifier) {
@@ -29,7 +32,7 @@ function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
     case 'Alt':
       return isMac ? '⌥' : 'Alt'
     case 'Shift':
-      return isMac ? '⇧' : 'Shift'
+      return '⇧'
   }
 }
 
@@ -57,7 +60,7 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
     parts.push(isMac ? '⌥' : 'Alt')
   }
   if (parsed.shift) {
-    parts.push(isMac ? '⇧' : 'Shift')
+    parts.push('⇧')
   }
   parts.push(formatKeyToken(parsed.key, isMac))
   return parts
@@ -146,6 +149,7 @@ export function findKeybindingConflictsForDefinitions(
   overrides?: KeybindingOverrides,
   options: FindKeybindingConflictOptions = {}
 ): KeybindingConflict[] {
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]))
   const owners = new Map<string, { binding: string; actionIds: Set<KeybindingActionId> }>()
   const ignoredActionIds = new Set(options.ignoredActionIds ?? [])
   const customizedActions = new Set(
@@ -164,23 +168,15 @@ export function findKeybindingConflictsForDefinitions(
     if (ignoredActionIds.has(definition.id)) {
       continue
     }
-    for (const binding of getEffectiveKeybindingsForDefinition(definition, platform, overrides)) {
-      const groups = new Set([definition.conflictGroup ?? definition.scope])
-      if (definition.conflictGroup) {
-        // Why: native menu accelerators can consume global chords, so check custom bindings against both the menu bucket and scope.
-        groups.add(definition.scope)
-      }
-      // Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
-      if (
-        options.includeMainProcessInterception &&
-        isKeybindingInterceptedByMainProcess(definition)
-      ) {
-        for (const scope of scopes) {
-          if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
-            groups.add(scope)
-          }
-        }
-      }
+    for (const binding of getEffectiveKeybindingsForDefinition(
+      definition,
+      platform,
+      overrides,
+      definitions
+    )) {
+      const groups = options.includeMainProcessInterception
+        ? keybindingMainProcessConflictGroups(definition, scopes)
+        : new Set(keybindingConflictGroups(definition))
       for (const group of groups) {
         for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
           const conflictKey = `${group}\u0000${identity}`
@@ -212,9 +208,25 @@ export function findKeybindingConflictsForDefinitions(
     )
     .map(({ binding, actionIds }) => ({
       binding,
-      actionIds: Array.from(actionIds)
+      actionIds: Array.from(actionIds).filter((id) => {
+        const definition = byId.get(id)
+        return (
+          !definition?.implicitDefaultYields ||
+          // Why: an override can carry the action's own default, which still shares that chord on purpose.
+          !getDefaultBindings(definition, platform).some((ownDefault) =>
+            bindingsOverlap(definition, binding, definition, ownDefault, platform)
+          ) ||
+          !Array.from(actionIds).every((otherId) => {
+            const other = byId.get(otherId)
+            return otherId === id || (other && isDefaultKeybinding(other, binding, platform))
+          })
+        )
+      })
     }))
     .filter((conflict) => {
+      if (conflict.actionIds.length < 2) {
+        return false
+      }
       const key = `${conflict.binding}\u0000${conflict.actionIds.join('\u0000')}`
       if (seenConflictKeys.has(key)) {
         return false

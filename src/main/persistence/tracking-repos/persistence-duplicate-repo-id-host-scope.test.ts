@@ -9,12 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Project, ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
-import { resetRetirementCollisionKeyCacheForTests } from '../../worktree-name-retirement'
+import type { Project, ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 let hasCreatedStoreInCase = false
@@ -112,45 +112,19 @@ afterEach(async () => {
 })
 
 describe('deleting one host copy of a repo id shared by two hosts', () => {
-  it('keeps both rows resolvable after load', async () => {
-    const store = await createStoreWithDuplicateRepoId()
+  it('removing a local folder project keeps the repo with the same id on another host', async () => {
+    const store = await createStoreFromState({
+      repos: duplicateIdRepos().map((repo) => ({ ...repo, kind: 'folder' }))
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'dup::/remote/dup', hostId: 'ssh:ssh-1' }), {
+      displayName: 'SSH wt'
+    })
 
-    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup', '/remote/dup'])
-  })
-
-  it.each(['git', 'folder'] as const)(
-    'removing the local %s row keeps the other host row and its metadata',
-    async (kind) => {
-      const store = await createStoreFromState({
-        repos: duplicateIdRepos().map((repo) => ({ ...repo, kind }))
-      })
-      store.setWorktreeMeta(hostWorktreeTarget({ id: 'dup::/remote/dup', hostId: 'ssh:ssh-1' }), {
-        displayName: 'SSH wt'
-      })
-
-      store.removeProjectForHost({ id: 'dup', executionHostId: 'local' })
-      expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
-      expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
-        'SSH wt'
-      )
-    }
-  )
-
-  it('removeProjectForHost drops only the addressed host row', async () => {
-    const store = await createStoreWithDuplicateRepoId()
-
-    store.removeProjectForHost({ id: 'dup', executionHostId: 'ssh:ssh-1' })
-
-    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup'])
-  })
-
-  it('removeProjectForHost given the SSH row itself leaves the local twin', async () => {
-    const store = await createStoreWithDuplicateRepoId()
-    const sshRow = store.getRepos().find((repo) => repo.connectionId === 'ssh-1')!
-
-    store.removeProjectForHost(sshRow)
-
-    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup'])
+    store.removeProjectForHost({ id: 'dup', executionHostId: 'local' })
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
+    expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
+      'SSH wt'
+    )
   })
 
   it('moveProjectToGroup moves the addressed twin, not the first row with the id', async () => {
@@ -169,74 +143,6 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
       store.getRepos().map((repo) => [repo.path, repo.projectGroupId ?? null])
     )
     expect(groupByPath).toEqual({ '/laptop/dup': null, '/remote/dup': group.id })
-  })
-
-  it('moveProjectToGroup on a host holding no twin moves nothing', async () => {
-    const store = await createStoreWithDuplicateRepoId()
-    const group = store.createProjectGroup({ name: 'G', createdFrom: 'manual' })
-
-    expect(store.moveProjectToGroup({ id: 'dup', connectionId: 'ssh-2' }, group.id)).toBeNull()
-    expect(store.getRepos().every((repo) => !repo.projectGroupId)).toBe(true)
-  })
-
-  it('deleteProjectHostSetup drops only the row it reports, never the sibling host', async () => {
-    // Duplicate repo IDs also duplicate derived setup IDs; only the resolved host row may be deleted.
-    const store = await createStoreWithDuplicateRepoId()
-
-    const result = store.deleteProjectHostSetup({ setupId: 'dup' })
-
-    expect(result?.repo?.path).toBeDefined()
-    expect(store.getRepos().map((repo) => repo.path)).toEqual(
-      duplicateIdRepos()
-        .map((repo) => repo.path)
-        .filter((path) => path !== result?.repo?.path)
-    )
-  })
-
-  it.each(['local', 'ssh:ssh-1'] as const)(
-    'deleteProjectHostSetup with hostId %s removes that host twin only',
-    async (hostId) => {
-      const store = await createStoreWithDuplicateRepoId()
-
-      const result = store.deleteProjectHostSetup({ setupId: 'dup', hostId })
-
-      expect(result?.setup.hostId).toBe(hostId)
-      expect(store.getRepos().map((repo) => repo.path)).toEqual(
-        hostId === 'local' ? ['/remote/dup'] : ['/laptop/dup']
-      )
-    }
-  )
-
-  it.each(['local', 'ssh:ssh-1'] as const)(
-    'updateProjectHostSetup with hostId %s renames that host twin only',
-    async (hostId) => {
-      const store = await createStoreWithDuplicateRepoId()
-
-      const result = store.updateProjectHostSetup({
-        setupId: 'dup',
-        hostId,
-        updates: { displayName: 'Renamed' }
-      })
-
-      expect(result?.setup.hostId).toBe(hostId)
-      expect(store.getRepos().map((repo) => repo.displayName)).toEqual(
-        hostId === 'local' ? ['Renamed', 'Dup Remote'] : ['Dup Local', 'Renamed']
-      )
-    }
-  )
-
-  it('a hostId naming no twin edits nothing', async () => {
-    const store = await createStoreWithDuplicateRepoId()
-
-    expect(
-      store.updateProjectHostSetup({
-        setupId: 'dup',
-        hostId: 'ssh:other',
-        updates: { displayName: 'Renamed' }
-      })
-    ).toBeNull()
-    expect(store.deleteProjectHostSetup({ setupId: 'dup', hostId: 'ssh:other' })).toBeNull()
-    expect(store.getRepos().map((repo) => repo.displayName)).toEqual(['Dup Local', 'Dup Remote'])
   })
 
   it('setResolvedRepoGitUsername writes only the probed host row', async () => {

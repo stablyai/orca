@@ -1,10 +1,18 @@
+import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import {
+  isBackgroundLaunch,
+  showWindowWithoutStealingFocus
+} from './activation/foreground-activation-policy'
+import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
-import type { Store } from '../persistence'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
+import {
+  stepUIZoomLevel,
+  type UIZoomDirection
+} from '../../shared/app-lifecycle/windows/ui-zoom-level'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 let spaceWindow: BrowserWindow | null = null
 
@@ -28,9 +36,14 @@ export function zoomWorkspaceSpaceWindowIfFocused(direction: UIZoomDirection): b
   return true
 }
 
-export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
+export function createOrFocusWorkspaceSpaceWindow(
+  nativeSettings: NativeSettingsProjection
+): BrowserWindow {
   const existing = getWorkspaceSpaceWindow()
   if (existing) {
+    if (existing.webContents.isCrashed()) {
+      existing.webContents.reload()
+    }
     if (existing.isMinimized()) {
       existing.restore()
     }
@@ -40,12 +53,14 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
     return existing
   }
 
+  // Serve-only: this window lists saved WSL hosts and their Connect, as the main window does.
+  const wslArguments = wslHostsWindowArguments()
   const window = new BrowserWindow({
     width: 1180,
     height: 820,
     minWidth: 700,
     minHeight: 520,
-    title: 'Orca Space Beta',
+    title: translateMain('native.dialog.spaceTitle', 'Orca Space Beta'),
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
@@ -53,7 +68,8 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       partition: 'orca-workspace-space-window',
-      webviewTag: false
+      webviewTag: false,
+      ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
     }
   })
   spaceWindow = window
@@ -64,11 +80,11 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
   window.webContents.session.setPermissionCheckHandler(() => false)
   window.webContents.on('dom-ready', () => {
     if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(store.getUI().uiZoomLevel ?? 0)
+      window.webContents.setZoomLevel(nativeSettings.getUI().uiZoomLevel ?? 0)
     }
   })
-  let lastFollowedZoomLevel = store.getUI().uiZoomLevel ?? 0
-  const offUIChanged = store.onUIChanged((ui) => {
+  let lastFollowedZoomLevel = nativeSettings.getUI().uiZoomLevel ?? 0
+  const offUIChanged = nativeSettings.onUIChanged((ui) => {
     const level = ui.uiZoomLevel ?? 0
     if (level !== lastFollowedZoomLevel && !window.isDestroyed()) {
       lastFollowedZoomLevel = level
@@ -76,7 +92,18 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
     }
   })
   window.once('ready-to-show', () => showWindowWithoutStealingFocus(window))
+  window.on('page-title-updated', (event) => {
+    event.preventDefault()
+  })
+  const updateTitle = (): void => {
+    if (!window.isDestroyed()) {
+      window.setTitle(translateMain('native.dialog.spaceTitle', 'Orca Space Beta'))
+    }
+  }
+  mainI18n.on('languageChanged', updateTitle)
+
   window.on('closed', () => {
+    mainI18n.off('languageChanged', updateTitle)
     offUIChanged()
     if (spaceWindow === window) {
       spaceWindow = null

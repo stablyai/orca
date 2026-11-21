@@ -17,7 +17,11 @@ describe('cloud database', () => {
   it('names the SQLite file after the service and applies the given schema', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'orca-cloud-database-'))
     dirs.push(dataDir)
-    const database = await openCloudDatabase({ service: 'sample', schemaStatements: SCHEMA, dataDir })
+    const database = await openCloudDatabase({
+      service: 'sample',
+      schemaStatements: SCHEMA,
+      dataDir
+    })
     await database.transaction(async (tx) => {
       await tx.query('INSERT INTO items (id, value) VALUES (?, ?)', ['a', 1])
     })
@@ -30,8 +34,50 @@ describe('cloud database', () => {
       dataDir,
       readOnly: true
     })
-    await expect(reader.query('SELECT id, value FROM items')).resolves.toEqual([{ id: 'a', value: 1 }])
+    await expect(reader.query('SELECT id, value FROM items')).resolves.toEqual([
+      { id: 'a', value: 1 }
+    ])
     await reader.close()
+  })
+
+  it('adds a column on SQLite only while it is missing, so every boot can repeat it', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'orca-cloud-database-'))
+    dirs.push(dataDir)
+    const schema = [
+      ...SCHEMA,
+      'ALTER TABLE items ADD COLUMN IF NOT EXISTS note TEXT',
+      'ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "Extra" TEXT'
+    ]
+    for (let boot = 0; boot < 2; boot++) {
+      const database = await openCloudDatabase({
+        service: 'sample',
+        schemaStatements: schema,
+        dataDir
+      })
+      await database.query('INSERT INTO items (id, value, note) VALUES (?, ?, ?)', [
+        `${boot}`,
+        1,
+        'n'
+      ])
+      await database.close()
+    }
+  })
+
+  it('drops a column on SQLite only while it is present, so every boot can repeat it', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'orca-cloud-database-'))
+    dirs.push(dataDir)
+    const added = [...SCHEMA, 'ALTER TABLE items ADD COLUMN IF NOT EXISTS note TEXT']
+    await (await openCloudDatabase({ service: 'sample', schemaStatements: added, dataDir })).close()
+    const dropped = [...SCHEMA, 'ALTER TABLE items DROP COLUMN IF EXISTS note']
+    for (let boot = 0; boot < 2; boot++) {
+      const database = await openCloudDatabase({
+        service: 'sample',
+        schemaStatements: dropped,
+        dataDir
+      })
+      await expect(database.query('SELECT note FROM items')).rejects.toThrow()
+      await database.close()
+    }
   })
 
   it('rolls back a failed transaction in memory', async () => {

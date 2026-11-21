@@ -1,0 +1,93 @@
+import { describe, expect, it } from 'vitest'
+import { harness } from '../test-support/bridge-host-test-harness'
+import { clientFrame, createFakeRpcClient } from '../test-support/bridge-host-test-fakes'
+import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT
+} from '../bridge/protocol/bridge-frame-fields'
+
+import { BRIDGE_ROUTE_PARAM_CLEAR } from '../bridge/page-lifecycle/bridge-route-update'
+
+describe('notifications, refusals and the fence', () => {
+  it('reports a listener that throws on a page fault once, and keeps reading', () => {
+    const failure = new Error('the session is gone')
+    const bridge = harness({
+      onPageFault: () => {
+        throw failure
+      }
+    })
+    const fault = clientFrame({
+      type: 'notify',
+      name: BRIDGE_FAULT_GRANT,
+      error: { category: 'Error', message: 'route threw', isRpcDeliveryUnknown: false }
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // Never let a throw escape the native event handler delivering this frame.
+    bridge.host.receive(fault)
+    bridge.host.receive(fault)
+    expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
+  })
+
+  it('reports a post that throws instead of rejecting, and does not take the sender down', () => {
+    const failure = new Error('the bridge module is gone')
+    const client = createFakeRpcClient()
+    const bridge = harness({
+      client,
+      post: () => {
+        throw failure
+      }
+    })
+    // State frames run inside client fan-out; a thrown post must not take down sibling listeners.
+    expect(() => client.pushState('reconnecting')).not.toThrow()
+    expect(bridge.diagnostics).toEqual([{ kind: 'post-failed', error: failure }])
+  })
+})
+
+// Validate external-link schemes at the envelope too; a page bypassing its own guard must not reach the device handler with arbitrary URLs.
+describe('externalLink', () => {
+  const open = (url: string) =>
+    clientFrame({ type: 'notify', name: BRIDGE_EXTERNAL_LINK_GRANT, url })
+
+  it('hands over the URL the parser read, not the string the page sent', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // The WHATWG parser strips tab/LF/CR and trims leading C0/space; these raw spellings pass a naive scheme check.
+    bridge.host.receive(open('ht\ntps://example.com'))
+    bridge.host.receive(open('https://example.com/a\r\n'))
+    bridge.host.receive(open('  https://example.com/a  '))
+    bridge.host.receive(open('https:example.com'))
+    expect(bridge.externalLinks).toEqual([
+      'https://example.com/',
+      'https://example.com/a',
+      'https://example.com/a',
+      'https://example.com/'
+    ])
+  })
+
+  it('refuses a scheme the grant does not cover, as a frame the reader never accepts', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', 'orca-mobile-web://s/x']) {
+      bridge.host.receive(open(url))
+    }
+    expect(bridge.externalLinks).toEqual([])
+    // Envelope refusal must precede grants/device dispatch; the reporter, not this host harness, deduplicates repeated diagnostics.
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
+    )
+  })
+})
+
+describe('the page erasing a one-shot route param', () => {
+  it('refuses a clear for a param the page may not erase', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: BRIDGE_ROUTE_PARAM_CLEAR, param: 'name', value: 'x' })
+    )
+    expect(bridge.routeParamClears()).toEqual([])
+    expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
+  })
+})

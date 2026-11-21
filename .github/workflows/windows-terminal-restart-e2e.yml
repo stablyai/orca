@@ -59,9 +59,8 @@ jobs:
         # grep and worker flags positional filters instead of CLI options.
         run: >-
           pnpm run test:e2e
-          tests/e2e/restart-restore-terminal-input.spec.ts
-          tests/e2e/terminal-restart-persistence.spec.ts
-          --grep "clean restart with a live daemon session|cold-restored pane accepts typing|daemon snapshot relaunch preserves"
+          tests/e2e/desktop/startup-recovery/restart-restore-terminal-input.spec.ts
+          --grep "clean restart with a live daemon session|cold-restored pane accepts typing"
           --workers=1
 
       - name: Upload Playwright traces

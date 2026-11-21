@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
@@ -14,7 +15,10 @@ export type SshLeaseStoreMock = {
   removeSshRemotePtyLeases: Mock
 }
 
-export type MockBrowserWindow = { isDestroyed: () => boolean; webContents: { send: Mock } }
+export type MockBrowserWindow = {
+  isDestroyed: () => boolean
+  webContents: { send: Mock; isDestroyed: () => boolean }
+}
 
 export type SshIpcHarness = {
   handlers: Map<string, (_event: unknown, args: unknown) => unknown>
@@ -45,15 +49,17 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     getRepos: () => [],
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    removeSshRemotePtyLeases: vi.fn()
+    removeSshRemotePtyLeases: vi.fn(),
+    getSettings: () => ({}),
+    updateSettings: vi.fn()
   }
   const mockWindow = {
     isDestroyed: () => false,
-    webContents: { send: vi.fn() }
+    webContents: { send: vi.fn(), isDestroyed: () => false }
   }
   const createMockWindow = () => ({
     isDestroyed: () => false,
-    webContents: { send: vi.fn() }
+    webContents: { send: vi.fn(), isDestroyed: () => false }
   })
   const createConnectionManagerMock = () => ({
     connect: vi.fn(),
@@ -95,7 +101,11 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockSshStore.addTarget.mockReset()
     mockSshStore.updateTarget.mockReset()
     mockSshStore.removeTarget.mockReset()
-    mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
+    mockSshStore.importFromSshConfig
+      .mockReset()
+      .mockResolvedValue({ targets: [], repoReadoptions: [] })
+    mockSshStore.currentSshRouteSnapshot.mockReset().mockReturnValue(null)
+    mockSshStore.refreshSshRouteSnapshot.mockReset().mockResolvedValue(null)
     mockSshStore.lastRepoReadoptions = []
     mockWindow.webContents.send.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
@@ -134,7 +144,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     powerMonitorOnMock.mockReset()
     powerMonitorOffMock.mockReset()
 
-    registerSshHandlers(mockStore as never, () => mockWindow as never)
+    await registerSshHandlers(mockStore as never, () => mockWindow as never)
   }
 
   return {

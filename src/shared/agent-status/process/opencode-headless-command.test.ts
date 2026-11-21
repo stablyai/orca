@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest'
+import { tokenizeStartupCommand } from '../../agent-launch/startup/tui-agent-startup-shell'
+import { tokenizeCommandLine } from './agent-command-line-entrypoint'
+import { isOpenCodeRunCommand } from './opencode-headless-command'
+
+const matches = (commandLine: string): boolean =>
+  isOpenCodeRunCommand(tokenizeCommandLine(commandLine))
+
+describe('wrapped OpenCode run command position', () => {
+  it('recognizes a PowerShell call operator before a quoted executable', () => {
+    const parsed = tokenizeStartupCommand(
+      '& "C:\\Program Files\\opencode\\opencode.exe" run --standalone',
+      'powershell'
+    )
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      throw new Error(parsed.error)
+    }
+    expect(isOpenCodeRunCommand(parsed.tokens, 'powershell')).toBe(true)
+    expect(isOpenCodeRunCommand(parsed.tokens, 'cmd')).toBe(false)
+  })
+
+  it.each([
+    'env -u FOO opencode run',
+    'env -uFOO opencode run',
+    'env --unset FOO opencode run',
+    'env --unset=FOO opencode run',
+    'env -i PRIVATE_CONFIG=kept opencode run',
+    'env --ignore-environment PRIVATE_CONFIG=kept opencode run',
+    'env - PRIVATE_CONFIG=kept opencode run',
+    'env -C /workspace opencode run',
+    'env -C/workspace opencode run',
+    'env --chdir /workspace opencode run',
+    'env --chdir=/workspace opencode run',
+    'env -P /private/bin opencode run',
+    'env -P/private/bin opencode run',
+    'CONFIG=kept /usr/bin/env -i -u FOO -C /workspace -- OTHER=kept opencode run'
+  ])('recognizes an executable after env options: %s', (command) => {
+    expect(matches(command)).toBe(true)
+  })
+
+  it.each([
+    'env -u',
+    'env -C',
+    'env -u opencode run',
+    'env -C opencode run',
+    'env -u FOO echo opencode run',
+    'env --unset=FOO echo run',
+    'env -S "opencode run"',
+    'env --unknown opencode run'
+  ])('does not mistake env option arguments for the executable: %s', (command) => {
+    expect(matches(command)).toBe(false)
+  })
+
+  it('does not find executable names inside other commands or prompt arguments', () => {
+    expect(matches('env CUSTOM_CONFIG=private echo opencode run')).toBe(false)
+    expect(matches('env CUSTOM_CONFIG=private echo run')).toBe(false)
+    expect(matches('CUSTOM_CONFIG=private opencode --prompt "opencode run"')).toBe(false)
+    expect(matches('env -- opencode serve --title run')).toBe(false)
+    expect(matches('opencode attach http://host/run')).toBe(false)
+  })
+})

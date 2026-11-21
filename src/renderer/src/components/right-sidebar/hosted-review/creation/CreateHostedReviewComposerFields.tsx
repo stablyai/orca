@@ -1,0 +1,250 @@
+import { GitHubImageTextarea } from '@/components/github/GitHubImageTextarea'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import { CornerDownRight, GitPullRequestArrow, Sparkles } from 'lucide-react'
+import { useId, useState } from 'react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import { CreateHostedReviewBasePicker } from './CreateHostedReviewBasePicker'
+import { CreateHostedReviewComposerMessage } from './CreateHostedReviewComposerMessage'
+import {
+  COMPOSER_CHECKBOX_CLASS,
+  COMPOSER_FIELD_CLASS,
+  COMPOSER_TEXTAREA_CLASS
+} from './create-hosted-review-composer-field-class'
+import type { HostedReviewStackParent } from '../provider-actions/useHostedReviewStackParent'
+
+type CreateHostedReviewComposerFieldsProps = {
+  imageUpload?: GitHubImageIntake
+  copy: LocalizedHostedReviewCopy
+  base: string
+  setBase: (value: string) => void
+  repoDefaultBase: string | null
+  title: string
+  setTitle: (value: string) => void
+  body: string
+  setBody: (value: string) => void
+  draft: boolean
+  setDraft: (value: boolean) => void
+  supportsDraft: boolean
+  stacked: boolean
+  setStacked: (value: boolean) => void
+  stackParentReview: HostedReviewStackParent | null
+  baseQuery: string
+  setBaseQuery: (value: string) => void
+  baseResults: string[]
+  setBaseResults: (value: string[]) => void
+  baseSearchPending: boolean
+  baseSearchError: string | null
+  generateError: string | null
+  createError: string | null
+  fieldsLocked: boolean
+  generating: boolean
+  normalizedBase: string
+  strippedBranch: string
+  baseSameAsBranch: boolean
+}
+
+export function CreateHostedReviewComposerFields({
+  imageUpload,
+  copy,
+  base,
+  setBase,
+  repoDefaultBase,
+  title,
+  setTitle,
+  body,
+  setBody,
+  draft,
+  setDraft,
+  supportsDraft,
+  stacked,
+  setStacked,
+  stackParentReview,
+  baseQuery,
+  setBaseQuery,
+  baseResults,
+  setBaseResults,
+  baseSearchPending,
+  baseSearchError,
+  generateError,
+  createError,
+  fieldsLocked,
+  generating,
+  normalizedBase,
+  strippedBranch,
+  baseSameAsBranch
+}: CreateHostedReviewComposerFieldsProps): React.JSX.Element {
+  const t = useTranslate()
+  // Own editing state here so stack options step aside while base results would overlap them.
+  const [baseEditing, setBaseEditing] = useState(false)
+  const draftFieldId = useId()
+  const stackFieldId = useId()
+
+  return (
+    <>
+      <div className="relative space-y-1.5">
+        <Input
+          aria-label={t(
+            'auto.components.right.sidebar.SourceControl.a6eda33521',
+            '{{value0}} title',
+            { value0: copy.titleLabel }
+          )}
+          value={title}
+          disabled={fieldsLocked}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder={t('auto.components.right.sidebar.SourceControl.7d6a8f0082', 'Title')}
+          className={cn(COMPOSER_FIELD_CLASS, 'px-2 font-medium')}
+        />
+
+        <GitHubImageTextarea
+          imageUpload={imageUpload}
+          aria-label={t(
+            'auto.components.right.sidebar.SourceControl.a8873e1d62',
+            '{{value0}} description',
+            { value0: copy.titleLabel }
+          )}
+          rows={6}
+          value={body}
+          disabled={fieldsLocked}
+          onValueChange={setBody}
+          placeholder={t(
+            'auto.components.right.sidebar.SourceControl.a0dc20fc93',
+            'Description (optional)'
+          )}
+          className={cn(COMPOSER_TEXTAREA_CLASS, 'min-h-[7rem] resize-y scrollbar-sleek')}
+        />
+
+        {generating ? (
+          // Explain the locked title/description fields before generated replacements arrive.
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-background/40"
+            aria-hidden="true"
+          >
+            <div className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground shadow-xs">
+              <Sparkles className="size-3 animate-pulse text-foreground" />
+              <span>
+                {t(
+                  'auto.components.right.sidebar.SourceControl.9484270f45',
+                  'Generating title & description…'
+                )}
+              </span>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <CreateHostedReviewBasePicker
+        copy={copy}
+        base={base}
+        setBase={setBase}
+        repoDefaultBase={repoDefaultBase}
+        editing={baseEditing}
+        setEditing={setBaseEditing}
+        baseQuery={baseQuery}
+        setBaseQuery={setBaseQuery}
+        baseResults={baseResults}
+        setBaseResults={setBaseResults}
+        baseSearchPending={baseSearchPending}
+        baseSearchError={baseSearchError}
+        fieldsLocked={fieldsLocked}
+        strippedBranch={strippedBranch}
+        baseSameAsBranch={baseSameAsBranch}
+      />
+
+      <div className="space-y-2.5">
+        {stackParentReview && !baseEditing ? (
+          <div className="space-y-1.5">
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id={stackFieldId}
+                checked={stacked}
+                disabled={fieldsLocked}
+                onCheckedChange={(value) => setStacked(value === true)}
+                className={cn(COMPOSER_CHECKBOX_CLASS, 'mt-px')}
+              />
+              {/* Explain the stack effect; the base field already names its parent branch. */}
+              <Label
+                htmlFor={stackFieldId}
+                className="min-w-0 flex-1 flex-col items-start gap-0.5 text-xs leading-snug"
+              >
+                <span className="text-foreground">
+                  {t(
+                    'auto.components.right.sidebar.CreateHostedReviewComposerFields.90cabf6cfc',
+                    'Stack this PR above #{{value0}}',
+                    { value0: stackParentReview.number }
+                  )}
+                </span>
+                {stacked ? null : (
+                  <span className="text-[11px] font-normal text-muted-foreground">
+                    {t(
+                      'auto.components.right.sidebar.CreateHostedReviewComposerFields.ff81473a57',
+                      "Creates a GitHub Stack or extends the parent's existing stack."
+                    )}
+                  </span>
+                )}
+              </Label>
+            </div>
+
+            {stacked ? (
+              <div className="ml-6 space-y-1 border-l border-border pl-2 text-[11px]">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <GitPullRequestArrow
+                    className="size-3 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="shrink-0 text-muted-foreground">
+                    #{stackParentReview.number}
+                  </span>
+                  <span className="truncate text-foreground">{normalizedBase}</span>
+                </div>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <CornerDownRight
+                    className="size-3 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="truncate text-foreground">{strippedBranch}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {t(
+                      'auto.components.right.sidebar.CreateHostedReviewComposerFields.29732f2fb0',
+                      'new PR'
+                    )}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {supportsDraft ? (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={draftFieldId}
+              checked={draft}
+              disabled={fieldsLocked}
+              onCheckedChange={(value) => setDraft(value === true)}
+              className={COMPOSER_CHECKBOX_CLASS}
+            />
+            <Label htmlFor={draftFieldId} className="min-w-0 flex-1 truncate text-xs">
+              {t('auto.components.right.sidebar.SourceControl.78ddfd0bb4', 'Create as draft')}
+            </Label>
+          </div>
+        ) : null}
+      </div>
+
+      {generateError || createError ? (
+        <div className="space-y-1">
+          {generateError ? (
+            <CreateHostedReviewComposerMessage>{generateError}</CreateHostedReviewComposerMessage>
+          ) : null}
+          {createError ? (
+            <CreateHostedReviewComposerMessage>{createError}</CreateHostedReviewComposerMessage>
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  )
+}

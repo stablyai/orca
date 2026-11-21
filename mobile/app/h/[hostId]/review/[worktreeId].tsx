@@ -4,13 +4,13 @@ import {
   workspaceRouteParams
 } from '../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
-import { firstReviewParam } from '../../../../src/session/mobile-diff-review-screen-model'
+import { firstReviewParam } from '../../../../src/source-control/review/diff-state/mobile-diff-review-screen-model'
 import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../../src/mobile-web-shell/shell-screen-route'
+} from '../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 
 // Review and explorer routes both have five segments; exact static-segment matching distinguishes review from files.
 export default withWorkspaceRoute(function MobileDiffReviewScreen() {
@@ -22,6 +22,8 @@ export default withWorkspaceRoute(function MobileDiffReviewScreen() {
     scope?: string | string[]
     file?: string | string[]
     area?: string | string[]
+    commit?: string | string[]
+    line?: string | string[]
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
@@ -30,7 +32,7 @@ export default withWorkspaceRoute(function MobileDiffReviewScreen() {
   // Carry screen query params unchanged, omitting empty values: screen normalizers distinguish absence from empty scope/file/area.
   const routeParams: Record<string, string> = {
     ...Object.fromEntries(
-      (['name', 'scope', 'file', 'area'] as const)
+      (['name', 'scope', 'file', 'area', 'commit', 'line'] as const)
         .map((key) => [key, firstReviewParam(params[key])] as const)
         .filter(([, value]) => value !== '')
     ),

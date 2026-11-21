@@ -1,29 +1,29 @@
 import type {
   RuntimeHeadlessTerminal,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
+} from '../records/runtime-terminal-state-records'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { splitFreebuffScreenUpdates } from '../../../../shared/agent-status/output/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
-import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
+import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import {
   observeCodexCapacityTerminalStatus,
   observeCodexReconnectFailure
-} from '../../codex-notice-terminal-status'
-import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
-import type { LaunchedAgentForeground } from '../../launched-agent-foreground'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
+} from './codex-notice-terminal-status'
+import { TrustDialogStatusObserver } from './trust-dialog-status-observer'
+import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
-import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
-  protected abstract markPaneLiveTitlesDirty(): void
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  protected abstract markPaneLiveTitlesDirty(ref: string): void
   protected abstract settleLostAgentSession(ptyId: string): void
   abstract readLaunchedAgentForeground(
     ptyId: string,
@@ -48,6 +48,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         false
       )
   })
+
+  /** Claims a startup-dialog card choice while the screen still reads as that card; a moved highlight, a new dialog or an earlier claim on this screen fails. */
+  claimStartupDialogChoice(ptyId: string, prompt: string): boolean {
+    const received = this.getPtyOutputSequence(ptyId)
+    // A model behind received output could vouch for a screen Claude has already changed.
+    return (
+      this.headlessTerminals.get(ptyId)?.outputSequence === received &&
+      this.trustDialogStatus.claimChoice(ptyId, prompt, received)
+    )
+  }
 
   // Create emulator state synchronously and chain renderer hydration first so concurrent live bytes cannot be overwritten by a late seed (docs/mobile-prefer-renderer-scrollback.md).
   maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null {
@@ -92,9 +102,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       try {
         // Retain normal-buffer scrollback while a TUI is in alt-screen so pre-TUI history remains restorable (#6106).
-        // Desktop depth (this emulator's retention): a hidden-output reveal repaints the pane from this model.
+        // This emulator's retention: a hidden-output reveal repaints the pane from this model.
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
+          scrollbackRows: this.headlessTerminalScrollbackRows
         })
         if (
           this.headlessTerminals.get(ptyId) !== state ||
@@ -104,7 +114,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           return
         }
         this.recordOsc7MetadataForPty(ptyId, rendered.data)
-        this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
+        this.recordRecentPtyOutput(ptyId, rendered.data)
         // Resize to renderer's dims so the seed reflows correctly into the
         // emulator's grid, then resize back to PTY dims (if known) so live
         // writes use the correct cell layout.
@@ -171,7 +181,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         leaf.lastAgentStatus = status
       }
     }
-    this.markPaneLiveTitlesDirty()
+    this.markPaneLiveTitlesDirty(ptyId)
   }
 
   /** Capture reply ownership synchronously at ingestion; never re-read it when the queued write runs. */
@@ -186,7 +196,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   /** True when this PTY's queries go unanswered unless its single receiving remote view answers them. */
   isSoleRemoteTerminalQueryOwner(ptyId: string): boolean {
     return (
-      this.terminalViewSubscribers.remoteReceivingOutputCount(ptyId) === 1 &&
+      this.terminalViewSubscribers.remoteAnsweringQueriesCount(ptyId) === 1 &&
       shouldModelAnswerHiddenPtyQueries({
         ptyId,
         settings: this.store?.getSettings(),
