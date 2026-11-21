@@ -210,10 +210,10 @@ function home(owner: Bot, fields: Parameters<typeof makeFolderWorkspace>[0] = {}
   })
 }
 
-const fold = (folded: boolean) => ({
+const fold = (folded: boolean, working = 1) => ({
   folded,
   total: 2,
-  counts: { permission: 0, working: 1, failed: 0 },
+  counts: { permission: 0, working, failed: 0 },
   onToggle: () => {}
 })
 
@@ -322,6 +322,11 @@ const CASES: [string, number, React.ReactNode][] = [
     <>
       {releaseRow}
       {row(builder, { fold: fold(true) })}
+      {row(
+        { ...triage, name: 'Triage for launch posts and weekly digest' },
+        { fold: fold(true, 0) }
+      )}
+      {row(release, { fold: fold(false) })}
       {row(cos, { fold: fold(false) })}
     </>
   ]
@@ -358,6 +363,7 @@ export const botRowCases = defineFixture({
           <div key={label} className="flex flex-col gap-1.5">
             <div className="text-[11px] text-muted-foreground">{label}</div>
             <div
+              data-case={label}
               className="flex flex-col rounded-lg border border-border bg-worktree-sidebar py-1 pr-1.5 text-worktree-sidebar-foreground"
               style={{ width }}
             >
