@@ -73,10 +73,11 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
         ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
       })
     },
-    getSubmoduleStatus: (worktreePath, submodulePath, area = 'unstaged') =>
+    getSubmoduleStatus: (worktreePath, submodulePath, area = 'unstaged', submoduleOptions) =>
       getSubmoduleStatus(worktreePath, submodulePath, {
         ...interactive,
-        ...(area === 'staged' ? { staged: true } : {})
+        ...(area === 'staged' ? { staged: true } : {}),
+        ...(submoduleOptions?.workingTreeOnly ? { workingTreeOnly: true } : {})
       }),
     checkIgnoredPaths: (worktreePath, relativePaths) =>
       checkIgnoredPaths(worktreePath, relativePaths, interactive),

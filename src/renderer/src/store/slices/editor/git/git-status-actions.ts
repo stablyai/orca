@@ -11,6 +11,7 @@ import {
   getKnownGitHead
 } from './branch-compare-state'
 import { closeDroppedEditorFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
+import { emitGitStatusRead } from './git-status-read-signal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function createGitStatusActions(
@@ -279,6 +280,8 @@ export function createGitStatusActions(
           gitBranchChangesByWorktree: nextBranchChanges
         }
       })
+      // Nested reads (submodules) can change while the parent status stays identical.
+      emitGitStatusRead(worktreeId)
       // A resolved deleted-side conflict drops its placeholder record; main closes its tab, and its frame drops it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && filesBefore && filesBefore !== get().openFiles) {
         closeDroppedEditorFileTabsThroughLayoutOwner(get(), filesBefore, worktreeId)

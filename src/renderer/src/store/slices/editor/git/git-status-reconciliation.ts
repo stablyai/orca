@@ -81,7 +81,22 @@ export function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetad
       }
 }
 
+function areSubmoduleFlagsEqual(prev: GitStatusEntry, next: GitStatusEntry): boolean {
+  const a = prev.submodule
+  const b = next.submodule
+  return (
+    a === b ||
+    (a !== undefined &&
+      b !== undefined &&
+      a.commitChanged === b.commitChanged &&
+      a.trackedChanges === b.trackedChanges &&
+      a.untrackedChanges === b.untrackedChanges &&
+      a.restoreRecurses === b.restoreRecurses)
+  )
+}
+
 // Why: conflict state can change (unresolved↔resolved_locally) without the base status changing, so also compare conflict fields.
+// Submodule flags can change under the same `M` status (e.g. a moved submodule gains a tracked edit).
 export function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatusEntry[]): boolean {
   return (
     prev.length === next.length &&
@@ -95,7 +110,8 @@ export function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatus
         entry.conflictStatus === next[index].conflictStatus &&
         entry.conflictStatusSource === next[index].conflictStatusSource &&
         entry.added === next[index].added &&
-        entry.removed === next[index].removed
+        entry.removed === next[index].removed &&
+        areSubmoduleFlagsEqual(entry, next[index])
     )
   )
 }

@@ -38,7 +38,9 @@ export const GitSubmoduleStatus = WorktreeSelector.extend({
         .refine((value) => !value.startsWith('-'), 'Submodule path must not start with -')
     ),
   // The Source Control row selects HEAD→index versus index→worktree gitlink ranges.
-  area: z.enum(['staged', 'unstaged', 'untracked']).optional()
+  area: z.enum(['staged', 'unstaged', 'untracked']).optional(),
+  // The file explorer reads only the submodule's own working tree, without committed-range rows.
+  workingTreeOnly: z.boolean().optional()
 })
 
 export const GitFilePath = WorktreeSelector.extend({

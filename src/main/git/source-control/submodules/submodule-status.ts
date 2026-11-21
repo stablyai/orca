@@ -27,9 +27,12 @@ import {
 export async function getSubmoduleStatus(
   worktreePath: string,
   submodulePath: string,
-  options: GetStatusOptions & { staged?: boolean } = {}
+  options: GetStatusOptions & { staged?: boolean; workingTreeOnly?: boolean } = {}
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
+  if (options.workingTreeOnly) {
+    return getSubmoduleWorkingTreeStatus(submoduleWorktreePath, options)
+  }
   const limit = resolveGitStatusLimit(options.limit)
   // Read independent inputs concurrently; staged expansion needs HEAD/index only, not inner status.
   const [workingResult, fromOid, toOid] = await Promise.all([
@@ -72,6 +75,33 @@ export async function getSubmoduleStatus(
     return { ...workingResult, entries: [] }
   }
   return workingResult
+}
+
+/** The submodule's own working-tree changes only: no committed-range rows and no line stats. */
+async function getSubmoduleWorkingTreeStatus(
+  submoduleWorktreePath: string,
+  options: GetStatusOptions
+): Promise<GitStatusResult> {
+  let prefix: string
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-parse', '--show-prefix'], {
+      ...gitOptionsForWorktree(submoduleWorktreePath, options),
+      env: gitOptionalLocksDisabledEnv()
+    })
+    prefix = stdout.trim()
+  } catch (error) {
+    // A failed probe proves nothing; callers keep their last good result.
+    return {
+      entries: [],
+      conflictOperation: 'unknown',
+      readError: error instanceof Error ? error.message : String(error)
+    }
+  }
+  // An unchecked-out submodule folder has no repo of its own; Git walked up to the parent.
+  if (prefix !== '') {
+    return { entries: [], conflictOperation: 'unknown' }
+  }
+  return getStatus(submoduleWorktreePath, { ...options, includeLineStats: false })
 }
 
 async function computeSubmoduleRangeEntries(
