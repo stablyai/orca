@@ -24594,8 +24594,8 @@
       "scopedStatus_one": "Показаны только bots. Найден {{count}} результат.",
       "scopedStatus_other": "Показаны только bots. Найдено {{count}} результата.",
       "sidebarSearchLabel": "Поиск bots, рабочих пространств и вкладок браузера",
-      "scopedStatus_few": "Показаны только боты. Найдено {{count}} результата.",
-      "scopedStatus_many": "Показаны только боты. Найдено {{count}} результатов.",
+      "scopedStatus_few": "Показаны только bots. Найдено {{count}} результата.",
+      "scopedStatus_many": "Показаны только bots. Найдено {{count}} результатов.",
       "section": "Bots"
     },
     "templates": {
