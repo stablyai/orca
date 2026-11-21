@@ -11,8 +11,8 @@ import { splitWorktreeId } from '../../shared/worktree/id'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import type { Worktree } from '../../shared/worktree/types'
 import {
-  allLinks,
   findLink,
+  findLinkForSession,
   type ExternalConversationLinkStore
 } from '../external-conversations/external-conversation-links'
 import { readWorkspaceReviewPR } from '../../shared/sidebar-list/feed-facts/workspace-review-facts'
@@ -271,7 +271,7 @@ async function readTurnAddress(
   if (!store) {
     return null
   }
-  const link = [...allLinks(store)].find((linked) => linked.link.sessionId === sessionId)?.link
+  const link = findLinkForSession(store, sessionId)?.link
   if (!link?.bot) {
     return null
   }

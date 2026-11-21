@@ -15,7 +15,11 @@ import {
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
-import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  type WriteSchedulingOperations,
+  scheduleSave,
+  workspaceLinkWriteOptions
+} from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
 import {
@@ -267,7 +271,22 @@ export function setWorktreeMetaForHost(
   if (!legacy || legacy.hostId === executionHostId) {
     state.worktreeMeta[worktreeId] = updated
   }
-  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+  const singleWorkspaceUnmoved =
+    !migrated &&
+    identityKeys.length <= 1 &&
+    (!existing?.hostId || existing.hostId === executionHostId)
+  const linkWriteOptions = singleWorkspaceUnmoved
+    ? workspaceLinkWriteOptions(
+        {
+          worktreeId,
+          sshHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? null : executionHostId
+        },
+        'externalConversations' in meta ||
+          existing?.externalConversations !== updated.externalConversations,
+        updated.externalConversations
+      )
+    : undefined
+  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS, undefined, undefined, linkWriteOptions)
   for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
     try {
       listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })

@@ -15,7 +15,11 @@ import { cloudConversation } from '../../shared/connectors/connector-cloud-contr
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { SlackMirrorCloud } from './slack-mirror-cloud'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
-import { allLinks, type ExternalConversationLinkStore } from './external-conversation-links'
+import {
+  findLinkForSession,
+  findLinksForSession,
+  type ExternalConversationLinkStore
+} from './external-conversation-links'
 import { markThreadSeen } from './external-conversation-link-writes'
 import { ExternalConversationSeam } from './external-conversation-seam'
 import {
@@ -199,9 +203,8 @@ function connectorReplyOutbox(
     hasSession: (sessionId) =>
       getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId) != null,
     isBot: (sessionId) =>
-      [...allLinks(store)].some(({ link }) => link.sessionId === sessionId && link.bot),
-    agentOf: (sessionId) =>
-      [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)?.link.agent ?? '',
+      findLinksForSession(store, sessionId).some(({ link }) => Boolean(link.bot)),
+    agentOf: (sessionId) => findLinkForSession(store, sessionId)?.link.agent ?? '',
     fillTurn: fill,
     filled,
     usageLimitDisposition,
