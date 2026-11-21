@@ -240,7 +240,7 @@ By default, `terminal read` returns the accumulated output stream with terminal 
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
 
-When a message contains `orcaTabId: <id>`, start with `orca terminal list --worktree active --json` and match the full value against `terminals[].unifiedTabId`. A copied tab ID is usually a UUID, so keep every character and compare it exactly. The terminal `handle` is a different ID: use the matching row's handle with `orca terminal read --terminal <handle> --json`. Older runtimes may omit `unifiedTabId`; try an exact `tabId` match, and use `--include-visual-layouts` if you need to distinguish panes sharing a tab.
+When `orcaTabId: <id>` came from a terminal tab, start with `orca terminal list --worktree active --json` and match the full value against `terminals[].unifiedTabId`. Locally created terminal tabs normally use UUID v4 IDs. Copy Tab ID preserves the tab's ID exactly, so keep every character and compare it exactly. Other tab types and mirrored or caller-supplied terminal tabs can use different ID formats. The terminal `handle` is a different ID: use the matching row's handle with `orca terminal read --terminal <handle> --json`. Older runtimes may omit `unifiedTabId`; try an exact `tabId` match, and use `--include-visual-layouts` if you need to distinguish panes sharing a tab.
 
 ## Installed agents
 

@@ -5,8 +5,10 @@ import type {
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { ResolvedWorktreeSnapshot } from '../../workspaces/catalog/runtime-resolved-worktree-cache'
 import type {
   RuntimeLeafRecord,
@@ -54,6 +56,18 @@ type RuntimeTerminalListDependencies = {
   ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
   /** Layout-owner builds: main lists every saved pane of the workspace, a live terminal or not. */
   listsEveryPane?: (worktreeId: string) => boolean
+}
+
+export function terminalTabsLookup(
+  store: Pick<RuntimeStore, 'getWorkspaceSession'> | null,
+  getWorkspaceSessionForWorktree: (worktreeId: string) => WorkspaceSessionState | null | undefined
+): RuntimeTerminalListDependencies['getUnifiedTabs'] {
+  return (worktreeId, hostId) => {
+    const session = hostId
+      ? store?.getWorkspaceSession?.(hostId)
+      : getWorkspaceSessionForWorktree(worktreeId)
+    return session?.unifiedTabs?.[worktreeId]
+  }
 }
 
 export class RuntimeTerminalList {

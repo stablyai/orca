@@ -37,6 +37,7 @@ function makeStore() {
 
 async function makeRuntimeWithLeaf(store = makeStore()): Promise<OrcaRuntimeService> {
   // SAFETY: Restore reads only this fixture's workspace, metadata, and settings capabilities.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the store methods exercised by the restore path.
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),

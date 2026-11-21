@@ -20,7 +20,7 @@ import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-resolved-worktree-cache'
 import { BotWorktreeLineageController } from '../workspaces/lineage/runtime-bot-worktree-lineage-controller'
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
-import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
+import { RuntimeTerminalList, terminalTabsLookup } from '../terminal/query/runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
 import { OpenCodeRunLifetimeStatus } from '../terminal/output/opencode-run-lifetime-status'
@@ -69,8 +69,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected notifier: RuntimeNotifier | null = null
 
   protected readonly clientEvents = new RuntimeClientEventBus({
-    makeTitleGateKey: (rawTitle, normalizedTitle) =>
-      this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle),
+    makeTitleGateKey: this.makeDecorativeTitleGateKey.bind(this),
     onConsumerAvailabilityChanged: () => this.refreshTerminalSideEffectConsumerAvailability()
   })
 
@@ -132,12 +131,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     buildLeafSummary: (leaf, worktrees, livePtyIds) =>
       this.buildTerminalSummary(leaf, worktrees, livePtyIds),
     buildPtySummary: (pty, worktrees) => this.buildPtyTerminalSummary(pty, worktrees),
-    getUnifiedTabs: (worktreeId, hostId) => {
-      const session = hostId
-        ? this.store?.getWorkspaceSession?.(hostId)
-        : this.getWorkspaceSessionForWorktree(worktreeId)
-      return session?.unifiedTabs?.[worktreeId]
-    },
+    getUnifiedTabs: terminalTabsLookup(this.store, this.getWorkspaceSessionForWorktree.bind(this)),
     getSnapshots: () => this.mobileSessionTabsByWorktree,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),
