@@ -1516,6 +1516,9 @@
       },
       "pluginInstallLink": {
         "invalid": "Dieser Plugin-Link ist ungültig."
+      },
+      "newFile": {
+        "failed": "Die Datei konnte nicht erstellt werden."
       }
     },
     "lib": {
@@ -4444,7 +4447,8 @@
             "1a8af49530": "CMD-Eingabeaufforderung",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Tabs nach links scrollen",
-            "232e075b07": "Tabs nach rechts scrollen"
+            "232e075b07": "Tabs nach rechts scrollen",
+            "newFile": "Neue Datei..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Datei erstellen",
@@ -16595,7 +16599,8 @@
           "folderEmpty": "Ordnerpfad darf nicht leer sein",
           "folderOutsideWorkspace": "Ordner muss im aktuellen Arbeitsbereich liegen",
           "nameTaken": "Eine Datei mit diesem Namen existiert bereits",
-          "saveFailed": "Die Datei konnte nicht gespeichert werden"
+          "saveFailed": "Die Datei konnte nicht gespeichert werden",
+          "invalidName": "Dateinamen eingeben"
         },
         "export": {
           "active": {
@@ -16973,6 +16978,12 @@
           "tooLarge": "{{value0}} ist zu groß, um in {{value1}} geöffnet zu werden ({{value2}}; das Limit ist {{value3}}).",
           "unsupported": "{{value0}} kann diese Datei an ihrem Speicherort nicht lesen. Aktualisiere den Orca-Server, auf dem sie liegt, oder wechsle zu „Quelle“.",
           "readFailed": "{{value0}} konnte für {{value1}} nicht gelesen werden. {{value2}}"
+        },
+        "NewFileDialog": {
+          "failed": "Die Datei konnte nicht erstellt werden.",
+          "title": "Neue Datei",
+          "description": "Dateinamen mit Erweiterung eingeben und einen Ordner auswählen.",
+          "create": "Erstellen"
         }
       },
       "diff": {
@@ -23109,7 +23120,8 @@
       "1524825c2c": "Arbeitsbereichsübersicht ein-/ausblenden",
       "d286d1ab85": "Bereichstitel leeren",
       "botItemPrevious": "Vorheriges Element",
-      "botItemNext": "Nächstes Element"
+      "botItemNext": "Nächstes Element",
+      "tabNewFile": "Neuen Datei-Tab öffnen"
     },
     "group": {
       "global": "Global",

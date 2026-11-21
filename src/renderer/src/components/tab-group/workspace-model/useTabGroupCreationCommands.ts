@@ -38,6 +38,7 @@ export function useTabGroupCreationCommands({
   const openNewMarkdownInActiveWorkspace = useAppStore(
     (state) => state.openNewMarkdownInActiveWorkspace
   )
+  const openNewFileInActiveWorkspace = useAppStore((state) => state.openNewFileInActiveWorkspace)
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
@@ -115,6 +116,9 @@ export function useTabGroupCreationCommands({
     // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
     newFileTab: async () => {
       await openNewMarkdownInActiveWorkspace(groupId)
+    },
+    newNamedFileTab: async () => {
+      await openNewFileInActiveWorkspace(groupId)
     },
     newTerminalTab: () => {
       void openNewTerminalTabInActiveWorkspace(groupId)

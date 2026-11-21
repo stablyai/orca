@@ -1314,6 +1314,9 @@
       },
       "pluginInstallLink": {
         "invalid": "このプラグインのリンクは無効です。"
+      },
+      "newFile": {
+        "failed": "ファイルを作成できませんでした。"
       }
     },
     "lib": {
@@ -4392,7 +4395,8 @@
             "1a8af49530": "CMDプロンプト",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "タブを左にスクロール",
-            "232e075b07": "タブを右にスクロール"
+            "232e075b07": "タブを右にスクロール",
+            "newFile": "新規ファイル..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "ファイルの作成",
@@ -16729,7 +16733,8 @@
           "folderEmpty": "フォルダーパスを空にすることはできません",
           "folderOutsideWorkspace": "フォルダーは現在のワークスペース内に指定してください",
           "nameTaken": "同じ名前のファイルがすでに存在します",
-          "saveFailed": "ファイルを保存できませんでした"
+          "saveFailed": "ファイルを保存できませんでした",
+          "invalidName": "ファイル名を入力してください"
         },
         "export": {
           "active": {
@@ -17117,6 +17122,12 @@
           "tooLarge": "{{value0}} は大きすぎるため {{value1}} で開けません（{{value2}}、上限は {{value3}}）。",
           "unsupported": "{{value0}} はこのファイルの保存場所から読み取れません。ホストしている Orca サーバーをアップデートするか、ソースに切り替えてください。",
           "readFailed": "{{value1}} 用に {{value0}} を読み取れませんでした。{{value2}}"
+        },
+        "NewFileDialog": {
+          "failed": "ファイルを作成できませんでした。",
+          "title": "新規ファイル",
+          "description": "拡張子を含むファイル名を入力し、フォルダーを選択します。",
+          "create": "作成"
         }
       },
       "diff": {
@@ -24150,7 +24161,8 @@
       "1524825c2c": "ワークスペースボードの切り替え",
       "d286d1ab85": "ペインのタイトルをクリア",
       "botItemPrevious": "前の項目",
-      "botItemNext": "次の項目"
+      "botItemNext": "次の項目",
+      "tabNewFile": "新規ファイル タブ"
     },
     "group": {
       "global": "グローバル",

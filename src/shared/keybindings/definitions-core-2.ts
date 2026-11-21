@@ -129,6 +129,14 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+M'])
   },
   {
+    id: 'tab.newFile',
+    title: 'New file tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'file', 'new', 'create'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'tab.openMarkdown',
     title: 'Open markdown tab',
     group: 'Tabs',

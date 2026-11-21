@@ -25,6 +25,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewBrowserTab,
     onNewSimulatorTab,
     onNewFileTab,
+    onNewNamedFileTab,
     onOpenFileTab,
     onPinFile
   } = props
@@ -51,6 +52,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewBrowserTab,
     onNewSimulatorTab,
     onNewFileTab,
+    onNewNamedFileTab,
     onOpenFileTab
   })
   const pluginCreateMenu = usePluginNewFileMenuOptions(

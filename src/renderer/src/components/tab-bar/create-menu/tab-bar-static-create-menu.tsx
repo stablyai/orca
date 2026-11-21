@@ -1,5 +1,5 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { FileCode, FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { MobileEmulatorTabIntroCallout } from '../../emulator-pane/tab-intro/MobileEmulatorTabIntroCallout'
 import { NewTabMenuTipSlot } from '../menu-fit/NewTabMenuTipSlot'
@@ -61,6 +61,7 @@ export function TabBarStaticCreateMenu({
     onNewBrowserTab,
     onNewSimulatorTab,
     onNewFileTab,
+    onNewNamedFileTab,
     onOpenFileTab
   } = props
   const pluginNewFiles = usePluginNewFiles()
@@ -122,6 +123,17 @@ export function TabBarStaticCreateMenu({
             actionId: 'tab.newMarkdown',
             run: onNewFileTab
           },
+          ...(onNewNamedFileTab
+            ? [
+                {
+                  id: 'new-file',
+                  label: t('auto.components.tab.bar.TabBar.newFile', 'New File...'),
+                  icon: <FileCode className={ICON_CLASS} />,
+                  actionId: 'tab.newFile',
+                  run: onNewNamedFileTab
+                } satisfies TabBarCreateRowItem
+              ]
+            : []),
           // Plugin file types create files the same way, so they travel with New Markdown.
           ...pluginNewFiles.map((newFile): TabBarCreateRowItem => ({
             id: `plugin-file:${newFile.key}`,
