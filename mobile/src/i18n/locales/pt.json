@@ -748,6 +748,54 @@
     },
     "messageTime": {
       "yesterday": "Ontem {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "Não iniciado",
+        "connected": "Conectado",
+        "failed": "Falhou",
+        "failedReason": "Falhou: {{error}}",
+        "finishOnPage": "Conclua na página que foi aberta",
+        "needsAuth": "Login necessário",
+        "needsAuthAfterSend": "Login necessário. Envie uma mensagem para entrar aqui.",
+        "off": "Desativado",
+        "pending": "Conectando…",
+        "tools_many": "{{count}} ferramentas",
+        "tools_one": "{{count}} ferramenta",
+        "tools_other": "{{count}} ferramentas",
+        "waitingForSignIn": "Aguardando login…"
+      },
+      "source": {
+        "project": "Projeto",
+        "local": "Local",
+        "user": "Usuário",
+        "plugin": "Plugin",
+        "session": "Sessão"
+      },
+      "title": "Servidores MCP",
+      "notRunning": "Os servidores MCP se conectam quando você envia sua próxima mensagem.",
+      "unsupported": "Atualize o Orca no host deste chat para gerenciar os servidores MCP aqui.",
+      "readFailed": "Não foi possível carregar os servidores MCP.",
+      "retry": "Tentar novamente",
+      "empty": "Não há servidores MCP configurados para este chat.",
+      "signIn": "Entrar",
+      "reconnect": "Reconectar",
+      "toggleLabel": "Usar {{name}}",
+      "actionFailed": "Não foi possível realizar a ação. Tente novamente.",
+      "openAgain": "Abrir novamente",
+      "pastePlaceholder": "Cole o endereço",
+      "pasteLabel": "Endereço da página de login",
+      "finish": "Concluir",
+      "signInUnfinished": "O login ainda não foi concluído. Conclua-o na página aberta e toque em “Concluído”.",
+      "summary": {
+        "signingIn": "entrando em {{name}}",
+        "connected": "Conectados: {{count}}",
+        "needsAuth_one": "{{count}} precisa de login",
+        "needsAuth_other": "{{count}} precisam de login",
+        "failed": "Com falha: {{count}}",
+        "needsAuth_many": "{{count}} precisam de login"
+      },
+      "pasteHint": "Quando o navegador chegar a uma página que não carrega, copie o endereço e cole aqui."
     }
   },
   "common": {

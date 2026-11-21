@@ -110,6 +110,13 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   omp: null,
   // No folder scan until Gemini's ACP is checked to load a picked skill.
   gemini: null,
+  // Droid reports skills only once a session starts, so resting chats rely on the scan.
+  droid: {
+    skillPrefix: '/',
+    skillSourceOwner: 'droid'
+  },
+  // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
+  'qwen-code': null,
   // ZCode invokes a `/name` mention by running its own Skill tool, so the text passes through.
   zcode: {
     skillPrefix: '/',

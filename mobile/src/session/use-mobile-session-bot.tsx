@@ -27,9 +27,14 @@ import {
 } from './tabs/pending-session-selection'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 import type { MobileNewTabBotActions } from './tabs/MobileNewTabSheet'
+import type { MobileSessionItemLink } from './mobile-session-item-target'
 
-/** A bot's home route: its header facts, its sheet, and its new chats from +. */
-export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) {
+/** A bot's home route: its header facts, its sheet, and its new chats from +; `access`, an access
+ *  request its push asked to review, opens in the bot's panel. */
+export function useMobileSessionBot(
+  scope: MobileSessionPanelRouteActionsModel,
+  access: MobileSessionItemLink['access'] = null
+) {
   const {
     hostId,
     client,
@@ -71,6 +76,11 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     },
     [refreshRouteBot]
   )
+  // The panel reads the bot's requests as it opens, so the push's request needs no route read.
+  if (access && itemsOnPhone) {
+    access.reviewed()
+    setBotPanel({ access: access.requestId })
+  }
   const now = useNow(60_000, routeBot !== null)
 
   const botStatus = useMemo(() => {

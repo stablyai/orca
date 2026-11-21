@@ -19905,7 +19905,6 @@
         "copyFailed": "No se pudo copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (no es una rama)",
-        "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
@@ -19945,6 +19944,60 @@
       "splitDown": "Dividir hacia abajo",
       "automationSaved": {
         "openFullPage": "Abrir página"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Sin iniciar",
+          "connected": "Conectado",
+          "disabled": "Desactivado",
+          "failed": "Error",
+          "failedReason": "Error: {{error}}",
+          "needsAuth": "Sesión requerida",
+          "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
+          "pending": "Conectando…",
+          "tools_many": "{{count}} herramientas",
+          "tools_one": "{{count}} herramienta",
+          "tools_other": "{{count}} herramientas"
+        },
+        "signIn": {
+          "external": "Completa el proceso en la página que se abrió",
+          "waiting": "Esperando el inicio de sesión…",
+          "waitingBrowser": "Esperando tu navegador…",
+          "action": "Iniciar sesión",
+          "remote": "Después de iniciar sesión, el navegador llega a una página que no se carga. Copia la dirección de esa página y pégala aquí.",
+          "done": "Listo",
+          "finish": "Finalizar",
+          "openAgain": "Volver a abrir",
+          "addressLabel": "Dirección de la página de inicio de sesión",
+          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo»."
+        },
+        "title": "Servidores MCP",
+        "close": "Cerrar",
+        "loading": "Cargando…",
+        "notRunning": "Se conectan al enviar tu próximo mensaje",
+        "unsupported": "Actualiza Orca en el host de este chat para administrarlos aquí",
+        "readFailed": "No se pudo cargar",
+        "retry": "Reintentar",
+        "empty": "No hay ninguno configurado para este chat",
+        "cancel": "Cancelar",
+        "reconnect": "Reconectar",
+        "toggle": "Usar {{name}}",
+        "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
+        "summary": {
+          "connected": "Conectados: {{count}}",
+          "needsAuth_one": "{{count}} requiere iniciar sesión",
+          "needsAuth_other": "{{count}} requieren iniciar sesión",
+          "failed": "Fallidos: {{count}}",
+          "signingIn": "iniciando sesión en {{name}}",
+          "needsAuth_many": "{{count}} requieren iniciar sesión"
+        },
+        "source": {
+          "project": "Proyecto",
+          "local": "Local",
+          "user": "Usuario",
+          "plugin": "Plugin",
+          "session": "Sesión"
+        }
       }
     },
     "tab": {
@@ -20230,7 +20283,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
           "unavailable": "No se pudieron comprobar los cambios",
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",
@@ -20254,7 +20306,6 @@
           "line_other": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}",
           "line_many": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}"
         },
-        "ignoredFilesLost": "Se perderán los archivos ignorados: {{names}}",
         "ignoredFilesUnchecked": "No se pudieron comprobar todos los archivos ignorados"
       }
     },
@@ -22514,7 +22565,6 @@
         "withIgnored": "Se perderán {{what}} y los archivos ignorados",
         "ignoredOnly": "Se perderán los archivos ignorados"
       },
-      "showChanges": "Mostrar cambios",
       "unsavedSuffix": "(sin guardar)",
       "onHost": "En {{host}}",
       "forceDeletingEllipsis": "Forzando la eliminación…",
@@ -23118,7 +23168,9 @@
       "128cce6e6d": "Establecer título…",
       "e9da9f872a": "Enviar notas de revisión al agente",
       "1524825c2c": "Alternar tablero de espacios de trabajo",
-      "d286d1ab85": "Borrar título del panel"
+      "d286d1ab85": "Borrar título del panel",
+      "botItemPrevious": "Elemento anterior",
+      "botItemNext": "Elemento siguiente"
     },
     "group": {
       "global": "Global",
@@ -24232,6 +24284,73 @@
       "paste": {
         "remoteSignIn": "Inicio de sesión remoto"
       }
+    },
+    "row": {
+      "runsOn": "Se ejecuta en {{host}}",
+      "disconnected": "Desconectado",
+      "hostDisconnected": "{{host}} desconectado",
+      "idle": "Inactivo",
+      "paused": "En pausa",
+      "reading": "Leyendo tu mensaje",
+      "replying": "Respondiendo",
+      "replyingIn": "Respondiendo en {{place}}",
+      "replyingOn": "Respondiendo a {{place}}",
+      "waitingCount": "Eventos pendientes: {{count}}",
+      "waitingFor": "Esperando {{label}}",
+      "waitingForUntil": "Esperando {{label}} · hasta {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} de {{total}}",
+        "navigation": "Elemento {{index}} de {{total}}",
+        "loadingNext": "Cargando el siguiente elemento",
+        "shown": "Elemento {{index}} de {{total}}: {{title}}",
+        "firstItem": "Primer elemento",
+        "lastItem": "Último elemento",
+        "previous": "Elemento anterior",
+        "next": "Elemento siguiente"
+      }
+    },
+    "hover": {
+      "asksQuestion": "Espera tu respuesta",
+      "wantsApproval": "Solicita tu aprobación",
+      "signIn": "Necesita que inicies sesión",
+      "access": "Ha solicitado acceso",
+      "review": "Revisar",
+      "openHome": "Abrir Home de {{name}}",
+      "needsYouHeading_one": "{{count}} asunto te necesita",
+      "needsYouHeading_many": "{{count}} asuntos te necesitan",
+      "needsYouHeading_other": "{{count}} asuntos te necesitan",
+      "moreAsks_one": "+{{count}} solicitud más",
+      "moreAsks_many": "+{{count}} solicitudes más",
+      "moreAsks_other": "+{{count}} solicitudes más",
+      "itemsNeedYou_one": "{{count}} elemento que marcó para ti",
+      "itemsNeedYou_many": "{{count}} elementos que marcó para ti",
+      "itemsNeedYou_other": "{{count}} elementos que marcó para ti"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Nuevo chat"
+    },
+    "needs": {
+      "chat": "Tu chat con {{name}}"
+    },
+    "panel": {
+      "needYou_many": "{{count}} te necesitan",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_other": "{{count}} te necesitan",
+      "working": "{{count}} trabajando",
+      "working_many": "{{count}} trabajando",
+      "working_one": "{{count}} trabajando",
+      "working_other": "{{count}} trabajando"
+    },
+    "usageLimit": {
+      "continuesAt": "Continúa a las {{time}}",
+      "continuesShort": "Continúa {{time}}",
+      "continuesTip": "Continúa automáticamente a las {{time}}",
+      "hitLimit": "Límite alcanzado · se restablece a las {{time}}",
+      "hitShort": "Límite alcanzado",
+      "hitTip": "{{agent}} alcanzó su límite de uso · se restablece a las {{time}}"
     }
   },
   "speechModelUpdate": {

@@ -26,6 +26,8 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight', Shuffle: 'Shuffle' }))
 vi.mock('./MobileBotTemplatesSheet', () => ({ MobileBotTemplatesSheet: 'TemplatesSheet' }))
+vi.mock('./MobileBotImportSheet', () => ({ MobileBotImportSheet: 'ImportSheet' }))
+vi.mock('./bot-import-host-reads', () => ({ useBotImportSources: () => ({ status: 'loading' }) }))
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children?: ReactNode }) => children
 }))

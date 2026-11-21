@@ -20801,7 +20801,6 @@
         "copyFailed": "Не удалось скопировать",
         "copyIdentity": "Копировать {{value0}}",
         "detachedCommit": "Коммит {{head}} (не ветка)",
-        "folder": "Папка",
         "mainCheckout": "Основная рабочая копия",
         "turnWorking": "Агент этого чата работает. Переключите ветку после завершения его хода.",
         "worktree": "Рабочее дерево"
@@ -20845,6 +20844,62 @@
       },
       "usageLimitActions": {
         "handOff": "Передать агенту"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Не запущен",
+          "connected": "Подключён",
+          "disabled": "Выключен",
+          "failed": "Сбой",
+          "failedReason": "Сбой: {{error}}",
+          "needsAuth": "Требуется вход",
+          "needsAuthAfterSend": "Требуется вход. Отправьте сообщение, чтобы войти здесь.",
+          "pending": "Подключение…",
+          "tools_few": "{{count}} инструмента",
+          "tools_many": "{{count}} инструментов",
+          "tools_one": "{{count}} инструмент",
+          "tools_other": "{{count}} инструмента"
+        },
+        "signIn": {
+          "external": "Завершите на открывшейся странице",
+          "waiting": "Ожидание входа…",
+          "waitingBrowser": "Ожидание браузера…",
+          "action": "Войти",
+          "remote": "После входа браузер откроет страницу, которая не загрузится. Скопируйте её адрес и вставьте здесь.",
+          "done": "Готово",
+          "finish": "Завершить",
+          "openAgain": "Открыть снова",
+          "addressLabel": "Адрес страницы входа",
+          "unfinished": "Вход ещё не завершён. Завершите его на открывшейся странице, затем нажмите «Готово»."
+        },
+        "title": "Серверы MCP",
+        "close": "Закрыть",
+        "loading": "Загрузка…",
+        "notRunning": "Подключатся при отправке следующего сообщения",
+        "unsupported": "Обновите Orca на хосте этого чата, чтобы управлять ими здесь",
+        "readFailed": "Не удалось загрузить",
+        "retry": "Повторить",
+        "empty": "Для этого чата ничего не настроено",
+        "cancel": "Отмена",
+        "reconnect": "Переподключить",
+        "toggle": "Использовать {{name}}",
+        "actionFailed": "Не удалось выполнить действие. Повторите попытку.",
+        "summary": {
+          "connected": "Подключено: {{count}}",
+          "needsAuth_one": "{{count}} требует входа",
+          "needsAuth_other": "{{count}} требуют входа",
+          "failed": "С ошибкой: {{count}}",
+          "signingIn": "вход в {{name}}",
+          "needsAuth_few": "{{count}} требуют входа",
+          "needsAuth_many": "{{count}} требуют входа"
+        },
+        "source": {
+          "project": "Проект",
+          "local": "Локально",
+          "user": "Пользователь",
+          "plugin": "Плагин",
+          "session": "Сессия"
+        }
       }
     },
     "tab": {
@@ -21137,7 +21192,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Все незакоммиченные и неотслеживаемые изменения в рабочих пространствах Git будут удалены навсегда.",
           "unavailable": "Не удалось проверить изменения",
           "checking": "Проверка изменений…",
           "checkingDetails": "Проверка…",
@@ -21165,7 +21219,6 @@
           "line_few": "Несохранённые изменения в {{count}} файлах будут потеряны: {{files}}",
           "line_many": "Несохранённые изменения в {{count}} файлах будут потеряны: {{files}}"
         },
-        "ignoredFilesLost": "Игнорируемые файлы будут потеряны: {{names}}",
         "ignoredFilesUnchecked": "Не удалось полностью проверить игнорируемые файлы"
       }
     },
@@ -22765,7 +22818,6 @@
         "withIgnored": "Будут потеряны: {{what}} и игнорируемые файлы",
         "ignoredOnly": "Игнорируемые файлы будут потеряны"
       },
-      "showChanges": "Показать изменения",
       "unsavedSuffix": "(не сохранено)",
       "onHost": "На {{host}}",
       "forceDeletingEllipsis": "Принудительное удаление…",
@@ -23481,7 +23533,9 @@
       "128cce6e6d": "Задать заголовок…",
       "e9da9f872a": "Отправить агенту заметки к проверке",
       "1524825c2c": "Показать или скрыть доску рабочих пространств",
-      "d286d1ab85": "Очистить заголовок панели"
+      "d286d1ab85": "Очистить заголовок панели",
+      "botItemPrevious": "Предыдущий элемент",
+      "botItemNext": "Следующий элемент"
     },
     "group": {
       "browser": "Браузер",
@@ -24425,6 +24479,78 @@
       "paste": {
         "remoteSignIn": "Удалённый вход"
       }
+    },
+    "row": {
+      "runsOn": "Работает на {{host}}",
+      "disconnected": "Отключён",
+      "hostDisconnected": "{{host}} отключён",
+      "idle": "Бездействует",
+      "paused": "Приостановлен",
+      "reading": "Читает ваше сообщение",
+      "replying": "Отвечает",
+      "replyingIn": "Отвечает в {{place}}",
+      "replyingOn": "Отвечает на {{place}}",
+      "waitingCount": "Событий в ожидании: {{count}}",
+      "waitingFor": "Ожидает {{label}}",
+      "waitingForUntil": "Ожидает {{label}} · до {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} из {{total}}",
+        "navigation": "Элемент {{index}} из {{total}}",
+        "loadingNext": "Загрузка следующего элемента",
+        "shown": "Элемент {{index}} из {{total}}: {{title}}",
+        "firstItem": "Первый элемент",
+        "lastItem": "Последний элемент",
+        "previous": "Предыдущий элемент",
+        "next": "Следующий элемент"
+      }
+    },
+    "hover": {
+      "asksQuestion": "Ожидает вашего ответа",
+      "wantsApproval": "Ждёт вашего одобрения",
+      "signIn": "Нужен вход",
+      "access": "Запрос доступа",
+      "review": "Проверить",
+      "openHome": "Открыть Home {{name}}",
+      "needsYouHeading_one": "Ждёт вас: {{count}}",
+      "needsYouHeading_few": "Ждут вас: {{count}}",
+      "needsYouHeading_many": "Ждут вас: {{count}}",
+      "needsYouHeading_other": "Ждут вас: {{count}}",
+      "moreAsks_one": "Ещё {{count}} запрос",
+      "moreAsks_few": "Ещё {{count}} запроса",
+      "moreAsks_many": "Ещё {{count}} запросов",
+      "moreAsks_other": "Ещё {{count}} запроса",
+      "itemsNeedYou_one": "{{count}} элемент, отмеченный для вас",
+      "itemsNeedYou_few": "{{count}} элемента, отмеченных для вас",
+      "itemsNeedYou_many": "{{count}} элементов, отмеченных для вас",
+      "itemsNeedYou_other": "{{count}} элемента, отмеченных для вас"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Новый чат"
+    },
+    "needs": {
+      "chat": "Ваш чат с {{name}}"
+    },
+    "panel": {
+      "needYou_few": "Ждут вас: {{count}}",
+      "needYou_many": "Ждут вас: {{count}}",
+      "needYou_one": "Ждёт вас: {{count}}",
+      "needYou_other": "Ждут вас: {{count}}",
+      "working": "В работе: {{count}}",
+      "working_few": "В работе: {{count}}",
+      "working_many": "В работе: {{count}}",
+      "working_one": "В работе: {{count}}",
+      "working_other": "В работе: {{count}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Продолжит в {{time}}",
+      "continuesShort": "Продолжит {{time}}",
+      "continuesTip": "Автоматически продолжит в {{time}}",
+      "hitLimit": "Лимит исчерпан · сброс в {{time}}",
+      "hitShort": "Лимит исчерпан",
+      "hitTip": "Лимит использования {{agent}} исчерпан · сброс в {{time}}"
     }
   },
   "agentPicker": {

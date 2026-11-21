@@ -473,6 +473,18 @@
       "reset": "Reset",
       "done": "Done",
       "sortBy": "Sort by"
+    },
+    "actions": {
+      "resume": "Resume"
+    },
+    "handoff": {
+      "title": "Hand off to agent",
+      "context": "Context",
+      "latestStatus": "Latest status",
+      "fullTranscript": "Full transcript",
+      "noContext": "No session context is available to continue in a new session.",
+      "launchFailed": "Could not start a new session.",
+      "promptCopied": "Prompt copied. Open the agent to paste it."
     }
   },
   "diagnostics": {
@@ -5357,6 +5369,7 @@
       "couldNotFinishDetail": "An automation run or worker fails.",
       "nameTaken": "Another bot already has that name.",
       "deleteFailed": "Something went wrong. Try again.",
+      "deleteUnsavedDrafts": "Its folder has unsaved editor changes. Save or close them on {{host}}, then delete again.",
       "deleteTitle": "Delete {{name}}?",
       "deleteDetail": "Its folder stays at {{path}}, with its soul and memory.",
       "deleteConfirm": "Delete bot",
@@ -6315,6 +6328,48 @@
       "putBack": "{{reason}} {{name}} stayed where it was.",
       "movedSince": "{{reason}} {{name}} stays where you moved it.",
       "leftMoved": "{{reason}} {{name}} is under {{bot}} now; move it back from its menu."
+    },
+    "import": {
+      "chooseFolderTitle": "Choose a folder",
+      "onHost": "On {{host}}",
+      "loadingFolders": "Loading folders…",
+      "selectFolder": "Select folder",
+      "oldBot": "Old bot",
+      "importedAs": "imported before as {{bot}}",
+      "defaultProfile": "default profile",
+      "profile": "profile",
+      "agent": "agent",
+      "rowDetail": "{{app}} {{kind}}",
+      "bringOver": "Bring over",
+      "lookingOn": "Looking on {{host}}…",
+      "foundOn": "{{count}} found on {{host}}",
+      "otherApp": "Another app…",
+      "otherAppNote": "Your old bot copies its files for you",
+      "noneFoundNote": "No bots found in OpenClaw (~/.openclaw), Hermes (~/.hermes) or OpenBot.",
+      "sendStep": "Send your old bot this message",
+      "copiedNote": "Copied. Paste it to your old bot wherever you chat with it.",
+      "copyAgain": "Copy again",
+      "copyMessage": "Copy message",
+      "seeMessage": "See the message",
+      "addStep": "Add the folder it made",
+      "addStepNote": "It saves a folder ending in -export in Downloads on {{host}}.",
+      "folderItems_one": "{{count}} item",
+      "folderItems_other": "{{count}} items",
+      "removePath": "Remove {{name}}",
+      "chooseAnother": "Choose another folder…",
+      "chooseFolderRow": "Choose a folder…",
+      "replyPlaceholder": "Paste its reply, if it wrote one",
+      "replyLabel": "Its reply",
+      "title": "Import from another app",
+      "newBot": "New bot",
+      "exportDescription": "Ask your old bot for a copy of itself, then give the copy to your new bot.",
+      "description": "Your new bot reads the old one and sets itself up.",
+      "nameAnother": "Name a new bot",
+      "importedBefore": "{{bot}} came from this bot",
+      "keysStay": "Keys and logins stay behind",
+      "nudgeOne": "We found a bot in {{app}}.",
+      "nudgeMany": "We found {{count}} bots in {{app}}.",
+      "noFolders": "No folders"
     }
   },
   "mobileWebShell": {

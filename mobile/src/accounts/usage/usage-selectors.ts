@@ -42,14 +42,17 @@ export function getSystemDefaultProviderUsage(
   snapshot: AccountsSnapshot,
   provider: ProviderKey,
   activeAccountId: string | null
-): ProviderRateLimits | null {
+): { limits: ProviderRateLimits | null; isFetching: boolean } {
   if (activeAccountId === null) {
-    return getActiveProviderRateLimits(snapshot, provider)
+    const limits = getActiveProviderRateLimits(snapshot, provider)
+    return { limits, isFetching: limits?.status === 'fetching' }
   }
-  return provider === 'claude'
-    ? (getInactiveProviderUsage(snapshot, provider, CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID)
-        ?.rateLimits ?? null)
-    : null
+  // A host re-reading an unselected login flags the entry, not the reading's status.
+  const entry =
+    provider === 'claude'
+      ? getInactiveProviderUsage(snapshot, provider, CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID)
+      : null
+  return { limits: entry?.rateLimits ?? null, isFetching: entry?.isFetching === true }
 }
 
 // System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.

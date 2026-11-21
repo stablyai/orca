@@ -690,6 +690,50 @@
     },
     "messageTime": {
       "yesterday": "어제 {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "시작하지 않음",
+        "connected": "연결됨",
+        "failed": "실패",
+        "failedReason": "실패: {{error}}",
+        "finishOnPage": "열린 페이지에서 완료하세요",
+        "needsAuth": "로그인 필요",
+        "needsAuthAfterSend": "로그인이 필요합니다. 메시지를 보내면 여기서 로그인할 수 있습니다.",
+        "off": "꺼짐",
+        "pending": "연결 중…",
+        "tools_other": "도구 {{count}}개",
+        "waitingForSignIn": "로그인을 기다리는 중…"
+      },
+      "source": {
+        "project": "프로젝트",
+        "local": "로컬",
+        "user": "사용자",
+        "plugin": "플러그인",
+        "session": "세션"
+      },
+      "title": "MCP 서버",
+      "notRunning": "다음 메시지를 보내면 MCP 서버가 연결됩니다.",
+      "unsupported": "여기서 MCP 서버를 관리하려면 이 채팅 호스트의 Orca를 업데이트하세요.",
+      "readFailed": "MCP 서버를 불러오지 못했습니다.",
+      "retry": "다시 시도",
+      "empty": "이 채팅에 설정된 MCP 서버가 없습니다.",
+      "signIn": "로그인",
+      "reconnect": "다시 연결",
+      "toggleLabel": "{{name}} 사용",
+      "actionFailed": "작업을 수행하지 못했습니다. 다시 시도하세요.",
+      "openAgain": "다시 열기",
+      "pastePlaceholder": "주소 붙여넣기",
+      "pasteLabel": "로그인 페이지 주소",
+      "finish": "완료",
+      "signInUnfinished": "로그인이 아직 완료되지 않았습니다. 열린 페이지에서 완료한 다음 “완료”를 탭하세요.",
+      "summary": {
+        "signingIn": "{{name}}에 로그인하는 중",
+        "connected": "연결됨: {{count}}",
+        "needsAuth_other": "로그인 필요: {{count}}",
+        "failed": "실패: {{count}}"
+      },
+      "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요."
     }
   },
   "common": {

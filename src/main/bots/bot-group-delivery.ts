@@ -21,6 +21,9 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { BOT_ORCA_CLI } from './bot-preamble'
+import { assertRemotePoster, deliverRemoteAsks } from './bot-group-remote'
+import { collectRemoteAnswers, presentRemoteAsks } from './bot-group-remote-answers'
+import { remoteAsksFor } from './bot-group-remote-question'
 
 /** Turns members' @Name replies may wake per person's post: the Slack connector's agent-to-agent cap. */
 export const BOT_GROUP_HANDOFF_LIMIT = 6
@@ -35,6 +38,8 @@ export async function sendBotGroupMessage(
   input: z.infer<typeof BotGroupSend>,
   options: SendBotGroupMessageOptions = {}
 ): Promise<BotGroupMessage> {
+  // The remote questions of a post stored by this call; a replayed send dispatches none.
+  let remoteBodies: Map<string, string> | null = null
   const message = await runKeyedSerializedOperation(groups.queues, input.groupId, async () => {
     const existing = groups.store.message(input.messageId)
     if (existing) {
@@ -55,6 +60,7 @@ export async function sendBotGroupMessage(
     if (group.members.length === 0) {
       throw new Error('Every bot has left this group. Add a bot before sending.')
     }
+    assertRemotePoster(groups, group, options.local === true)
     const bots = requireGroupBots(
       groups,
       group.members.map((member) => member.botId)
@@ -78,12 +84,20 @@ export async function sendBotGroupMessage(
       input.text,
       requestedImages
     )
-    const { turns, contexts } = await reserveGroupTurns(
+    const { turns, contexts, history, completed } = await reserveGroupTurns(
       groups,
       group,
       input.threadId,
       bots,
       audience
+    )
+    const remote = remoteAsksFor(
+      group,
+      audience,
+      history,
+      completed,
+      { id: input.messageId, text: input.text, images },
+      groups.store.get(group.id).name
     )
     const stored = groups.store.append(
       {
@@ -94,7 +108,8 @@ export async function sendBotGroupMessage(
         text: input.text,
         ...(images.length > 0 ? { images } : {}),
         createdAt: Date.now(),
-        turns
+        turns,
+        ...(remote ? { remoteAsks: remote.asks } : {})
       },
       contexts
     )
@@ -106,8 +121,11 @@ export async function sendBotGroupMessage(
     if (input.threadId) {
       titleThread(groups, input.threadId, stored)
     }
+    remoteBodies = remote?.bodies ?? null
     return stored
   })
+  // Marks its asks in flight before any reader can see the post.
+  void deliverRemoteAsks(groups, message, remoteBodies)
   groups.changed()
   for (const turn of message.turns) {
     void deliverTurn(groups, message, turn)
@@ -268,12 +286,15 @@ export function readBotGroup(
   threadId?: string
 ) {
   const group = groups.store.room(groupId, threadId)
-  const messages = groups.store.roomMessages(groupId, threadId, 40, beforeSequence)
+  const messages = collectRemoteAnswers(
+    groups,
+    groups.store.roomMessages(groupId, threadId, 40, beforeSequence)
+  )
   settleDeadGroupMailTurns(groups, messages)
   return {
     group,
     // Saved replies feed later posts' context only; the room renders each turn from its chat.
-    messages: messages.map((message) => ({
+    messages: presentRemoteAsks(messages).map((message) => ({
       ...message,
       turns: message.turns.map(({ reply: _reply, ...turn }) => turn)
     })),

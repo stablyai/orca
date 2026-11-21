@@ -1,7 +1,7 @@
 // The desktop's "Give access" confirm on the phone: who asked and where, the warning in its tone, and
 // what they would reach. As a sheet, Decline answers here too; closing any other way leaves the request
 // waiting.
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Mail, ShieldAlert, ShieldOff, type LucideIcon } from 'lucide-react-native'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
@@ -12,7 +12,9 @@ import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { BotPanelOpen } from './MobileBotPanel'
 import {
+  ACCESS_REQUEST_EXPIRED_LINE,
   accessDecisionCopy,
   phoneAccessHost,
   type AccessDecisionRow,
@@ -94,11 +96,42 @@ export function MobileBotAccessDecisionContent({
 export function useBotAccessDecisionSheet(
   {
     accessRequests: access,
-    client
-  }: { accessRequests: BotAccessRequests | null; client: RpcClient | null },
-  bot: Omit<PhoneAccessBot, 'accessHost'>
+    client,
+    open
+  }: {
+    accessRequests: BotAccessRequests | null
+    client: RpcClient | null
+    /** What the panel opened on: an access request, from its push, opens here once read. */
+    open: BotPanelOpen | null
+  },
+  bot: Omit<PhoneAccessBot, 'accessHost'>,
+  showToast: (message: string) => void
 ): { review: (request: ConnectorAccessRequest) => void; sheet: ReactNode } {
   const [reviewing, setReviewing] = useState<ConnectorAccessRequest | null>(null)
+  // An access open waits for a read that landed after it, so a request newer than the last read is found.
+  const [asked, setAsked] = useState<{ open: BotPanelOpen; after: number } | null>(null)
+  // The open whose request was gone by the time its read landed.
+  const [missing, setMissing] = useState<BotPanelOpen | null>(null)
+  if (open && 'access' in open && asked?.open !== open) {
+    setAsked({ open, after: access?.reads ?? 0 })
+  } else if (asked && asked.open !== open) {
+    // Closed or moved on before its read landed: a later open isn't this push's.
+    setAsked(null)
+  } else if (asked && 'access' in asked.open && access && access.reads > asked.after) {
+    const id = asked.open.access
+    setAsked({ open: asked.open, after: Number.POSITIVE_INFINITY })
+    const request = access.requests.find((entry) => entry.requestId === id)
+    if (request) {
+      setReviewing(request)
+    } else {
+      setMissing(asked.open)
+    }
+  }
+  useEffect(() => {
+    if (missing) {
+      showToast(ACCESS_REQUEST_EXPIRED_LINE)
+    }
+  }, [missing, showToast])
   // Answered elsewhere, or no longer read: nothing is left to decide.
   if (reviewing && !access?.requests.some((request) => request.requestId === reviewing.requestId)) {
     setReviewing(null)

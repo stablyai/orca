@@ -50,7 +50,8 @@ const SPECS = {
   goose: acpLaunchSpecFor('goose')!,
   kilo: acpLaunchSpecFor('kilo')!,
   'mimo-code': acpLaunchSpecFor('mimo-code')!,
-  gemini: acpLaunchSpecFor('gemini')!
+  gemini: acpLaunchSpecFor('gemini')!,
+  'qwen-code': acpLaunchSpecFor('qwen-code')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -66,7 +67,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' },
   kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
-  gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' }
+  gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' },
+  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -79,7 +81,8 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   goose: '1.60.2',
   kilo: '7.8.32',
   'mimo-code': '0.1.17',
-  gemini: '0.70.0'
+  gemini: '0.70.0',
+  'qwen-code': '0.28.0'
 }
 
 let dataDirectory = ''
@@ -311,34 +314,40 @@ describe('ACP launch: standing instructions', () => {
     }
   })
 
-  it("writes them to Hermes's .hermes.md in the folder it runs in, rewriting it at each launch", async () => {
-    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-hermes-'))
-    try {
-      const agentsPath = join(home, 'AGENTS.md')
-      const contextPath = join(home, '.hermes.md')
-      const instructions = `---\ntitle: bot\n---\n${PREAMBLE}`
-      const priorInstructions =
-        'The previous set of standing instructions is intentionally longer than the replacement.'
-      await writeFile(agentsPath, 'Workspace instructions')
-      const first = await launch('hermes', { instructions: priorInstructions, workspacePath: home })
-      expect(first.args).toEqual((await launch('hermes', { workspacePath: home })).args)
-      expect(first.sessionMeta).toBeUndefined()
-      expect(await readFile(contextPath, 'utf8')).toContain(priorInstructions)
+  it.each([
+    ['hermes', '.hermes.md'],
+    ['qwen-code', 'QWEN.md']
+  ] as const)(
+    "writes them to %s's %s in the folder it runs in, rewriting it at each launch",
+    async (agent, contextFile) => {
+      const home = await mkdtemp(join(tmpdir(), `acp-instructions-${agent}-`))
+      try {
+        const agentsPath = join(home, 'AGENTS.md')
+        const contextPath = join(home, contextFile)
+        const instructions = `---\ntitle: bot\n---\n${PREAMBLE}`
+        const priorInstructions =
+          'The previous set of standing instructions is intentionally longer than the replacement.'
+        await writeFile(agentsPath, 'Workspace instructions')
+        const first = await launch(agent, { instructions: priorInstructions, workspacePath: home })
+        expect(first.args).toEqual((await launch(agent, { workspacePath: home })).args)
+        expect(first.sessionMeta).toBeUndefined()
+        expect(await readFile(contextPath, 'utf8')).toContain(priorInstructions)
 
-      await launch('hermes', { instructions, workspacePath: home })
+        await launch(agent, { instructions, workspacePath: home })
 
-      const written = await readFile(contextPath, 'utf8')
-      expect(written).toMatch(/^<!--[^\n]+-->\n\n/)
-      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${instructions}\n`)
-      expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions')
-      expect((await readdir(home)).sort()).toEqual(['.hermes.md', 'AGENTS.md'])
-      if (process.platform !== 'win32') {
-        expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+        const written = await readFile(contextPath, 'utf8')
+        expect(written).toMatch(/^<!--[^\n]+-->\n\n/)
+        expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${instructions}\n`)
+        expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions')
+        expect((await readdir(home)).sort()).toEqual([contextFile, 'AGENTS.md'].sort())
+        if (process.platform !== 'win32') {
+          expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+        }
+      } finally {
+        await rm(home, { recursive: true, force: true })
       }
-    } finally {
-      await rm(home, { recursive: true, force: true })
     }
-  })
+  )
 
   it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
     const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))

@@ -103,6 +103,7 @@ export function MobileBotGroupRoom({
     bots,
     needsYou,
     itemReads,
+    itemMemberIds,
     loadEarlier
   } = useMobileBotGroupTranscript(client, groupId, threadId, hostId, visible && connected, setError)
   const group = data?.group
@@ -379,6 +380,7 @@ export function MobileBotGroupRoom({
           bots={bots}
           needsYou={needsYou}
           reads={itemReads}
+          memberIds={itemMemberIds}
           online={connected}
           hostName={hostName}
           onOpenRoom={setThreadId}

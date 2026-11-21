@@ -153,11 +153,14 @@ export function accessDecisionCopy(
   }
 }
 
+/** A request answered elsewhere or gone by when the phone asks about it. */
+export const ACCESS_REQUEST_EXPIRED_LINE = 'This request was already answered or has expired.'
+
 /** Why the host didn't save an answer. */
 export function accessDecideFailureLine(request: ConnectorAccessRequest, error: string): string {
   switch (error) {
     case 'expired':
-      return 'This request was already answered or has expired.'
+      return ACCESS_REQUEST_EXPIRED_LINE
     case 'full':
       return botAccessCopy('full', { person: accessRequestPerson(request) })
     case 'granted_not_added':

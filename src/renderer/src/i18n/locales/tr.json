@@ -20284,7 +20284,6 @@
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
         "detachedCommit": "Commit {{head}} (dal değil)",
-        "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
@@ -20326,6 +20325,58 @@
       },
       "usageLimitActions": {
         "handOff": "Ajana devret"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Başlatılmadı",
+          "connected": "Bağlı",
+          "disabled": "Devre dışı",
+          "failed": "Başarısız",
+          "failedReason": "Başarısız: {{error}}",
+          "needsAuth": "Oturum açılmalı",
+          "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
+          "pending": "Bağlanıyor…",
+          "tools_one": "{{count}} araç",
+          "tools_other": "{{count}} araç"
+        },
+        "signIn": {
+          "external": "Açılan sayfada tamamlayın",
+          "waiting": "Oturum açılması bekleniyor…",
+          "waitingBrowser": "Tarayıcınız bekleniyor…",
+          "action": "Oturum aç",
+          "remote": "Oturum açtıktan sonra tarayıcı yüklenmeyen bir sayfaya yönlenir. Bu sayfanın adresini kopyalayıp buraya yapıştırın.",
+          "done": "Bitti",
+          "finish": "Tamamla",
+          "openAgain": "Yeniden aç",
+          "addressLabel": "Oturum açma sayfasının adresi",
+          "unfinished": "Oturum açma henüz tamamlanmadı. Açılan sayfada tamamlayıp “Bitti” düğmesine basın."
+        },
+        "title": "MCP sunucuları",
+        "close": "Kapat",
+        "loading": "Yükleniyor…",
+        "notRunning": "Sonraki mesajınızı gönderdiğinizde bağlanır",
+        "unsupported": "Burada yönetmek için bu sohbetin ana makinesindeki Orca’yı güncelleyin",
+        "readFailed": "Yüklenemedi",
+        "retry": "Yeniden dene",
+        "empty": "Bu sohbet için ayarlanmış sunucu yok",
+        "cancel": "İptal",
+        "reconnect": "Yeniden bağlan",
+        "toggle": "{{name}} kullan",
+        "actionFailed": "İşlem gerçekleştirilemedi. Yeniden deneyin.",
+        "summary": {
+          "connected": "Bağlı: {{count}}",
+          "needsAuth_one": "{{count}} sunucuda oturum açılmalı",
+          "needsAuth_other": "{{count}} sunucuda oturum açılmalı",
+          "failed": "Başarısız: {{count}}",
+          "signingIn": "{{name}} için oturum açılıyor"
+        },
+        "source": {
+          "project": "Proje",
+          "local": "Yerel",
+          "user": "Kullanıcı",
+          "plugin": "Eklenti",
+          "session": "Oturum"
+        }
       }
     },
     "tab": {
@@ -20604,7 +20655,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git çalışma alanlarındaki commit edilmemiş veya izlenmeyen tüm değişiklikler kalıcı olarak silinecek.",
           "unavailable": "Değişiklikler kontrol edilemedi",
           "checking": "Değişiklikler kontrol ediliyor…",
           "checkingDetails": "Kontrol ediliyor…",
@@ -20624,7 +20674,6 @@
           "line_one": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}",
           "line_other": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}"
         },
-        "ignoredFilesLost": "Yok sayılan dosyalar kaybolacak: {{names}}",
         "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi"
       }
     },
@@ -22190,7 +22239,6 @@
         "withIgnored": "{{what}} ve yok sayılan dosyalar kaybolacak",
         "ignoredOnly": "Yok sayılan dosyalar kaybolacak"
       },
-      "showChanges": "Değişiklikleri göster",
       "unsavedSuffix": "(kaydedilmedi)",
       "onHost": "{{host}} üzerinde",
       "forceDeletingEllipsis": "Zorla siliniyor…",
@@ -22886,7 +22934,9 @@
       "128cce6e6d": "Başlık belirle…",
       "e9da9f872a": "İnceleme notlarını ajana gönder",
       "1524825c2c": "Çalışma alanı panosunu göster/gizle",
-      "d286d1ab85": "Bölme başlığını temizle"
+      "d286d1ab85": "Bölme başlığını temizle",
+      "botItemPrevious": "Önceki öğe",
+      "botItemNext": "Sonraki öğe"
     },
     "group": {
       "global": "Genel",
@@ -23810,6 +23860,68 @@
       "paste": {
         "remoteSignIn": "Uzaktan oturum açma"
       }
+    },
+    "row": {
+      "runsOn": "{{host}} üzerinde çalışıyor",
+      "disconnected": "Bağlantı kesildi",
+      "hostDisconnected": "{{host}} bağlantısı kesildi",
+      "idle": "Boşta",
+      "paused": "Duraklatıldı",
+      "reading": "Mesajınızı okuyor",
+      "replying": "Yanıtlıyor",
+      "replyingIn": "{{place}} içinde yanıtlıyor",
+      "replyingOn": "{{place}} üzerinde yanıtlıyor",
+      "waitingCount": "Beklenen olay sayısı: {{count}}",
+      "waitingFor": "{{label}} bekleniyor",
+      "waitingForUntil": "{{label}} bekleniyor · {{time}} saatine kadar"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} / {{total}}",
+        "navigation": "Öğe {{index}} / {{total}}",
+        "loadingNext": "Sonraki öğe yükleniyor",
+        "shown": "Öğe {{index}} / {{total}}: {{title}}",
+        "firstItem": "İlk öğe",
+        "lastItem": "Son öğe",
+        "previous": "Önceki öğe",
+        "next": "Sonraki öğe"
+      }
+    },
+    "hover": {
+      "asksQuestion": "Yanıtınızı bekliyor",
+      "wantsApproval": "Onayınızı istiyor",
+      "signIn": "Oturum açmanız gerekiyor",
+      "access": "Erişim istedi",
+      "review": "İncele",
+      "openHome": "{{name}} için Home bölümünü aç",
+      "needsYouHeading_one": "Sizi bekleyen {{count}} konu",
+      "needsYouHeading_other": "Sizi bekleyen {{count}} konu",
+      "moreAsks_one": "+{{count}} istek daha",
+      "moreAsks_other": "+{{count}} istek daha",
+      "itemsNeedYou_one": "Sizin için işaretlediği {{count}} öğe",
+      "itemsNeedYou_other": "Sizin için işaretlediği {{count}} öğe"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Yeni sohbet"
+    },
+    "needs": {
+      "chat": "{{name}} ile sohbetiniz"
+    },
+    "panel": {
+      "needYou_one": "Sizi bekleyen: {{count}}",
+      "needYou_other": "Sizi bekleyen: {{count}}",
+      "working": "{{count}} çalışıyor",
+      "working_one": "{{count}} çalışıyor",
+      "working_other": "{{count}} çalışıyor"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} saatinde devam eder",
+      "continuesShort": "{{time}} devam eder",
+      "continuesTip": "{{time}} saatinde otomatik devam eder",
+      "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır",
+      "hitShort": "Limite ulaşıldı",
+      "hitTip": "{{agent}} kullanım limitine ulaştı · {{time}} saatinde sıfırlanır"
     }
   },
   "agentPicker": {

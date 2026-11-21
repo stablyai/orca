@@ -73,6 +73,10 @@ function answeredLines(
   if (recorded) {
     return { lines: recorded, byOrder: false }
   }
+  // Sent as a comment of its own, with no question named in the box.
+  if (reply.data.plain === true) {
+    return { lines: [], byOrder: false }
+  }
   const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
   // A line read by order is open to a comment that names it.
   const open = (index: number): boolean => !answers[index] || byOrder[index] === true

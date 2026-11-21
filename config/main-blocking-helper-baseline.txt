@@ -312,7 +312,7 @@
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
-22 src/main/codex/history/bridges/codex-session-bridge.ts
+13 src/main/codex/history/bridges/codex-session-bridge.ts
 2 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
@@ -1185,7 +1185,7 @@
 8 src/main/runtime/orchestration/db/dispatch-context/attempt-task-settlement.ts
 19 src/main/runtime/orchestration/db/dispatch-context/dispatch-completion.ts
 3 src/main/runtime/orchestration/db/dispatch-context/dispatch-context-store.ts
-2 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts
+3 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts # one Task unblock shared by a federated start and a local start seen only late, inside orchestration DB writes that were already synchronous
 10 src/main/runtime/orchestration/db/dispatch-context/worker-report-settlement.ts
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts
@@ -1211,7 +1211,7 @@
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
-11 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts
+12 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts # the same ready transaction lifts the Task block of a start seen only late, inside orchestration DB writes that were already synchronous
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stage.ts
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
@@ -1456,7 +1456,8 @@
 1 src/main/warp-themes/index.ts
 2 src/main/webhooks/webhook-call-file.ts
 1 src/main/webhooks/webhook-call-runs.ts
-3 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-ledger.ts
+2 src/main/webhooks/webhook-host-newer-agent-hooks.ts # the ledger's two secure writes, moved out of webhook-host-ledger.ts (its count dropped by 2)
 8 src/main/window/attach-main-window-services.ts
 2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts

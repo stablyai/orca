@@ -20493,7 +20493,6 @@
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
         "detachedCommit": "コミット {{head}}（ブランチではありません）",
-        "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
@@ -20574,6 +20573,56 @@
       },
       "automationSaved": {
         "openFullPage": "ページを開く"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "未開始",
+          "connected": "接続済み",
+          "disabled": "無効",
+          "failed": "失敗",
+          "failedReason": "失敗：{{error}}",
+          "needsAuth": "サインインが必要",
+          "needsAuthAfterSend": "サインインが必要です。メッセージを送信すると、ここでサインインできます。",
+          "pending": "接続中…",
+          "tools_other": "{{count}} 個のツール"
+        },
+        "signIn": {
+          "external": "開いたページで完了してください",
+          "waiting": "サインイン待ち…",
+          "waitingBrowser": "ブラウザー待ち…",
+          "action": "サインイン",
+          "remote": "サインイン後、ブラウザーは読み込めないページに移動します。そのページのアドレスをコピーし、ここに貼り付けてください。",
+          "done": "完了",
+          "finish": "完了",
+          "openAgain": "もう一度開く",
+          "addressLabel": "サインインページのアドレス",
+          "unfinished": "サインインはまだ完了していません。開いたページで完了させてから「完了」を押してください。"
+        },
+        "title": "MCP サーバー",
+        "close": "閉じる",
+        "loading": "読み込み中…",
+        "notRunning": "次のメッセージ送信時に接続",
+        "unsupported": "ここで管理するには、このチャットのホストの Orca を更新",
+        "readFailed": "読み込みに失敗",
+        "retry": "再試行",
+        "empty": "このチャットには未設定",
+        "cancel": "キャンセル",
+        "reconnect": "再接続",
+        "toggle": "{{name}} を使用",
+        "actionFailed": "操作できませんでした。もう一度お試しください。",
+        "summary": {
+          "connected": "接続済み: {{count}}",
+          "needsAuth_other": "{{count}} 件サインインが必要",
+          "failed": "失敗: {{count}}",
+          "signingIn": "{{name}} にサインイン中"
+        },
+        "source": {
+          "project": "プロジェクト",
+          "local": "ローカル",
+          "user": "ユーザー",
+          "plugin": "プラグイン",
+          "session": "セッション"
+        }
       }
     },
     "tab": {
@@ -20861,7 +20910,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
           "unavailable": "変更を確認できませんでした",
           "checking": "変更を確認中…",
           "checkingDetails": "確認中…",
@@ -21274,6 +21322,33 @@
         "confirmCheckHomeFolder": "このホームフォルダーを共有する他のマシンで Orca は実行されていません",
         "details": "詳細",
         "clearing": "解除中…"
+      },
+      "workspaceCleanup": {
+        "keep": {
+          "folderWorkspaceSibling": "このワークスペースの別のリポジトリが使用中",
+          "activeWorkspace": "現在開いています",
+          "agentRunning": "Agent が実行中",
+          "archiveScript": "アーカイブスクリプトあり",
+          "archiveUnavailable": "アーカイブを利用できません",
+          "gitUnknown": "Git の状態を読み取れませんでした",
+          "ignoredFiles": "無視されたファイル",
+          "noRuleMatched": "一致するルールなし",
+          "notRemovable": "メインワークスペースまたはフォルダープロジェクト",
+          "pinned": "ピン留め済み",
+          "projectOff": "このプロジェクトのクリーンアップはオフ",
+          "recentlyActive": "過去 1 時間以内に使用",
+          "removing": "削除処理中",
+          "rulesOff": "有効なルールなし",
+          "terminalRunning": "ターミナルでプロセスが実行中",
+          "terminalUnknown": "ターミナルの状態が不明",
+          "uncommittedChanges": "未コミットの変更",
+          "unpushedCommits": "未プッシュのコミット",
+          "unsavedEditorChanges": "エディターの未保存の変更",
+          "waiting": "待機中"
+        },
+        "activity": {
+          "kept": "保持 · {{count}}"
+        }
       }
     },
     "agentChildRow": {
@@ -23265,7 +23340,6 @@
         "withIgnored": "{{what}}と無視されたファイルが失われます",
         "ignoredOnly": "無視されたファイルが失われます"
       },
-      "showChanges": "変更を表示",
       "unsavedSuffix": "（未保存）",
       "onHost": "{{host}} 上",
       "forceDeletingEllipsis": "強制削除中…",
@@ -23940,7 +24014,9 @@
       "128cce6e6d": "タイトルを設定…",
       "e9da9f872a": "レビューノートを Agent に送信",
       "1524825c2c": "ワークスペースボードの切り替え",
-      "d286d1ab85": "ペインのタイトルをクリア"
+      "d286d1ab85": "ペインのタイトルをクリア",
+      "botItemPrevious": "前の項目",
+      "botItemNext": "次の項目"
     },
     "group": {
       "global": "グローバル",
@@ -25135,6 +25211,63 @@
       "paste": {
         "remoteSignIn": "リモートサインイン"
       }
+    },
+    "row": {
+      "runsOn": "{{host}} で実行中",
+      "disconnected": "切断済み",
+      "hostDisconnected": "{{host}} は切断されています",
+      "idle": "アイドル",
+      "paused": "一時停止中",
+      "reading": "メッセージを読んでいます",
+      "replying": "返信中",
+      "replyingIn": "{{place}} で返信中",
+      "replyingOn": "{{place}} に返信中",
+      "waitingCount": "待機中のイベント：{{count}} 件",
+      "waitingFor": "{{label}} を待機中",
+      "waitingForUntil": "{{label}} を待機中 · {{time}} まで"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{total}} 件中 {{index}} 件目",
+        "navigation": "項目 {{index}} / {{total}}",
+        "loadingNext": "次の項目を読み込み中",
+        "shown": "項目 {{index}} / {{total}}：{{title}}",
+        "firstItem": "最初の項目",
+        "lastItem": "最後の項目",
+        "previous": "前の項目",
+        "next": "次の項目"
+      }
+    },
+    "hover": {
+      "asksQuestion": "回答を待っています",
+      "wantsApproval": "承認を求めています",
+      "signIn": "サインインが必要です",
+      "access": "アクセスをリクエストしました",
+      "review": "確認",
+      "openHome": "{{name}} の Home を開く",
+      "needsYouHeading_other": "{{count}} 件の対応が必要です",
+      "moreAsks_other": "ほか {{count}} 件のリクエスト",
+      "itemsNeedYou_other": "あなた向けにマークした項目 {{count}} 件"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "新しいチャット"
+    },
+    "needs": {
+      "chat": "{{name}} とのチャット"
+    },
+    "panel": {
+      "needYou_other": "要対応 {{count}} 件",
+      "working": "{{count}} 件が作業中",
+      "working_other": "{{count}} 件が作業中"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} に再開",
+      "continuesShort": "{{time}} に再開",
+      "continuesTip": "{{time}} に自動的に再開",
+      "hitLimit": "上限に到達 · {{time}} にリセット",
+      "hitShort": "上限に到達",
+      "hitTip": "{{agent}} の利用上限に到達 · {{time}} にリセット"
     }
   },
   "speechModelUpdate": {
