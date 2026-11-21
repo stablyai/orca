@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { linkSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -30,6 +30,7 @@ afterEach(() => {
 
 function reads(db: Database.Database, counted: (sql: string, key: unknown) => boolean) {
   let total = 0
+  let writes = 0
   const prepare = db.prepare
   vi.spyOn(db, 'prepare').mockImplementation(function (this: Database.Database, sql) {
     const statement = prepare.call(this, sql)
@@ -43,15 +44,20 @@ function reads(db: Database.Database, counted: (sql: string, key: unknown) => bo
         total += counted(sql, parameters[0]) ? rows.length : 0
         return rows
       },
-      run: statement.run.bind(statement),
+      run: (...parameters: Parameters<typeof statement.run>) => {
+        writes++
+        return statement.run(...parameters)
+      },
       iterate: statement.iterate.bind(statement),
       setReadBigInts: statement.setReadBigInts.bind(statement)
     }
   })
   return {
     total: () => total,
+    writes: () => writes,
     reset: () => {
       total = 0
+      writes = 0
     }
   }
 }
@@ -228,55 +234,85 @@ it('fingerprints changed custody once before retrying claims', async () => {
   })
 })
 
-/** Per-launch statement reads over a damaged original of `count` chats, and what it recorded. */
-async function damagedOriginalLaunches(count: number, damage: string) {
+/**
+ * Per-launch reads and writes over a damaged original of `count` chats converted here and `count`
+ * the older Orca added after, and what it recorded. A second link leaves its identity uncertifiable.
+ */
+async function damagedOriginalLaunches(count: number, damage: string, linked: boolean) {
   const root = mkdtempSync(join(tmpdir(), 'legacy-damaged-perf-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db: source } = openJournalDatabase(journalDatabasePath(root))
-  runJournalTransaction(source, () => {
-    const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
-    const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
-    for (let index = 0; index < count; index++) {
-      const sessionId = `chat-${index}`
-      publishJournalSessionEpoch(source, { sessionId, workspaceId: 'workspace' }, 'epoch')
-      record.run(sessionId, JSON.stringify({ sessionId, lease: { sessionId } }))
-      claim.run(`upload-${index}`, sessionId, 100)
-    }
-  })
+  const addChats = (prefix: string) =>
+    runJournalTransaction(source, () => {
+      const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      for (let index = 0; index < count; index++) {
+        const sessionId = `${prefix}-${index}`
+        publishJournalSessionEpoch(source, { sessionId, workspaceId: 'workspace' }, 'epoch')
+        record.run(sessionId, JSON.stringify({ sessionId, lease: { sessionId } }))
+        claim.run(`upload-${sessionId}`, sessionId, 100)
+      }
+    })
+  addChats('converted')
   const filename = await initializeJournalDomainDatabase(root)
   const { db } = openJournalDomainDatabase(filename)
   cleanup.push(() => db.close())
+  // Deleted here, it keeps its revision and must not be held back.
+  db.prepare("DELETE FROM agent_session_records WHERE session_id='converted-0'").run()
+  addChats('added')
   source.exec(damage)
   source.close()
+  if (linked) {
+    linkSync(journalDatabasePath(root), join(root, 'second-link.db'))
+  }
   const counted = reads(Database.prototype, () => true)
-  const perLaunch: number[] = []
+  const perLaunch: { reads: number; writes: number }[] = []
   for (let launch = 0; launch < 3; launch++) {
     counted.reset()
     reconcileJournalLegacySource(root, db)
-    perLaunch.push(counted.total())
+    perLaunch.push({ reads: counted.total(), writes: counted.writes() })
   }
   vi.restoreAllMocks()
   const keys = db
     .prepare("SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-%'")
     .all()
     .map((row) => String(row.key))
-  return { perLaunch, keys }
+  const held = db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()
+  return { perLaunch, keys, held: Number(held!.held) }
 }
 
 it.each([
   [
     'its record tables',
-    'DROP TABLE agent_session_command_receipts; DROP TABLE agent_session_records'
+    'DROP TABLE agent_session_command_receipts; DROP TABLE agent_session_records',
+    false
   ],
-  ['its history sessions', 'DROP TABLE journal_sessions']
-])('records a version-four original missing %s once, at flat cost', async (_, damage) => {
-  const small = await damagedOriginalLaunches(20, damage)
-  const large = await damagedOriginalLaunches(200, damage)
-  // The first launch keeps the original's upload claims; later ones skip the unchanged file.
-  expect(large.perLaunch.slice(1)).toEqual(small.perLaunch.slice(1))
-  expect(large.perLaunch[0]).toBeLessThanOrEqual(small.perLaunch[0] * 10)
-  for (const { keys } of [small, large]) {
-    expect(keys.filter((key) => key.startsWith('journal.legacy-failed:'))).toEqual([])
-    expect(keys).toContain(JOURNAL_LEGACY_SOURCE_DAMAGED)
+  ['its history sessions', 'DROP TABLE journal_sessions', false],
+  ['its history sessions, with an uncertifiable identity,', 'DROP TABLE journal_sessions', true]
+])(
+  'records a version-four original missing %s once and keeps its uploads claimed',
+  async (_, damage, linked) => {
+    const small = await damagedOriginalLaunches(20, damage, linked)
+    const large = await damagedOriginalLaunches(200, damage, linked)
+    for (const [size, { perLaunch, keys, held }] of [
+      [20, small],
+      [200, large]
+    ] as const) {
+      expect(held).toBe(2 * size)
+      // Only chats never shown here hold their uploads with a failure record.
+      expect(keys.filter((key) => key.startsWith('journal.legacy-failed:')).sort()).toEqual(
+        Array.from({ length: size }, (_, index) => `journal.legacy-failed:added-${index}`).sort()
+      )
+      expect(keys).toContain(JOURNAL_LEGACY_SOURCE_DAMAGED)
+      // Later launches write nothing: the claims are kept and the file is recorded.
+      expect(perLaunch.slice(1).map(({ writes }) => writes)).toEqual([0, 0])
+    }
+    if (linked) {
+      // Without an identity to compare, each launch rechecks the claims, linearly and read-only.
+      expect(large.perLaunch[1].reads).toBeLessThanOrEqual(small.perLaunch[1].reads * 10)
+    } else {
+      expect(large.perLaunch.slice(1)).toEqual(small.perLaunch.slice(1))
+    }
+    expect(large.perLaunch[0].reads).toBeLessThanOrEqual(small.perLaunch[0].reads * 10)
   }
-})
+)

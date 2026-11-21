@@ -3,7 +3,11 @@ import { runJournalTransaction } from './journal-database'
 import { readJournalLegacyClaims } from './journal-legacy-adoption'
 import { missingJournalLegacyClaims, recoverJournalLegacyClaims } from './journal-legacy-claims'
 import { readMeta, recordJournalLegacyFailure, writeMeta } from './journal-legacy-reconcile-marks'
-import { journalLegacyFailureKey, openJournalLegacySourceChecked } from './journal-legacy-source'
+import {
+  journalLegacyChatRevisionKey,
+  journalLegacyFailureKey,
+  openJournalLegacySourceChecked
+} from './journal-legacy-source'
 import {
   sameJournalLegacySource,
   type JournalLegacySourceReceipt
@@ -47,22 +51,22 @@ export function openReconcilableJournalLegacySource(
 }
 
 /**
- * Claims a damaged original still lists are kept here. A chat this file doesn't hold yet also keeps
- * a failure record, which is what holds its claims through the sweep until a full pass adopts it.
+ * Claims a damaged original still lists are kept here. A chat this file has never shown also keeps
+ * a failure record, which holds its claims through the sweep until a full pass adopts it; a chat
+ * deleted here keeps its revision instead and stays deleted.
  */
 function keepOriginalClaims(source: Database.Database, db: Database.Database, error: string): void {
   const held = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-  const failed = db.prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
   for (const [id, claims] of readJournalLegacyClaims(source, null)) {
-    const holds = held.get(id) !== undefined
-    if (
-      missingJournalLegacyClaims(db, id, claims).length === 0 &&
-      (holds || failed.get(journalLegacyFailureKey(id)) !== undefined)
-    ) {
+    const unseen =
+      held.get(id) === undefined &&
+      readMeta(db, journalLegacyChatRevisionKey(id)) === undefined &&
+      readMeta(db, journalLegacyFailureKey(id)) === undefined
+    if (!unseen && missingJournalLegacyClaims(db, id, claims).length === 0) {
       continue
     }
     recoverJournalLegacyClaims(db, id, claims, (refused) => {
-      if (!holds) {
+      if (unseen) {
         recordJournalLegacyFailure(db, {
           sessionId: id,
           revision: undefined,
