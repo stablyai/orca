@@ -8,6 +8,7 @@ import type { Automation } from '../../../../../../shared/automations/automation
 import type { AutomationRun } from '../../../../../../shared/automations/history/automation-run'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { replyFollowUp } from './reply-follow-up'
 import { sendToBot } from './bot-request-send'
 import type * as RecipientRouting from './recipient-routing'
@@ -60,9 +61,10 @@ describe('mail to a bot', () => {
   let send: ReturnType<typeof setupBotMail>['send']
   let sent: ReturnType<typeof setupBotMail>['sent']
   let reply: ReturnType<typeof setupBotMail>['reply']
+  let publishTab: ReturnType<typeof setupBotMail>['publishTab']
 
   beforeEach(() => {
-    ;({ db, runtime, bots, send, sent, reply } = setupBotMail(h))
+    ;({ db, runtime, bots, send, sent, reply, publishTab } = setupBotMail(h))
   })
   afterEach(() => h.cleanup())
 
@@ -695,6 +697,45 @@ describe('mail to a bot', () => {
     )
     expect(db.getBotConversationActsFor(ownNew)?.actsFor).toEqual([{ kind: 'owner' }])
     expect(withChat).not.toHaveBeenCalled()
+  })
+
+  it('gives a --chat new chat a tab in the bot home, without focus, so it lists under the bot', async () => {
+    journals[RANGER_CHAT] = [message('ask')]
+    await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
+    const docs = bots.find((bot) => bot.id === 'docs')!
+    expect(publishTab).toHaveBeenCalledTimes(1)
+    expect(publishTab).toHaveBeenCalledWith({
+      workspaceId: folderWorkspaceKey(docs.folderWorkspaceId),
+      sessionId: DOCS_REQUEST,
+      agent: docs.agent,
+      activate: false
+    })
+  })
+
+  it("keeps a teammate's request conversation out of the tab bar", async () => {
+    journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
+    await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
+    expect(publishTab).not.toHaveBeenCalled()
+  })
+
+  it('shows no tab for a --chat new send that was a duplicate', async () => {
+    journals[RANGER_CHAT] = [message('ask')]
+    await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
+    await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
+    expect(publishTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('still delivers a --chat new request when its tab cannot be shown', async () => {
+    publishTab.mockRejectedValueOnce(new Error('no window'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      journals[RANGER_CHAT] = [message('ask')]
+      const receipt = await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
+      expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
+      expect(warn).toHaveBeenCalledWith('[bots] could not show a new chat tab', expect.any(Error))
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('refuses --chat new on mail that is no handoff or question', async () => {

@@ -16,6 +16,7 @@ import {
   botRequestSenderName,
   type BotRequestRecord
 } from '../../../../../bots/bot-request-view'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
@@ -47,13 +48,16 @@ async function requestConversation(
 
 /** Admits a reserved request into a conversation of its own; when it goes nowhere the conversation
  *  is closed again and the reservation given back. `home`: the owner's Chat, told it went elsewhere
- *  (`chat` is null while the bot has none); null tells none. */
+ *  (`chat` is null while the bot has none); null tells none. `tab`: the conversation is a chat the
+ *  sender asked for (`--chat new`), so it gets a tab in the bot's home and lists under the bot like a
+ *  chat opened from the tab bar; a teammate's waits in the bot's Chats. */
 export async function admitInOwnConversation(
   runtime: OrcaRuntimeService,
   bot: Bot,
   record: BotRequestRecord,
   subject: string,
   home: { chat: string | null } | null,
+  tab: boolean,
   reservation: {
     admit: (address: string) => { sent: boolean; receipt: unknown }
     release: () => void
@@ -87,7 +91,27 @@ export async function admitInOwnConversation(
   if (home) {
     noteInChat(home.chat ?? undefined, botRequestElsewhereNote(record, title))
   }
+  if (tab) {
+    await showConversationTab(runtime, bot, sessionId)
+  }
   return admitted.receipt
+}
+
+/** A tab for the new chat in the bot's home, without taking focus. The request is already delivered,
+ *  so a tab that can't be shown only leaves the chat in the bot's Chats, where it was before. */
+async function showConversationTab(
+  runtime: OrcaRuntimeService,
+  bot: Bot,
+  sessionId: string
+): Promise<void> {
+  await runtime
+    .publishStructuredAgentSessionTab({
+      workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
+      sessionId,
+      agent: bot.agent,
+      activate: false
+    })
+    .catch((error: unknown) => console.warn('[bots] could not show a new chat tab', error))
 }
 
 export function sessionAddress(sessionId: string): string {
