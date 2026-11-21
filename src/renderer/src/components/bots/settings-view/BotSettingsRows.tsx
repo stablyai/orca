@@ -51,7 +51,7 @@ type SettingsInsetRowProps = {
   detail?: React.ReactNode
   /** The second line wraps instead of truncating, for descriptions. */
   wrapDetail?: boolean
-  /** A short muted value at the row's end, such as "Local Mac"; it truncates before the title does. */
+  /** A short muted value at the row's end, such as "Local Mac"; shown only when it fits whole. */
   value?: string | null
   /** A control at the row's end (a switch, a button). Without one, `onOpen` draws a chevron. */
   end?: React.ReactNode
@@ -112,13 +112,14 @@ function RowText({
         ) : null}
       </span>
       {value ? (
-        <span
-          title={value}
-          className="ml-auto min-w-0 truncate text-right text-xs text-muted-foreground"
-        >
-          {/* Screen readers hear "Computer, Local Mac" as the row's name. */}
-          <span className="sr-only">, </span>
-          {value}
+        // Whole or not at all: a value wider than its room wraps past the empty first item onto a
+        // clipped second line. Screen readers still hear "Computer, Local Mac" as the row's name.
+        <span className="ml-auto flex h-4 min-w-0 flex-wrap justify-end overflow-hidden text-xs leading-4 text-muted-foreground">
+          <span aria-hidden className="h-4 w-0 shrink-0" />
+          <span className="shrink-0 whitespace-nowrap">
+            <span className="sr-only">, </span>
+            {value}
+          </span>
         </span>
       ) : null}
     </>

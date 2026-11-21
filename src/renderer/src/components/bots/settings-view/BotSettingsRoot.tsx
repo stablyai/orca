@@ -302,17 +302,20 @@ export function BotSettingsRoot({
           </div>
           <div data-slot="bot-settings-actions" className="flex shrink-0 items-center gap-0.5">
             <Tooltip>
+              {/* The span keeps the tooltip on hover while the button is off (its host is offline). */}
               <TooltipTrigger asChild>
-                <Button
-                  variant="muted-field-icon"
-                  size="icon-sm"
-                  className="size-7"
-                  aria-label={shareLabel}
-                  disabled={controlsOff}
-                  onClick={() => setSharing(true)}
-                >
-                  <Share2 className="size-3.5" />
-                </Button>
+                <span className="inline-flex">
+                  <Button
+                    variant="muted-field-icon"
+                    size="icon-sm"
+                    className="size-7"
+                    aria-label={shareLabel}
+                    disabled={controlsOff}
+                    onClick={() => setSharing(true)}
+                  >
+                    <Share2 className="size-3.5" />
+                  </Button>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">{shareLabel}</TooltipContent>
             </Tooltip>
@@ -322,7 +325,7 @@ export function BotSettingsRoot({
       <SettingsInsetGroup title={t('settings.bots.agent', 'Agent')}>
         <SettingsInsetRow
           icon={<BotIcon />}
-          title={t('bots.settingsView.agent', 'Agent and model')}
+          title={t('settings.bots.agent', 'Agent')}
           value={botAgentLabel(bot.agent)}
           page="agent"
           onOpen={() => open('agent')}
