@@ -122,7 +122,7 @@ async function applyTidyUpPlan(
       }
     )
     if (migration) {
-      recordMoved(deps, run, migration, made)
+      await recordMoved(deps, run, migration, made)
     }
     return tidyUpSummaryOf(plan, asked, made, written)
   } catch (error) {
@@ -136,19 +136,19 @@ async function applyTidyUpPlan(
 
 /** The status move's lines MEMORY.md really lost, which the journal now holds, for salvage. A
  *  record that fails leaves those lines unoffered, never the tidy-up undone. */
-function recordMoved(
+async function recordMoved(
   deps: ApplyDeps,
   run: { botId: string; today: string },
   migration: TidyUpPlan,
   made: BotMemoryChange
-): void {
+): Promise<void> {
   const moved = new Set(migration.change.removed.map(({ line }) => line.trimEnd()))
   const lines = made.removed.map(({ line }) => line.trimEnd()).filter((line) => moved.has(line))
   if (lines.length === 0 || !deps.salvage) {
     return
   }
   try {
-    deps.salvage.recordMoved(run.botId, run.today.slice(0, 7), lines, Date.now())
+    await deps.salvage.recordMoved(run.botId, run.today.slice(0, 7), lines, Date.now())
   } catch (error) {
     console.warn('[bots] salvage could not record moved lines', error)
   }

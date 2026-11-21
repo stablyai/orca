@@ -1,10 +1,10 @@
 // Each bot's salvage record on its host: every line the status move took out of MEMORY.md, by its
 // hash, with where it stands. Kept beside the profile, not in the bot's home, so only a line Orca
 // itself moved is ever offered back: a line written into a journal file by hand never is.
-import { readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { SALVAGE, salvageLineDate, salvageLineHash } from './bot-memory-salvage'
 
@@ -42,20 +42,19 @@ export type SalvageSource = z.infer<typeof SourceSchema>
 export type BotSalvage = z.infer<typeof BotSalvageSchema>
 
 export type SalvageStoreIo = {
-  read: () => string | null
+  read: () => Promise<string | null>
   write: (text: string) => Promise<void>
 }
 
 export function salvageFileIo(path: () => string): SalvageStoreIo {
   return {
-    read: () => {
-      try {
-        return readFileSync(path(), 'utf8')
-      } catch {
-        return null
-      }
-    },
-    write: async (text) => writeFileAtomically(path(), text, { mode: 0o600 })
+    read: () => readFile(path(), 'utf8').catch(() => null),
+    // A whole new file renamed over the old, so a crash leaves one or the other, never half.
+    write: async (text) => {
+      const temp = `${path()}.${randomUUID()}.tmp`
+      await writeFile(temp, text, { mode: 0o600 })
+      await rename(temp, path())
+    }
   }
 }
 
@@ -70,16 +69,15 @@ export function hostSalvageStore(): BotSalvageStore {
 }
 
 export class BotSalvageStore {
-  private bots: Map<string, BotSalvage> | null = null
+  private bots: Promise<Map<string, BotSalvage>> | null = null
   /** An unreadable file is never written over: what it held may be the only record of a move. */
   private readOnly = false
   private writing: Promise<void> = Promise.resolve()
 
   constructor(private readonly io: SalvageStoreIo) {}
 
-  private all(): Map<string, BotSalvage> {
-    if (!this.bots) {
-      const text = this.io.read()
+  private all(): Promise<Map<string, BotSalvage>> {
+    this.bots ??= this.io.read().then((text) => {
       let parsed: z.infer<typeof FileSchema> | null = null
       try {
         parsed = text ? FileSchema.parse(JSON.parse(text)) : null
@@ -87,20 +85,25 @@ export class BotSalvageStore {
         this.readOnly = true
         console.warn('[bots] salvage record unreadable; leaving it as it is', error)
       }
-      this.bots = new Map(Object.entries(parsed?.bots ?? {}))
-    }
+      return new Map(Object.entries(parsed?.bots ?? {}))
+    })
     return this.bots
   }
 
-  get(botId: string): BotSalvage {
-    return this.all().get(botId) ?? EMPTY
+  async get(botId: string): Promise<BotSalvage> {
+    return (await this.all()).get(botId) ?? EMPTY
   }
 
   /** Notes lines the status move took into `month`'s journal; a line already known keeps its
    *  state, so a line moved again after a restore is still the restored one. */
-  recordMoved(botId: string, month: string, lines: readonly string[], now: number): void {
-    const before = this.get(botId)
-    const sources = { ...before.sources }
+  async recordMoved(
+    botId: string,
+    month: string,
+    lines: readonly string[],
+    now: number
+  ): Promise<void> {
+    const all = await this.all()
+    const sources = { ...(all.get(botId) ?? EMPTY).sources }
     let added = 0
     for (const line of lines) {
       const hash = salvageLineHash(month, line)
@@ -109,25 +112,17 @@ export class BotSalvageStore {
         added++
       }
     }
-    if (added > 0) {
-      this.set(botId, { sources })
-    }
-  }
-
-  private set(botId: string, state: BotSalvage): void {
-    if (this.readOnly) {
+    if (added === 0 || this.readOnly) {
       return
     }
-    this.all().set(botId, state)
-    const text = JSON.stringify({ bots: Object.fromEntries(this.all()) })
-    this.writing = this.writing
-      .then(() => this.io.write(text))
-      .catch((error) => console.warn('[bots] salvage record not saved', error))
-  }
-
-  /** Waits for the saves made so far. */
-  flushed(): Promise<void> {
-    return this.writing
+    all.set(botId, { sources })
+    const text = JSON.stringify({ bots: Object.fromEntries(all) })
+    // Saves in the order they were made; one that fails is said, and the next carries it.
+    this.writing = this.writing.then(() => this.io.write(text))
+    await this.writing.catch((error) => {
+      this.writing = Promise.resolve()
+      throw error
+    })
   }
 }
 

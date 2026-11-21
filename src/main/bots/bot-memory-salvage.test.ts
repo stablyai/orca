@@ -91,28 +91,29 @@ describe("the owner's answer to a proposal", () => {
 describe("a bot's salvage record", () => {
   const io = (text: string | null = null) => {
     const writes: string[] = []
-    return { writes, io: { read: () => text, write: async (t: string) => void writes.push(t) } }
+    return {
+      writes,
+      io: { read: async () => text, write: async (t: string) => void writes.push(t) }
+    }
   }
 
   it('notes each moved line once and keeps the state it reached', async () => {
     const { io: file, writes } = io()
     const store = new BotSalvageStore(file)
-    store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending  '], 1)
+    await store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending  '], 1)
     const hash = salvageLineHash('2026-11', '- 2026-11-03 a #1 pending')
-    expect(store.get('b1').sources[hash]).toMatchObject({
+    expect((await store.get('b1')).sources[hash]).toMatchObject({
       state: 'moved',
       line: '- 2026-11-03 a #1 pending'
     })
-    store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending'], 2)
-    await store.flushed()
+    await store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending'], 2)
     expect(writes).toHaveLength(1)
   })
 
   it('never writes over a record it cannot read', async () => {
     const { io: file, writes } = io('{not json')
     const store = new BotSalvageStore(file)
-    store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending'], 1)
-    await store.flushed()
+    await store.recordMoved('b1', '2026-11', ['- 2026-11-03 a #1 pending'], 1)
     expect(writes).toEqual([])
   })
 
