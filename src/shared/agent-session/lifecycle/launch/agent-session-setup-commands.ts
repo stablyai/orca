@@ -71,6 +71,13 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
       'curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash',
     windowsInstallScript: 'https://raw.githubusercontent.com/aaif-goose/goose/main/download_cli.ps1'
   },
+  // `--json` takes the pasted sign-in response instead of the browser's localhost callback.
+  {
+    agent: 'aug',
+    loginCommand: ['auggie', 'auth', 'login', '--headless'],
+    remoteLoginCommand: ['auggie', 'auth', 'login', '--headless', '--json'],
+    installCommand: 'npm install -g @augmentcode/auggie'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

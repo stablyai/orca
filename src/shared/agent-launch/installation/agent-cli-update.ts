@@ -13,7 +13,8 @@ export const AGENT_CLI_UPDATE_AGENTS = [
   'kimi',
   'cursor',
   'hermes',
-  'goose'
+  'goose',
+  'aug'
 ] as const
 export type AgentCliUpdateAgent = (typeof AGENT_CLI_UPDATE_AGENTS)[number]
 

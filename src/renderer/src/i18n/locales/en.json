@@ -29711,6 +29711,7 @@
     "cursorProduct": "Cursor CLI",
     "hermesProduct": "Hermes Agent",
     "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
