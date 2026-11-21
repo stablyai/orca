@@ -99,7 +99,7 @@ describe('loadBotItemsList work', () => {
     expect(calls).toBe(1)
   })
 
-  it('reads the loaded items that link a worker for a worker change, fifty a read', async () => {
+  it('reads the loaded items that link a worker for a worker change, in no more calls than a whole read', async () => {
     const items = seeded()
     const link = {
       kind: 'dispatch' as const,
@@ -130,16 +130,25 @@ describe('loadBotItemsList work', () => {
     expect(asked).toEqual([['i3', 'i2', 'i1']])
     const changed = read.items.find((item) => item.uid === 'i2')?.links[0]
     expect(changed?.kind === 'dispatch' ? changed.state : null).toBe('completed')
-    // More than one read holds: a read per fifty, however deep Closed is loaded.
-    for (const item of [...items.slice(0, 100), ...items.slice(200)]) {
+    // Fifty a call while that is fewer calls than the loaded pages; beyond it, the list reads whole.
+    for (const item of items.slice(0, 60)) {
       item.links = [link]
     }
     read = await loadBotItemsList(call, null, WHOLE)
     read = await loadBotItemsList(call, read, MORE)
     asked.length = 0
-    await loadBotItemsList(call, read, worker)
-    expect(asked.map((uids) => (Array.isArray(uids) ? uids.length : uids))).toEqual([
-      50, 50, 50, 50
-    ])
+    read = await loadBotItemsList(call, read, worker)
+    expect(asked.map((uids) => (Array.isArray(uids) ? uids.length : uids))).toEqual([50, 10])
+    for (const item of [...items.slice(0, 100), ...items.slice(200)]) {
+      item.links = [link]
+    }
+    read = await loadBotItemsList(call, null, WHOLE)
+    read = await loadBotItemsList(call, read, MORE)
+    items[0]!.links = [{ ...link, state: 'completed' }]
+    asked.length = 0
+    read = await loadBotItemsList(call, read, worker)
+    expect(asked).toHaveLength(2)
+    const first = read.items.find((item) => item.uid === 'i1')?.links[0]
+    expect(first?.kind === 'dispatch' ? first.state : null).toBe('completed')
   })
 })

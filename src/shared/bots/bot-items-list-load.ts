@@ -112,6 +112,13 @@ async function loadAsked(
   const live = () => isLive(options)
   const page = BOT_ITEM_LIMITS.listPage
   const parts = previous ? namedParts(ask.parts, previous) : []
+  // Named reads beyond a whole read's calls (one per loaded page) read whole instead: each call
+  // costs the host a read of its workers, however few rows it answers.
+  const namedCalls = Math.ceil(parts.length / page)
+  const wholeCalls = previous ? Math.ceil(botItemsClosedDepth(previous) / page) : 0
+  if (!ask.whole && previous && parts.length > 0 && namedCalls > wholeCalls) {
+    return loadAsked(call, previous, { ...ask, whole: true }, options)
+  }
   if (!ask.whole && previous && parts.length > 0) {
     const named = await readNamed(call, parts, live)
     // A host before `uids` answers whole: what it left out isn't gone, so the list is read whole.
@@ -196,9 +203,12 @@ async function readBelow(
         closedLimit: Math.min(want - loaded, BOT_ITEM_LIMITS.listPage)
       })
     } catch {
+      // Going on from where a read stopped: the pages read stand, the rest still owed.
       if (owed && kept) {
-        unread.set(kept, owed)
-        return kept
+        const stopped = joined()
+        const value = reuseEqualJson(kept, withLoadedBelow(stopped, kept))
+        unread.set(value, stopped.nextClosedCursor ?? owed)
+        return value
       }
       const value = readThrough(reuseEqualJson(kept, top))
       if (more) {
