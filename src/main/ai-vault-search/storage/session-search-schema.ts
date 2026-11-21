@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../../sqlite/sync-database'
 import { openVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
+import { PARTIAL_FILE_CURSOR } from './session-search-file-cursor'
 
 // Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 
@@ -68,11 +69,24 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
 );
 `
+// Reread Grok transcripts indexed before the synthetic-turn filter once, without a schema bump. A
+// partial cursor forces a whole read without counting as due, so unreachable roots cannot hold the
+// index in indexing. The pending gate is the outer loop, so later opens skip the sessions lookup.
+const GROK_FILES_REPAIR_SQL = `
+UPDATE files SET byte_offset = ${PARTIAL_FILE_CURSOR} WHERE session_row_id IN (
+  SELECT sessions.id
+  FROM (SELECT 1 WHERE NOT EXISTS (
+    SELECT 1 FROM meta WHERE key = 'grok_files_version' AND value = '1'
+  )) AS pending CROSS JOIN sessions
+  WHERE sessions.agent = 'grok'
+);
+INSERT OR REPLACE INTO meta(key, value) VALUES ('grok_files_version', '1');
+`
 
 export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {
     version: SESSION_SEARCH_SCHEMA_VERSION,
-    sql: SCHEMA_SQL,
+    sql: `${SCHEMA_SQL}${GROK_FILES_REPAIR_SQL}`,
     afterSchema: (db) => {
       db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
         'index_incarnation',

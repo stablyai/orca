@@ -120,13 +120,16 @@ export function useNativeChatFindMatches({
   barRef,
   query,
   isVisible,
-  revealMatch
+  revealMatch,
+  restoredQuery = null
 }: {
   rootRef: React.RefObject<HTMLDivElement | null>
   barRef: React.RefObject<HTMLElement | null>
   query: string
   isVisible: boolean
   revealMatch: (match: Range) => void
+  /** The query a restored bar came back with: already searched, so it reveals nothing on its own. */
+  restoredQuery?: string | null
 }): NativeChatFindMatches {
   const [instance] = useState<DomTextSearchInstance>(() => ({}))
   const [matchCount, setMatchCount] = useState(0)
@@ -134,7 +137,7 @@ export function useNativeChatFindMatches({
   const matchesRef = useRef<readonly Range[]>([])
   const activeIndexRef = useRef(-1)
   const anchorRef = useRef<MatchAnchor | null>(null)
-  const searchedQueryRef = useRef<string | null>(null)
+  const searchedQueryRef = useRef<string | null>(restoredQuery)
   // Text nodes holding a match: React rewrites a growing node whole, which collapses its ranges.
   const matchNodesRef = useRef<ReadonlySet<Node>>(new Set())
 

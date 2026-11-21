@@ -3,7 +3,10 @@ import { Activity, createRef, StrictMode } from 'react'
 import { act, cleanup, render, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import { NativeChatComposerEditorOwner } from './native-chat-composer-editor-owner'
+import {
+  NativeChatComposerEditorOwner,
+  releaseNativeChatComposerEditors
+} from './native-chat-composer-editor-owner'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
   openNativeChatEditDraft,
@@ -16,6 +19,10 @@ import {
 } from '../../drafts/native-chat-composer-draft-memory'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { mountedEditorView } from './native-chat-mounted-editor-view'
+import { openNativeChatViewTabs } from '../../pane/ownership/native-chat-view-memory'
+
+const RELEASED_TAB = { tabId: 'released-tab', worktreeId: 'wt-released' }
+openNativeChatViewTabs([RELEASED_TAB.tabId])
 
 afterEach(() => {
   cleanup()
@@ -68,6 +75,44 @@ it('keeps the draft, selection and undo across hides without a hidden view, and 
   await act(() => vi.runOnlyPendingTimersAsync())
   expect(onDestroy).toHaveBeenCalledOnce()
   expect(mountedEditorView(editor)).toBeNull()
+})
+
+it('keeps a draft editor with its undo across a released chat view, and frees it when the tab closes', async () => {
+  vi.useFakeTimers()
+  const input = createRef<NativeChatComposerInput>()
+  const pane = () => (
+    <NativeChatComposerEditorOwner viewTab={RELEASED_TAB}>
+      <NativeChatPromptEditor
+        scopeKey="agent-session:released-editor"
+        inputRef={input}
+        initialValue="hello"
+        disabled={false}
+        placeholder="Message"
+        onChange={() => {}}
+        onSelect={() => {}}
+      />
+    </NativeChatComposerEditorOwner>
+  )
+  const first = render(pane())
+  const editor = promptEditor(within(first.container).getByRole('textbox'))
+  act(() => {
+    input.current!.setSelectionRange(5, 5)
+    input.current!.insertText!(' world')
+  })
+  first.unmount()
+  await act(() => vi.runOnlyPendingTimersAsync())
+  const second = render(pane())
+  expect(promptEditor(within(second.container).getByRole('textbox'))).toBe(editor)
+  act(() => {
+    editor.commands.undo()
+  })
+  expect(input.current!.value).toBe('hello')
+  second.unmount()
+  await act(() => vi.runOnlyPendingTimersAsync())
+  const onDestroy = vi.fn()
+  editor.on('destroy', onDestroy)
+  releaseNativeChatComposerEditors(['released-tab'])
+  expect(onDestroy).toHaveBeenCalledOnce()
 })
 
 it('releases completed inline-edit editors while the chat stays open', () => {

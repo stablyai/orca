@@ -18,6 +18,7 @@ export function NativeChatTranscriptViewport({
   onJump,
   overlays,
   label,
+  memoryKey,
   children
 }: {
   scrollRef: Ref<HTMLDivElement>
@@ -30,10 +31,12 @@ export function NativeChatTranscriptViewport({
   overlays?: ReactNode
   /** The scroller's accessible name; the conversation by default. */
   label?: string
+  /** This transcript within its chat tab, for disclosures that outlive a released view. */
+  memoryKey?: string
   children: ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const disclosures = useNativeChatDisclosures()
+  const disclosures = useNativeChatDisclosures(memoryKey)
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatForwardedGestureContext.Provider value={forwardedGesture}>

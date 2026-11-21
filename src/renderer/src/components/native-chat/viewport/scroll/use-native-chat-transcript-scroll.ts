@@ -244,11 +244,11 @@ export function useNativeChatTranscriptScroll({
   )
 
   const scrollMessageToTop = useCallback(
-    (element: HTMLElement, edge?: NativeChatAlignEdge) => {
+    (element: HTMLElement, edge?: NativeChatAlignEdge, inset?: number) => {
       clearForwardedScroll()
       followingRef.current = false
       onLeaveEnd?.()
-      alignToViewportTop(element, edge)
+      alignToViewportTop(element, edge, inset)
     },
     [alignToViewportTop, clearForwardedScroll, onLeaveEnd]
   )

@@ -1,5 +1,6 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useRef, useState, type RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
+import { useNativeChatQuestionForm } from './use-native-chat-question-form'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
@@ -9,7 +10,6 @@ import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import {
   NativeChatQuestionSteps,
-  useReportNativeChatQuestionDraft,
   foldNativeChatQuestionOnEscape,
   type NativeChatQuestionCardDraft,
   type NativeChatQuestionCardLook
@@ -50,6 +50,8 @@ export type NativeChatQuestionCardProps = {
   /** Another surface's own look for the card (an item page's open question). */
   look?: NativeChatQuestionCardLook
   draft?: NativeChatQuestionCardDraft
+  /** The prompt's identity in its chat, so a half-made answer survives the chat view being released. */
+  memoryKey?: string
 }
 
 // Reserve a non-option index so single-select holds either an option or typed text.
@@ -75,22 +77,15 @@ export function NativeChatQuestionCard({
   shouldFocus = false,
   answerInputRef,
   look,
-  draft
+  draft,
+  memoryKey
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
-  const [index, setIndex] = useState(0)
+  const { index, setIndex, selections, setSelections, otherText, setOtherText } =
+    useNativeChatQuestionForm({ prompt, freeTextInputs, draft, memoryKey })
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
-  // Use indices because labels can repeat and the agent commits numbered rows.
-  const [selections, setSelections] = useState<number[][]>(
-    () => draft?.selections ?? prompt.questions.map(() => [])
-  )
-  const [otherText, setOtherText] = useState<string[]>(
-    () =>
-      draft?.otherText ?? prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
-  )
-  useReportNativeChatQuestionDraft(draft, selections, otherText)
 
   const total = prompt.questions.length
   const isLast = index === total - 1

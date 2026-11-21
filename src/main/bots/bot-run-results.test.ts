@@ -242,11 +242,26 @@ describe('deliverBotRunResult', () => {
     )
 
     expect(delivery.postAsBot).not.toHaveBeenCalled()
-    expect(completion.error).toBe('Not posted to Slack: this computer is signed out of Orca.')
+    expect(completion.error).toBe(
+      "Not posted to Slack: this computer isn't signed in to Orca Cloud."
+    )
     expect(delivery.noteToRun).toHaveBeenCalledWith(
       SESSION,
       'result-not-posted:run-1',
-      'Not posted to Slack: this computer is signed out of Orca.'
+      "Not posted to Slack: this computer isn't signed in to Orca Cloud."
+    )
+  })
+
+  it('says on a headless server how its owner signs it in, so the result can post next time', async () => {
+    const delivery = deps({ cloudSignedOut: () => true, signInServer: () => 'box1' })
+
+    const completion = await deliverBotRunResult(
+      delivery,
+      result({ target: { runsIn: 'new', resultsTo: { channel: 'C123' } } })
+    )
+
+    expect(completion.error).toMatch(
+      /^Not posted to Slack\. This Orca server \(box1\) isn't signed in to Orca Cloud\. Run `orca auth login` in a terminal on box1 .+Connectors tab in Orca on your computer\.$/
     )
   })
 

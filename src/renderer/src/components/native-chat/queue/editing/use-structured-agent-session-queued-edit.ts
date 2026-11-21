@@ -2,7 +2,15 @@ import type { QueuedEditLeaseLoss } from '../../../../../../shared/native-chat/i
 import { queuedEditPublicationKey } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-publication'
 // Edit inside the card while prompts own the composer; host owns durable content, this pane owns typing, a delivery hold lease and compare-and-set Save.
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { toast } from 'sonner'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { AgentSessionQueuedMessageUpdateResult } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -27,6 +35,9 @@ import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
+import { chatViewRetention } from '../../pane/routing/native-chat-view-retention'
+import { NativeChatViewTabContext } from '../../pane/ownership/native-chat-view-memory'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import {
   useNativeChatQueuedEditLifetime,
   nativeChatQueuedEditSaving,
@@ -52,10 +63,32 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
     }
   }, [messages, cards, submissions, promptOpen, scope])
 
-  const render = useCallback((edit: Edit | null) => {
-    active.current = edit
-    setShown(edit ? { ...edit } : null)
-  }, [])
+  // An open edit holds the host's delivery, so its chat view stays mounted until Save or Cancel ends it,
+  // taken and released here rather than in an effect, which a hidden chat would not run.
+  const viewTab = useContext(NativeChatViewTabContext)
+  const releaseHold = useRef<(() => void) | null>(null)
+  const render = useCallback(
+    (edit: Edit | null) => {
+      active.current = edit
+      if (edit && !releaseHold.current && viewTab) {
+        releaseHold.current = chatViewRetention.hold(viewTab.tabId)
+      } else if (!edit && releaseHold.current) {
+        releaseHold.current()
+        releaseHold.current = null
+      }
+      setShown(edit ? { ...edit } : null)
+    },
+    [viewTab]
+  )
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => {
+        releaseHold.current?.()
+        releaseHold.current = null
+      },
+      []
+    )
+  )
   const close = useCallback(
     (edit = active.current) => {
       if (!edit || edit.closed) {

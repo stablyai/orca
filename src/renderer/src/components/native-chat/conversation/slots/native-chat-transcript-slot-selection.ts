@@ -23,10 +23,19 @@ export function nativeChatSlotIndexOf(
     ? -1
     : slots.findIndex(
         (slot) =>
-          slot.kind === 'message' &&
-          (slot.message.id === messageId ||
+          nativeChatSlotKey(slot) === messageId ||
+          (slot.kind === 'message' &&
             (slot.workRun ?? slot.itemNotes)?.some((member) => member.id === messageId) === true)
       )
+}
+
+/** The row at an index, by the key `nativeChatSlotIndexOf` finds it again by: a message, or a subagent's header. */
+export function nativeChatSlotKeyAt(
+  slots: readonly NativeChatTranscriptSlot[],
+  index: number
+): string | null {
+  const slot = slots[index]
+  return slot ? nativeChatSlotKey(slot) : null
 }
 
 /** Place queued and unjournaled not-sent messages after live activity, outside its turn. */

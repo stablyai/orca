@@ -89,6 +89,7 @@ function Transcript({
     scrollRef,
     scrollMessageToTop,
     readerLeavesEnd,
+    readerAtEnd: () => following,
     scrollToBottom: returnToEnd
   })
   useLayoutEffect(() => {

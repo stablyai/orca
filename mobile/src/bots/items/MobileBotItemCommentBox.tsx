@@ -38,12 +38,9 @@ import { botItemWriteFailure } from './use-bot-item-moves'
 const drafts = new Map<string, string>()
 
 export type BotItemCommentBoxHandle = {
-  focus: () => void
-  /** Post `text` as the owner's comment, as Comment does (a quick reply): `landed` when it went or
-   *  may have gone (the reply dropped after sending), `failed` when it surely didn't. */
-  send: (text: string) => Promise<'landed' | 'failed'>
-  /** Put `text` in the box in place of its words, to add to before sending. */
-  fill: (text: string) => void
+  /** Post `text` as the owner's comment, as Comment does (the ask card's answer): `unknown` when the
+   *  reply dropped after sending, so it may have gone; `failed` when it surely didn't. */
+  send: (text: string) => Promise<'landed' | 'unknown' | 'failed'>
 }
 
 export function MobileBotItemCommentBox({
@@ -111,7 +108,7 @@ export function MobileBotItemCommentBox({
     })
   const micActive = mic?.micActive ?? false
   const canSend = online && text.trim().length > 0 && !micActive
-  const post = async (words: string, typed: boolean): Promise<'landed' | 'failed'> => {
+  const post = async (words: string, typed: boolean): Promise<'landed' | 'unknown' | 'failed'> => {
     if (!online || !words || sending || !client) {
       return 'failed'
     }
@@ -121,7 +118,7 @@ export function MobileBotItemCommentBox({
     setSending(false)
     if (outcome.kind === 'done') {
       setError(null)
-      // Words put in the box while it was sending (a quick reply's long press) stay.
+      // Words put in the box while it was sending stay.
       if (typed && revision.current === sentRevision) {
         setText('')
       }
@@ -129,7 +126,7 @@ export function MobileBotItemCommentBox({
     }
     triggerError()
     setError(botItemWriteFailure(outcome, hostName, t))
-    return outcome.kind === 'unknown' ? 'landed' : 'failed'
+    return outcome.kind === 'unknown' ? 'unknown' : 'failed'
   }
   const send = async () => {
     if (canSend) {
@@ -137,12 +134,7 @@ export function MobileBotItemCommentBox({
     }
   }
   useImperativeHandle(ref, () => ({
-    focus: () => input.current?.focus(),
-    send: (words) => post(words.trim(), false),
-    fill: (words) => {
-      setText(`${words} `)
-      input.current?.focus()
-    }
+    send: (words) => post(words.trim(), false)
   }))
   const notice = !online
     ? t(

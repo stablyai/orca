@@ -4,7 +4,8 @@ import {
 } from './use-structured-agent-session-queued-reorder'
 // Host owns durable queued drafts; this pane routes card/header actions and holds only open-edit typing.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useNativeChatViewState } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -81,6 +82,8 @@ function alreadySentNotice(): void {
   )
 }
 
+const NONE_IN_FLIGHT: ReadonlyMap<string, QueuedMessagesPendingAction> = new Map()
+
 export function useStructuredAgentSessionQueuedMessages(args: {
   /** Host advertises `agent-session.queued-messages.v2` and the transport has a fence. */
   enabled: boolean
@@ -133,9 +136,12 @@ export function useStructuredAgentSessionQueuedMessages(args: {
 
   // Refs close same-frame double-click/chord races before disabled state renders.
   const inFlightRef = useRef(new Map<string, QueuedMessagesPendingAction>())
-  const [inFlight, setInFlight] = useState<ReadonlyMap<string, QueuedMessagesPendingAction>>(
-    () => new Map()
-  )
+  // Kept with the chat tab: a view released mid-request returns still excluding what that request holds.
+  const [inFlight, setInFlight] = useNativeChatViewState('queue-in-flight', NONE_IN_FLIGHT)
+  const shownInFlight = useRef(inFlight)
+  useLayoutEffect(() => {
+    shownInFlight.current = inFlight
+  })
   const run = useCallback(
     async <T>(
       keys: readonly string[],
@@ -143,19 +149,23 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       action: () => Promise<T>
     ): Promise<T | false> => {
       const held = inFlightRef.current
-      if (keys.some((key) => held.has(key))) {
+      if (keys.some((key) => held.has(key) || shownInFlight.current.has(key))) {
         return false
       }
       keys.forEach((key) => held.set(key, pending))
-      setInFlight(new Map(held))
+      setInFlight((current) => new Map([...current, ...keys.map((key) => [key, pending] as const)]))
       try {
         return await action()
       } finally {
         keys.forEach((key) => held.delete(key))
-        setInFlight(new Map(held))
+        setInFlight((current) => {
+          const next = new Map(current)
+          keys.forEach((key) => next.delete(key))
+          return next.size === 0 ? NONE_IN_FLIGHT : next
+        })
       }
     },
-    []
+    [setInFlight]
   )
 
   const steer = useCallback(

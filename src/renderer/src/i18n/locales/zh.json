@@ -1151,7 +1151,6 @@
         "missing": "此项目已不在 Orca 中。",
         "notYet": "暂不可用",
         "none": "此项目还没有技能。运行项目的设置流程来添加技能；这些技能会在 {{bot}} 的下次聊天中加载。",
-        "more": "另外 {{count}} 个",
         "openFolder": "打开文件夹",
         "noneShort": "无技能",
         "link": "关联项目",
@@ -25410,7 +25409,8 @@
       "when": "何时运行",
       "option": "机器人 · {{name}}",
       "channelMissing": "请输入接收结果的频道。",
-      "hostUnavailable": "这台电脑暂时无法承载新的自动化。请稍后重试。",
+      "hostUnavailable": "机器人所在的电脑暂时无法承载新的自动化。请稍后重试。",
+      "hostNeedsUpdate": "请更新 {host} 上的 Orca 服务器，它的机器人才能使用自动化。",
       "promptMissing": "请输入要做的事。",
       "deletedBot": "已删除的机器人",
       "fieldLabel": "机器人或项目",
@@ -26262,7 +26262,29 @@
         "google": "以你的身份使用 Gmail、Calendar 和 Drive"
       },
       "mcp": {
-        "adding": "正在添加 {{app}}…"
+        "adding": "正在添加 {{app}}…",
+        "addTitle": "添加 {{app}}",
+        "advanced": "高级",
+        "hostInvalid": "请输入主机名，例如 {{example}}。",
+        "datadog": {
+          "siteLabel": "Datadog 站点"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab 地址（可选）",
+          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com。"
+        },
+        "place": {
+          "usEast": "美国东部",
+          "usWest": "美国西部",
+          "usCentral": "美国中部",
+          "europe": "欧洲",
+          "japan": "日本",
+          "australia": "澳大利亚",
+          "unitedKingdom": "英国"
+        },
+        "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。",
+        "elsewhereOther": "请先在“管理”中移除，再添加其他。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",
@@ -27694,6 +27716,10 @@
       "controlNone": "你添加的任何人都能通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
       "controlOne": "{{person}} 可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
       "controlMany": "他们可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
+      "controlBrief": "他们可以在这里以你的身份操作。",
+      "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作。",
+      "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作。",
+      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作。",
       "reachHeading": "{{name}} 可以访问什么",
       "reachComputer": "你在 {{computer}} 上的文件、命令和账号",
       "reachComputerDetail": "以你的身份操作，范围由下方权限决定。",
@@ -27834,7 +27860,7 @@
       "description": "{{name}} 的 Home Chat 将在 {{agent}} 上重新开始。当前对话会保留在历史记录中。",
       "kept": "保留：灵魂、记忆、自动化、连接器",
       "notKept": "不保留：当前对话",
-      "threads": "正在运行的 Slack 话题会继续使用 {{agent}}，直至结束",
+      "threads": "已有 Orca 聊天的 Slack 话题会保留该聊天的智能体",
       "action": "切换为 {{agent}}"
     },
     "paused": {
