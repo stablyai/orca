@@ -17,17 +17,17 @@ afterEach(() => {
 })
 
 describe('AgentTeamStore', () => {
-  it('lets only an opted-in bot create, up to its cap per 24 hours, across restarts', () => {
+  it('lets only an opted-in bot create, up to its cap per 24 hours, across restarts', async () => {
     const file = store()
     const teams = file.make()
     const day = 24 * 60 * 60 * 1000
-    expect(teams.mayCreate('lead', 1000)).toBe(false)
-    teams.set('lead', { teamBuilder: true, dailyCap: 2 })
-    teams.recordCreated('lead', 1000)
-    teams.recordCreated('lead', 2000)
+    expect(await teams.mayCreate('lead', 1000)).toBe(false)
+    await teams.set('lead', { teamBuilder: true, dailyCap: 2 })
+    await teams.recordCreated('lead', 1000)
+    await teams.recordCreated('lead', 2000)
     const reopened = file.make()
-    expect(reopened.mayCreate('lead', 3000)).toBe(false)
-    expect(reopened.mayCreate('lead', 1000 + day)).toBe(true)
-    expect(reopened.mayCreate('other', 3000)).toBe(false)
+    expect(await reopened.mayCreate('lead', 3000)).toBe(false)
+    expect(await reopened.mayCreate('lead', 1000 + day)).toBe(true)
+    expect(await reopened.mayCreate('other', 3000)).toBe(false)
   })
 })

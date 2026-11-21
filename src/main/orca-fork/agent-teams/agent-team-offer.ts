@@ -25,7 +25,7 @@ export function agentTeamStore(): AgentTeamStore {
 /** The team room with the lead and `member` in it, made the first time; its name. */
 async function joinTeamGroup(runtime: OrcaRuntimeService, lead: Bot, member: Bot): Promise<string> {
   const groups = runtimeBotGroups(runtime)
-  const groupId = agentTeamStore().entry(lead.id).groupId
+  const { groupId } = await agentTeamStore().entry(lead.id)
   const existing = groupId ? groups.store.listing().find((group) => group.id === groupId) : null
   if (existing) {
     const botIds = existing.members.map((entry) => entry.botId)
@@ -42,7 +42,7 @@ async function joinTeamGroup(runtime: OrcaRuntimeService, lead: Bot, member: Bot
     name: teamGroupName(lead.name),
     botIds: [lead.id, member.id]
   })
-  agentTeamStore().setGroup(lead.id, group.id)
+  await agentTeamStore().setGroup(lead.id, group.id)
   return group.name
 }
 
@@ -68,7 +68,7 @@ export async function acceptTeamOffer(
   lead: Bot,
   offer: BotCreateOffer
 ): Promise<string | null> {
-  if (!FORK_FEATURES.agentTeams || !agentTeamStore().mayCreate(lead.id)) {
+  if (!FORK_FEATURES.agentTeams || !(await agentTeamStore().mayCreate(lead.id))) {
     return null
   }
   const fromOffer = { botId: lead.id, offerId: offer.offerId }
@@ -81,7 +81,7 @@ export async function acceptTeamOffer(
     return null
   }
   const bot = made.bot
-  agentTeamStore().recordCreated(lead.id)
+  await agentTeamStore().recordCreated(lead.id)
   console.info(`[orca-fork] team builder ${lead.name} created bot ${bot.name} (${bot.id})`)
   let room: string | null = null
   try {

@@ -1,5 +1,5 @@
 // orca-fork: Bot settings › "Can build a team". Hidden on a host whose server has no agent teams.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { UsersRound } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
@@ -17,9 +17,9 @@ export function BotTeamBuilderRow({ bot }: { bot: Bot }): React.JSX.Element | nu
   const t = useTranslate()
   const [team, setTeam] = useState<AgentTeamView | null>(null)
   const { id, hostId } = bot
-  const ref = useMemo<BotRef>(() => ({ id, hostId }), [id, hostId])
   useEffect(() => {
     let live = true
+    const ref: BotRef = { id, hostId }
     setTeam(null)
     callBotRpc<AgentTeamView>(ref, AGENT_TEAMS_GET_METHOD, { botId: id })
       .then((view) => live && setTeam(view))
@@ -27,9 +27,10 @@ export function BotTeamBuilderRow({ bot }: { bot: Bot }): React.JSX.Element | nu
     return () => {
       live = false
     }
-  }, [ref])
+  }, [id, hostId])
   const toggle = useCallback(
     (teamBuilder: boolean) => {
+      const ref: BotRef = { id, hostId }
       setTeam((previous) => (previous ? { ...previous, teamBuilder } : previous))
       void callBotRpc<AgentTeamView>(ref, AGENT_TEAMS_SET_METHOD, {
         botId: id,
@@ -40,7 +41,7 @@ export function BotTeamBuilderRow({ bot }: { bot: Bot }): React.JSX.Element | nu
           setTeam((previous) => (previous ? { ...previous, teamBuilder: !teamBuilder } : previous))
         )
     },
-    [ref]
+    [id, hostId]
   )
   if (!FORK_FEATURES.agentTeams || !team) {
     return null

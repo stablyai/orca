@@ -20,7 +20,7 @@ export const AGENT_TEAM_METHODS = [
     name: 'orcaFork.teams.get',
     permission: 'workspace',
     params: AgentTeamsGet,
-    handler: ({ botId }, { runtime }) => {
+    handler: async ({ botId }, { runtime }) => {
       assertBot(runtime, botId)
       return agentTeamStore().view(botId)
     }
@@ -29,11 +29,11 @@ export const AGENT_TEAM_METHODS = [
     name: 'orcaFork.teams.set',
     permission: 'workspace',
     params: AgentTeamsSet,
-    handler: ({ botId, teamBuilder, dailyCap }, context) => {
+    handler: async ({ botId, teamBuilder, dailyCap }, context) => {
       // Only the owner grants it; a bot can't give itself the permission.
       assertBotGroupOwner(context)
       assertBot(context.runtime, botId)
-      agentTeamStore().set(botId, { teamBuilder, ...(dailyCap ? { dailyCap } : {}) })
+      await agentTeamStore().set(botId, { teamBuilder, ...(dailyCap ? { dailyCap } : {}) })
       return agentTeamStore().view(botId)
     }
   })
