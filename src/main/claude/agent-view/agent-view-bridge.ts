@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import { claudeAgentViewChord, readClaudeAgentViewChord } from './agent-view-keybindings'
 import {
   answerPendingView,
+  clickReadableConfigDir,
   ClaudeAgentViewMessage,
   type ClaudeAgentViewReply,
   type PendingView
@@ -112,7 +113,6 @@ export class ClaudeAgentViewBridge {
     }
   }
 
-  /** `sameMachine`: the mod's config folder is readable here (not a WSL or remote guest path). */
   receive(body: unknown, options: { sameMachine?: boolean } = {}): ClaudeAgentViewReply {
     const parsed = ClaudeAgentViewMessage.safeParse(body)
     if (!parsed.success) {
@@ -122,7 +122,7 @@ export class ClaudeAgentViewBridge {
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
       const chord = claudeAgentViewChord(message.keybindings)
-      const configDir = options.sameMachine ? message.configDir : undefined
+      const configDir = clickReadableConfigDir(message.configDir, options.sameMachine)
       // A local pane stays without a binding: each click reads the binding from configDir.
       if (!chord && !configDir) {
         if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
@@ -157,8 +157,8 @@ export class ClaudeAgentViewBridge {
       if (session && message.view) {
         this.observe(session, message.view)
       }
-      // durable: no heartbeat needed. A WSL mod keeps one: only it can see its keybindings change.
-      return options.sameMachine ? { registered: true, durable: true } : { registered: true }
+      // durable only with a config folder a click can read here; others (WSL, relative) keep checking in.
+      return configDir ? { registered: true, durable: true } : { registered: true }
     }
     if (
       !current ||

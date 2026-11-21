@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import { z } from 'zod'
 import { ClaudeAgentViewIdentity as Identity } from './agent-view-registry-file'
 import {
@@ -60,4 +61,13 @@ export function answerPendingView(
     request.finish(message.deny ? { status: 'denied', reason: message.deny } : { status: 'viewed' })
   }
   return {}
+}
+
+/** The mod's config folder when Orca can read it at click time: same machine (not a WSL guest)
+ *  and absolute (a relative one names the Claude's cwd, not main's). */
+export function clickReadableConfigDir(
+  configDir: string | undefined,
+  sameMachine: boolean | undefined
+): string | undefined {
+  return sameMachine && configDir && isAbsolute(configDir) ? configDir : undefined
 }

@@ -35,9 +35,16 @@ const RegistryFile = z.object({
   sessions: z.array(RegisteredView).max(MAX_CLAUDE_AGENT_VIEW_SESSIONS)
 })
 
-async function readRegistry(filePath: string): Promise<RegisteredClaudeAgentView[]> {
+/** undefined: the file exists but could not be read now (a lock), so the caller retries. */
+async function readRegistry(filePath: string): Promise<RegisteredClaudeAgentView[] | undefined> {
+  let text: string
   try {
-    const parsed = RegistryFile.safeParse(JSON.parse(await readFile(filePath, 'utf8')))
+    text = await readFile(filePath, 'utf8')
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT' ? [] : undefined
+  }
+  try {
+    const parsed = RegistryFile.safeParse(JSON.parse(text))
     return parsed.success ? parsed.data.sessions : []
   } catch {
     return []
@@ -85,12 +92,17 @@ export class ClaudeAgentViewRegistryFile {
   }
 
   private async merge(merge: (saved: RegisteredClaudeAgentView[]) => boolean): Promise<void> {
-    const saved = await readRegistry(this.filePath)
+    let saved = await readRegistry(this.filePath)
+    // Idle mods will not register again, so a locked file is retried (2 s doubling, four times).
+    for (let attempt = 1; saved === undefined && attempt <= 4 && !this.closed; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt))
+      saved = await readRegistry(this.filePath)
+    }
     this.restoring = false
     if (this.closed) {
       return
     }
-    const changed = merge(saved)
+    const changed = merge(saved ?? [])
     if (changed || this.savedDuringRestore) {
       void this.save()
     }
