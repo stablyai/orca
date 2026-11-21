@@ -55,7 +55,7 @@ export function ChatRow({
       <TooltipContent side="top" sideOffset={4} className="z-[70]">
         {t(
           'resourceManager.chatRow.tooltip',
-          '{{agent}} chat, including the processes it started',
+          '{{agent}} chat, including the processes running under it',
           { agent: agentLabel }
         )}
       </TooltipContent>

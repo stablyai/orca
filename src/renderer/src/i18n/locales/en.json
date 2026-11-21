@@ -25952,7 +25952,7 @@
       "privateBytes": "Committed by Orca, agents and terminals"
     },
     "chatRow": {
-      "tooltip": "{{agent}} chat, including the processes it started"
+      "tooltip": "{{agent}} chat, including the processes running under it"
     },
     "sharedAgentProcesses": "Shared agent processes"
   },
