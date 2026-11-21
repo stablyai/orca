@@ -11,6 +11,9 @@ import {
   type ConnectorActionsCloud
 } from './connector-actions-cloud-fixture'
 
+// The auth override is all-or-nothing; no relay call is expected, so nothing real may answer.
+const UNUSED_RELAY_URL = 'https://127.0.0.1:1'
+
 const test = stubTest.extend<{ connectorCloud: ConnectorActionsCloud }>({
   // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
   connectorCloud: async ({}, provideFixture) => {
@@ -22,6 +25,7 @@ const test = stubTest.extend<{ connectorCloud: ConnectorActionsCloud }>({
     await provideFixture({
       ORCA_CLOUD_API_URL: connectorCloud.origin,
       ORCA_CLOUD_CLIENT_ID: 'connector-first-setup-e2e',
+      ORCA_RELAY_URL: UNUSED_RELAY_URL,
       ORCA_CLOUD_DEV_AUTH: '1',
       ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
       ORCA_CONNECTOR_URL: connectorCloud.origin

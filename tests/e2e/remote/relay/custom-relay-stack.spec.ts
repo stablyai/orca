@@ -347,6 +347,13 @@ test.describe('environment override', () => {
     expect((await orcaPage.evaluate(() => window.api.orcaProfiles.authStatus())).state).toBe(
       'connected'
     )
+    const relayOption = orcaPage.getByRole('radio', { name: /Orca Relay/ })
+    await expect(relayOption).toHaveAttribute('aria-checked', 'true')
+    await expect(relayOption).toHaveAttribute('aria-disabled', 'false')
+    await expect(orcaPage.getByRole('button', { name: /Sign in/ })).toBeHidden()
+    await expect(
+      orcaPage.getByRole('button', { name: /^(Generate|Regenerate) QR code$/ })
+    ).toBeEnabled()
     const pairing = await orcaPage.evaluate(() =>
       window.api.mobile.getPairingQR({ address: '127.0.0.1', connectionMode: 'automatic' })
     )
@@ -354,5 +361,6 @@ test.describe('environment override', () => {
       throw new Error(`Environment relay pairing failed: ${JSON.stringify(pairing)}`)
     }
     expect(decodePairingOffer(pairing.pairingUrl).relay?.directorUrl).toBe(stack.relayUrl)
+    await expect(orcaPage.getByText('Ready', { exact: true })).toBeVisible({ timeout: 30_000 })
   })
 })
