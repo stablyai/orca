@@ -16,6 +16,7 @@ vi.mock('./browser-manager-navigation', () => ({
 
 import {
   clearBrowserGuestUserAgentDemand,
+  getBrowserGuestFrameUserAgentDemand,
   setBrowserGuestFrameUserAgentDemand,
   setBrowserGuestPageUserAgentDemand
 } from '../../../identity/requests/browser-session-ua-demand'
@@ -144,4 +145,32 @@ it('checks an idle popup a fixed number of times, not on a timer for its lifetim
   // Checks 2, 4, 8 and 16 s apart, then none while the popup sits idle.
   expect(checks).toBe(4)
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it('checks a site iframe a popup shows after loading a new page, then clears it once removed', () => {
+  vi.useFakeTimers()
+  const siteFrame = (frameTreeNodeId: number) => ({
+    frameTreeNodeId,
+    detached: false,
+    isDestroyed: () => false
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: has every WebContents member the popup tracker reads.
+  const popup = Object.assign(new EventEmitter(), {
+    id: 7,
+    session: {},
+    isDestroyed: () => false,
+    getURL: () => 'https://login.example.test/'
+  }) as unknown as Electron.WebContents
+  trackBrowserPopupUserAgentDemand(popup)
+  const teams = 'https://teams.microsoft.com/v2/'
+  popup.emit('did-start-navigation', { url: teams, isMainFrame: false, frame: siteFrame(3) })
+  vi.advanceTimersByTime(60_000)
+  // The popup loads another page, which embeds a new Teams iframe.
+  popup.emit('did-navigate')
+  const next = siteFrame(4)
+  popup.emit('did-start-navigation', { url: teams, isMainFrame: false, frame: next })
+  expect([...getBrowserGuestFrameUserAgentDemand(7)]).toEqual([4])
+  next.detached = true
+  vi.advanceTimersByTime(2_500)
+  expect([...getBrowserGuestFrameUserAgentDemand(7)]).toEqual([])
 })

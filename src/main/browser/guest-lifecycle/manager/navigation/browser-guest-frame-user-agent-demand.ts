@@ -163,7 +163,9 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
 export function watchBrowserPopupSiteFrameRemoval(contents: Electron.WebContents): void {
   const { id, session } = contents
   let recheck: NodeJS.Timeout | null = null
-  let seen = getBrowserGuestFrameUserAgentDemand(id).size
+  // Site iframes whose checks already ran or are running; a page change or a check that clears
+  // one drops it, so an iframe that comes back starts over.
+  const watched = new Set<number>()
   const scheduleRecheck = (delay: number): void => {
     recheck = setTimeout(() => {
       recheck = null
@@ -181,18 +183,31 @@ export function watchBrowserPopupSiteFrameRemoval(contents: Electron.WebContents
     }, delay)
     recheck.unref?.()
   }
-  const onSubframeStart = (details: Electron.Event<{ isMainFrame: boolean }>): void => {
+  const onSubframeStart = (
+    details: Electron.Event<{ isMainFrame: boolean; frame?: Electron.WebFrameMain | null }>
+  ): void => {
     if (details.isMainFrame) {
       return
     }
-    const size = getBrowserGuestFrameUserAgentDemand(id).size
-    if (size > seen) {
-      if (recheck) {
-        clearTimeout(recheck)
+    const demand = getBrowserGuestFrameUserAgentDemand(id)
+    for (const frameTreeNodeId of watched) {
+      if (!demand.has(frameTreeNodeId)) {
+        watched.delete(frameTreeNodeId)
       }
-      scheduleRecheck(POPUP_FRAME_RECHECK_MS.first)
     }
-    seen = size
+    const frameTreeNodeId = details.frame?.frameTreeNodeId
+    if (
+      frameTreeNodeId === undefined ||
+      !demand.has(frameTreeNodeId) ||
+      watched.has(frameTreeNodeId)
+    ) {
+      return
+    }
+    watched.add(frameTreeNodeId)
+    if (recheck) {
+      clearTimeout(recheck)
+    }
+    scheduleRecheck(POPUP_FRAME_RECHECK_MS.first)
   }
   contents.on('did-start-navigation', onSubframeStart)
   contents.on('did-redirect-navigation', onSubframeStart)

@@ -27,6 +27,7 @@ import {
   allowNativeBrowserPopup,
   isNativeBrowserPopupRequest
 } from '../../popups/presentation/browser-popup-native-window'
+import type { PopupOwnerContext } from '../../popups/browser-popup-ownership'
 import { watchBrowserPopupSiteFrameRemoval } from '../navigation/browser-guest-frame-user-agent-demand'
 import { isBrowserRouteGuestPopup } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-app-launch'
@@ -44,8 +45,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
-        this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
-        watchBrowserPopupSiteFrameRemoval(window.webContents)
+        this.attachPopupGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
         this.inheritAgentLead(guest.id, window.webContents.id)
       }
     }
@@ -196,6 +196,18 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     })
   }
 
+  // A popup window's iframes run no guest preload, so removed site iframes are checked for here.
+  private attachPopupGuestPolicies(
+    contents: Electron.WebContents,
+    owner: PopupOwnerContext | null
+  ): void {
+    const fresh = !this.policyAttachedGuestIds.has(contents.id)
+    this.attachGuestPolicies(contents, owner)
+    if (fresh) {
+      watchBrowserPopupSiteFrameRemoval(contents)
+    }
+  }
+
   protected createPopupChildWindowWithOriginBar(
     openerGuest: Electron.WebContents,
     targetUrl: string,
@@ -209,8 +221,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       if (!owner) {
         return false
       }
-      this.attachGuestPolicies(contents, owner)
-      watchBrowserPopupSiteFrameRemoval(contents)
+      this.attachPopupGuestPolicies(contents, owner)
       this.inheritAgentLead(openerGuest.id, contents.id)
       return true
     })
