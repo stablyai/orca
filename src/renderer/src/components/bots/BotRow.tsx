@@ -128,7 +128,15 @@ export function BotRow({
           />
         ) : null
       }
-      trailing={fold ? <BotRowFoldToggle botName={bot.name} fold={fold} /> : null}
+      trailing={
+        fold ? (
+          <BotRowFoldToggle
+            botName={bot.name}
+            fold={fold}
+            working={!offline && status === 'working'}
+          />
+        ) : null
+      }
       hoverDetails={() => (
         <BotHoverDetails
           bot={bot}
@@ -207,14 +215,19 @@ function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
 
 function BotRowFoldToggle({
   botName,
-  fold
+  fold,
+  working
 }: {
   botName: string
   fold: BotRowFold
+  /** The bot itself is working: the row's working mark sits here, on the strip. */
+  working: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { folded, counts } = fold
-  const live = botFoldLiveStatus(counts)
+  const live = folded ? botFoldLiveStatus(counts) : null
+  // One mark: a folded workspace's ask outranks the bot's own work, which outranks the rest.
+  const mark = live === 'permission' ? live : working ? 'working' : live
   const label = folded
     ? t('bots.chats.unfold', 'Unfold {{name}}', { name: botName })
     : t('bots.chats.fold', 'Fold {{name}}', { name: botName })
@@ -243,10 +256,10 @@ function BotRowFoldToggle({
       onKeyDown={(event) => event.stopPropagation()}
     >
       {/* Folded, only its most urgent live workspace's status: a bare count of every workspace it
-          ever made said nothing at a glance. */}
-      {folded && live ? (
+          ever made said nothing at a glance. Folded or not, the bot's own work shows here too. */}
+      {mark ? (
         <span className="flex items-center">
-          <StatusIndicator status={live} showTooltip={false} />
+          <StatusIndicator status={mark} showTooltip={false} />
         </span>
       ) : null}
       <span className="flex size-4 items-center justify-center">

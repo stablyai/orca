@@ -264,6 +264,18 @@ const CASES: [string, number, React.ReactNode][] = [
     280,
     row(release, { home: home(release, { isUnread: true }), fold: fold(true) })
   ],
+  ...([true, false] as const).map((folded): [string, number, React.ReactNode] => [
+    `Replying, workers ${folded ? 'folded' : 'unfolded'}`,
+    280,
+    row(replying, {
+      home: home(replying, {
+        externalConversations: [
+          thread('slack-replying', 'slack', 'can you check the nightly?', '#bots')
+        ]
+      }),
+      fold: fold(folded)
+    })
+  ]),
   [
     'Workers: one agent, two kinds, five agents of four kinds',
     280,
