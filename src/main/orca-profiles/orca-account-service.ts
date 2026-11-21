@@ -184,12 +184,16 @@ export class OrcaAccountService {
     return result
   }
 
-  async withCloudServerSwitch<T>(operation: () => Promise<T>): Promise<T> {
+  // `serverChanging` fences in-flight profile creation; a save that keeps the effective server must not.
+  async withCloudServerSwitch<T>(
+    operation: (serverChanging: () => void) => Promise<T>
+  ): Promise<T> {
     this.assertCloudServerStable()
     this.switchingCloudServer = true
-    this.cloudServerGeneration++
     try {
-      return await operation()
+      return await operation(() => {
+        this.cloudServerGeneration++
+      })
     } finally {
       this.switchingCloudServer = false
     }

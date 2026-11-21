@@ -16,6 +16,10 @@ export function trackPairingPublication(publish: () => Promise<void>): Promise<v
   return publication
 }
 
+export function hasPendingPairingPublications(): boolean {
+  return pendingPublications.size > 0
+}
+
 export async function pairingPublicationsSettled(): Promise<void> {
   if (pendingPublications.size === 0) {
     return

@@ -93,9 +93,9 @@ describe('Orca cloud profile creation vs server switch', () => {
     vi.unstubAllEnvs()
   })
 
-  it.each([false, true])(
+  it.each(['none', 'same-server', 'new-server'] as const)(
     'commits an in-flight profile only if its server stayed unchanged (switch=%s)',
-    async (switchServer) => {
+    async (switchKind) => {
       const account = new OrcaAccountService({
         openBrowser: openNoBrowser,
         userDataPath: () => userDataPath
@@ -114,11 +114,14 @@ describe('Orca cloud profile creation vs server switch', () => {
       })
       const creating = account.createCloudLinked({ name: 'Work' })
       await started
-      if (switchServer) {
-        await account.withCloudServerSwitch(async () => {
+      if (switchKind === 'new-server') {
+        await account.withCloudServerSwitch(async (serverChanging) => {
+          serverChanging()
           await account.signOut()
           vi.stubEnv('ORCA_CLOUD_API_URL', 'https://new-auth.example.test')
         })
+      } else if (switchKind === 'same-server') {
+        await account.withCloudServerSwitch(async () => {})
       }
       finishCreate({
         accessToken: 'created-access',
@@ -128,7 +131,7 @@ describe('Orca cloud profile creation vs server switch', () => {
         organizations,
         capabilities
       })
-      if (switchServer) {
+      if (switchKind === 'new-server') {
         await expect(creating).resolves.toMatchObject({
           status: 'reconnect-required'
         })

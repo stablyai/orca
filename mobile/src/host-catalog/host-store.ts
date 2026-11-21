@@ -5,7 +5,8 @@ import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './host-pr
 import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'
-import { pairingPublicationsSettled, trackPairingPublication } from './pairing-publication-fence'
+import { trackPairingPublication } from './pairing-publication-fence'
+import { loadSettledHostListSnapshot } from './host-list-settled-load'
 import { joinHostCatalogCredentials } from './host-catalog-credential-join'
 import {
   readHostDeviceToken,
@@ -57,21 +58,8 @@ export const peekHosts = (): HostProfile[] | null =>
 export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 
-// A write that completes mid-read (a pairing save lands metadata, token and relay routing in turn) makes the snapshot stale.
-const MAX_STALE_HOST_LOAD_RETRIES = 4
-
 async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
-  for (let retries = 0; ; retries++) {
-    // Wait for full serialized mutations so loads cannot read half-written state.
-    await pairingPublicationsSettled()
-    await hostListMutationsSettled()
-    const startedRevision = hostListLoads.getHostListLoadRevision()
-    const snapshot = await hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
-    const stale = startedRevision !== hostListLoads.getHostListLoadRevision()
-    if (!stale || retries >= MAX_STALE_HOST_LOAD_RETRIES) {
-      return snapshot
-    }
-  }
+  return loadSettledHostListSnapshot(doLoadHostListSnapshot)
 }
 
 async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {

@@ -70,7 +70,7 @@ export async function switchCloudServer(
 ): Promise<CustomCloudServerSettings> {
   const settings = requireCustomCloudServer(value, ports.packaged)
   const previous = ports.store.getSettings().customCloudServer ?? DEFAULT_CLOUD_SERVER
-  return ports.account.withCloudServerSwitch(async () => {
+  return ports.account.withCloudServerSwitch(async (serverChanging) => {
     const oldConfig = getOrcaCloudAuthConfig(process.env, ports.packaged, previous)
     const nextConfig = getOrcaCloudAuthConfig(process.env, ports.packaged, settings)
     const unchanged =
@@ -85,6 +85,7 @@ export async function switchCloudServer(
       await persist()
       return settings
     }
+    serverChanging()
     // Stop the installer as well as the broker before awaiting any network or disk work.
     ports.stopRelay()
     try {
