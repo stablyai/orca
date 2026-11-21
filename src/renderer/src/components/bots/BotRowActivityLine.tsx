@@ -5,8 +5,7 @@ import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/acti
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
-import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useBotWaits, useListedBotItemsNeedingOwner } from '@/lib/bot-catalog'
 import { usePublishedBotNeedsYou } from './bot-needs-you-published'
 import { useStructuredAgentSessionsStarting } from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
@@ -255,7 +254,7 @@ export function BotRowLineText({
   if (line?.kind === 'replying' && line.place) {
     return <ReplyingAtLabel place={line.place} />
   }
-  return <>{line ? lineText(line, now) : (fallback ?? '')}</>
+  return <>{line ? lineText(t, line, now) : (fallback ?? '')}</>
 }
 
 /** The hover card's copy of the row's line, whole and with markdown stripped. */
@@ -266,14 +265,18 @@ export function BotHoverLatestLine({
   line: BotRowLine | null
   now: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   if (!line || line.kind === 'paused') {
     return null
   }
   const age =
-    line.kind === 'activity' && line.at !== null ? formatUiRelativeTime(line.at - now) : null
+    line.kind === 'activity' && line.at !== null
+      ? formatUiRelativeTime(line.at - now, intlLocale)
+      : null
   // Block markers first (list bullets, headings, quotes), then inline links and emphasis.
   const text = stripInlineMarkdownForToc(
-    lineText(line, now).replace(/^\s*(?:[-*+]|\d+\.|#{1,6}|>)\s+/gm, '')
+    lineText(t, line, now).replace(/^\s*(?:[-*+]|\d+\.|#{1,6}|>)\s+/gm, '')
   )
   return (
     <div className="mt-2.5 line-clamp-3 border-t border-border pt-2 text-xs leading-snug text-foreground">
@@ -296,7 +299,8 @@ function BotRowPlaceLabel({ place }: { place: BotRowPlace }): React.JSX.Element 
 const PLACE_SLOT = '\u0000'
 
 function ReplyingAtLabel({ place }: { place: BotRowPlace }): React.JSX.Element {
-  const [before = '', after = ''] = botRowReplyingAt(translate, place, PLACE_SLOT).split(PLACE_SLOT)
+  const t = useTranslate()
+  const [before = '', after = ''] = botRowReplyingAt(t, place, PLACE_SLOT).split(PLACE_SLOT)
   return (
     <>
       {before}
@@ -306,6 +310,8 @@ function ReplyingAtLabel({ place }: { place: BotRowPlace }): React.JSX.Element {
   )
 }
 
-function lineText(line: BotRowLine, now: number): string {
-  return botRowLineText(line, translate, (by) => formatWaitTime(by, now))
+// Takes the render's t, not module translate(): React Compiler memoizes this call on its arguments,
+// so a module translate() here kept the previous language after a switch.
+function lineText(t: Translate, line: BotRowLine, now: number): string {
+  return botRowLineText(line, t, (by) => formatWaitTime(by, now))
 }
