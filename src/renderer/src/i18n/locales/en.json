@@ -27431,6 +27431,8 @@
         "describe": "Picture description",
         "button": "Generate",
         "generating": "Generating…",
+        "closeAnytime": "Close anytime",
+        "failedFor": "Couldn't generate a picture for {{name}}.",
         "cancel": "Cancel",
         "cancelRunning": "Cancel generating",
         "edit": "Edit description",

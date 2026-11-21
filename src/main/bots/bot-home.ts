@@ -168,6 +168,9 @@ export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
           name: bot.name,
           agent: bot.agent,
           avatar: bot.avatar,
+          // Kept here as well as in the record, which saves on a debounce: after a crash the higher of
+          // the two is still at least every revision a write acknowledged.
+          ...(bot.avatarRevision ? { avatarRevision: bot.avatarRevision } : {}),
           members: bot.members,
           ...(bot.skillProjects?.length ? { skillProjects: bot.skillProjects } : {})
         },
@@ -210,6 +213,26 @@ export async function writeBotHome(
     if ((await fs.readText(path)) !== file.text) {
       await fs.writeText(path, file.text)
     }
+  }
+}
+
+/** The picture revision bot.json last recorded; 0 when it has none or can't be read. */
+export async function botHomeAvatarRevision(
+  fs: BotHomeFilesystem,
+  folder: string
+): Promise<number> {
+  const text = await fs.readText(join(folder, 'bot.json'))
+  try {
+    const record: unknown = text === null ? null : JSON.parse(text)
+    const revision =
+      typeof record === 'object' && record !== null && 'avatarRevision' in record
+        ? record.avatarRevision
+        : undefined
+    return typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0
+      ? revision
+      : 0
+  } catch {
+    return 0
   }
 }
 

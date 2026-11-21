@@ -45,6 +45,7 @@ export const BOT_ERROR_CODES = [
   'bot_not_found',
   'bot_folder_not_owned',
   'bot_avatar_invalid',
+  'bot_avatar_changed',
   BOT_OFFER_ALREADY_ANSWERED
 ] as const
 
@@ -198,7 +199,10 @@ export const BotAvatarUpload = z.object({
   png: z
     .string()
     .min(1)
-    .max(Math.ceil(MAX_BOT_AVATAR_BYTES / 3) * 4)
+    .max(Math.ceil(MAX_BOT_AVATAR_BYTES / 3) * 4),
+  /** Refused with bot_avatar_changed unless the bot's `avatarRevision` (absent: 0) is still this, checked in
+   *  the same step as the write. Sent only to a host with bots.avatar-revision.v1; an older one drops it. */
+  expectedAvatarRevision: z.number().int().nonnegative().optional()
 })
 
 export const BotAvatarRead = z.object({ botId: requiredString('Missing bot id') })

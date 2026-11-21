@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/lib/bot-catalog', () => ({
   uploadBotAvatar: mocks.uploadBotAvatar,
   readBotAvatarPng: mocks.readBotAvatarPng,
+  readHostBots: () => [],
   openBotChat: mocks.openBotChat
 }))
 vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => ({

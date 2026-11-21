@@ -21,7 +21,13 @@ import {
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { proposalSoul } from '../../shared/bots/bot-proposal'
 import { botOfferCreation } from './bot-offer-creation'
-import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
+import {
+  assertBotOwnsHome,
+  type BotHomeFilesystem,
+  botHomeAvatarRevision,
+  botHomeFolder,
+  writeBotHome
+} from './bot-home'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
 import { makeBotsHome } from './bot-home-workspace'
@@ -213,6 +219,14 @@ export class BotController {
         assertBotNameFree(store.getBots(), updates.name, botId)
       }
       const updated: Bot = { ...applyBotUpdates(bot, updates), updatedAt: Date.now() }
+      // Any picture or color choice counts, even one that sets the same value again. Every other edit
+      // keeps the highest revision seen, so rewriting bot.json from a record that lost it can't lower it.
+      const revision = await this.avatarRevision(bot, botHomeFolder(bot, this.deps.botsRoot()))
+      if (updates.avatar !== undefined || updates.avatarColor !== undefined) {
+        updated.avatarRevision = revision + 1
+      } else if (revision > 0) {
+        updated.avatarRevision = revision
+      }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
       await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
       if (next.name !== bot.name) {
@@ -227,8 +241,10 @@ export class BotController {
     })
   }
 
-  /** A square PNG of at least Slack's 512 px becomes the bot's picture, kept in its home. */
-  setAvatarImage(botId: string, png: Uint8Array): Promise<Bot> {
+  /** A square PNG of at least Slack's 512 px becomes the bot's picture, kept in its home. With
+   *  `expectedAvatarRevision`, refused (bot_avatar_changed, nothing written) once any other picture or
+   *  color write has landed since that revision. */
+  setAvatarImage(botId: string, png: Uint8Array, expectedAvatarRevision?: number): Promise<Bot> {
     return this.serialize(async () => {
       const store = this.requireStore()
       const bot = this.requireBot(store, botId)
@@ -237,8 +253,13 @@ export class BotController {
       }
       const folderPath = botHomeFolder(bot, this.deps.botsRoot())
       await assertBotOwnsHome(this.deps.filesystem, folderPath, botId)
+      const revision = await this.avatarRevision(bot, folderPath)
+      if (expectedAvatarRevision !== undefined && expectedAvatarRevision !== revision) {
+        throw new Error('bot_avatar_changed')
+      }
       const version = createHash('sha256').update(png).digest('hex').slice(0, 16)
-      const next: Bot = { ...bot, avatar: uploadAvatar(version), updatedAt: Date.now() }
+      const avatar = uploadAvatar(version)
+      const next: Bot = { ...bot, avatar, avatarRevision: revision + 1, updatedAt: Date.now() }
       await this.deps.filesystem.writeBytes(join(folderPath, BOT_AVATAR_FILE), png)
       await writeBotHome(this.deps.filesystem, folderPath, next)
       store.saveBot(next)
@@ -310,6 +331,15 @@ export class BotController {
       this.deps.notifyBotsWritten(true)
       return { deleted: true }
     })
+  }
+
+  /** The higher of the record's revision and its home's bot.json: the record saves on a debounce, so
+   *  after a crash bot.json can be ahead. Read inside the queue. */
+  private async avatarRevision(bot: Bot, folderPath: string): Promise<number> {
+    return Math.max(
+      bot.avatarRevision ?? 0,
+      await botHomeAvatarRevision(this.deps.filesystem, folderPath)
+    )
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {

@@ -13,6 +13,8 @@ import {
   keepSavedPictureDescription
 } from './generated-avatar-descriptions'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
+import { noteBotPictureChoice } from './bot-picture-ops'
+import { newAvatarDraftKey } from './use-avatar-generation'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
 function firstMascot(chosen: string | undefined): BotPictureValue {
@@ -50,6 +52,9 @@ export type NewBotPicture = {
   /** Saves an upload to the bot just made; the bot as it is afterwards. */
   saveUpload: (bot: Bot) => Promise<Bot>
   reset: () => void
+  /** Names the mascot and color choices in the picture ledger, so a picture still being generated
+   *  doesn't land on top of a newer one. */
+  choiceKey: string
 }
 
 /** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `colors` is
@@ -60,6 +65,7 @@ export function useNewBotPicture(
   initialUpload?: string
 ): NewBotPicture {
   const t = useTranslate()
+  const [choiceKey] = useState(newAvatarDraftKey)
   const [value, setValue] = useState<BotPictureValue>(() =>
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
@@ -82,7 +88,10 @@ export function useNewBotPicture(
   return {
     value,
     custom,
-    onChange: setValue,
+    onChange: (next) => {
+      noteBotPictureChoice(choiceKey)
+      setValue(next)
+    },
     onUpload: (png, after) => {
       setUpload({ png, after })
       setValue({ kind: 'custom' })
@@ -95,7 +104,12 @@ export function useNewBotPicture(
       setValue({ kind: 'custom' })
     },
     color,
-    onColorChange: colors ? setColor : undefined,
+    onColorChange: colors
+      ? (next) => {
+          noteBotPictureChoice(choiceKey)
+          setColor(next)
+        }
+      : undefined,
     src: showingUpload && custom ? custom.src : mascotSrc,
     avatar: mascotAvatar(mascotId),
     avatarColor: showingUpload || !color ? undefined : color,
@@ -118,6 +132,7 @@ export function useNewBotPicture(
       setColor(null)
       setValue(initialUpload ? { kind: 'custom' } : firstMascot(mascot))
       setUpload(initialUpload ? { png: initialUpload, after: -1 } : null)
-    }
+    },
+    choiceKey
   }
 }

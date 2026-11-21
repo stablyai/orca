@@ -46,7 +46,9 @@ const picture: Parameters<typeof BotPanelHeader>[0]['picture'] = {
   upload: () => {},
   undo: () => {},
   color: null,
-  pickColor: () => {}
+  pickColor: () => {},
+  beginIntake: () => () => {},
+  uploads: () => 0
 }
 
 function header(hostId: ExecutionHostId, offline = false): string {

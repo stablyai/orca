@@ -219,7 +219,11 @@ export const BOT_METHODS = [
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision
+      )
     })
   }),
   defineMethod({

@@ -171,6 +171,9 @@ export const BotSchema = z.object({
   avatar: z.string().nullable(),
   /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  /** Bumped by every picture or color write, so a write can require that none landed since it was
+   *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
+  avatarRevision: z.number().int().nonnegative().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
