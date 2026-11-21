@@ -282,7 +282,12 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     const lists = spyOnWorktreeLists()
 
     await expect(refresh(repoPath)).resolves.toBeUndefined()
-    fastForwardCheckedOutLocalBaseAfterCreate(repoPath, 'origin/main', 'refs/remotes/origin/main', {})
+    fastForwardCheckedOutLocalBaseAfterCreate(
+      repoPath,
+      'origin/main',
+      'refs/remotes/origin/main',
+      {}
+    )
 
     await vi.waitFor(() => expect(git(linkedPath, ['rev-parse', 'HEAD'])).toBe(remoteOid))
     expect(await readFile(join(linkedPath, 'version.txt'), 'utf8')).toBe('two\n')

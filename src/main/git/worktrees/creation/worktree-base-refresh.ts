@@ -1,4 +1,3 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
@@ -16,6 +15,11 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import {
+  readGitDirState,
+  readLinkedWorktreeDir,
+  REFTABLE_HEAD_PLACEHOLDER
+} from './git-dir-branch-state'
 import {
   translateWslOutputPath,
   translateWslOutputPaths
@@ -172,7 +176,9 @@ function localBaseBranchGit(
     return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routed(repoPath)))
   }
   const gitPathOf = (repoPath: string, path: string) =>
-    isAbsolute(path) ? translateWslOutputPath(path, repoPath, routed(repoPath)) : join(repoPath, path)
+    isAbsolute(path)
+      ? translateWslOutputPath(path, repoPath, routed(repoPath))
+      : join(repoPath, path)
   const repoGitDirsOf = async (repoPath: string): Promise<RepoGitDirs> => {
     const { stdout } = await gitExecFileAsync(
       ['rev-parse', '--is-bare-repository', '--git-dir', '--git-common-dir'],
@@ -210,18 +216,16 @@ function localBaseBranchGit(
     if (reserved.has(fullRef)) {
       return { reserved: true }
     }
-    const owners = [...heads].filter(
+    const owner = [...heads.entries()].find(
       ([gitDir, head]) => head === `ref: ${fullRef}` && !(dirs.bare && gitDir === dirs.commonDir)
-    )
-    const owner = owners[0]?.[0]
-    const ownerPath =
-      owner === undefined
-        ? undefined
-        : owner === dirs.commonDir
-          ? dirs.isMain
-            ? repoPath
-            : undefined
-          : await readLinkedWorktreePath(owner, repoPath)
+    )?.[0]
+    let ownerPath: string | undefined
+    if (owner === dirs.commonDir) {
+      // Only the main worktree's own path is known without asking Git.
+      ownerPath = dirs.isMain ? repoPath : undefined
+    } else if (owner !== undefined) {
+      ownerPath = await readLinkedWorktreePath(owner, repoPath)
+    }
     // Reftable HEADs, or an owner whose path the files do not give, need Git's own listing.
     if (
       [...heads.values()].includes(REFTABLE_HEAD_PLACEHOLDER) ||
@@ -233,12 +237,10 @@ function localBaseBranchGit(
     return { reserved: false, ...(ownerPath === undefined ? {} : { ownerPath }) }
   }
   const readLinkedWorktreePath = async (gitDir: string, repoPath: string) => {
-    // `gitdir` names the checkout's `.git` file; Git 2.48+ may write it relative to the git dir.
-    const dotGit = (await readOptional(join(gitDir, 'gitdir'))).replace(/\r?\n$/, '')
-    if (!dotGit.endsWith('/.git')) {
+    const path = await readLinkedWorktreeDir(gitDir)
+    if (path === undefined) {
       return undefined
     }
-    const path = dotGit.slice(0, -'/.git'.length)
     return isAbsolute(path)
       ? translateWslOutputPath(path, repoPath, routed(repoPath))
       : join(gitDir, path)
@@ -277,82 +279,12 @@ function localBaseBranchGit(
   }
 }
 
-const REFTABLE_HEAD_PLACEHOLDER = 'ref: refs/heads/.invalid'
-
 type RepoGitDirs = {
   commonDir: string
   /** The repo path's own git dir is the common dir: it is the main worktree or the bare repo. */
   isMain: boolean
   /** The common dir's own HEAD names a branch nothing has checked out. */
   bare: boolean
-}
-
-type GitDirState = {
-  /** Each git dir's HEAD file, keyed by git dir. */
-  heads: ReadonlyMap<string, string>
-  /** Branches a rebase (head-name, --update-refs) or bisect reserves: Git's own in-use rule. */
-  reserved: ReadonlySet<string>
-}
-
-// Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
-async function readGitDirState(commonDir: string): Promise<GitDirState> {
-  // Fail closed: an unreadable common dir must not look like "nothing in use".
-  if (!(await stat(commonDir)).isDirectory()) {
-    throw new Error(`${commonDir} is not a Git directory`)
-  }
-  const gitDirs = [commonDir]
-  try {
-    for (const entry of await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        gitDirs.push(join(commonDir, 'worktrees', entry.name))
-      }
-    }
-  } catch (error) {
-    rethrowUnlessMissing(error)
-  }
-  const heads = new Map<string, string>()
-  const reserved = new Set<string>()
-  await Promise.all(
-    gitDirs.map(async (gitDir) => {
-      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-        readOptional(join(gitDir, 'HEAD')),
-        readOptional(join(gitDir, 'rebase-merge', 'head-name')),
-        readOptional(join(gitDir, 'rebase-apply', 'head-name')),
-        readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
-        readOptional(join(gitDir, 'BISECT_START'))
-      ])
-      heads.set(gitDir, head.trim())
-      for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
-        text.split('\n')
-      )) {
-        if (line.startsWith('refs/heads/')) {
-          reserved.add(line.trim())
-        }
-      }
-      const bisected = bisectStart.trim()
-      if (bisected) {
-        reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
-      }
-    })
-  )
-  return { heads, reserved }
-}
-
-async function readOptional(path: string): Promise<string> {
-  try {
-    return await readFile(path, 'utf8')
-  } catch (error) {
-    rethrowUnlessMissing(error)
-    return ''
-  }
-}
-
-function rethrowUnlessMissing(error: unknown): void {
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
-  if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-    throw error
-  }
 }
 
 function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
