@@ -3,10 +3,34 @@
 
 /** Marks a card so a jump can find it. */
 export const BOT_ITEM_COMMENT_ATTRIBUTE = 'data-bot-item-comment-id'
-/** Set while a card shows its focus ring without focus: `data-flash:` in its classes. */
+/** A card's highlight: `on`, then `fading` as ring and tint ease out (`data-[flash=…]:` in its classes). */
 const BOT_ITEM_COMMENT_FLASH_ATTRIBUTE = 'data-flash'
-const FLASH_MS = 1600
+const FLASH_HOLD_MS = 1200
+/** Matches the card's fading transition. */
+const FLASH_FADE_MS = 600
+/** With reduced motion the highlight holds, then goes with no fade. */
+const FLASH_STILL_MS = 1600
 const flashTimers = new WeakMap<HTMLElement, number>()
+
+function flash(target: HTMLElement, still: boolean): void {
+  const later = (ms: number, run: () => void): void => {
+    window.clearTimeout(flashTimers.get(target))
+    flashTimers.set(target, window.setTimeout(run, ms))
+  }
+  const end = (): void => {
+    target.removeAttribute(BOT_ITEM_COMMENT_FLASH_ATTRIBUTE)
+    flashTimers.delete(target)
+  }
+  target.setAttribute(BOT_ITEM_COMMENT_FLASH_ATTRIBUTE, 'on')
+  if (still) {
+    later(FLASH_STILL_MS, end)
+    return
+  }
+  later(FLASH_HOLD_MS, () => {
+    target.setAttribute(BOT_ITEM_COMMENT_FLASH_ATTRIBUTE, 'fading')
+    later(FLASH_FADE_MS, end)
+  })
+}
 
 export function revealBotItemComment(
   root: ParentNode | null | undefined,
@@ -25,13 +49,5 @@ export function revealBotItemComment(
     target.focus({ preventScroll: true })
     return
   }
-  window.clearTimeout(flashTimers.get(target))
-  target.setAttribute(BOT_ITEM_COMMENT_FLASH_ATTRIBUTE, '')
-  flashTimers.set(
-    target,
-    window.setTimeout(() => {
-      target.removeAttribute(BOT_ITEM_COMMENT_FLASH_ATTRIBUTE)
-      flashTimers.delete(target)
-    }, FLASH_MS)
-  )
+  flash(target, still)
 }

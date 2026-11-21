@@ -199,13 +199,13 @@ function longActivity(uid: number, width: number): ComponentFixture {
 /** A long Activity read back to its top: the question is out of view. */
 export const readBack360 = { ...longActivity(411, 360), interact: readBack }
 export const readBack700 = { ...longActivity(412, 700), interact: readBack }
-/** Clicking "Replying to" scrolls to the question and lights its card; the box keeps focus. */
+/** Clicking "Replying to" scrolls to the question; its card's brief highlight can end before the shot. */
 export const shownQuestion360 = {
   ...longActivity(413, 360),
   interact: async (frame: HTMLElement) => {
     await readBack(frame)
     chip(frame)?.click()
-    await pause(700)
+    await pause(300)
   }
 }
 export const shownQuestion700 = { ...longActivity(414, 700), interact: shownQuestion360.interact }

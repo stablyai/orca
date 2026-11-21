@@ -127,7 +127,9 @@ export function BotItemCommentCard({
         className={cn(
           // A hairline (an inset ring, so its size and padding hold) and, in dark, the muted surface: a
           // tint alone lost the card's edge on the page.
-          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 data-flash:ring-2 data-flash:ring-ring/50 dark:bg-muted',
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 dark:bg-muted',
+          // Shown from "Replying to": a full ring and tint, easing out as it ends.
+          'data-[flash=on]:bg-foreground/8 data-[flash=on]:ring-2 data-[flash=on]:ring-ring data-[flash=fading]:transition-[box-shadow,background-color] data-[flash=fading]:duration-600 dark:data-[flash=on]:bg-foreground/8',
           // A question's chips end the card: more room under them.
           shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}
