@@ -183,6 +183,12 @@ export type AcpDialect = {
   modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
   /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
   familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
+  /** A provider's bounded historical projection; live tool results remain unchanged. */
+  historyProjection?(method: string, params: unknown): unknown
+  /** Legacy replay can place the first reply before its opening user message. */
+  historyStartsWithAssistant?: true
+  /** Session model IDs preserve variants that the configuration select omits. */
+  preferSessionModels?: true
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */

@@ -78,6 +78,7 @@ function resumableStateFactoryFor(
     case 'antigravity':
       return (messages) => createAntigravitySessionResumeState(candidate.file, messages)
     case 'devin':
+    case 'trae':
     case 'grok':
     case 'hermes':
     case 'jcode':

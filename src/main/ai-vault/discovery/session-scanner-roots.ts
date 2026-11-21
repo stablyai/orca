@@ -14,6 +14,7 @@ export const AGENT_SESSION_HOME_SEGMENTS = {
     ['.codex', 'sessions']
   ],
   grok: [['.grok', 'sessions']],
+  trae: [['.trae', 'cli', 'sessions']],
   omp: [['.omp', 'agent', 'sessions']]
 } as const satisfies Record<string, readonly (readonly string[])[]>
 

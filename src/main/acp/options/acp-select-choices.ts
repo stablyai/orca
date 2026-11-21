@@ -10,6 +10,20 @@ import { isAgentSessionInteractionMode } from '../../../shared/agent-session/opt
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
+export function acpSelectOption(
+  options: readonly SessionConfigOption[],
+  category: string,
+  preferSessionModels = false
+): SelectOption | null {
+  if (category === 'model' && preferSessionModels) {
+    return null
+  }
+  const option = options.find(
+    (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+  )
+  return option?.type === 'select' ? option : null
+}
+
 export function acpSelectChoices(option: SelectOption): SessionConfigSelectOption[] {
   const choices: SessionConfigSelectOption[] = []
   for (const entry of option.options) {

@@ -105,7 +105,7 @@ export async function acquireAcpStructuredSession(input: {
       clientInfo: acpClientInfo(spec, launch.version ?? null),
       // Only a chat can show a URL request's card, so other connections never advertise it.
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
-      retryBusyPrompts: spec.agent === 'omp',
+      retryBusyPrompts: spec.agent === 'omp' || spec.agent === 'trae',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
         if (!childState.isAcpReadySession(session) || !session.turns?.acceptsRequests) {
@@ -165,10 +165,8 @@ export async function acquireAcpStructuredSession(input: {
     whenLane(() => {
       if (slot.lane) {
         if (slot.reattaching) {
-          slot.history?.keep(
-            'session/update',
-            event.kind === 'known' ? event.notification : event.raw
-          )
+          const notification = event.kind === 'known' ? event.notification : event.raw
+          slot.history?.keep('session/update', notification)
         }
         routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
         if (
@@ -230,12 +228,15 @@ export async function acquireAcpStructuredSession(input: {
     // What the agent replays is kept for catch-up, never written as it arrives.
     slot.history =
       attaching && spec.historyCatchUp
-        ? new AcpLoadHistory(providerSessionId, () =>
-            logger.warn(`${agentName} chat did not catch up on turns made outside it`, {
-              scope: 'acp-history-catch-up',
-              sessionId,
-              reason: 'replay-too-large'
-            })
+        ? new AcpLoadHistory(
+            providerSessionId,
+            () =>
+              logger.warn(`${agentName} chat did not catch up on turns made outside it`, {
+                scope: 'acp-history-catch-up',
+                sessionId,
+                reason: 'replay-too-large'
+              }),
+            spec.dialect.historyProjection
           )
         : null
     if (attaching) {
@@ -310,8 +311,6 @@ export async function acquireAcpStructuredSession(input: {
   }
   session = child
   childState.assertAcpStartingSession(child, input.abandoned)
-  return {
-    acquisition: { process, acquisitionGeneration: generation },
-    session: child
-  }
+  const acquisition = { process, acquisitionGeneration: generation }
+  return { acquisition, session: child }
 }

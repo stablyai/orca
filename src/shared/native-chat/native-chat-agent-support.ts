@@ -7,6 +7,7 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
   'openclaude',
   'codex',
+  'trae',
   'grok',
   'omp',
   'opencode',
@@ -50,6 +51,9 @@ export function nativeChatStopSendsSecondEscape(agent: string | null | undefined
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
+  if (agent === 'trae' || agent === 'traecli') {
+    return 'codex'
+  }
   // OpenClaude writes Claude transcripts but retains distinct launch/UI identity.
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'

@@ -4,7 +4,7 @@ import type { AcpPeerOptions } from '../transport/acp-peer-limits'
 import type { AcpPermissionHandler } from './acp-permission-requests'
 
 export type AcpSessionRuntimeOptions = {
-  /** OMP's typed busy refusal confirms this prompt never ran. */
+  /** The agent's explicit busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
   clientInfo?: InitializeRequest['clientInfo']
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>

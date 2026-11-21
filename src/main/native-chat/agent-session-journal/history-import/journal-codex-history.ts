@@ -8,6 +8,7 @@ import {
 import { codexTurnLifecycleIdentity } from '../../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import {
   createCodexHistoryPlacement,
@@ -41,7 +42,9 @@ type Fact = {
 export function createCodexHistoryCollector(
   sessionId: string,
   limits: JournalPayloadLimits,
-  maxBytes: number
+  maxBytes: number,
+  project: (body: AgentJournalItemBody) => AgentJournalItemBody = (body) =>
+    boundLegacyImportBody(body, limits)
 ) {
   const window = createNewestItemWindow(maxBytes)
   const facts = new Map<string, Fact>()
@@ -262,10 +265,7 @@ export function createCodexHistoryCollector(
           sessionId,
           recordId: descriptor.recordId
         },
-        body: boundLegacyImportBody(
-          withJournalReasoningLifecycle(body, endedJournalReasoning()),
-          limits
-        ),
+        body: project(withJournalReasoningLifecycle(body, endedJournalReasoning())),
         ownerFence: 0,
         ...(Number.isFinite(time) ? { observedAt: time } : {}),
         turnScope: turnId

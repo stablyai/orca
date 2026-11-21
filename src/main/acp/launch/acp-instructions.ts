@@ -24,6 +24,9 @@ export type AcpInstructionsLaunch = {
   env?: Record<string, string>
   /** `_meta` on `session/new`, and on a reopen only with `sessionMetaOnReopen`. */
   sessionMeta?: Record<string, unknown>
+  /** Top-level session extensions, applied before the host-owned cwd and session identity. */
+  sessionParameters?: Readonly<Record<string, unknown>>
+  sessionParametersOnReopen?: true
   /** The agent keeps none across its own restarts, so every reopen sends `sessionMeta` again. */
   sessionMetaOnReopen?: true
   /** Whether the agent's `initialize` says it takes `sessionMeta`; a session it doesn't never opens. */

@@ -28,7 +28,7 @@ import type { AcpStructuredLane } from '../../journal/acp-structured-lane'
 import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-resolution'
 import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
-import { acpSessionStartMeta } from '../../launch/acp-session-meta'
+import { acpSessionInstructionMeta, acpSessionStartMeta } from '../../launch/acp-session-meta'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
@@ -73,16 +73,7 @@ export async function initializeAcpStructuredSession(
   const initialized = await connection.initialize()
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
-  const sessionMetaRefused = Boolean(
-    launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)
-  )
-  if (sessionMetaRefused && !launch.sessionMetaOptional) {
-    const version = initialized.agentInfo?.version
-    throw new Error(
-      `${agentName}${version ? ` ${version}` : ''} cannot take this chat's standing instructions, so it did not start`
-    )
-  }
-  const sessionMeta = sessionMetaRefused ? undefined : launch.sessionMeta
+  const sessionMeta = acpSessionInstructionMeta(launch, initialized, agentName)
   options.adoptInitialize(initialized)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
@@ -126,6 +117,7 @@ export async function initializeAcpStructuredSession(
           liveLane = attaching
           const opened = await connection.start(
             {
+              ...(launch.sessionParametersOnReopen ? launch.sessionParameters : {}),
               cwd,
               mcpServers: launch.mcpServers ?? [],
               sessionId: resume.sessionId,
@@ -193,6 +185,7 @@ export async function initializeAcpStructuredSession(
     try {
       started = await connection.start(
         {
+          ...launch.sessionParameters,
           cwd: launch.cwd,
           mcpServers: launch.mcpServers ?? [],
           ...(sessionMeta ? { _meta: sessionMeta } : {}),

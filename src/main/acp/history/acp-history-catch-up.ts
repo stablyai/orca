@@ -48,7 +48,12 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
     readView: (history) => readAcpHistoryJournal(input, history, candidates),
     prepare: async ({ view, history, check, yieldTurn }) => {
       // Derive source keys once without saved facts, then capture before any saved read or yield.
-      candidates = acpHistoryTurns(input.frames, input.identity, check)
+      candidates = acpHistoryTurns(
+        input.frames,
+        input.identity,
+        check,
+        input.dialect.historyStartsWithAssistant === true
+      )
         .filter((turn): turn is AcpIdentifiedHistoryTurn => turn.turn !== null)
         .map((source) => ({
           source,

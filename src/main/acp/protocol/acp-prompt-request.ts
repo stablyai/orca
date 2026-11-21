@@ -1,15 +1,21 @@
 import { delayUnlessAborted } from '../../../shared/concurrency/abort-aware-delay'
-import { AcpAgentError } from '../transport/acp-errors'
+import { AcpAgentError, acpErrorDataWords } from '../transport/acp-errors'
 import type { PromptResponse } from '../generated/acp-protocol.generated'
 
+const TRAE_PROMPT_BUSY_MESSAGE = 'an ACP prompt is already in progress'
+
 function sessionBusy(error: unknown): boolean {
+  if (!(error instanceof AcpAgentError)) {
+    return false
+  }
   return (
-    error instanceof AcpAgentError &&
-    error.code === -32003 &&
-    typeof error.data === 'object' &&
-    error.data !== null &&
-    'reason' in error.data &&
-    error.data.reason === 'session_busy'
+    (error.code === -32003 &&
+      typeof error.data === 'object' &&
+      error.data !== null &&
+      'reason' in error.data &&
+      error.data.reason === 'session_busy') ||
+    error.message === TRAE_PROMPT_BUSY_MESSAGE ||
+    acpErrorDataWords(error.data) === TRAE_PROMPT_BUSY_MESSAGE
   )
 }
 

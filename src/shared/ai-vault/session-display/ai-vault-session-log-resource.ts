@@ -33,6 +33,7 @@ const logFileResolvers = {
   codebuddy: jsonlLog,
   qoder: jsonlLog,
   codex: jsonlLog,
+  trae: jsonlLog,
   hermes: () => null,
   pi: jsonlLog,
   omp: jsonlLog,

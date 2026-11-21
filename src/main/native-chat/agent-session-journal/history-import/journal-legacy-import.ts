@@ -20,6 +20,7 @@ import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import { createCodexHistoryCollector } from './journal-codex-history'
+import { createTraeHistoryCollector } from '../../../trae/trae-imported-history'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import type { JournalPayloadLimits } from '../item-lifecycle/journal-payload-bounds'
 import type { AgentSessionJournal } from '../journal-store'
@@ -216,7 +217,11 @@ async function decodeReplacementItems(input: {
     replacementItem(message, identity, input.limits)
   const retained =
     input.transcriptAgent === 'codex'
-      ? createCodexHistoryCollector(input.sessionId, input.limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)
+      ? (input.agent === 'trae' ? createTraeHistoryCollector : createCodexHistoryCollector)(
+          input.sessionId,
+          input.limits,
+          MAX_LEGACY_IMPORT_RETAINED_BYTES
+        )
       : createNewestItemWindow(MAX_LEGACY_IMPORT_RETAINED_BYTES)
   let paginated = false
   const pi =

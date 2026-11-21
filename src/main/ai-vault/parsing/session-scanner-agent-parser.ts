@@ -19,6 +19,7 @@ import {
   parseRovoSessionFile
 } from '../scanners/session-scanner-graph-parsers'
 import { parseKimiSessionFile } from '../scanners/kimi/session-scanner-kimi-parser'
+import { parseTraeSessionFile } from '../../trae/trae-session-parser'
 import { parseMuseSessionFile } from '../scanners/muse/session-scanner-muse-parser'
 import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { parseJcodeSessionFile } from '../scanners/jcode/session-scanner-jcode-parser'
@@ -105,6 +106,8 @@ export async function parseAgentSessionFile(
         undefined,
         messages
       )
+    case 'trae':
+      return parseTraeSessionFile(candidate.file, platform, messages)
     case 'gemini':
       return parseGeminiSessionFile(candidate.file, platform, messages, signal)
     case 'antigravity':
