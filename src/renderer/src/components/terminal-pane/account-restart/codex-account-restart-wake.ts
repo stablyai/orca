@@ -115,8 +115,13 @@ export function routeCodexAccountRestartWake(
   const token = context.token
   if (!token) {
     const retained = state.pendingPaneAccountRestarts[session.cacheKey]
-    if (!isCodexAccountRestart(retained) || !isCurrentCodexAccountRestart(state, retained)) {
+    if (!isCodexAccountRestart(retained)) {
       return undefined
+    }
+    if (!isCurrentCodexAccountRestart(state, retained)) {
+      return isCurrentCodexAccountRestart(state, retained, undefined, { allowPendingPairing: true })
+        ? Promise.resolve(null)
+        : undefined
     }
     const retainedToken = codexAccountRestartToken(retained)
     if (

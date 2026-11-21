@@ -4,7 +4,11 @@ import {
   reconcileRetiredCodexNotices
 } from '@/store/terminals/codex-account-restart-continuation'
 import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
-import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import {
+  isRuntimeEnvironmentContinuationPending,
+  resolveContinuedRuntimeEnvironmentRevision
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { CodexAccountRestart } from '../../terminals/terminal-contracts'
 import type { RuntimeStatusStoreSetState, RuntimeStatusStoreState } from './runtime-status-types'
 import { openStatusTransactionFor } from '../../status-transaction/status-transaction'
 import type { HostStatusReplacement } from './host-status-transaction-draft'
@@ -19,6 +23,27 @@ function writtenRuntimeStatus(
     return patch.runtimeStatusByEnvironmentId.get(environmentId)
   }
   return staged?.findLast(([id]) => id === environmentId)?.[1]
+}
+
+function retainedPairingRevision(
+  environmentId: string,
+  request: CodexAccountRestart,
+  previousRevision: number,
+  nextRevision: number
+): number | undefined {
+  if (
+    resolveContinuedRuntimeEnvironmentRevision(environmentId, previousRevision) === nextRevision
+  ) {
+    return nextRevision
+  }
+  // Keep Retry fenced to the old pairing while a managed re-pair is verifying its host key.
+  if (
+    (request.phase === 'failed' || request.phase === 'unresolved') &&
+    isRuntimeEnvironmentContinuationPending(environmentId, previousRevision)
+  ) {
+    return previousRevision
+  }
+  return undefined
 }
 
 function retireChangedRuntimeRequests(
@@ -58,22 +83,18 @@ function retireChangedRuntimeRequests(
     if (!revisionChanged && !runtimeChanged) {
       continue
     }
-    // Why: a re-pair proven to be the same machine keeps the request (and a failed pane's Retry).
-    const sameHostRotation =
-      !runtimeChanged &&
-      nextRevision !== undefined &&
-      expectedRevision !== undefined &&
-      resolveContinuedRuntimeEnvironmentRevision(request.environmentId, expectedRevision) ===
-        nextRevision
-    if (sameHostRotation && request.pairingRevision === undefined) {
+    const keptRevision =
+      !runtimeChanged && nextRevision !== undefined && expectedRevision !== undefined
+        ? retainedPairingRevision(request.environmentId, request, expectedRevision, nextRevision)
+        : undefined
+    if (keptRevision !== undefined && request.pairingRevision === keptRevision) {
       continue
     }
     if (requests === state.pendingPaneAccountRestarts) {
       requests = { ...requests }
     }
-    if (sameHostRotation) {
-      // Re-stamp so later reads compare against the pairing the request now continues on.
-      requests[key] = { ...request, pairingRevision: nextRevision }
+    if (keptRevision !== undefined) {
+      requests[key] = { ...request, pairingRevision: keptRevision }
       continue
     }
     delete requests[key]

@@ -1,4 +1,5 @@
 import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
+import { isRuntimeEnvironmentContinuationPending } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { awaitsCodexRestartAnswer } from '@/components/terminal-pane/account-restart/codex-restart-notice-state'
 import { getResourceExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -81,7 +82,8 @@ export function isCodexAccountRestart(
 export function isCurrentCodexAccountRestart(
   state: CodexRestartPopulationState,
   request: CodexAccountRestart,
-  tabs?: ReadonlyMap<string, CodexRestartTabScope>
+  tabs?: ReadonlyMap<string, CodexRestartTabScope>,
+  { allowPendingPairing = false }: { allowPendingPairing?: boolean } = {}
 ): boolean {
   if (getResourceExecutionHostIdForWorktree(state, request.worktreeId) !== request.hostId) {
     return false
@@ -92,7 +94,11 @@ export function isCurrentCodexAccountRestart(
       environment &&
       'createdAt' in environment &&
       (('pairingRevision' in environment ? environment.pairingRevision : undefined) ??
-        environment.createdAt) !== request.pairingRevision
+        environment.createdAt) !== request.pairingRevision &&
+      !(
+        allowPendingPairing &&
+        isRuntimeEnvironmentContinuationPending(request.environmentId, request.pairingRevision)
+      )
     ) {
       return false
     }
@@ -141,21 +147,23 @@ export function isCurrentCodexAccountRestart(
 export function pruneCodexAccountRestarts(
   state: CodexRestartPopulationState
 ): AppState['pendingPaneAccountRestarts'] {
-  let next = state.pendingPaneAccountRestarts
-  if (!Object.values(next).some(isCodexAccountRestart)) {
-    return next
+  const requests = state.pendingPaneAccountRestarts
+  if (!Object.values(requests).some(isCodexAccountRestart)) {
+    return requests
   }
   const tabs = codexRestartTabIndex(state)
-  for (const [key, request] of Object.entries(next)) {
-    if (!isCodexAccountRestart(request) || isCurrentCodexAccountRestart(state, request, tabs)) {
+  let pruned: typeof requests | undefined
+  for (const [key, request] of Object.entries(requests)) {
+    if (
+      !isCodexAccountRestart(request) ||
+      isCurrentCodexAccountRestart(state, request, tabs, { allowPendingPairing: true })
+    ) {
       continue
     }
-    if (next === state.pendingPaneAccountRestarts) {
-      next = { ...next }
-    }
-    delete next[key]
+    pruned ??= { ...requests }
+    delete pruned[key]
   }
-  return next
+  return pruned ?? requests
 }
 
 export type CodexAccountRestartToken = Pick<
@@ -265,20 +273,16 @@ type CodexRestartTabScope = { createdAt: number; leaves: ReadonlySet<string> }
 export function codexRestartTabIndex(
   state: Pick<CodexRestartPopulationState, 'tabsByWorktree' | 'terminalLayoutsByTabId'>
 ): ReadonlyMap<string, CodexRestartTabScope> {
-  return new Map(
-    Object.entries(state.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
-      tabs.map(
-        (tab) =>
-          [
-            `${worktreeId}\0${tab.id}`,
-            {
-              createdAt: tab.createdAt,
-              leaves: new Set(collectLeafIds(state.terminalLayoutsByTabId[tab.id]?.root))
-            }
-          ] as const
-      )
-    )
-  )
+  const index = new Map<string, CodexRestartTabScope>()
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    for (const tab of tabs) {
+      index.set(`${worktreeId}\0${tab.id}`, {
+        createdAt: tab.createdAt,
+        leaves: new Set(collectLeafIds(state.terminalLayoutsByTabId[tab.id]?.root))
+      })
+    }
+  }
+  return index
 }
 
 export function coveredCodexRestartPtyIds(requests: readonly CodexAccountRestart[]): Set<string> {
