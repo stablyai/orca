@@ -68,3 +68,18 @@ export const narrowFourLinksPeek = listFixture(4, NARROWEST_WIDTH)
 export const narrowTwelveLinksTop = listFixture(12, NARROWEST_WIDTH)
 export const narrowTwelveLinksBottom = listFixture(12, NARROWEST_WIDTH, scrollList('bottom'))
 export const narrowTwelveLinksRevokeFocused = listFixture(12, NARROWEST_WIDTH, focusRevoke)
+
+// Notices make rows taller than the 3.5-row cap; three links still show in full, unscrolled.
+export const narrowThreeLinksWithNotices = defineFixture({
+  width: NARROWEST_WIDTH,
+  render: () => (
+    <RuntimeAccessGrantList
+      className="border-t border-border/40 pt-3"
+      grants={links(3).map((grant) => ({ ...grant, olderPairingMethod: true as const }))}
+      currentGrantId="link-0"
+      isLoading={false}
+      revokingGrantId={null}
+      onRevoke={() => {}}
+    />
+  )
+})

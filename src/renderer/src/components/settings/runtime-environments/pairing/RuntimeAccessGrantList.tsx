@@ -46,7 +46,13 @@ function readScrollEdges(el: HTMLElement, current: ScrollEdges): ScrollEdges {
  * Why a separate component: edge state lives here, so a fade change re-renders only this
  * wrapper; the row elements arrive as the same `children` and React skips them.
  */
-function ActiveLinksScroller({ children }: { children: React.ReactNode }): React.JSX.Element {
+function ActiveLinksScroller({
+  capped,
+  children
+}: {
+  capped: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
   const listRef = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState<ScrollEdges>({ above: false, below: false })
 
@@ -73,7 +79,8 @@ function ActiveLinksScroller({ children }: { children: React.ReactNode }): React
         setEdges((current) => readScrollEdges(el, current))
       }}
       className={cn(
-        'scrollbar-sleek max-h-[13.75rem] scroll-py-4 space-y-2 overflow-y-auto',
+        'space-y-2',
+        capped && 'scrollbar-sleek max-h-[13.75rem] scroll-py-4 overflow-y-auto',
         edges.above &&
           edges.below &&
           '[mask-image:linear-gradient(to_bottom,transparent,black_1rem,black_calc(100%-1rem),transparent)]',
@@ -122,8 +129,9 @@ export function RuntimeAccessGrantList({
           {t('auto.components.settings.RuntimeAccessGrantList.noActiveLinks', 'No active links.')}
         </p>
       ) : (
-        // Why: links pile up over time; past ~3.5 rows the list scrolls under a fixed heading.
-        <ActiveLinksScroller>
+        // Why: links pile up over time; past 3 the list scrolls under a fixed heading. Up to 3
+        // always show in full, even when notices make their rows taller than the cap.
+        <ActiveLinksScroller capped={grants.length > 3}>
           {grants.map((grant) => {
             const isCurrent = currentGrantId === grant.deviceId
             const isRevoking = revokingGrantId === grant.deviceId
