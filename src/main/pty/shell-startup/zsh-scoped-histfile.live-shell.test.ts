@@ -78,6 +78,26 @@ function withHome(files: Record<string, string>, run: (home: string) => Promise<
 describe.skipIf(process.platform === 'win32')(
   'worktree-scoped HISTFILE survives zsh startup',
   () => {
+    itWithZsh(
+      'loads scoped commands after startup replaces the history file',
+      withHome(
+        {
+          '.zshrc': 'HISTFILE="$HOME/global-history"\nHISTSIZE=100\nSAVEHIST=100\n',
+          'global-history': 'echo global_probe\n',
+          'scoped-history': 'echo scoped_probe\n'
+        },
+        async (home) => {
+          const { env } = launchPane(home, join(home, 'scoped-history'))
+          const { values } = await runZshPty({
+            env,
+            commands: ['SCOPED_COMMAND=$(builtin fc -ln 1 | command grep "^echo scoped_probe$")'],
+            report: ['SCOPED_COMMAND']
+          })
+
+          expect(values.SCOPED_COMMAND).toBe('echo scoped_probe')
+        }
+      )
+    )
     itWithClobber(
       'keeps the injected path that the system zshrc would otherwise clobber',
       withHome(USER_FILES, async (home) => {
