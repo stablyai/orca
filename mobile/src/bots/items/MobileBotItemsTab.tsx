@@ -17,6 +17,7 @@ import {
 } from '../../../../src/shared/bots/bot-item-groups'
 import { mergeBotItemsByUid } from '../../../../src/shared/bots/bot-item-merge'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import { botItemWalkOf, type BotItemWalk } from '../../../../src/shared/bots/bot-item-walk'
 import { botItemGroupName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   MobileLoadErrorState,
@@ -79,7 +80,8 @@ export function MobileBotItemsTab({
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
-  onOpen: (item: BotItem) => void
+  /** `walk`: the list as it shows now, which the item page steps through. */
+  onOpen: (item: BotItem, walk: BotItemWalk) => void
   setSheet: (sheet: BotItemSheet) => void
   /** Automations and Up next, below the groups as on the desktop. */
   after: ReactNode
@@ -203,7 +205,9 @@ export function MobileBotItemsTab({
         checked={selecting ? selected.has(item.uid) : null}
         now={now}
         disabled={disabled}
-        onPress={() => (selecting ? toggle(item) : onOpen(item))}
+        onPress={() =>
+          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal))
+        }
         onLongPress={() => (selecting ? toggle(item) : setSheet({ kind: 'row', item }))}
       />
     )
@@ -272,7 +276,7 @@ function ItemGroup({
   id: BotItemGroupId
   items: BotItem[]
   total: number
-  onMoreClosed: (() => Promise<void>) | null
+  onMoreClosed: (() => Promise<unknown>) | null
   seenEventId: string
   renderItem: (item: BotItem) => ReactNode
   onCancelAll: (() => void) | null

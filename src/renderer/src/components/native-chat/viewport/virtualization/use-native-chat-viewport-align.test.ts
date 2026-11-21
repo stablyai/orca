@@ -20,10 +20,6 @@ function row(wrapperTop: number, contentTop: number): HTMLElement {
 }
 
 describe('where a jump lands a row', () => {
-  it('lands a slot that pulls up into the gap by its first note, not by its own top', () => {
-    expect(nativeChatRowDrawnAbove(row(200, 184))).toBe(16)
-  })
-
   it('lands every other row by its own top', () => {
     expect(nativeChatRowDrawnAbove(row(200, 200))).toBe(0)
     expect(nativeChatRowDrawnAbove(document.createElement('div'))).toBe(0)

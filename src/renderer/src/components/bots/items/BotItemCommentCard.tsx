@@ -1,6 +1,8 @@
 // A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
 // the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
 // its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
+// While the item waits on it, the asking comment stands out: a Needs you tag by its time and its
+// question ruled off from the body. Answered, it reads as any other comment.
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -29,6 +31,20 @@ import {
 } from './use-bot-item-question-steps'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
+
+/** The asking comment's question, ruled off across the card's full width, its words still on the body's
+ *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. */
+const QUESTION_RULE = '-ml-9 -mr-2 mt-2.5 border-t border-border pl-9 pr-2 pt-2.5'
+
+function NeedsYouTag(): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-agent-question/12 px-2 py-px text-2xs font-semibold leading-4 text-agent-question-text">
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-agent-question" />
+      {t('bots.items.status.needsYou', 'Needs you')}
+    </span>
+  )
+}
 
 function Avatar({
   bot,
@@ -109,13 +125,16 @@ export function BotItemCommentCard({
         className={cn(
           'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
           // A question's chips end the card: more room under them.
-          shape.decisions.length > 0 ? 'pb-3.5' : 'pb-2'
+          shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}
       >
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
-          <b className="shrink-0 text-[13px] font-medium text-foreground">{name}</b>
-          <span className="ml-auto shrink-0 text-2xs tabular-nums">{format.format(event.at)}</span>
+          <b className="min-w-0 truncate text-[13px] font-medium text-foreground">{name}</b>
+          {waiting ? <NeedsYouTag /> : null}
+          <span className={cn('shrink-0 text-2xs tabular-nums', !waiting && 'ml-auto')}>
+            {format.format(event.at)}
+          </span>
         </div>
         {replyTo ? (
           <button
@@ -163,6 +182,8 @@ export function BotItemCommentCard({
               answers={entry.answers}
               byOrder={entry.byOrder}
               actions={quickReplies}
+              // Ruled off only below something: a question with no body stays under the name.
+              className={waiting && shape.body.trim() ? QUESTION_RULE : undefined}
             />
           ) : null}
           {failed ? (

@@ -29,21 +29,6 @@ export type MobileWaitingAgentMailActionsValue = {
 export const MobileWaitingAgentMailContext =
   createContext<MobileWaitingAgentMailActionsValue | null>(null)
 
-/** Gives the transcript's waiting agent mail the chat's queue actions. */
-export function MobileWaitingAgentMail({
-  value,
-  children
-}: {
-  value: MobileWaitingAgentMailActionsValue | undefined
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <MobileWaitingAgentMailContext.Provider value={value ?? null}>
-      {children}
-    </MobileWaitingAgentMailContext.Provider>
-  )
-}
-
 /** Steer (Send while idle), Edit and Delete on a waiting agent message, as its queued card offered. */
 export function MobileWaitingAgentMailActions({
   queuedMessageId

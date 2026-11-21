@@ -23472,5 +23472,8 @@
     "dontSend": "不要傳送",
     "sending": "正在傳送…",
     "sendReport": "傳送報告"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "這台電腦"
   }
 }

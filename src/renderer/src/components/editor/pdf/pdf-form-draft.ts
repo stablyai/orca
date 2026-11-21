@@ -88,6 +88,11 @@ export function attachPdfFormDraft({
       }
       unserialized ??= captureViewEditGeneration(fileId)
       held ||= holdEditorBytesEdits(fileId, view)
+      if (held) {
+        // Why: a range read that fails after this edit would destroy the document and its values;
+        // reading the whole file now leaves save and later pages nothing left to fetch.
+        void recordBaseline().catch(() => {})
+      }
     }
   })
 

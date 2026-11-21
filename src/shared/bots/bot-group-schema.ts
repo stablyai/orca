@@ -75,6 +75,8 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
+  handedOff: z.array(z.string()).optional(),
   frozenItems: z
     .array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem))
     .optional()
@@ -108,6 +110,12 @@ export const BotGroupMessageSchema = z.object({
     .optional(),
   /** The member whose reply this follow-up turn reads, on the asker's own mail turn. */
   answeredBy: z.object({ id: z.string(), name: z.string() }).optional(),
+  /** On a person's post: the turns its members' `@Name` replies have woken so far. */
+  handoffs: z.number().int().nonnegative().optional(),
+  /** Woken by an `@Name` in the requester's reply; counts toward its post's hand-off limit. */
+  mentioned: z.literal(true).optional(),
+  /** The quiet line held where the post's hand-offs reached this limit; it starts no turn. */
+  pausedAfter: z.number().int().positive().optional(),
   turns: z.array(BotGroupTurnSchema)
 })
 

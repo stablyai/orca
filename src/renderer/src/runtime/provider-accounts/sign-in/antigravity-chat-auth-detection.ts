@@ -22,6 +22,7 @@ type Entry = {
 
 // Surfaces that mount together (strip, chip, notices) share one read.
 const FRESH_MS = 5_000
+const UNOBSERVED_KEEP_MS = 10 * 60_000
 
 const entries = new Map<string, Entry>()
 const listeners = new Set<() => void>()
@@ -34,6 +35,17 @@ const hostKey = (owner: RuntimeClientTarget): string =>
 function entryFor(owner: RuntimeClientTarget): Entry {
   let entry = entries.get(hostKey(owner))
   if (!entry) {
+    // Why: hosts nothing observes and nothing read for a while must not stay for the renderer's life.
+    for (const [key, held] of entries) {
+      if (
+        held.observers === 0 &&
+        held.fetchedAt > 0 &&
+        !held.inFlight &&
+        Date.now() - held.fetchedAt > UNOBSERVED_KEEP_MS
+      ) {
+        entries.delete(key)
+      }
+    }
     entry = {
       owner,
       detection: null,

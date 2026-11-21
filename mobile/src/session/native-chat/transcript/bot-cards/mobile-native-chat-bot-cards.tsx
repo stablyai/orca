@@ -18,6 +18,7 @@ import { MobileBotMemoryUpdatedRow } from './MobileBotMemoryUpdatedRow'
 import { MobileBotRequestCard } from './MobileBotRequestCard'
 import { MobileBotToolAddedCard } from './MobileBotToolAddedCard'
 import { MobileBotWebhookCard } from './MobileBotWebhookCard'
+import { MobileGoogleSetupCard } from './MobileGoogleSetupCard'
 
 export type MobileBotCardContext = {
   /** The transcript row carrying the card: its fold and its offer answer key. */
@@ -45,7 +46,9 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
   botRequest: (card, { cardId, fallback, fontScale }) => (
     <MobileBotRequestCard card={card} cardId={cardId} fallback={fallback} fontScale={fontScale} />
   ),
-  googleSetup: 'phoneFallback',
+  googleSetup: (card, { fallback, fontScale }) => (
+    <MobileGoogleSetupCard card={card} fallback={fallback} fontScale={fontScale} />
+  ),
   composioSetup: 'phoneFallback',
   createOffer: (offer, { cardId, fallback, fontScale }) => (
     <MobileBotCreateOfferCard

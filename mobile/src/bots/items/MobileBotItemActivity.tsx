@@ -1,5 +1,6 @@
 // An item's Activity on the phone, in the desktop's order and words: comments as cards (an agent's
-// question with its question footer and quick replies), and one muted line per other event.
+// question with its question footer and quick replies), and one muted line per other event; comments
+// sent from the box that the host's read doesn't show yet come last, as sent.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
@@ -24,37 +25,24 @@ import {
   type BotItem,
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
 import {
   mobileBotItemCommentWords,
-  MobileBotItemCommentAttachments,
   type MobileBotItemAttachmentSource
 } from './MobileBotItemCommentAttachments'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
-import {
-  MobileBotItemQuestionLines,
-  type MobileBotItemQuickReplyActions
-} from './MobileBotItemQuestionLines'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
+import { botItemEventTime, MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 
 const ICON = 13
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
-}
-
-function timeOf(at: number): string {
-  return new Intl.DateTimeFormat(getUiIntlLocale(), { hour: 'numeric', minute: '2-digit' }).format(
-    at
-  )
 }
 
 function fieldName(field: string, t: Translate): string {
@@ -251,82 +239,31 @@ function EntryIcon({ entry }: { entry: LineEntry }) {
   }
 }
 
-function CommentCard({
-  item,
-  entry,
-  quickReplies,
-  busy,
-  attachments
-}: {
-  item: BotItem
-  entry: Extract<BotItemActivityEntry, { kind: 'comment' }>
-  quickReplies: MobileBotItemQuickReplyActions
-  busy: boolean
-  attachments: MobileBotItemAttachmentSource
-}) {
-  const t = useMobileTranslation()
-  const { event, replyTo, waiting } = entry
-  const mine = event.actor.kind === 'owner'
-  const shape = botItemQuestionShape(event.data)
-  const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
-  return (
-    <View
-      style={[
-        styles.card,
-        mine && styles.cardMine,
-        shape.decisions.length > 0 && styles.cardAsking
-      ]}
-    >
-      <View style={styles.cardHead}>
-        <Text style={styles.author}>{botItemActorName(event, item, t)}</Text>
-        <View style={styles.spacer} />
-        <Text style={styles.meta}>{timeOf(event.at)}</Text>
-      </View>
-      {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
-      <MobileBotItemCommentAttachments data={event.data} {...attachments}>
-        {text.trim() ? <MobileMarkdown content={text} /> : null}
-      </MobileBotItemCommentAttachments>
-      {shape.decisions.length > 0 ? (
-        <MobileBotItemQuestionLines
-          shape={shape}
-          waiting={waiting}
-          answers={entry.answers}
-          actions={quickReplies}
-          busy={busy}
-        />
-      ) : null}
-    </View>
-  )
-}
-
 export function MobileBotItemActivity({
   item,
   events,
-  quickReplies,
-  busy = false,
-  attachments
+  attachments,
+  pending
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
-  /** A quick reply is on its way or just landed: the quick replies wait for its outcome. */
-  busy?: boolean
-  /** What the waiting question's quick replies do. */
-  quickReplies: MobileBotItemQuickReplyActions
+  /** Comments sent from the box that the item's read doesn't show yet: last, as sent. */
+  pending: Pick<BotItemPendingComments, 'shown' | 'retry' | 'discard'>
   attachments: MobileBotItemAttachmentSource
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const entries = botItemActivity(item, events)
+  // A reply already sent answers the question, before the host's read says so.
+  const answered = pending.shown.some(({ failed }) => !failed)
   return (
     <View>
       {entries.map((entry) =>
         entry.kind === 'comment' ? (
-          <CommentCard
+          <MobileBotItemCommentCard
             key={entry.key}
             item={item}
-            entry={entry}
-            quickReplies={quickReplies}
-            busy={busy}
+            entry={answered ? { ...entry, waiting: false } : entry}
             attachments={attachments}
           />
         ) : (
@@ -341,11 +278,27 @@ export function MobileBotItemActivity({
                 <EventLine event={entry.event} item={item} />
               )}
             </View>
-            <Text style={styles.meta}>{timeOf(entry.at)}</Text>
+            <Text style={styles.meta}>{botItemEventTime(entry.at)}</Text>
           </View>
         )
       )}
-      {entries.some((entry) => entry.kind === 'comment') ? null : (
+      {pending.shown.map(({ event, failed, mayHaveArrived }) => (
+        <MobileBotItemCommentCard
+          key={event.id}
+          item={item}
+          entry={{ event, waiting: false }}
+          attachments={attachments}
+          failed={
+            failed
+              ? {
+                  retry: mayHaveArrived ? null : () => pending.retry(event.id),
+                  discard: () => pending.discard(event.id)
+                }
+              : undefined
+          }
+        />
+      ))}
+      {entries.some((entry) => entry.kind === 'comment') || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}
         </Text>
@@ -383,26 +336,5 @@ const styles = themedStyleSheet(() => ({
     textDecorationLine: 'line-through'
   },
   added: { fontSize: 13, lineHeight: 18, color: colors.textPrimary },
-  card: {
-    marginVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    borderRadius: radii.surface,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.sheetGroup
-  },
-  cardMine: { backgroundColor: colors.bgRaised },
-  // A question's chips end the card: more room under them.
-  cardAsking: { paddingBottom: spacing.lg + spacing.xxs },
-  cardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  author: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  spacer: { flex: 1 }
+  meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))

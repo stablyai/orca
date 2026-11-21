@@ -49,6 +49,7 @@ import {
 } from './MobileBotPanelHeader'
 import { useBotItemMoves } from './items/use-bot-item-moves'
 import { usePhoneBotItems } from './items/use-phone-bot-items'
+import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
 
 type PanelPage = 'settings' | `item:${string}`
@@ -120,6 +121,7 @@ export function MobileBotPanel(props: {
     showing: visible,
     reads: props.routeBot.itemReads
   })
+  const walk = usePhoneBotItemWalk({ items, pager, showToast, opened: props.open })
   const allItems = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
@@ -229,6 +231,7 @@ export function MobileBotPanel(props: {
           client={props.client}
           bot={bot}
           rows={props.routeBot.activity.automations ?? null}
+          waits={props.routeBot.activity.waits}
           showToast={showToast}
           onNewAutomation={props.onNewAutomation}
           online={props.online}
@@ -267,7 +270,7 @@ export function MobileBotPanel(props: {
           hostName={props.hostName}
           selected={selected}
           onSelected={setSelected}
-          onOpen={(item) => pager.open(`item:${item.uid}`)}
+          onOpen={walk.open}
           setSheet={setSheet}
           after={after}
           asks={asks}
@@ -339,6 +342,7 @@ export function MobileBotPanel(props: {
   )
 
   const page = pager.page
+  const shownItem = page?.startsWith('item:') ? walk.shown(page.slice('item:'.length)) : null
   const pageNode =
     page === 'settings' ? (
       <View style={styles.page}>
@@ -354,6 +358,7 @@ export function MobileBotPanel(props: {
             online={props.online}
             hostName={props.hostName}
             accessRequests={props.accessRequests}
+            onAskInChat={props.onStartSuggestion}
             lookAround={
               lookAroundSupported(bot.agent)
                 ? { onLookNow: upNext.lookNow, busy: upNext.busy }
@@ -362,11 +367,13 @@ export function MobileBotPanel(props: {
           />
         </ScrollView>
       </View>
-    ) : page?.startsWith('item:') ? (
+    ) : shownItem ? (
       <MobileBotItemPage
+        key={shownItem.uid}
+        {...shownItem}
         client={props.client}
         bot={bot}
-        uid={page.slice('item:'.length)}
+        showToast={showToast}
         reads={props.routeBot.itemReads}
         online={props.online}
         hostName={props.hostName}
@@ -379,7 +386,6 @@ export function MobileBotPanel(props: {
       />
     ) : null
 
-  const onItemPage = page?.startsWith('item:') === true
   return (
     <BottomDrawerModalHost>
       <BottomDrawer
@@ -392,7 +398,7 @@ export function MobileBotPanel(props: {
         <View style={styles.root}>
           <OptionPager pager={pager} main={main} page={pageNode} fill />
           {/* The sheet already sits spacing.lg above the home indicator; the toast lands there too. */}
-          <TransientToast message={message} bottomInset={onItemPage ? boxHeight : -spacing.lg} />
+          <TransientToast message={message} bottomInset={shownItem ? boxHeight : -spacing.lg} />
         </View>
       </BottomDrawer>
       <MobileBotItemSheets
@@ -400,9 +406,7 @@ export function MobileBotPanel(props: {
         setSheet={setSheet}
         online={props.online}
         hostName={props.hostName}
-        onSelect={
-          tab === 'items' && !onItemPage ? (item) => setSelected(new Set([item.uid])) : null
-        }
+        onSelect={tab === 'items' && !shownItem ? (item) => setSelected(new Set([item.uid])) : null}
         onOpenChat={props.onOpenItemChat}
         move={async (moved, to, reason) => clearOnWrite(await moves.move(moved, to, reason))}
         snooze={async (snoozed, until) => clearOnWrite(await moves.snooze(snoozed, until))}

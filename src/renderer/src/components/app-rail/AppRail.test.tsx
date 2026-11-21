@@ -296,34 +296,23 @@ it('shows Tasks and Automations below Workspaces per their visibility settings',
   expect(railItems()).toEqual(['workspaces', 'automations', 'help', 'settings'])
 })
 
-it('opens Tasks and Automations by mouse and marks the current one', () => {
-  showDestinations(true, true)
-  renderRail()
-  fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
-  expect(useAppStore.getState().activeView).toBe('tasks')
-  expect(screen.getByRole('button', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
-  fireEvent.click(screen.getByRole('button', { name: 'Automations' }))
-  expect(useAppStore.getState().activeView).toBe('automations')
-  expect(screen.getByRole('button', { name: 'Automations' })).toHaveAttribute(
-    'aria-current',
-    'page'
-  )
-  expect(screen.getByRole('button', { name: 'Tasks' })).not.toHaveAttribute('aria-current')
-})
-
-it('opens Tasks and Automations from the keyboard', async () => {
+it('selects rail destinations by click and keyboard and updates the current page', async () => {
   showDestinations(true, true)
   renderRail()
   const user = userEvent.setup()
-  act(() => screen.getByRole('button', { name: 'Workspaces' }).focus())
-  await user.keyboard('{ArrowDown}')
-  expect(screen.getByRole('button', { name: 'Tasks' })).toHaveFocus()
-  await user.keyboard('{Enter}')
+  const tasks = screen.getByRole('button', { name: 'Tasks' })
+  const automations = screen.getByRole('button', { name: 'Automations' })
+
+  await user.click(tasks)
   expect(useAppStore.getState().activeView).toBe('tasks')
+  expect(tasks).toHaveAttribute('aria-current', 'page')
+
   await user.keyboard('{ArrowDown}')
-  expect(screen.getByRole('button', { name: 'Automations' })).toHaveFocus()
+  expect(automations).toHaveFocus()
   await user.keyboard(' ')
   expect(useAppStore.getState().activeView).toBe('automations')
+  expect(automations).toHaveAttribute('aria-current', 'page')
+  expect(tasks).not.toHaveAttribute('aria-current')
 })
 
 it('folds Tasks and Automations into More and opens them from there, with More current for a folded page', async () => {

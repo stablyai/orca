@@ -57,7 +57,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   const revealInBackground =
     options.revealInBackground ??
     (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv))
-  const { store, keybindings } = requireMainWindowServices({
+  const { keybindings } = requireMainWindowServices({
     store: state.store,
     runtime: state.core.runtime,
     stats: state.core.stats,
@@ -97,7 +97,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   if (state.isServeMode) {
     applyServeDesktopWindowActivationPolicy({ warn: console.warn, background: revealInBackground })
   }
-  const window = createMainWindow(store, {
+  const window = createMainWindow(state.nativeSettings, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false

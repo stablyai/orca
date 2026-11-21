@@ -30,14 +30,16 @@ it('keeps the shared crew host across a chat hidden and shown 20 times, then let
       }
     }
   )
-  const showAndHide = () =>
+  const show = () =>
     subscribeCrew(
       () => model.read(LEGACY_COORDINATOR),
       (wake) => model.subscribe(wake, LEGACY_COORDINATOR),
       () => {}
-    )()
+    )
   for (let i = 0; i < 20; i++) {
-    showAndHide()
+    const hide = show()
+    hide()
+    hide()
   }
   expect({ builds, watching, timers: vi.getTimerCount() }).toEqual({
     builds: 1,
@@ -47,7 +49,7 @@ it('keeps the shared crew host across a chat hidden and shown 20 times, then let
   vi.advanceTimersByTime(CREW_HOST_GRACE_MS)
   // Nobody listening: no watch, no timer.
   expect({ watching, timers: vi.getTimerCount() }).toEqual({ watching: 0, timers: 0 })
-  showAndHide()
+  show()()
   expect(builds).toBe(2)
 })
 
@@ -129,15 +131,4 @@ it('stops filtering for a chat that closed beside an open one', () => {
   model.read('term_coord')
   expect(builds).toBe(1)
   mounted()
-})
-
-it('schedules one release when a subscription is stopped twice', () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const f = fixture()
-  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const stop = model.subscribe(() => {}, 'term_coord')
-  model.read('term_coord')
-  stop()
-  stop()
-  expect(vi.getTimerCount()).toBe(1)
 })

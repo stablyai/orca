@@ -274,6 +274,9 @@ export const VERIFY_CHECKS = [
 const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
 // Mirrors KEY_LITERAL_RE in verify-localization-extraction.mjs: quoted dotted literals keep keys referenced.
 const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+// A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
+const EXPORTED_STRING_CONSTANT =
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
 const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
 
 function flattenCatalogKeys(value, prefix = '', keys = new Set()) {
@@ -311,7 +314,11 @@ function translationEvidence(readVersions) {
         return true
       }
       return readVersions(file).some(
-        (text) => text !== null && (TRANSLATION_USE.test(text) || namesCatalogKey(text))
+        (text) =>
+          text !== null &&
+          (TRANSLATION_USE.test(text) ||
+            EXPORTED_STRING_CONSTANT.test(text) ||
+            namesCatalogKey(text))
       )
     }
   }

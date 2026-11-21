@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatPaneHeader } from './NativeChatPaneHeader'
+import { pairedHostStatuses } from '@/lib/bot-host-capability.test-fixture'
 
 const sidebar = vi.hoisted(() => ({ setRightSidebarTab: vi.fn(), setRightSidebarOpen: vi.fn() }))
 const owner = vi.hoisted(() => ({ hostId: 'local' }))
@@ -27,6 +28,13 @@ vi.mock('@/store', () => ({
     getState: () => sidebar
   })
 }))
+vi.mock('@/lib/bot-host-status', async () => {
+  const { botHomeRuleApplies } = await import('@/lib/bot-host-capability')
+  return {
+    useBotHomeRuleApplies: (bot: Parameters<typeof botHomeRuleApplies>[0]) =>
+      botHomeRuleApplies(bot, servers)
+  }
+})
 vi.mock('../../../bots/bot-workspace', () => ({
   useBotForWorkspace: (workspaceId: string) =>
     workspaceId === 'folder:bot-home'
@@ -67,12 +75,17 @@ function renderHeader(worktreeId: string, sessionId: string): void {
 const OPEN_PAGE = "Open Main X Manager's page"
 
 afterEach(cleanup)
-beforeEach(() => {
-  owner.hostId = 'local'
-})
+const servers = pairedHostStatuses({ new: ['bots.home-pin.v1'], old: [] })
+
+function hostHome(hostId: string): void {
+  owner.hostId = hostId
+  state.unifiedTabsByWorktree['folder:bot-home'][0].executionHostId = hostId
+}
+
+beforeEach(() => hostHome('local'))
 
 describe("a bot's Home Chat banner", () => {
-  it('offers the banner only on the Home tab of a locally hosted agent', () => {
+  it('offers the banner only on the Home tab of an agent whose host keeps the Home rule', () => {
     renderHeader('folder:bot-home', 'home')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).not.toBeNull()
     cleanup()
@@ -80,7 +93,11 @@ describe("a bot's Home Chat banner", () => {
     renderHeader('folder:project', 'home')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
     cleanup()
-    owner.hostId = 'runtime:paired'
+    hostHome('runtime:new')
+    renderHeader('folder:bot-home', 'home')
+    expect(screen.queryByRole('button', { name: OPEN_PAGE })).not.toBeNull()
+    cleanup()
+    hostHome('runtime:old')
     renderHeader('folder:bot-home', 'home')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
   })

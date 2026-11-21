@@ -1,5 +1,5 @@
 import { MobileWaitingAgentMailRows } from './transcript/agent-messages/MobileWaitingAgentMailRows'
-import { MobileWaitingAgentMail } from './transcript/agent-messages/MobileWaitingAgentMailActions'
+import { MobileBotFirstScreen, useMobileBotFirstScreen } from './MobileBotFirstScreen'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
 import { MobileMarkdownBotCardContext } from '../../components/markdown/blocks/mobile-markdown-bot-card-context'
@@ -78,6 +78,7 @@ export function MobileNativeChatView({
   workingStartedAt,
   settledTurns,
   turnJournal = null,
+  transcriptLoading = false,
   receipts = null,
   actionablePromptIds,
   onStop,
@@ -214,6 +215,11 @@ export function MobileNativeChatView({
   )
 
   const turnBot = useContext(MobileNativeChatBotIdentityContext)
+  const firstScreen = useMobileBotFirstScreen(
+    messages,
+    transcriptLoading ? null : turnJournal,
+    agentWorking === true
+  )
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: true,
@@ -271,12 +277,8 @@ export function MobileNativeChatView({
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
-  const footer = mobileNativeChatListFooter(
-    liveStatus,
-    turns.waitingRows,
-    renderItem,
-    waitingAgentMail?.rows.length ? <MobileWaitingAgentMailRows fontScale={fontScale} /> : undefined
-  )
+  const mailRows = <MobileWaitingAgentMailRows mail={waitingAgentMail} fontScale={fontScale} />
+  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem, mailRows)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
@@ -362,57 +364,57 @@ export function MobileNativeChatView({
   }
 
   return (
-    <MobileWaitingAgentMail value={waitingAgentMail}>
-      <MobileNativeChatOpenFileContext value={onOpenFile}>
-        <View testID="native-chat-view" style={[styles.root, { paddingBottom: bottomPad }]}>
-          {status === 'loading' && messages.length === 0 ? (
-            <MobileStateView
-              loading
-              title={t('session.nativeChatView.loading', 'Loading conversation…')}
-            />
-          ) : (
-            <GestureHandlerRootView style={styles.listWrap}>
-              <MobileNativeChatDisclosureContext.Provider value={disclosures}>
-                <MobileBotCardSendContext.Provider value={sendFromCard}>
-                  <MobileMarkdownBotCardContext.Provider value={drawReplyCard}>
-                    <MobileNativeChatScrollRootsBoundary
-                      {...{ rowKeys, layoutKey }}
+    <MobileNativeChatOpenFileContext value={onOpenFile}>
+      <View testID="native-chat-view" style={[styles.root, { paddingBottom: bottomPad }]}>
+        {status === 'loading' && messages.length === 0 ? (
+          <MobileStateView
+            loading
+            title={t('session.nativeChatView.loading', 'Loading conversation…')}
+          />
+        ) : firstScreen ? (
+          <MobileBotFirstScreen firstScreen={firstScreen} />
+        ) : (
+          <GestureHandlerRootView style={styles.listWrap}>
+            <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+              <MobileBotCardSendContext.Provider value={sendFromCard}>
+                <MobileMarkdownBotCardContext.Provider value={drawReplyCard}>
+                  <MobileNativeChatScrollRootsBoundary
+                    {...{ rowKeys, layoutKey }}
+                    roots={disclosures.roots}
+                    runPlacements={rowKeys.runPlacements}
+                  >
+                    <MobileNativeChatRowList
+                      {...{
+                        tail,
+                        rowKeys,
+                        renderItem,
+                        footer,
+                        emptyStateView,
+                        onScroll,
+                        layoutKey
+                      }}
+                      {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                      itemJump={itemJump}
+                      rows={turns.listMessages}
+                      runs={turns.presentation.workRuns.heads}
                       roots={disclosures.roots}
-                      runPlacements={rowKeys.runPlacements}
-                    >
-                      <MobileNativeChatRowList
-                        {...{
-                          tail,
-                          rowKeys,
-                          renderItem,
-                          footer,
-                          emptyStateView,
-                          onScroll,
-                          layoutKey
-                        }}
-                        {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                        itemJump={itemJump}
-                        rows={turns.listMessages}
-                        runs={turns.presentation.workRuns.heads}
-                        roots={disclosures.roots}
-                        contentContainerStyle={styles.listContent}
-                        pinchGesture={pinchGesture}
-                      />
-                    </MobileNativeChatScrollRootsBoundary>
-                  </MobileMarkdownBotCardContext.Provider>
-                </MobileBotCardSendContext.Provider>
-              </MobileNativeChatDisclosureContext.Provider>
-              <MobileNativeChatFloatingControls
-                showJumpToTail={tail.showJumpToTail}
-                onJumpToTail={jumpToTail}
-              />
-            </GestureHandlerRootView>
-          )}
-          <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
-            {lowerContent}
-          </MobileNativeChatLowerRegion>
-        </View>
-      </MobileNativeChatOpenFileContext>
-    </MobileWaitingAgentMail>
+                      contentContainerStyle={styles.listContent}
+                      pinchGesture={pinchGesture}
+                    />
+                  </MobileNativeChatScrollRootsBoundary>
+                </MobileMarkdownBotCardContext.Provider>
+              </MobileBotCardSendContext.Provider>
+            </MobileNativeChatDisclosureContext.Provider>
+            <MobileNativeChatFloatingControls
+              showJumpToTail={tail.showJumpToTail}
+              onJumpToTail={jumpToTail}
+            />
+          </GestureHandlerRootView>
+        )}
+        <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
+          {lowerContent}
+        </MobileNativeChatLowerRegion>
+      </View>
+    </MobileNativeChatOpenFileContext>
   )
 }
