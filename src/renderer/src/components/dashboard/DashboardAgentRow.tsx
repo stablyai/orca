@@ -1,9 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/class-names'
-import {
-  opensClaudeParentConversation,
-  viewClaudeAgentFromRow
-} from '@/lib/agent-session/navigation/claude-agent-row-view'
+import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
@@ -46,6 +43,11 @@ import {
   agentChildRowNoUpdateLabel
 } from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
+import {
+  WorkspaceAgentRowMenu,
+  activateAgentRow,
+  useWorkspaceAgentRowMenu
+} from '../sidebar/workspace-card/activity/agent-row-menu/WorkspaceAgentRowMenu'
 import { WORKSPACE_AGENT_ROW_ATTR } from '@/components/sidebar/workspace-actions/context-menu/workspace-agent-row-marker'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -146,11 +148,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
-      void viewClaudeAgentFromRow(agent)
+      activateAgentRow(agent, onActivate)
     },
     [onActivate, agent]
   )
+  const agentMenu = useWorkspaceAgentRowMenu()
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
       if (!sendTargetStatus) {
@@ -254,6 +256,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     <div
       onClickCapture={handleSendTargetClickCapture}
       onClick={handleActivate}
+      {...agentMenu.rowProps}
       className={cn(
         // Why: named group scopes the X-reveal to this row, not every row in the card.
         'agent-disclosure-row group/agent-row relative -ml-2 flex flex-col py-1',
@@ -409,6 +412,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         isInterrupted={isInterrupted}
         stoppedByUser={agentMainAgentVerdict(agent.entry) === 'cancellation'}
         lastAssistantMessage={lastAssistantMessage}
+      />
+      <WorkspaceAgentRowMenu
+        handle={agentMenu}
+        agent={agent}
+        title={prompt}
+        unread={isUnvisited}
+        viewing={highlighted}
+        onActivate={onActivate}
       />
     </div>
   )

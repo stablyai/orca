@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,8 +79,6 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
-  // Recomputed on every open, the only place this menu opens.
-  const [openedFromAgentRow, setOpenedFromAgentRow] = useState(false)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -108,11 +105,14 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         if (shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)) {
           return
         }
+        // An agent row opens its own Agent menu; this workspace menu's Delete would read as deleting the agent.
+        if (isFromWorkspaceAgentRow(event.currentTarget, event.target)) {
+          return
+        }
         event.preventDefault()
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         setDeveloperMenuRevealed(event.altKey)
-        setOpenedFromAgentRow(isFromWorkspaceAgentRow(event.currentTarget, event.target))
         setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -184,13 +184,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           {!isMultiContext && (
             <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
           )}
-          {/* From an agent row, Delete would read as deleting that agent; it removes the whole workspace. */}
-          {!openedFromAgentRow && (
-            <>
-              <WorktreeContextMenuDeleteItems model={model} />
-              <DropdownMenuSeparator />
-            </>
-          )}
+          <WorktreeContextMenuDeleteItems model={model} />
+          <DropdownMenuSeparator />
           {!isMultiContext && (
             <>
               <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>

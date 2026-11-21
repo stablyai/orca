@@ -10,7 +10,6 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { cn } from '@/lib/class-names'
-import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
@@ -27,6 +26,11 @@ import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-ord
 import type { ProgramStatusPresentation } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import {
+  WorkspaceAgentRowMenu,
+  activateAgentRow,
+  useWorkspaceAgentRowMenu
+} from './agent-row-menu/WorkspaceAgentRowMenu'
 import { WORKSPACE_AGENT_ROW_ATTR } from '../../workspace-actions/context-menu/workspace-agent-row-marker'
 
 function getCompactAgentPrimary(
@@ -176,12 +180,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Child agents activate their spawning parent pane because they have no pane of their own.
-      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
-      void viewClaudeAgentFromRow(agent)
+      activateAgentRow(agent, onActivate)
     },
     [agent, onActivate]
   )
+  const agentMenu = useWorkspaceAgentRowMenu()
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
       if (!sendTargetStatus) {
@@ -305,7 +308,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     <div
       draggable={false}
       className={cn(
-        'compact-agent-row agent-disclosure-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+        'compact-agent-row agent-disclosure-row group/compact-agent-row relative min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',
@@ -329,8 +332,17 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
       title={sendTargetDisabledReason}
+      {...agentMenu.rowProps}
     >
       {rowBody}
+      <WorkspaceAgentRowMenu
+        handle={agentMenu}
+        agent={agent}
+        title={primary}
+        unread={isUnvisited}
+        viewing={highlighted}
+        onActivate={onActivate}
+      />
     </div>
   )
 })

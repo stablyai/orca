@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { agentMenuLabels } from '@/components/agent/menu/agent-menu-labels'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
@@ -31,7 +32,7 @@ export function getActivityThreadCopyTargets(
 ): CopyTarget[] {
   const title: CopyTarget = {
     key: 'title',
-    label: t('auto.components.activity.ActivityThreadContextMenu.copyTitle', 'Copy Title'),
+    label: agentMenuLabels(t).copyTitle,
     value: activityThreadRowCopy(thread, t).taskTitle
   }
   // Why gated: synthetic floating/standalone worktrees have no path.
@@ -114,9 +115,7 @@ export function ActivityThreadContextMenu({
       <ContextMenuTrigger asChild>{children(menuOpen)}</ContextMenuTrigger>
       {/* Why no focus restore: refocusing the row would reopen its hover preview and pin it open. */}
       <ContextMenuContent className="w-52" onCloseAutoFocus={(event) => event.preventDefault()}>
-        <ContextMenuLabel>
-          {t('auto.components.activity.ActivityThreadContextMenu.agentSection', 'Agent')}
-        </ContextMenuLabel>
+        <ContextMenuLabel>{agentMenuLabels(t).section}</ContextMenuLabel>
         {targets.length > 1 ? (
           <ActivityThreadBulkMenuItems
             targets={targets}
@@ -162,7 +161,7 @@ function ActivityThreadSingleMenuItems({
     <>
       <ContextMenuItem onSelect={() => onOpen(thread)}>
         <PanelRight className="size-3.5" />
-        {t('auto.components.activity.ActivityThreadContextMenu.open', 'Open')}
+        {agentMenuLabels(t).open}
       </ContextMenuItem>
       {canJump ? (
         <ContextMenuItem onSelect={() => onJump(thread)}>
@@ -186,9 +185,7 @@ function ActivityThreadSingleMenuItems({
         onSelect={() => (thread.unread ? onMarkRead(thread) : onMarkUnread(thread))}
       >
         {thread.unread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-        {thread.unread
-          ? t('auto.components.activity.ActivityThreadContextMenu.markRead', 'Mark Read')
-          : t('auto.components.activity.ActivityThreadContextMenu.markUnread', 'Mark Unread')}
+        {thread.unread ? agentMenuLabels(t).markRead : agentMenuLabels(t).markUnread}
       </ContextMenuItem>
       {isClearableActivityThread(thread) ? (
         <>
@@ -240,7 +237,7 @@ function ActivityThreadBulkMenuItems({
                 'Mark {{count}} Agents Unread',
                 { count: read.length, defaultValue_one: 'Mark {{count}} Agent Unread' }
               )
-            : t('auto.components.activity.ActivityThreadContextMenu.markUnread', 'Mark Unread')}
+            : agentMenuLabels(t).markUnread}
         </ContextMenuItem>
       )}
       <ContextMenuSeparator />

@@ -5,14 +5,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WORKSPACE_AGENT_ROW_ATTR } from './workspace-agent-row-marker'
-import type * as RadixDropdownMenu from 'radix-ui/dropdown-menu'
 
 const stub = (name: string) => () => <div data-testid={name} />
-// The menu content's own presence decides when it unmounts, so a closing animation keeps it mounted.
-vi.mock('radix-ui/dropdown-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof RadixDropdownMenu>()
-  return { ...actual, Portal: ({ children }: { children?: React.ReactNode }) => children }
-})
 vi.mock('./WorktreeContextMenuDeleteItems', () => ({
   WorktreeContextMenuDeleteItems: stub('delete-items')
 }))
@@ -111,10 +105,13 @@ function Card({ isMultiContext = false }: { isMultiContext?: boolean }): React.J
   return <WorktreeContextMenuView model={model} />
 }
 
-function openFrom(testId: string): void {
+/** Right-clicks a part of the card; true when the card left the event to that part. */
+function openFrom(testId: string): boolean {
+  let unhandled = true
   act(() => {
-    fireEvent.contextMenu(screen.getByTestId(testId))
+    unhandled = fireEvent.contextMenu(screen.getByTestId(testId))
   })
+  return unhandled
 }
 
 function close(): void {
@@ -123,72 +120,51 @@ function close(): void {
   })
 }
 
-const removeAfter: Element[] = []
-
 afterEach(() => {
   cleanup()
-  removeAfter.splice(0).forEach((node) => node.remove())
 })
 
-describe('WorktreeContextMenuView from an agent row', () => {
-  it('opens the workspace menu without Delete', () => {
+describe('WorktreeContextMenuView and agent rows', () => {
+  it('leaves a right-click on an agent row to the row, opening no workspace menu', () => {
     render(<Card />)
-    openFrom('agent-row')
-    expect(screen.getByTestId('mute-item')).toBeTruthy()
-    expect(screen.getByTestId('sleep-items')).toBeTruthy()
+    expect(openFrom('agent-row')).toBe(true)
+    expect(screen.queryByRole('menu')).toBeNull()
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })
 
   it('treats a control inside the row (keyboard-opened menus target it) as the row', () => {
     render(<Card />)
-    openFrom('agent-row-control')
-    expect(screen.queryByTestId('delete-items')).toBeNull()
+    expect(openFrom('agent-row-control')).toBe(true)
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('keeps Delete from the header and the agents expander', () => {
+  it('opens the full workspace menu, Delete included, from the header and the agents expander', () => {
     render(<Card />)
-    openFrom('header')
+    expect(openFrom('header')).toBe(false)
+    expect(screen.getByTestId('mute-item')).toBeTruthy()
     expect(screen.getByTestId('delete-items')).toBeTruthy()
     close()
     openFrom('expander')
     expect(screen.getByTestId('delete-items')).toBeTruthy()
   })
 
-  it('decides on every open, in either order', () => {
+  it('decides on every right-click, in either order', () => {
     render(<Card />)
     openFrom('agent-row')
-    expect(screen.queryByTestId('delete-items')).toBeNull()
-    close()
+    expect(screen.queryByRole('menu')).toBeNull()
     openFrom('header')
     expect(screen.getByTestId('delete-items')).toBeTruthy()
     close()
-    openFrom('agent-row')
+    expect(openFrom('agent-row')).toBe(true)
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })
 
-  it('keeps Delete out of a row-opened menu while it animates closed', () => {
-    // An exit animation keeps closing menu content mounted until the animation ends.
-    const exit = document.createElement('style')
-    exit.textContent =
-      "[data-slot='dropdown-menu-content'][data-state='closed'] { animation-name: menu-exit; }"
-    document.head.append(exit)
-    removeAfter.push(exit)
-    render(<Card />)
-    openFrom('agent-row')
-    const menu = document.querySelector('[data-slot="dropdown-menu-content"]')
-    close()
-    expect(menu?.isConnected).toBe(true)
-    expect(menu?.getAttribute('data-state')).toBe('closed')
-    expect(screen.getByTestId('mute-item')).toBeTruthy()
-    expect(screen.queryByTestId('delete-items')).toBeNull()
-  })
-
-  it('omits the batch Delete of a multi-selection too', () => {
+  it('leaves agent rows to themselves in a multi-selection too', () => {
     render(<Card isMultiContext />)
     openFrom('header')
     expect(screen.getByTestId('delete-items')).toBeTruthy()
     close()
-    openFrom('agent-row')
+    expect(openFrom('agent-row')).toBe(true)
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })
 })

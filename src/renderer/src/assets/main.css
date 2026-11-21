@@ -1975,7 +1975,8 @@ html.native-shell .app-layout {
   --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
 }
 
-.worktree-agent-row-hover:hover {
+.worktree-agent-row-hover:hover,
+.worktree-agent-row-hover[data-agent-row-menu-open] {
   background: var(--worktree-sidebar-accent);
 }
 
@@ -2146,7 +2147,8 @@ html.native-shell .app-layout {
     inset 0 0 0 1px color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
 }
 
-.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover {
+.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+.worktree-agent-lineage-parent-row.worktree-agent-row-hover[data-agent-row-menu-open] {
   background: color-mix(in srgb, var(--sidebar-foreground) 6%, var(--sidebar));
 }
 
@@ -2157,7 +2159,8 @@ html.native-shell .app-layout {
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-.dark .worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover {
+.dark .worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+.dark .worktree-agent-lineage-parent-row.worktree-agent-row-hover[data-agent-row-menu-open] {
   background: color-mix(in srgb, var(--accent) 30%, var(--sidebar));
 }
 
@@ -2167,7 +2170,8 @@ html.native-shell .app-layout {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
 }
 
-.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover,
+.worktree-agent-lineage-child-row.worktree-agent-row-hover[data-agent-row-menu-open] {
   background: color-mix(in srgb, var(--sidebar-foreground) 4%, var(--sidebar));
 }
 
@@ -2185,7 +2189,8 @@ html.native-shell .app-layout {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
-.dark .worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+.dark .worktree-agent-lineage-child-row.worktree-agent-row-hover:hover,
+.dark .worktree-agent-lineage-child-row.worktree-agent-row-hover[data-agent-row-menu-open] {
   background: color-mix(in srgb, var(--accent) 18%, var(--sidebar));
 }
 
@@ -2399,7 +2404,11 @@ html.native-shell .app-layout {
 [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
 [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover[data-agent-row-menu-open],
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover,
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover[data-agent-row-menu-open] {
   background: var(--worktree-sidebar-accent);
 }
 
