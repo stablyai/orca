@@ -5,19 +5,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WORKSPACE_AGENT_ROW_ATTR } from './workspace-agent-row-marker'
-import type * as DropdownMenuModule from '@/components/ui/dropdown-menu'
+import type * as RadixDropdownMenu from 'radix-ui/dropdown-menu'
 
 const stub = (name: string) => () => <div data-testid={name} />
-// While set, the menu stays mounted after the view closes it, as during its exit animation.
-const radixHold = vi.hoisted(() => ({ keepMounted: false }))
-vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof DropdownMenuModule>()
-  return {
-    ...actual,
-    DropdownMenu: (props: React.ComponentProps<typeof actual.DropdownMenu>) => (
-      <actual.DropdownMenu {...props} open={props.open || radixHold.keepMounted} />
-    )
-  }
+// The menu content's own presence decides when it unmounts, so a closing animation keeps it mounted.
+vi.mock('radix-ui/dropdown-menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof RadixDropdownMenu>()
+  return { ...actual, Portal: ({ children }: { children?: React.ReactNode }) => children }
 })
 vi.mock('./WorktreeContextMenuDeleteItems', () => ({
   WorktreeContextMenuDeleteItems: stub('delete-items')
@@ -114,12 +108,7 @@ function Card({ isMultiContext = false }: { isMultiContext?: boolean }): React.J
     worktree: { id: 'repo::/w', isPinned: false },
     workspaceStatuses: []
   } as unknown as WorktreeContextMenuModel
-  return (
-    <>
-      <button type="button" data-testid="close-menu" onClick={() => setMenuOpen(false)} />
-      <WorktreeContextMenuView model={model} />
-    </>
-  )
+  return <WorktreeContextMenuView model={model} />
 }
 
 function openFrom(testId: string): void {
@@ -134,9 +123,11 @@ function close(): void {
   })
 }
 
+const removeAfter: Element[] = []
+
 afterEach(() => {
   cleanup()
-  radixHold.keepMounted = false
+  removeAfter.splice(0).forEach((node) => node.remove())
 })
 
 describe('WorktreeContextMenuView from an agent row', () => {
@@ -175,16 +166,19 @@ describe('WorktreeContextMenuView from an agent row', () => {
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })
 
-  it('keeps Delete out while a row-opened menu is still mounted after closing', () => {
+  it('keeps Delete out of a row-opened menu while it animates closed', () => {
+    // An exit animation keeps closing menu content mounted until the animation ends.
+    const exit = document.createElement('style')
+    exit.textContent =
+      "[data-slot='dropdown-menu-content'][data-state='closed'] { animation-name: menu-exit; }"
+    document.head.append(exit)
+    removeAfter.push(exit)
     render(<Card />)
-    openFrom('header')
-    expect(screen.getByTestId('delete-items')).toBeTruthy()
-    close()
     openFrom('agent-row')
-    radixHold.keepMounted = true
-    act(() => {
-      screen.getByTestId('close-menu').click()
-    })
+    const menu = document.querySelector('[data-slot="dropdown-menu-content"]')
+    close()
+    expect(menu?.isConnected).toBe(true)
+    expect(menu?.getAttribute('data-state')).toBe('closed')
     expect(screen.getByTestId('mute-item')).toBeTruthy()
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })

@@ -85,27 +85,44 @@ function seed(mode: 'compact' | 'full', overrides: Partial<Worktree> = {}): Work
   return worktree
 }
 
-function renderCard(worktree: Worktree): HTMLElement {
+function renderCard(
+  worktree: Worktree,
+  selection?: { selected: readonly Worktree[] }
+): HTMLElement {
   return render(
     <ConfirmationDialogContext.Provider value={declineConfirm}>
       <TooltipProvider>
-        <WorktreeCard worktree={worktree} repo={TEST_REPO} isActive nativeDragEnabled={false} />
+        <WorktreeCard
+          worktree={worktree}
+          repo={TEST_REPO}
+          isActive
+          nativeDragEnabled={false}
+          isMultiSelected={selection !== undefined}
+          selectedWorktrees={selection?.selected}
+          onContextMenuSelect={selection ? () => selection.selected : undefined}
+        />
       </TooltipProvider>
     </ConfirmationDialogContext.Provider>
   ).container
 }
 
+/** Opens the card's menu from `target` and returns its item labels, after showing that it opened. */
 function openMenuOn(target: Element): string[] {
   act(() => {
     fireEvent.contextMenu(target)
   })
-  return screen.queryAllByRole('menuitem').map((item) => item.textContent?.trim() ?? '')
+  const menu = screen.getByRole('menu')
+  expect(menu.isConnected).toBe(true)
+  return Array.from(menu.querySelectorAll('[role="menuitem"]')).map(
+    (item) => item.textContent?.trim() ?? ''
+  )
 }
 
 function closeMenu(): void {
   act(() => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
   })
+  expect(screen.queryByRole('menu')).toBeNull()
 }
 
 function deleteItems(labels: string[]): string[] {
@@ -120,6 +137,18 @@ function surfaceOf(container: HTMLElement): Element {
   return surface
 }
 
+function agentRows(container: HTMLElement): { root: Element; child: Element } {
+  const rows = Array.from(container.querySelectorAll(`[${WORKSPACE_AGENT_ROW_ATTR}]`))
+  const child = container.querySelector(
+    `.worktree-agent-lineage-child-row[${WORKSPACE_AGENT_ROW_ATTR}]`
+  )
+  const root = rows.find((row) => row !== child)
+  if (!root || !child) {
+    throw new Error('expected a root agent row and its worker’s child row')
+  }
+  return { root, child }
+}
+
 afterEach(() => {
   cleanup()
   clearWorktreeAgentExpansionStateForTests()
@@ -129,14 +158,12 @@ afterEach(() => {
 describe.each(['compact', 'full'] as const)('a %s agent row in a workspace card', (mode) => {
   it('opens the workspace menu without Delete, which the card header still offers', () => {
     const container = renderCard(seed(mode))
-    const rows = container.querySelectorAll(`[${WORKSPACE_AGENT_ROW_ATTR}]`)
-    expect(rows.length).toBeGreaterThanOrEqual(2)
-
     expect(deleteItems(openMenuOn(surfaceOf(container)))).toEqual([
       expect.stringMatching(/^Delete/)
     ])
     closeMenu()
-    for (const row of rows) {
+    const { root, child } = agentRows(container)
+    for (const row of [root, child]) {
       const labels = openMenuOn(row)
       expect(labels).toContain('Mute Notifications')
       expect(deleteItems(labels)).toEqual([])
@@ -146,10 +173,11 @@ describe.each(['compact', 'full'] as const)('a %s agent row in a workspace card'
 
   it('treats anything inside the row as the row', () => {
     const container = renderCard(seed(mode))
-    const row = container.querySelector(`[${WORKSPACE_AGENT_ROW_ATTR}]`)
-    const inner = row?.querySelector('button, [tabindex], span')
+    const inner = agentRows(container).root.querySelector('button, [tabindex], span')
     expect(inner).toBeTruthy()
-    expect(deleteItems(openMenuOn(inner!))).toEqual([])
+    const labels = openMenuOn(inner!)
+    expect(labels).toContain('Mute Notifications')
+    expect(deleteItems(labels)).toEqual([])
   })
 
   it('offers no project removal from an agent row of a primary checkout', () => {
@@ -158,7 +186,31 @@ describe.each(['compact', 'full'] as const)('a %s agent row in a workspace card'
       expect.arrayContaining(['Delete Worktree', 'Remove Project from Orca'])
     )
     closeMenu()
-    const row = container.querySelector(`[${WORKSPACE_AGENT_ROW_ATTR}]`)
-    expect(deleteItems(openMenuOn(row!))).toEqual([])
+    const labels = openMenuOn(agentRows(container).root)
+    expect(labels).toContain('Mute Notifications')
+    expect(deleteItems(labels)).toEqual([])
+  })
+
+  it('offers no batch Delete from an agent row of a multi-selected card', () => {
+    const worktree = seed(mode)
+    const other = makeWorktree({
+      id: `${TEST_REPO.id}::/discount`,
+      repoId: TEST_REPO.id,
+      path: '/discount',
+      displayName: 'discount'
+    })
+    useAppStore.setState({ worktreesByRepo: { [TEST_REPO.id]: [worktree, other] } })
+    const container = renderCard(worktree, { selected: [worktree, other] })
+    const header = openMenuOn(surfaceOf(container))
+    expect(deleteItems(header)).toEqual([expect.stringMatching(/^Delete 2 Workspaces/)])
+    const batchDelete = screen
+      .getAllByRole('menuitem')
+      .find((item) => item.textContent?.startsWith('Delete 2 Workspaces'))
+    expect(batchDelete?.hasAttribute('data-disabled')).toBe(false)
+    closeMenu()
+    const row = openMenuOn(agentRows(container).root)
+    // Still the two-workspace menu (only a multi-selection offers this), with no way to delete either.
+    expect(row).toContain('Move Statuses To')
+    expect(deleteItems(row)).toEqual([])
   })
 })
