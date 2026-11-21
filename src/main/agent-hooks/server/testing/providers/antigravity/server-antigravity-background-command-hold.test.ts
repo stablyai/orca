@@ -480,6 +480,11 @@ it('holds an unreadable root launch past the discovery lease and clears it on pr
   }
   await agyHook('PreToolUse', question)
   expect(state()).toBe('waiting')
+  await agyHook('PreToolUse', {
+    ...subagentCall,
+    lastUserInput: 'earlier task',
+    modelName: 'model-old'
+  })
   programDone()
   await vi.advanceTimersByTimeAsync(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
   expect(server.getStatusSnapshot()[0]).toMatchObject({

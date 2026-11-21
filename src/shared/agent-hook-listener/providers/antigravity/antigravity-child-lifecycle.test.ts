@@ -528,6 +528,57 @@ it.each([
   }
 )
 
+it('keeps a newer root question visible after a late PostToolUse from a pending launch', async () => {
+  const previousLaunch = { ...launch(300), prompt: 'Earlier task', modelName: 'model-a' }
+  expect(hook('root', 'PreToolUse', previousLaunch)?.payload.antigravitySpawnPending).toBe(true)
+
+  hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
+  const swarm = {
+    stepIdx: 301,
+    toolCall: { id: 'swarm-301', name: 'swarm', args: { action: 'add', tasks: ['worker'] } }
+  }
+  hook('root', 'PreToolUse', swarm)
+  expect(hook('root', 'PreToolUse', previousLaunch)).toBeNull()
+  expect(hook('root', 'PostToolUse', swarm)?.payload).toMatchObject({
+    state: 'working',
+    toolName: 'swarm',
+    prompt: 'Current task',
+    model: 'model-b'
+  })
+
+  const waiting = {
+    state: 'waiting',
+    toolName: 'ask_question',
+    toolInput: 'Continue?',
+    prompt: 'Current task',
+    model: 'model-b',
+    mainAgent: { state: 'waiting' }
+  }
+  expect(
+    hook('root', 'PreToolUse', {
+      stepIdx: 302,
+      toolCall: { id: 'question-302', name: 'ask_question', args: { question: 'Continue?' } }
+    })?.payload
+  ).toMatchObject({ ...waiting, antigravitySpawnPending: true })
+  expect(hook('root', 'PostToolUse', previousLaunch)).toBeNull()
+  expect(hook('root', 'PostToolUse', previousLaunch)).toBeNull()
+  expect(row.payload).toMatchObject({ ...waiting, antigravitySpawnPending: true })
+
+  launchResult(
+    300,
+    'Encountered error in step execution: subagent "x" not found or not allowed to be invoked',
+    'ERROR'
+  )
+  expect((await poll())?.payload).toMatchObject({ ...waiting, antigravitySpawnPending: true })
+
+  transcript('worker')
+  expect(hook('worker', 'Stop', { fullyIdle: true })).toBeNull()
+  launchResult(301, JSON.stringify({ status: 'added', name: 'worker', conversation_id: 'worker' }))
+  const settled = await poll()
+  expect(settled?.payload).toMatchObject(waiting)
+  expect(settled?.payload.antigravitySpawnPending).toBeUndefined()
+})
+
 it('holds an old first-delivered phase through a newer question until its matching root result', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   try {

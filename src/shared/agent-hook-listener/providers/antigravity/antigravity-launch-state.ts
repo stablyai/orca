@@ -82,11 +82,7 @@ export function trackAntigravityLaunch(
     }
     if (!completedBookkeepingOnly || older) {
       prior.phases |= phase
-      if (older && pane.currentLaunch !== prior) {
-        return 'stale'
-      }
-      pane.currentLaunch = prior
-      return 'current'
+      return pane.currentLaunch === prior ? 'current' : 'stale'
     }
   }
   if (completedBookkeepingOnly && !older) {
