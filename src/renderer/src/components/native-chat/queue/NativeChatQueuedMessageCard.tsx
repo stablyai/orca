@@ -250,8 +250,8 @@ export function NativeChatQueuedMessageCard({
           expanded && 'scrollbar-sleek -my-1 -mr-1 max-h-64 overflow-y-auto py-1 pr-1'
         )}
       >
-        {/* Floated, one text line tall, so only the first line makes room; hidden actions keep their space so text never shifts. */}
-        <div className="float-right -mb-1 ml-1 flex h-7 items-center">
+        {/* Floated with a margin box one text line tall (text and controls scale apart), so only the first line makes room; hidden actions keep their space so text never shifts. */}
+        <div className="float-right mb-[calc(1lh_-_var(--spacing)_*_6)] ml-1 flex h-7 items-center text-sm">
           {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
           {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
           {card.hold === 'sending' ? null : (
