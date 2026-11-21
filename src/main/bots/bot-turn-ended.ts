@@ -7,7 +7,7 @@ import { botGroupRoomOfSession, markBotGroupRoomUnread } from './bot-group-runti
 import type { BotGroupRoomOfSession } from '../runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { noteBotGroupMemberReply } from './bot-group-latest'
 import { type BotRecentChatsSection, readBotRecentChats } from './bot-recent-chats'
-import { joinedTurnSections } from './bot-active-work'
+import { joinedTurnSections, type TurnSectionsMemo } from './bot-active-work'
 import { readBotActiveWork } from './bot-active-work-read'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
@@ -70,6 +70,7 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
     endedTurns: async (sessionId) =>
       (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
   })
+  const sections: TurnSectionsMemo = new Map()
   return {
     turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
     requestFailed: (failure) =>
@@ -78,21 +79,24 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       ),
     groupRoomOf: (sessionId) => botGroupRoomOfSession(runtime, sessionId),
     // A stalled read never holds a message back: past the bound, this turn goes without it.
-    // With the bot's live work, which rides the same resend-on-change key.
+    // With the bot's live work, which rides the same resend-on-change key; a read past the bound
+    // keeps what the chat last got.
     recentChats: async (botId, sessionId, message) =>
       joinedTurnSections(
-        ...(await Promise.all([
+        sections,
+        sessionId,
+        await Promise.all([
           withTimeout(
             readBotRecentChats(runtime, botId, sessionId, message),
             BOT_WORK_NOTE_TIMEOUT_MS,
-            null
+            undefined
           ),
           withTimeout(
             readBotActiveWork(runtime, botId, sessionId, message).catch(() => null),
             BOT_WORK_NOTE_TIMEOUT_MS,
-            null
+            undefined
           )
-        ]))
+        ])
       ),
     // Like the recent chats: a failed or stalled read means no note this turn, never a held message.
     unansweredQuestionNote: (sessionId) =>

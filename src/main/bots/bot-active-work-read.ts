@@ -1,13 +1,14 @@
 // Reads a bot's live work for a turn its owner asked: open items and the work record, cached for a
-// minute per bot, since the work record checks each worker it lists.
+// few seconds per bot, since the work record checks each worker it lists.
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { actsForOwner } from '../../shared/bots/bot-acts-for'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readBotTurn } from '../runtime/rpc/methods/orchestration/messaging/bot-recipient'
 import { type BotActiveWorkSection, botActiveWorkSection } from './bot-active-work'
 
-const FRESH_MS = 60_000
-const ITEMS_READ = 50
+const FRESH_MS = 15_000
+/** Per status: needs_you is read on its own, so items in progress never push one off the page. */
+const ITEMS_READ = 12
 
 type Cached = { at: number; section: Promise<BotActiveWorkSection | null> }
 const cache = new WeakMap<OrcaRuntimeService, Map<string, Cached>>()
@@ -32,15 +33,20 @@ export async function readBotActiveWork(
     return hit.section
   }
   const section = (async () => {
-    const page = await runtime.botItems
-      .store()
-      .list({ botId, statuses: ['needs_you', 'working'], limit: ITEMS_READ })
-    const [items, workers] = await Promise.all([
-      runtime.botItems.views(page.items),
+    const read = (status: 'needs_you' | 'working') =>
+      runtime.botItems.store().list({ botId, statuses: [status], limit: ITEMS_READ })
+    const [needsYou, working, workers] = await Promise.all([
+      read('needs_you'),
+      read('working'),
       runtime.botWork.list(botId)
     ])
+    const items = await runtime.botItems.views([...needsYou.items, ...working.items])
     return botActiveWorkSection(items, workers)
-  })().catch(() => null)
+  })().catch(() => {
+    // A failed read is tried again on the next turn, never kept.
+    bots.delete(botId)
+    return null
+  })
   bots.set(botId, { at: now, section })
   return section
 }
