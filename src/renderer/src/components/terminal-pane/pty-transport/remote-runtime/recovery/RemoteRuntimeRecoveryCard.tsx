@@ -6,7 +6,7 @@ import {
   remoteRuntimeDownForLabel,
   remoteRuntimeTailscaleHintLabel
 } from './remote-runtime-recovery-copy'
-import { useNow } from '@/lib/window-activity/use-now'
+import { useNowFromMount } from '@/lib/window-activity/use-now'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 /** The one look for "this remote work is recovering", shared by the pane and server notices. */
@@ -29,7 +29,7 @@ export function RemoteRuntimeRecoveryCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const now = useNow(1_000, downSince !== null)
+  const now = useNowFromMount(1_000, downSince !== null)
   return (
     <div
       className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex justify-center"

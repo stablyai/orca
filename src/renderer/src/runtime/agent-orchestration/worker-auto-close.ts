@@ -6,7 +6,7 @@ import {
   readLocalRuntimeCapabilitiesOrUnknown
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { useNow } from '@/lib/window-activity/use-now'
+import { useNowFromMount } from '@/lib/window-activity/use-now'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
@@ -126,7 +126,7 @@ export function useWorkerAutoClose(
 
   const shown = activity === null ? null : state
   const ticking = active && shown !== null && !shown.kept && shown.closesAt !== null
-  const nowMs = useNow(1_000, ticking)
+  const nowMs = useNowFromMount(1_000, ticking)
 
   const keepOpen = useCallback(() => {
     publishWorkerAutoClose(key, { kept: true })
