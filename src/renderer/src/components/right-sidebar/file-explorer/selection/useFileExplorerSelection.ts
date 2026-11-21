@@ -10,6 +10,7 @@ import {
   getFileExplorerSelectionMode,
   updateFileExplorerSelection,
   updateFileExplorerSelectionPaths,
+  type FileExplorerCopyKind,
   type FileExplorerSelectionMode
 } from './file-explorer-selection'
 
@@ -26,7 +27,7 @@ type UseFileExplorerSelectionResult = {
   ) => void
   moveSelection: (targetPath: string, mode: FileExplorerSelectionMode) => void
   preserveSelectionForContextMenu: (node: TreeNode) => void
-  copyPathsForNode: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
+  copyPathsForNode: (node: TreeNode, pathKind: FileExplorerCopyKind) => void
 }
 
 export function useFileExplorerSelection(
@@ -111,7 +112,7 @@ export function useFileExplorerSelection(
     )
   }, [])
 
-  const copyPathsForNode = useCallback((node: TreeNode, pathKind: 'absolute' | 'relative') => {
+  const copyPathsForNode = useCallback((node: TreeNode, pathKind: FileExplorerCopyKind) => {
     const { selectedPaths } = selectionStateRef.current
     const selectedNodes = selectedPaths.has(node.path)
       ? rowProjectionRef.current.getRowsByPaths(selectedPaths)

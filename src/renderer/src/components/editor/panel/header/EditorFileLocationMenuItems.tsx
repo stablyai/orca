@@ -3,7 +3,9 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { isWorktreeRootEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
+import { absolutePathBasename } from '@/lib/path'
 import {
   getRevealInFileManagerLabel,
   getOpenFileRevealOwner,
@@ -40,6 +42,16 @@ export function EditorFileLocationMenuItems({
         <Copy />
         {t('auto.components.editor.EditorPanelHeader.269ce4842b', 'Copy Relative Path')}
       </DropdownMenuItem>
+      {!isWorktreeRootEditorFile(file) && (
+        <DropdownMenuItem
+          onSelect={() =>
+            void window.api.ui.writeClipboardText(absolutePathBasename(file.filePath))
+          }
+        >
+          <Copy />
+          {t('auto.components.editor.EditorPanelHeader.copyFileName', 'Copy File Name')}
+        </DropdownMenuItem>
+      )}
     </>
   )
 }
