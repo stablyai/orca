@@ -25,13 +25,19 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
       } & ContinueRebaseRequest
     ): Promise<ContinueRebaseResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (args.action === 'inspect') {
+        // An automatic read: a stopped WSL distro rejects here and Continue stays disabled.
+        return readWorktreeGitUnlessWslStopped(store, args.worktreePath, false, (path, options) =>
+          continueRebase(path, 'inspect', { ...options, admissionTier: 'interactive' })
+        )
+      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
-      return continueRebase(worktreePath, args.action === 'inspect' ? 'inspect' : 'continue', {
+      return continueRebase(worktreePath, 'continue', {
         ...gitOptions,
         admissionTier: 'interactive',
         expected: args.expected
