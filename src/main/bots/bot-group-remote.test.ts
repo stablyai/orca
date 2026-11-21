@@ -310,6 +310,21 @@ describe('a group with a bot on another computer', () => {
     ).rejects.toThrow('atlas is already in this group.')
   })
 
+  it('compares a joining bot with the name a kept member joined with, not its new one', async () => {
+    const base = remoteFixture()
+    const group = await mixedRoom(base)
+    // Atlas is renamed Orion on its computer; the room still mentions it as Atlas.
+    base.bots[1].name = 'Atlas'
+    await expect(
+      base.groups.update({
+        groupId: group.id,
+        revision: group.revision,
+        botIds: ['bot-0', 'bot-1'],
+        remoteBots: [{ ...ATLAS, name: 'Orion' }]
+      })
+    ).rejects.toThrow('Atlas is already in this group.')
+  })
+
   it("checks a joining member's computer without holding the room's posts", async () => {
     let release: () => void = () => {}
     let checking = false

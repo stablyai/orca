@@ -56,8 +56,15 @@ export function BotGroupMembersDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const listedBots = useBots()
-  // A remote member whose computer isn't listed now still shows, so it can be removed.
-  const allBots = useMemo(() => withUnlistedMembers(listedBots, group), [listedBots, group])
+  // In a room here, a remote member whose computer isn't listed now still shows, so it can be
+  // removed. Another computer's room keeps its remote roster to itself.
+  const allBots = useMemo(
+    () =>
+      group?.hostId === LOCAL_EXECUTION_HOST_ID
+        ? withUnlistedMembers(listedBots, group)
+        : listedBots,
+    [listedBots, group]
+  )
   // A room on this computer can also hold bots on paired computers; a paired server's room holds
   // only that server's bots. A paired web window's bots all live on its one server.
   const canMix = !isPairedWebClientWindow() && (!group || group.hostId === LOCAL_EXECUTION_HOST_ID)
@@ -370,6 +377,11 @@ function MemberRow({
 /** The row's computer; only mounted when bots span more than one, so others don't subscribe. */
 function MemberHost({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element {
   const t = useTranslate()
-  const host = useBotHostLabel(hostId) ?? getTranslatedExecutionHostLabel(hostId, t)
+  const remote = useBotHostLabel(hostId)
+  // Matches the dialog's own words ("…at least one bot on this computer").
+  const host =
+    hostId === LOCAL_EXECUTION_HOST_ID
+      ? t('bots.groups.thisComputer', 'This computer')
+      : (remote ?? getTranslatedExecutionHostLabel(hostId, t))
   return <span className="max-w-32 shrink-0 truncate text-xs text-muted-foreground">{host}</span>
 }

@@ -88,3 +88,29 @@ export const shortened = defineFixture({
     />
   )
 })
+
+/** 4 · A narrow pane and a long name: the name gives way first, and the status keeps its words. */
+export const narrow = defineFixture({
+  width: 300,
+  render: () => (
+    <Column
+      asks={[
+        {
+          ...base,
+          name: 'Nightly builds and release checks',
+          requestId: id(9),
+          state: 'unknown',
+          error: 'The request timed out.'
+        },
+        {
+          ...base,
+          name: 'Nightly builds and release checks',
+          requestId: id(10),
+          state: 'failed',
+          error: "Couldn't reach Workstation. It is offline."
+        },
+        { ...base, requestId: id(11), state: 'sending' }
+      ]}
+    />
+  )
+})

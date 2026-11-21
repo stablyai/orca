@@ -92,7 +92,11 @@ export function resolveRemoteMembers(
   const wasLocal = new Set(group?.members.map((member) => member.botId))
   const named = [
     ...localBots.map((bot) => ({ name: bot.name, joining: !wasLocal.has(bot.id) })),
-    ...remoteBots.map((bot) => ({ name: bot.name, joining: !kept.has(botGroupRemoteKey(bot)) }))
+    // A kept member is mentioned by the name it joined with, whatever its computer calls it now.
+    ...remoteBots.map((bot) => {
+      const member = kept.get(botGroupRemoteKey(bot))
+      return { name: member?.name ?? bot.name, joining: !member }
+    })
   ]
   for (const [index, member] of named.entries()) {
     const folded = member.name.toLocaleLowerCase()

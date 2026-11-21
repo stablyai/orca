@@ -252,6 +252,31 @@ describe('BotGroupMembersDialog', () => {
     })
   })
 
+  it("leaves another computer's room's remote members to that computer", () => {
+    const remote = {
+      environmentId: 'elsewhere',
+      botId: 'w',
+      chatSessionId: 'chat-w',
+      computer: 'Workstation',
+      joinedAfter: 0,
+      name: 'Willow',
+      avatar: null,
+      agent: 'claude' as const
+    }
+    mocks.bots = [bot('x', 'Hazel', 'runtime:ws')]
+    render(
+      <BotGroupMembersDialog
+        group={stampBotGroupHost('runtime:ws', {
+          ...group,
+          members: [{ botId: 'x', sessionId: 's-x' }],
+          remoteMembers: [remote]
+        })}
+        onClose={() => {}}
+      />
+    )
+    expect(screen.queryByRole('checkbox', { name: /Willow/ })).toBeNull()
+  })
+
   it("creates a paired server's group on that server and opens it there", async () => {
     mocks.bots = [bot('w', 'Willow', 'runtime:ws'), bot('x', 'Hazel', 'runtime:ws')]
     render(<BotGroupMembersDialog onClose={() => {}} />)

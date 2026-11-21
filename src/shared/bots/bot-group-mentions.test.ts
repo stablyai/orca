@@ -253,4 +253,15 @@ describe('a member on another computer', () => {
       { id: 'sage', start: 12 }
     ])
   })
+
+  it('keeps its longer name from waking a local member whose name starts it', () => {
+    const sageBot = {
+      ...mixed,
+      remoteMembers: [{ environmentId: 'ws', botId: 'sb', name: 'Sage Bot' }]
+    }
+    expect(botGroupReplyMentions('@Sage Bot can you check', sageBot, bots, 'scout')).toEqual([])
+    expect(botGroupReplyMentions('@Sage can you check', sageBot, bots, 'scout')).toEqual([
+      { id: 'sage', start: 0 }
+    ])
+  })
 })
