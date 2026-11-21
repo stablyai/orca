@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
-import { MAILBOX_POINTER_RESERVED } from './mailbox-pointer-enter-state'
 
 const dirs: string[] = []
 const dbs: OrchestrationDb[] = []
@@ -51,7 +50,7 @@ function countStatements(db: OrchestrationDb): { count: number } {
   return counter
 }
 
-// Guards the title-write path: every working/permission title edge released pointers with a sync UPDATE,
+// Guards #46016's title-write path: every working/permission title edge released pointers with a sync UPDATE,
 // thousands per minute with no mail at all. Now each PTY runs it once per session, never per frame.
 describe('mailbox pointer release gate', () => {
   it.each([13, 130])(
@@ -77,7 +76,7 @@ describe('mailbox pointer release gate', () => {
 
     const restarted = open(path)
     expect(restarted.getMessageById(id)).toMatchObject({
-      pointer_enter_pending: MAILBOX_POINTER_RESERVED,
+      pointer_enter_pending: 1,
       pointer_pty_id: 'pty_kept'
     })
     restarted.releasePendingMailboxPointerForPty('pty_kept')
