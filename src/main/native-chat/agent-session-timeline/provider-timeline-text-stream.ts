@@ -32,14 +32,19 @@ export type ProviderTimelineStream = {
 export function providerTimelineLiveText(
   stream: ProviderTimelineStream,
   epoch: string,
-  snapshot: { text: string } | null
+  readSnapshot: () => { text: string } | null,
+  /** A row no reader takes is not read. */
+  takes?: (itemId: string) => boolean
 ): AgentJournalRenderItem[] {
   const committed = stream.committed
-  return !committed ||
-    committed.epoch !== epoch ||
-    !snapshot ||
-    stream.closing ||
-    stream.stoppedIn !== null
+  if (!committed || takes?.(committed.placement.itemId) === false) {
+    return []
+  }
+  if (committed.epoch !== epoch || stream.closing || stream.stoppedIn !== null) {
+    return []
+  }
+  const snapshot = readSnapshot()
+  return !snapshot
     ? []
     : [
         {

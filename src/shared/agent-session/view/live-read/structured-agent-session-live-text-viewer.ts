@@ -24,6 +24,10 @@ function randomViewerPart(): string {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+/** Retries of one failed report, each twice as long after the last; a later change starts over. */
+const REPORT_RETRIES = 5
+const REPORT_RETRY_MS = 1000
+
 export function createLiveTextViewerReport(
   viewer: StructuredAgentSessionLiveTextViewer | undefined
 ) {
@@ -31,21 +35,49 @@ export function createLiveTextViewerReport(
   const id = `${(viewers++).toString(36)}-${randomViewerPart()}`
   let told: boolean | null = null
   let opened: boolean | null = null
-  const tell = (): void => {
+  let retry: { timer: ReturnType<typeof setTimeout> | null; left: number } = {
+    timer: null,
+    left: REPORT_RETRIES
+  }
+  const cancelRetry = (): void => {
+    if (retry.timer) {
+      clearTimeout(retry.timer)
+    }
+    retry = { timer: null, left: REPORT_RETRIES }
+  }
+  const tell = (retrying = false): void => {
     if (!viewer || told === null) {
       return
     }
     const shown = viewer.shown()
-    if (shown !== told) {
-      told = shown
-      void viewer.setShown(id, shown).catch(() => {})
+    if (shown === told) {
+      return
     }
+    if (!retrying) {
+      cancelRetry()
+    }
+    told = shown
+    const attempt = retry
+    viewer.setShown(id, shown).catch(() => {
+      // Unconfirmed, so the host may still hold the old state: say it again, a bounded number of times.
+      if (attempt !== retry || told !== shown || attempt.left === 0) {
+        return
+      }
+      told = !shown
+      const wait = REPORT_RETRY_MS * 2 ** (REPORT_RETRIES - attempt.left)
+      attempt.left -= 1
+      attempt.timer = setTimeout(() => {
+        attempt.timer = null
+        tell(true)
+      }, wait)
+    })
   }
-  const stop = viewer?.subscribeShown(tell)
+  const stop = viewer?.subscribeShown(() => tell())
   return {
     id,
     /** The `shown` state for an open that asks for the viewer, or undefined for one that doesn't. */
     opening: (asksViewer: boolean): boolean | undefined => {
+      cancelRetry()
       told = null
       opened = asksViewer && viewer ? viewer.shown() : null
       return opened ?? undefined
@@ -56,6 +88,9 @@ export function createLiveTextViewerReport(
         tell()
       }
     },
-    dispose: (): void => stop?.()
+    dispose: (): void => {
+      cancelRetry()
+      stop?.()
+    }
   }
 }

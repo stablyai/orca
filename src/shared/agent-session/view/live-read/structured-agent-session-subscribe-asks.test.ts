@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createStructuredAgentSessionSubscribeAsks } from './structured-agent-session-subscribe-asks'
 
 function viewer(supported: Promise<boolean> | boolean, shown: boolean) {
@@ -62,5 +62,33 @@ describe('a live-text viewer', () => {
     reader.show(false)
     reader.show(true)
     expect(reader.calls).toEqual([])
+  })
+
+  it('says it again when a report fails, so the host does not keep the old state', async () => {
+    vi.useFakeTimers()
+    try {
+      const reader = viewer(true, false)
+      let failures = 1
+      const sent: boolean[] = []
+      reader.viewer.setShown = async (_viewerId: string, next: boolean) => {
+        sent.push(next)
+        if (failures-- > 0) {
+          throw new Error('call lost')
+        }
+      }
+      const asks = createStructuredAgentSessionSubscribeAsks({ liveTextViewer: reader.viewer })
+      asks.read()
+      asks.registered()
+      reader.show(true)
+      await vi.advanceTimersByTimeAsync(999)
+      expect(sent).toEqual([true])
+      await vi.advanceTimersByTimeAsync(1)
+      expect(sent).toEqual([true, true])
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(sent).toEqual([true, true])
+      asks.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

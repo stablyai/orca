@@ -136,13 +136,14 @@ function liveRow(
  *  save or a fresh view never shows less than the stream already did. */
 export function withSubscriberLiveText(
   items: AgentJournalRenderItem[],
-  readLive: () => readonly AgentJournalRenderItem[],
+  /** Reads live text for these rows only, so an unrelated save reads no streaming text. */
+  readLive: (itemIds: ReadonlySet<string>) => readonly AgentJournalRenderItem[],
   form: HistoryReader['form'],
   applied?: (live: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number) => void,
   /** The rest of the page (its submissions and removals), which shares the page's budget. */
   besides: unknown = null
 ): AgentJournalRenderItem[] {
-  const live = items.length > 0 ? readLive() : []
+  const live = items.length > 0 ? readLive(new Set(items.map((item) => item.itemId))) : []
   if (live.length === 0) {
     return items
   }
@@ -184,9 +185,9 @@ export function batchWithSubscriberLiveText(
   page: SizedPage,
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
-  const live = (): readonly AgentJournalRenderItem[] => {
-    const rows = liveTextOf(port, subscriber)
-    forgetEndedLiveRows(subscriber, rows)
+  const live = (itemIds: ReadonlySet<string>): readonly AgentJournalRenderItem[] => {
+    const rows = liveTextOf(port, subscriber, itemIds)
+    forgetEndedLiveRows(subscriber, rows, itemIds)
     return rows
   }
   return withSubscriberLiveText(page.items, live, reader.form, noteSubscriberLiveRow(subscriber), [
@@ -198,22 +199,27 @@ export function batchWithSubscriberLiveText(
 /** The session's live text this subscriber takes: a reply's newest text only while it is shown. */
 function liveTextOf(
   port: SubscriberDeliveryPort,
-  subscriber: Subscriber
+  subscriber: Subscriber,
+  only?: ReadonlySet<string>
 ): readonly AgentJournalRenderItem[] {
-  return (
-    port.hooks.readLiveText?.(subscriber.sessionId, subscriberLiveTextReaders(subscriber)) ?? []
-  )
+  const { takes, ...readers } = subscriberLiveTextReaders(subscriber)
+  const scoped = (id: string) => only?.has(id) !== false && takes?.(id) !== false
+  return port.hooks.readLiveText?.(subscriber.sessionId, { ...readers, takes: scoped }) ?? []
 }
 
 /** A row whose stream ended is saved whole, so what was last sent of it is let go. */
-function forgetEndedLiveRows(subscriber: Subscriber, live: readonly AgentJournalRenderItem[]) {
+function forgetEndedLiveRows(
+  subscriber: Subscriber,
+  live: readonly AgentJournalRenderItem[],
+  within?: ReadonlySet<string> // the rows the read covered; others were not read, so are kept
+) {
   const sent = subscriber.liveSent
   if (!sent || sent.size === 0) {
     return
   }
   const streaming = new Set(live.map((item) => item.itemId))
   for (const itemId of sent.keys()) {
-    if (!streaming.has(itemId)) {
+    if (!streaming.has(itemId) && within?.has(itemId) !== false) {
       sent.delete(itemId)
     }
   }
@@ -226,7 +232,7 @@ export function pageWithSubscriberLiveText(
   page: SizedPage,
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
-  const live = () => liveTextOf(port, subscriber)
+  const live = (itemIds: ReadonlySet<string>) => liveTextOf(port, subscriber, itemIds)
   subscriber.liveSent = new Map()
   subscriber.liveShortened = undefined
   return subscriber.boundedFrames

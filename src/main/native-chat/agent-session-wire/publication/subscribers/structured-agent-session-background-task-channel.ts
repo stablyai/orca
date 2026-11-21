@@ -99,7 +99,11 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     // A fresh view never shows less than the stream already did.
     const items = withSubscriberLiveText(
       result.page.items,
-      () => hooks.readLiveText?.(request.sessionId) ?? [],
+      (itemIds) =>
+        hooks.readLiveText?.(request.sessionId, {
+          appends: true,
+          takes: (id) => itemIds.has(id)
+        }) ?? [],
       (reader ?? CLIENT_HISTORY_READER).form,
       undefined,
       [result.page.submissions, result.page.removedItemIds]

@@ -155,7 +155,11 @@ export class AgentSessionSubscribers {
     // Shown viewers also take a reply's newest text; the rest get main's live text, read apart.
     for (const shown of [true, false]) {
       const targets = all.filter((subscriber) => liveText.shownViewer(subscriber) === shown)
-      const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets, shown) : []
+      // Only a caught-up reader takes live text, so behind ones read none.
+      const readers = targets.filter(
+        (t) => this.isActive(t) && liveText.subscriberAtHead(t, journal)
+      )
+      const items = readers.length > 0 ? liveText.liveTextFor(read, readers, shown) : []
       const live = { journal, fence, items, hostNow: this.now() }
       // Checked per subscriber, in case ending one ends another mid fan-out. Nothing to send and
       // nothing sent before to let go of means no delivery at all.
