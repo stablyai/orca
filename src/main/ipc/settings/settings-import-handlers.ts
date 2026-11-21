@@ -3,6 +3,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import { previewGhosttyImport } from '../../ghostty/index'
 import { previewKittyImport } from '../../kitty/index'
 import { previewWarpThemeImport } from '../../warp-themes/index'
+import { registerSettingsTransferHandlers } from './settings-transfer-handlers'
 
 // Omitted sources fall back to each importer's auto-discovery default.
 export function registerSettingsImportHandlers(store: Store): void {
@@ -15,4 +16,5 @@ export function registerSettingsImportHandlers(store: Store): void {
   ipcMain.handle('settings:previewWarpThemeImport', (event, source?: unknown) =>
     previewWarpThemeImport(store, source, event.sender)
   )
+  registerSettingsTransferHandlers(store)
 }

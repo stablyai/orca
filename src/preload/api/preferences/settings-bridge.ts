@@ -7,6 +7,10 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../../../shared/terminal-themes/terminal-custom-themes'
+import type {
+  SettingsExportResult,
+  SettingsImportReadResult
+} from '../../../shared/settings/portable-settings'
 import type { PreloadApi } from '../../api-types'
 
 export const settingsApi = {
@@ -34,6 +38,11 @@ export const settingsApi = {
 
   previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
     ipcRenderer.invoke('settings:previewWarpThemeImport', source),
+
+  exportToFile: (): Promise<SettingsExportResult> => ipcRenderer.invoke('settings:exportToFile'),
+
+  readImportFile: (): Promise<SettingsImportReadResult> =>
+    ipcRenderer.invoke('settings:readImportFile'),
 
   onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, updates: Record<string, unknown>): void =>

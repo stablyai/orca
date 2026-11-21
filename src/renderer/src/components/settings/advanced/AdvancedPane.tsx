@@ -14,6 +14,8 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { OrcaUninstallSection } from './uninstall/OrcaUninstallSection'
+import { SettingsTransferSection } from './transfer/SettingsTransferSection'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 type AdvancedPaneProps = {
   settings: GlobalSettings
@@ -142,6 +144,20 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
       >
         <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
       </SettingsGroup>
+
+      {/* Export and import use native file dialogs, which the web client does not have. */}
+      {isWebClientLocation() ? null : (
+        <SettingsGroup
+          title={t('settings.transfer.groupTitle', 'Settings File')}
+          className={
+            matchesSettingsSearch(searchQuery, [getAdvancedSearchEntry().settingsTransfer])
+              ? undefined
+              : 'hidden'
+          }
+        >
+          <SettingsTransferSection updateSettings={updateSettings} />
+        </SettingsGroup>
+      )}
 
       {/* Hidden, not unmounted, so filtering mid-run keeps the run's progress. */}
       <SettingsGroup

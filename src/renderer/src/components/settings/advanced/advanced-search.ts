@@ -3,6 +3,7 @@ import { getAdvancedNetworkSearchEntries } from './network/advanced-network-sear
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export const getAdvancedSearchEntry = createLocalizedCatalog(
   () =>
@@ -64,6 +65,22 @@ export const getAdvancedSearchEntry = createLocalizedCatalog(
           )
         ]
       },
+      settingsTransfer: {
+        title: translate('settings.transfer.title', 'Export and import settings'),
+        description: translate(
+          'settings.transfer.searchDescription',
+          'Export your settings to a file and import them on another device.'
+        ),
+        keywords: [
+          ...translateSearchKeyword('settings.transfer.keywords.export', 'export'),
+          ...translateSearchKeyword('settings.transfer.keywords.import', 'import'),
+          ...translateSearchKeyword('settings.transfer.keywords.backup', 'backup'),
+          ...translateSearchKeyword('settings.transfer.keywords.restore', 'restore'),
+          ...translateSearchKeyword('settings.transfer.keywords.sync', 'sync'),
+          ...translateSearchKeyword('settings.transfer.keywords.migrate', 'migrate'),
+          ...translateSearchKeyword('settings.transfer.keywords.device', 'device')
+        ]
+      },
       uninstall: {
         title: translate('settings.uninstall.title', 'Uninstall Orca'),
         description: translate(
@@ -84,5 +101,6 @@ export const getAdvancedSearchEntry = createLocalizedCatalog(
 export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAdvancedNetworkSearchEntries(),
   getAdvancedSearchEntry().http1Compatibility,
+  ...(isWebClientLocation() ? [] : [getAdvancedSearchEntry().settingsTransfer]),
   getAdvancedSearchEntry().uninstall
 ])
