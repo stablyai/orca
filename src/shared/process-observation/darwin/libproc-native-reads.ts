@@ -80,10 +80,7 @@ function submitRead(addon: LibprocAddon, query: LibprocQuery, key: string): Nati
     if (sharedReads.get(key) === read) {
       sharedReads.delete(key)
     }
-    for (const waiter of slotWaiters) {
-      waiter()
-    }
-    slotWaiters.clear()
+    wakeSlotWaiters()
   }
   pending.then(
     () => {
@@ -96,6 +93,18 @@ function submitRead(addon: LibprocAddon, query: LibprocQuery, key: string): Nati
     }
   )
   return read
+}
+
+// Wake only as many waiters as there are free slots, oldest first; waking all made a queue of N re-queue O(N²) times.
+function wakeSlotWaiters(): void {
+  let free = MAX_OUTSTANDING_READS - outstandingReads
+  for (const waiter of slotWaiters) {
+    if (free-- <= 0) {
+      return
+    }
+    slotWaiters.delete(waiter)
+    waiter()
+  }
 }
 
 function waitForSlot(deadline: number): Promise<boolean> {
@@ -129,6 +138,8 @@ export async function readFreshNativeTable(
     let read: NativeRead
     if (shared && (!shared.submitted || shared.sequence >= registeredSequence)) {
       read = shared
+      // A woken waiter that joins a shared read leaves its slot free for the next one.
+      wakeSlotWaiters()
     } else if (outstandingReads < MAX_OUTSTANDING_READS) {
       read = submitRead(addon, query, key)
     } else if (poolStalled) {
