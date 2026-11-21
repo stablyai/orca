@@ -8,23 +8,32 @@ import {
   type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
 import { linkUnlessTaken, lstatIfPresent } from './codex-legacy-session-copy-name-ops'
-import { waitForCopyTurn } from './codex-legacy-session-copy-turns'
+import { runAloneForCopy } from './codex-legacy-session-copy-turns'
 
 /**
- * Before a resume looks for a copy's name: waits out a swap of it, and gives a copy that a stopped
- * swap left moved aside its name back. Starts no swap.
+ * Before a resume looks for a copy's name: runs after any swap of it, and gives a copy that a
+ * stopped swap left moved aside its name back. Starts no swap. Throws unless the marker is read or
+ * proven absent: only then may the caller link the source in over a copy that may be aside.
  */
 export async function settleLegacySessionCopyName(args: {
   managedHome: string
   relativePath: string
 }): Promise<void> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  await waitForCopyTurn(copyPath)
+  const settled = await runAloneForCopy(copyPath, 'settle', () => settle(args, copyPath))
+  if (settled === 'deferred') {
+    throw new Error(`Legacy session copy marker unreadable: ${copyPath}`)
+  }
+}
+
+async function settle(
+  args: { managedHome: string; relativePath: string },
+  copyPath: string
+): Promise<'none'> {
   if (await lstatIfPresent(copyPath)) {
-    return
+    return 'none'
   }
   const markerPath = legacySessionCopyMarkerPath(args.managedHome, args.relativePath)
-  // Only a marker proven absent lets the caller link the source in over a copy that may be aside.
   const marker = await readFile(markerPath, 'utf-8').then(
     parseLegacyCopiedSessionMarker,
     (error: unknown) => {
@@ -37,6 +46,7 @@ export async function settleLegacySessionCopyName(args: {
   if (marker && !marker.kept) {
     await restoreMovedCopy(marker, normalize(marker.sourcePath), copyPath)
   }
+  return 'none'
 }
 
 /** A swap stopped after moving the copy aside: its name comes back before anything else. */
