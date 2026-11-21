@@ -1,6 +1,8 @@
 import { MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../../shared/native-chat/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../../shared/native-chat/native-chat-types'
@@ -26,6 +28,7 @@ export function NativeChatEmptyState({
   retrying?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const fades = useScrollEdgeFades<HTMLDivElement>()
   const shownPersona = kind === 'empty' ? persona : null
   const copy = shownPersona
     ? {
@@ -40,28 +43,43 @@ export function NativeChatEmptyState({
       }
     : emptyStateCopy(kind, { message, headline }, agent, retrying, t)
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
-      {shownPersona ? (
-        shownPersona.icon
-      ) : (
-        <div
-          className={
-            kind === 'error'
-              ? 'flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive'
-              : 'flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground'
-          }
-        >
-          {kind === 'error' ? (
-            <TriangleAlert className="size-6" />
+    <div className="h-full min-h-0 w-full overflow-hidden has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring">
+      <div
+        ref={fades.ref}
+        role={fades.scrollable ? 'region' : undefined}
+        aria-label={fades.scrollable ? copy.title : undefined}
+        tabIndex={fades.scrollable ? 0 : undefined}
+        className={cn(
+          'scrollbar-sleek flex h-full min-h-0 w-full flex-col justify-center-safe overflow-y-auto focus-visible:outline-none',
+          fades.className
+        )}
+      >
+        <div className="flex w-full shrink-0 flex-col items-center gap-3 p-6 text-center">
+          {shownPersona ? (
+            shownPersona.icon
           ) : (
-            <MessageSquare className="size-6" />
+            <div
+              className={
+                kind === 'error'
+                  ? 'flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive'
+                  : 'flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground'
+              }
+            >
+              {kind === 'error' ? (
+                <TriangleAlert className="size-6" />
+              ) : (
+                <MessageSquare className="size-6" />
+              )}
+            </div>
           )}
+          <p className="text-sm font-medium text-chat-foreground-strong">{copy.title}</p>
+          {copy.subtitle ? (
+            <p className="max-w-sm text-balance text-xs text-chat-foreground-faint">
+              {copy.subtitle}
+            </p>
+          ) : null}
         </div>
-      )}
-      <p className="text-sm font-medium text-chat-foreground-strong">{copy.title}</p>
-      {copy.subtitle ? (
-        <p className="max-w-sm text-balance text-xs text-chat-foreground-faint">{copy.subtitle}</p>
-      ) : null}
+      </div>
     </div>
   )
 }
