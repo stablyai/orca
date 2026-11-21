@@ -20185,7 +20185,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 工作區中任何未提交或未追蹤的變更都將被永久刪除。",
           "unavailable": "無法檢查變更",
           "checking": "正在檢查變更…",
           "checkingDetails": "檢查…",
@@ -20205,7 +20204,6 @@
           "line_one": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}",
           "line_other": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}"
         },
-        "ignoredFilesLost": "Git 忽略的檔案將會遺失：{{names}}",
         "ignoredFilesUnchecked": "無法完整檢查 Git 忽略的檔案"
       }
     },
@@ -21766,7 +21764,6 @@
         "withIgnored": "{{what}}及 Git 忽略的檔案將會遺失",
         "ignoredOnly": "Git 忽略的檔案將會遺失"
       },
-      "showChanges": "顯示變更",
       "unsavedSuffix": "（未儲存）",
       "onHost": "位於 {{host}}",
       "forceDeletingEllipsis": "正在強制刪除…",
