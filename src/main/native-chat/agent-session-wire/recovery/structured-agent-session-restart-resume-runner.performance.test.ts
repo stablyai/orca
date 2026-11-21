@@ -38,12 +38,10 @@ it('starts at most six restart continuations at once on a many-core host', async
   expect(peak).toBe(6)
 })
 
-it('starts chats cut mid-turn first and at most two whose lead had finished', async () => {
+it('gives chats cut mid-turn the start slots before chats whose lead had finished', async () => {
   const { StructuredAgentSessionResumeAdmission, resumeStructuredAgentSessionsFromRestart } =
     await import('./structured-agent-session-restart-resume-runner')
   const started: string[] = []
-  let finishedRunning = 0
-  let finishedPeak = 0
   let open: () => void = () => {}
   const gate = new Promise<void>((resolve) => {
     open = resolve
@@ -71,23 +69,18 @@ it('starts chats cut mid-turn first and at most two whose lead had finished', as
       consumeMarker: async () => true,
       resume: async (sessionId) => {
         started.push(sessionId)
-        const finished = sessionId.startsWith('finished')
-        finishedRunning += finished ? 1 : 0
-        finishedPeak = Math.max(finishedPeak, finishedRunning)
         await gate
-        finishedRunning -= finished ? 1 : 0
       }
     },
     candidates,
     'launch'
   )
-  for (let turn = 0; turn < 50 && started.length < 5; turn += 1) {
+  for (let turn = 0; turn < 50 && started.length < 6; turn += 1) {
     await new Promise((resolve) => setImmediate(resolve))
   }
   expect(started.slice(0, 3)).toEqual(['mid-0', 'mid-1', 'mid-2'])
-  expect(started).toHaveLength(5)
+  expect(started).toHaveLength(6)
   open()
   await all
   expect(started).toHaveLength(23)
-  expect(finishedPeak).toBe(2)
 })
