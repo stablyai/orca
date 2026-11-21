@@ -142,6 +142,21 @@ describe('Store', () => {
     ])
   })
 
+  it('updateRepo persists the sidebar highlight across reloads', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    expect(store.updateRepo({ id: 'r1' }, { sidebarHighlight: true })!.sidebarHighlight).toBe(true)
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.sidebarHighlight).toBe(true)
+
+    expect(reloaded.updateRepo({ id: 'r1' }, { sidebarHighlight: false })!.sidebarHighlight).toBe(
+      false
+    )
+  })
+
   // Git catalogs cannot enumerate sibling folder workspaces; changing kind would strand their tabs (STA-10638).
 
   // Git accepts subdirectories; conversion must separately prove this folder is the checkout root.
