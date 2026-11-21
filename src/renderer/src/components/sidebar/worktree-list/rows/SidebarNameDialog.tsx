@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -12,25 +12,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 
-type ProjectGroupNameDialogProps = {
+type SidebarNameDialogProps = {
   open: boolean
   title: string
   description: string
+  label?: string
   initialName: string
   confirmLabel: string
   onOpenChange: (open: boolean) => void
   onSubmit: (name: string) => Promise<void> | void
 }
 
-export function ProjectGroupNameDialog({
+export function SidebarNameDialog({
   open,
   title,
   description,
+  label,
   initialName,
   confirmLabel,
   onOpenChange,
   onSubmit
-}: ProjectGroupNameDialogProps): React.JSX.Element {
+}: SidebarNameDialogProps): React.JSX.Element {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const inputId = useId()
@@ -38,7 +40,24 @@ export function ProjectGroupNameDialog({
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
   const mountedRef = useRef(true)
+  const sessionRef = useRef(0)
   const trimmedName = name.trim()
+
+  useEffect(() => {
+    if (!open) {
+      sessionRef.current += 1
+    }
+  }, [open])
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        sessionRef.current += 1
+      }
+      onOpenChange(nextOpen)
+    },
+    [onOpenChange]
+  )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
     // Track content attachment so late saves cannot update closed dialog state.
@@ -65,24 +84,25 @@ export function ProjectGroupNameDialog({
       if (!trimmedName || submitting) {
         return
       }
+      const session = sessionRef.current
       setSubmitting(true)
       try {
         await onSubmit(trimmedName)
-        if (mountedRef.current) {
-          onOpenChange(false)
+        if (mountedRef.current && sessionRef.current === session) {
+          handleOpenChange(false)
         }
       } catch (error) {
-        console.error('Failed to save project group name:', error)
-        if (mountedRef.current) {
+        console.error('Failed to save sidebar name:', error)
+        if (mountedRef.current && sessionRef.current === session) {
           setSubmitting(false)
         }
       }
     },
-    [onOpenChange, onSubmit, submitting, trimmedName]
+    [handleOpenChange, onSubmit, submitting, trimmedName]
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
@@ -99,7 +119,8 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              {t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
+              {label ??
+                t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
               id={inputId}
@@ -115,7 +136,7 @@ export function ProjectGroupNameDialog({
               variant="outline"
               size="sm"
               className="text-xs"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
             >
               {t('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
