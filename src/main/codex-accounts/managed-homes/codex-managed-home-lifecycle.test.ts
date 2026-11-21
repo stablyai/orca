@@ -63,11 +63,13 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     const f = fixture()
     mkdirSync(join(f.home, 'sessions'))
     writeFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'only copy\n')
+    writeFileSync(join(f.home, 'history.jsonl'), '{"text":"only prompt"}\n')
     writeFileSync(join(f.home, 'auth.json'), '{}')
 
     await f.lifecycle.safeRemove(f.home, 'a')
 
-    expect(readdirSync(f.home)).toEqual(['sessions'])
+    expect(readdirSync(f.home).sort()).toEqual(['history.jsonl', 'sessions'])
+    expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('{"text":"only prompt"}\n')
     expect(readFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'utf8')).toBe('only copy\n')
   })
 
