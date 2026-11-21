@@ -45,7 +45,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
     this.statusHookGeneration += 1
     if (!enabled) {
-      this.claudeAgentViews.clear()
+      this.claudeAgentViews.release()
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
       this.clearAllAssistantMessageRetries()

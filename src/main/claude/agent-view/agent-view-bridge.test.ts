@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeAgentViewBridge } from './agent-view-bridge'
 
@@ -72,5 +75,41 @@ describe('Claude agent view delivery', () => {
     await vi.advanceTimersByTimeAsync(4000)
     expect(await result).toEqual({ status: 'timeout' })
     expect(bridge.receive({ ...identity, action: 'take' })).toEqual({})
+  })
+
+  it('keeps an idle Claude viewable after main restarts, since its mod does not register again', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-view-'))
+    try {
+      const file = join(dir, 'claude-agent-views.json')
+      const before = new ClaudeAgentViewBridge()
+      await before.restore(file)
+      before.receive({
+        ...identity,
+        action: 'register',
+        view: { agentId: 'previous', revision: 1 },
+        keybindings: JSON.stringify({
+          bindings: [{ context: 'Chat', bindings: { 'ctrl+alt+h': 'command:orca-agent-view' } }]
+        })
+      })
+      await vi.waitFor(() => expect(existsSync(file)).toBe(true))
+      before.close()
+
+      const after = new ClaudeAgentViewBridge()
+      await after.restore(file)
+      const trigger = vi.fn(async () => true)
+      const result = after.view({ ...identity, agentId: 'child', trigger })
+      await vi.waitFor(() =>
+        expect(trigger).toHaveBeenCalledWith('\u001b[104;7u', expect.any(Function))
+      )
+      const taken = after.receive({ ...identity, action: 'take' })
+      expect(taken).toMatchObject({ agentId: 'child' })
+      after.receive({ ...identity, action: 'ack', ...taken })
+      expect(await result).toEqual({ status: 'viewed' })
+      expect(after.receive({ ...identity, instanceId: 'other', action: 'take' })).toEqual({
+        unknown: true
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

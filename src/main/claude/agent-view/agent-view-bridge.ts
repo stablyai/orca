@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { claudeAgentViewChord } from './agent-view-keybindings'
+import {
+  ClaudeAgentViewIdentity as Identity,
+  MAX_CLAUDE_AGENT_VIEW_SESSIONS,
+  ClaudeAgentViewRegistryFile,
+  type RegisteredClaudeAgentView
+} from './agent-view-registry-file'
 import {
   CLAUDE_AGENT_VIEW_SHORTCUTS,
   ClaudeAgentViewObservation,
@@ -9,14 +14,6 @@ import {
   type ClaudeAgentViewResult
 } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
-const Identity = z.object({
-  paneKey: z
-    .string()
-    .max(256)
-    .refine((value) => parsePaneKey(value) !== null),
-  sessionId: z.string().min(1).max(256),
-  instanceId: z.string().min(1).max(256)
-})
 const Message = z.discriminatedUnion('action', [
   Identity.extend({
     action: z.literal('register'),
@@ -41,33 +38,49 @@ type PendingView = {
   finish: (result: ClaudeAgentViewResult) => void
 }
 
-type ViewSession = z.infer<typeof Identity> & {
-  chord: string
-  seenAt: number
-  pending?: PendingView
-  view?: z.infer<typeof ClaudeAgentViewObservation>
-}
+type ViewSession = RegisteredClaudeAgentView & { pending?: PendingView }
 
-type BridgeReply = { registered?: true; requestId?: string; agentId?: string; expiresAt?: number }
+type BridgeReply = {
+  registered?: true
+  unknown?: true
+  requestId?: string
+  agentId?: string
+  expiresAt?: number
+}
 
 export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
-  private expiryTimer?: ReturnType<typeof setInterval>
+  private registry?: ClaudeAgentViewRegistryFile
 
   subscribe(listener: (snapshot: ClaudeAgentViewSnapshot) => void): () => void {
-    this.prune()
     this.listeners.add(listener)
     listener(this.snapshot())
-    this.expiryTimer ??= setInterval(() => this.prune(), 1000)
-    this.expiryTimer.unref()
     return () => {
       this.listeners.delete(listener)
-      if (this.listeners.size === 0) {
-        clearInterval(this.expiryTimer)
-        this.expiryTimer = undefined
+    }
+  }
+
+  /** Mods register only on change, so a restarted main reloads what idle Claudes told the last one. */
+  async restore(filePath: string): Promise<void> {
+    const registry = new ClaudeAgentViewRegistryFile(filePath)
+    this.registry = registry
+    const saved = await registry.load()
+    if (this.registry !== registry) {
+      return
+    }
+    for (const session of saved) {
+      if (!this.sessions.has(session.paneKey)) {
+        this.sessions.set(session.paneKey, session)
       }
     }
+    this.publish()
+  }
+
+  private save(): void {
+    void this.registry?.save(
+      [...this.sessions.values()].map(({ pending: _pending, ...session }) => session)
+    )
   }
 
   private snapshot(): ClaudeAgentViewSnapshot {
@@ -99,6 +112,7 @@ export class ClaudeAgentViewBridge {
     session.view = view
     if (changed) {
       this.publish()
+      this.save()
     }
   }
 
@@ -108,7 +122,6 @@ export class ClaudeAgentViewBridge {
       return {}
     }
     const message = parsed.data
-    this.prune()
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
       const chord = claudeAgentViewChord(message.keybindings)
@@ -117,15 +130,19 @@ export class ClaudeAgentViewBridge {
           current.pending?.finish({ status: 'unavailable' })
           this.sessions.delete(message.paneKey)
           this.publish()
+          this.save()
         }
         return {}
       }
-      if (!current && this.sessions.size >= 1024) {
-        return {}
+      if (!current && this.sessions.size >= MAX_CLAUDE_AGENT_VIEW_SESSIONS) {
+        this.evictOldest()
       }
       if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
         current.seenAt = Date.now()
-        current.chord = chord
+        if (current.chord !== chord) {
+          current.chord = chord
+          this.save()
+        }
       } else {
         current?.pending?.finish({ status: 'unavailable' })
         this.sessions.set(message.paneKey, {
@@ -136,6 +153,7 @@ export class ClaudeAgentViewBridge {
           seenAt: Date.now()
         })
         this.publish()
+        this.save()
       }
       const session = this.sessions.get(message.paneKey)
       if (session && message.view) {
@@ -148,12 +166,14 @@ export class ClaudeAgentViewBridge {
       current.instanceId !== message.instanceId ||
       current.sessionId !== message.sessionId
     ) {
-      return {}
+      // Asks a mod this main never heard from (or forgot) to register again.
+      return message.action === 'end' ? {} : { unknown: true }
     }
     if (message.action === 'end') {
       current.pending?.finish({ status: 'unavailable' })
       this.sessions.delete(message.paneKey)
       this.publish()
+      this.save()
       return {}
     }
     if (message.action === 'observe') {
@@ -190,7 +210,6 @@ export class ClaudeAgentViewBridge {
     trigger: (input: string, isCurrent: () => boolean) => Promise<boolean>
     signal?: AbortSignal
   }): Promise<ClaudeAgentViewResult> {
-    this.prune()
     const session = this.sessions.get(args.paneKey)
     const shortcut = CLAUDE_AGENT_VIEW_SHORTCUTS.find((item) => item.chord === session?.chord)
     if (!session || session.sessionId !== args.sessionId || !shortcut) {
@@ -226,8 +245,7 @@ export class ClaudeAgentViewBridge {
       session.view.agentId !== args.agentId &&
       session.chord === shortcut.chord &&
       session.pending === pending &&
-      pending.expiresAt >= Date.now() &&
-      Date.now() - session.seenAt <= 15000
+      pending.expiresAt >= Date.now()
     const timeout = setTimeout(() => finish({ status: 'timeout' }), 5500)
     const abort = () => finish({ status: 'unavailable' })
     args.signal?.addEventListener('abort', abort, { once: true })
@@ -250,24 +268,31 @@ export class ClaudeAgentViewBridge {
     }
   }
 
-  clear(): void {
+  /** Settles waiting views; the registry stays saved for the next main, whose mods stay quiet. */
+  release(): void {
     for (const session of this.sessions.values()) {
       session.pending?.finish({ status: 'unavailable' })
     }
+  }
+
+  /** Stop: the saved registry outlives this main; memory and subscribers do not. */
+  close(): void {
+    this.release()
+    this.registry = undefined
     this.sessions.clear()
     this.publish()
   }
 
-  private prune(): void {
-    let changed = false
-    for (const [paneKey, session] of this.sessions) {
-      if (Date.now() - session.seenAt > 15000) {
-        session.pending?.finish({ status: 'unavailable' })
-        this.sessions.delete(paneKey)
-        changed = true
+  private evictOldest(): void {
+    let oldest: ViewSession | undefined
+    for (const session of this.sessions.values()) {
+      if (!oldest || session.seenAt < oldest.seenAt) {
+        oldest = session
       }
     }
-    if (changed) {
+    if (oldest) {
+      oldest.pending?.finish({ status: 'unavailable' })
+      this.sessions.delete(oldest.paneKey)
       this.publish()
     }
   }
