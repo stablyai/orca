@@ -3,12 +3,10 @@ import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diff
 import type { MobileNativeChatTurnRow } from '../projection/use-mobile-native-chat-row-props'
 import { useCallback, useMemo } from 'react'
 import { nativeChatAutomationTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-automation-turns'
+import { nativeChatActingTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
-import {
-  isSubagentGroupBlock,
-  type NativeChatMessage
-} from '../../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import {
   nativeChatLiveLine,
@@ -33,7 +31,7 @@ import {
   nativeChatTurnBarRows
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
-import { mobileNativeChatQuietCardAnswerIds } from './mobile-native-chat-quiet-card-answer-rows'
+import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
 import { structuredAgentTurnOpeningSendPending } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 
 const NO_TURN_KEYS: readonly undefined[] = []
@@ -52,7 +50,8 @@ export function useMobileNativeChatTurnDisclosure({
   stopping = false,
   lineYields = false,
   receipts,
-  scopeKey
+  scopeKey,
+  showsTurnDiffs = true
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
@@ -66,6 +65,8 @@ export function useMobileNativeChatTurnDisclosure({
   lineYields?: boolean
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   scopeKey: string
+  /** Off in a bot's chat, whose own edits are scratch files: its workers do the code work. */
+  showsTurnDiffs?: boolean
 }): {
   active: NativeChatTurnStatus | null
   presentation: MobileNativeChatRunPresentation
@@ -122,7 +123,17 @@ export function useMobileNativeChatTurnDisclosure({
     turnKeys,
     completedByTurn
   )
-  const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
+  const summaries = useMobileNativeChatTurnDiffs(
+    rows,
+    enabled,
+    showsTurnDiffs,
+    turnKeys,
+    partialTurnKey
+  )
+  const quiet = useMemo(
+    () => (enabled ? mobileNativeChatQuietTurns(rows, turnKeys, completedByTurn, summaries) : null),
+    [completedByTurn, enabled, rows, summaries, turnKeys]
+  )
   const waiting = useMemo(() => {
     const ids = enabled
       ? nativeChatMessagesWaitingBehindLiveTurn(
@@ -133,27 +144,25 @@ export function useMobileNativeChatTurnDisclosure({
           turnJournal ?? {}
         )
       : null
-    const quiet = enabled
-      ? mobileNativeChatQuietCardAnswerIds(rows, turnKeys, completedByTurn, summaries)
-      : null
-    if (!ids?.size && !quiet?.size) {
+    if (!ids?.size && !quiet?.ids.size) {
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
     return {
-      listMessages: rows.filter((message) => !ids?.has(message.id) && !quiet?.has(message.id)),
+      // Rows merged into a later one are among the quiet ids, and draw inside it.
+      listMessages: (quiet?.shown ?? rows).filter((m) => !ids?.has(m.id) && !quiet?.ids.has(m.id)),
       waitingRows: rows.flatMap((item, index) => (ids?.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
-  }, [completedByTurn, enabled, rows, stopping, summaries, turnJournal, turnKeys])
+  }, [enabled, quiet, rows, stopping, turnJournal])
   const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
-  const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
   const automationTurns = useMemo(
     () => nativeChatAutomationTurnKeys(rows, turnKeys),
     [rows, turnKeys]
   )
+  const actingTurns = useMemo(() => nativeChatActingTurnKeys(rows, turnKeys), [rows, turnKeys])
 
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
@@ -213,7 +222,7 @@ export function useMobileNativeChatTurnDisclosure({
       const turnKey = turnKeys[index]
       const bar = turnKey === undefined ? undefined : bars.get(turnKey)
       const turnStatus =
-        enabled && turnKey !== undefined && bar?.index === index
+        enabled && turnKey !== undefined && bar?.index === index && !quiet?.turns.has(turnKey)
           ? turnKey === activeTurnKey
             ? active
             : (completedByTurn[turnKey] ?? null)
@@ -228,6 +237,9 @@ export function useMobileNativeChatTurnDisclosure({
         ...(turnKey === message.id ? { opensTurn: true as const } : {}),
         ...(turnKey !== undefined && automationTurns.has(turnKey)
           ? { inAutomationTurn: true as const }
+          : {}),
+        ...(turnKey !== undefined && actingTurns.has(turnKey)
+          ? { inActingTurn: true as const }
           : {}),
         ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // Without a user boundary, session working state remains authoritative; bridge chat knows only its synthetic stream row is live.
@@ -248,10 +260,6 @@ export function useMobileNativeChatTurnDisclosure({
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
         onToggleReasoning: toggleReasoning,
-        ...(message.blocks.some(isSubagentGroupBlock)
-          ? { subagentGroupsOpen: openSubagentGroups }
-          : {}),
-        onToggleSubagentGroup: toggleSubagentGroup,
         userMessageOpen: message.role === 'user' && openUserMessages.has(message.id),
         onToggleUserMessage: toggleUserMessage
       }
@@ -259,8 +267,10 @@ export function useMobileNativeChatTurnDisclosure({
     [
       turnKeys,
       automationTurns,
+      actingTurns,
       summaries,
       waiting,
+      quiet,
       bars,
       enabled,
       activeTurnKey,
@@ -278,8 +288,6 @@ export function useMobileNativeChatTurnDisclosure({
       liveReasoningId,
       expandedReasoning,
       toggleReasoning,
-      openSubagentGroups,
-      toggleSubagentGroup,
       isWorking,
       openUserMessages,
       toggleUserMessage

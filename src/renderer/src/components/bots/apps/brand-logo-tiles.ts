@@ -48,3 +48,6 @@ export const LOGO_TILES: {
     zoom: zoomLogo
   }
 }
+
+/** Composio logos that are one near-black mark on nothing: bare in a connector row, a dark theme draws them white. */
+export const COMPOSIO_DARK_MARKS: ReadonlySet<string> = new Set(['github', 'intercom'])

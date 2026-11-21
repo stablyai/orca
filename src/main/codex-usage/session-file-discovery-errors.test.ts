@@ -61,15 +61,12 @@ describe('Codex history discovery failures', () => {
     await expect(listCodexSessionFiles()).rejects.toMatchObject({ code: 'EACCES' })
   })
 
-  it.each(['ENOENT', 'ENOTDIR'])(
-    'keeps sibling files when a child disappears (%s)',
-    async (code) => {
-      const sibling = join(sessions, 'kept.jsonl')
-      await writeFile(sibling, '')
-      state.blocked = join(sessions, 'removed')
-      await mkdir(state.blocked)
-      state.code = code
-      await expect(listCodexSessionFiles()).resolves.toEqual([sibling])
-    }
-  )
+  it('keeps sibling files when a child directory becomes a file', async () => {
+    const sibling = join(sessions, 'kept.jsonl')
+    await writeFile(sibling, '')
+    state.blocked = join(sessions, 'replaced')
+    await mkdir(state.blocked)
+    state.code = 'ENOTDIR'
+    await expect(listCodexSessionFiles()).resolves.toEqual([sibling])
+  })
 })

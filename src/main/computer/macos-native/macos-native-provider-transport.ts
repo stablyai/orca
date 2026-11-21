@@ -20,9 +20,10 @@ export type StartedMacOSProviderSocket = {
   socketToken: string
 }
 
-export function isMacOS14OrNewer(): boolean {
+// Darwin 22 is macOS 13; Orca.app's own 13.4 minimum already rules out 13.0-13.3.
+export function isMacOS13OrNewer(): boolean {
   const darwinMajor = Number.parseInt(release().split('.')[0] ?? '', 10)
-  return Number.isFinite(darwinMajor) && darwinMajor >= 23
+  return Number.isFinite(darwinMajor) && darwinMajor >= 22
 }
 
 // Suppress stale socket errors without retaining the client or crashing the process.

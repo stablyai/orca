@@ -10,7 +10,13 @@ vi.mock('@/lib/bot-host-views', () => ({ useBotHostOffline: () => false }))
 vi.mock('../../settings/bots/use-bot-home-file', () => ({ useBotHome: () => null }))
 vi.mock('./BotComputerPage', () => ({ useBotComputerName: () => 'This Mac' }))
 vi.mock('./use-bot-picture-paste', () => ({ useBotPicturePaste: () => () => {} }))
-vi.mock('./BotSettingsRoot', () => ({ BotSettingsRoot: () => <p>root</p> }))
+vi.mock('./BotSettingsRoot', () => ({
+  BotSettingsRoot: ({ open }: { open: (page: 'soul') => void }) => (
+    <button type="button" data-settings-page="soul" onClick={() => open('soul')}>
+      Soul
+    </button>
+  )
+}))
 vi.mock('./BotSettingsSubpage', async () => {
   const { useBotSettingsLeaveGuard } = await import('./bot-settings-leave-guard')
   return {
@@ -75,12 +81,6 @@ describe('BotSettingsView breadcrumb', () => {
     expect(onExit).toHaveBeenCalledTimes(1)
   })
 
-  it('the bot name leaves the view from the root', async () => {
-    const { onExit } = show(null)
-    await click('Bot builder')
-    expect(onExit).toHaveBeenCalledTimes(1)
-  })
-
   it('a subpage that refuses to leave keeps both crumbs on it', async () => {
     leave.allowed = false
     const { onExit } = show('agent')
@@ -88,5 +88,17 @@ describe('BotSettingsView breadcrumb', () => {
     await click('Bot builder')
     expect(readBotSettingsPlace('panel')).toEqual({ botId: bot.id, page: 'agent' })
     expect(onExit).not.toHaveBeenCalled()
+  })
+
+  it('restores root scroll position when backing out of a subpage', async () => {
+    show(null)
+    const rootScreen = document.querySelector<HTMLElement>('[data-settings-screen]')
+    expect(rootScreen).not.toBeNull()
+    rootScreen!.scrollTop = 340
+    await click('Soul')
+    expect(readBotSettingsPlace('panel')).toEqual({ botId: bot.id, page: 'soul' })
+    await click('Back to Settings')
+    expect(readBotSettingsPlace('panel')).toEqual({ botId: bot.id, page: null })
+    expect(document.querySelector<HTMLElement>('[data-settings-screen]')?.scrollTop).toBe(340)
   })
 })

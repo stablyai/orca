@@ -30,7 +30,6 @@ export function NativeChatCliForkMenuItems({
   const pending = useNativeChatCliForkPending(
     chat ? { executionHostScope: chat.request.executionHostScope, sessionId: chat.sessionId } : null
   )
-  const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
   if (!chat || !agent) {
     return null
@@ -46,7 +45,7 @@ export function NativeChatCliForkMenuItems({
         cliPending={pending}
         onResumeInNewCli={(event) => {
           event.preventDefault()
-          void runNativeChatCliFork({ subject: chat, tab, agent, commandOverrides, onComplete })
+          void runNativeChatCliFork({ subject: chat, tab, agent, onComplete })
         }}
       />
     </>

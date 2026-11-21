@@ -1,17 +1,20 @@
 // Brand marks for Orca's own connectors, the MCP apps Add to <bot> lists and well-known tools, on the tile each brand
 // is drawn on (LOGO_TILES.brand; white otherwise). GitHub keeps its monochrome mark: the connector's own icon.
-import React, { type ComponentType } from 'react'
+import React, { useContext, type ComponentType } from 'react'
 import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
+import datadogDarkLogo from '@/assets/connector-brands/datadog-dark.svg'
 import gitlabLogo from '@/assets/connector-brands/gitlab.svg'
 import googleLogo from '@/assets/connector-brands/google.svg'
 import neonLogo from '@/assets/connector-brands/neon.svg'
 import netlifyLogo from '@/assets/connector-brands/netlify.svg'
+import netlifyDarkLogo from '@/assets/connector-brands/netlify-dark.svg'
 import notionLogo from '@/assets/connector-brands/notion.svg'
 import playwrightLogo from '@/assets/connector-brands/playwright.svg'
 import posthogLogo from '@/assets/connector-brands/posthog.svg'
+import posthogDarkLogo from '@/assets/connector-brands/posthog-dark.svg'
 import sentryLogo from '@/assets/connector-brands/sentry.svg'
 import slackLogo from '@/assets/connector-brands/slack.svg'
 import stripeLogo from '@/assets/connector-brands/stripe.svg'
@@ -21,7 +24,8 @@ import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
-import { BotAppLogo } from './BotAppRow'
+import { BARE_LOGO_BOX, BotAppLogo, BotLogoBare } from './BotAppRow'
+import { cn } from '@/lib/class-names'
 import { LOGO_TILES } from './brand-logo-tiles'
 
 type BotAppBrand = {
@@ -29,6 +33,10 @@ type BotAppBrand = {
   logo?: string
   /** A monochrome mark: drawn where there is no logo, and as BotAppBrandMark. */
   Icon?: ComponentType<{ className?: string }>
+  /** The logo is a white mark for a dark tile: bare, a light theme draws it black. */
+  whiteMark?: true
+  /** The logo with its near-black ink in white: bare, a dark theme draws it in place of `logo`. */
+  darkLogo?: string
 }
 
 /** By connector id or BOT_MCP_APPS id; a new MCP app adds its logo here, and its tile to LOGO_TILES.brand. */
@@ -37,16 +45,16 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },
   github: { Icon: GitHubIcon },
-  vercel: { logo: vercelLogo },
-  sentry: { logo: sentryLogo },
-  datadog: { logo: datadogLogo },
-  posthog: { logo: posthogLogo },
+  vercel: { logo: vercelLogo, whiteMark: true },
+  sentry: { logo: sentryLogo, whiteMark: true },
+  datadog: { logo: datadogLogo, darkLogo: datadogDarkLogo },
+  posthog: { logo: posthogLogo, darkLogo: posthogDarkLogo },
   cloudflare: { logo: cloudflareLogo },
   supabase: { logo: supabaseLogo },
   neon: { logo: neonLogo },
-  netlify: { logo: netlifyLogo },
+  netlify: { logo: netlifyLogo, darkLogo: netlifyDarkLogo },
   gitlab: { logo: gitlabLogo },
-  context7: { logo: context7Logo },
+  context7: { logo: context7Logo, whiteMark: true },
   atlassian: { logo: atlassianLogo },
   notion: { logo: notionLogo },
   stripe: { logo: stripeLogo },
@@ -70,8 +78,9 @@ export function BotAppBrandMark({
   return Icon ? <Icon className={className} /> : null
 }
 
-/** An app's logo tile: its brand mark on its brand's tile, else its own icon. At xs, a link row's icon,
- *  the bare mark with no tile: a monochrome mark in the text colour, so it inverts with the theme. */
+/** An app's logo tile: its brand mark on its brand's tile, else its own icon. At xs, a link row's icon, and in a
+ *  connector list's row (BotLogoBare, 20 px), the bare mark with no tile: a monochrome mark in the text colour, so it
+ *  inverts with the theme. */
 export function BotAppBrandLogo({
   app,
   size = 'md'
@@ -81,16 +90,41 @@ export function BotAppBrandLogo({
   /** xs: a link row's icon column; sm: a chip in a list of names; md: a list row; lg: a setup dialog's heading. */
   size?: 'xs' | 'sm' | 'md' | 'lg'
 }): React.JSX.Element {
+  const bare = useContext(BotLogoBare)
   const brand = BRANDS[app.id]
   const Icon = app.Icon ?? brand?.Icon
-  if (size === 'xs') {
-    return brand?.logo ? (
-      <img src={brand.logo} alt="" draggable={false} className="size-3.5 object-contain" />
+  if (size === 'xs' || bare) {
+    const box = size === 'xs' ? 'size-3.5' : 'size-5'
+    // Only a connector row's marks follow the theme; xs elsewhere keeps its logos as they were.
+    const darkLogo = bare ? brand?.darkLogo : undefined
+    const mark = brand?.logo ? (
+      <>
+        <img
+          src={brand.logo}
+          alt=""
+          draggable={false}
+          className={cn(
+            box,
+            'object-contain',
+            bare && brand.whiteMark && 'brightness-0 dark:brightness-100',
+            darkLogo && 'dark:hidden'
+          )}
+        />
+        {darkLogo ? (
+          <img
+            src={darkLogo}
+            alt=""
+            draggable={false}
+            className={cn(box, 'hidden object-contain dark:block')}
+          />
+        ) : null}
+      </>
     ) : Icon ? (
-      <Icon className="size-3.5 text-foreground" />
+      <Icon className={cn(box, 'text-foreground')} />
     ) : (
-      <span className="size-3.5" />
+      <span className={box} />
     )
+    return size === 'xs' ? mark : <span className={BARE_LOGO_BOX}>{mark}</span>
   }
   return (
     <BotAppLogo

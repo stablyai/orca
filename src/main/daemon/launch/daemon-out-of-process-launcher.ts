@@ -37,6 +37,7 @@ import {
 } from './daemon-spawner'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 import { prepareDaemonReplacement } from './daemon-replacement-preflight'
+import { resolveDaemonFdClosingExec } from './daemon-fd-closing-exec'
 import { ensureDaemonSocketDir } from '../endpoint/publication/daemon-socket-endpoint-path'
 import { inspectDaemonHostImage } from '../executable-host/linux/daemon-host-image'
 import { noteSeveredDaemon } from '../providers/lifecycle/daemon-host-image-state'
@@ -200,6 +201,7 @@ export function createOutOfProcessLauncher(
           `[daemon] AppImage daemon host fallback reason=${generation.fallback}: starting it on Electron, ${appImage ? 'from its own mount' : 'from the current mount'}`
         )
       }
+      const fdClosingExec = await resolveDaemonFdClosingExec()
       let launched
       try {
         launched = await launchDaemonChild({
@@ -215,6 +217,7 @@ export function createOutOfProcessLauncher(
           launchNonce,
           macosLoginSessionWatch,
           startupTimeoutMs,
+          fdClosingExec,
           ...(spawnAdmission ? { spawnAdmission } : {})
         })
       } catch (error) {

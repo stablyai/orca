@@ -17,16 +17,17 @@ const { calls, connector, signOutCurrentOrcaProfile, state } = vi.hoisted(() => 
     }),
     state: {
       activeOrcaProfile: { profile: { id: 'profile-1' } },
-      runtime: { bots },
-      relayHost: {
-        signOutStarted: () => calls.push('relay-sign-out-started'),
-        accountChanged: () => calls.push('relay-account-changed')
+      core: {
+        runtime: { bots },
+        relayHost: {
+          signOutStarted: () => calls.push('relay-sign-out-started'),
+          accountChanged: () => calls.push('relay-account-changed')
+        }
       }
     }
   }
 })
 
-vi.mock('electron', () => ({ shell: { openExternal: vi.fn() } }))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('./cloud-startup/main-process-connector-startup', () => ({
   mainProcessConnectorCloud: () => connector
@@ -48,7 +49,7 @@ describe('desktop Orca account service', () => {
   })
 
   it('fences the relay and connector before revoking, then finishes the connector', async () => {
-    await createDesktopOrcaAccountService().signOut()
+    await createDesktopOrcaAccountService(vi.fn(async () => {})).signOut()
 
     expect(calls).toEqual([
       'relay-sign-out-started',
@@ -59,7 +60,7 @@ describe('desktop Orca account service', () => {
   })
 
   it('retries the relay and tells the connector after a sign-in', async () => {
-    await createDesktopOrcaAccountService().connect()
+    await createDesktopOrcaAccountService(vi.fn(async () => {})).connect()
 
     expect(calls).toEqual(['relay-account-changed', 'connector-account-changed'])
   })

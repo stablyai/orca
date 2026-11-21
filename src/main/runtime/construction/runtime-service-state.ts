@@ -269,8 +269,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
         this.structuredMailReportItem?.(db, message) ?? Promise.resolve(null),
       conversationPlace: (sessionId, from) => this.chatConversationPlace?.(sessionId, from) ?? null,
       senderSnapshotReader: () => this.orchestrationSenderNames.snapshotReader(),
-      senderSnapshot: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
+      senderSnapshot: (party, reportedDispatchId, recorded) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId, recorded),
       host: createStructuredMailboxPointerHost(this.structuredMailOwner?.())
     })
 
@@ -312,7 +312,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,
-    isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
+    isWaitingForMail: (mailbox) => this.messageWaiters.has(mailbox),
     notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
     isChatMailbox: (mailbox) =>
       typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',

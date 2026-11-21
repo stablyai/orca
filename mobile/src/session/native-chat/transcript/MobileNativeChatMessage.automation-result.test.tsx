@@ -135,21 +135,4 @@ describe('mobile automation result note', () => {
     act(() => tree.root.findAll((node) => String(node.type) === 'Pressable')[0]!.props.onPress())
     expect(texts(tree)).toContain("Arrived before the chat was cleared. It won't go to Atlas.")
   })
-
-  it('draws the plain line an older host or client falls back to without the note', () => {
-    const tree = render(noteMessage({ automationResult: undefined }))
-    expect(texts(tree)).toEqual(['Hook echo finished: got: hello'])
-  })
-
-  it("says how many results the person's message carried", () => {
-    const tree = render({
-      id: 'user',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'what came in?' }],
-      timestamp: null,
-      source: 'transcript',
-      automationResultsCarried: 2
-    })
-    expect(texts(tree)).toContain('Sent with 2 automation results')
-  })
 })

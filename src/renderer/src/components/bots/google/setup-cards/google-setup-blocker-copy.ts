@@ -117,8 +117,3 @@ export function googleSetupBlockerText(blocker: GoogleSetupBlocker): string {
       )
   }
 }
-
-/** Blockers the sign-in card shows: the key, and the account once signed in. */
-export function googleSetupBlockerIsConnect(blocker: GoogleSetupBlocker): boolean {
-  return blocker.kind !== 'stopped' && blocker.kind !== 'paused' && blocker.kind !== 'needs-user'
-}

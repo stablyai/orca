@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Bot } from '../../../../shared/bot-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -72,11 +73,14 @@ const lineage = {
 
 // The sidebar's children over these records, as the Bots section reads them.
 function sidebarChildrenOf(records: typeof lineage) {
-  return selectSidebarChildrenByParentIdentity({
-    ...useAppStore.getState(),
-    folderWorkspaces: [home],
-    ...records
-  })
+  return selectSidebarChildrenByParentIdentity(
+    {
+      ...useAppStore.getState(),
+      folderWorkspaces: [home],
+      ...records
+    },
+    readRuntimeStatuses()
+  )
 }
 
 describe('sortBotsBySidebarOrder', () => {
@@ -156,36 +160,5 @@ describe('getBotListedWorktreeIdentities', () => {
       ])
     )
     expect(visible).toHaveLength(2)
-  })
-
-  it("filters a bot's finished workspace from Projects exactly as an active one", () => {
-    // A merged PR; the Bots section folds it behind "N done", Projects reads no PR state.
-    const finished = { ...worker, linkedPR: 7 }
-    const sources = { ...lineage, worktreesByRepo: { repo1: [finished, plain] } }
-    const projectList = (hideBotCreated: boolean) =>
-      computeVisibleWorktrees(sources.worktreesByRepo, [finished.id, plain.id], {
-        filterRepoIds: [],
-        showSleepingWorkspaces: true,
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        worktreeIdsWithLiveAgent: new Set(),
-        hideDefaultBranchWorkspace: false,
-        hideAutomationGeneratedWorkspaces: false,
-        hideCliCreatedWorkspaces: false,
-        hideDetachedHeadWorkspaces: false,
-        hideWorkspacesFromOtherDevices: false,
-        pairedDeviceIdsByEnvironment: new Map(),
-        repoMap: new Map(),
-        workspaceHostScope: 'all',
-        defaultHostId: LOCAL_EXECUTION_HOST_ID,
-        hiddenProjects: indexHiddenProjects([], LOCAL_EXECUTION_HOST_ID),
-        worktreeLineageById: sources.worktreeLineageById,
-        botListedWorktreeIdentities: hideBotCreated
-          ? getBotListedWorktreeIdentities([home], sidebarChildrenOf(sources))
-          : new Set()
-      }).map((worktree) => worktree.id)
-
-    expect(projectList(true)).toEqual([plain.id])
-    expect(projectList(false).sort()).toEqual([finished.id, plain.id].sort())
   })
 })

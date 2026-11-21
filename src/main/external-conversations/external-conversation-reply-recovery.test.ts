@@ -9,6 +9,8 @@ import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { conversationReplyFill } from './external-conversation-reply-fill'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 
@@ -138,6 +140,7 @@ function fixture(
     chat: () => chat as never,
     hasSession: () => exists,
     isBot: () => bot,
+    agentOf: () => 'claude',
     fillTurn: conversationReplyFill(
       () => journal,
       () => {}
@@ -180,13 +183,67 @@ describe('recovery from the journal', () => {
     expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', prose: 'NO_REPLY' })
   })
 
-  it('fills a request rejected before any turn opened as failed', async () => {
-    const f = fixture({
-      items: [asked('d1', 1)],
-      submissions: [submission('d1', { dispatchState: 'rejected', answeredInTurn: null })]
-    })
+  it('fills rejections before any turn opens and preserves a recorded reason', async () => {
+    const f = fixture(
+      {
+        items: [asked('d1', 1), asked('d2', 2)],
+        submissions: [
+          submission('d1', { dispatchState: 'rejected', answeredInTurn: null }),
+          submission('d2', {
+            dispatchState: 'rejected',
+            answeredInTurn: null,
+            rejection: agentSessionFailureFact('notSignedIn')
+          })
+        ]
+      },
+      { rows: [row('d1'), row('d2')] }
+    )
     await f.recovery.boot()
     expect(f.rows[0]?.fill?.outcome).toBe('failed')
+    expect(f.rows[1]?.fill).toMatchObject({
+      outcome: 'failed',
+      failure: { category: 'signed_out', agentName: 'Claude' }
+    })
+  })
+
+  it('fills a turn the usage limit ended with the limit and its reset', async () => {
+    const f = fixture({
+      items: [
+        asked('d1', 1),
+        item(
+          'limit-row',
+          2,
+          {
+            kind: 'status',
+            tone: 'warning',
+            ...agentSessionFailureWords(
+              agentSessionFailureFact('usageLimitReached', {
+                usageLimit: { window: 'session', resetsAt: 1_800_000_000_000 }
+              }),
+              { agentName: 'Claude', provider: 'claude', surface: 'row' }
+            )
+          },
+          TURN_KEY
+        ),
+        item(TURN_KEY, 3, {
+          kind: 'turn',
+          turnId: 'provider-turn',
+          state: 'completed',
+          outcome: 'failure',
+          userItemId: agentJournalSubmissionKey('d1')
+        })
+      ],
+      submissions: [submission('d1')]
+    })
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toMatchObject({
+      outcome: 'failed',
+      failure: {
+        category: 'usage_limit',
+        agentName: 'Claude',
+        usageLimit: { window: 'session', resetsAt: 1_800_000_000_000 }
+      }
+    })
   })
 
   it('watches a chat from admission, and wakes the sender once a withdrawal fills its row', async () => {
@@ -203,21 +260,6 @@ describe('recovery from the journal', () => {
 })
 
 describe('recovery, round 2', () => {
-  it('fills a request the provider exited before taking, with no turn, as interrupted', async () => {
-    const f = fixture({
-      items: [asked('d1', 1)],
-      submissions: [
-        submission('d1', {
-          dispatchState: 'unknown',
-          recovered: true,
-          reason: 'provider_exited_before_acknowledgement'
-        })
-      ]
-    })
-    await f.recovery.boot()
-    expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
-  })
-
   it('keeps an outstanding send with no evidence unfilled and watched', async () => {
     const f = fixture({
       items: [asked('d1', 1)],

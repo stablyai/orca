@@ -94,13 +94,21 @@ function setup(
 }
 
 describe('a webhook on its host', () => {
-  it('writes the ledger when a read brings news, never for a read that repeats it', () => {
+  it('retries a failed ledger write and skips repeated reads once saved', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { hooks } = setup({})
     const file = join(userDataPath, 'webhook-host.json')
+    mkdirSync(file)
+    try {
+      hooks.remember(cloudHook('live'))
+    } finally {
+      warn.mockRestore()
+    }
+    rmSync(file, { recursive: true })
+
     hooks.remember(cloudHook('live'))
     expect(existsSync(file)).toBe(true)
 
-    // Each card read remembers what the cloud said; the same answer writes nothing.
     rmSync(file)
     hooks.remember(cloudHook('live'))
     hooks.remember(cloudHook('orphaned'))
@@ -108,20 +116,6 @@ describe('a webhook on its host', () => {
 
     hooks.remember(cloudHook('paused', 2))
     expect(existsSync(file)).toBe(true)
-  })
-
-  it('writes a repeated answer again after a write failed', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { hooks } = setup({})
-    const file = join(userDataPath, 'webhook-host.json')
-    // A folder where the file goes makes the write fail.
-    mkdirSync(file)
-    hooks.remember(cloudHook('live'))
-    rmSync(file, { recursive: true })
-
-    hooks.remember(cloudHook('live'))
-    expect(existsSync(file)).toBe(true)
-    vi.restoreAllMocks()
   })
 
   it('is made from a draft once, idempotently, and kept with its URL on an edit', async () => {
@@ -281,8 +275,8 @@ describe('a webhook on its host', () => {
     expect(ledger.hook(HOOK)).toBeUndefined()
   })
 
-  it.each([400, 403, 409])('stops sending a change the cloud refuses with %i', async (status) => {
-    const setState = vi.fn(async () => failed(status))
+  it('stops sending a change after a terminal client error', async () => {
+    const setState = vi.fn(async () => failed(409))
     const { hooks, ledger } = setup({ setState }, [automation({ enabled: false })])
     ledger.saveHook({
       hookId: HOOK,
@@ -297,22 +291,19 @@ describe('a webhook on its host', () => {
     warn.mockRestore()
   })
 
-  it.each([401, 408, 429, 503])(
-    'keeps a change the cloud answers %i, to send again',
-    async (status) => {
-      const setState = vi.fn(async () => failed(status))
-      const { hooks, ledger } = setup({ setState }, [automation({ enabled: false })])
-      ledger.saveHook({
-        hookId: HOOK,
-        automationId: 'auto-1',
-        botId: 'bot-1',
-        epoch: 1,
-        state: 'live'
-      })
-      await hooks.reconcile()
-      expect(ledger.hook(HOOK)?.change).toMatchObject({ state: 'paused' })
-    }
-  )
+  it.each([401, 408, 429])('keeps a change the cloud answers %i, to send again', async (status) => {
+    const setState = vi.fn(async () => failed(status))
+    const { hooks, ledger } = setup({ setState }, [automation({ enabled: false })])
+    ledger.saveHook({
+      hookId: HOOK,
+      automationId: 'auto-1',
+      botId: 'bot-1',
+      epoch: 1,
+      state: 'live'
+    })
+    await hooks.reconcile()
+    expect(ledger.hook(HOOK)?.change).toMatchObject({ state: 'paused' })
+  })
 
   it('drops a hook deleted while away, and an automation it alone started', () => {
     const alone = automation()

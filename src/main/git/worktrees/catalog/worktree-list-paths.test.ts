@@ -83,21 +83,13 @@ afterEach(async () => {
 
 describe('git worktree paths', () => {
   it.skipIf(process.platform === 'win32')(
-    'lists worktrees whose paths contain newlines',
+    'lists a newline-path worktree and deletes its merged branch on removal',
     async () => {
       const { repoPath, worktreePath } = await createRepoWithNewlineWorktree()
 
       const worktrees = await listWorktrees(repoPath)
 
       expect(worktrees.map((worktree) => worktree.path)).toContain(worktreePath)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'deletes the matching local branch after removing a newline-path worktree',
-    async () => {
-      const { repoPath, worktreePath } = await createRepoWithNewlineWorktree()
-
       await removeWorktree(repoPath, worktreePath)
 
       expect(branchExists(repoPath, 'feature/newline')).toBe(false)

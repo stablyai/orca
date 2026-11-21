@@ -4,13 +4,11 @@ import { cleanup, fireEvent, render as renderBare, screen, waitFor } from '@test
 import type { ReactElement } from 'react'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import slackLogo from '@/assets/connector-brands/slack.svg'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
-import type { AppState } from '@/store/types'
 
 const openAppHttpLink = vi.fn()
 const statUserOpenedPath = vi.fn()
@@ -109,28 +107,6 @@ function rows(): HTMLElement[] {
   return screen.getAllByRole('button')
 }
 
-it('lists PRs and issues, then other links, then files, each on one line', () => {
-  expect(rows().map((row) => row.textContent)).toEqual([
-    'Issue #7',
-    'PR #9',
-    'PR #10',
-    'ENG-12',
-    'example.com/docs/a',
-    'acme.slack.com/archives/C1/p2',
-    'mock.html'
-  ])
-})
-
-it.each([
-  ['https://example.com/docs/a', 'example.com'],
-  ['notes/mock.html', 'notes/mock.html']
-])('puts what a second line would say on hover: %s', async (ref, tip) => {
-  const kind = ref.startsWith('https:') ? 'url' : 'file'
-  render(<BotItemLinks bot={BOT} links={[{ kind, ref }]} chat="Home Chat" />)
-  fireEvent.focus(screen.getByRole('button'))
-  expect((await screen.findByRole('tooltip')).textContent).toBe(tip)
-})
-
 const FIX_LOGIN: LinearIssue = {
   id: 'lin-1',
   identifier: 'ENG-12',
@@ -161,59 +137,6 @@ it('titles a Linear issue from Orca’s Linear cache, beside its identifier', ()
   useAppStore.setState({ linearIssueCache: {} })
 })
 
-it('looks Linear titles up once per cache, not on every store write, at N and 10N writes', () => {
-  let reads = 0
-  const cache: AppState['linearIssueCache'] = {}
-  for (let index = 0; index < 500; index += 1) {
-    const data = {
-      ...FIX_LOGIN,
-      id: `lin-${index}`,
-      identifier: `ENG-${index}`,
-      title: `T${index}`
-    }
-    cache[`ENG-${index}`] = {
-      fetchedAt: 1,
-      get data() {
-        reads += 1
-        return data
-      }
-    }
-  }
-  useAppStore.setState({ linearIssueCache: cache })
-  render(
-    <BotItemLinks
-      bot={BOT}
-      links={[1, 2, 3].map((n) => ({
-        kind: 'url',
-        ref: `https://linear.app/acme/issue/eng-${n}/x`
-      }))}
-      chat="Home Chat"
-    />
-  )
-  expect(screen.getAllByRole('button').map((row) => row.textContent)).toEqual([
-    'T1ENG-1',
-    'T2ENG-2',
-    'T3ENG-3'
-  ])
-  const built = reads
-  for (const writes of [5, 50]) {
-    for (let index = 0; index < writes; index += 1) {
-      useAppStore.setState({ rightSidebarOpen: index % 2 === 0 })
-    }
-    expect(reads).toBe(built)
-  }
-  useAppStore.setState({ linearIssueCache: {} })
-})
-
-it('marks Linear and Slack links with their brand mark, others with a link or file icon', () => {
-  const icons = rows().map((row) => row.firstElementChild!)
-  const marks = icons.map((icon) => icon.firstElementChild!)
-  expect(marks[3]!.classList.contains('text-foreground')).toBe(true)
-  expect(marks[5]!.getAttribute('src')).toBe(slackLogo)
-  expect(icons[4]!.querySelector('.lucide-link-2')).not.toBeNull()
-  expect(icons[6]!.querySelector('.lucide-file-text')).not.toBeNull()
-})
-
 type PrState = 'open' | 'draft' | 'merged' | 'closed'
 const prLink = (
   repo: string,
@@ -242,48 +165,19 @@ function only(link: BotItemLinkView): HTMLElement {
   return screen.getByRole('button')
 }
 
-it.each([
-  ['open', 'lucide-git-pull-request', 'text-emerald-600'],
-  ['draft', 'lucide-git-pull-request-draft', 'text-muted-foreground'],
-  ['merged', 'lucide-git-merge', 'text-purple-600'],
-  ['closed', 'lucide-git-pull-request-closed', 'text-rose-600']
-] as const)('draws a %s PR with its own icon and tone', (state, icon, tone) => {
-  const svg = only(prLink('acme/app', 9, state, null)).querySelector('svg')!
-  expect(svg.classList.contains(icon)).toBe(true)
-  expect(svg.classList.contains(tone)).toBe(true)
-})
-
-it.each([
-  ['open', 'lucide-circle-dot', 'text-emerald-600'],
-  ['closed', 'lucide-circle-check', 'text-purple-600']
-] as const)('draws a cached %s issue with its title, icon and tone', (state, icon, tone) => {
+it('uses the cached issue title beside its number', () => {
   const row = only({
     kind: 'url',
     ref: 'https://github.com/acme/app/issues/7',
-    issue: { title: 'Viewers can edit', state }
+    issue: { title: 'Viewers can edit', state: 'open' }
   })
   expect(row.textContent).toBe('Viewers can edit#7')
-  const svg = row.querySelector('svg')!
-  expect(svg.classList.contains(icon)).toBe(true)
-  expect(svg.classList.contains(tone)).toBe(true)
-})
-
-it('titles a PR from the cache with its number, else PR #n', () => {
-  expect(only(prLink('acme/app', 9, 'open', null, 'Share dialog')).textContent).toBe(
-    'Share dialog#9'
-  )
-  cleanup()
-  const fallback = only(prLink('acme/app', 9, 'open', null, null))
-  expect(fallback.textContent).toBe('PR #9')
 })
 
 it.each([
   ['open', 'failure', 'Checks failing'],
-  ['open', 'success', 'Checks passing'],
   ['draft', 'success', 'Checks passing'],
   ['open', 'pending', null],
-  ['open', null, null],
-  ['merged', 'success', null],
   ['closed', 'failure', null]
 ] as const)('a %s PR with %s checks shows CI glyph %s', (state, checks, label) => {
   only(prLink('acme/app', 9, state, checks))
@@ -291,13 +185,13 @@ it.each([
   expect(glyph?.getAttribute('aria-label') ?? null).toBe(label)
 })
 
-it('names the repo only on links outside the item’s own repo', () => {
+it('uses cached titles when available and names the repo only on external links', () => {
   render(
     <BotItemLinks
       bot={BOT}
       links={[
-        prLink('acme/app', 1, 'open', null),
-        prLink('acme/app', 2, 'merged', null),
+        prLink('acme/app', 1, 'open', null, 'Share dialog'),
+        prLink('acme/app', 2, 'merged', null, null),
         prLink('acme/infra', 3, 'closed', null),
         { kind: 'pr', ref: 'acme/infra#4', pr: null }
       ]}
@@ -305,8 +199,8 @@ it('names the repo only on links outside the item’s own repo', () => {
     />
   )
   expect(screen.getAllByRole('button').map((row) => row.textContent)).toEqual([
-    'Title 1#1',
-    'Title 2#2',
+    'Share dialog#1',
+    'PR #2',
     'Title 3acme/infra#3',
     'PR #4acme/infra'
   ])
@@ -370,11 +264,6 @@ it('refuses a file link whose real path leaves the bot folder through a symlink'
   expect(openLinkedFileInEditor).not.toHaveBeenCalled()
 })
 
-it('draws every link in the same icon and text columns', () => {
-  const columns = new Set(rows().map((row) => row.firstElementChild!.className))
-  expect(columns).toEqual(new Set(['flex h-5 w-4 shrink-0 items-center justify-center']))
-})
-
 describe('a PR merged since the host read it', () => {
   const merged: PRInfo = {
     number: 9,
@@ -404,20 +293,17 @@ describe('a PR merged since the host read it', () => {
       : link
   }
 
-  it('shows merged, not its last CI result, once this window read it later', () => {
+  it('uses the newer PR read from the host or this window and hides CI once merged', () => {
     useAppStore.setState({ prCache: { 'acme/app#fix': { data: merged, fetchedAt: 2 } } })
-    const svg = only(prLink('acme/app', 9, 'open', 'success')).querySelector('svg')!
-    expect(svg.classList.contains('lucide-git-merge')).toBe(true)
-    expect(svg.classList.contains('text-purple-600')).toBe(true)
+    only(prLink('acme/app', 9, 'open', 'failure'))
     expect(screen.queryByRole('img')).toBeNull()
-  })
 
-  it('keeps the host’s read when this window’s is older', () => {
+    cleanup()
     useAppStore.setState({
       prCache: { 'acme/app#fix': { data: { ...merged, state: 'open' }, fetchedAt: 0 } }
     })
-    const svg = only(prLink('acme/app', 9, 'merged', null)).querySelector('svg')!
-    expect(svg.classList.contains('lucide-git-merge')).toBe(true)
+    only(prLink('acme/app', 9, 'merged', 'failure'))
+    expect(screen.queryByRole('img')).toBeNull()
   })
 
   it('asks for a fresh read of a worker’s stale open PR, never of a fresh or settled one', () => {

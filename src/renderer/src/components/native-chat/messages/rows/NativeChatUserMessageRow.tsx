@@ -1,4 +1,5 @@
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
+import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { NativeChatUserBubble } from './NativeChatUserBubble'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
@@ -205,26 +206,17 @@ export function NativeChatUserMessageRow({
         />
       ) : null}
       {from ? null : <NativeChatSlackMirrorPostLine itemId={message.id} post={slackPost} />}
-      {deliveryNotice?.text !== undefined ? (
-        <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
-          <span className="min-w-0 break-words">{deliveryNotice.text}</span>
-          <NativeChatSetupButton failureKind={deliveryNotice.failureKind} />
-          {deliveryNotice.onSend ? (
-            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
-              {t('components.native-chat.queuedMessages.send', 'Send')}
-            </Button>
-          ) : null}
-          {deliveryNotice.onEdit ? (
-            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
-              {t('components.native-chat.editDeliveryNotice', 'Edit')}
-            </Button>
-          ) : null}
-          {deliveryNotice.onDismiss ? (
-            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
-              {t('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
-            </Button>
-          ) : null}
-        </div>
+      {deliveryNotice?.text !== undefined && deliveryNotice.signIn ? (
+        <NativeChatTranscriptSignInNotice
+          agentName={deliveryNotice.signIn.agentName}
+          account={deliveryNotice.signIn.account}
+          rowId={message.id}
+          sent
+          className="max-w-[85%]"
+          fallback={() => <NativeChatDeliveryLine notice={deliveryNotice} rowId={message.id} />}
+        />
+      ) : deliveryNotice?.text !== undefined ? (
+        <NativeChatDeliveryLine notice={deliveryNotice} rowId={message.id} />
       ) : null}
       {deliveryNotice?.detail ? (
         <div className="max-w-[85%]">
@@ -234,6 +226,38 @@ export function NativeChatUserMessageRow({
             {deliveryNotice.detail}
           </NativeChatDetailsDisclosure>
         </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** A refused send's words, under its message. */
+function NativeChatDeliveryLine({
+  notice,
+  rowId
+}: {
+  notice: Extract<NativeChatDeliveryNotice, { text: string }>
+  rowId: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
+      <span className="min-w-0 break-words">{notice.text}</span>
+      <NativeChatSetupButton failureKind={notice.failureKind} rowId={rowId} />
+      {notice.onSend ? (
+        <Button type="button" variant="ghost" size="xs" onClick={notice.onSend}>
+          {t('components.native-chat.queuedMessages.send', 'Send')}
+        </Button>
+      ) : null}
+      {notice.onEdit ? (
+        <Button type="button" variant="ghost" size="xs" onClick={notice.onEdit}>
+          {t('components.native-chat.editDeliveryNotice', 'Edit')}
+        </Button>
+      ) : null}
+      {notice.onDismiss ? (
+        <Button type="button" variant="ghost" size="xs" onClick={notice.onDismiss}>
+          {t('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
+        </Button>
       ) : null}
     </div>
   )

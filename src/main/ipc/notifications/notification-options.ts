@@ -3,6 +3,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import { formatUsageLimitResetClock } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { NotificationDispatchRequest } from '../../../shared/notifications/notification-settings-types'
+import { slackMentionsPlainText } from '../../../shared/connectors/slack-message-markup'
 
 type NotificationTranslator = (key: string, fallback: string) => string
 
@@ -143,8 +144,12 @@ function buildAgentTaskCompleteRichBody(
   if (failure) {
     return failure
   }
+  // A reply written for Slack names people as Slack does; the notification shows names.
   const assistantMessage = normalizeNotificationText(
-    args.agentLastAssistantMessage,
+    args.agentLastAssistantMessage &&
+      (args.agentRepliesInSlack
+        ? slackMentionsPlainText(args.agentLastAssistantMessage)
+        : args.agentLastAssistantMessage),
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
   if (assistantMessage) {

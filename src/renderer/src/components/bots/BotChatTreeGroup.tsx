@@ -7,9 +7,12 @@ import { openBotHomeTab } from '@/lib/bot-catalog'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
+import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
+import { UsageLimitStopMark, usageLimitStopText } from './BotUsageLimitMark'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   CHAT_TREE_CAPS,
+  chatFoldCounts,
   chatFoldSummary,
   chatRunningCount,
   chatWaitingCount,
@@ -68,10 +71,14 @@ export function BotChatLine({
   folded: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const stop = useBotUsageLimitStopIndex().bySession.get(chat.chatId)
   if (chat.live === 'replying') {
     return <>{t('bots.chats.replying', 'Replying…')}</>
   }
   const place = botChatPlace(chat)
+  if (stop && chat.live === 'idle') {
+    return <>{[place, usageLimitStopText(t, stop)].filter(Boolean).join(' · ')}</>
+  }
   if (chat.live === 'needs-you') {
     return (
       <>
@@ -80,9 +87,9 @@ export function BotChatLine({
       </>
     )
   }
-  const summary = folded ? chatFoldSummary(chat) : null
-  if (summary) {
-    return <>{summary}</>
+  const counts = folded ? chatFoldCounts(chat) : null
+  if (counts) {
+    return <>{chatFoldSummary(t, counts)}</>
   }
   const closed = chat.closedAt
     ? t('bots.chats.closedOn', 'closed {{date}}', {
@@ -104,12 +111,32 @@ const META = 'flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground 
 function ChatRowMeta({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
   const t = useTranslate()
   const waiting = chatWaitingCount(chat)
-  const running = chatRunningCount(chat)
-  if (waiting + running > 0) {
+  const { byWorkspace } = useBotUsageLimitStopIndex()
+  // A worker stopped on its limit counts as stopped, not running; one asking the owner still waits.
+  const stoppedWorkers = [...chat.running, ...chat.finished].filter(
+    (worker) =>
+      worker.state !== 'needs-you' && worker.worktreeId && byWorkspace.has(worker.worktreeId)
+  )
+  const stopped = stoppedWorkers.map((worker) => byWorkspace.get(worker.worktreeId!)!)
+  const running =
+    chatRunningCount(chat) -
+    stoppedWorkers.filter(
+      (worker) => chat.running.includes(worker) && worker.state !== 'unreachable'
+    ).length
+  if (waiting + running + stopped.length > 0) {
     const waitingLabel = t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting })
     const runningLabel = t('bots.chats.runningCount', '{{count}} running', { count: running })
     return (
       <span className="flex shrink-0 items-center gap-2">
+        {stopped.length > 0 ? (
+          <span className={cn(META, 'text-status-warning-text')}>
+            <UsageLimitStopMark stop={stopped[0]!} />
+            <span aria-hidden>{stopped.length}</span>
+            <span className="sr-only">
+              {t('bots.usageLimit.stoppedCount', '{{count}} stopped', { count: stopped.length })}
+            </span>
+          </span>
+        ) : null}
         {waiting > 0 ? (
           <span className={META}>
             <span
@@ -156,6 +183,7 @@ export function BotChatTreeGroup({
   loadMore: (chatId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const stopIndex = useBotUsageLimitStopIndex()
   const [limit, setLimit] = useState(CHATS_TAB_FIRST_WORKERS)
   const foldable = unfolded !== null && chat.runningTotal + chat.finishedTotal > 0
   const open = foldable && unfolded === true
@@ -223,6 +251,7 @@ export function BotChatTreeGroup({
         </span>
         <BotChatStatusSlot
           chat={chat}
+          stop={stopIndex.bySession.get(chat.chatId) ?? null}
           className="h-5 w-4"
           iconClassName="size-3.5"
           onClick={pressRow}

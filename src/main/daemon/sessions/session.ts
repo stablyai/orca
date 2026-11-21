@@ -75,6 +75,7 @@ export class Session extends SessionProcessInspection {
     })
     try {
       this.subprocess.onData((data) => {
+        this._outputChunks += 1
         if (!this._disposed) {
           this.shellReady.ingestSubprocessData(data)
         }
@@ -139,6 +140,7 @@ export class Session extends SessionProcessInspection {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
+      this.shellReady.observeTypedInput(data)
       this.subprocess.write(data)
     }
   }
@@ -165,6 +167,7 @@ export class Session extends SessionProcessInspection {
     if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
       return
     }
+    this.repaintNudge.retire()
     this.output.resize(cols, rows)
     this.subprocess.resize(cols, rows)
   }

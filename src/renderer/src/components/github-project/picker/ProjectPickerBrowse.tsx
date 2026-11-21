@@ -24,7 +24,7 @@ import {
 type Props = {
   query: string
   onQueryChange: (query: string) => void
-  browseHost: string
+  browseHost: string | undefined
   browseError: GitHubProjectViewError | null
   browseLoading: boolean
   browseProjects: GitHubProjectSummary[]
@@ -62,7 +62,10 @@ export function ProjectPickerBrowse(props: Props): React.JSX.Element {
         </div>
       </div>
       {props.browseError ? (
-        <ProjectPickerError error={props.browseError} host={props.browseHost} />
+        <ProjectPickerError
+          error={props.browseError}
+          host={props.browseHost ?? props.browseError.host}
+        />
       ) : null}
       {!props.browseError && props.partialFailures.length > 0 ? (
         <ProjectPickerPartialFailures failures={props.partialFailures} />

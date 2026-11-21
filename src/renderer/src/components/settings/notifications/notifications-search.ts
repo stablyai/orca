@@ -214,6 +214,28 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('settings.notifications.perfNotices.disk.label', 'Disk almost full'),
+    description: translate(
+      'settings.notifications.perfNotices.disk.description',
+      'Suggest cleaning up workspaces when your disk is almost full.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.disk', 'disk'),
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.warning', 'warning')
+    ]
+  },
+  {
+    title: translate('settings.notifications.perfNotices.hiddenTabs.label', 'Hidden browser tabs'),
+    description: translate(
+      'settings.notifications.perfNotices.hiddenTabs.description',
+      'Suggest Memory Saver when many hidden browser tabs stay loaded.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.tabs', 'tabs'),
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.memory', 'memory')
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.notifications.search.55ecae5b7e',
       'Send test notification'

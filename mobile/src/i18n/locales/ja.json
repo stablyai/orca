@@ -57,7 +57,8 @@
       "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
-      "resumeSession": "Agent セッションを再開"
+      "resumeSession": "Agent セッションを再開",
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -111,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... またはコードを貼り付け",
       "pasteCodeTitle": "ペアリングコードを貼り付け",
       "pasteInstead": "代わりにコードを貼り付け",
-      "pastePairingCode": "またはペアリングコードを貼り付け",
+      "pastePairingCode": "ペアリングコードを貼り付け",
       "scanCodeStep": "QR コードをスキャン",
       "title": "デスクトップのペアリング",
       "tryAgain": "再試行",
@@ -145,7 +146,7 @@
       "installTitle": "新しいアプリをダウンロード",
       "installDescription": "確認が表示されたら、ブラウザにアプリのインストールを許可してください。",
       "download": "ダウンロード",
-      "keepThisVersion": "このバージョンを使い続ける",
+      "keepThisVersion": "このバージョンを使う",
       "keepThisVersionNote": "セキュリティ修正は届かなくなります。1 週間後にもう一度お知らせします。"
     },
     "pairTitle": "コンピュータとペアリング",
@@ -186,7 +187,18 @@
       "webView": "ウェブサイトのデスクトップ表示に切り替え"
     },
     "loadFailure": {
-      "retry": "再試行"
+      "retry": "再試行",
+      "connectionNotSecure": "接続は安全ではありません",
+      "certificateNameMismatch": "証明書が {{value0}} と一致しません。",
+      "certificateDateInvalid": "{{value0}} の証明書は現在の日時では有効ではありません。",
+      "certificateAuthorityInvalid": "Orca は {{value0}} の証明書を発行した認証局を信頼していません。",
+      "certificateVerificationFailed": "Orca は {{value0}} の証明書を検証できませんでした。",
+      "proceedUnsafe": "続行（安全ではない）",
+      "connecting": "接続中…",
+      "certificateChallengeExpired": "この証明書の承認は期限切れです。ページを再試行して、承認をもう一度リクエストしてください。",
+      "certificateChallengeChanged": "証明書のリクエストが変更されました。ページを再試行して、警告の内容を改めて確認してください。",
+      "certificateProceedFailed": "Orca はこの証明書のリクエストを承認できませんでした。ページを再試行して、もう一度お試しください。",
+      "certificateChallengeUnavailable": "この証明書のリクエストは利用できなくなりました。ページを再試行して、もう一度リクエストしてください。"
     }
   },
   "chat": {
@@ -312,7 +324,7 @@
       "triedSearchWeb": "ウェブ検索を試行"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "メッセージ全体を表示（読み込み失敗、タップして再試行）",
+      "loadFailed": "メッセージ全文を再取得",
       "showFullMessage": "メッセージ全体を表示",
       "showLess": "折りたたむ"
     },
@@ -378,8 +390,7 @@
       "submitSelectedOptions": "選択した項目を送信"
     },
     "queuedMessages": {
-      "clearAll": "すべてクリア",
-      "deleteAll": "キュー内のすべてのメッセージを削除",
+      "deleteAll": "すべて削除",
       "editMessage": "メッセージを編集",
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
@@ -604,10 +615,6 @@
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Agentに引き継ぎました",
-      "startedAgent": "Agentを開始しました"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
       "incompleteReply": "添付ファイルが変更されたか、応答が不完全でした。閉じてもう一度お試しください。",
@@ -655,7 +662,7 @@
       "confirm": "巻き戻す",
       "unsupported": "このチャットは以前のメッセージに戻れません。",
       "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
-      "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+      "busy": "チャットがアイドル状態のときに利用できます",
       "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
       "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
       "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
@@ -777,7 +784,7 @@
       "manageShortcuts": "ショートカットを管理",
       "manageShortcutsHint": "ショートカットキーの表示・非表示・並べ替え",
       "modifiers": "修飾キー",
-      "moreKeys": "その他のキー：Tab、矢印キー、F1–F12…",
+      "moreKeys": "その他のキー",
       "navigation": "ナビゲーション",
       "pickKey": "キーを選択",
       "pressEnter": "Enter を押す",
@@ -929,11 +936,11 @@
       "dismissDrawer": "ドロワーを閉じる"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "フック",
       "label": "セットアップスクリプト",
-      "run": "実行",
-      "runSetupCommand": "セットアップコマンドを実行",
-      "skip": "スキップ"
+      "runSetup": "セットアップを実行",
+      "skip": "スキップ",
+      "startAgentAfterSetup": "セットアップ後に Agent を開始",
+      "waitForSetupSaveFailed": "セットアップ時の起動設定を保存できませんでした。"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "接続",
@@ -1207,7 +1214,7 @@
       "privacyHint": "ホスト名、エンドポイント、バージョン、接続状態、イベントを含む、機密情報を伏せてサイズを制限したレポートを送信します。ターミナルの内容や認証情報は含まれません。",
       "reconnecting": "再接続中",
       "retrySending": "送信を再試行",
-      "sendDiagnostics": "診断情報を Orca に送信",
+      "sendDiagnostics": "診断情報を送信",
       "sending": "送信中…",
       "sent": "診断情報を送信しました",
       "stateWithAttempt": "{{state}} · 試行 {{attempts}} 回目",
@@ -1591,10 +1598,8 @@
   "host": {
     "edit": {
       "address": "アドレス",
-      "addressHint": "IP、host:port、ws:// / wss:// を使用できます。ポートを省略した wss:// URL は 443 を使用します。アドレスのみの場合は、現在のポート（未設定の場合は 6768）を引き継ぎます。",
       "connectionPreview": "{{endpoint}} に接続します",
       "goBack": "戻る",
-      "help": "表示名や接続先アドレスを変更できます。名前を空欄にすると、デスクトップから取得した名前を使用します。アドレスを編集しても、このスマートフォンの接続先が変わるだけで、再ペアリングは行われません。同じデスクトップに別の IP で接続できる場合（自宅の LAN と Tailscale の切り替えなど）に使用してください。",
       "hostNamePlaceholder": "ホスト名",
       "hostRemoved": "このホストはこのスマートフォンから削除されました。",
       "loadFailed": "ホストの読み込みに失敗しました。",
@@ -1635,7 +1640,12 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
       "unpin": "固定を解除する",
-      "rename": "名前を変更"
+      "rename": "名前を変更",
+      "markRead": "既読マークを付ける",
+      "markUnread": "未読としてマークする",
+      "muteNotifications": "通知をミュート",
+      "unmuteNotifications": "通知のミュートを解除",
+      "moveToStatus": "ステータスに移動"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -1935,7 +1945,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} はオープンな PR にリンクされていません。",
       "currentBranchNotLinked": "現在のブランチはオープンな PR にリンクされていません。",
-      "linkExistingPullRequest": "既存の PR をリンク",
+      "linkExistingPullRequest": "PR をリンク",
       "linkedPrUnavailable": "リンク済みの PR #{{number}} は利用できません",
       "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。"
     },
@@ -2008,6 +2018,9 @@
       "sendFailed": "再開コマンドの送信に失敗しました。"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "この {{agent}} の会話はチャットで開かれています。開くにはセッション履歴を更新してください。",
+      "ownershipUnknown": "Orca はこの {{agent}} の会話の所有者を確認できませんでした。セッション履歴を更新して、再試行してください。",
+      "preparationRefused": "Orca はこの {{agent}} の会話を準備できませんでした。続けるには新しいチャットを開始してください。",
       "prepareFailed": "この旧形式の Codex セッションを準備できませんでした。再開を再試行してください。"
     },
     "backgroundTask": {
@@ -2116,6 +2129,7 @@
     "failure": {
       "accountSwitchInProgress": "このホストで {{agent}} のセットアップを変更中です。完了してからもう一度お試しください。",
       "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
+      "agentCommandFailed": "設定 → Agent にある {{agent}} の「コマンド」で {{agent}} を起動できませんでした: {{detail}}。コマンドを変更するかリセットしてください。",
       "agentCommandNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を使って {{agent}} にサインインしてください。",
       "agentNotSignedIn": "{{agent}} にサインインしてください。",
       "agentStarting": "Agent はまだ起動中です。",
@@ -2200,6 +2214,7 @@
       "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
       "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
       "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+      "providerResponseFailedQuoted": "{{agent}} はこの応答を完了できませんでした: {{detail}}。",
       "selectedModel": "選択されたモデル",
       "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
       "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",
@@ -2312,8 +2327,8 @@
       "scrollToLatest": "最新の内容にスクロール"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "メッセージ全体を表示（読み込み失敗、タップして再試行）",
-      "loadOutputFailed": "出力をすべて表示（読み込み失敗、タップして再試行）",
+      "loadMessageFailed": "メッセージ全文を再取得",
+      "loadOutputFailed": "出力全文を再取得",
       "partialMessage": "このメッセージの一部を表示しています。",
       "partialOutput": "{{total}} のうち {{shown}} を表示しています。",
       "showFullMessage": "メッセージ全体を表示",
@@ -2329,8 +2344,8 @@
       "notFoundTitle": "この会話はまだ見つかりません"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "チャット表示に切り替え",
-      "switchToTerminalView": "ターミナル表示に切り替え"
+      "switchToChatView": "チャットに切り替え",
+      "switchToTerminalView": "ターミナルに切り替え"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "Agent は起動しましたが、メモは送信されませんでした。",
@@ -2461,6 +2476,11 @@
       "sendReviewNotes": "レビューメモを送信",
       "shortcut": "ショートカット",
       "terminal": "ターミナル",
+      "terminalWithShell": "ターミナル: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMDプロンプト",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
@@ -2781,6 +2801,10 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "そのメッセージが見つかりませんでした。"
+    },
+    "browserProfile": {
+      "title": "プロファイル",
+      "default": "デフォルト"
     }
   },
   "settings": {
@@ -3834,7 +3858,7 @@
       "issueSource": "Issue ソース",
       "keySecurityHint": "キーはホスト OS のキーチェーンで暗号化され、ローカルに保存されます。",
       "linearConnectSubtitle": "ワークスペースの Issue を閲覧するには、個人用 API キーを貼り付けてください。",
-      "linearSettingsLink": "Linear の設定 / セキュリティ / 新規 API キー",
+      "linearSettingsLink": "Linearの設定を開く",
       "linearTeam": "Linear チーム",
       "linearTeamSubtitle": "選択した Linear チームに Issue を作成します。",
       "newIssueTitle": "{{providerLabel}} の新規 Issue",
@@ -3908,7 +3932,7 @@
       "runSetupAndCreate": "セットアップを実行して作成",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
       "setupTitle": "セットアップスクリプトを実行しますか?",
-      "skipSetupAndCreate": "セットアップをスキップして作成",
+      "skipSetupAndCreate": "セットアップなしで作成",
       "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。"
     },
     "worktreeCreateRetry": {
@@ -4438,7 +4462,7 @@
   "bots": {
     "link": {
       "pairTitle": "コンピュータをペアリング",
-      "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてください。",
+      "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
       "pairAction": "コンピュータをペアリング",
       "openFailed": "このリンクを開けませんでした",
       "ambiguous": "このボットは{{names}}にあります。使用するコンピュータのOrcaでチャットを開いてください。",

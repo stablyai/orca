@@ -22,6 +22,10 @@ import {
   isTerminalOwnerPartition,
   type TerminalSessionPartition
 } from '../pane-ownership/terminal-topology-membership'
+import {
+  changedRelayKeys,
+  forgetDesktopRelayKeys
+} from '../../../../shared/workspace-session/desktop-relay-ownership'
 
 type PlannedTerminalLeafMove = {
   result: TerminalLeafMoveResult
@@ -137,7 +141,13 @@ function moveLeafInPartition(
   }
   return advanceTerminalTopologyRevision(
     {
-      ...session,
+      ...forgetDesktopRelayKeys(
+        session,
+        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId, [
+          sourceTabId,
+          targetTabId
+        ])
+      ),
       tabsByWorktree: { ...session.tabsByWorktree, [worktreeId]: [...nextTabs, targetTab] },
       terminalLayoutsByTabId,
       ...(session.remoteSessionIdsByTabId ? { remoteSessionIdsByTabId } : {}),

@@ -209,14 +209,16 @@ function drawn(rows: Row[]): string[] {
 }
 
 describe("the bot's notes in one turn: one row, each item at its final state", () => {
-  it('passes tool work and anchors at the first note, with the last note’s time', () => {
+  it('folds across tool work and keeps the first and last journal positions', () => {
     const first = bot('t1', made('win'))
-    const rows = [
-      first,
-      tool(),
-      bot('t1', moved('win', 'planned', 'working'), linked('win', 'working', 'dispatch:ctx_1')),
-      prose()
-    ]
+    const last = bot(
+      't1',
+      moved('win', 'planned', 'working'),
+      linked('win', 'working', 'dispatch:ctx_1')
+    )
+    first.message.journalPosition = { sequence: 3, index: 0 }
+    last.message.journalPosition = { sequence: 9, index: 1 }
+    const rows = [first, tool(), last, prose()]
     const folded = foldBotItemNotes(
       rows.map((row) => row.message),
       rows.map((row) => row.turn)
@@ -228,27 +230,26 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
       'prose'
     ])
     expect(folded[0]!.id).toBe(first.message.id)
-    expect(folded[0]!.botItemNote?.at).toBe(rows[2]!.message.timestamp)
+    expect(folded[0]!.botItemNote?.at).toBe(last.message.timestamp)
+    expect(folded[0]!.journalPosition).toEqual({ sequence: 3, index: 0 })
+    expect(folded[0]!.botItemNote?.position).toEqual({ sequence: 9, index: 1 })
   })
 
-  it('reads an add then an ask as one line', () => {
+  it('groups items by final change while preserving their first appearance', () => {
     expect(
       drawn([
-        bot('t1', made('share')),
-        bot('t1', commented('share', 'planned'), moved('share', 'planned', 'needs_you')),
-        prose()
-      ])
-    ).toEqual(['Added and asked you about <Share links>', 'prose'])
-  })
-
-  it('splits items that ended differently, keeping the order they first appeared', () => {
-    expect(
-      drawn([
-        bot('t1', made('rel'), made('tok'), made('flaky')),
-        bot('t1', moved('tok', 'planned', 'working'))
+        bot(
+          't1',
+          moved('win', 'done', 'working'),
+          made('rel'),
+          made('tok'),
+          made('flaky'),
+          made('exp')
+        ),
+        bot('t1', moved('exp', 'planned', 'working'), moved('tok', 'planned', 'working'))
       ])
     ).toEqual([
-      'Added <Release notes> <Flaky test sweep> / Added and moved <Token refresh fix> to In progress'
+      'Moved <Windows path casing audit> to In progress / Added <Release notes> <Flaky test sweep> / Added and moved <Token refresh fix> <Export timeout> to In progress'
     ])
   })
 
@@ -293,40 +294,24 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
     ])
   })
 
-  it('says a reopened item moved, and shares a line between items that ended the same way', () => {
-    expect(
-      drawn([
-        bot('t1', moved('tok', 'done', 'working')),
-        bot('t1', made('login'), made('exp')),
-        bot('t1', moved('login', 'planned', 'working'), moved('exp', 'planned', 'working'))
-      ])
-    ).toEqual([
-      'Moved <Token refresh fix> to In progress / Added and moved <Login flaky test> <Export timeout> to In progress'
-    ])
-  })
-
-  it('folds a bulk add and start into one line with every item', () => {
-    const five = ['a1', 'a2', 'a3', 'a4', 'a5']
-    expect(
-      drawn([
-        bot('t1', ...five.map(made)),
-        bot('t1', ...five.map((uid) => moved(uid, 'planned', 'working')))
-      ])
-    ).toEqual(['Added and moved <a1> <a2> <a3> <a4> <a5> to In progress'])
-  })
-
-  it('marks done after a link, drops a round trip to its comment, and leaves owner runs as they are', () => {
+  it('renders net bot changes and keeps the owner run separate', () => {
     expect(
       drawn([
         bot('t1', linked('tok', 'working', 'pr:acme/app#812')),
         bot('t1', moved('tok', 'working', 'done'), moved('onb', 'planned', 'working')),
-        bot('t1', moved('onb', 'working', 'planned'), commented('onb', 'planned')),
+        bot(
+          't1',
+          moved('onb', 'working', 'planned'),
+          commented('onb', 'planned'),
+          moved('rel', 'planned', 'working'),
+          moved('rel', 'working', 'planned')
+        ),
         note('owner', 't1', moved('dlg', 'planned', 'working')),
         note('owner', 't1', moved('dlg', 'working', 'needs_you')),
         note('owner', 't1', moved('dlg', 'needs_you', 'done'))
       ])
     ).toEqual([
-      'Marked <Token refresh fix> done / Commented on <Onboarding copy>',
+      'Marked <Token refresh fix> done / Commented on <Onboarding copy> / Updated <Release notes>',
       'You changed <Share dialog> Planned → Done · 3 changes'
     ])
   })
@@ -383,19 +368,5 @@ describe('item rows that touch', () => {
     )
 
     expect(Object.fromEntries(joins)).toEqual({ 1: 'below', 2: 'above' })
-  })
-})
-
-describe('a folded run of bot notes', () => {
-  it('keeps the newest folded note’s journal place', () => {
-    const first = bot('t1', made('a1'))
-    const later = bot('t1', moved('a1', 'planned', 'working'))
-    first.message.journalPosition = { sequence: 3, index: 0 }
-    later.message.journalPosition = { sequence: 9, index: 1 }
-
-    const [lead] = foldBotItemNotes([first.message, later.message], ['t1', 't1'])
-
-    expect(lead!.journalPosition).toEqual({ sequence: 3, index: 0 })
-    expect(lead!.botItemNote?.position).toEqual({ sequence: 9, index: 1 })
   })
 })

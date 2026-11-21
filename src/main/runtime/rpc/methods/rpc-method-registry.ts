@@ -18,6 +18,7 @@ import { BROWSER_CORE_METHODS } from './browser/browser-core'
 import { BROWSER_IDENTITY_METHODS } from './browser/browser-identity-rpc'
 import { BROWSER_EXTRA_METHODS } from './browser/browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser/browser-screencast'
+import { BROWSER_GRAB_METHODS } from './browser/browser-grab'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser/browser-client-host'
 import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from './browser/desktop-browser-bridge'
 import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser/browser-client-file-channel'
@@ -79,6 +80,7 @@ import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessio
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './host-management/managed-runtime-install'
+import { AGENT_CLI_UPDATE_METHODS } from './host-management/agent-cli-update'
 import { ARTIFACT_METHODS } from './artifacts/artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
@@ -144,6 +146,7 @@ const CORE_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...MANAGED_RUNTIME_INSTALL_METHODS,
+  ...AGENT_CLI_UPDATE_METHODS,
   ...AGENT_LAUNCH_METHODS,
   ...AGENT_CONVERSATION_METHODS,
   ...CONNECTOR_METHODS,
@@ -187,6 +190,7 @@ const SERVICE_RPC_METHODS = [
   ...BROWSER_CORE_METHODS,
   ...BROWSER_IDENTITY_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
+  ...BROWSER_GRAB_METHODS,
   ...BROWSER_EXTRA_METHODS,
   ...BROWSER_CLIENT_HOST_METHODS,
   ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,

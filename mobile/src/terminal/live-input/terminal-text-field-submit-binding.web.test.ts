@@ -46,8 +46,8 @@ describe('the web sibling', () => {
   })
 })
 
-describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s', (os) => {
-  function setup(accept = true, platform: ReturnType<typeof hostOs> = os) {
+describe('live terminal keyboard chords', () => {
+  function setup(accept = true, platform: ReturnType<typeof hostOs> = 'android') {
     vi.mocked(hostOs).mockReturnValueOnce(platform)
     const field = mountField()
     const onChord = vi.fn(() => accept)
@@ -68,10 +68,11 @@ describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s'
   }
 
   it.each([
-    ['c', { ctrlKey: true }, '\x03'],
-    ['Enter', { ctrlKey: true }, '\x1b[13;5u']
-  ])('claims %s once before RNWeb can resend it', (name, options, bytes) => {
-    const { field, onChord, key } = setup()
+    ['android', 'c', { ctrlKey: true }, '\x03'],
+    ['ios', 'c', { ctrlKey: true }, '\x03'],
+    ['android', 'Enter', { ctrlKey: true }, '\x1b[13;5u']
+  ] as const)('claims %s %s once before RNWeb can resend it', (platform, name, options, bytes) => {
+    const { field, onChord, key } = setup(true, platform)
     const parentKey = vi.fn()
     field.parentElement?.addEventListener('keydown', parentKey, { once: true })
     expect(key(name, options).defaultPrevented).toBe(true)
@@ -79,10 +80,14 @@ describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s'
     expect(parentKey).not.toHaveBeenCalled()
   })
 
-  it.each(['b'])('keeps Option-generated %j native on iOS and Alt chords on Android', (name) => {
-    const { onChord, key } = setup()
-    expect(key(name, { altKey: true }).defaultPrevented).toBe(os === 'android')
-    expect(onChord.mock.calls).toEqual(os === 'android' ? [[{ bytes: `\x1b${name}` }]] : [])
+  it('keeps Option-generated text native on iOS and Alt chords on Android', () => {
+    const android = setup(true, 'android')
+    expect(android.key('b', { altKey: true }).defaultPrevented).toBe(true)
+    expect(android.onChord).toHaveBeenCalledExactlyOnceWith({ bytes: '\x1bb' })
+
+    const ios = setup(true, 'ios')
+    expect(ios.key('b', { altKey: true }).defaultPrevented).toBe(false)
+    expect(ios.onChord).not.toHaveBeenCalled()
   })
 
   it.each([

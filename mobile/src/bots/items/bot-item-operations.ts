@@ -1,5 +1,6 @@
 // The owner's item calls from the phone: the host the route reaches (a paired server's too) reads and
-// changes the bot's items. Writes carry no request id in v1, so a dropped reply is never retried.
+// changes the bot's items. Only a comment carries a request id (where the host takes one), so only a
+// comment's Retry is safe after a dropped reply.
 import * as z from 'zod'
 import {
   BotItemShowReadSchema,
@@ -74,7 +75,10 @@ const itemsSnooze = bindDeferredRpcOperation(
   })
 )
 
-export type BotItemRead<T> = { kind: 'read'; value: T } | { kind: 'failed'; notFound: boolean }
+/** `message` says why a read failed: the host's refusal or the transport's error, when either gave one. */
+export type BotItemRead<T> =
+  | { kind: 'read'; value: T }
+  | { kind: 'failed'; notFound: boolean; message?: string }
 
 /** Every open item, closed ones a page at a time (`closedCursor` for the next), or one chat's. */
 export async function readBotItems(
@@ -89,9 +93,13 @@ export async function readBotItems(
     )
     return answer.kind === 'answered'
       ? { kind: 'read', value: answer.value }
-      : { kind: 'failed', notFound: false }
-  } catch {
-    return { kind: 'failed', notFound: false }
+      : {
+          kind: 'failed',
+          notFound: false,
+          message: answer.kind === 'failed' ? answer.message : undefined
+        }
+  } catch (error) {
+    return { kind: 'failed', notFound: false, message: error instanceof Error ? error.message : '' }
   }
 }
 
@@ -122,7 +130,7 @@ export function markBotItemsOpened(client: RpcClient, botId: string): void {
 
 /** How an owner write went: `unknown` when the connection dropped after sending, so it may have landed. */
 export type BotItemWriteOutcome =
-  | { kind: 'done' }
+  | { kind: 'done'; result?: unknown }
   | { kind: 'refused'; message: string }
   | { kind: 'unknown' }
   | { kind: 'not-sent' }
@@ -134,19 +142,32 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
   } catch (error) {
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
-  return reply instanceof Error ? { kind: 'refused', message: reply.message } : { kind: 'done' }
+  return reply instanceof Error
+    ? { kind: 'refused', message: reply.message }
+    : { kind: 'done', result: reply }
 }
 
+/** `images`: committed attachment store paths on the bot's host; `requestId` only to a host that
+ *  takes one. Done carries the host's answer, `{ eventId }`. */
 export function commentOnBotItem(
   client: RpcClient,
   uid: string,
-  text: string
+  text: string,
+  extra: { images?: readonly string[]; requestId?: string } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemComment.request(client, { item: uid, text })
+    const reply = await itemComment.request(
+      client,
+      {
+        item: uid,
+        text,
+        ...(extra.images?.length ? { images: [...extra.images] } : {}),
+        ...(extra.requestId ? { requestId: extra.requestId } : {})
+      },
+      { failWhenDisconnected: true }
+    )
     try {
-      itemComment.interpret(reply)
-      return null
+      return itemComment.interpret(reply)
     } catch (error) {
       return error instanceof Error ? error : new Error(String(error))
     }
@@ -161,11 +182,15 @@ export function setBotItemsStatus(
   reason?: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemsStatus.request(client, {
-      items: [...uids],
-      status,
-      ...(reason ? { reason } : {})
-    })
+    const reply = await itemsStatus.request(
+      client,
+      {
+        items: [...uids],
+        status,
+        ...(reason ? { reason } : {})
+      },
+      { failWhenDisconnected: true }
+    )
     try {
       itemsStatus.interpret(reply)
       return null
@@ -183,10 +208,14 @@ export function snoozeBotItems(
   until: number | null
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemsSnooze.request(client, {
-      items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
-      until
-    })
+    const reply = await itemsSnooze.request(
+      client,
+      {
+        items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
+        until
+      },
+      { failWhenDisconnected: true }
+    )
     try {
       itemsSnooze.interpret(reply)
       return null

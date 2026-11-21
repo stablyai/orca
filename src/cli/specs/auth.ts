@@ -9,7 +9,7 @@ export const AUTH_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca auth login [--org <id|name>] [--switch] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'org', 'switch'],
     notes: [
-      'Prints a link to open in any browser. After you sign in, the page shows a code; paste it back into this terminal only.',
+      'Prints a link to open in any browser, and a code. Sign in there, check the page shows the same code, and approve; nothing is pasted back.',
       'The running Orca on this host keeps the sign-in; this command never writes it. Start Orca on this host first.',
       '--switch replaces an account that is already signed in. --org picks the organization when you belong to more than one.'
     ],

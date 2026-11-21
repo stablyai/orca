@@ -59,6 +59,7 @@ export type BotDirectApp = { category: BotAppCategory; composio?: readonly strin
       name: string
       line: string
       url: string
+      variable?: BotMcpApp['variable']
       signIn: BotMcpApp['signIn']
     }
 )
@@ -68,16 +69,19 @@ export const DIRECT_APPS: readonly BotDirectApp[] = [
   { route: 'connector', connector: 'slack', category: 'chat', composio: ['slack'] },
   { route: 'connector', connector: 'linear', category: 'docs', composio: ['linear'] },
   { route: 'connector', connector: 'google', category: 'mail', composio: ['gmail'] },
-  ...BOT_MCP_APPS.map(({ id, name, line, url, signIn, category, composio }): BotDirectApp => ({
-    route: 'mcp',
-    id,
-    name,
-    line,
-    url,
-    signIn,
-    category,
-    composio
-  }))
+  ...BOT_MCP_APPS.map(
+    ({ id, name, line, url, variable, signIn, category, composio }): BotDirectApp => ({
+      route: 'mcp',
+      id,
+      name,
+      line,
+      url,
+      variable,
+      signIn,
+      category,
+      composio
+    })
+  )
 ]
 
 /** A row's one line: what the app does for the bot, before it is added. */

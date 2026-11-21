@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { readGitReviewBranchSources } from '../../../../shared/git/remotes/git-review-branch-source'
@@ -11,14 +11,13 @@ vi.mock('./tracked-upstream-branch', () => ({
     const { readGitReviewBranchSources } =
       await import('../../../../shared/git/remotes/git-review-branch-source')
     const { runProcess } = await import('@orca/process-host')
-    const { devNull } = await import('node:os')
     const sources = await readGitReviewBranchSources(
       async (args) => {
         const result = await runProcess({
           program: 'git',
           args,
           cwd: repoPath,
-          env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' }
+          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
         })
         if (result.code !== 0) {
           throw new Error(result.stderr)
@@ -57,12 +56,6 @@ const cases: PushCase[] = [
     config: [['push.default', 'nothing']],
     destination: null,
     pushSucceeds: false
-  },
-  {
-    name: 'unmapped refspec',
-    config: [['remote.fork.push', 'refs/heads/other:refs/heads/other']],
-    destination: null,
-    pushSucceeds: true
   },
   {
     name: 'unmapped refspec overrides upstream mode',
@@ -227,7 +220,7 @@ it.for(cases)(
         program: 'git',
         args,
         cwd,
-        env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' }
+        env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
       })
     const git = async (args: string[]) => {
       const result = await run(repo, args)

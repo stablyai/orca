@@ -6,6 +6,7 @@ import type { onRunningWslDistrosStopped } from '../../../wsl/discovery/wsl-runn
 import { onWslDistroGateNote } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { buildWslHealInvocation } from '../index/codex-session-index-heal'
+import { CodexHistoryPassRequests } from './codex-history-pass-queue'
 import {
   healCodexIndexPendingRollouts,
   isCodexAccountHistoryWorkStopping
@@ -61,24 +62,6 @@ async function linkInGuest(
     requireRunning: () => dependencies.requireRunning(target.distro)
   })
   return parseHelperOutput(stdout)
-}
-
-/** Compares the home's left-behind rollouts with the guest store within the helper's budget. */
-async function checkInGuest(
-  target: WslCodexAccountHistoryTarget,
-  dependencies: WslAccountHistoryDependencies
-): Promise<void> {
-  const stdout = await dependencies.runHelper({
-    distro: target.distro,
-    helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
-    helperLabel: 'Codex account history',
-    helperArgs: ['check', target.accountHome, target.storeHome],
-    timeoutMs: HELPER_TIMEOUT_MS,
-    requireRunning: () => dependencies.requireRunning(target.distro)
-  })
-  if (!parseHelperOutput(stdout)) {
-    throw new Error('The WSL Codex history check printed no summary')
-  }
 }
 
 /** Marker lines precede the summary; a missing summary means the list may be clipped. */
@@ -172,16 +155,13 @@ async function clearPendingMarkers(
   }
 }
 
-type QueuedPass = { shared: boolean; pass: Promise<void> }
-
 /**
- * WSL account history passes, one at a time per distro in request order (homes merging into its
- * store at once would race on its folders; a request joins only the latest queued one for that
- * home with the same mode); indexing runs detached, one at a time per distro.
+ * WSL account history passes, one at a time per distro (homes merging into its store at once would
+ * race on its folders), a launch's own ahead of background ones; indexing runs detached, one at a
+ * time per distro.
  */
 export class WslCodexAccountHistoryLaunches {
-  private readonly latest = new Map<string, QueuedPass>()
-  private readonly tails = new Map<string, Promise<void>>()
+  private readonly requests = new CodexHistoryPassRequests()
   private readonly heals = new Map<string, Promise<void>>()
   // The newest guest marker list per distro, indexed once no pass runs there.
   private readonly owedHeals = new Map<
@@ -197,63 +177,59 @@ export class WslCodexAccountHistoryLaunches {
   private readonly startedPasses = new Map<string, number>()
   // A home settled in a mode this run skips later guest passes in it.
   private readonly settledThisRun = new Map<string, boolean>()
-  // Shared homes whose left-behind rollouts await a content check, one guest check per distro.
-  private readonly owedChecks = new Map<string, WslCodexAccountHistoryTarget>()
-  private readonly checks = new Set<string>()
 
   constructor(private readonly dependencies: WslAccountHistoryDependencies = defaultDependencies) {}
 
-  run(target: WslCodexAccountHistoryTarget): Promise<void> {
+  run(
+    target: WslCodexAccountHistoryTarget,
+    { forLaunch = false }: { forLaunch?: boolean } = {}
+  ): Promise<void> {
     if (isCodexAccountHistoryWorkStopping()) {
       return Promise.resolve()
     }
     const distroKey = target.distro.toLowerCase()
     const key = `${distroKey}\0${target.accountHome}`
-    const previous = this.latest.get(key)
-    if (previous?.shared === target.shared) {
-      return previous.pass
-    }
-    const pass = (this.tails.get(distroKey) ?? Promise.resolve())
-      .then(async () => {
-        // Quit doesn't await history work, so a pass queued before it must not start guest work.
-        if (isCodexAccountHistoryWorkStopping()) {
-          return
-        }
-        if (this.settledThisRun.get(key) === target.shared) {
-          this.retryFailedHeal(distroKey)
-          return
-        }
-        this.settledThisRun.delete(key)
-        this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 0) + 1)
-        this.startedPasses.set(distroKey, (this.startedPasses.get(distroKey) ?? 0) + 1)
+    // A launch's own pass goes ahead of the distro's background ones, never behind a queued one.
+    return this.requests.request(
+      { queue: distroKey, home: key, shared: target.shared, forLaunch },
+      async () => {
         try {
-          const output = await linkInGuest(target, this.dependencies)
-          if (output && output.result === (target.shared ? 'shared' : 'unshared')) {
-            this.settledThisRun.set(key, target.shared)
-          }
-          if (output && output.pending.length > 0) {
-            this.oweHeal(distroKey, { target, output })
-          }
-          if (target.shared && (output?.result === 'shared' || output?.result === 'incomplete')) {
-            this.owedChecks.set(key, { ...target })
-          }
-        } finally {
-          this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 1) - 1)
-          this.startOwedHeal(distroKey)
-          this.startOwedCheck(distroKey)
+          await this.runPass(target, distroKey, key)
+        } catch (error: unknown) {
+          console.warn('[codex-account-history] WSL account history pass failed:', error)
         }
-      })
-      .catch((error: unknown) => {
-        console.warn('[codex-account-history] WSL account history pass failed:', error)
-      })
-    this.tails.set(distroKey, pass)
-    this.latest.set(key, { shared: target.shared, pass })
-    void pass.finally(() => {
-      if (this.latest.get(key)?.pass === pass) {
-        this.latest.delete(key)
       }
-    })
-    return pass
+    )
+  }
+
+  private async runPass(
+    target: WslCodexAccountHistoryTarget,
+    distroKey: string,
+    key: string
+  ): Promise<void> {
+    // Quit doesn't await history work, so a pass queued before it must not start guest work.
+    if (isCodexAccountHistoryWorkStopping()) {
+      return
+    }
+    if (this.settledThisRun.get(key) === target.shared) {
+      this.retryFailedHeal(distroKey)
+      return
+    }
+    this.settledThisRun.delete(key)
+    this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 0) + 1)
+    this.startedPasses.set(distroKey, (this.startedPasses.get(distroKey) ?? 0) + 1)
+    try {
+      const output = await linkInGuest(target, this.dependencies)
+      if (output && output.result === (target.shared ? 'shared' : 'unshared')) {
+        this.settledThisRun.set(key, target.shared)
+      }
+      if (output && output.pending.length > 0) {
+        this.oweHeal(distroKey, { target, output })
+      }
+    } finally {
+      this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 1) - 1)
+      this.startOwedHeal(distroKey)
+    }
   }
 
   // Passes in one distro share its marker folder and may report in any order: keep every name.
@@ -302,41 +278,5 @@ export class WslCodexAccountHistoryLaunches {
         this.startOwedHeal(distroKey)
       })
     this.heals.set(distroKey, heal)
-  }
-
-  // Detached: hashing a large history must not hold up a launch's pass.
-  private startOwedCheck(distroKey: string): void {
-    if (
-      this.checks.has(distroKey) ||
-      (this.activePasses.get(distroKey) ?? 0) > 0 ||
-      isCodexAccountHistoryWorkStopping()
-    ) {
-      return
-    }
-    const owed = [...this.owedChecks].find(
-      ([, target]) => target.distro.toLowerCase() === distroKey
-    )
-    if (!owed) {
-      return
-    }
-    const [key, target] = owed
-    this.checks.add(distroKey)
-    // An unfinished check resumes on a later launch, never in a loop now.
-    // A pass that finished meanwhile owes a fresh check; only this run's request is settled.
-    const settle = (): void => {
-      if (this.owedChecks.get(key) === target) {
-        this.owedChecks.delete(key)
-      }
-    }
-    void checkInGuest(target, this.dependencies)
-      .then(settle)
-      .catch((error: unknown) => {
-        settle()
-        console.warn('[codex-account-history] Checking WSL left-behind history failed:', error)
-      })
-      .finally(() => {
-        this.checks.delete(distroKey)
-        this.startOwedCheck(distroKey)
-      })
   }
 }

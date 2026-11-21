@@ -1,4 +1,6 @@
 import type { Bot } from '../bot-types'
+import { replaceImageReferences } from '../native-chat/attachments/native-chat-image-reference'
+import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../native-chat/input/composer/agent-image-paste'
 import type { BotGroup } from './bot-group-schema'
 
 type Room = Pick<BotGroup, 'members' | 'replyMode'>
@@ -17,16 +19,27 @@ const EVERYONE = '@everyone'
 const MENTION_START = /(^|[^\p{L}\p{N}_.@])@/gu
 const MENTION_END = /^(?:$|[\s,:;!?)]|\.(?:\s|$))/u
 const LEADING_GAP = /^[\s,:!?]*$/u
+// A member's reply addresses `@Name` wherever the name is not run into more word characters.
+const REPLY_MENTION_END = /^(?![\p{L}\p{N}_])/u
+const QUOTED_ROOM_HISTORY = /<quoted_room_history>[\s\S]*?(?:<\/quoted_room_history>|(?![\s\S]))/gu
+// A parsed reply's code and block quotes come blanked already; its quoted strings stay data.
+const QUOTED_STRINGS = /\u201c[^\u201d]*\u201d|"[^"\n]*"/gu
 // Code and quoted prose is data, never an address; blanked to keep every offset in place.
 const UNADDRESSED_PROSE =
-  /```[\s\S]*?(?:```|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
+  /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
+// A file's `@path`, as drops and attachments write it, is data too: quoted, or rooted at a path.
+const FILE_REFERENCE = new RegExp(
+  `${NATIVE_CHAT_QUOTED_FILE_REFERENCE.source}|@(?:[\\\\/~]|[a-z]:[\\\\/])\\S*`,
+  'giu'
+)
 
 /** Every `@` in `text` that could address someone: the longest member name it spells, `@everyone`,
  *  or `none` with the unmatched `@word`. Send, draft and display all read mentions through this. */
 export function botGroupMentions(
   text: string,
   members: readonly Named[],
-  everyone: readonly string[]
+  everyone: readonly string[],
+  nameEnd = MENTION_END
 ): BotGroupMention[] {
   const mentions: BotGroupMention[] = []
   let leadingEnd: number | null = 0
@@ -41,11 +54,11 @@ export function botGroupMentions(
     const named = members.filter(
       (bot) =>
         rest.slice(1, 1 + bot.name.length).toLocaleLowerCase() === bot.name.toLocaleLowerCase() &&
-        MENTION_END.test(rest.slice(1 + bot.name.length))
+        nameEnd.test(rest.slice(1 + bot.name.length))
     )
     const longest = Math.max(0, ...named.map((bot) => bot.name.length))
     const best = named.filter((bot) => bot.name.length === longest)
-    const broadcast = /^@everyone/iu.test(rest) && MENTION_END.test(rest.slice(EVERYONE.length))
+    const broadcast = /^@everyone/iu.test(rest) && nameEnd.test(rest.slice(EVERYONE.length))
     // A member name spelled here (`Everyone Helper`) wins; one named exactly `Everyone` is ambiguous.
     const clash = broadcast && longest === EVERYONE.length - 1
     const mention: BotGroupMention =
@@ -61,7 +74,8 @@ export function botGroupMentions(
             }
           : {
               start,
-              end: start + (/^@\S*/u.exec(rest)?.[0].length ?? 1),
+              // Up to the next `@`, so an unknown name never swallows a mention right after it.
+              end: start + (/^@[^\s@]*/u.exec(rest)?.[0].length ?? 1),
               leading,
               match: 'none',
               ids: []
@@ -72,12 +86,42 @@ export function botGroupMentions(
   return mentions
 }
 
-function roomMentions(text: string, group: Room, bots: readonly Named[]): BotGroupMention[] {
+function roomMentions(
+  text: string,
+  group: Pick<Room, 'members'>,
+  bots: readonly Named[],
+  nameEnd?: RegExp,
+  unaddressed = UNADDRESSED_PROSE
+): BotGroupMention[] {
   return botGroupMentions(
-    text.replace(UNADDRESSED_PROSE, (prose) => ' '.repeat(prose.length)),
+    text
+      .replace(FILE_REFERENCE, (file) => ' '.repeat(file.length))
+      .replace(unaddressed, (prose) => ' '.repeat(prose.length)),
     bots.filter((bot) => group.members.some((member) => member.botId === bot.id)),
-    group.members.map((member) => member.botId)
+    group.members.map((member) => member.botId),
+    nameEnd
   )
+}
+
+/** The other members a member's reply hands off to, each with where it is first named: every
+ *  `@Name` outside quoted strings and quoted history, in order. `prose` already has its Markdown
+ *  code and block quotes blanked in place. `@everyone` and an ambiguous name reach no one; the
+ *  speaker never itself. */
+export function botGroupReplyMentions(
+  prose: string,
+  group: Pick<Room, 'members'>,
+  bots: readonly Named[],
+  speakerId: string
+): { id: string; start: number }[] {
+  const unquoted = prose.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
+  const named = new Map<string, number>()
+  for (const mention of roomMentions(unquoted, group, bots, REPLY_MENTION_END, QUOTED_STRINGS)) {
+    const [id] = mention.ids
+    if (mention.match === 'member' && id !== undefined && id !== speakerId && !named.has(id)) {
+      named.set(id, mention.start)
+    }
+  }
+  return [...named].map(([id, start]) => ({ id, start }))
 }
 
 /** Who the room's reply mode reaches when no one is mentioned; a default that left reaches no one. */
@@ -137,8 +181,9 @@ export function botGroupDraftAudience(
   group: Room,
   bots: readonly Named[]
 ): { ids: string[]; addressed: boolean } | 'invalid' {
-  const mentions = roomMentions(draft, group, bots).filter(
-    (mention) => !(mention.match === 'none' && mention.end === draft.length)
+  const prose = replaceImageReferences(draft, () => '')
+  const mentions = roomMentions(prose, group, bots).filter(
+    (mention) => !(mention.match === 'none' && mention.end === prose.length)
   )
   if (
     mentions.some(

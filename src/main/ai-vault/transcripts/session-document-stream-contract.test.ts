@@ -33,11 +33,15 @@ describe('streamed session document contracts', () => {
       }
       state.push(value)
     }
-    expect(await read('{"messages":["bad",1],"messages":[2,3]}', { consume })).toEqual({
+    expect(await read('{"messages":["discard","bad"],"messages":[2,3]}', { consume })).toEqual({
       record: {},
       state: [2, 3]
     })
-    expect(await read('{"messages":["bad"],"messages":[]}', { consume })).toEqual({
+    expect(await read('{"messages":["discard","bad"],"messages":[]}', { consume })).toEqual({
+      record: {},
+      state: []
+    })
+    expect(await read('{"messages":[1],"messages":null}')).toEqual({
       record: {},
       state: []
     })
@@ -68,7 +72,7 @@ describe('streamed session document contracts', () => {
     })
   })
 
-  it('validates discarded subtrees and closes their source on malformed input', async () => {
+  it('rejects malformed input in a discarded subtree or after consuming messages', async () => {
     let closed = false
     async function* malformed() {
       try {
@@ -80,6 +84,7 @@ describe('streamed session document contracts', () => {
     }
     await expect(read('', { bytes: malformed() })).rejects.toBeInstanceOf(SyntaxError)
     expect(closed).toBe(true)
+    await expect(read('{"messages":[1]')).rejects.toBeInstanceOf(SyntaxError)
   })
 
   it('preserves source failure and closes the source even after a consumer failure', async () => {

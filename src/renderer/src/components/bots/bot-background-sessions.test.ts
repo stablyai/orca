@@ -3,7 +3,7 @@ import type { AgentSessionStatusSummary } from '../../../../shared/agent-session
 import type { Bot } from '../../../../shared/bot-types'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { botBackgroundSessionTabs, joinBotSessions } from './bot-background-sessions'
+import { botBackgroundSessionTabs } from './bot-background-sessions'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only folderWorkspaceId is read.
 const bots = [{ folderWorkspaceId: 'fw-1' } as Bot]
@@ -40,17 +40,5 @@ describe('botBackgroundSessionTabs', () => {
         agentSessionAgent: 'claude'
       })
     ])
-  })
-
-  it('joins the same background and tabs into the same list', () => {
-    const background = botBackgroundSessionTabs(
-      bots,
-      [],
-      hostSessions(['thread', 'folder:fw-1']),
-      {}
-    )
-    const tabs = botBackgroundSessionTabs(bots, [], hostSessions(['other', 'folder:fw-1']), {})
-    expect(joinBotSessions(background, tabs)).toBe(joinBotSessions(background, tabs))
-    expect(joinBotSessions([], tabs)).toBe(tabs)
   })
 })

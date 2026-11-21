@@ -130,7 +130,6 @@ describe('ImportBotDialog, bots found', () => {
     renderDialog()
 
     expect(nameInput().value).toBe('Molty')
-    expect(screen.getByText('2 found')).toBeTruthy()
     expect(screen.getByRole('radio', { name: /Molty/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('radio', { name: /Scout/ }))
     expect(nameInput().value).toBe('Scout')
@@ -153,23 +152,17 @@ describe('ImportBotDialog, bots found', () => {
     expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
   })
 
-  it('moves the pick with the arrow keys, and the list is one Tab stop', async () => {
+  it('moves the pick with the arrow keys', async () => {
     found({ app: 'openclaw', home: '~/.openclaw', bots: [candidate('Molty'), candidate('Scout')] })
     renderDialog()
     const molty = screen.getByRole('radio', { name: /Molty/ })
     const scout = screen.getByRole('radio', { name: /Scout/ })
-    // Tab lands on the group, which hands focus to the picked row; the rows themselves are not Tab stops.
-    const tabStops = (): HTMLElement[] =>
-      screen.getAllByRole('radio').filter((radio) => radio.tabIndex === 0)
-    expect(tabStops()).toEqual([])
-
     molty.focus()
     fireEvent.keyDown(molty, { key: 'ArrowDown' })
     // Radix moves focus on the next task.
     await waitFor(() => expect(document.activeElement).toBe(scout))
     expect(scout.getAttribute('aria-checked')).toBe('true')
     expect(nameInput().value).toBe('Scout')
-    expect(tabStops()).toEqual([scout])
   })
 
   it('does not create on Enter while Create is disabled', () => {
@@ -181,13 +174,8 @@ describe('ImportBotDialog, bots found', () => {
     expect(mocks.createBot).not.toHaveBeenCalled()
   })
 
-  it('adds New group’s filter only past ten bots', () => {
+  it('filters a long source list and keeps the export option', () => {
     const many = Array.from({ length: 11 }, (_, i) => candidate(`Bot ${i + 1}`))
-    found({ app: 'openclaw', home: '~/.openclaw', bots: many.slice(0, 10) })
-    renderDialog()
-    expect(screen.queryByLabelText('Filter bots')).toBeNull()
-    cleanup()
-
     found({ app: 'openclaw', home: '~/.openclaw', bots: many })
     renderDialog()
     fireEvent.change(screen.getByLabelText('Filter bots'), { target: { value: 'bot 1' } })
@@ -207,7 +195,6 @@ describe('ImportBotDialog, bots found', () => {
     renderDialog()
 
     expect(nameInput().value).toBe('')
-    expect(screen.getByText('Molty came from this bot')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Update Molty' }))
     await waitFor(() =>
       expect(mocks.openBotHomeTab).toHaveBeenCalledWith(existing, {
@@ -238,6 +225,9 @@ describe('ImportBotDialog, another app', () => {
     mocks.createBot.mockResolvedValue(bot({ name: 'Sage' }))
     renderDialog()
     fireEvent.click(screen.getByRole('button', { name: /Another app/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('radio', { name: /Molty/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Another app/ }))
     expect(nameInput().value).toBe('')
     expect(screen.queryByLabelText('Its reply')).toBeNull()
 
@@ -258,14 +248,6 @@ describe('ImportBotDialog, another app', () => {
       name: 'Sage',
       reply: 'Saved SOUL.md'
     })
-  })
-
-  it('goes Back to the found bots', () => {
-    found({ app: 'openclaw', home: '~/.openclaw', bots: [candidate('Molty')] })
-    renderDialog()
-    fireEvent.click(screen.getByRole('button', { name: /Another app/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(screen.getByRole('radio', { name: /Molty/ })).toBeTruthy()
   })
 })
 

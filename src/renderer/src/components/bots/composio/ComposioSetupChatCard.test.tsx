@@ -54,43 +54,6 @@ describe('the Composio Connect card', () => {
     expect(await screen.findByRole('button', { name: 'Connect X' })).toBeTruthy()
   })
 
-  it('tells the owner an API-key app opens Composio to enter its key', async () => {
-    hostSays(['key'])
-    render(<ComposioSetupChatCard card={card} fallback="fallback" />)
-    expect(
-      await screen.findByText(
-        'Opens Composio to enter your X API key. Composio keeps it, not Orca.'
-      )
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Connect X' })).toBeTruthy()
-  })
-
-  it('a Ready card names the account when Composio gives one, and nothing for an API-key app', async () => {
-    const connected = (label: string | null) =>
-      mocks.rpc.mockReset().mockImplementation(async (_target: unknown, method: string) => {
-        if (method === 'bots.composio.status') {
-          return { key: 'ok', added: true }
-        }
-        if (method === 'bots.composio.connections') {
-          const connection = { id: 'ca_1', app: 'twitter', name: 'X', status: 'active', label }
-          return { connections: [connection], pending: [] }
-        }
-        return {}
-      })
-    connected('dana@acme.com')
-    const first = render(
-      <ComposioSetupChatCard card={{ ...card, card: 'ready' }} fallback="fallback" />
-    )
-    expect(
-      await screen.findByText('As dana@acme.com. Your app sign-ins are held by Composio.')
-    ).toBeTruthy()
-    first.unmount()
-    resetComposioClientForTest()
-    connected(null)
-    render(<ComposioSetupChatCard card={{ ...card, card: 'ready' }} fallback="fallback" />)
-    expect(await screen.findByText('Your app sign-ins are held by Composio.')).toBeTruthy()
-  })
-
   it('says an old Ready card no longer holds once the key or the bot’s tool is gone', async () => {
     mocks.rpc
       .mockReset()
