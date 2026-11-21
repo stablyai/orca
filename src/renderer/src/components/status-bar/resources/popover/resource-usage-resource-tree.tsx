@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useWorktreeMap } from '../../../../store/slices/worktrees/listing/use-worktree-catalog'
@@ -81,13 +81,24 @@ export function ResourceTree({
   const t = useTranslate()
   const worktreeById = useWorktreeMap()
 
-  const sortedRepos = useMemo(() => {
-    const grouped = sortProjectGroups(repos, sortOption)
-    return grouped.map((repo) => ({
-      ...repo,
-      worktrees: sortWorktrees(repo.worktrees, sortOption)
-    }))
-  }, [repos, sortOption])
+  // The merge keeps an unchanged group's object, so its sorted copy is reused.
+  const [sortedGroups] = useState(
+    () =>
+      new WeakMap<UnifiedProjectGroup, { sortOption: SortOption; sorted: UnifiedProjectGroup }>()
+  )
+  const sortedRepos = useMemo(
+    () =>
+      sortProjectGroups(repos, sortOption).map((repo) => {
+        const cached = sortedGroups.get(repo)
+        if (cached?.sortOption === sortOption) {
+          return cached.sorted
+        }
+        const sorted = { ...repo, worktrees: sortWorktrees(repo.worktrees, sortOption) }
+        sortedGroups.set(repo, { sortOption, sorted })
+        return sorted
+      }),
+    [repos, sortOption, sortedGroups]
+  )
 
   const renderWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element => {
     const storeRecord = worktreeById.get(wt.worktreeId) ?? null

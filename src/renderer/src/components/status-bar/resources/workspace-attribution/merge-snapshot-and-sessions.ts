@@ -26,6 +26,12 @@ import {
   resolveDaemonSessionLabel,
   resolveSnapshotSessionLabel
 } from './resource-session-labels'
+import {
+  cachedSampleRow,
+  rememberSampleRow,
+  reuseUnchangedGroups,
+  type ResourceMergeCache
+} from './resource-merge-cache'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -39,10 +45,13 @@ export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
   daemonSessions: readonly DaemonSession[],
   ctx: MergeContext,
-  t?: Translate
+  t?: Translate,
+  cache?: ResourceMergeCache
 ): UnifiedProjectGroup[] {
   const repos = new Map<string, UnifiedProjectGroup>()
   const worktreeRowsByRepo = new Map<string, Map<string, UnifiedWorktreeRow>>()
+  // Rows shared with the previous merge; later steps copy one before changing it.
+  const reusedRows = new Set<UnifiedWorktreeRow>()
   const seenSessionIds = new Set<string>()
   // Include deferred wake hints so inactive restored sessions cannot become reclaimable orphans before their panes mount.
   const index = buildResourceSessionBindingIndex(ctx)
@@ -84,6 +93,16 @@ export function mergeSnapshotAndSessions(
     }
   }
 
+  function ownRow(repo: UnifiedProjectGroup, row: UnifiedWorktreeRow): UnifiedWorktreeRow {
+    if (!reusedRows.delete(row)) {
+      return row
+    }
+    const copy = { ...row, sessions: [...row.sessions], browsers: [...row.browsers] }
+    repo.worktrees[repo.worktrees.indexOf(row)] = copy
+    worktreeRowsByRepo.get(repo.repoId)!.set(row.worktreeId, copy)
+    return copy
+  }
+
   function ingestSampledWorktree(
     wt: WorktreeMemory,
     row: Pick<UnifiedWorktreeRow, 'worktreeId' | 'repoId' | 'repoName' | 'isRemote'> & {
@@ -95,6 +114,22 @@ export function mergeSnapshotAndSessions(
     }
   ): void {
     const repo = ensureRepo(row.repoId, row.repoName)
+    const placement = {
+      worktreeId: row.worktreeId,
+      worktreeName: row.worktreeName,
+      repoId: row.repoId,
+      repoName: row.repoName,
+      isRemote: row.isRemote,
+      hostLabel: row.hostLabel || undefined,
+      runtimeHostId: row.runtimeHostId,
+      unplaced: row.unplaced
+    }
+    const cached = cachedSampleRow(cache, wt, placement)
+    if (cached) {
+      reusedRows.add(cached)
+      appendWorktreeRow(repo, cached)
+      return
+    }
     const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
       seenSessionIds.add(s.sessionId)
       const tabId = index.ptyIdToTabId.get(s.sessionId) ?? null
@@ -114,23 +149,18 @@ export function mergeSnapshotAndSessions(
         ...(row.readOnly ? { readOnly: true } : {})
       }
     })
-    appendWorktreeRow(repo, {
-      worktreeId: row.worktreeId,
-      worktreeName: row.worktreeName,
-      repoId: row.repoId,
-      repoName: row.repoName,
+    const built: UnifiedWorktreeRow = {
+      ...placement,
       cpu: wt.cpu,
       memory: wt.memory,
       history: wt.history,
       hasLocalSamples: true,
-      isRemote: row.isRemote,
-      ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
-      runtimeHostId: row.runtimeHostId,
-      unplaced: row.unplaced,
       sessions,
       chats: wt.chats,
       browsers: []
-    })
+    }
+    rememberSampleRow(cache, wt, built)
+    appendWorktreeRow(repo, built)
   }
 
   // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
@@ -219,7 +249,9 @@ export function mergeSnapshotAndSessions(
     const repo = ensureRepo(finalRepoId, finalRepoName)
 
     let row = findWorktreeRow(repo, finalWorktreeId)
-    if (!row) {
+    if (row) {
+      row = ownRow(repo, row)
+    } else {
       row = {
         worktreeId: finalWorktreeId,
         worktreeName: finalWorktreeName,
@@ -260,7 +292,9 @@ export function mergeSnapshotAndSessions(
     const repoName = ctx.repoDisplayNameById.get(worktree.repoId) || worktree.repoId
     const repo = ensureRepo(worktree.repoId, repoName)
     let row = findWorktreeRow(repo, worktreeId)
-    if (!row) {
+    if (row) {
+      row = ownRow(repo, row)
+    } else {
       row = {
         worktreeId,
         worktreeName: worktree.displayName,
@@ -295,5 +329,5 @@ export function mergeSnapshotAndSessions(
     repo.memory = anyLocal ? memSum : null
   }
 
-  return [...repos.values()]
+  return reuseUnchangedGroups(cache, [...repos.values()])
 }
