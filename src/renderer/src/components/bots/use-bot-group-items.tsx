@@ -163,7 +163,7 @@ function memberClosed(read: MemberRead): {
   return {
     closed: read.list.shown.filter((item) => item.status === 'done' || item.status === 'canceled'),
     more: !read.list.closedEnded,
-    endAt: read.list.closedEndAt
+    endAt: read.list.closedEndAt ?? null
   }
 }
 

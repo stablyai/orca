@@ -29,7 +29,7 @@ export type BotItemsShownList = {
   /** Every Closed item this list counts is loaded. */
   closedEnded: boolean
   /** The last activity of the loaded Closed end, while more pages remain. */
-  closedEndAt: number | null
+  closedEndAt?: number | null
 }
 
 export function useBotItemsShownList(

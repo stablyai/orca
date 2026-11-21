@@ -74,6 +74,30 @@ function loadedItems(
   return paged.size > 0 ? [...items, ...paged.values()] : items
 }
 
+function carriedPages(
+  pages: Pages,
+  read: BotItemsRead,
+  named: ReadonlyMap<string, BotItem | null>
+): BotItem[] {
+  const inRead = new Set(read.items.map((item) => item.uid))
+  const held = new Map<string, BotItem>()
+  for (const item of [...pages.base.items.filter(isClosed), ...pages.items]) {
+    if (!held.has(item.uid)) {
+      held.set(item.uid, item)
+    }
+  }
+  return [...held.values()].flatMap((item) => {
+    if (inRead.has(item.uid)) {
+      return []
+    }
+    if (!named.has(item.uid)) {
+      return [item]
+    }
+    const copy = named.get(item.uid)
+    return copy && isClosed(copy) ? [copy] : []
+  })
+}
+
 export function useBotItemsClosedPages(
   bot: BotRef,
   read: BotItemsRead | null,
@@ -83,12 +107,12 @@ export function useBotItemsClosedPages(
   const chats = useStableBotItemChats(chatIds)
   const [kept, setPages] = useState<Pages | null>(null)
   const pages = kept?.chats === chats ? kept : null
-  // A read that is the pages' own with only named items read again: the named items' copies are in it
-  // now (none for a deleted one), so the pages drop theirs and carry on. Any other new read reads the
-  // depth again.
+  // A read that is the pages' own with only named items read again carries them on, nothing read
+  // again: rows it pushed past its first page join the pages, and each named item takes its new copy
+  // (out of the pages when it's open, in the read, or gone). Any other new read reads the depth again.
   const named = pages && read && pages.base !== read ? botItemsNamedSince(read, pages.base) : null
   if (pages && read && named) {
-    setPages({ ...pages, base: read, items: pages.items.filter((item) => !named.has(item.uid)) })
+    setPages({ ...pages, base: read, items: carriedPages(pages, read, named) })
   }
   const generation = useRef(0)
   const latest = useRef(read)
