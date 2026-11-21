@@ -4,8 +4,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 
-const opened = vi.hoisted((): { result: string } => ({ result: 'system' }))
-vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: () => opened.result }))
+const opened = vi.hoisted((): { result: string; calls: unknown[][] } => ({
+  result: 'system',
+  calls: []
+}))
+vi.mock('@/lib/bot-host-page', () => ({
+  openBotHostPageOrSay: (...args: unknown[]) => {
+    opened.calls.push(args)
+    return opened.result
+  }
+}))
 
 // Made-up values with only the prefixes Slack gives its two tokens.
 const REFRESH = 'xoxe-refresh-example'
@@ -17,7 +25,6 @@ function shown(clipboard: string) {
   vi.stubGlobal('api', { ui: { readClipboardText } })
   render(
     <SlackConfigTokenForm
-      hostId="local"
       submitLabel="Create Slack app"
       busy={false}
       error={null}
@@ -29,11 +36,18 @@ function shown(clipboard: string) {
 
 afterEach(() => {
   opened.result = 'system'
+  opened.calls = []
   cleanup()
   vi.unstubAllGlobals()
 })
 
 describe('SlackConfigTokenForm', () => {
+  it("opens Slack's page in this computer's browser, with no bot whose workspace could host it", () => {
+    shown('')
+    fireEvent.click(screen.getByRole('button', { name: 'Get config token' }))
+    expect(opened.calls).toEqual([['local', 'https://api.slack.com/apps', { local: 'system' }]])
+  })
+
   it('fills the field with the token copied in Slack when the window comes back, and sends only on submit', async () => {
     const { onSubmit, readClipboardText } = shown(`  ${REFRESH}\n`)
     // Nothing is read until Slack's page was opened from here.

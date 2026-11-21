@@ -12,7 +12,6 @@ import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { ConnectorTryIt } from '../ConnectorTryIt'
 import { readBotSlack, slackTeamState } from '@/lib/bot-slack-state'
@@ -180,8 +179,6 @@ function BotSlackSetupFlow({
               </p>
             ) : null}
             <SlackConfigTokenForm
-              // This desktop's own token is made with this computer's Slack login.
-              hostId={step.mine ? LOCAL_EXECUTION_HOST_ID : bot.hostId}
               aside={
                 offer ? (
                   <SlackHandOffLines

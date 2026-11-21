@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
@@ -74,6 +74,7 @@ import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { useAppStore } from '@/store'
 import { ORCA_CONNECTED } from '../orca-sign-in.test-fixture'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
+import { SlackWorkspacesSettings } from './SlackWorkspacesSettings'
 import { ORCA_ACCOUNT_APPROVE_IN_BROWSER_RUNTIME_CAPABILITY } from '../../../../../shared/orca-account-runtime-capabilities'
 
 const SERVER: ExecutionHostId = 'runtime:m4'
@@ -118,10 +119,10 @@ function serverState(state: ConnectorBotSlackState): void {
   mocks.hosts[SERVER].state.mockResolvedValue(ok(state))
 }
 
-function openDialog(): void {
+function openDialog(overrides: Partial<Bot> = {}, teamId?: string): void {
   render(
     <TooltipProvider>
-      <BotSlackSetupDialog bot={bot()} open onOpenChange={() => {}} />
+      <BotSlackSetupDialog bot={bot(overrides)} teamId={teamId} open onOpenChange={() => {}} />
     </TooltipProvider>,
     { wrapper: ConfirmationDialogProvider }
   )
@@ -219,6 +220,80 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(mocks.hosts[SERVER].adoptApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
     expect(mocks.hosts[SERVER].setUpApp).not.toHaveBeenCalled()
+  })
+
+  it("opens Slack's token page in this computer's browser, never the server's or another bot's", async () => {
+    // The server's own token lapsed for the workspace this bot is already in: no hand-off, the token
+    // form only, and the new token goes to the server's account.
+    mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue(ok({ teamId: 'T1' }))
+    mocks.hosts[SERVER].setUpApp.mockResolvedValue(
+      ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+    )
+    openDialog({ slack: { appId: 'A1', teamId: 'T1' } }, 'T1')
+
+    await screen.findByText(
+      'Slack no longer accepts this workspace’s token. Paste a new one to reconnect.'
+    )
+    expect(screen.queryByRole('button', { name: 'Use it →' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Get config token' }))
+    // No `bot`: a server's page would otherwise open in one of its bots' workspaces.
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+    expect(mocks.open).toHaveBeenCalledWith('local', 'https://api.slack.com/apps', {
+      local: 'system'
+    })
+
+    fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-1-new' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Slack workspace' }))
+    await screen.findByRole('button', { name: 'Approve in Slack' })
+    expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-new' })
+    expect(mocks.hosts.local.saveGrant).not.toHaveBeenCalled()
+  })
+
+  it("opens Approve in Slack in this computer's browser, where the token was made", async () => {
+    mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
+    serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].setUpApp.mockResolvedValue(
+      ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+    )
+    mocks.open.mockReturnValue('system-browser')
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+    expect(mocks.open).toHaveBeenCalledWith('local', AUTHORIZE, { local: 'system' })
+    expect(await screen.findByText('Waiting for Slack…')).toBeTruthy()
+  })
+
+  it("reconnects a server's workspace from Settings with Slack's page in this computer's browser", async () => {
+    mocks.bots = [bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } })]
+    serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue(ok({ teamId: 'T1' }))
+    render(
+      <TooltipProvider>
+        <SlackWorkspacesSettings
+          hostId={SERVER}
+          botHostIds={[SERVER]}
+          account="m4air@example.test"
+        />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconnect' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Get config token' }))
+    expect(mocks.open).toHaveBeenCalledWith('local', 'https://api.slack.com/apps', {
+      local: 'system'
+    })
+    fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-1-new' }
+    })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reconnect' }))
+    await waitFor(() =>
+      expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-new' })
+    )
   })
 
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {

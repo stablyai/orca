@@ -12,7 +12,6 @@ import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { refreshBotSlack } from '@/lib/bot-slack-state'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -23,6 +22,7 @@ import type {
 import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { botSlackErrorMessage } from './bot-slack-copy'
+import { openSlackApprovalHere } from './slack-page-here'
 import { SlackPersonPlaceholder } from './SlackPersonPlaceholder'
 
 type Installed = Extract<ConnectorBotSlackState, { state: 'installed' }>
@@ -106,7 +106,7 @@ export function BotSlackPostAs({
       return
     }
     if (result.value && 'authorizeUrl' in result.value) {
-      openBotHostPageOrSay(bot.hostId, result.value.authorizeUrl, { bot, local: 'system' })
+      openSlackApprovalHere(result.value.authorizeUrl)
     }
     await refreshBotSlack(bot)
   }

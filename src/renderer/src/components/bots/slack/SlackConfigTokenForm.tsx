@@ -5,12 +5,8 @@ import { DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { SLACK_CONFIG_REFRESH_TOKEN_PREFIX } from '../../../../../shared/connector-bot-slack-contract'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-
-// Where Slack lists "Your App Configuration Tokens".
-const SLACK_APPS_URL = 'https://api.slack.com/apps'
+import { openSlackAppsHere } from './slack-page-here'
 
 // Slack shows two tokens side by side; the access token is the one Orca can't keep using.
 const SLACK_CONFIG_ACCESS_TOKEN_PREFIX = 'xoxe.xoxp-'
@@ -29,16 +25,15 @@ export function slackConfigTokenKind(text: string): 'refresh' | 'access' | null 
 }
 
 /** Paste a workspace's configuration refresh token; it is cleared the moment it is sent. Slack's
- *  page opens on the host, so the token is made with that computer's own Slack login. */
+ *  page opens in this computer's browser whatever computer the bot is on: the person here makes the
+ *  token with their own Slack login, and the page has no return to the host. */
 export function SlackConfigTokenForm({
-  hostId,
   submitLabel,
   busy,
   error,
   onSubmit,
   aside
 }: {
-  hostId: ExecutionHostId
   submitLabel: string
   busy: boolean
   error: string | null
@@ -125,8 +120,7 @@ export function SlackConfigTokenForm({
         variant="outline"
         className="w-full"
         onClick={() => {
-          awaitingCopy.current =
-            openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' }) !== 'unrouted'
+          awaitingCopy.current = openSlackAppsHere() !== 'unrouted'
         }}
       >
         {t('bots.slack.token.open', 'Get config token')}

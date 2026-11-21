@@ -4,12 +4,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBots } from '@/lib/bot-catalog'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { refreshBotSlack, slackReturnUrl, slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
+import { openSlackApprovalHere } from './slack-page-here'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { hostBots, knownSlackTeam, otherSlackTeams } from './slack-setup-teams'
 import {
@@ -76,7 +76,7 @@ export function useBotSlackSetup(
   handOff: (teamId: string) => Promise<void>
   submitToken: (token: string) => Promise<void>
   pasteToken: () => void
-  /** A paired computer's bot: opens Slack's page on that computer. */
+  /** A paired computer's bot: opens Slack's page in this computer's browser. */
   approve: () => void
   /** A paired computer's bot: the link, for approving in another browser. */
   copyLink: () => Promise<void>
@@ -124,10 +124,7 @@ export function useBotSlackSetup(
       if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
         // Remembered at once: stepping aside mounts the flow anew, which must not open Slack again.
         remember(teamId, link)
-        if (
-          openBotHostPageOrSay(bot.hostId, link.authorizeUrl, { bot, local: 'system' }) ===
-          'orca-browser'
-        ) {
+        if (openSlackApprovalHere(link.authorizeUrl) === 'orca-browser') {
           onStepAside?.()
         }
       }
@@ -285,7 +282,7 @@ export function useBotSlackSetup(
     if (!link) {
       return
     }
-    const opened = openBotHostPageOrSay(bot.hostId, link.authorizeUrl, { bot, local: 'system' })
+    const opened = openSlackApprovalHere(link.authorizeUrl)
     if (opened === 'unrouted') {
       return
     }
@@ -293,7 +290,7 @@ export function useBotSlackSetup(
     if (opened === 'orca-browser') {
       onStepAside?.()
     }
-  }, [step, bot, wait, onStepAside])
+  }, [step, wait, onStepAside])
 
   const copyLink = useCallback(async () => {
     if ((step.kind !== 'ready' && step.kind !== 'waiting') || !step.link) {
