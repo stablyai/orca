@@ -220,8 +220,13 @@ function withSlot<V, K extends string>(
   agent: K,
   value: V | undefined
 ): Partial<Record<K, V>> {
-  const { [agent]: _base, ...rest } = record ?? {}
-  return value === undefined ? rest : { ...rest, [agent]: value }
+  const next: Partial<Record<K, V>> = { ...record }
+  if (value === undefined) {
+    delete next[agent]
+  } else {
+    next[agent] = value
+  }
+  return next
 }
 
 /** Applies the copy a launch's options name. A copy this host no longer has refuses, so a launch
