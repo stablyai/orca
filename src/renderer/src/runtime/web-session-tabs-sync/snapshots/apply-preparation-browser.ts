@@ -17,7 +17,7 @@ import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsClientHostedPages,
   hostSnapshotAffirmsWorktreeContents
-} from '../hydration/host-session-snapshot-authority'
+} from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import {
