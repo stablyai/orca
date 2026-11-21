@@ -115,3 +115,35 @@ describe('a terminal chat file send with spaces in the stored path', () => {
     }
   })
 })
+
+describe('a terminal chat file send from a Windows host', () => {
+  const store = 'C:\\Users\\u\\AppData\\Roaming\\orca\\agent-session-attachments'
+  const bare = `${store}\\0b3f5c2a-1d4e-4a6b-9c8d-7e6f5a4b3c2d\\movie.mp4`
+  const spaced = `${store}\\1c4e6d3b-2e5f-4b7c-8d9e-8f7a6b5c4d3e\\My Notes.txt`
+  const row: NativeChatMessage = {
+    id: 'row-1',
+    role: 'user',
+    blocks: [{ type: 'text', text: `${bare} "${spaced}"  Files` }],
+    timestamp: 1,
+    source: 'transcript'
+  }
+  const echo = {
+    id: 'echo-1',
+    text: 'Files',
+    sentAt: 1,
+    afterMessageId: null,
+    matchingOccurrence: 1,
+    images: [bare, spaced]
+  }
+
+  it('leaves no echo behind once the confirmed row lands', () => {
+    const landed = findLandedImagePreviewEchoes([row], [echo])
+    expect(landed).toEqual([{ pendingId: 'echo-1', messageId: 'row-1', images: [bare, spaced] }])
+    const kept = retireLandedMobileNativeChatPending(
+      [row],
+      [echo],
+      new Set(landed.map((entry) => entry.pendingId))
+    )
+    expect(visibleMobileNativeChatPending([row], kept)).toEqual([])
+  })
+})

@@ -51,4 +51,14 @@ describe('uploaded file references in a sent message', () => {
       `C:\\Users\\u\\AppData\\Roaming\\orca\\agent-session-attachments\\${id}\\my notes.txt`
     ])
   })
+
+  it('finds the plain backslash paths a Windows terminal chat types, quoted when they have a space', () => {
+    const store = 'C:\\Users\\u\\AppData\\Roaming\\orca\\agent-session-attachments'
+    const bare = `${store}\\0b3f5c2a-1d4e-4a6b-9c8d-7e6f5a4b3c2d\\movie.mp4`
+    const spaced = `${store}\\1c4e6d3b-2e5f-4b7c-8d9e-8f7a6b5c4d3e\\My Notes.txt`
+    const text = `${bare} "${spaced}" Files test`
+    expect(nativeChatUploadedFilePaths(text)).toEqual([bare, spaced])
+    expect(nativeChatTextWithoutUploadedFiles(text)).toBe('Files test')
+    expect(nativeChatUploadedFilePaths('see C:\\Users\\u\\notes\\todo.txt please')).toEqual([])
+  })
 })

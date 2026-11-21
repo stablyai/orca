@@ -45,7 +45,14 @@ function useChatAttachmentShare(read: AttachmentTextRead, path: string) {
   const [error, setError] = useState('')
   const active = useRef<AbortController | null>(null)
   // Leaving the preview, or switching files, stops a download so it cannot open a share sheet afterwards.
-  useEffect(() => () => active.current?.abort(), [read, path])
+  useEffect(
+    () => () => {
+      active.current?.abort()
+      active.current = null
+      setProgress(null)
+    },
+    [read, path]
+  )
   const share = async () => {
     setError('')
     setProgress(0)
@@ -61,7 +68,7 @@ function useChatAttachmentShare(read: AttachmentTextRead, path: string) {
         await Sharing.shareAsync(uri)
       }
     } catch (cause) {
-      if (!controller.signal.aborted) {
+      if (active.current === controller) {
         setError(
           cause instanceof Error && cause.message
             ? cause.message
@@ -69,7 +76,8 @@ function useChatAttachmentShare(read: AttachmentTextRead, path: string) {
         )
       }
     } finally {
-      if (!controller.signal.aborted) {
+      if (active.current === controller) {
+        active.current = null
         setProgress(null)
       }
     }
