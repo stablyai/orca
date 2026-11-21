@@ -72,7 +72,7 @@ export type KnownPairedBotRoster = {
   bots: readonly BotRosterEntry[] | null
 }
 
-/** A paired server's bots as one read answered them, under its current name and `--on`. */
+/** A paired server's roster as one read answered it, under its current name and `--on`. */
 export type CachedPairedBotRoster = {
   environmentId: string
   server: BotRosterServer
