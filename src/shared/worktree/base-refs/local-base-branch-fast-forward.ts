@@ -7,10 +7,11 @@ import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
-  /** Each worktree's path and checked-out branch as a full ref, as this host reports them. */
-  listWorktrees: (repoPath: string) => Promise<readonly { path: string; branch?: string | null }[]>
-  /** Full refs a rebase or bisect in any worktree has reserved; their worktrees list a detached HEAD. */
-  listReservedBranches: (repoPath: string) => Promise<ReadonlySet<string>>
+  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it. */
+  readBranchUse: (
+    repoPath: string,
+    fullRef: string
+  ) => Promise<{ reserved: boolean; ownerPath?: string }>
   /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
   updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>
 }
@@ -96,10 +97,11 @@ export async function inspectLocalBaseBranch(
   let owner: { path: string } | undefined
   try {
     // Git's in-use rule also counts a branch a rebase or bisect has reserved.
-    if ((await git.listReservedBranches(repoPath)).has(fullRef)) {
+    const use = await git.readBranchUse(repoPath, fullRef)
+    if (use.reserved) {
       return { status: 'nothing_to_do' }
     }
-    owner = (await git.listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
+    owner = use.ownerPath === undefined ? undefined : { path: use.ownerPath }
   } catch {
     return { status: 'skipped_error' }
   }

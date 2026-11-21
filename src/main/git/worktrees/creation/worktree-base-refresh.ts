@@ -171,30 +171,83 @@ function localBaseBranchGit(
     )
     return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routed(repoPath)))
   }
-  const commonDirOf = async (repoPath: string) => {
+  const gitPathOf = (repoPath: string, path: string) =>
+    isAbsolute(path) ? translateWslOutputPath(path, repoPath, routed(repoPath)) : join(repoPath, path)
+  const repoGitDirsOf = async (repoPath: string): Promise<RepoGitDirs> => {
     const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--git-common-dir'],
+      ['rev-parse', '--is-bare-repository', '--git-dir', '--git-common-dir'],
       execOptions(repoPath)
     )
-    // Only strip the line ending: a path may end in spaces.
-    const commonDir = stdout.replace(/\r?\n$/, '')
-    return isAbsolute(commonDir)
-      ? translateWslOutputPath(commonDir, repoPath, routed(repoPath))
-      : join(repoPath, commonDir)
+    // Only strip line endings: a path may end in spaces.
+    const [bareLine, gitDirLine, commonDirLine] = stdout.split(/\r?\n/)
+    if (!gitDirLine || !commonDirLine) {
+      throw new Error(`git rev-parse printed no git dirs for ${repoPath}`)
+    }
+    const gitDir = gitPathOf(repoPath, gitDirLine)
+    const commonDir = gitPathOf(repoPath, commonDirLine)
+    const isMain =
+      normalizeRuntimePathForComparison(gitDir) === normalizeRuntimePathForComparison(commonDir)
+    // From a linked worktree Git reports false; its main is bare when core.bare says so.
+    const bare = bareLine === 'true' || (!isMain && (await readCoreBare(repoPath)))
+    return { commonDir, isMain, bare }
+  }
+  const readCoreBare = async (repoPath: string) => {
+    try {
+      const { stdout } = await gitExecFileAsync(
+        ['config', '--bool', '--get', 'core.bare'],
+        execOptions(repoPath)
+      )
+      return stdout.trim() === 'true'
+    } catch {
+      // Unset or unreadable: count the main checkout as in use.
+      return false
+    }
+  }
+  // Reads each git dir's HEAD instead of listing every worktree, which costs seconds at thousands of worktrees.
+  const readBranchUse = async (repoPath: string, fullRef: string) => {
+    const dirs = await repoGitDirsOf(repoPath)
+    const { heads, reserved } = await readGitDirState(dirs.commonDir)
+    if (reserved.has(fullRef)) {
+      return { reserved: true }
+    }
+    const owners = [...heads].filter(
+      ([gitDir, head]) => head === `ref: ${fullRef}` && !(dirs.bare && gitDir === dirs.commonDir)
+    )
+    const owner = owners[0]?.[0]
+    const ownerPath =
+      owner === undefined
+        ? undefined
+        : owner === dirs.commonDir
+          ? dirs.isMain
+            ? repoPath
+            : undefined
+          : await readLinkedWorktreePath(owner, repoPath)
+    // Reftable HEADs, or an owner whose path the files do not give, need Git's own listing.
+    if (
+      [...heads.values()].includes(REFTABLE_HEAD_PLACEHOLDER) ||
+      (owner !== undefined && ownerPath === undefined)
+    ) {
+      const fromGit = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
+      return { reserved: false, ...(fromGit ? { ownerPath: fromGit.path } : {}) }
+    }
+    return { reserved: false, ...(ownerPath === undefined ? {} : { ownerPath }) }
+  }
+  const readLinkedWorktreePath = async (gitDir: string, repoPath: string) => {
+    // `gitdir` names the checkout's `.git` file; Git 2.48+ may write it relative to the git dir.
+    const dotGit = (await readOptional(join(gitDir, 'gitdir'))).replace(/\r?\n$/, '')
+    if (!dotGit.endsWith('/.git')) {
+      return undefined
+    }
+    const path = dotGit.slice(0, -'/.git'.length)
+    return isAbsolute(path)
+      ? translateWslOutputPath(path, repoPath, routed(repoPath))
+      : join(gitDir, path)
   }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
-    listWorktrees,
-    listReservedBranches: async (repoPath) =>
-      (await readGitDirState(await commonDirOf(repoPath))).reserved,
+    readBranchUse,
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
-      const commonDir = await commonDirOf(repoPath)
-      const worktrees = await listWorktrees(repoPath)
-      if (worktrees.some((wt) => wt.branch === fullRef)) {
-        return false
-      }
-      // A bare repo's own HEAD names a branch without checking it out.
-      const bareCommonDir = worktrees[0]?.isBare === true
+      const { commonDir, bare } = await repoGitDirsOf(repoPath)
       let inUse = false
       try {
         await gitExecFileAsync(args, {
@@ -205,9 +258,10 @@ function localBaseBranchGit(
               reserved.has(fullRef) ||
               [...heads].some(
                 ([gitDir, head]) =>
-                  !(bareCommonDir && gitDir === commonDir) &&
+                  // A bare repo's own HEAD names a branch without checking it out.
+                  !(bare && gitDir === commonDir) &&
                   // Reftable keeps HEAD elsewhere and leaves this placeholder: fail closed.
-                  (head === `ref: ${fullRef}` || head === 'ref: refs/heads/.invalid')
+                  (head === `ref: ${fullRef}` || head === REFTABLE_HEAD_PLACEHOLDER)
               )
             return !inUse
           }
@@ -221,6 +275,16 @@ function localBaseBranchGit(
       return true
     }
   }
+}
+
+const REFTABLE_HEAD_PLACEHOLDER = 'ref: refs/heads/.invalid'
+
+type RepoGitDirs = {
+  commonDir: string
+  /** The repo path's own git dir is the common dir: it is the main worktree or the bare repo. */
+  isMain: boolean
+  /** The common dir's own HEAD names a branch nothing has checked out. */
+  bare: boolean
 }
 
 type GitDirState = {

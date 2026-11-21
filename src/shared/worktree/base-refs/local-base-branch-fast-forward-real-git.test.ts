@@ -72,6 +72,8 @@ function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void)
         error ? reject(Object.assign(error, { stdout, stderr })) : resolve({ stdout })
       )
     })
+  const listWorktrees = async (repoPath: string) =>
+    parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout)
   const git: LocalBaseBranchGit = {
     exec: async (args, cwd) => {
       const result = await run(args, cwd)
@@ -80,11 +82,12 @@ function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void)
       }
       return result
     },
-    listWorktrees: async (repoPath) =>
-      parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout),
-    listReservedBranches: async () => new Set(),
+    readBranchUse: async (repoPath, fullRef) => ({
+      reserved: false,
+      ownerPath: (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)?.path
+    }),
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
-      if ((await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
+      if ((await listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
         return false
       }
       await git.exec(args, repoPath)
