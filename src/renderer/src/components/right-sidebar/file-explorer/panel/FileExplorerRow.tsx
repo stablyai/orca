@@ -18,6 +18,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { createMultiSelectDragGhost } from '../mutations/file-explorer-multi-drag-image'
+import { canDragOutFile, writeFileExplorerDragOut } from '../mutations/file-explorer-drag-out'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 export type FileExplorerRowProps = {
@@ -171,6 +172,9 @@ export function FileExplorerRow({
               sourceOwner?.executionHostId,
               sourceOwner?.runtimeEnvironmentId
             )
+            if (canDragOutFile(node, paths.length)) {
+              writeFileExplorerDragOut(event.dataTransfer, node)
+            }
             event.dataTransfer.effectAllowed = 'copyMove'
             onDragSourceChange(node.path)
 
