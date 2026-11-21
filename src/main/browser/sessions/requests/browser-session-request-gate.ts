@@ -44,19 +44,18 @@ function refresh(session: Session): void {
 function listen(session: Session): () => void {
   return holdBrowserSessionWebRequest(session, 'onBeforeRequest', (details, callback) => {
     reportBrowserSessionWebRequest(session, 'onBeforeRequest', details)
-    const readiness = getProxySessionApplicationReadiness(session)
-    const answer = (ready: boolean): void => {
-      if (ready) {
+    // Rechecked after every wait: a newer policy can start applying before the held request leaves.
+    const decide = (): void => {
+      const readiness = getProxySessionApplicationReadiness(session)
+      if (readiness === true) {
         answerBrowserSessionBeforeRequest(session, details, callback)
-      } else {
+      } else if (readiness === false) {
         callback({ cancel: true })
+      } else {
+        void readiness.then((ready) => (ready ? decide() : callback({ cancel: true })))
       }
     }
-    if (typeof readiness === 'boolean') {
-      answer(readiness)
-    } else {
-      void readiness.then(answer)
-    }
+    decide()
   })
 }
 
