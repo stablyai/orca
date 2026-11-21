@@ -15,6 +15,7 @@ import {
   isTerminalLeafId
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { recentStamp } from '../../../../../../shared/sidebar-list/sorting/stamp-order'
+import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import {
   buildResourceSessionBindingIndex,
   type ResourceSessionBindingInputs
@@ -44,6 +45,27 @@ export type ResourcePtyGroup = {
   kind: 'unbound' | 'workspace'
   name: string | null
   rows: ResourcePtyRow[]
+}
+
+export function resourcePtyProcessBaseName(process: string | undefined): string {
+  return (
+    process
+      ?.trim()
+      .split(/[\\/]/)
+      .pop()
+      ?.toLowerCase()
+      .replace(/\.exe$/, '') ?? ''
+  )
+}
+
+export function countResourcePtysRunningWork(rows: readonly ResourcePtyRow[]): number {
+  return rows.filter(({ session }) => {
+    const process = session.foregroundProcess?.trim()
+    return (
+      !session.exiting &&
+      (session.agentOwnership === 'present' || (!!process && !isShellProcess(process)))
+    )
+  }).length
 }
 
 export function buildResourcePtyRows(args: {

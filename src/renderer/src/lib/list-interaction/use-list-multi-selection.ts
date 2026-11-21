@@ -30,12 +30,15 @@ export type ListMultiSelection<T> = {
 export function useListMultiSelection<T>({
   items,
   getKey,
-  getScope
+  getScope,
+  getRetainedItem
 }: {
   items: readonly T[]
   getKey: (item: T) => string
   /** Pointerdowns outside this element clear the selection. */
   getScope: () => Element | null
+  /** Keeps already selected items when folded away. Ranges still use visible order. */
+  getRetainedItem?: (key: string) => T | undefined
 }): ListMultiSelection<T> {
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
   const entryByKey = useMemo(() => {
@@ -55,7 +58,12 @@ export function useListMultiSelection<T>({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [selectionAnchorKey, setSelectionAnchorKey] = useState<string | null>(null)
 
-  const prunedSelection = pruneSelection(selectedKeys, selectionAnchorKey, visibleKeySet)
+  const prunedSelection = pruneSelection(
+    selectedKeys,
+    selectionAnchorKey,
+    visibleKeySet,
+    getRetainedItem ? (key) => getRetainedItem(key) !== undefined : undefined
+  )
   // Why: filters/grouping can hide selected rows; prune during render so nothing sees stale ids for unrendered items.
   if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {
     setSelectedKeys(prunedSelection.selectedIds)
@@ -72,10 +80,15 @@ export function useListMultiSelection<T>({
         const entry = entryByKey.get(key)
         if (entry) {
           selected.push(entry)
+        } else {
+          const retained = getRetainedItem?.(key)
+          if (retained !== undefined) {
+            selected.push({ item: retained, index: Infinity })
+          }
         }
       }
       return selected.sort((a, b) => a.index - b.index).map(({ item }) => item)
-    }, [entryByKey, selectedKeys])
+    }, [entryByKey, selectedKeys, getRetainedItem])
   )
   const getItemForKey = useCallback((key: string) => entryByKey.get(key)?.item, [entryByKey])
 

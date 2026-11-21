@@ -65,18 +65,23 @@ export function updateSelection(params: {
 export function pruneSelection(
   selectedIds: ReadonlySet<string>,
   anchorId: string | null,
-  visibleIds: readonly string[] | ReadonlySet<string>
+  visibleIds: readonly string[] | ReadonlySet<string>,
+  hasRetainedId?: (id: string) => boolean
 ): { selectedIds: Set<string>; anchorId: string | null } {
   const visible = 'has' in visibleIds ? visibleIds : new Set(visibleIds)
   const next = new Set<string>()
+  let firstVisible: string | null = null
   for (const id of selectedIds) {
     if (visible.has(id)) {
+      firstVisible ??= id
+      next.add(id)
+    } else if (hasRetainedId?.(id)) {
       next.add(id)
     }
   }
   return {
     selectedIds: next,
-    anchorId: anchorId && visible.has(anchorId) ? anchorId : (next.values().next().value ?? null)
+    anchorId: anchorId && visible.has(anchorId) ? anchorId : firstVisible
   }
 }
 

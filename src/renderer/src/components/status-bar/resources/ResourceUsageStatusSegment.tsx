@@ -2,8 +2,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Activity, Terminal } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { ResourcePtyPanel } from './pty/ResourcePtyPanel'
-import React from 'react'
+import { ResourcePtyPanel, type ResourcePtyEndAllConfirmation } from './pty/ResourcePtyPanel'
+import React, { useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import { DialogCancel } from '@/components/ui/dialog-parts'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { DaemonActionDialog } from '../../shared/useDaemonActions'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../composition/status-bar-context-menu-policy'
@@ -25,6 +35,9 @@ import { WorkspaceSpaceCompactPanel } from '../workspace-storage/WorkspaceSpaceC
 export function ResourceUsageStatusSegment(): React.JSX.Element {
   const t = useTranslate()
   const controller = useResourceUsageStatusController()
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [endAllConfirmation, setEndAllConfirmation] =
+    useState<ResourcePtyEndAllConfirmation | null>(null)
   const {
     open,
     setOpen,
@@ -91,6 +104,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
       )}
 
       <PopoverContent
+        ref={popoverRef}
         side="top"
         align="end"
         sideOffset={8}
@@ -100,7 +114,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => {
-          if (killConfirm) {
+          if (killConfirm || endAllConfirmation) {
             event.preventDefault()
           }
         }}
@@ -206,6 +220,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
               projectGroups={controller.projectGroups}
               runtimePaneTitlesByTabId={controller.runtimePaneTitlesByTabId}
               onNavigate={navigateToTab}
+              onConfirmEndAll={setEndAllConfirmation}
             />
           </TabsContent>
         </Tabs>
@@ -220,6 +235,63 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
         },
         t
       )}
+      <Dialog
+        open={endAllConfirmation !== null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setEndAllConfirmation(null)
+          }
+        }}
+      >
+        <DialogContent
+          size="confirm"
+          initialFocus="cancel"
+          className="z-[80]"
+          overlayClassName="z-[80]"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            popoverRef.current
+              ?.querySelector<HTMLElement>('[data-resource-pty-body]')
+              ?.focus({ preventScroll: true })
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {t('resourceManager.pty.endAllConfirmTitle', 'End all terminals?')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'resourceManager.pty.endAllRunningCount',
+                '{{count}} sessions are running agents or other programs.',
+                {
+                  count: endAllConfirmation?.runningCount ?? 0,
+                  defaultValue_one: '{{count}} session is running an agent or another program.'
+                }
+              )}{' '}
+              {t(
+                'resourceManager.pty.endAllConfirmWarning',
+                'Ending these terminals stops their processes and can lose unsaved work.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogCancel />
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={controller.localPtyInventory.sessionsError}
+              onClick={() => {
+                if (endAllConfirmation) {
+                  setEndAllConfirmation(null)
+                  void controller.ptyActions.endMany(endAllConfirmation.rows)
+                }
+              }}
+            >
+              {t('resourceManager.pty.endAll', 'End all')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DaemonActionDialog api={daemonActions} />
     </Popover>
   )

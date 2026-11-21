@@ -58,24 +58,24 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
             defaultValue_one: '{{count}} PTY'
           })}
         </span>
+        <span aria-hidden className="ml-auto flex shrink-0 items-center gap-1">
+          {group.rows.slice(0, STRIP_LIMIT).map((row) => (
+            <Tooltip key={row.identity}>
+              <TooltipTrigger asChild>
+                <span className="inline-flex size-3.5 items-center justify-center">
+                  <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {ptyHoverName(row)}
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          {hidden > 0 && (
+            <span className="text-2xs text-muted-foreground tabular-nums">+{hidden}</span>
+          )}
+        </span>
       </button>
-      <span aria-hidden className="flex shrink-0 items-center gap-1">
-        {group.rows.slice(0, STRIP_LIMIT).map((row) => (
-          <Tooltip key={row.identity}>
-            <TooltipTrigger asChild>
-              <span className="inline-flex size-3.5 items-center justify-center">
-                <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {ptyHoverName(row)}
-            </TooltipContent>
-          </Tooltip>
-        ))}
-        {hidden > 0 && (
-          <span className="text-2xs text-muted-foreground tabular-nums">+{hidden}</span>
-        )}
-      </span>
       <Button
         variant="ghost"
         size="xs"
@@ -84,7 +84,7 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
         aria-label={t('resourceManager.pty.endAllNamed', 'End all PTYs in {{group}}', {
           group: name
         })}
-        className="hidden h-[22px] px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15 group-focus-within/line:inline-flex group-hover/line:inline-flex"
+        className="hidden h-[22px] px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15 group-has-[:focus-visible]/line:inline-flex group-hover/line:inline-flex"
       >
         {t('resourceManager.pty.endAll', 'End all')}
       </Button>

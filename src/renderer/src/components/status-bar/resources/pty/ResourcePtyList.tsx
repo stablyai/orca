@@ -3,9 +3,10 @@ import { VirtualizedList } from '@/components/ui/virtualized-list'
 import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyGroupRow } from './ResourcePtyGroupRow'
 import { ResourcePtyRow } from './ResourcePtyRow'
+import { canEndResourcePty } from './use-resource-pty-actions'
 
 export type ResourcePtyListItem =
-  | { kind: 'group'; key: string; group: ResourcePtyGroup; open: boolean; canEndAll: boolean }
+  | { kind: 'group'; key: string; group: ResourcePtyGroup; open: boolean }
   | { kind: 'session'; key: string; row: PtyRow; showWorkspace: boolean }
 
 const itemKey = (item: ResourcePtyListItem): string => item.key
@@ -35,7 +36,7 @@ export function ResourcePtyList({
   openDetails: ReadonlySet<string>
   onToggleGroup: (key: string) => void
   onEndAll: (group: ResourcePtyGroup, source: Element) => void
-  onActivate: (row: PtyRow, event: React.MouseEvent) => void
+  onActivate: (row: PtyRow, event: React.MouseEvent, canSelect: boolean) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
@@ -52,7 +53,10 @@ export function ResourcePtyList({
             key={item.key}
             group={item.group}
             open={item.open}
-            canEndAll={item.canEndAll}
+            canEndAll={
+              !unverifiable &&
+              item.group.rows.some((row) => canEndResourcePty(row) && !ending.has(row.identity))
+            }
             onToggle={onToggleGroup}
             onEndAll={onEndAll}
           />

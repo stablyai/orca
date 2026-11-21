@@ -2897,7 +2897,9 @@
   "resourceManager": {
     "pty": {
       "count_one": "{{count}} PTY",
-      "count_other": "{{count}} PTYs"
+      "count_other": "{{count}} PTYs",
+      "endAllRunningCount_one": "{{count}} session is running an agent or another program.",
+      "endAllRunningCount_other": "{{count}} sessions are running agents or other programs."
     }
   },
   "runtime": {

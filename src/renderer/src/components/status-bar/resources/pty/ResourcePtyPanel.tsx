@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import { AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
+import { getSelectionIntent } from '@/lib/list-interaction/list-multi-selection'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   buildResourcePtyRows,
+  countResourcePtysRunningWork,
   groupResourcePtyRows,
   type ResourcePtyGroup,
   type ResourcePtyRow
@@ -17,11 +20,17 @@ import { canEndResourcePty, type useResourcePtyActions } from './use-resource-pt
 const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
 const ptyRowKey = (row: ResourcePtyRow): string => row.identity
 
+export type ResourcePtyEndAllConfirmation = {
+  rows: readonly ResourcePtyRow[]
+  runningCount: number
+}
+
 type Props = Omit<Parameters<typeof buildResourcePtyRows>[0], 'sessions'> & {
   active: boolean
   inventory: ReturnType<typeof useResourceSessionInventory>
   actions: ReturnType<typeof useResourcePtyActions>
   onNavigate: (tabId: string, paneKey: string | null) => void
+  onConfirmEndAll: (confirmation: ResourcePtyEndAllConfirmation) => void
 }
 
 export function ResourcePtyPanel({
@@ -29,6 +38,7 @@ export function ResourcePtyPanel({
   inventory,
   actions,
   onNavigate,
+  onConfirmEndAll,
   bindings,
   worktrees,
   repos,
@@ -40,7 +50,8 @@ export function ResourcePtyPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const getScope = useCallback(() => panelRef.current, [])
   const { sessions } = inventory.sessionInventory
-  const { end: endPty } = actions
+  const { end: endPty, endMany, ending } = actions
+  const { sessionsError } = inventory
   const rows = useMemo(
     () =>
       active
@@ -56,25 +67,32 @@ export function ResourcePtyPanel({
     [active, sessions, bindings, worktrees, repos, projectGroups, runtimePaneTitlesByTabId]
   )
   const groups = useMemo(() => groupResourcePtyRows(rows), [rows])
-  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set())
-  const [openDetails, setOpenDetails] = useState<ReadonlySet<string>>(new Set())
-  const isEndable = useCallback(
-    (row: ResourcePtyRow) =>
-      !inventory.sessionsError && canEndResourcePty(row) && !actions.ending.has(row.identity),
-    [inventory.sessionsError, actions.ending]
-  )
-  const { items, selectableRows } = useMemo(() => {
+  const rowsByKey = useMemo(() => new Map(rows.map((row) => [row.identity, row])), [rows])
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set())
+  const [openDetails, setOpenDetails] = useState<ReadonlySet<string>>(() => new Set())
+  const [previousGroups, setPreviousGroups] = useState(groups)
+  if (groups !== previousGroups) {
+    setPreviousGroups(groups)
+    // Why: the inactive view projects an empty list. Only a real inventory projection retires keys.
+    if (active) {
+      if (openGroups.size > 0) {
+        setOpenGroups(
+          retainPresentKeys(
+            openGroups,
+            groups.map((group) => group.key)
+          )
+        )
+      }
+      if (openDetails.size > 0) {
+        setOpenDetails(retainPresentKeys(openDetails, rowsByKey.keys()))
+      }
+    }
+  }
+  const items = useMemo(() => {
     const list: ResourcePtyListItem[] = []
-    const selectable: ResourcePtyRow[] = []
     for (const group of groups) {
       const open = openGroups.has(group.key)
-      list.push({
-        kind: 'group',
-        key: group.key,
-        group,
-        open,
-        canEndAll: group.rows.some(isEndable)
-      })
+      list.push({ kind: 'group', key: group.key, group, open })
       if (!open) {
         continue
       }
@@ -85,52 +103,57 @@ export function ResourcePtyPanel({
           row,
           showWorkspace: group.kind === 'unbound'
         })
-        if (isEndable(row)) {
-          selectable.push(row)
-        }
       }
     }
-    return { items: list, selectableRows: selectable }
-  }, [groups, openGroups, isEndable])
-  const selection = useListMultiSelection({ items: selectableRows, getKey: ptyRowKey, getScope })
-  const { updateSelectionForGesture, setAllSelected } = selection
+    return list
+  }, [groups, openGroups])
+  const selectableRows = useMemo(() => {
+    if (sessionsError) {
+      return EMPTY_PTY_ROWS
+    }
+    const selectable: ResourcePtyRow[] = []
+    for (const item of items) {
+      if (item.kind === 'session' && canEndResourcePty(item.row) && !ending.has(item.key)) {
+        selectable.push(item.row)
+      }
+    }
+    return selectable
+  }, [items, sessionsError, ending])
+  const getRetainedItem = useCallback(
+    (key: string) => {
+      if (sessionsError || ending.has(key)) {
+        return undefined
+      }
+      const row = rowsByKey.get(key)
+      return row && canEndResourcePty(row) ? row : undefined
+    },
+    [ending, rowsByKey, sessionsError]
+  )
+  const selection = useListMultiSelection({
+    items: selectableRows,
+    getKey: ptyRowKey,
+    getScope,
+    getRetainedItem
+  })
+  const { clearSelection, updateSelectionForGesture } = selection
   const hasSelection = selection.selectedKeys.size > 0
-  useEffect(() => {
-    if (!hasSelection) {
-      return
-    }
-    // Why window capture: the popover closes on Escape from a document capture listener, before React sees it.
-    const clearOnEscape = (event: KeyboardEvent): void => {
-      if (
-        event.key !== 'Escape' ||
-        event.isComposing ||
-        !(event.target instanceof Node) ||
-        !panelRef.current?.contains(event.target)
-      ) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      setAllSelected(false)
-    }
-    window.addEventListener('keydown', clearOnEscape, { capture: true })
-    return () => window.removeEventListener('keydown', clearOnEscape, { capture: true })
-  }, [hasSelection, setAllSelected])
   const toggleGroup = useCallback((key: string) => {
     setOpenGroups((previous) => toggledSet(previous, key))
   }, [])
   const activate = useCallback(
-    (row: ResourcePtyRow, event: React.MouseEvent) => {
-      const modified = event.metaKey || event.ctrlKey || event.shiftKey
-      if (modified && updateSelectionForGesture(event, row)) {
+    (row: ResourcePtyRow, event: React.MouseEvent, canSelect: boolean) => {
+      if (getSelectionIntent(event, navigator.userAgent.includes('Mac')) !== 'replace') {
+        if (canSelect) {
+          updateSelectionForGesture(event, row)
+        }
         return
       }
-      setAllSelected(false)
+      clearSelection(canSelect ? row : undefined)
       setOpenDetails((previous) => toggledSet(previous, row.identity))
     },
-    [updateSelectionForGesture, setAllSelected]
+    [clearSelection, updateSelectionForGesture]
   )
-  const focusBodyBeforeEnd = useCallback(
+  const focusBody = useCallback(
     (source: Element | null) => {
       if (
         !active ||
@@ -147,25 +170,54 @@ export function ResourcePtyPanel({
     },
     [active, scrollElement]
   )
+  useEffect(() => {
+    if (!hasSelection) {
+      return
+    }
+    // Why window capture: the popover closes on Escape from a document capture listener, before React sees it.
+    const clearOnEscape = (event: KeyboardEvent): void => {
+      if (
+        event.key !== 'Escape' ||
+        event.isComposing ||
+        !(event.target instanceof Element) ||
+        !panelRef.current?.contains(event.target)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      focusBody(event.target.closest('[data-resource-pty-selection]'))
+      clearSelection()
+    }
+    window.addEventListener('keydown', clearOnEscape, { capture: true })
+    return () => window.removeEventListener('keydown', clearOnEscape, { capture: true })
+  }, [hasSelection, focusBody, clearSelection])
   const end = useCallback(
     (row: ResourcePtyRow) => {
       const focusedRow =
         panelRef.current?.ownerDocument.activeElement?.closest('[data-resource-pty-row]')
-      focusBodyBeforeEnd(
+      focusBody(
         focusedRow?.getAttribute('data-resource-pty-row') === row.identity ? focusedRow : null
       )
       endPty(row)
     },
-    [endPty, focusBodyBeforeEnd]
+    [endPty, focusBody]
   )
-  const { endMany } = actions
-  const endAll = useCallback(
-    (group: ResourcePtyGroup, source: Element) => {
-      focusBodyBeforeEnd(source.closest('[data-resource-pty-group]'))
-      void endMany(group.rows)
-    },
-    [endMany, focusBodyBeforeEnd]
-  )
+  const endAll = useLatestHandler((group: ResourcePtyGroup, source: Element) => {
+    focusBody(source.closest('[data-resource-pty-group]'))
+    setOpenGroups((previous) =>
+      previous.has(group.key) ? previous : new Set([...previous, group.key])
+    )
+    const runningCount = group.kind === 'workspace' ? countResourcePtysRunningWork(group.rows) : 0
+    if (runningCount > 0) {
+      onConfirmEndAll({
+        rows: group.rows.filter((row) => canEndResourcePty(row) && !ending.has(row.identity)),
+        runningCount
+      })
+      return
+    }
+    void endMany(group.rows)
+  })
   return (
     <div ref={panelRef} className="flex h-full min-h-0 flex-col">
       {inventory.sessionsError && (
@@ -223,14 +275,24 @@ export function ResourcePtyPanel({
         />
       </div>
       {selection.selectedItems.length > 0 && (
-        <div className="flex h-[37px] shrink-0 items-center gap-1.5 border-t border-border px-3">
+        <div
+          data-resource-pty-selection
+          className="flex h-[37px] shrink-0 items-center gap-1.5 border-t border-border px-3"
+        >
           <span className="text-xs tabular-nums">
             {t('resourceManager.pty.selectedCount', '{{count}} selected', {
               count: selection.selectedItems.length
             })}
           </span>
           <span className="flex-1" />
-          <Button variant="ghost" size="xs" onClick={() => setAllSelected(false)}>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={(event) => {
+              focusBody(event.currentTarget)
+              clearSelection()
+            }}
+          >
             {t('resourceManager.pty.clearSelection', 'Clear')}
           </Button>
           <Button
@@ -239,7 +301,7 @@ export function ResourcePtyPanel({
             onClick={(event) => {
               const focusedRow =
                 event.currentTarget.ownerDocument.activeElement?.closest('[data-resource-pty-row]')
-              focusBodyBeforeEnd(
+              focusBody(
                 selection.selectedKeys.has(focusedRow?.getAttribute('data-resource-pty-row') ?? '')
                   ? (focusedRow ?? null)
                   : event.currentTarget
@@ -255,6 +317,19 @@ export function ResourcePtyPanel({
       )}
     </div>
   )
+}
+
+function retainPresentKeys(
+  previous: ReadonlySet<string>,
+  currentKeys: Iterable<string>
+): ReadonlySet<string> {
+  const retained = new Set<string>()
+  for (const key of currentKeys) {
+    if (previous.has(key)) {
+      retained.add(key)
+    }
+  }
+  return retained.size === previous.size ? previous : retained
 }
 
 function toggledSet(previous: ReadonlySet<string>, key: string): ReadonlySet<string> {

@@ -1,24 +1,13 @@
 import { SquareTerminal } from 'lucide-react'
 import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/accounts/provider-icons'
-
-// Windows reports `claude.exe`, and some hosts report a full path.
-function processBaseName(process: string | undefined): string {
-  return (
-    process
-      ?.trim()
-      .split(/[\\/]/)
-      .pop()
-      ?.toLowerCase()
-      .replace(/\.exe$/, '') ?? ''
-  )
-}
+import { resourcePtyProcessBaseName } from './resource-pty-view-model'
 
 export function ResourcePtyProcessIcon({
   process
 }: {
   process: string | undefined
 }): React.JSX.Element {
-  const name = processBaseName(process)
+  const name = resourcePtyProcessBaseName(process)
   if (name === 'claude') {
     return <ClaudeIcon size={14} className="shrink-0" />
   }
