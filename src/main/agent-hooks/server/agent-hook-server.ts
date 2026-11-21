@@ -18,6 +18,7 @@ import {
 } from '../../../shared/agent-status/process/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence-probe'
 import { AgentHookServerLifecycle } from './server-lifecycle'
+import type { EnrichedAgentHookEventPayload } from './server-types'
 
 export class AgentHookServer extends AgentHookServerLifecycle {
   private readonly presenceChecks = new WeakMap<
@@ -267,16 +268,22 @@ export class AgentHookServer extends AgentHookServerLifecycle {
 
   /** The last report of this pane's local agent, restored from disk or replayed from the offline
    *  spool. A report naming its process counts only while that process runs. */
-  async readRestoredAgentStatus(
-    paneKey: string
-  ): Promise<Pick<ParsedAgentStatusPayload, 'state' | 'mainAgent' | 'sessionBoundary'> | null> {
+  async readRestoredAgentStatus(paneKey: string): Promise<
+    | (Pick<ParsedAgentStatusPayload, 'state' | 'mainAgent' | 'sessionBoundary'> & {
+        receivedAt: number
+      })
+    | null
+  > {
     if (!this.statusHooksEnabled) {
       return null
     }
     const generation = this.statusHookGeneration
     await this.initializeStatusHookOwner()
     const resolved = this.resolvePaneKeyAlias(paneKey)
-    const row = this.state.lastStatusByPaneKey.get(resolved)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
     // A terminal report after an exit keeps the retired record only as metadata, not as its author.
     const retired = row?.agentPresence?.ended === true
     if (!row || row.connectionId !== null || (retired && row.providerSessionOnly)) {
@@ -292,7 +299,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     // Each await may have seen hooks turned off or a newer report replace this one.
     return this.statusHookGeneration === generation &&
       this.state.lastStatusByPaneKey.get(resolved) === row
-      ? row.payload
+      ? { ...row.payload, receivedAt: row.evidenceObservedAt ?? row.receivedAt }
       : null
   }
 }

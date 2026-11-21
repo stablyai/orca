@@ -22,6 +22,8 @@ import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-compo
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
+import type { EnrichedAgentHookEventPayload } from '../../../agent-hooks/server/server-types'
+import { dispatchHookStatusMailWakeup } from '../../orchestration/mailbox/terminal-pointer/hook-status-mail-wakeup'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
 const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
@@ -77,6 +79,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
 
   /** Point a terminal at its mail once it takes input and is settled; refusal re-arms the recheck. */
   protected deliverPendingMessagesForPty(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty && !pty.lastAgentStatusObservedLive && pty.commandPaint?.awaitsReattachedCommand()) {
+      this.restoreReattachedAgentStatus(ptyId)
+    }
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (
       terminal &&
@@ -85,6 +91,20 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     ) {
       this.orchestrationMailboxNotifications.deliverForTerminal(terminal)
     }
+  }
+
+  protected observeHookStatusForMail(enriched: EnrichedAgentHookEventPayload): void {
+    dispatchHookStatusMailWakeup(enriched, {
+      resolvePtyIdForHookPane: (paneKey) => this.getPtyRecordForPaneKey(paneKey)?.ptyId ?? null,
+      getPaneAgentForHookMail: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+      wakeHeldMailForHookTurnDone: (ptyId) => {
+        if (!this.ptysById.get(ptyId)?.connected) {
+          return
+        }
+        this.orchestrationMailboxPointerDelivery.observeAgentIdle(ptyId)
+        this.deliverPendingMessagesForPty(ptyId)
+      }
+    })
   }
 
   /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */

@@ -28,8 +28,15 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (
+    ptyId: string,
+    options?: { ignoreStagedPointerWrite?: boolean }
+  ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
-  writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  writePty: (
+    ptyId: string,
+    data: string,
+    options?: { stagePointerText?: boolean }
+  ) => WriteSettlement | Promise<WriteSettlement>
 }

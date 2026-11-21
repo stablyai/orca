@@ -185,29 +185,29 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   }
 
   /** The pane's main-agent turn from the hook server's store, for tui-idle's hook lane. */
-  protected readTuiIdleHookTurnForPty(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null {
+  protected readTuiIdleHookTurnForPty(
+    ptyId: string,
+    agent: TuiAgent,
+    lastInputAt: number | null = this.terminalRunFacts.readLastInputAt(ptyId)
+  ): TuiIdleHookTurn | null {
     const pty = this.ptysById.get(ptyId)
-    const join = this.readHookRowJoinForPty(ptyId)
-    if (!pty || !join) {
-      return null
-    }
-    const { handles, paneKeys, hookRows } = join
-    return readTuiIdleHookTurn({
-      agent,
-      handles,
-      paneKeys,
-      hookRows,
-      connectionId: pty.connectionId,
-      wslDistro: pty.wslDistro,
-      launchToken: pty.launchToken,
-      titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
-      hasExplicitIdleTitle: hasExplicitIdleTitle(pty),
-      respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
-      lastInputAt: this.terminalRunFacts.readLastInputAt(ptyId),
-      tailIncludes: (text) => retainedTailIncludes(pty.tailBuffer, pty.tailPartialLine, text),
-      resolveBlockedText: (state, row) =>
-        this.resolveTuiIdleHookBlockedText(ptyId, handles, state, row)
-    })
+    const join = pty ? this.readHookRowJoinForPty(ptyId) : null
+    return !pty || !join
+      ? null
+      : readTuiIdleHookTurn({
+          agent,
+          ...join,
+          connectionId: pty.connectionId,
+          wslDistro: pty.wslDistro,
+          launchToken: pty.launchToken,
+          titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
+          hasExplicitIdleTitle: hasExplicitIdleTitle(pty),
+          respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
+          lastInputAt,
+          tailIncludes: (text) => retainedTailIncludes(pty.tailBuffer, pty.tailPartialLine, text),
+          resolveBlockedText: (state, row) =>
+            this.resolveTuiIdleHookBlockedText(ptyId, join.handles, state, row)
+        })
   }
 
   protected isPtyAwaitingUserInput(ptyId: string): boolean {

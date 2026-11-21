@@ -45,6 +45,11 @@ export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
+  private readonly lastInputSeqByPtyId = new Map<string, number>()
+  private readonly stagedPointerInputByPtyId = new Map<
+    string,
+    { seq: number; priorLastInputAt: number | null }
+  >()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
   private readonly userOpenedByPtyId = new Set<string>()
   private readonly unattributedDraftSeenAtByPtyId = new Map<string, number>()
@@ -94,6 +99,8 @@ export class TerminalRunFactsRegister {
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
+      this.lastInputSeqByPtyId.delete(commit.id)
+      this.stagedPointerInputByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
       this.userOpenedByPtyId.delete(commit.id)
       this.unattributedDraftSeenAtByPtyId.delete(commit.id)
@@ -120,6 +127,8 @@ export class TerminalRunFactsRegister {
       return
     }
     this.lastInputAtByPtyId.set(ptyId, now)
+    this.lastInputSeqByPtyId.set(ptyId, (this.lastInputSeqByPtyId.get(ptyId) ?? 0) + 1)
+    this.stagedPointerInputByPtyId.delete(ptyId)
     const run = this.runsByPtyId.get(ptyId)
     if (isDrivingInputKind(inputKind)) {
       if (inputKind === 'driving') {
@@ -153,6 +162,29 @@ export class TerminalRunFactsRegister {
    *  included; null if none has. */
   readLastInputAt(ptyId: string): number | null {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
+  }
+
+  readLastInputSeq(ptyId: string): number {
+    return this.lastInputSeqByPtyId.get(ptyId) ?? 0
+  }
+
+  markStagedPointerWrite(ptyId: string, priorLastInputAt: number | null, priorSeq: number): void {
+    const seq = this.lastInputSeqByPtyId.get(ptyId) ?? 0
+    if (seq > priorSeq) {
+      this.stagedPointerInputByPtyId.set(ptyId, { seq, priorLastInputAt })
+    }
+  }
+
+  clearStagedPointerWrite(ptyId: string): void {
+    this.stagedPointerInputByPtyId.delete(ptyId)
+  }
+
+  readLastInputAtExcludingStagedPointer(ptyId: string): number | null {
+    const staged = this.stagedPointerInputByPtyId.get(ptyId)
+    if (staged && this.lastInputSeqByPtyId.get(ptyId) === staged.seq) {
+      return staged.priorLastInputAt
+    }
+    return this.readLastInputAt(ptyId)
   }
 
   /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
@@ -198,6 +230,8 @@ export class TerminalRunFactsRegister {
   delete(ptyId: string): void {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
+    this.lastInputSeqByPtyId.delete(ptyId)
+    this.stagedPointerInputByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
     this.userOpenedByPtyId.delete(ptyId)
     this.unattributedDraftSeenAtByPtyId.delete(ptyId)

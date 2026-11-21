@@ -13,15 +13,11 @@ import {
   restoredTerminalTailSeedAllowed
 } from './tail/terminal-tail-restore-seed'
 
-import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
-import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
+import { takeReattachedRepaintRequest } from '../input/terminal-command-paint'
 import {
-  admitRestoredTerminalReport,
-  hasCommandBoundarySinceReattach,
-  hasTerminalCommandPainted,
-  takeReattachedRepaintRequest
-} from '../input/terminal-command-paint'
+  admitReattachedAgentStatusRecord,
+  runReattachedAgentStatusRestore
+} from './reattached-agent-status-restore'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
@@ -251,50 +247,18 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
    *  a screen-ruled agent's strong ready screen counts once that agent repaints it: such agents may
    *  write no title at rest, and a retained frame may be an earlier program's. */
   restoreReattachedAgentStatus(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty?.connected || pty.lastAgentStatusObservedLive) {
-      return
-    }
-    const { incarnationId } = pty
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    // A respawn, an exit or a live report since the reattach decides instead.
-    const isCurrent = (): boolean =>
-      this.ptysById.get(ptyId) === pty &&
-      pty.incarnationId === incarnationId &&
-      this.getPtyLifecycleGeneration(ptyId) === generation &&
-      pty.connected &&
-      !pty.lastAgentStatusObservedLive &&
-      !hasCommandBoundarySinceReattach(pty)
-    const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
-    void Promise.all([
-      this.ptyForegroundAgent.identifyForeground(ptyId),
-      // Why: the ready-screen read needs the seeded snapshot applied.
-      this.headlessTerminals.get(ptyId)?.writeChain,
-      ...paneKeys.map((paneKey) => agentHookServer.readRestoredAgentStatus(paneKey))
-    ]).then(async ([agent, , ...reports]) => {
-      const report = reports.find((candidate) => candidate !== null)
-      const turn = agent && report ? hookLeadTurnState(report) : null
-      // A host that cannot repaint (Windows ConPTY, older daemons) still restores a proven frame.
-      const proven = !turn && !!agent && (await this.isRetainedFrameProven(ptyId, agent))
-      if (!isCurrent()) {
-        return
-      }
-      if (proven) {
-        pty.commandPaint?.vouchRetainedPaint()
-      }
-      if (turn) {
-        this.applyReattachedAgentStatus(ptyId, turn === 'done' ? 'idle' : turn)
-      } else if (agent) {
-        restoreFromReattachedReadyScreen({
-          agent,
-          readScreen: () => this.readCaughtUpRuledScreen(ptyId),
-          readOutputClockAt: () => this.readOutputClockAt(ptyId),
-          hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
-          requestRepaint: () => this.requestReattachedRepaint(ptyId),
-          isCurrent,
-          applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
-        })
-      }
+    runReattachedAgentStatusRestore(ptyId, {
+      getPty: (id) => this.ptysById.get(id),
+      getLifecycleGeneration: (id) => this.getPtyLifecycleGeneration(id),
+      collectAgentStatusPaneKeys: (id) => this.collectAgentStatusPaneKeysForPty(id),
+      identifyForeground: (id) => this.ptyForegroundAgent.identifyForeground(id),
+      getHeadlessWriteChain: (id) => this.headlessTerminals.get(id)?.writeChain,
+      isRetainedFrameProven: (id, agent) => this.isRetainedFrameProven(id, agent),
+      readCaughtUpRuledScreen: (id) => this.readCaughtUpRuledScreen(id),
+      readOutputClockAt: (id) => this.readOutputClockAt(id),
+      readLastInputAt: (id) => this.terminalRunFacts.readLastInputAt(id),
+      requestRepaint: (id) => this.requestReattachedRepaint(id),
+      applyStatus: (id, status, options) => this.applyReattachedAgentStatus(id, status, options)
     })
   }
 
@@ -306,11 +270,15 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   }
 
   /** The restored report speaks for the process now running, so it counts as current. */
-  protected applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
+  protected applyReattachedAgentStatus(
+    ptyId: string,
+    status: AgentStatus,
+    options?: { restoredAtRestAt?: number }
+  ): void {
     const pty = this.ptysById.get(ptyId)
+    admitReattachedAgentStatusRecord(pty, status, options?.restoredAtRestAt)
     const title = pty?.lastOscTitle ?? ''
     this.applyTrackedPtyTitle(ptyId, title, title, undefined, { statusOnly: true, status })
-    admitRestoredTerminalReport(pty, Date.now())
   }
 
   protected readOutputClockAt(ptyId: string | null | undefined): number | null {
