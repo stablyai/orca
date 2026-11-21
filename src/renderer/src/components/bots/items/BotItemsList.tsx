@@ -396,6 +396,7 @@ function BotItemGroup({
             viewport={viewport}
             label={botItemGroupName(id, t)}
             renderRow={(item, tabbable, windowed) => row(item, tabbable, windowed)}
+            faces={owner.faces}
             backUid={backItem?.uid ?? null}
             onBackFocused={backFocused}
             disabled={offline}

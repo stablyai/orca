@@ -1,7 +1,6 @@
-import { useContext, useEffect, useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
-import { botAvatarReadKey } from '../bot-avatar-image'
 import { BotItemFaceReadsContext } from './bot-item-face-reads'
 
 const FACE_CLASS = 'size-4 rounded-full text-[9px]'
@@ -26,20 +25,8 @@ export function BotItemRowFace({
 
 function WindowedFace({ bot }: { bot: Bot }): React.JSX.Element {
   const reads = useContext(BotItemFaceReadsContext)
-  const offline = reads?.offline.has(bot.hostId) === true
+  const paused = reads ? !reads.live.has(bot.hostId) : false
   const failures = reads?.failures ?? null
-  const { hostId, id } = bot
-  useEffect(() => {
-    if (offline && failures) {
-      // Coming back reads again what failed meanwhile.
-      const prefix = botAvatarReadKey({ hostId, id }, '')
-      for (const key of failures) {
-        if (key.startsWith(prefix)) {
-          failures.delete(key)
-        }
-      }
-    }
-  }, [offline, failures, hostId, id])
-  const read = useMemo(() => ({ paused: offline, failures }), [offline, failures])
+  const read = useMemo(() => ({ paused, failures }), [paused, failures])
   return <BotAvatar bot={bot} className={FACE_CLASS} read={read} />
 }

@@ -14,18 +14,29 @@ type Upload = {
   waiting: Set<(src: string | null, failed: boolean) => void>
 }
 
-/** `paused`: don't read now (the host is offline). `failures`: reads that failed, by `botAvatarReadKey`;
- *  one listed there isn't read again, and a failed read is added. */
-export type BotAvatarRead = { paused: boolean; failures: Set<string> | null }
+/** The latest failed read's version per bot (by botRefKey), at most MAX_FAILURES, oldest let go first. */
+export type BotAvatarFailures = Map<string, string>
+const MAX_FAILURES = 64
+
+/** `paused`: don't read now (the host is offline). `failures`: a version listed there for its bot isn't
+ *  read again; a failed read is listed and a successful one unlisted. */
+export type BotAvatarRead = { paused: boolean; failures: BotAvatarFailures | null }
+
+function noteFailure(failures: BotAvatarFailures, key: string, version: string): void {
+  failures.delete(key)
+  failures.set(key, version)
+  for (const oldest of failures.keys()) {
+    if (failures.size <= MAX_FAILURES) {
+      break
+    }
+    failures.delete(oldest)
+  }
+}
 
 // Each bot's current upload only (by botRefKey), so a replaced picture is let go. A finished read is
 // kept, so a face drawn again (a row scrolled back into view) shows it at once; a failed read is
 // dropped, so the next face reads again.
 const uploads = new Map<string, Upload>()
-
-export function botAvatarReadKey(bot: BotRef, version: string): string {
-  return `${botRefKey(bot)}\n${version}`
-}
 
 function uploadOf(key: string, version: string): Upload | undefined {
   const cached = uploads.get(key)
@@ -102,12 +113,15 @@ export function useBotAvatarSrc(
   const { hostId, id } = bot
   const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey))
   useEffect(() => {
-    if (!uploadKey || paused || failures?.has(botAvatarReadKey({ hostId, id }, uploadKey))) {
+    const key = botRefKey({ hostId, id })
+    if (!uploadKey || paused || failures?.get(key) === uploadKey) {
       return
     }
     return readUpload({ hostId, id }, uploadKey, (src, failed) => {
-      if (failed) {
-        failures?.add(botAvatarReadKey({ hostId, id }, uploadKey))
+      if (failures && failed) {
+        noteFailure(failures, key, uploadKey)
+      } else if (failures?.get(key) === uploadKey) {
+        failures.delete(key)
       }
       setUpload((shown) =>
         shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }

@@ -11,8 +11,7 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
 import { focusFellToNothing } from '../use-needs-you-focus'
-import { useOfflineBotHostIds } from '@/lib/bot-host-views'
-import { BotItemFaceReadsContext, type BotItemFaceReads } from './bot-item-face-reads'
+import { BotItemFaceReadsContext, useBotItemFaceReads } from './bot-item-face-reads'
 
 /** A one-line row and its gap, and one that names its chat on a second line. Until a drawn row is
  *  read, their heights at the default font size; a larger font (Orca Web) makes them taller. */
@@ -142,6 +141,7 @@ export function BotItemRowsWindow({
   viewport,
   label,
   renderRow,
+  faces = false,
   backUid,
   onBackFocused,
   disabled = false
@@ -155,6 +155,8 @@ export function BotItemRowsWindow({
   label: string
   /** `tabbable`: the row is in the Tab order; `windowed`: it mounts and unmounts as the panel scrolls. */
   renderRow: (item: BotItem, tabbable: boolean, windowed: boolean) => React.ReactNode
+  /** Rows show their bot's face, whose pictures read as the rows mount. */
+  faces?: boolean
   /** Back's row: drawn until it has focus, then `onBackFocused`. */
   backUid: string | null
   onBackFocused: () => void
@@ -163,15 +165,6 @@ export function BotItemRowsWindow({
   disabled?: boolean
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
-  const [faceFailures] = useState(() => new Set<string>())
-  const offlineHosts = useOfflineBotHostIds()
-  const faceReads = useMemo(
-    (): BotItemFaceReads => ({
-      failures: faceFailures,
-      offline: new Set(offlineHosts ? offlineHosts.split('\n') : [])
-    }),
-    [faceFailures, offlineHosts]
-  )
   const count = items.length
   // Once long, a group keeps windowing while it's shown, so updates around 50 rows don't mount and
   // unmount the rows out of view each time.
@@ -180,6 +173,7 @@ export function BotItemRowsWindow({
     setWindowed(true)
   }
   const all = count <= ALL_ROWS && !windowed
+  const faceReads = useBotItemFaceReads(faces && !all)
   // Heights follow from which rows have a chat line: in one bot's list none do, so positions are a count.
   // Keyed by those heights alone, so content changes leave the positions as they were.
   const tallKey = useMemo(
@@ -412,10 +406,11 @@ export function BotItemRowsWindow({
           ? count - 1
           : Math.min(count - 1, Math.max(0, at + (event.key === 'ArrowDown' ? 1 : -1)))
     const item = items[next]
+    // At either end the key does nothing, rather than scroll the panel while focus stays on the row.
+    event.preventDefault()
     if (next === at || !item) {
       return
     }
-    event.preventDefault()
     setTarget({ uid: item.uid, at: next })
   }
 
