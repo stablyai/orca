@@ -2,22 +2,21 @@ import {
   IN_PROCESS_OPTIONS_READER,
   type StructuredAgentSessionOptionsReader
 } from './structured-agent-session-resting-options'
-import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  isAgentSessionRefusalError,
+  refuse
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOptionResult } from '../../../../shared/agent-session/agent-session-wire'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
+import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import type {
   AgentSessionTurnContext,
   TurnOutcome
 } from '../operations/structured-agent-session-turns'
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
-import {
-  type savedAgentSessionCatalogModels,
-  structuredAgentSessionPickReply
-} from './structured-agent-session-pick-reply'
-import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
+import { structuredAgentSessionPickReply } from './structured-agent-session-pick-reply'
 
 function acceptsOptionPick(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
@@ -54,12 +53,8 @@ export function structuredAgentSessionOptionOverridesRefusal(
 
 /** Records literal picks for registered keys; the native control owns value acceptance. */
 export async function recordStructuredAgentSessionOptionIntent(
-  deps: {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replaceSessionOptions' | 'updateRecord'>
-    agents: Pick<StructuredAgentRegistry, 'definition'>
-    adapter?: Pick<StructuredAgentSessionAdapter, 'projectOptions'>
-  } & Parameters<typeof savedAgentSessionCatalogModels>[0],
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'now'>,
+  { deps, startFlights }: Pick<StructuredAgentSessionMutationContext, 'deps' | 'startFlights'>,
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'journal' | 'publish' | 'now'>,
   input: { key: string; value: string },
   reader: StructuredAgentSessionOptionsReader = IN_PROCESS_OPTIONS_READER
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {
@@ -85,10 +80,28 @@ export async function recordStructuredAgentSessionOptionIntent(
     // Preserve the wire’s permission mode within options.
     options = { ...record.options, [input.key]: input.value }
   } else {
-    const picked = { sessionId, fence, ...input, models: undefined, now: ctx.now() }
-    options =
-      (await deps.store.updateRecord(picked.sessionId, { kind: 'pick-option', args: picked }))
-        .options ?? {}
+    // Send admission captures the model before the startup reservation reaches the record store.
+    const startupPending =
+      input.key === 'model' &&
+      record.provider === 'codex' &&
+      record.providerHandleChain.length === 0 &&
+      record.lease.claimStatus === 'released' &&
+      (startFlights.get(sessionId) !== undefined ||
+        (await ctx.journal.reads.input({ kind: 'first-queued' })).submission !== undefined)
+    const picked = { sessionId, fence, ...input, models: undefined, startupPending, now: ctx.now() }
+    try {
+      options =
+        (await deps.store.updateRecord(sessionId, { kind: 'pick-option', args: picked })).options ??
+        {}
+    } catch (error) {
+      if (
+        isAgentSessionRefusalError(error) &&
+        error.refusal.code === 'agent_session_operation_invalid'
+      ) {
+        return { ok: false, refusal: error.refusal }
+      }
+      throw error
+    }
   }
   ctx.publish()
   return {
@@ -96,7 +109,7 @@ export async function recordStructuredAgentSessionOptionIntent(
     value: {
       ...input,
       options:
-        deps.adapter?.projectOptions?.(sessionId, options)?.options ??
+        deps.adapter.projectOptions?.(sessionId, options)?.options ??
         structuredAgentSessionPickReply(options, undefined)
     }
   }

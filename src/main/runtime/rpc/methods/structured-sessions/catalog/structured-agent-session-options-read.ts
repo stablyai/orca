@@ -1,4 +1,5 @@
 import {
+  AGENT_SESSION_CODEX_PROVIDER_MODELS_CLIENT_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY
 } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
@@ -30,6 +31,15 @@ import {
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { finishedListingIds } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
+import { isCodexProviderModelId } from '../../../../../../shared/agent-session/options/model-catalog/codex-provider-model'
+import type { RpcContext } from '../../../core'
+
+function clientReadsCodexProviderModels(ctx: RpcContext): boolean {
+  return (
+    ctx.clientKind === undefined ||
+    ctx.clientCapabilities?.includes(AGENT_SESSION_CODEX_PROVIDER_MODELS_CLIENT_CAPABILITY) === true
+  )
+}
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -66,6 +76,12 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
       const options = await host.readOptions(params.sessionId, { readsWithoutModel })
       const conversation = host.deps.store.getConversation(params.sessionId)
       const result = { ...options, sessionNeverStarted: conversation?.neverStarted }
+      if (conversation?.provider === 'codex' && !clientReadsCodexProviderModels(ctx)) {
+        result.models = result.models.filter(
+          ({ id }) => id === result.current.model || !isCodexProviderModelId(id)
+        )
+        result.listedModelIds = result.listedModelIds?.filter((id) => !isCodexProviderModelId(id))
+      }
       if (result.current.model === undefined && !readsWithoutModel) {
         return {
           ...result,
@@ -153,11 +169,17 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         const result = host ? await host.readModelCatalog(request) : await catalog.read(request)
         return follows ? { ...result, listingInProgress: true } : result
       }
-      const listing = await read()
+      const result = await read()
+      const readsProviderModels = params.agent !== 'codex' || clientReadsCodexProviderModels(ctx)
+      const listing =
+        !readsProviderModels && result.origin !== 'unknown'
+          ? { ...result, models: result.models.filter(({ id }) => !isCodexProviderModelId(id)) }
+          : result
       const own = record?.provider === params.agent ? record : null
       // Preserve a reopened chat's own model even if unlisted; new-chat reads instead seed the next picker.
       return !coherent &&
         own &&
+        (readsProviderModels || !isCodexProviderModelId(own.options?.model ?? '')) &&
         worktree === undefined &&
         finishedListingIds(listing) &&
         listing.origin !== 'unknown'

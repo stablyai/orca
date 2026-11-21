@@ -19,6 +19,7 @@ import {
   applyCodexConfiguredLaunchDefaults,
   readCodexConfiguredLaunchDefaults
 } from '../launch/codex-configured-launch-defaults'
+import { readCodexProviderModels } from './codex-configured-provider-models'
 
 const MODEL_PAGE_LIMIT = 100
 const MAX_MODEL_PAGES = 20
@@ -155,6 +156,7 @@ export async function fetchCodexModelCatalogListing(input: {
   timeoutMs?: number | null
   deadlineMs?: number
   cwd?: string
+  modelProfileFiles?: readonly string[]
   operation?: StructuredAgentResolutionOperation
   publish?: (listing: CodexModelCatalogListing) => void
 }): Promise<CodexModelCatalogListing> {
@@ -182,18 +184,31 @@ export async function fetchCodexModelCatalogListing(input: {
       })
   )
   assertStructuredAgentResolutionCurrent(input.operation)
-  if (parsedModels.length === 0) {
+  if (parsedModels.length === 0 && !input.modelProfileFiles?.length) {
     return { models: [], complete: false }
   }
-  input.publish?.({ models: parsedModels, complete: false })
+  if (parsedModels.length > 0) {
+    input.publish?.({ models: parsedModels, complete: false })
+  }
   const configured = await readCodexConfiguredLaunchDefaults(
     input.connection,
     remainingTimeout(),
     input.cwd
   )
+  const providerModels =
+    configured?.modelProviders && input.modelProfileFiles
+      ? await readCodexProviderModels(input.modelProfileFiles, configured.modelProviders)
+      : []
   assertStructuredAgentResolutionCurrent(input.operation)
+  const models = [
+    ...applyCodexConfiguredLaunchDefaults(parsedModels, configured),
+    ...providerModels
+  ]
+  if (models.length === 0) {
+    return { models, complete: false }
+  }
   return {
-    models: applyCodexConfiguredLaunchDefaults(parsedModels, configured),
+    models,
     complete: complete && configured !== null,
     ...(configured
       ? {

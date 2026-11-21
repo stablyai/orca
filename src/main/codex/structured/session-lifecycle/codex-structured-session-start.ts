@@ -180,6 +180,9 @@ export async function openCodexStructuredSession(
     connection,
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,
+    ...(opened.selectedModelProvider
+      ? { selectedModelProvider: opened.selectedModelProvider }
+      : {}),
     historyMode: opened.historyMode,
     permissions: {
       acquiredMode: input.permissionMode ?? 'ask',

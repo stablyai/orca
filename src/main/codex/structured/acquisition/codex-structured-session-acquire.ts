@@ -38,6 +38,7 @@ import type { deliverCodexServerRequest } from '../session-lifecycle/codex-struc
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
 import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
+import { withCodexSubmittedThreadModel } from '../launch/codex-thread-model-selection'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -129,14 +130,9 @@ export async function acquireCodexStructuredSession(input: {
       .catch((error: unknown) => {
         throw launchPreparationFailure(error)
       })
-    const { model: _savedNextModel, ...launchSettings } = resolvedLaunch
-    const launch =
-      acquireInput.options === undefined
-        ? resolvedLaunch
-        : {
-            ...launchSettings,
-            ...(acquireInput.options.model ? { model: acquireInput.options.model } : {})
-          }
+    const launch = acquireInput.options
+      ? withCodexSubmittedThreadModel(resolvedLaunch, acquireInput.options.model)
+      : resolvedLaunch
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
     const open = codexConnectionOpener(deps, sessionId, launch)

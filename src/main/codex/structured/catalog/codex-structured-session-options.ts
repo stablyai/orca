@@ -10,6 +10,7 @@ import {
   type CodexSessionOptionCatalog
 } from './codex-structured-model-catalog'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
+import { codexThreadModel } from '../launch/codex-thread-model-selection'
 
 export function restoredCodexSessionOptions(
   options: Readonly<Record<string, string>> | undefined
@@ -95,6 +96,9 @@ function applyValidatedCodexStructuredSessionOption(
           )
         )
       : requestedValue
+  if (key === 'model') {
+    codexThreadModel(value, session.selectedModelProvider)
+  }
   session.options.set(key, value)
   return Object.fromEntries(session.options)
 }

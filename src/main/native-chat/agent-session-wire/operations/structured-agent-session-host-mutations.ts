@@ -244,7 +244,7 @@ export async function setStructuredAgentSessionOption(
       ...plan,
       conversationWrite: true,
       run: async (ctx) => {
-        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
+        const picked = await recordStructuredAgentSessionOptionIntent(context, ctx, params, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok && params.key === 'model' && params.value) {

@@ -25,6 +25,7 @@ import {
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
+import { codexBoundModelSnapshot } from '../../../../../../src/shared/agent-session/options/view/model-menu-options'
 import { lockedStructuredAgentSessionOptionSnapshot } from '../../../../../../src/shared/agent-session/options/view/structured-agent-session-option-snapshot'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
@@ -135,9 +136,13 @@ export function useMobileStructuredAgentOptions(args: {
   // Before attach, picks are held and go out when the fence lands.
   const acceptsPicks = !!client && !!sessionId && enabled
   const appliesOnAttach = acceptsPicks && fence === null
+  const boundCodex =
+    agent === 'codex' &&
+    (args.hasTurn === true || !(optionState.sessionNeverStarted ?? createdHere !== undefined))
   const readBaseOptionSnapshot = useCallback(
     (view = readOptionState()) => {
-      const shown = structuredAgentSessionShownSnapshot(view)
+      const base = structuredAgentSessionShownSnapshot(view)
+      const shown = boundCodex ? codexBoundModelSnapshot(base) : base
       const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
       if (!acceptsPicks) {
         return lockedStructuredAgentSessionOptionSnapshot(snapshot)
@@ -151,7 +156,7 @@ export function useMobileStructuredAgentOptions(args: {
           )
         : snapshot
     },
-    [acceptsPicks, appliesOnAttach, legacyHostPermissions, readOptionState]
+    [acceptsPicks, appliesOnAttach, boundCodex, legacyHostPermissions, readOptionState]
   )
   const readOptionSnapshot = useCallback(() => {
     const view = readOptionState()

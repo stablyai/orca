@@ -13,6 +13,7 @@ export type CodexTurnHost = {
   skillReport?: Pick<CodexSkillReport, 'hasSkillPath'>
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
+  selectedModelProvider?: string
   permissions?: CodexSession['permissions']
   options: Map<string, string>
   appliedTurnOptions?: Readonly<Record<string, string>>

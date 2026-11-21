@@ -14,6 +14,27 @@ Codex is OpenAI's agentic CLI. Orca's Codex integration is one of the deepest in
 
 Pick **Codex** from the agent combobox. Orca launches `codex` with the worktree as `cwd` and routes auth through the currently selected account.
 
+## Custom models in Chat
+
+Register the provider in the selected Codex account's `config.toml` on the machine that runs Codex. For a local Responses-compatible server, the provider entry can look like this.
+
+```toml
+[model_providers.local]
+name = "Local"
+base_url = "http://127.0.0.1:8080/v1"
+wire_api = "responses"
+```
+
+In that account's Codex home, add a named profile such as `local.config.toml` with the model ID and provider ID. Add `model_reasoning_effort` to offer a specific effort choice.
+
+```toml
+model = "inkling-2-mini"
+model_provider = "local"
+model_reasoning_effort = "xhigh"
+```
+
+Create a Codex Chat and open the model picker in the composer before sending the first message. Select **inkling-2-mini · Local**. The picker reads the profile's model, provider and effort choice. The provider's endpoint and authentication come from the account's main config. Start another chat to choose a different provider.
+
 ## Account hot-swap
 
 Many Codex users run multiple accounts to stretch rate limits. Orca's account switcher swaps the active account without re-login or config edits. See [Hot-swap Codex accounts](/docs/agents/codex-hot-swap).

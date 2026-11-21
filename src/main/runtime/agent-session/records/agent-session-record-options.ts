@@ -2,6 +2,7 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import { isCodexProviderModelId } from '../../../../shared/agent-session/options/model-catalog/codex-provider-model'
 
 export function replaceAgentSessionRecordOptions(
   record: AgentSessionRecord,
@@ -27,13 +28,40 @@ export type AgentSessionOptionPick = {
   key: string
   value: string
   models: AgentSessionAdmissionModels
+  startupPending?: boolean
   now: number
 }
 
 export function pickAgentSessionOption(
   record: AgentSessionRecord,
-  { key, value, models: _models, ...at }: AgentSessionOptionPick
+  { key, value, models: _models, startupPending, ...at }: AgentSessionOptionPick
 ): AgentSessionRecord {
+  const savedModel = record.options?.model ?? ''
+  if (
+    record.provider === 'codex' &&
+    key === 'model' &&
+    value !== savedModel &&
+    (isCodexProviderModelId(value) || isCodexProviderModelId(savedModel))
+  ) {
+    if (record.providerHandleChain.length > 0) {
+      throw agentSessionRefusalError(
+        'agent_session_operation_invalid',
+        { reason: 'optionRejected' },
+        'Start a new Codex chat to use a different model provider'
+      )
+    }
+    if (
+      startupPending ||
+      record.lease.claimStatus === 'reserved' ||
+      record.lease.claimStatus === 'live'
+    ) {
+      throw agentSessionRefusalError(
+        'agent_session_operation_invalid',
+        { reason: 'providerStarting' },
+        'Codex is starting with the model provider already selected for this chat'
+      )
+    }
+  }
   return replaceAgentSessionRecordOptions(record, {
     ...at,
     options: { ...record.options, [key]: value }

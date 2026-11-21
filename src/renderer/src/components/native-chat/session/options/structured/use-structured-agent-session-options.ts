@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { structuredAgentSessionSeedCatalog } from '../../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import { codexBoundModelSnapshot } from '../../../../../../../shared/agent-session/options/view/model-menu-options'
 import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
@@ -66,13 +67,20 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   })
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
+  const boundCodex =
+    agent === 'codex' &&
+    (args.hasTurn === true ||
+      args.providerRunning ||
+      !(optionState.sessionNeverStarted ?? newLaunch))
 
   const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
   )
-  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
-    !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => {
+    const scoped = boundCodex ? codexBoundModelSnapshot(snapshot) : snapshot
+    return !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(scoped) : scoped
+  }
   useLayoutEffect(() => {
     interactionReadyRef.current = acceptsPicks
     lockSnapshotRef.current = lockSnapshot

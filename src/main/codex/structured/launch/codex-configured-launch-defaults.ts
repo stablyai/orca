@@ -9,10 +9,31 @@ type CodexConfiguredLaunchDefaults = {
   effort: string | null
   personality?: string
   serviceTier?: string
+  modelProviders?: ReadonlyMap<string, string>
 }
 
 function configuredText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function configuredModelProviders(providers: unknown): Map<string, string> {
+  const names = new Map<string, string>()
+  if (typeof providers === 'object' && providers !== null && !Array.isArray(providers)) {
+    for (const [id, provider] of Object.entries(providers)) {
+      if (
+        id !== 'openai' &&
+        typeof provider === 'object' &&
+        provider !== null &&
+        'name' in provider
+      ) {
+        const name = configuredText(provider.name)
+        if (name) {
+          names.set(id, name)
+        }
+      }
+    }
+  }
+  return names
 }
 
 export async function readCodexConfiguredLaunchDefaults(
@@ -48,7 +69,10 @@ export async function readCodexConfiguredLaunchDefaults(
       ...(serviceTier ? { serviceTier } : {}),
       model: 'model' in config ? configuredText(config.model) : null,
       effort:
-        'model_reasoning_effort' in config ? configuredText(config.model_reasoning_effort) : null
+        'model_reasoning_effort' in config ? configuredText(config.model_reasoning_effort) : null,
+      ...('model_providers' in config
+        ? { modelProviders: configuredModelProviders(config.model_providers) }
+        : {})
     }
   } catch {
     // Refusal and transport failure leave configuration unknown.

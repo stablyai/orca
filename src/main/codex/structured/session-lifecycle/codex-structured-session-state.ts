@@ -152,6 +152,7 @@ export type CodexSession = Pick<CodexBotLaunchOptions, 'readOnly'> & {
   fence: number
   acquisitionGeneration: string
   threadId: string
+  selectedModelProvider?: string
   historyMode?: 'legacy' | 'paginated'
   /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
   permissions?: {

@@ -9,6 +9,8 @@ import {
 } from '../structured-agent-session-options'
 import { structuredAgentSessionShownSnapshot } from './structured-agent-session-option-view'
 import { withoutUnprovenNewLaunchDefault } from '../model-catalog/host-model-catalog-snapshot-rules'
+import { isCodexProviderModelId } from '../model-catalog/codex-provider-model'
+import type { SessionOptionDescriptor } from '../../../native-chat/input/native-chat-session-options'
 
 export type ModelMenuSurface = 'chat' | 'terminal' | 'textGeneration'
 export type ModelMenuInput = {
@@ -20,6 +22,28 @@ export type ModelMenuInput = {
   coherentCatalog?: boolean
   newLaunch: boolean
   seedsModel: boolean
+}
+
+/** A running thread can keep its configured selection, but its provider cannot change. */
+export function codexBoundModelSnapshot(
+  snapshot: SessionOptionDescriptor[]
+): SessionOptionDescriptor[] {
+  return snapshot.map((option) => {
+    if (option.id !== 'model' || option.kind.type !== 'select') {
+      return option
+    }
+    const { currentValue, choices } = option.kind
+    const bound = typeof currentValue === 'string' && isCodexProviderModelId(currentValue)
+    return {
+      ...option,
+      kind: {
+        ...option.kind,
+        choices: choices.filter((choice) =>
+          bound ? choice.value === currentValue : !isCodexProviderModelId(choice.value)
+        )
+      }
+    }
+  })
 }
 
 /** Membership and display follow the composer; carriers remain owned by each launch surface. */
@@ -40,9 +64,12 @@ export function modelMenuOptions(
     observed?.origin !== 'unknown' && observed
       ? {
           ...observed,
-          models: observed.models.map((model) =>
-            input.surface === 'chat' ? model : { ...model, chatEfforts: undefined }
-          )
+          // Launch setup can send the same draft to a terminal. Provider picks belong to the chat composer.
+          models: observed.models
+            .filter((model) => input.agent !== 'codex' || !isCodexProviderModelId(model.id))
+            .map((model) =>
+              input.surface === 'chat' ? model : { ...model, chatEfforts: undefined }
+            )
         }
       : observed
   state = surfaced

@@ -54,6 +54,10 @@ export const AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY =
 export const AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY =
   'agent-session.coherent-model-catalog.v1' as const
 
+// Older renderers can reuse a chat's listing to build terminal arguments.
+export const AGENT_SESSION_CODEX_PROVIDER_MODELS_CLIENT_CAPABILITY =
+  'agent-session.codex-provider-models.v1' as const
+
 // Older hosts reject unknown catalog keys; this observation never writes a chat option.
 export const AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY =
   'agent-session.model-catalog.model-efforts.v1' as const
