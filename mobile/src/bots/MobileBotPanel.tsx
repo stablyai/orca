@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
-  botItemFilterChat,
   botItemChats,
   botItemStaleDays,
   botItemsNeedingOwner,
@@ -16,7 +15,6 @@ import { usePhoneNeedsYouAsks } from './items/phone-needs-you-asks'
 import { phoneBotItemFilterLabel } from './items/phone-bot-item-filter-label'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
-import { lookAroundSupported } from '../../../src/shared/bots/bot-look-around'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
@@ -29,7 +27,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
 import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
-import { MobileBotSettingsTab } from './MobileBotSettingsTab'
+import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
 import { MobileBotUpNext } from './MobileBotUpNext'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import type { BotChatTreeActions } from './MobileBotChatTree'
@@ -55,7 +53,7 @@ import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 
 type PanelPage = 'settings' | `item:${string}`
 
-export type BotPanelOpen = { tab: 'items' } | { item: string }
+export type BotPanelOpen = { tab: 'items' } | { item: string } | { access: string }
 
 export function MobileBotPanel(props: {
   /** What the panel opens on; null while closed. */
@@ -81,6 +79,7 @@ export function MobileBotPanel(props: {
   onOpenItemChat: (item: BotItem) => void
   /** Opens a file an item links; a path outside the bot's folder is refused with a toast. */
   onOpenFile: (path: string, showToast: (message: string) => void) => void
+  home: BotSettingsHome
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -118,7 +117,7 @@ export function MobileBotPanel(props: {
   const items = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatId: botItemFilterChat(filter),
+    chatIds: filter.chatIds,
     showing: visible,
     reads: props.routeBot.itemReads
   })
@@ -126,7 +125,7 @@ export function MobileBotPanel(props: {
   const allItems = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatId: null,
+    chatIds: null,
     showing: visible && filter.chatIds !== null,
     reads: props.routeBot.itemReads
   })
@@ -145,7 +144,7 @@ export function MobileBotPanel(props: {
     showing: visible,
     reads: props.routeBot.reads
   })
-  const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot)
+  const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
   const { shown: asks, count: needsYou } = usePhoneNeedsYouAsks({
     client: visible ? props.client : null,
     access: props.accessRequests,
@@ -342,13 +341,10 @@ export function MobileBotPanel(props: {
             showToast={showToast}
             online={props.online}
             hostName={props.hostName}
+            home={props.home}
             accessRequests={props.accessRequests}
             onAskInChat={props.onStartSuggestion}
-            lookAround={
-              lookAroundSupported(bot.agent)
-                ? { onLookNow: upNext.lookNow, busy: upNext.busy }
-                : null
-            }
+            upNext={upNext}
           />
         </ScrollView>
       </View>
@@ -357,6 +353,7 @@ export function MobileBotPanel(props: {
         key={shownItem.uid}
         {...shownItem}
         client={props.client}
+        hostKey={props.hostKey}
         bot={bot}
         showToast={showToast}
         reads={props.routeBot.itemReads}

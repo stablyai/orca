@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
+import { CopyX, ExternalLink, Files, X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -268,7 +268,8 @@ export default function BrowserTab({
         />
         {onDuplicate ? (
           <>
-            <ContextMenuItem inset onSelect={onDuplicate}>
+            <ContextMenuItem onSelect={onDuplicate}>
+              <Files className="size-3.5" />
               {t('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
             </ContextMenuItem>
             <ContextMenuSeparator />
@@ -281,7 +282,8 @@ export default function BrowserTab({
             : t('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
         </ContextMenuItem>
         {showAudioControl ? (
-          <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
+          <ContextMenuItem onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
+            {audioMuted ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
             {toggleAudioMutedLabel}
           </ContextMenuItem>
         ) : null}
@@ -291,15 +293,16 @@ export default function BrowserTab({
           <X className="size-3.5" />
           {t('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
         </ContextMenuItem>
-        <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
+        <ContextMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+          <CopyX className="size-3.5" />
           {t('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
         </ContextMenuItem>
         <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
         <ContextMenuItem
-          inset
           onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
           disabled={!isHttpUrl}
         >
+          <ExternalLink className="size-3.5" />
           {t('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
         </ContextMenuItem>
       </ContextMenuContent>

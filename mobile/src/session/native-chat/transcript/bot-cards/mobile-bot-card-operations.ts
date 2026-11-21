@@ -25,34 +25,6 @@ export const botRequestOutcomeRead = bindDeferredRpcOperation(
   })
 )
 
-const OwnToolSchema = z.looseObject({
-  name: z.string(),
-  detail: z.string(),
-  remote: z.boolean(),
-  signIn: z.looseObject({ state: z.string() }).optional()
-})
-
-export const botToolsListRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'bots.tools.list',
-    method: 'bots.tools.list',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    // Another agent's bot has no own tools here; its card reads as added.
-    read: rpcResultVariant('bot-tools', z.looseObject({ own: z.array(OwnToolSchema).optional() }))
-  })
-)
-
-export const botToolRemove = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'bots.tools.remove',
-    method: 'bots.tools.remove',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('bot-tool-removed', z.unknown())
-  })
-)
-
 export const webhookCardRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'webhooks.card',

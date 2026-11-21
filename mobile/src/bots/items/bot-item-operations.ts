@@ -75,20 +75,30 @@ const itemsSnooze = bindDeferredRpcOperation(
   })
 )
 
+/** One chat goes as `chatId`, which hosts from before `chatIds` read too, as the desktop sends it. */
+function botItemsChatScope(
+  chatIds: readonly string[] | null
+): { chatId: string } | { chatIds: string[] } | Record<string, never> {
+  if (chatIds === null) {
+    return {}
+  }
+  return chatIds.length === 1 ? { chatId: chatIds[0]! } : { chatIds: [...chatIds] }
+}
+
 /** `message` says why a read failed: the host's refusal or the transport's error, when either gave one. */
 export type BotItemRead<T> =
   | { kind: 'read'; value: T }
   | { kind: 'failed'; notFound: boolean; message?: string }
 
-/** Every open item, closed ones a page at a time (`closedCursor` for the next), or one chat's. */
+/** Every open item, closed ones a page at a time (`closedCursor` for the next), or these chats'. */
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  page: { chatId?: string; closedCursor?: string } = {}
+  { chatIds, ...page }: { chatIds?: readonly string[] | null; closedCursor?: string } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(
-      await itemsList.request(client, { botId, ...page }),
+      await itemsList.request(client, { botId, ...page, ...botItemsChatScope(chatIds ?? null) }),
       itemsList.interpret
     )
     return answer.kind === 'answered'

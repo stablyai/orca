@@ -155,7 +155,11 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       ownerContext?.rootGuestWebContentsId ??
       (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
       guestWebContentsId
-    const decision = routeBrowserClientDownload({ guestWebContentsId: ownerGuestWebContentsId })
+    const decision = routeBrowserClientDownload({
+      guestWebContentsId: ownerGuestWebContentsId,
+      filename: requestedFilename,
+      documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? ''
+    })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
     // Extension pages and chrome.downloads start their own downloads, never the agent's click.
     const isExtensionDownload = adoptedTabId !== null || this.extensionDownloads.has(item)

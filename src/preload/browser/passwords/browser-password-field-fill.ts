@@ -136,21 +136,21 @@ export function applyBrowserPasswordFill(
     ? target
     : (parsed.password?.element ?? parsed.newPassword?.element ?? null)
 
-  if (!passwordInput) {
-    // Why: a username-first step has no password box; fill just the username the user picked.
+  const refusal = passwordInput ? refusalFor(passwordInput) : null
+  if (!passwordInput || (refusal && target === usernameInput)) {
+    // Why: a username-first step has no password box, or has one that is not fillable until Next;
+    // fill just the username the user picked. A pick on that box itself still refuses.
     if (!usernameInput || request.username === null) {
       return { requestId: request.requestId, ok: true }
     }
-    const refusal = refusalFor(usernameInput)
-    if (refusal) {
-      return refuse(refusal)
+    const usernameRefusal = refusalFor(usernameInput)
+    if (usernameRefusal) {
+      return refuse(usernameRefusal)
     }
     writeValue(usernameInput, request.username)
     context.recordFilledValue(usernameInput, request.username)
     return { requestId: request.requestId, ok: true }
   }
-
-  const refusal = refusalFor(passwordInput)
   if (refusal) {
     return refuse(refusal)
   }

@@ -687,6 +687,53 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "選択したテキストを引用としてメッセージに追加します"
+    },
+    "messageTime": {
+      "yesterday": "昨日 {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "未開始",
+        "connected": "接続済み",
+        "failed": "失敗",
+        "failedReason": "失敗：{{error}}",
+        "finishOnPage": "開いたページで完了してください",
+        "needsAuth": "サインインが必要",
+        "needsAuthAfterSend": "サインインが必要です。メッセージを送信すると、ここでサインインできます。",
+        "off": "オフ",
+        "pending": "接続中…",
+        "tools_other": "{{count}} 個のツール",
+        "waitingForSignIn": "サインイン待ち…"
+      },
+      "source": {
+        "project": "プロジェクト",
+        "local": "ローカル",
+        "user": "ユーザー",
+        "plugin": "プラグイン",
+        "session": "セッション"
+      },
+      "title": "MCP サーバー",
+      "notRunning": "MCP サーバーは次のメッセージを送信すると接続されます。",
+      "unsupported": "ここで MCP サーバーを管理するには、このチャットのホストの Orca を更新してください。",
+      "readFailed": "MCP サーバーを読み込めませんでした。",
+      "retry": "再試行",
+      "empty": "このチャットには MCP サーバーが設定されていません。",
+      "signIn": "サインイン",
+      "reconnect": "再接続",
+      "toggleLabel": "{{name}} を使用",
+      "actionFailed": "操作できませんでした。もう一度お試しください。",
+      "openAgain": "もう一度開く",
+      "pastePlaceholder": "アドレスを貼り付け",
+      "pasteLabel": "サインインページのアドレス",
+      "finish": "完了",
+      "signInUnfinished": "サインインはまだ完了していません。開いたページで完了させてから「完了」をタップしてください。",
+      "summary": {
+        "signingIn": "{{name}} にサインイン中",
+        "connected": "接続済み: {{count}}",
+        "needsAuth_other": "{{count}} 件サインインが必要",
+        "failed": "失敗: {{count}}"
+      },
+      "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。"
     }
   },
   "common": {

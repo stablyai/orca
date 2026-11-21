@@ -11,6 +11,7 @@ import {
   type BotAgentSkillsFolder
 } from '../../shared/bots/bot-package'
 import type { BotOwnSkillsView } from '../../shared/bots/bot-skill-projects'
+import { realFolderUnderRoot } from '../filesystem/real-folder-under-root'
 import { admittedSkill, type ScannedSkill, scanSkillsFolder } from './bot-skill-projects'
 
 export type BotOwnSkills = {
@@ -27,30 +28,9 @@ const AGENT_FOLDERS: readonly (readonly [BotAgentSkillsFolder, string])[] = [
   ['agents', BOT_AGENT_SKILLS_FOLDERS.agents]
 ]
 
-/** `segments` under the home: a real folder there (no link on the way), missing with nothing on the
- *  way a link, or anything else. */
-async function realFolder(
-  home: string,
-  realHome: string,
-  segments: readonly string[]
-): Promise<'real' | 'missing' | 'other'> {
-  for (let depth = 1; depth <= segments.length; depth += 1) {
-    const path = join(home, ...segments.slice(0, depth))
-    const entry = await lstat(path).catch(() => null)
-    if (!entry) {
-      return 'missing'
-    }
-    const expected = join(realHome, ...segments.slice(0, depth))
-    if (!entry.isDirectory() || (await realpath(path)) !== expected) {
-      return 'other'
-    }
-  }
-  return 'real'
-}
-
 /** skills/'s own skills: real folders right under it (never links) holding a SKILL.md. */
 async function ownSkillEntries(home: string, realHome: string): Promise<BotOwnSkills['skills']> {
-  if ((await realFolder(home, realHome, [BOT_OWN_SKILLS_FOLDER])) !== 'real') {
+  if ((await realFolderUnderRoot(home, realHome, [BOT_OWN_SKILLS_FOLDER])) !== 'real') {
     return []
   }
   const skillsDir = join(realHome, BOT_OWN_SKILLS_FOLDER)
@@ -128,7 +108,7 @@ export async function linkBotOwnSkills(home: string): Promise<void> {
   }
   for (const [, folder] of AGENT_FOLDERS) {
     const segments = folder.split('/')
-    const state = await realFolder(home, realHome, segments)
+    const state = await realFolderUnderRoot(home, realHome, segments)
     if (state === 'other') {
       continue
     }

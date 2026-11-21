@@ -14,7 +14,10 @@ import { ensureAgentSessionAttachmentClaimTables } from '../native-chat/agent-se
 import {
   fillJournalConnectorReplies,
   readJournalConnectorReplies,
-  sentJournalConnectorReplies
+  sentJournalConnectorReplies,
+  cutJournalConnectorReplies,
+  recutJournalConnectorReplies,
+  releaseJournalConnectorClaim
 } from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies'
 import { readJournalDomainDispatchItem } from '../native-chat/agent-session-journal/journal-domain-dispatch-placement'
 import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
@@ -33,7 +36,7 @@ import {
   SERVER_NOW,
   settle
 } from './connector-poll-client.test-fixture'
-import type { ConnectorReplyJournal } from './connector-reply-outbox'
+import type { ConnectorReplyCutJournal } from './connector-reply-outbox'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { fakeSeam } from './fake-connector-seam.test-fixture'
 
@@ -61,13 +64,16 @@ function openJournal(file: string) {
     `INSERT OR IGNORE INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
      VALUES('workspace','chat-1','e',10,1)`
   ).run()
-  const journal: ConnectorReplyJournal = {
+  const journal: ConnectorReplyCutJournal = {
     read: async (sessionId) =>
       readJournalConnectorReplies(db).filter(
         (row) => sessionId === undefined || row.sessionId === sessionId
       ),
     fillOutcomes: async (fills) => fillJournalConnectorReplies(db, fills, SERVER_NOW) > 0,
-    sent: async (keys) => sentJournalConnectorReplies(db, keys, SERVER_NOW)
+    sent: async (keys) => sentJournalConnectorReplies(db, keys, SERVER_NOW),
+    cut: async (rows) => cutJournalConnectorReplies(db, rows) > 0,
+    recut: async (claim, cut) => recutJournalConnectorReplies(db, claim, cut) > 0,
+    releaseClaim: async (claim) => releaseJournalConnectorClaim(db, claim) > 0
   }
   return { db, journal }
 }

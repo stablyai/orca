@@ -19974,6 +19974,7 @@
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
           "none": "无",
+          "off": "关闭",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -20751,7 +20752,6 @@
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
@@ -20862,7 +20862,8 @@
           "failed": "失败",
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
-          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录"
+          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
+          "notStarted": "尚未启动"
         },
         "signIn": {
           "action": "登录",
@@ -21805,7 +21806,8 @@
           "notRemovable": "主工作区或文件夹项目",
           "projectOff": "此项目已关闭清理",
           "rulesOff": "未开启任何规则",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "folderWorkspaceSibling": "此工作区中的另一个仓库仍在使用中"
         },
         "trigger": {
           "startup": "启动时",
@@ -24677,6 +24679,9 @@
     "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -24793,7 +24798,9 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "botItemPrevious": "上一个条目",
+      "botItemNext": "下一个条目"
     },
     "group": {
       "global": "全局",
@@ -26418,7 +26425,7 @@
         "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "sub": "条目 {{number}} · {{chat}} · {{when}}",
+        "subWhere": "条目 {{number}} · {{chat}}",
         "showEarlier": "显示更早的内容",
         "place": "{{index}} / {{total}}",
         "deleted": "此条目已删除。",
@@ -27038,15 +27045,6 @@
         "open": "打开",
         "stopped": "此链接已失效",
         "stoppedDetail": "请向分享者索取新链接。",
-        "ask": "请求批准",
-        "askDetail": "从链接创建的机器人默认使用此项",
-        "full": "完全访问权限",
-        "fullDetail": "运行命令时不询问",
-        "chatsDetail": "初始采用你的聊天权限设置",
-        "askLine": "运行命令前请求批准。你自己的允许规则仍然适用。",
-        "fullLine": "运行命令时不询问。",
-        "chatsLine": "按你的聊天设置请求批准。",
-        "change": "（更改）",
         "origin": "来自 {{who}} 的链接",
         "originAnonymous": "来自分享链接",
         "back": "返回",
@@ -27707,6 +27705,7 @@
       "titleOne": "允许 {{person}} 访问 {{name}}？",
       "titleMany": "允许 {{count}} 人访问 {{name}}？",
       "confirm": "授予访问权限",
+      "reject": "拒绝",
       "confirmWarning": "他们将以你的身份在 {{computer}} 上操作。",
       "confirmComputer": "运行命令和修改文件",
       "confirmNoApprovals": "无需事先询问即可操作",

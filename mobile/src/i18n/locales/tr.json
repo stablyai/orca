@@ -691,6 +691,55 @@
     "selectionQuote": {
       "action": "Alıntıla",
       "hint": "Seçili metni mesaja alıntı olarak ekler"
+    },
+    "messageTime": {
+      "yesterday": "Dün {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "Başlatılmadı",
+        "connected": "Bağlı",
+        "failed": "Başarısız",
+        "failedReason": "Başarısız: {{error}}",
+        "finishOnPage": "Açılan sayfada tamamlayın",
+        "needsAuth": "Oturum açılmalı",
+        "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
+        "off": "Kapalı",
+        "pending": "Bağlanıyor…",
+        "tools_one": "{{count}} araç",
+        "tools_other": "{{count}} araç",
+        "waitingForSignIn": "Oturum açılması bekleniyor…"
+      },
+      "source": {
+        "project": "Proje",
+        "local": "Yerel",
+        "user": "Kullanıcı",
+        "plugin": "Eklenti",
+        "session": "Oturum"
+      },
+      "title": "MCP sunucuları",
+      "notRunning": "MCP sunucuları sonraki mesajınızı gönderdiğinizde bağlanır.",
+      "unsupported": "MCP sunucularını burada yönetmek için bu sohbetin ana makinesindeki Orca’yı güncelleyin.",
+      "readFailed": "MCP sunucuları yüklenemedi.",
+      "retry": "Yeniden dene",
+      "empty": "Bu sohbet için ayarlanmış MCP sunucusu yok.",
+      "signIn": "Oturum aç",
+      "reconnect": "Yeniden bağlan",
+      "toggleLabel": "{{name}} kullan",
+      "actionFailed": "İşlem gerçekleştirilemedi. Yeniden deneyin.",
+      "openAgain": "Yeniden aç",
+      "pastePlaceholder": "Adresi yapıştırın",
+      "pasteLabel": "Oturum açma sayfasının adresi",
+      "finish": "Tamamla",
+      "signInUnfinished": "Oturum açma henüz tamamlanmadı. Açılan sayfada tamamlayıp “Bitti” düğmesine dokunun.",
+      "summary": {
+        "signingIn": "{{name}} için oturum açılıyor",
+        "connected": "Bağlı: {{count}}",
+        "needsAuth_one": "{{count}} sunucuda oturum açılmalı",
+        "needsAuth_other": "{{count}} sunucuda oturum açılmalı",
+        "failed": "Başarısız: {{count}}"
+      },
+      "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın."
     }
   },
   "common": {

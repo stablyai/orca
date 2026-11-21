@@ -42,3 +42,22 @@ it('opens Automations over Tasks from Settings with Tasks as its predecessor', a
   useAppStore.getState().closeAutomationsPage()
   expect(useAppStore.getState().activeView).toBe('tasks')
 })
+
+it.each([
+  ['artifacts', () => useAppStore.getState().closeArtifactsPage()],
+  ['skills', () => useAppStore.getState().closeSkillsPage()],
+  ['mobile', () => useAppStore.getState().closeMobilePage()]
+] as const)(
+  "leaves Settings first for %s, so the page's own Close returns to the page before Settings",
+  async (id, closePage) => {
+    useAppStore.setState({ activeView: 'terminal' })
+    useAppStore.getState().openSettingsPage()
+
+    activateRailDestination(id)
+    await Promise.resolve()
+
+    expect(useAppStore.getState().activeView).toBe(id)
+    closePage()
+    expect(useAppStore.getState().activeView).toBe('terminal')
+  }
+)

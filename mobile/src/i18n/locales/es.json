@@ -726,6 +726,57 @@
     "selectionQuote": {
       "action": "Citar",
       "hint": "Añade el texto seleccionado al mensaje como cita"
+    },
+    "messageTime": {
+      "yesterday": "Ayer {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "Sin iniciar",
+        "connected": "Conectado",
+        "failed": "Error",
+        "failedReason": "Error: {{error}}",
+        "finishOnPage": "Completa el proceso en la página que se abrió",
+        "needsAuth": "Sesión requerida",
+        "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
+        "off": "Desactivado",
+        "pending": "Conectando…",
+        "tools_many": "{{count}} herramientas",
+        "tools_one": "{{count}} herramienta",
+        "tools_other": "{{count}} herramientas",
+        "waitingForSignIn": "Esperando el inicio de sesión…"
+      },
+      "source": {
+        "project": "Proyecto",
+        "local": "Local",
+        "user": "Usuario",
+        "plugin": "Plugin",
+        "session": "Sesión"
+      },
+      "title": "Servidores MCP",
+      "notRunning": "Los servidores MCP se conectan cuando envías tu próximo mensaje.",
+      "unsupported": "Actualiza Orca en el host de este chat para administrar los servidores MCP aquí.",
+      "readFailed": "No se pudieron cargar los servidores MCP.",
+      "retry": "Reintentar",
+      "empty": "No hay servidores MCP configurados para este chat.",
+      "signIn": "Iniciar sesión",
+      "reconnect": "Reconectar",
+      "toggleLabel": "Usar {{name}}",
+      "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
+      "openAgain": "Volver a abrir",
+      "pastePlaceholder": "Pega la dirección",
+      "pasteLabel": "Dirección de la página de inicio de sesión",
+      "finish": "Finalizar",
+      "signInUnfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego toca «Listo».",
+      "summary": {
+        "signingIn": "iniciando sesión en {{name}}",
+        "connected": "Conectados: {{count}}",
+        "needsAuth_one": "{{count}} requiere iniciar sesión",
+        "needsAuth_other": "{{count}} requieren iniciar sesión",
+        "failed": "Fallidos: {{count}}",
+        "needsAuth_many": "{{count}} requieren iniciar sesión"
+      },
+      "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí."
     }
   },
   "common": {

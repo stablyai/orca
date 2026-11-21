@@ -2,6 +2,7 @@ import {
   botPreviewFacts,
   botStatusNeedsAttention
 } from '../../../src/shared/bots/bot-collapsed-preview'
+import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
 import { getBotSidebarEntries } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { BotSidebarEntryActivity } from '../../../src/shared/bots/bot-sidebar-view'
 import { foldBotStatus, type BotRowStatus } from '../../../src/shared/bots/bot-row-status'
@@ -175,6 +176,10 @@ export function drawHostBotEntries(
     const status = foldBotStatus(preview.status, bot.paused)
     const upNext = offline ? 0 : (listing.unseen?.[bot.id] ?? 0)
     const needsYou = listing.needsYou?.[bot.id] ?? 0
+    // A down host's requests are its last read, so its line leaves them out.
+    const access = offline
+      ? []
+      : (listing.accessRequests ?? []).filter((request) => request.botId === bot.id)
     // A down host's bot is its row alone, as on the desktop: no client keeps its chats.
     const listsUnder = botListsUnderRow({
       folded: inputs.collapsedGroups.has(groupKey),
@@ -229,8 +234,11 @@ export function drawHostBotEntries(
         links: listing.links?.[home.id] ?? [],
         ...(listing.ownChats?.[bot.id] ? { chats: listing.ownChats[bot.id] } : {}),
         waits: listing.waits?.[bot.id] ?? [],
-        workers: workerCounts
+        workers: workerCounts,
+        // As the desktop's line counts them: its items and the people asking, beside its rows' asks.
+        itemsNeedingYou: needsYou + access.length
       },
+      ...(access[0] ? { askedForAccess: accessRequestPerson(access[0]) } : {}),
       statusLine: botStatusLine(dot, bot.paused),
       paused: bot.paused,
       ...(host ? { host } : {})

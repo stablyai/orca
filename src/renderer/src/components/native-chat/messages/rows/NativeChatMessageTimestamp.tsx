@@ -1,6 +1,5 @@
-import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useIntlLocale } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { cn } from '@/lib/class-names'
 import {
@@ -32,7 +31,7 @@ export function NativeChatMessageTimestamp({
 }): React.JSX.Element | null {
   const intlLocale = useIntlLocale()
   const today = useNowSnapshot(30_000, getNativeChatMessageDay)
-  useTranslation()
+  const t = useTranslate()
   if (timestamp === null) {
     return null
   }
@@ -56,7 +55,9 @@ export function NativeChatMessageTimestamp({
             className
           )}
         >
-          {formatter.format(date, today.date)}
+          {formatter.format(date, today.date, (time) =>
+            t('nativeChat.messageTime.yesterday', 'Yesterday {{time}}', { time })
+          )}
         </time>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

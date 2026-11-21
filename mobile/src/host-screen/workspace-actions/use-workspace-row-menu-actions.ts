@@ -3,6 +3,7 @@ import {
   BellMinus,
   BellOff,
   BellRing,
+  Bot,
   Edit3,
   Kanban,
   Moon,
@@ -20,7 +21,13 @@ import type { HostScreenController } from '../use-host-screen-controller'
 import { useWorkspaceNotificationMutes } from './use-workspace-notification-mutes'
 
 // worktree.set resolves git worktrees only, so these refuse a folder workspace's id.
-const GIT_WORKTREE_ONLY_ACTIONS = new Set(['rename', 'toggleRead', 'togglePin', 'moveToStatus'])
+const GIT_WORKTREE_ONLY_ACTIONS = new Set([
+  'rename',
+  'toggleRead',
+  'togglePin',
+  'moveToStatus',
+  'handToBot'
+])
 
 /** The workspace row menu, in the desktop row menu's words. */
 export function useWorkspaceRowMenuActions(args: {
@@ -29,8 +36,10 @@ export function useWorkspaceRowMenuActions(args: {
   server: ReturnType<typeof useWorkspaceServer>
   onRename: (row: Worktree) => void
   onMoveToStatus: (row: Worktree) => void
+  /** Absent while this computer's Bots are off or unread. */
+  onHandToBot: ((row: Worktree) => void) | null
 }): ActionSheetAction[] {
-  const { controller, row, server, onRename, onMoveToStatus } = args
+  const { controller, row, server, onRename, onMoveToStatus, onHandToBot } = args
   const { actions, client, connState, hostCapabilities, hostId, state } = controller
   const t = useMobileTranslation()
   const { mutes, setMuted } = useWorkspaceNotificationMutes({
@@ -125,6 +134,17 @@ export function useWorkspaceRowMenuActions(args: {
             onPress: () => onMoveToStatus(row)
           }
         ]),
+    // A server's workspace would move under a bot on another computer, which only the desktop builds.
+    ...(onHandToBot && !server.server
+      ? [
+          {
+            id: 'handToBot',
+            label: t('bots.handToBot.menu', 'Hand to bot…'),
+            icon: Bot,
+            onPress: () => onHandToBot(row)
+          }
+        ]
+      : []),
     {
       id: 'delete',
       // Desktop's folder rows say Remove Workspace: the folder stays on disk.
