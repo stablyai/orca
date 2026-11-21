@@ -14,7 +14,8 @@ type Upload = {
   waiting: Set<(src: string | null) => void>
 }
 
-// Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
+// Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried by
+// the next face (rows: after RETRY_MS).
 const uploads = new Map<string, Upload>()
 
 // Each bot's last failed read, which rows mounting as a list scrolls don't send again for RETRY_MS. At
@@ -22,6 +23,8 @@ const uploads = new Map<string, Upload>()
 const failures = new Map<string, { version: string; at: number }>()
 const RETRY_MS = 10_000
 const MAX_FAILURES = 64
+// Rows that skipped reading a recently failed version, by botRefKey; each leaves as it unmounts.
+const skippedFaces = new Map<string, Set<{ version: string; show: (src: string | null) => void }>>()
 
 function noteFailure(key: string, version: string): void {
   failures.delete(key)
@@ -53,12 +56,18 @@ function startUpload(bot: BotRef, key: string, version: string): Upload {
       }
       upload.read = png ? `data:image/png;base64,${png}` : null
       done(upload.read)
+      skippedFaces.get(key)?.forEach((face) => {
+        if (face.version === version) {
+          face.show(upload.read ?? null)
+        }
+      })
     },
     () => {
+      // A read another version replaced says nothing about the bot's current picture.
       if (uploads.get(key) === upload) {
         uploads.delete(key)
+        noteFailure(key, version)
       }
-      noteFailure(key, version)
       done(null)
     }
   )
@@ -99,7 +108,16 @@ export function useBotAvatarSrc(
       return
     }
     if (cached?.version !== uploadKey && backoff && failedLately(key, uploadKey)) {
-      return
+      // No read now, but another face's read of this version still reaches it.
+      const skipped = skippedFaces.get(key) ?? new Set()
+      const face = { version: uploadKey, show }
+      skippedFaces.set(key, skipped.add(face))
+      return () => {
+        skipped.delete(face)
+        if (skipped.size === 0 && skippedFaces.get(key) === skipped) {
+          skippedFaces.delete(key)
+        }
+      }
     }
     const reading =
       cached?.version === uploadKey ? cached : startUpload({ hostId, id }, key, uploadKey)

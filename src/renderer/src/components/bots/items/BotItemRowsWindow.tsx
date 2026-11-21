@@ -363,7 +363,8 @@ export function BotItemRowsWindow({
     const at = Number(
       event.target.closest<HTMLElement>('[data-bot-item-index]')?.dataset.botItemIndex ?? -1
     )
-    if (at < 0) {
+    // At the group's first or last row, Home and End go on to the panel, which scrolls to its ends.
+    if (at < 0 || (event.key === 'Home' && at === 0) || (event.key === 'End' && at === count - 1)) {
       return
     }
     const next =
