@@ -206,6 +206,32 @@ describe('reused Pi subagent counts', () => {
     expect(filesystem.stat.mock.calls.length - stamps).toBe(1)
   })
 
+  it('keeps its stamps when the parent transcript is reparsed', async () => {
+    const root = await makeTempDir()
+    const parentPath = await writePiParentWithMessages(root)
+    await writePiChild(root, AGENT_DIR, 'run-0', 'child-1')
+    const stats = createSessionParseStats()
+
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+
+    // The parent grows, so its next parse is a resume rather than a reuse.
+    await writeFile(
+      parentPath,
+      `${JSON.stringify({ type: 'message', message: { role: 'user', content: 'And review it' } })}\n`,
+      { flag: 'a' }
+    )
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+    const walksAfterReparse = filesystem.readdir.mock.calls.length
+    const stamps = filesystem.stat.mock.calls.length
+
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+
+    // A reparse carries the stamps it had, so reuse still skips the walk.
+    expect(filesystem.readdir.mock.calls.length).toBe(walksAfterReparse)
+    expect(filesystem.stat.mock.calls.length - stamps).toBe(3)
+  })
+
   it('recounts when a directory that read as absent comes back', async () => {
     const root = await makeTempDir()
     const parentPath = await writePiParentWithMessages(root)
