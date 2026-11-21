@@ -1,3 +1,4 @@
+import type { BotItemStatus } from '../../shared/bots/bot-items'
 import { BotItemsComment, BotItemsSet } from '../../shared/rpc-contract/bots-items-params'
 import { EVAL_BOT, type EvalHostState } from '../bot-automation-eval/bot-automation-eval-host'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -24,13 +25,31 @@ export function serveEvalDecisionItem(
     )
   }
   const comment = 'text' in input ? input.text : input.comment
+  const status = 'status' in input ? input.status : undefined
+  // The host's status rules, checked before anything is written.
+  const reason = 'reason' in input ? input.reason : undefined
+  if (status === 'canceled' && !reason?.trim()) {
+    throw new RuntimeClientError('invalid_argument', 'Canceling needs a reason: --reason "..."')
+  }
+  if (reason !== undefined && status !== 'canceled') {
+    throw new RuntimeClientError('invalid_argument', '--reason goes with --status canceled.')
+  }
+  const moveTo = (next: BotItemStatus): void => {
+    // Leaving Needs you settles its question, as the host clears it.
+    if (next !== 'needs_you') {
+      seed.item.question = null
+    }
+    seed.item.status = next
+  }
   // Like the real host, a set may change only the status; it then posts no comment.
-  if (!comment?.trim() && 'status' in input && input.status && !input.ask) {
-    seed.item.status = input.status
+  if (!comment?.trim() && status && !('ask' in input && input.ask)) {
+    moveTo(status)
     io.save(state)
     io.record({ kind: 'write', method, params, result: {} })
     return { item: seed.item }
   }
+  // Unlike the host, which treats an empty set as no change, the eval refuses it: a decision
+  // item write that says nothing is a grading failure worth surfacing.
   if (!comment?.trim()) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -39,8 +58,8 @@ export function serveEvalDecisionItem(
   }
   const eventId = `decision-${seed.comments.length + 1}`
   seed.comments.push(comment)
-  if ('status' in input && input.status) {
-    seed.item.status = input.status
+  if (status) {
+    moveTo(status)
   }
   if ('ask' in input && input.ask) {
     seed.item.question = { eventId, text: comment }

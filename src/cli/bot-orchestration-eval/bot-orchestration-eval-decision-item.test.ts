@@ -37,6 +37,55 @@ describe('the eval decision item', () => {
     expect(io.record).toHaveBeenCalledOnce()
   })
 
+  it('needs a reason to cancel, like the host, and writes nothing without one', () => {
+    const state = seeded()
+    const io = { record: vi.fn(), save: vi.fn() }
+    expect(() =>
+      serveEvalDecisionItem(
+        state,
+        'bots.items.set',
+        { callerSessionId: CHAT, item: '41', status: 'canceled' },
+        io
+      )
+    ).toThrow('Canceling needs a reason')
+    expect(state.decisionItem?.item.status).not.toBe('canceled')
+    expect(io.save).not.toHaveBeenCalled()
+    expect(
+      serveEvalDecisionItem(
+        state,
+        'bots.items.set',
+        { callerSessionId: CHAT, item: '41', status: 'canceled', reason: 'Superseded' },
+        io
+      ).item.status
+    ).toBe('canceled')
+  })
+
+  it('settles the open question when the item leaves Needs you', () => {
+    const state = seeded()
+    const io = { record: vi.fn(), save: vi.fn() }
+    serveEvalDecisionItem(
+      state,
+      'bots.items.set',
+      {
+        callerSessionId: CHAT,
+        item: '41',
+        status: 'needs_you',
+        comment: 'Ship it now or wait a day?',
+        ask: { questions: [{ prompt: 'Ship it now or wait a day?', options: [] }] }
+      },
+      io
+    )
+    expect(state.decisionItem?.item.question).not.toBeNull()
+    serveEvalDecisionItem(
+      state,
+      'bots.items.set',
+      { callerSessionId: CHAT, item: '41', status: 'done' },
+      io
+    )
+    expect(state.decisionItem?.item.question).toBeNull()
+  })
+
+  // The host treats an empty set as no change; the eval refuses it on purpose.
   it('still refuses a set that neither comments nor changes the status', () => {
     const io = { record: vi.fn(), save: vi.fn() }
     expect(() =>
