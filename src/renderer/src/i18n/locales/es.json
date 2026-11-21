@@ -13618,7 +13618,25 @@
             "markResolved": "Marcar como resuelto",
             "keepFile": "Conservar archivo",
             "keepDeletion": "Mantener eliminación",
-            "refreshAll": "Actualizar todo"
+            "refreshAll": "Actualizar todo",
+            "baseUpToDate": "Actualizado",
+            "rebaseOperationInProgress": "Espera a que termine la operación de Git actual",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} conflicto",
+            "rebaseConflictCount_other": "{{count}} conflictos",
+            "rebaseConflictCount_many": "{{count}} conflictos",
+            "rebasePaused": "Rebase en pausa",
+            "rebaseResolveConflictsFirst": "Resuelve primero los conflictos",
+            "rebaseAbort": "Abortar",
+            "rebaseContinue": "Continuar",
+            "continueRebasePausedAgain": "Rebase en pausa en el siguiente conflicto",
+            "continueRebaseFailed": "Error al continuar el rebase",
+            "rebaseAutostashConflict": "Rebase completado. Tus cambios sin commit no se pudieron volver a aplicar limpiamente; están guardados en el stash.",
+            "rebaseStoppedByGit": "Git pausó el rebase",
+            "continueRebaseUnconfirmed": "No se pudo confirmar el resultado. Control de código se actualizó para mostrar el estado actual.",
+            "noRebaseInProgress": "No hay ningún rebase en curso",
+            "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
+            "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -14063,7 +14081,6 @@
                   "titleCommitAndPush": "Hacer commit de los cambios staged y push",
                   "commitForcePush": "Commit y Force Push",
                   "commitPush": "Commit y push",
-                  "titleOperationInProgress": "Operación en curso…",
                   "titleAbortRebaseInProgress": "Abortar el rebase en curso",
                   "titleAbortMergeInProgress": "Abortar el merge en curso",
                   "titleNothingToPushTo": "No hay nada para hacer push a {{upstreamName}}",
@@ -14129,10 +14146,8 @@
                   "titlePublishBranchFirst": "Publica la rama primero para sincronizar commits",
                   "titleUseForcePush": "Usa Commit y Force Push — el remoto solo tiene copias antiguas de commits locales",
                   "titleCommitThenPullPush": "Haz commit y luego pull y push",
-                  "rebaseFromNamedBase": "Rebase desde {{baseRef}}",
                   "rebaseFromBase": "Rebase desde la base",
                   "rebaseChooseRemoteBase": "Elige una rama base remota desde la que hacer rebase",
-                  "rebaseDirtyHint": "Intenta hacer rebase; git puede requerir hacer commit o stash de los cambios locales primero",
                   "rebaseWithLatestFrom": "Hacer rebase de la rama actual con los commits más recientes de {{baseRef}}",
                   "blockedCommitFirst": "Haz commit de los cambios primero",
                   "blockedCheckOutBranchFirst": "Haz checkout de una rama primero",
@@ -14145,7 +14160,13 @@
                   "blockedExistingReview": "Ya existe una solicitud de revisión ({{reviewLabel}})",
                   "blockedForkHeadUnsupported": "Head de fork no compatible",
                   "blockedBaseNotOnRemote": "La rama base no está en el remoto",
-                  "blockedBranchNotReady": "La rama no está lista"
+                  "blockedBranchNotReady": "La rama no está lista",
+                  "rebaseOntoNamedBase": "Hacer rebase sobre {{base}}",
+                  "rebaseCommitOrStashFirst": "Haz commit o stash de los cambios primero",
+                  "continueRebase": "Continuar rebase",
+                  "titleContinueRebase": "Continuar el rebase en pausa",
+                  "rebaseFromNamedBase": "Rebase desde {{baseRef}}",
+                  "rebaseDirtyHint": "Intenta hacer rebase; git puede requerir hacer commit o stash de los cambios locales primero"
                 }
               },
               "primary": {
@@ -14188,7 +14209,8 @@
                   "e9b5d1f470": "Haz checkout de una rama antes de crear una solicitud de revisión ({{value0}}).",
                   "f0c6e2a581": "Esta rama aún no está lista para una solicitud de revisión ({{value0}}).",
                   "8f9a0b1c2d": "No hay nada para hacer commit. La rama está actualizada.",
-                  "h3i4j5k607": "Comprobando si esta rama puede crear una solicitud de revisión ({{value0}})…"
+                  "h3i4j5k607": "Comprobando si esta rama puede crear una solicitud de revisión ({{value0}})…",
+                  "nothingToCommit": "Nada que confirmar"
                 }
               },
               "branch": {
@@ -18775,7 +18797,8 @@
         "thisComputer": "este equipo"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Para completar una fusión se necesita una versión más reciente de Orca en este host. Actualiza Orca en ese host."
+        "completeMergeNeedsNewerHost": "Para completar una fusión se necesita una versión más reciente de Orca en este host. Actualiza Orca en ese host.",
+        "continueRebaseNeedsNewerHost": "Continuar un rebase requiere un Orca más reciente en este host. Actualiza Orca en ese host."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Para resolver conflictos se necesita una versión más reciente de Orca en este host. Actualiza Orca en ese host."

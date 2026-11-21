@@ -13,7 +13,10 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
-import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type {
+  GitConflictOperation,
+  RebaseStopToken
+} from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import {
@@ -22,6 +25,27 @@ import {
   type CreatePrIntentRunToken
 } from '../review/create-pr-intent-flow'
 
+// `unsupported`: an older host without the probe, which callers treat as off.
+export type RebaseAutoStashSetting = boolean | 'unsupported' | null
+
+/**
+ * Orca's own rebase of this branch integrated this upstream tip, so the remote only holds old
+ * copies. done: just finished; active: a diverged reading has matched it. Mismatches retire it.
+ */
+export type OrcaRebaseMarker = {
+  branch: string
+  upstreamOid: string
+  state: 'done' | 'active'
+}
+
+/** The stop the panel last read; Continue sends it back so Git only continues what was shown. */
+export type RebaseStopReading = {
+  token: RebaseStopToken
+  branch: string | null
+  // Git found nothing to commit here, or paused for its own reason: Abort only.
+  continueBlocked: boolean
+}
+
 /** Everything Source Control tracks for one worktree copy; lives past panel/section unmounts. */
 export type WorktreeOperationRecord = {
   readonly draftKey: string
@@ -29,6 +53,13 @@ export type WorktreeOperationRecord = {
   commitError: string | null
   isCommitting: boolean
   isAbortingOperation: boolean
+  // Also holds isAbortingOperation so every conflict-operation gate covers Continue.
+  isContinuingRebase: boolean
+  // null until probed; Git refuses a rebase over tracked changes unless this is on.
+  rebaseAutoStash: RebaseAutoStashSetting
+  rebaseStop: RebaseStopReading | null
+  // Orca started this rebase; once done it hides Pull/Sync/Fast-forward, never enables a force path.
+  orcaRebase: OrcaRebaseMarker | null
   remoteActionError: SourceControlActionError | null
   remoteActionSequence: number
   generateInFlight: boolean
@@ -70,6 +101,10 @@ function createRecord(draftKey: string): WorktreeOperationRecord {
     commitError: null,
     isCommitting: false,
     isAbortingOperation: false,
+    isContinuingRebase: false,
+    rebaseAutoStash: null,
+    rebaseStop: null,
+    orcaRebase: null,
     remoteActionError: null,
     remoteActionSequence: 0,
     generateInFlight: false,

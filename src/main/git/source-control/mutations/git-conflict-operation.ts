@@ -71,3 +71,23 @@ export async function abortRebase(
     gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
   )
 }
+
+// Git 2.55 reworded "Applying autostash resulted in conflicts"; match both.
+export const AUTOSTASH_REAPPLY_CONFLICT =
+  /Applying autostash resulted in conflicts|local changes are stashed, however applying them\s+resulted in conflicts|could not apply autostash/i
+
+/** Git refuses to rebase over tracked changes unless rebase.autoStash is on. */
+export async function readRebaseAutoStash(
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
+): Promise<boolean> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['config', '--bool', '--get', '--default=false', 'rebase.autoStash'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
+}
