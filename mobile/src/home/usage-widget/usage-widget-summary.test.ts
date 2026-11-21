@@ -18,6 +18,22 @@ const claudeSnapshot = decodeAccountsSnapshot({
       status: 'ok'
     },
     codex: null,
+    grok: {
+      provider: 'grok',
+      session: null,
+      weekly: { usedPercent: 64, windowMinutes: 10080, resetsAt: 9000, resetDescription: null },
+      updatedAt: 1100,
+      error: null,
+      status: 'ok'
+    },
+    gemini: {
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: 1100,
+      error: null,
+      status: 'idle'
+    },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
   }
@@ -29,12 +45,12 @@ const hosts = [
 ]
 
 describe('buildUsageWidgetSummary', () => {
-  it('keeps an offline desktop’s last usage, drops unpaired ones, and stores no account identity', () => {
+  it('keeps an offline desktop’s last usage, drops unpaired ones and providers without usage, and stores no account identity', () => {
     const summary = buildUsageWidgetSummary({
       hosts,
       liveSnapshots: { studio: claudeSnapshot },
       previous: {
-        v: 1,
+        v: 2,
         display: 'used',
         hosts: [
           {
@@ -43,6 +59,7 @@ describe('buildUsageWidgetSummary', () => {
             providers: [
               {
                 provider: 'codex',
+                title: 'Codex',
                 updatedAt: 900,
                 session: { usedPercent: 10, resetsAt: null },
                 weekly: null
@@ -56,7 +73,7 @@ describe('buildUsageWidgetSummary', () => {
     })
 
     expect(summary).toEqual({
-      v: 1,
+      v: 2,
       display: 'remaining',
       hosts: [
         {
@@ -65,9 +82,17 @@ describe('buildUsageWidgetSummary', () => {
           providers: [
             {
               provider: 'claude',
+              title: 'Claude',
               updatedAt: 1000,
               session: { usedPercent: 42, resetsAt: 5000 },
               weekly: null
+            },
+            {
+              provider: 'grok',
+              title: 'Grok',
+              updatedAt: 1100,
+              session: null,
+              weekly: { usedPercent: 64, resetsAt: 9000 }
             }
           ]
         },
@@ -77,6 +102,7 @@ describe('buildUsageWidgetSummary', () => {
           providers: [
             {
               provider: 'codex',
+              title: 'Codex',
               updatedAt: 900,
               session: { usedPercent: 10, resetsAt: null },
               weekly: null

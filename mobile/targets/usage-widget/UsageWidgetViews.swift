@@ -56,14 +56,17 @@ struct UsageWidgetView: View {
   let entry: UsageWidgetEntry
 
   var body: some View {
-    if let summary = entry.summary, let host = summary.hosts.first, let updated = host.updatedDate {
-      let stale = entry.date.timeIntervalSince(updated) > usageWidgetStaleAfter
+    if let summary = entry.summary,
+      let content = summary.content(for: entry.configuration, family: family, at: entry.date)
+    {
+      let stale = entry.date.timeIntervalSince(content.updated) > usageWidgetStaleAfter
+      let remaining = summary.showsRemaining
       VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 8) {
         HStack(spacing: 6) {
-          Text(host.name).font(.caption.weight(.semibold)).lineLimit(1)
+          Text(content.host.name).font(.caption.weight(.semibold)).lineLimit(1)
           Spacer(minLength: 4)
           if family != .systemSmall {
-            updatedLabel(updated)
+            updatedLabel(content.updated)
             Link(destination: usageWidgetRefreshURL) {
               Image(systemName: "arrow.clockwise").font(.caption.weight(.semibold))
             }
@@ -71,16 +74,23 @@ struct UsageWidgetView: View {
           }
         }
         .foregroundStyle(UsageWidgetColors.secondary)
-        if family == .systemSmall {
-          ForEach(host.providers.prefix(2)) { provider in
-            UsageWidgetSmallRow(provider: provider, remaining: summary.showsRemaining, date: entry.date)
+        switch family {
+        case .systemSmall:
+          ForEach(content.providers) { provider in
+            UsageWidgetSmallRow(provider: provider, windows: content.windows, remaining: remaining, date: entry.date)
           }
           Spacer(minLength: 0)
-          updatedLabel(updated)
-        } else {
+          updatedLabel(content.updated)
+        case .systemLarge:
+          ForEach(content.providers) { provider in
+            UsageWidgetLargeRow(provider: provider, windows: content.windows, remaining: remaining, date: entry.date)
+          }
+          Spacer(minLength: 0)
+        default:
           HStack(alignment: .top, spacing: 14) {
-            ForEach(host.providers.prefix(2)) { provider in
-              UsageWidgetProviderColumn(provider: provider, remaining: summary.showsRemaining, date: entry.date)
+            ForEach(content.providers) { provider in
+              UsageWidgetProviderColumn(
+                provider: provider, windows: content.windows, remaining: remaining, date: entry.date)
             }
           }
           Spacer(minLength: 0)
@@ -124,58 +134,101 @@ struct UsageWidgetBar: View {
   }
 }
 
-/// Small: the 5-hour window, which runs out first.
+/// Small: one meter per agent, or the two windows side by side.
 struct UsageWidgetSmallRow: View {
   let provider: UsageWidgetProvider
+  let windows: [UsageWidgetWindowKind]
   let remaining: Bool
   let date: Date
 
   var body: some View {
-    let meter = UsageWidgetMeter(provider.session ?? provider.weekly, remaining: remaining, at: date)
-    VStack(alignment: .leading, spacing: 3) {
-      HStack(alignment: .firstTextBaseline) {
-        Text(provider.title).font(.caption).foregroundStyle(UsageWidgetColors.secondary)
-        Spacer(minLength: 4)
-        Text(meter.label(remaining: remaining))
-          .font(.subheadline.weight(.semibold).monospacedDigit())
-          .foregroundStyle(UsageWidgetColors.primary)
+    if let only = windows.first, windows.count == 1 {
+      let meter = UsageWidgetMeter(only.window(of: provider), remaining: remaining, at: date)
+      VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .firstTextBaseline) {
+          Text(provider.title).font(.caption).foregroundStyle(UsageWidgetColors.secondary).lineLimit(1)
+          Spacer(minLength: 4)
+          Text(meter.label(remaining: remaining))
+            .font(.subheadline.weight(.semibold).monospacedDigit())
+            .foregroundStyle(UsageWidgetColors.primary)
+        }
+        UsageWidgetBar(meter: meter)
       }
-      UsageWidgetBar(meter: meter)
+    } else {
+      VStack(alignment: .leading, spacing: 3) {
+        Text(provider.title).font(.caption).foregroundStyle(UsageWidgetColors.secondary).lineLimit(1)
+        HStack(alignment: .top, spacing: 8) {
+          ForEach(windows, id: \.self) { kind in
+            UsageWidgetWindowMeter(
+              kind: kind, window: kind.window(of: provider), remaining: remaining, date: date, showsReset: false)
+          }
+        }
+      }
     }
   }
 }
 
-/// Medium: both windows with their reset times.
+/// Medium: one column per agent with its windows and reset times.
 struct UsageWidgetProviderColumn: View {
   let provider: UsageWidgetProvider
+  let windows: [UsageWidgetWindowKind]
   let remaining: Bool
   let date: Date
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text(provider.title).font(.subheadline.weight(.semibold))
-        .foregroundStyle(UsageWidgetColors.primary)
-      windowRow(String(localized: "5h"), provider.session)
-      windowRow(String(localized: "7d"), provider.weekly)
+        .foregroundStyle(UsageWidgetColors.primary).lineLimit(1)
+      ForEach(windows, id: \.self) { kind in
+        UsageWidgetWindowMeter(kind: kind, window: kind.window(of: provider), remaining: remaining, date: date)
+      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
+}
 
-  private func windowRow(_ label: String, _ window: UsageWidgetWindow?) -> some View {
+/// Large: one row per agent, its windows side by side.
+struct UsageWidgetLargeRow: View {
+  let provider: UsageWidgetProvider
+  let windows: [UsageWidgetWindowKind]
+  let remaining: Bool
+  let date: Date
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 12) {
+      Text(provider.title).font(.subheadline.weight(.semibold))
+        .foregroundStyle(UsageWidgetColors.primary).lineLimit(1)
+        .frame(width: 84, alignment: .leading)
+      ForEach(windows, id: \.self) { kind in
+        UsageWidgetWindowMeter(kind: kind, window: kind.window(of: provider), remaining: remaining, date: date)
+      }
+    }
+  }
+}
+
+struct UsageWidgetWindowMeter: View {
+  let kind: UsageWidgetWindowKind
+  let window: UsageWidgetWindow?
+  let remaining: Bool
+  let date: Date
+  var showsReset = true
+
+  var body: some View {
     let meter = UsageWidgetMeter(window, remaining: remaining, at: date)
-    return VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: 2) {
       HStack(alignment: .firstTextBaseline) {
-        Text(label).font(.caption2).foregroundStyle(UsageWidgetColors.secondary)
+        Text(kind.label ?? "").font(.caption2).foregroundStyle(UsageWidgetColors.secondary)
         Spacer(minLength: 2)
         Text(meter.label(remaining: remaining))
           .font(.caption.weight(.semibold).monospacedDigit())
           .foregroundStyle(UsageWidgetColors.primary)
       }
       UsageWidgetBar(meter: meter)
-      if let reset = window?.resetDate, reset > date {
+      if showsReset, let reset = window?.resetDate, reset > date {
         Text(usageWidgetRelative(reset, to: date))
           .font(.caption2).foregroundStyle(UsageWidgetColors.secondary).lineLimit(1)
       }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }

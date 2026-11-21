@@ -1,8 +1,14 @@
 import * as z from 'zod'
 import type { UsagePercentageDisplay } from '../../../../src/shared/agent-usage/display/usage-percentage-display'
-import type { AccountsSnapshot, RateLimitWindow } from '../../accounts/accounts-snapshot'
+import { getProviderDisplayName } from '../../../../src/shared/agent-usage/display/usage-provider-windows'
+import type {
+  AccountsSnapshot,
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../accounts/accounts-snapshot'
 import {
   getActiveProviderRateLimits,
+  getOtherUsageProviders,
   hasRenderableUsage,
   type ProviderKey
 } from '../../accounts/usage/usage-selectors'
@@ -14,7 +20,7 @@ const UsageWidgetWindowSchema = z.object({
 })
 
 const UsageWidgetSummarySchema = z.object({
-  v: z.literal(1),
+  v: z.literal(2),
   display: z.enum(['used', 'remaining']),
   hosts: z.array(
     z.object({
@@ -22,7 +28,8 @@ const UsageWidgetSummarySchema = z.object({
       name: z.string(),
       providers: z.array(
         z.object({
-          provider: z.enum(['claude', 'codex']),
+          provider: z.string().min(1),
+          title: z.string(),
           updatedAt: z.number(),
           session: UsageWidgetWindowSchema.nullable(),
           weekly: UsageWidgetWindowSchema.nullable()
@@ -37,7 +44,7 @@ type UsageWidgetHost = UsageWidgetSummary['hosts'][number]
 type UsageWidgetProvider = UsageWidgetHost['providers'][number]
 type UsageWidgetWindow = z.infer<typeof UsageWidgetWindowSchema>
 
-const PROVIDERS: readonly ProviderKey[] = ['claude', 'codex']
+const ACCOUNT_PROVIDERS: readonly ProviderKey[] = ['claude', 'codex']
 
 function widgetWindow(window: RateLimitWindow | null): UsageWidgetWindow | null {
   return window ? { usedPercent: window.usedPercent, resetsAt: window.resetsAt } : null
@@ -45,15 +52,29 @@ function widgetWindow(window: RateLimitWindow | null): UsageWidgetWindow | null 
 
 // The active login's windows only: no emails, org names, or other accounts leave the app.
 function widgetProviders(snapshot: AccountsSnapshot): UsageWidgetProvider[] {
-  return PROVIDERS.flatMap((provider) => {
+  const accountProviders = ACCOUNT_PROVIDERS.flatMap((provider) => {
     const limits = getActiveProviderRateLimits(snapshot, provider)
-    if (!limits || !hasRenderableUsage(snapshot, provider) || limits.updatedAt <= 0) {
-      return []
-    }
-    const session = widgetWindow(limits.session)
-    const weekly = widgetWindow(limits.weekly)
-    return session || weekly ? [{ provider, updatedAt: limits.updatedAt, session, weekly }] : []
+    return limits && hasRenderableUsage(snapshot, provider) ? [limits] : []
   })
+  return [...accountProviders, ...getOtherUsageProviders(snapshot)].flatMap(widgetProvider)
+}
+
+// The widget shows the 5-hour and weekly windows, so a provider with neither is left out.
+function widgetProvider(limits: ProviderRateLimits): UsageWidgetProvider[] {
+  const session = widgetWindow(limits.session)
+  const weekly = widgetWindow(limits.weekly)
+  if (limits.updatedAt <= 0 || (!session && !weekly)) {
+    return []
+  }
+  return [
+    {
+      provider: limits.provider,
+      title: getProviderDisplayName(limits.provider),
+      updatedAt: limits.updatedAt,
+      session,
+      weekly
+    }
+  ]
 }
 
 /** Live snapshots replace a desktop's entry; a desktop that is offline keeps its last one until it is unpaired. */
@@ -69,7 +90,7 @@ export function buildUsageWidgetSummary(input: {
     const providers = snapshot ? widgetProviders(snapshot) : previousById.get(host.id)?.providers
     return providers && providers.length > 0 ? [{ id: host.id, name: host.name, providers }] : []
   })
-  return { v: 1, display: input.display, hosts }
+  return { v: 2, display: input.display, hosts }
 }
 
 export function parseUsageWidgetSummary(raw: string | null): UsageWidgetSummary | null {
