@@ -51,6 +51,8 @@ export function MobileBotGroupApprovalDock({
       </Pressable>
       {request.permission ? (
         <MobileNativeChatPermission
+          // One card per occurrence, as in the chat, so an accepted answer's hold ends with its prompt.
+          key={`${requestMember.sessionId}:${JSON.stringify({ ...request.permission, options: undefined })}`}
           permission={request.permission}
           onRespond={request.respondPermission}
           onCancel={request.cancelPrompt}

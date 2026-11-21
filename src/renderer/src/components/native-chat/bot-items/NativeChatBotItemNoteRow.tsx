@@ -227,7 +227,7 @@ function CommentRow({ line }: { line: BotItemNoteLine & { kind: 'comment' } }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
     <div className="flex flex-col items-end gap-1">
-      {line.images ? <BotItemCommentImages images={line.images} /> : null}
+      {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
         <ItemChip item={line.item} />

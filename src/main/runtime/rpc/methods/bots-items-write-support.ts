@@ -75,7 +75,7 @@ export async function writeResult(
   if (!record) {
     throw new BotItemError('not_found', 'The item is gone.')
   }
-  runtime.botItems.changed([record.ownerBotId])
+  runtime.botItems.changed([record])
   const [item] = await runtime.botItems.views([record])
   if (outcome.eventId !== null) {
     await noteBotItemWrite(store, writer.sessionId, record, outcome.eventId, item!.links)

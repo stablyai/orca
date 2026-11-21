@@ -79,7 +79,17 @@ function setup(value: string, caret = value.length, lookup: Lookup = listed) {
 function pick(
   inputRef: React.RefObject<NativeChatComposerInput | null>,
   draft: string,
-  { name = NORA.name, token = TOKEN, composing = false } = {}
+  {
+    name = NORA.name,
+    token = TOKEN,
+    composing = false,
+    mentionNameMatches
+  }: {
+    name?: string
+    token?: string
+    composing?: boolean
+    mentionNameMatches?: (query: string) => boolean
+  } = {}
 ) {
   const input = inputRef.current!
   const { result } = renderHook(() =>
@@ -93,6 +103,7 @@ function pick(
       recalledFromHistory: false,
       disabled: false,
       isComposing: () => composing,
+      mentionNameMatches,
       textareaRef: inputRef,
       setDraft: vi.fn(),
       setCaret: vi.fn(),
@@ -105,7 +116,7 @@ function pick(
 
 it('inserts a picked bot as one undoable pill and preserves the surrounding draft', async () => {
   const draft = 'ask @Eng to review'
-  const { input, inputRef, pills, pillNames, getByTestId, editor } = setup(draft, 'ask @Eng'.length)
+  const { input, inputRef, pills, pillNames, getByTestId } = setup(draft, 'ask @Eng'.length)
   pick(inputRef, draft)
 
   await pillNames([NORA.name])
@@ -113,10 +124,29 @@ it('inserts a picked bot as one undoable pill and preserves the surrounding draf
   expect(getByTestId('avatar')).toBeTruthy()
   expect(input.value).toBe(`ask ${TOKEN} to review`)
   expect(input.selectionStart).toBe(`ask ${TOKEN} `.length)
+})
+
+it('replaces the entire spaced name with a pill and restores that query on undo', async () => {
+  const { input, inputRef, pillNames, editor } = setup('ask @eng n after', 10)
+  pick(inputRef, 'ask @eng n after', { mentionNameMatches: (query) => query === 'eng n' })
+  expect(input.value).toBe('ask [Bot: Eng - Nora](bot:52fbc8b4-69a9-4cf9-89ef-72499d00c3d7) after')
+  await pillNames(['Eng - Nora'])
   act(() => {
     editor.commands.undo()
   })
-  expect(input.value).toBe(draft)
+  expect(input.value).toBe('ask @eng n after')
+})
+
+it('gives back the typed `@query` on undo, the pill going as one piece', async () => {
+  const { input, inputRef, pills, pillNames, editor } = setup('ask @Eng')
+  pick(inputRef, 'ask @Eng')
+  expect(input.value).toBe(`ask ${TOKEN} `)
+  await pillNames([NORA.name])
+
+  act(() => {
+    editor.commands.undo()
+  })
+  expect(input.value).toBe('ask @Eng')
   await pillNames([])
   expect(pills()).toEqual([])
 })
