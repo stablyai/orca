@@ -219,7 +219,10 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   }
 
   // Agent input moves Chromium focus into the guest; the pane restores the user's focus.
-  guardUserFocusForAgentInput(guestWebContentsId: number): Promise<() => void> {
+  guardUserFocusForAgentInput(
+    guestWebContentsId: number,
+    options?: { holdFocus?: boolean }
+  ): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (!browserPageId) {
       return Promise.reject(focusGuardUnavailableError('missing_page'))
@@ -228,7 +231,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     if (!renderer) {
       return Promise.reject(focusGuardUnavailableError('missing_renderer'))
     }
-    return guardPaneFocusForAgentInput(renderer, browserPageId)
+    return guardPaneFocusForAgentInput(renderer, browserPageId, options)
   }
 }
 

@@ -13,6 +13,7 @@ import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
 import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
+import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-media-arguments'
 
 const AgentBrowserDevice = z.object({
@@ -113,7 +114,14 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    const run = async (sessionName: string): Promise<unknown> => {
+    const run = async (
+      sessionName: string,
+      target: ResolvedBrowserCommandTarget
+    ): Promise<unknown> => {
+      // The helper's fill focuses the element it found.
+      if (action === 'fill') {
+        await this.refuseWhileUserComposes(this.requireTargetWebContents(target))
+      }
       const args = ['find', locator, value, action]
       if (text) {
         args.push(text)

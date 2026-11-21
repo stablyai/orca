@@ -158,9 +158,9 @@ export function registerBrowserStateIpcBridge(
     unsubs.push(unsubscribeAgentViewport)
   }
   const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
-    ({ browserPageId, token, active }) => {
+    ({ browserPageId, token, active, holdFocus }) => {
       if (active) {
-        const answer = beginAgentInputFocusGuard(browserPageId, token)
+        const answer = beginAgentInputFocusGuard(browserPageId, token, holdFocus !== false)
         window.api.browser.agentInputFocusGuardReady(token, answer === 'composing')
       } else {
         endAgentInputFocusGuard(token)

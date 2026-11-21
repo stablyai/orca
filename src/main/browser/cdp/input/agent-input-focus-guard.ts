@@ -40,9 +40,11 @@ function userComposingError(): BrowserError {
   )
 }
 
+/** `holdFocus: false` only asks whether the user composes, for input that never takes the window's focus. */
 export async function guardPaneFocusForAgentInput(
   renderer: WebContents,
-  browserPageId: string
+  browserPageId: string,
+  { holdFocus = true }: { holdFocus?: boolean } = {}
 ): Promise<() => void> {
   const token = randomUUID()
   const startedAt = performance.now()
@@ -65,7 +67,12 @@ export async function guardPaneFocusForAgentInput(
     }
     const timer = setTimeout(() => finish('unavailable'), PANE_READY_TIMEOUT_MS)
     ipcMain.on(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL, onReady)
-    renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, { browserPageId, token, active: true })
+    renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, {
+      browserPageId,
+      token,
+      active: true,
+      holdFocus
+    })
   })
   let released = false
   const release = (): void => {
