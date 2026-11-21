@@ -143,4 +143,16 @@ describe('mail held by a reattached idle agent', () => {
     expect(worker.alerts()).toEqual([])
     worker.db.close()
   })
+
+  it('reports the hold on a later recheck when storing the first report failed', async () => {
+    const worker = await reattachedIdleWorker({ repaint: ['unavailable'] })
+    worker.send('After a restart')
+    // The first report's transaction fails; nothing records it as sent.
+    vi.spyOn(worker.db, 'getTask').mockImplementationOnce(() => {
+      throw new Error('database is locked')
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(worker.alerts()).toHaveLength(1)
+    worker.db.close()
+  })
 })

@@ -8,22 +8,23 @@ import {
 /** Mail typed into a worker's terminal waits for its agent to paint after a reattach. Where its host
  *  cannot ask for that paint and nothing proves the retained frame, only the user can lift the hold,
  *  so the coordinator is told once per hold: `holdKey` names the reattach, and the report's stable
- *  id makes a second report of it a no-op. The worker's presence (its own rests) is left alone. */
+ *  id makes a second report of it a no-op. The worker's presence (its own rests) is left alone.
+ *  False only when the report could not be stored, so the next recheck tries again. */
 export function reportMailHeldWithoutPaint(
   db: OrchestrationDb,
   dispatchId: string,
   holdKey: string,
   deps: WorkerTurnStopReportDeps
-): void {
+): boolean {
   const dispatch = db.getDispatchContextById(dispatchId)
   if (
     !dispatch?.assignee_handle ||
     (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
     db.getFederatedDispatch(dispatchId)
   ) {
-    return
+    return true
   }
-  sendWorkerReport(
+  return sendWorkerReport(
     db,
     { kind: 'local', dispatch },
     { from: dispatch.assignee_handle, reason: 'mail-held', lastOutput: undefined },

@@ -157,11 +157,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     )) {
       const dispatchId = mailbox.startsWith('dispatch:') ? mailbox.slice('dispatch:'.length) : null
       if (dispatchId && !reported.has(dispatchId)) {
-        reported.add(dispatchId)
         // The process and the output count it reattached at name this hold: a later restart with no
         // output since is the same hold, one after output (a delivery) is a new one.
         const holdKey = `mail-held:${pty?.incarnationId ?? ptyId}:${this.reattachedProviderSequenceByPtyId.get(ptyId) ?? ''}`
-        reportMailHeldWithoutPaint(db, dispatchId, holdKey, this.workerTurnStopReportDeps)
+        if (reportMailHeldWithoutPaint(db, dispatchId, holdKey, this.workerTurnStopReportDeps)) {
+          reported.add(dispatchId)
+        }
       }
     }
   }
