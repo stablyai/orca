@@ -30,6 +30,18 @@ export const listNarrow = defineFixture({
   render: () => <Panel bot={base} />
 })
 
+/** Seeded Datadog MCP tool row alongside the connector list. */
+export const datadogToolRow = defineFixture({
+  width: 372,
+  setup: () =>
+    stub({
+      linearLinked: true,
+      composio: true,
+      owned: [{ name: 'datadog', detail: 'https://mcp.datadoghq.com/v1/mcp', remote: true }]
+    }),
+  render: () => <Panel bot={base} />
+})
+
 export const composioRowOpen = defineFixture({
   width: 372,
   setup: () => stub({ linearLinked: true, composio: true }),

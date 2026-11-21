@@ -5,6 +5,7 @@ import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
+import datadogDarkLogo from '@/assets/connector-brands/datadog-dark.svg'
 import gitlabLogo from '@/assets/connector-brands/gitlab.svg'
 import googleLogo from '@/assets/connector-brands/google.svg'
 import neonLogo from '@/assets/connector-brands/neon.svg'
@@ -46,7 +47,7 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   github: { Icon: GitHubIcon },
   vercel: { logo: vercelLogo, whiteMark: true },
   sentry: { logo: sentryLogo, whiteMark: true },
-  datadog: { logo: datadogLogo },
+  datadog: { logo: datadogLogo, darkLogo: datadogDarkLogo },
   posthog: { logo: posthogLogo, darkLogo: posthogDarkLogo },
   cloudflare: { logo: cloudflareLogo },
   supabase: { logo: supabaseLogo },
