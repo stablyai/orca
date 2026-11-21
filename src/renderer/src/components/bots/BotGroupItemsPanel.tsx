@@ -5,6 +5,7 @@ import { ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
+import { botRefKey } from '@/lib/bot-hosts'
 import { useNow } from '@/lib/window-activity/use-now'
 import type { Bot } from '../../../../shared/bot-types'
 import { botGroupSessionIds, type BotGroup } from '../../../../shared/bots/bot-group'
@@ -102,6 +103,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   const clock = useNow(60_000)
   const merged = useBotGroupItems(members, filter, clock)
   const facePictures = useBotGroupFacePictures()
+  useEffect(() => facePictures.retain(new Set(members.map(botRefKey))), [facePictures, members])
   const walk = useBotItemWalk(merged.list, `group:${group.id}`)
   const openItem = (uid: string): void => {
     setReturnTo(null)

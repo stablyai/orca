@@ -70,7 +70,7 @@ const skipped: ItemFieldEqual = () => true
 
 /** How each field compares when the version is unchanged. Only the item's own write bumps the version,
  *  so its long texts (which the row never shows) skip; of its links the row shows only whether one is
- *  live; joined parts (names, chat, the question) compare by value. Typed per field, so a new field
+ *  live; its question by its event; joined parts (names, chat) compare by value. Typed per field, so a new field
  *  needs a rule. */
 const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   uid: (a, b) => a.uid === b.uid,
@@ -82,7 +82,8 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   status: (a, b) => a.status === b.status,
   chat: (a, b) => structuralValuesEqual(a.chat, b.chat),
   madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
-  question: (a, b) => structuralValuesEqual(a.question, b.question),
+  // A question is one item event, which never changes once written.
+  question: (a, b) => a.question?.eventId === b.question?.eventId,
   closeNote: (a, b) => a.closeNote === b.closeNote,
   links: (a, b) => itemLive(a) === itemLive(b),
   version: (a, b) => a.version === b.version,

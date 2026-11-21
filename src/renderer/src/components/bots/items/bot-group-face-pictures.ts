@@ -40,6 +40,8 @@ export type BotGroupFacePictures = {
   open: () => void
   /** The panel closed: stop watching. */
   close: () => void
+  /** The group's members now (by botRefKey): pictures of others with no face drawn are let go. */
+  retain: (members: ReadonlySet<string>) => void
 }
 
 export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | null>(null)
@@ -171,6 +173,16 @@ function createFacePictures(): BotGroupFacePictures {
     },
     close: () => {
       closed = true
+      syncWatching()
+    },
+    retain: (members) => {
+      for (const [key, picture] of pictures) {
+        if (!members.has(key) && picture.faces.size === 0) {
+          pictures.delete(key)
+          handles.delete(key)
+          waiting.delete(picture)
+        }
+      }
       syncWatching()
     },
     faceOf: (bot, version) => {
