@@ -1,0 +1,27 @@
+{
+  "journal_retire_pending_head_epoch": {
+    "store": "chatDomain",
+    "why": "Queues retirement when any writer, including an older build, moves a chat to a new epoch.",
+    "sql": "CREATE TRIGGER journal_retire_pending_head_epoch AFTER UPDATE OF epoch ON journal_chat_state WHEN NEW.epoch IS NOT NULL AND NEW.epoch IS NOT OLD.epoch BEGIN INSERT INTO journal_retire_pending(session_id,generation) VALUES(NEW.session_id,1) ON CONFLICT(session_id) DO UPDATE SET generation=generation+1; END"
+  },
+  "journal_retire_pending_head_insert": {
+    "store": "chatDomain",
+    "why": "Queues retirement when any writer, including an older build, creates a chat head.",
+    "sql": "CREATE TRIGGER journal_retire_pending_head_insert AFTER INSERT ON journal_chat_state WHEN NEW.epoch IS NOT NULL BEGIN INSERT INTO journal_retire_pending(session_id,generation) VALUES(NEW.session_id,1) ON CONFLICT(session_id) DO UPDATE SET generation=generation+1; END"
+  },
+  "journal_retire_pending_item_epoch": {
+    "store": "chatDomain",
+    "why": "Queues retirement when any writer, including an older build, adds an item under a stale epoch.",
+    "sql": "CREATE TRIGGER journal_retire_pending_item_epoch AFTER INSERT ON journal_items WHEN EXISTS (SELECT 1 FROM journal_chat_state WHERE session_id=NEW.session_id AND epoch IS NOT NULL AND epoch IS NOT NEW.epoch) BEGIN INSERT INTO journal_retire_pending(session_id,generation) VALUES(NEW.session_id,1) ON CONFLICT(session_id) DO UPDATE SET generation=generation+1; END"
+  },
+  "journal_text_tail_removed": {
+    "store": "chatDomain",
+    "why": "Drops a text tail with its item. Tail writes stay off until every floor build folds tails.",
+    "sql": "CREATE TRIGGER journal_text_tail_removed AFTER DELETE ON journal_items BEGIN DELETE FROM journal_text_tail WHERE session_id=OLD.session_id AND epoch=OLD.epoch AND item_id=OLD.item_id; END"
+  },
+  "journal_text_tail_rewritten": {
+    "store": "chatDomain",
+    "why": "Drops a text tail whose item payload was rewritten. Tail writes stay off until every floor build folds tails.",
+    "sql": "CREATE TRIGGER journal_text_tail_rewritten AFTER UPDATE OF payload_json ON journal_items BEGIN DELETE FROM journal_text_tail WHERE session_id=OLD.session_id AND epoch=OLD.epoch AND item_id=OLD.item_id; END"
+  }
+}
