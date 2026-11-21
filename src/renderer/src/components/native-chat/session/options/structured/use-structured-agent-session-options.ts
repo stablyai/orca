@@ -17,6 +17,9 @@ import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
 import { useNativeChatCliUpdate } from '../../../host-access/native-chat-cli-update'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
+import { useStructuredAgentSessionModelDefault } from './use-structured-agent-session-model-default'
+import { AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { useStructuredAgentSessionHostCapability } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
@@ -66,6 +69,14 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   })
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
+  // Default needs a chat the host already holds; before that, a pick is held for the launch.
+  const offersDefault =
+    useStructuredAgentSessionHostCapability(
+      target,
+      AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY
+    ) &&
+    transportEnabled &&
+    fence !== null
 
   const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
@@ -78,7 +89,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     lockSnapshotRef.current = lockSnapshot
   })
   const renderedView = optionView(optionState, launchSeedOptions, launch?.explicitOptions)
-  const optionSnapshot = structuredAgentSessionOptionAvailability({
+  const availableSnapshot = structuredAgentSessionOptionAvailability({
     controller,
     view: renderedView,
     snapshot: lockSnapshot(structuredAgentSessionShownSnapshot(renderedView)),
@@ -86,6 +97,13 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     providerStarting,
     isCurrentContext
   })
+  const optionSnapshot = offersDefault
+    ? availableSnapshot.map((descriptor) =>
+        descriptor.id === 'model'
+          ? { ...descriptor, defaultChoice: { selected: renderedView.modelDefault === true } }
+          : descriptor
+      )
+    : availableSnapshot
   const modelOption = optionSnapshot.find((row) => row.id === 'model')
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,
@@ -160,6 +178,18 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
+  const resetModel = useStructuredAgentSessionModelDefault({
+    agent,
+    target,
+    mutate: args.mutate,
+    source: {
+      controller,
+      activeOptionRecordRef,
+      isCurrentContext,
+      updateOptionState,
+      rereadOptions
+    }
+  })
   const { demandModelCatalog } = hostCatalog
   // The updated CLI lists the models it was too old for.
   const cliUpdate = useNativeChatCliUpdate(target, agent, demandModelCatalog)
@@ -171,6 +201,16 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const openCliUpdateFailure = cliUpdate?.openFailure
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
+      ...(offersDefault
+        ? {
+            resetOption: async (id: string) => {
+              if (id === 'model' && acceptsPicks) {
+                await resetModel()
+              }
+              return { snapshot: optionSnapshot }
+            }
+          }
+        : {}),
       getSnapshot: () => optionSnapshot,
       demandModelCatalog,
       ...(cliUpdateAgent && cliUpdateModels && startCliUpdate && openCliUpdateFailure
@@ -195,6 +235,9 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       optionSnapshot,
       demandModelCatalog,
       writer,
+      offersDefault,
+      acceptsPicks,
+      resetModel,
       cliUpdateAgent,
       cliUpdateModels,
       cliUpdateRunnable,

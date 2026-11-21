@@ -53,6 +53,7 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
 import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
+import { resetStructuredAgentSessionModel } from '../options/structured-agent-session-model-default'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 import { applyStructuredAgentSessionPermissionPick } from '../options/structured-agent-session-live-permission'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
@@ -228,9 +229,10 @@ export function respondToStructuredAgentSessionPrompt(
 export async function setStructuredAgentSessionOption(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
+  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string | null }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
   const plan = setOptionPlan(params)
+  const { key, value } = params
   const noChoice =
     caller.readsOptionsWithoutModel === false && params.key === 'model' && params.value === ''
   return mutateStructuredAgentSession(
@@ -241,16 +243,21 @@ export async function setStructuredAgentSessionOption(
       ...plan,
       conversationWrite: true,
       run: async (ctx) => {
-        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
+        if (value === null) {
+          const hasChild = Boolean(context.sessions.get(ctx.sessionId)?.child)
+          return resetStructuredAgentSessionModel(context.deps, ctx, hasChild)
+        }
+        const input = { key, value }
+        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, input, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
-        if (picked.ok && params.key === 'model' && params.value) {
+        if (picked.ok && key === 'model' && value) {
           context.deps.adapter.noteModelPick?.({ sessionId: ctx.sessionId, fence: ctx.fence })
         }
-        if (picked.ok && params.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+        if (picked.ok && key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
           applyStructuredAgentSessionPermissionPick(context, ctx)
         } else if (picked.ok) {
-          const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, params)
+          const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, input)
           context.trackProviderOperation?.(confirming)
           void confirming.catch((error) => {
             ctx.logger.warn('confirming idle session metadata failed', {

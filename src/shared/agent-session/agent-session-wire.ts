@@ -382,7 +382,9 @@ export type AgentSessionPromptResult = {
 
 export type AgentSessionOptionResult = {
   key: string
-  value: string
+  /** Null when the model went back to the agent's default. */
+  value: string | null
+  modelDefault?: boolean
   /** Full effective next-turn values when the provider reconciled related options. */
   options?: Record<string, string>
 }
