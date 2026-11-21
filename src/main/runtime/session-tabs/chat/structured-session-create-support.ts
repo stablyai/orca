@@ -25,6 +25,7 @@ import { structuredAgentChatProgramNeedsInstall } from '../../agent-session/laun
 import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../agent-session/installation/structured-agent-session-host-refusal'
+import { startupOpenLeftChats } from '../../agent-session/records/local-agent-session-record-store-startup-open'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { isFloatingWorkspaceSelector } from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -303,7 +304,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
     const startup = this.structuredAgentSessionStartupOpen
     this.structuredAgentSessionStartupOpen = undefined
-    if (!(startup ? startup.persisted : this.hasPersistedStructuredAgentSessionStore())) {
+    const persisted = () => this.hasPersistedStructuredAgentSessionStore()
+    if (!(startup ? await startupOpenLeftChats(startup, persisted) : persisted())) {
       return
     }
     // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.

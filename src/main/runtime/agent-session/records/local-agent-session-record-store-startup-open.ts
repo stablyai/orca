@@ -8,14 +8,15 @@ import {
 import {
   hasPersistedStructuredAgentSessionStore,
   openAgentSessionRecordStoreOnce,
-  type AgentSessionRecordStoreLocation
+  type AgentSessionRecordStoreLocation,
+  type OpenedAgentSessionRecordStore
 } from './agent-session-record-store-slot'
 
 /** One startup's saved-chat probe and open attempt; startup restoration consumes it once. */
 export type AgentSessionRecordStoreStartupOpen = {
   legacySessionTabIds: readonly string[]
   persisted: boolean
-  opened: Promise<unknown> | null
+  opened: Promise<OpenedAgentSessionRecordStore> | null
 }
 
 export function localAgentSessionRecordStoreLocation(
@@ -43,4 +44,16 @@ export function startLocalAgentSessionRecordStoreOpen(
   // Restoration reads the outcome; the open already logs and records its own refusal.
   opened.catch(() => {})
   return { legacySessionTabIds, persisted: true, opened }
+}
+
+/** Whether the startup open left a chat to host: taking in only an older Orca's writes can leave none. */
+export async function startupOpenLeftChats(
+  startup: AgentSessionRecordStoreStartupOpen,
+  persisted: () => boolean
+): Promise<boolean> {
+  if (!startup.persisted) {
+    return false
+  }
+  const opened = await startup.opened?.catch(() => null)
+  return opened?.store.holdsRecords() !== false || persisted()
 }
