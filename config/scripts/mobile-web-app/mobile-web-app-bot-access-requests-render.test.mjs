@@ -221,6 +221,8 @@ async function openSettings(capabilities) {
   await openMobileBotSheet(opened.page, BOT.name)
   await opened.page.click('[data-testid="bot-sheet-tab-settings"]')
   await waitForText(opened.page, 'Needs permission')
+  // Requests are on Settings' Who can ask page, as on the desktop.
+  await opened.page.getByRole('button', { name: /^Who can ask, / }).click()
   return opened
 }
 
