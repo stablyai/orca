@@ -245,6 +245,7 @@ async function pasteResolvedDropPaths(
   }
   const writeResult = await writeTerminalDropPathsToCapturedTarget({
     dropTarget: args.dropTarget,
+    tabId: args.tabId,
     manager: args.manager,
     paneTransports: args.paneTransports,
     paths: args.paths,

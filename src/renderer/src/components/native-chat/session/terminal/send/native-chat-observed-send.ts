@@ -18,7 +18,8 @@ export type NativeChatObservedWrite = {
 export function sendNativeChatObservedWrites(
   ptyId: string,
   writes: readonly NativeChatObservedWrite[],
-  options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
+  options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number },
+  prepareWrites?: (signal: AbortSignal) => Promise<readonly NativeChatObservedWrite[]>
 ) {
   // Dismiss answer cards only after provider acknowledgment.
   const writeOptions = options.onDeliverySettled
@@ -29,7 +30,7 @@ export function sendNativeChatObservedWrites(
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
       clearConfirmDurationMs(options) +
       (options.settleDelayMs ?? 0),
-    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
+    ({ isCancelled, signal, delay, markSubmitted, markWriteStarted }) => {
       let reportedUnconfirmed = false
       let acknowledged = true
       let lineWasEmpty = false
@@ -43,6 +44,15 @@ export function sendNativeChatObservedWrites(
               submit: send
             })
           : send()
+      const refuseSuccessor = (index: number): boolean => {
+        if (options.isCurrent?.() !== false) {
+          return false
+        }
+        options.onWriteRejected?.()
+        options.onDeliverySettled?.(false)
+        markSubmitted(index === 0 ? 'not-submitted' : 'uncertain')
+        return true
+      }
       const writeAt = (index: number): void => {
         if (isCancelled()) {
           return
@@ -60,8 +70,11 @@ export function sendNativeChatObservedWrites(
           }
           return
         }
+        if (refuseSuccessor(index)) {
+          return
+        }
         const send = (): void => {
-          if (isCancelled()) {
+          if (isCancelled() || refuseSuccessor(index)) {
             return
           }
           markWriteStarted()
@@ -102,16 +115,39 @@ export function sendNativeChatObservedWrites(
           whenReady(write, send)
         }
       }
-      clearThenWrite(
-        ptyId,
-        options,
-        delay,
-        () => {
-          lineWasEmpty = readNativeChatInputLine(options.readInputLine) === ''
-          writeAt(0)
-        },
-        () => markSubmitted('not-submitted')
-      )
+      const begin = (): void => {
+        if (isCancelled()) {
+          return
+        }
+        clearThenWrite(
+          ptyId,
+          options,
+          delay,
+          () => {
+            lineWasEmpty = readNativeChatInputLine(options.readInputLine) === ''
+            writeAt(0)
+          },
+          () => markSubmitted('not-submitted')
+        )
+      }
+      if (prepareWrites) {
+        void prepareWrites(signal).then(
+          (prepared) => {
+            writes = prepared
+            begin()
+          },
+          () => {
+            if (isCancelled()) {
+              return
+            }
+            options.onWriteRejected?.()
+            options.onDeliverySettled?.(false)
+            markSubmitted('not-submitted')
+          }
+        )
+      } else {
+        begin()
+      }
     },
     { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
   )

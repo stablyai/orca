@@ -70,3 +70,84 @@ export function agentImagePasteWrites(
     separateImagePasteFromFollowingText(paste, index < framedPastes.length - 1 || followedByText)
   )
 }
+
+/** Keep a resized attachment associated with the file the user selected. */
+export function agentImageSourceContext(
+  original: readonly string[],
+  delivered: readonly string[]
+): string {
+  if (!original.some((path, index) => delivered[index] && delivered[index] !== path)) {
+    return ''
+  }
+  const sources = original.map(
+    (path, index) =>
+      `Image source file: ${JSON.stringify(path)}; attached viewing copy: ${JSON.stringify(delivered[index] ?? path)}`
+  )
+  return sources.length ? `[${sources.join('\n')}]` : ''
+}
+
+export function agentImageDeliveryText(
+  text: string,
+  original: readonly string[],
+  delivered: readonly string[]
+): string {
+  const context = agentImageSourceContext(original, delivered)
+  return context ? `${text}${text.trim() ? '\n\n' : ''}${context}` : text
+}
+
+export type AgentImageSourceContextRange = {
+  start: number
+  end: number
+  original: string[]
+  delivered: string[]
+}
+
+export function* agentImageSourceContexts(text: string): Generator<AgentImageSourceContextRange> {
+  const pattern =
+    /Image source file: ("(?:[^"\\]|\\.)*"); attached viewing copy: ("(?:[^"\\]|\\.)*")/g
+  let start = -1
+  let cursor = 0
+  let original: string[] = []
+  let delivered: string[] = []
+  for (const match of text.matchAll(pattern)) {
+    if (text[match.index - 1] === '[') {
+      start = match.index - 1
+      original = []
+      delivered = []
+    } else if (start === -1 || text.slice(cursor, match.index).trim()) {
+      start = -1
+      continue
+    }
+    try {
+      original.push(JSON.parse(match[1]))
+      delivered.push(JSON.parse(match[2]))
+    } catch {
+      start = -1
+      continue
+    }
+    cursor = match.index + match[0].length
+    if (text[cursor] === ']') {
+      yield { start, end: cursor + 1, original, delivered }
+      start = -1
+    }
+  }
+}
+
+export function readAgentImageSourceContext(text: string): {
+  text: string
+  original: string[]
+  delivered: string[]
+} {
+  if (text.endsWith(']')) {
+    for (const context of agentImageSourceContexts(text)) {
+      if (context.end === text.length) {
+        return {
+          text: text.slice(0, context.start).trimEnd(),
+          original: context.original,
+          delivered: context.delivered
+        }
+      }
+    }
+  }
+  return { text, original: [], delivered: [] }
+}

@@ -245,6 +245,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
+      paneKey,
       draftScopeKey,
       ...ptyCommandRouting,
       draft,

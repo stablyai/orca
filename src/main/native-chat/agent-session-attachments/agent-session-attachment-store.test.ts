@@ -1,6 +1,6 @@
-import { mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
@@ -78,4 +78,25 @@ describe('AgentSessionAttachmentStore', () => {
     await symlink(outside, stored.path)
     await expect(store.readPreview(stored.path)).rejects.toThrow('Not an attachment image')
   })
+})
+
+it('previews a committed viewing copy under its upload and refuses a copy symlink escape', async () => {
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=',
+    'base64'
+  )
+  const stored = await upload('shot.png', png)
+  const folder = join(dirname(stored.path), '.agent-images')
+  await mkdir(folder)
+  const copy = join(folder, `v2-${'a'.repeat(64)}.png`)
+  await writeFile(copy, png)
+  await expect(store.readPreview(copy)).resolves.toMatchObject({
+    isImage: true,
+    content: png.toString('base64')
+  })
+  const outside = join(root, 'outside.png')
+  await writeFile(outside, png)
+  await rm(copy)
+  await symlink(outside, copy)
+  await expect(store.readPreview(copy)).rejects.toThrow('Not an attachment image')
 })

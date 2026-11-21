@@ -96,19 +96,17 @@ export function retireLandedMobileNativeChatPending(
   current: MobileNativeChatPendingMessage[],
   landedImagePendingIds: ReadonlySet<string>
 ): MobileNativeChatPendingMessage[] {
-  const kept = new Set(prunePendingSends(current, messages))
+  const kept = new Set(prunePendingSends(current, messages).map((item) => item.id))
   let changed = false
   const next = current.flatMap((item) => {
     if (landedImagePendingIds.has(item.id)) {
-      changed = true
-      // The preview now lives on its row; a caption stays a plain send so it can retire with glued neighbours.
-      if (!kept.has(item) || nativeChatPendingContentKey(item) === 'empty') {
+      if (!kept.has(item.id) || nativeChatPendingContentKey(item) === 'empty') {
+        changed = true
         return []
       }
-      const { images: _bound, ...caption } = item
-      return [caption]
+      return [item]
     }
-    if (kept.has(item) || item.images?.length) {
+    if (kept.has(item.id) || item.images?.length) {
       return [item]
     }
     changed = true
@@ -119,9 +117,13 @@ export function retireLandedMobileNativeChatPending(
 
 export function visibleMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
-  current: MobileNativeChatPendingMessage[]
+  current: MobileNativeChatPendingMessage[],
+  landedImagePendingIds: ReadonlySet<string> = new Set()
 ): MobileNativeChatPendingMessage[] {
   const visible = new Set(visibleNativeChatPendingSends(current, messages))
-  const next = current.filter((item) => visible.has(item) || Boolean(item.images?.length))
+  const next = current.filter(
+    (item) =>
+      visible.has(item) || (Boolean(item.images?.length) && !landedImagePendingIds.has(item.id))
+  )
   return next.length === current.length ? current : next
 }

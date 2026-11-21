@@ -1,9 +1,25 @@
 import { mkdtemp, mkdir, realpath, rm, symlink, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type * as FileSystem from 'node:fs/promises'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+
+const homeProbe = vi.hoisted((): { wait: Promise<void> | null } => ({ wait: null }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileSystem>()
+  return {
+    ...actual,
+    realpath: async (filePath: string) => {
+      const result = await actual.realpath(filePath)
+      if (homeProbe.wait) {
+        await homeProbe.wait
+      }
+      return result
+    }
+  }
+})
 
 import {
   getFloatingWorkspaceFileRoots,
@@ -58,12 +74,43 @@ describe('floating workspace directory', () => {
   })
 
   afterEach(async () => {
+    homeProbe.wait = null
     await rm(tempRoot, { recursive: true, force: true })
   })
 
   async function symlinkDirectory(target: string, linkPath: string): Promise<void> {
     await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
   }
+
+  it.each(['unchanged', 'revoked', 'replaced', 'cleared', 'whitespace', 'home-changed'])(
+    'uses current floating trust after home resolution: %s',
+    async (change) => {
+      const approved = path.join(tempRoot, 'approved')
+      const store = createStore({
+        floatingTerminalCwd: approved,
+        floatingTerminalTrustedCwds: [approved, await realpath(homeDir)]
+      })
+      let release = () => {}
+      homeProbe.wait = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const pending = getFloatingWorkspaceFileRoots(store)
+      if (change === 'revoked') {
+        store.updateSettings({ floatingTerminalTrustedCwds: [] })
+      }
+      if (change === 'replaced') {
+        store.updateSettings({ floatingTerminalCwd: path.join(tempRoot, 'other') })
+      }
+      if (change === 'cleared' || change === 'whitespace') {
+        store.updateSettings({ floatingTerminalCwd: change === 'cleared' ? '' : '  ' })
+      }
+      if (change === 'home-changed') {
+        homeDir = path.join(tempRoot, 'new-home')
+      }
+      release()
+      expect((await pending).exactRoots).toEqual(change === 'unchanged' ? [approved] : [])
+    }
+  )
 
   it('stores a symlinked choice as its canonical target and rejects the link after retargeting', async () => {
     const store = createStore()
@@ -109,6 +156,6 @@ describe('floating workspace directory', () => {
     const canonicalElsewhere = await realpath(elsewhere)
     expect(store.settings.floatingTerminalTrustedCwds).not.toContain(canonicalElsewhere)
     store.settings = { ...store.settings, floatingTerminalCwd: canonicalElsewhere }
-    expect(getFloatingWorkspaceFileRoots(store).exactRoots).toEqual([])
+    expect((await getFloatingWorkspaceFileRoots(store)).exactRoots).toEqual([])
   })
 })

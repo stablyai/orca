@@ -124,11 +124,10 @@ export function sendNativeChatTypedCommand(
   /** A seeded draft's clear, confirmed like a message send's; the command's own Ctrl+U reaches one line. */
   options?: Pick<NativeChatSendOptions, 'clearInput' | 'readInputLine'>
 ): NativeChatSendHandle {
-  const controller = new AbortController()
   return enqueueNativeChatPtySend(
     ptyId,
     (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS + clearConfirmDurationMs(options),
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, signal, delay, markSubmitted, markWriteStarted }) => {
       const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
         if (!isCancelled() && outcome !== 'accepted') {
           clearUnsubmittedAgentInput(ptyId)
@@ -144,11 +143,12 @@ export function sendNativeChatTypedCommand(
       const typeCommand = (): void => {
         void typeAgentTuiCommand({
           command,
-          signal: controller.signal,
+          signal,
           write: async (key) => {
             if (isCancelled()) {
               return 'rejected'
             }
+            markWriteStarted()
             return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
               ? 'accepted'
               : 'rejected'
@@ -163,7 +163,6 @@ export function sendNativeChatTypedCommand(
     },
     {
       onCancelUnsubmitted: () => {
-        controller.abort()
         clearUnsubmittedAgentInput(ptyId)
       }
     }

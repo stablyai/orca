@@ -11,7 +11,10 @@ import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
 } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
-import { nativeChatPendingOccurrence } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-occurrence'
+import {
+  nativeChatPendingContentKey,
+  nativeChatPendingOccurrence
+} from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-occurrence'
 import type { NativeChatPendingSend } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 
 export type UnconfirmedSend = {
@@ -147,11 +150,15 @@ export function findLandedImagePreviewEchoes(
       continue
     }
     const targetText = normalizeNativeChatUserText(entry.text)
+    const grouped = nativeChatPendingContentKey(entry).includes('\0attachments:')
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user') {
         return false
       }
       if (targetText) {
+        if (grouped && message.blocks.filter(isImageRefBlock).length !== entry.images!.length) {
+          return false
+        }
         const text = normalizedNativeChatUserMessageText(message)
         if (text === null) {
           return false
