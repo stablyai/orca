@@ -279,8 +279,9 @@ export function reserveGroupMailTurn(
   groups.changed()
 }
 
-/** The group operation a member is running as it starts a worker, read from its live turn. */
-export async function captureGroupWorkerOperation(
+/** The group operation a member is running now (as it starts a worker or answers a peer), read
+ *  from its live turn. */
+export async function liveGroupOperation(
   groups: BotGroupRuntime,
   sessionId: string
 ): Promise<string | null> {
