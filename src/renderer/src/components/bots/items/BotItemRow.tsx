@@ -21,7 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botItemQuestionLine } from '../../../../../shared/bots/bot-item-ask'
-import { isJsonRecord, jsonEqual } from '../../../../../shared/json-equal'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import { BotRowHoverCard } from '../BotPanelRow'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
 import { BotItemRowFace } from './BotItemRowFace'
@@ -30,16 +30,40 @@ import { BOT_ITEM_ROW_ACTION_OVERLAY } from './bot-item-row-hover-actions'
 import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
+type BotItemRowProps = {
+  item: BotItem
+  stale: boolean
+  /** In the Snoozed group: grey like Stale, its wake time where the age goes. */
+  snoozed?: boolean
+  snoozing: BotItemSnoozing
+  unseen: boolean
+  selected: boolean
+  /** Some row is checked: every row shows its checkbox. */
+  selecting: boolean
+  now: number
+  onSelect: (item: BotItem, selected: boolean, range: boolean) => void
+  onAction: (item: BotItem, action: BotItemRowAction) => void
+  /** Its bot, in a group's merged list. */
+  face?: Bot | null
+  /** Its chat's name, when the list shows chats beyond the one it is about. */
+  place?: string | null
+  /** In the Tab order: a long group keeps one row there and moves between rows with arrows. */
+  tabbable?: boolean
+  /** Announced as a list item itself; false when its window's slot is the item. */
+  listItem?: boolean
+}
+
 /** The item compares by value, as a fresh host read decodes it anew; every other prop by identity. */
-function sameRowProps<P extends { item: BotItem }>(prev: Readonly<P>, next: Readonly<P>): boolean {
-  if (!isJsonRecord(prev) || !isJsonRecord(next)) {
-    return false
-  }
-  const keys = Object.keys(next)
+function sameRowProps(prev: BotItemRowProps, next: BotItemRowProps): boolean {
+  const before: Readonly<Record<string, unknown>> = prev
+  const after: Readonly<Record<string, unknown>> = next
+  const keys = Object.keys(after)
   return (
-    keys.length === Object.keys(prev).length &&
+    keys.length === Object.keys(before).length &&
     keys.every((key) =>
-      key === 'item' ? jsonEqual(prev.item, next.item) : Object.is(prev[key], next[key])
+      key === 'item'
+        ? structuralValuesEqual(prev.item, next.item)
+        : Object.is(before[key], after[key])
     )
   )
 }
@@ -61,28 +85,7 @@ function BotItemRowView({
   place = null,
   tabbable = true,
   listItem = true
-}: {
-  item: BotItem
-  stale: boolean
-  /** In the Snoozed group: grey like Stale, its wake time where the age goes. */
-  snoozed?: boolean
-  snoozing: BotItemSnoozing
-  unseen: boolean
-  selected: boolean
-  /** Some row is checked: every row shows its checkbox. */
-  selecting: boolean
-  now: number
-  onSelect: (item: BotItem, selected: boolean, range: boolean) => void
-  onAction: (item: BotItem, action: BotItemRowAction) => void
-  /** Its bot, in a group's merged list. */
-  face?: Bot | null
-  /** Its chat's name, when the list shows chats beyond the one it is about. */
-  place?: string | null
-  /** In the Tab order: a long group keeps one row there and moves between rows with arrows. */
-  tabbable?: boolean
-  /** Announced as a list item itself; false when its window's slot is the item. */
-  listItem?: boolean
-}): React.JSX.Element {
+}: BotItemRowProps): React.JSX.Element {
   const t = useTranslate()
   const closed = item.status === 'done' || item.status === 'canceled'
   const doneLabel = t('bots.items.row.done', 'Done')
