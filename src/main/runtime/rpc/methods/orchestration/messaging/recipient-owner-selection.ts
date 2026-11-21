@@ -17,7 +17,21 @@ export function selectBareRecipientOwner(params: {
   const boundRun = boundRuns.find((run) => run.id === addressedRunId) ?? boundRuns[0]
   if (boundRun) {
     const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }
+    // A default check reads only the newest bound Run.
+    const check =
+      boundRun === boundRuns[0] ? 'orchestration check' : `orchestration check --run ${boundRun.id}`
+    return (
+      mismatch ?? {
+        ok: true,
+        to: `run:${boundRun.id}`,
+        runId: boundRun.id,
+        warning: {
+          code: 'recipient_run_bound_redirect',
+          recipient: handle,
+          message: `${handle} coordinates Run ${boundRun.id}; queued for run:${boundRun.id}, the mailbox its ${check} reads.`
+        }
+      }
+    )
   }
 
   const dispatches = params.dispatches()
