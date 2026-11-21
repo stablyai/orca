@@ -37,8 +37,7 @@ const localClaudeUpdate = new Map<string, AgentCliUpdateHost>([
 function openWith(runtimeEnvironments: { id: string; name: string }[]): void {
   store.state = {
     agentCliUpdates: localClaudeUpdate,
-    runtimeEnvironments,
-    checkAgentCliUpdates: async () => {}
+    runtimeEnvironments
   }
   render(
     <TooltipProvider>
