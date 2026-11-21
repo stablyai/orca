@@ -43,6 +43,7 @@ import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 import { NativeChatHardBreakParagraphs } from './native-chat-hard-break-paragraphs'
+import { NativeChatPromptDirection } from './native-chat-prompt-direction'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 import { useNativeChatPromptEditorHandle } from '../../native-chat-prompt-editor-handle'
@@ -108,6 +109,7 @@ function NativePromptEditor({
       ...nativeChatPromptPills,
       NativeChatUnkernedRunDecorations,
       NativeChatHardBreakParagraphs,
+      NativeChatPromptDirection,
       // A disabled box still says why it is disabled, as the plain text box's placeholder does.
       Placeholder.configure({
         placeholder: ({ editor }) => {

@@ -14,6 +14,7 @@ import CommentMarkdown, {
 } from '@/components/comment-markdown/CommentMarkdown'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { markdownBlockDirection } from '@/components/comment-markdown/markdown-text-direction'
 import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
@@ -114,10 +115,22 @@ function containsImage(children: ReactNode): boolean {
 // The chat's own text blocks: list items take the paragraphs' line height (the shared comment
 // renderer gives them leading-relaxed), 10px between blocks and 3px between items at 13px.
 const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] = {
-  p: ({ children }) => <p className="my-2.5 first:mt-0 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="my-2.5 ml-5 list-disc space-y-0.75">{children}</ul>,
-  ol: ({ children, start }) => (
-    <ol start={start} className="my-2.5 ml-5 list-decimal space-y-0.75">
+  p: ({ node, children }) => (
+    <p dir={markdownBlockDirection(node)} className="my-2.5 first:mt-0 last:mb-0">
+      {children}
+    </p>
+  ),
+  ul: ({ node, children }) => (
+    <ul dir={markdownBlockDirection(node)} className="my-2.5 ms-5 list-disc space-y-0.75">
+      {children}
+    </ul>
+  ),
+  ol: ({ node, children, start }) => (
+    <ol
+      dir={markdownBlockDirection(node)}
+      start={start}
+      className="my-2.5 ms-5 list-decimal space-y-0.75"
+    >
       {children}
     </ol>
   ),
