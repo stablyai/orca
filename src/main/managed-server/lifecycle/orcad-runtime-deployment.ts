@@ -140,13 +140,15 @@ export async function createManagedOrcadEnvironment(
       }
       // Read the bound port: the preferred port may belong to another host process.
       const tunnel = deployedOrcadTunnelChecks(serving.readiness, serving.reprobe)
+      // Version GC needs only the activated slot, so it runs while the tunnel logs in and pairs.
+      const pruning = serving.prune?.()
       const localPort = await startOrcadManagedTunnel(
         environmentId,
         claimed,
         connection,
         tunnel.remotePort,
         { ...tunnel, preferredPort: ORCAD_MANAGED_REMOTE_PORT }
-      )
+      ).finally(() => pruning)
       const environment = await addManagedOrcadEnvironment(userDataPath, {
         id: environmentId,
         name: args.name,
@@ -172,7 +174,11 @@ export async function createManagedOrcadEnvironment(
   })
 }
 
-type DeployedOrcad = OrcadRunningAdoption & { created?: true }
+type DeployedOrcad = OrcadRunningAdoption & {
+  created?: true
+  /** Collects older versions now that this one serves; it never throws. */
+  prune?: () => Promise<boolean>
+}
 
 async function deployOwnOrcad(
   context: OrcadRemoteContext<SshTarget>,
@@ -206,16 +212,17 @@ async function deployOwnOrcad(
   const reprobe = () =>
     probeManagedOrcadReadiness(context, localOrcadDir, deployResult.fullVersion, args.signal)
   const readiness = await reprobe()
-  await pruneManagedOrcadVersions({
-    slot,
-    serverTarget: context.serverTarget,
-    activeVersion: deployResult.fullVersion,
-    readiness
-  })
   return {
     version: deployResult.fullVersion,
     readiness,
     reprobe,
+    prune: () =>
+      pruneManagedOrcadVersions({
+        slot,
+        serverTarget: context.serverTarget,
+        activeVersion: deployResult.fullVersion,
+        readiness
+      }),
     ...(deployResult.outcome === 'already-active' ? {} : { created: true as const })
   }
 }
