@@ -7,7 +7,7 @@ import { prepareFederationAttachmentWorkerStart } from './worker-start-validatio
 type WorkerAgentTarget = { repo?: string; worktree?: string }
 
 export async function resolveWorkerConfiguredAgentParams<T extends { agent?: string }>(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<OrcaRuntimeService, 'resolveOrchestrationAgentLauncherForTarget'>,
   params: T,
   resolveTarget: () => Promise<WorkerAgentTarget>
 ): Promise<T> {

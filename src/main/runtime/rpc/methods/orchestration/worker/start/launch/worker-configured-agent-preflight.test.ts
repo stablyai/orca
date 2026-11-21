@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 
-function runtimeResolving(agent: string | undefined) {
-  const resolveOrchestrationAgentLauncherForTarget = vi.fn(async () => agent)
-  return {
-    runtime: { resolveOrchestrationAgentLauncherForTarget } as unknown as OrcaRuntimeService,
+function runtimeResolving(agent: TuiAgent | undefined) {
+  const resolveOrchestrationAgentLauncherForTarget = vi.fn(
+    async (): Promise<TuiAgent | undefined> => agent
+  )
+  const runtime: Pick<OrcaRuntimeService, 'resolveOrchestrationAgentLauncherForTarget'> = {
     resolveOrchestrationAgentLauncherForTarget
   }
+  return { runtime, resolveOrchestrationAgentLauncherForTarget }
 }
 
 describe('resolveWorkerConfiguredAgentParams', () => {
