@@ -39,8 +39,13 @@ export function createLiveTextPublication(
     readers === null ||
     (readers !== undefined &&
       (readers.groups ?? [readers]).every((group) => read(group).length === 0))
-  return () =>
-    nobodyTakes(target()?.liveTextReaders?.())
+  // Streams flush together, so one decision serves every stream that grows in the same task.
+  let decided: StructuredAgentSessionSinkAdmission | undefined
+  return () => {
+    if (decided) {
+      return decided
+    }
+    decided = nobodyTakes(target()?.liveTextReaders?.())
       ? { accepted: true }
       : submit({
           bytes: 1,
@@ -51,6 +56,9 @@ export function createLiveTextPublication(
             }
           }
         })
+    queueMicrotask(() => (decided = undefined))
+    return decided
+  }
 }
 
 export function createChildWorkPublication(

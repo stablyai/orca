@@ -5,7 +5,7 @@ import type {
   StructuredAgentSessionEventTarget
 } from './structured-agent-session-event-sink'
 
-it('admits no live operations while nobody views the stream, and resumes for a new viewer', () => {
+it('admits no live operations while nobody views the stream, and resumes for a new viewer', async () => {
   const submit = vi.fn(() => ({ accepted: true as const }))
   let viewers = 0
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publication reads only this member of its target.
@@ -26,6 +26,7 @@ it('admits no live operations while nobody views the stream, and resumes for a n
   )
   for (let window = 0; window < 1000; window++) {
     publish()
+    await Promise.resolve()
   }
   expect(submit).not.toHaveBeenCalled()
   viewers = 1
