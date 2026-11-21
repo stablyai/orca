@@ -84,8 +84,9 @@ export type PairedBotRosterCache = {
   read(servers: ReadonlySet<string>): Promise<KnownPairedBotRoster[]>
   /** Each server any read answered, without listing servers or touching the network. */
   lastRead(): readonly CachedPairedBotRoster[]
-  /** Keeps what a full read just answered, so the next ask needn't wait on it. */
-  remember(rosters: readonly PairedBotRoster[]): void
+  /** Keeps what a read just answered, so the next ask needn't wait on it. `complete`: the read
+   *  covered every paired server, so one it didn't list is no longer paired. */
+  remember(rosters: readonly PairedBotRoster[], options?: { complete?: boolean }): void
 }
 
 /** The paired servers' bots without waiting on the network: what each was last read to hold, while
@@ -94,7 +95,16 @@ export type PairedBotRosterCache = {
 export function pairedBotRosterCache(runtime: PairedBotServers): PairedBotRosterCache {
   const known = new Map<string, CachedPairedBotRoster>()
   const reading = new Set<string>()
-  const remember = (rosters: readonly PairedBotRoster[]): void => {
+  const remember: PairedBotRosterCache['remember'] = (rosters, options) => {
+    // An empty list may be a failed server listing, so it keeps what is known.
+    if (options?.complete && rosters.length > 0) {
+      const listed = new Set(rosters.map((roster) => roster.environmentId))
+      for (const id of known.keys()) {
+        if (!listed.has(id)) {
+          known.delete(id)
+        }
+      }
+    }
     for (const roster of rosters) {
       const bots = 'bots' in roster ? roster.bots : known.get(roster.environmentId)?.bots
       if (bots) {
@@ -113,7 +123,7 @@ export function pairedBotRosterCache(runtime: PairedBotServers): PairedBotRoster
     }
     stale.forEach((id) => reading.add(id))
     void readPairedBotRosters(runtime, new Set(stale))
-      .then(remember)
+      .then((rosters) => remember(rosters))
       .catch(() => {})
       .finally(() => stale.forEach((id) => reading.delete(id)))
   }

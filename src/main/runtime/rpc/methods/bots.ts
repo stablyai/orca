@@ -166,7 +166,7 @@ export const BOT_METHODS = [
       const paired =
         params.allComputers && context.pairedDeviceId === undefined
           ? readPairedBotRosters(runtime).then((rosters) => {
-              runtime.pairedBotRosters.remember(rosters)
+              runtime.pairedBotRosters.remember(rosters, { complete: true })
               return rosters
             })
           : null

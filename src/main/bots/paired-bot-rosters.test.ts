@@ -98,3 +98,17 @@ it("keeps an unreachable computer's last answer under the name and --on it has n
     { environmentId: 'env-a', server: { name: 'Build Box', on: 'env-a' }, bots: [entry] }
   ])
 })
+
+it('drops a computer a complete read no longer lists, and keeps all on an empty one', () => {
+  const cache = pairedBotRosterCache(servers({}))
+  const entry = { ...ENTRY, agent: 'codex' as const, server: { name: 'M4', on: 'M4' } }
+  const m4 = { environmentId: 'env-m4', server: { name: 'M4', on: 'M4' }, bots: [entry] }
+  const box = { environmentId: 'env-box', server: { name: 'Box', on: 'Box' }, bots: [] }
+  cache.remember([m4, box])
+  cache.remember([box], { complete: true })
+  cache.remember([], { complete: true })
+  expect(cache.lastRead()).toEqual([box])
+  cache.remember([m4])
+  cache.remember([box])
+  expect(cache.lastRead()).toEqual([box, m4])
+})
