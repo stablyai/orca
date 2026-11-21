@@ -1145,6 +1145,7 @@
       "permissionWithoutAuto": "Agents without Approve for me",
       "permissionMixed": "Mixed",
       "permissionSurfaceDifference": "Terminals use the agent’s own settings; new chats use {{mode}}.",
+      "permissionModeSurfaceDifference": "Terminals use {{terminal}}; new chats use {{mode}}.",
       "permissionSameAsAll": "Same as all agents",
       "choiceChipRemove": "Remove {{flag}}",
       "choiceChipTooltip": "Added by {{choice}}. Remove it to use the default.",

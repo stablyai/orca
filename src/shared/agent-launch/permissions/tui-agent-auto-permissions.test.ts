@@ -4,6 +4,9 @@ import { buildAgentStartupPlan } from '../startup/tui-agent-startup'
 import { buildAgentResumeStartupPlan } from '../startup/tui-agent-resume-startup'
 
 import { tokenizeStartupCommand } from '../startup/tui-agent-startup-shell'
+import { agentPermissionArgsForLaunch } from './agent-permission-args'
+import { agentPickerPermissions } from '../picker/agent-launch-picker-catalog'
+import { automationLaunchInputs } from '../../automations/launch/automation-launch-choices'
 
 describe('codex resume permissions', () => {
   it.each(['posix', 'powershell', 'cmd'] as const)(
@@ -38,4 +41,26 @@ describe('codex resume permissions', () => {
       expect(resume(true)?.launchCommand).toContain('--dangerously-bypass-approvals-and-sandbox')
     }
   )
+})
+
+describe('cursor auto review', () => {
+  // cursor-agent 2026.11.19 exits when --auto-review meets --force or -f.
+  it.each(['--force', '-f', '--model gpt-5 --force'])(
+    'adds no flag when Arguments already hold %s',
+    (args) => {
+      expect(agentPermissionArgsForLaunch('cursor', 'auto', args)).toBeNull()
+    }
+  )
+
+  it('offers Approve for me to Cursor terminals only', () => {
+    expect(agentPickerPermissions('cursor', 'terminal')).toEqual(['own', 'auto', 'full-access'])
+    expect(agentPickerPermissions('cursor', 'chat')).toEqual(['own', 'ask', 'full-access'])
+  })
+
+  it.each([
+    { launchPreferences: { permissionMode: 'auto' as const } },
+    { agentArgs: '--auto-review' }
+  ])('starts a Cursor chat on Ask when its setup asks for Approve for me: %j', (setup) => {
+    expect(automationLaunchInputs('cursor', setup).chatSessionOptions?.permissionMode).toBe('ask')
+  })
 })

@@ -103,6 +103,21 @@ export function AgentPermissionMenu({
             { mode: nativeChatPermissionModeLabel(permission.chatChoice, t) }
           )}
         </span>
+      ) : !permission.argsSetPermission &&
+        permission.terminalChoice &&
+        permission.terminalChoice !== 'own' &&
+        permission.chatChoice &&
+        permission.terminalChoice !== permission.chatChoice ? (
+        <span className="text-xs text-muted-foreground">
+          {t(
+            'settings.agents.permissionModeSurfaceDifference',
+            'Terminals use {{terminal}}; new chats use {{mode}}.',
+            {
+              terminal: nativeChatPermissionModeLabel(permission.terminalChoice, t),
+              mode: nativeChatPermissionModeLabel(permission.chatChoice, t)
+            }
+          )}
+        </span>
       ) : null}
     </div>
   )

@@ -24,10 +24,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAccessRequests } from '@/lib/bot-access-requests'
 import { useAppStore } from '@/store'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
-import { savedChatPermissionMode } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentChatPermissionModes,
-  chatAsksNoApprovals
+  chatAsksNoApprovals,
+  savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'

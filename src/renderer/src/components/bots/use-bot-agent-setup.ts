@@ -2,11 +2,11 @@ import { useState } from 'react'
 import type { BotAgent } from '../../../../shared/bot-types'
 import type { BotAgentSetup } from './BotAgentLaunchPicker'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
-  savedChatPermissionMode,
-  type AgentChatPermissionMode
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** The owner's permission for the bot, whichever agent it ends up on: a mode, or the chats' own. */
 export type BotPermissionIntent = AgentChatPermissionMode | 'inherit'
