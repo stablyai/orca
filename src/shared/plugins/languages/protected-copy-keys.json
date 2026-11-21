@@ -689,6 +689,7 @@
     "bots.access.confirmWarning",
     "bots.access.place",
     "bots.access.reachSlack",
+    "bots.access.reject",
     "bots.access.titleMany",
     "bots.access.titleOne",
     "bots.connect.signOut.action",
