@@ -1,8 +1,21 @@
 import { rmSync } from 'node:fs'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { detectConflictOperation } from './git-conflict-operation'
 import { continueRebase } from './rebase-continue'
 import { createConflictingRebaseRepo } from './rebase-real-git.test-fixture'
+import type * as GitExecFile from '../../command-runner/git-exec-file'
+
+const gitExecFileAsyncSpy = vi.hoisted(() => ({ calls: [] as [string[], unknown][] }))
+vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitExecFile>()
+  return {
+    ...actual,
+    gitExecFileAsync: (...args: Parameters<typeof actual.gitExecFileAsync>) => {
+      gitExecFileAsyncSpy.calls.push([args[0], args[1]])
+      return actual.gitExecFileAsync(...args)
+    }
+  }
+})
 
 describe('continueRebase against real git', () => {
   const tempPaths: string[] = []
@@ -44,6 +57,18 @@ describe('continueRebase against real git', () => {
     ).resolves.toMatchObject({ outcome: 'completed', branch: 'feature' })
     await expect(detectConflictOperation(repoPath)).resolves.toBe('unknown')
     expect(git('log', '-1', '--format=%s').trim()).toBe('feature b')
+  })
+
+  it('waits for the rebase --continue child to exit before a cancelled Continue settles', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', 'main')).toThrow()
+    write('a.txt', 'resolved a\n')
+    git('add', 'a.txt')
+    gitExecFileAsyncSpy.calls.length = 0
+    await continueRebase(repoPath, 'continue', { expected: await stopToken(repoPath) })
+
+    const spawn = gitExecFileAsyncSpy.calls.find(([args]) => args.join(' ') === 'rebase --continue')
+    expect(spawn?.[1]).toMatchObject({ terminationBarrier: true })
   })
 
   it('refuses a Continue without a token or with one from an earlier stop', async () => {
