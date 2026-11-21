@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 import { setImmediate as nextTurn } from 'node:timers/promises'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import type { WorkerThreadChildEvent } from './worker-thread-child-process-protocol'
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }))
@@ -11,6 +11,24 @@ import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-s
 
 const CHUNKS = 256
 const CHUNK_BYTES = 64 * 1024
+
+beforeEach(() => {
+  spawn.mockReset()
+})
+
+function createRecordingPort() {
+  const events: WorkerThreadChildEvent[] = []
+  const port = Object.assign(new EventEmitter(), {
+    postMessage(event: WorkerThreadChildEvent) {
+      events.push(event)
+      if (event.type === 'spawn') {
+        port.emit('spawn')
+      }
+    }
+  })
+  serveWorkerThreadChildProcesses(port)
+  return { port, events }
+}
 
 function* outputBytes(chunks: number): Generator<Buffer> {
   for (let index = 0; index < chunks; index++) {
@@ -28,15 +46,23 @@ it.each([1, CHUNKS])(
     const pauseStdout = vi.spyOn(stdout, 'pause')
     const pauseStderr = vi.spyOn(stderr, 'pause')
     const stdin = new PassThrough()
-    const child = Object.assign(new EventEmitter(), { stdout, stderr, stdin, kill: vi.fn() })
-    spawn.mockReturnValue(child)
-    const events: WorkerThreadChildEvent[] = []
-    const port = Object.assign(new EventEmitter(), {
-      postMessage: (event: WorkerThreadChildEvent) => events.push(event)
+    const child = Object.assign(new EventEmitter(), {
+      stdout,
+      stderr,
+      stdin,
+      pid: 1,
+      kill: vi.fn()
     })
-    serveWorkerThreadChildProcesses(port)
+    spawn.mockReturnValue(child)
+    const { port, events } = createRecordingPort()
     try {
-      port.emit('message', { type: 'spawn', id: 1, spec: { program: 'fixture', args: [] } })
+      const spawned = once(port, 'spawn')
+      port.emit('message', {
+        type: 'spawn',
+        id: 1,
+        spec: { program: 'fixture', args: [], env: {} }
+      })
+      await spawned
       await nextTurn()
       if (chunks === 1) {
         expect(pauseStdout).not.toHaveBeenCalled()
@@ -83,20 +109,21 @@ it.each(['cancel-spawn', 'kill'] as const)(
       stdout: new PassThrough(),
       stderr: new PassThrough(),
       stdin,
+      pid: 1,
       kill: vi.fn()
     })
-    spawn.mockReset().mockReturnValue(child)
-    const events: WorkerThreadChildEvent[] = []
-    const port = Object.assign(new EventEmitter(), {
-      postMessage: (event: WorkerThreadChildEvent) => events.push(event)
+    spawn.mockReturnValue(child)
+    const { port, events } = createRecordingPort()
+    const spawned = once(port, 'spawn')
+    port.emit('message', {
+      type: 'spawn',
+      id: 1,
+      spec: { program: 'cancelled', args: [], env: {} }
     })
-    serveWorkerThreadChildProcesses(port)
-    port.emit('message', { type: 'spawn', id: 1, spec: { program: 'cancelled', args: [] } })
-    port.emit('message', { type: 'spawn', id: 2, spec: { program: 'kept', args: [] } })
+    port.emit('message', { type: 'spawn', id: 2, spec: { program: 'kept', args: [], env: {} } })
     port.emit('message', { type: stop, id: 1 })
     port.emit('message', { type: 'stdin-end', id: 2 })
-    // macOS launches wait for their async PATH lookup first.
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+    await spawned
 
     expect(spawn).toHaveBeenCalledOnce()
     expect(spawn.mock.calls[0]?.[0]).toMatchObject({ program: 'kept' })
@@ -111,18 +138,16 @@ it('keeps output on the worker once the reader discards it', async () => {
     stdout,
     stderr: new PassThrough(),
     stdin: new PassThrough(),
+    pid: 1,
     kill: vi.fn(),
     exitCode: null,
     signalCode: null
   })
-  spawn.mockReset().mockReturnValue(child)
-  const events: WorkerThreadChildEvent[] = []
-  const port = Object.assign(new EventEmitter(), {
-    postMessage: (event: WorkerThreadChildEvent) => events.push(event)
-  })
-  serveWorkerThreadChildProcesses(port)
-  port.emit('message', { type: 'spawn', id: 1, spec: { program: 'git', args: [] } })
-  await nextTurn()
+  spawn.mockReturnValue(child)
+  const { port, events } = createRecordingPort()
+  const spawned = once(port, 'spawn')
+  port.emit('message', { type: 'spawn', id: 1, spec: { program: 'git', args: [], env: {} } })
+  await spawned
   stdout.write('read')
   await nextTurn()
   port.emit('message', { type: 'discard-output', id: 1 })

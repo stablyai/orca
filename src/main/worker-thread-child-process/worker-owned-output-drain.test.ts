@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { expect, it, vi } from 'vitest'
@@ -53,14 +53,14 @@ it.skipIf(process.platform === 'win32')(
         kill: vi.fn()
       })
       spawn.mockReturnValue(nativeChild)
-      const child = host.spawn({ program: 'fixture', args: [], terminationBarrier: true })
+      const outputStarted = once(stdout, 'resume')
+      const child = host.spawn({ program: 'fixture', args: [], env: {}, terminationBarrier: true })
       const received: Buffer[] = []
       child.stdout.on('data', (chunk) => received.push(chunk))
       child.stderr.on('data', (chunk) => received.push(chunk))
       const closed = new Promise<void>((resolve) => child.once('close', resolve))
       try {
-        // One turn for the queued launch, one for its output to fill the pause threshold.
-        await nextTurn()
+        await outputStarted
         await nextTurn()
         expect(stdout.isPaused()).toBe(true)
         expect(stderr.isPaused()).toBe(true)
