@@ -86,7 +86,7 @@ type BucketCount = { bucket: readonly Worktree[]; count: number }
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState) => number {
   let previousState: UnreadBadgeCountState | undefined
   let pairings: ReadonlyMap<string, string> | null = null
-  let bucketCounts = new Map<string, BucketCount>()
+  const bucketCounts = new Map<string, BucketCount>()
   let worktreeCount = 0
   let folderCount = 0
 
@@ -132,17 +132,30 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
           defaultHostId,
           hiddenOtherDevicePairings: statePairings
         }
-        const nextCounts = new Map<string, BucketCount>()
-        let total = 0
-        for (const [repoId, bucket] of Object.entries(selectWorktreesByRepo(state))) {
-          const cached = reposStale ? undefined : bucketCounts.get(repoId)
-          // Why: a write replaces only the buckets it touched, so the rest keep their count.
-          const count =
-            cached?.bucket === bucket ? cached.count : countUnreadWorktreesInBucket(bucket, scope)
-          nextCounts.set(repoId, { bucket, count })
-          total += count
+        if (reposStale) {
+          bucketCounts.clear()
         }
-        bucketCounts = nextCounts
+        const buckets = selectWorktreesByRepo(state)
+        let total = 0
+        let bucketTotal = 0
+        // Why in place: a write replaces only the buckets it touched, so the rest keep their count unallocated.
+        for (const repoId in buckets) {
+          const bucket = buckets[repoId]!
+          bucketTotal += 1
+          let cached = bucketCounts.get(repoId)
+          if (cached?.bucket !== bucket) {
+            cached = { bucket, count: countUnreadWorktreesInBucket(bucket, scope) }
+            bucketCounts.set(repoId, cached)
+          }
+          total += cached.count
+        }
+        if (bucketCounts.size !== bucketTotal) {
+          for (const repoId of bucketCounts.keys()) {
+            if (!(repoId in buckets)) {
+              bucketCounts.delete(repoId)
+            }
+          }
+        }
         worktreeCount = total
       }
       if (foldersStale) {
