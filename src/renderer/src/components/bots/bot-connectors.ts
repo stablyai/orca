@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { ComponentType } from 'react'
-import { Webhook } from 'lucide-react'
+import { MessageCircle, Webhook } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { useBotLinear } from '@/lib/bot-linear-state'
@@ -18,7 +18,7 @@ import { SlackIcon } from '../icons/SlackIcon'
 import { useWebhooksConnector } from './webhooks/use-webhooks-connector'
 
 export type BotConnector = {
-  id: 'slack' | 'discord' | 'google' | 'linear' | 'github' | 'webhooks'
+  id: 'slack' | 'discord' | 'google' | 'linear' | 'github' | 'dingtalk' | 'webhooks'
   label: string
   Icon: ComponentType<{ className?: string }>
   /** False shows the connector as "Coming soon"; see useBotConnectorAvailable for Linear and GitHub. */
@@ -34,6 +34,7 @@ export const BOT_CONNECTORS: readonly BotConnector[] = [
   { id: 'google', label: 'Google', Icon: GoogleIcon, available: true, add: 'link' },
   { id: 'linear', label: 'Linear', Icon: LinearIcon, available: true, add: 'link' },
   { id: 'github', label: 'GitHub', Icon: GitHubIcon, available: true, add: 'link' },
+  { id: 'dingtalk', label: 'DingTalk', Icon: MessageCircle, available: true, add: 'link' },
   {
     id: 'webhooks',
     get label() {

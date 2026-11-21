@@ -18,6 +18,7 @@ import { botErrorMessage } from './bot-presentation'
 import { handOffConnectorSetup } from './connector-setup-handoff'
 import type { Bot } from '../../../../shared/bot-types'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
+import { DingTalkSetupDialog } from './apps/BotAppSteps'
 
 /** Each account connector's own setup, as Add connector opens it; `start` opens one. */
 export function useConnectorSetup(bot: Bot): {
@@ -53,6 +54,10 @@ export function useConnectorSetup(bot: Bot): {
       })
       return
     }
+    if (connector === 'dingtalk') {
+      setSetupOpen('dingtalk')
+      return
+    }
     const github = readBotGitHub(bot.hostId)
     // Another org: GitHub's install page, where the owner picks it; its row shows once installed.
     if (connector === 'github' && bot.github && github.status === 'ready') {
@@ -82,6 +87,11 @@ export function useConnectorSetup(bot: Bot): {
         bot={bot}
         open={setupOpen === 'google'}
         onOpenChange={(next) => setSetupOpen(next ? 'google' : null)}
+      />
+      <DingTalkSetupDialog
+        bot={bot}
+        open={setupOpen === 'dingtalk'}
+        onOpenChange={(next) => setSetupOpen(next ? 'dingtalk' : null)}
       />
     </>
   )
