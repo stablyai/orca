@@ -29,15 +29,21 @@ export class MobileSessionSnapshotsByWorktree extends ReverseIndexedMap<
     super(collectSnapshotPtyIds, (previous, next) => previous.tabs === next.tabs)
   }
 
-  // Status-only changes owe one version bump, paid when a client frame is next built.
-  private readonly owedVersions = new Set<string>()
+  // Status-only changes owe one version bump, paid when a client frame is next built; each owe gets a fresh mark.
+  private readonly owedVersions = new Map<string, number>()
+  private owedSequence = 0
 
   worktreeIdsForPty(ptyId: string): ReadonlySet<string> {
     return this.keysFor(ptyId)
   }
 
   oweVersion(worktreeId: string): void {
-    this.owedVersions.add(worktreeId)
+    this.owedVersions.set(worktreeId, ++this.owedSequence)
+  }
+
+  /** Changes whenever the stored snapshot or its owed status changes, so queued frames can tell they are stale. */
+  deliverySource(worktreeId: string): unknown {
+    return this.owedVersions.get(worktreeId) ?? this.get(worktreeId)
   }
 
   takeOwedVersion(worktreeId: string): boolean {
