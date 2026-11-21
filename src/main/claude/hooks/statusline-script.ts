@@ -11,8 +11,8 @@ import {
 import { wrapWindowsDirectCmdHookCommand } from '../../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { getManagedCommand } from './hook-settings'
 
-const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
+const STATUSLINE_CAPTURE_LABEL = 'orca_statusline_capture'
 
 // PowerShell needs a bare safe path; unsafe paths keep runtime HOME to avoid per-tick PowerShell spawns.
 export function getManagedStatusLineCommand(scriptPath: string): string {
@@ -23,7 +23,10 @@ export function getManagedStatusLineCommand(scriptPath: string): string {
 }
 
 // Forward live usage without OAuth polling; emit no stdout to preserve the terminal statusline.
-export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'): string {
+export function getManagedStatusLineScript(
+  target: 'local' | 'posix' = 'local',
+  windowsRuntimePath = process.execPath
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -36,8 +39,9 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       'set "ORCA_STATUSLINE_PANE_ID=%ORCA_STATUSLINE_PANE_ID::=_%"',
       // Buffer before spawning curl; per-pane names avoid same-second %RANDOM% collisions.
       'set "ORCA_STATUSLINE_PAYLOAD_FILE=%TEMP%\\orca-claude-statusline-%ORCA_STATUSLINE_PANE_ID%.tmp"',
-      `${WINDOWS_HOOK_STDIN_READER} >"%ORCA_STATUSLINE_PAYLOAD_FILE%" 2>nul`,
-      // Builtin throttling avoids findstr and curl spawns on streaming ticks.
+      // Builtin throttling avoids findstr and curl spawns on streaming ticks. It precedes stdin
+      // capture, so the ~44 of 45 ticks per interval that never post exit without owning stdin at
+      // all — an abandoned refresh can't orphan this wrapper.
       'set "ORCA_STATUSLINE_STAMP_FILE=%TEMP%\\orca-claude-statusline-last-%ORCA_STATUSLINE_PANE_ID%.tmp"',
       'set "ORCA_STATUSLINE_NOW="',
       'set "ORCA_STATUSLINE_TIME=%TIME: =0%"',
@@ -47,17 +51,28 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       'if exist "%ORCA_STATUSLINE_STAMP_FILE%" set /p ORCA_STATUSLINE_LAST=<"%ORCA_STATUSLINE_STAMP_FILE%"',
       'if defined ORCA_STATUSLINE_LAST for /f "delims=0123456789" %%d in ("%ORCA_STATUSLINE_LAST%") do set "ORCA_STATUSLINE_LAST="',
       'if defined ORCA_STATUSLINE_NOW if defined ORCA_STATUSLINE_LAST set /a "ORCA_STATUSLINE_ELAPSED=ORCA_STATUSLINE_NOW-ORCA_STATUSLINE_LAST" 2>nul',
-      `if not defined ORCA_STATUSLINE_ELAPSED goto :${STATUSLINE_PROBE_LABEL}`,
-      `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :${STATUSLINE_CLEANUP_LABEL}`,
+      `if not defined ORCA_STATUSLINE_ELAPSED goto :${STATUSLINE_CAPTURE_LABEL}`,
+      `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto orca_statusline_cleanup`,
+      `:${STATUSLINE_CAPTURE_LABEL}`,
+      'set "ELECTRON_RUN_AS_NODE=1"',
+      `if not defined ORCA_AGENT_HOOK_NODE set "ORCA_AGENT_HOOK_NODE=${windowsRuntimePath.replaceAll('%', '%%')}"`,
+      // A bounded read replaces the parking `more.com`; a timed-out capture leaves no payload,
+      // which the rate_limits probe below treats as a skipped tick. Falls back to the legacy
+      // capture when the reader helper is absent (an install predating this pairing).
+      'if exist "%~dp0claude-statusline-read.cjs" (',
+      '  "%ORCA_AGENT_HOOK_NODE%" "%~dp0claude-statusline-read.cjs" "%ORCA_STATUSLINE_PAYLOAD_FILE%" 2>nul',
+      ') else (',
+      `  ${WINDOWS_HOOK_STDIN_READER} >"%ORCA_STATUSLINE_PAYLOAD_FILE%" 2>nul`,
+      ')',
       `:${STATUSLINE_PROBE_LABEL}`,
       // Non-subscriber payloads lack rate_limits; skip their endpoint lookup and curl spawn.
       // Escaped quotes match the JSON key, avoiding false matches in paths.
       '"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
-      `if errorlevel 1 goto :${STATUSLINE_CLEANUP_LABEL}`,
+      'if errorlevel 1 goto orca_statusline_cleanup',
       // Refresh stale endpoint coordinates after Orca restarts, falling back to PTY env.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      `if "%ORCA_AGENT_HOOK_PORT%"=="" goto :${STATUSLINE_CLEANUP_LABEL}`,
-      `if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto :${STATUSLINE_CLEANUP_LABEL}`,
+      'if "%ORCA_AGENT_HOOK_PORT%"=="" goto orca_statusline_cleanup',
+      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto orca_statusline_cleanup',
       // Stamp only eligible posts so skipped ticks never postpone the next post.
       'if defined ORCA_STATUSLINE_NOW (>"%ORCA_STATUSLINE_STAMP_FILE%" echo %ORCA_STATUSLINE_NOW%)',
       // An always-defined field posts empty configDir when unset, rather than a literal %VAR%.
@@ -76,7 +91,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
         '--data-urlencode "payload@%ORCA_STATUSLINE_PAYLOAD_FILE%"',
         '>nul 2>&1'
       ].join(' '),
-      `:${STATUSLINE_CLEANUP_LABEL}`,
+      ':orca_statusline_cleanup',
       'del "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
       'exit /b 0',
       ''
