@@ -89,15 +89,18 @@ export function botAddressReach(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   to: string,
-  sender: OrchestrationCallerIdentity
+  sender: OrchestrationCallerIdentity,
+  { fromPairedComputer = false }: { fromPairedComputer?: boolean } = {}
 ): AddressReach {
   const name = parseBotAddress(to)
   const bots = runtime.bots.list()
   if (name !== null) {
     const bot = botOfAddress(bots, name)
+    // Mail another computer sent here with --on: it chose this computer, and our --on names mean nothing there.
+    const paired = fromPairedComputer ? undefined : runtime.pairedBotRosters.lastRead()
     return bot
       ? { kind: 'bot', receiving: { bot, via: 'alias', chat: null } }
-      : refuse(botNotFound(name, bots))
+      : refuse(botNotFound(name, bots, paired))
   }
   if (bots.length === 0) {
     return { kind: 'none' }

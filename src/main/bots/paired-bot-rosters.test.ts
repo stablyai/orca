@@ -68,7 +68,7 @@ it("reads each paired server's bots with the --on that reaches it, and says whic
 it('answers from the last read without waiting, reads again behind it, and keeps the last answer when a read fails', async () => {
   const answers: Record<string, unknown> = { 'env-air': { bots: [ENTRY] } }
   const runtime = servers(answers)
-  const read = pairedBotRosterCache(runtime)
+  const { read } = pairedBotRosterCache(runtime)
   const air = new Set(['env-air'])
 
   expect(await read(air)).toEqual([
@@ -85,4 +85,30 @@ it('answers from the last read without waiting, reads again behind it, and keeps
   expect((await read(air))[0]?.bots?.[0]?.name).toBe(ENTRY.name)
   const requested = runtime.callOrchestrationWorkerServer.mock.calls.map(([id]) => id)
   expect(new Set(requested)).toEqual(air)
+})
+
+it("keeps an unreachable computer's last answer under the name and --on it has now", () => {
+  const cache = pairedBotRosterCache(servers({}))
+  const entry = { ...ENTRY, agent: 'codex' as const, server: { name: 'M4', on: 'M4' } }
+  cache.remember([{ environmentId: 'env-a', server: { name: 'M4', on: 'M4' }, bots: [entry] }])
+  cache.remember([
+    { environmentId: 'env-a', server: { name: 'Build Box', on: 'env-a' }, unreachable: true }
+  ])
+  expect(cache.lastRead()).toEqual([
+    { environmentId: 'env-a', server: { name: 'Build Box', on: 'env-a' }, bots: [entry] }
+  ])
+})
+
+it('drops a computer a complete read no longer lists, and keeps all on an empty one', () => {
+  const cache = pairedBotRosterCache(servers({}))
+  const entry = { ...ENTRY, agent: 'codex' as const, server: { name: 'M4', on: 'M4' } }
+  const m4 = { environmentId: 'env-m4', server: { name: 'M4', on: 'M4' }, bots: [entry] }
+  const box = { environmentId: 'env-box', server: { name: 'Box', on: 'Box' }, bots: [] }
+  cache.remember([m4, box])
+  cache.remember([box], { complete: true })
+  cache.remember([], { complete: true })
+  expect(cache.lastRead()).toEqual([box])
+  cache.remember([m4])
+  cache.remember([box])
+  expect(cache.lastRead()).toEqual([box, m4])
 })

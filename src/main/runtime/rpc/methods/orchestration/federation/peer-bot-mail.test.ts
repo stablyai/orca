@@ -222,6 +222,23 @@ describe('mail to a bot on a paired server', () => {
     await expect(botReply(request!.id, 'again')).rejects.toThrow('already answered')
   })
 
+  it("refuses an --on miss as today, without the server's own --on hint", async () => {
+    const server = { name: 'Laptop', on: 'Laptop' }
+    const entry = {
+      id: 'doc',
+      name: 'Doc',
+      agent: 'codex' as const,
+      paused: false,
+      specialty: null,
+      linked: [],
+      server
+    }
+    b.runtime.pairedBotRosters.remember([{ environmentId: 'env_c', server, bots: [entry] }])
+    await expect(send({ type: 'question', to: 'bot:Doc' })).rejects.toThrow(
+      /^There is no bot named Doc on this computer \(its bots: bot:Docs\), so pick one of those or do the work yourself\.$/
+    )
+  })
+
   it('hands work to a bot with no Home Chat yet, and refuses to answer status', async () => {
     await send({ type: 'handoff', subject: 'Take the docs task' })
     await send({ type: 'status', subject: 'FYI: docs merged' })
