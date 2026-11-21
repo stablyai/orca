@@ -10,9 +10,10 @@ import { BotLaunchSchema } from './bots/bot-launch'
 import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
+import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['opencode2', 'copilot', 'cursor', 'kimi', 'hermes'] as const
+export const BOT_HELD_BACK_AGENTS = [] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [
@@ -22,8 +23,36 @@ export const BOT_AGENTS = [
   'opencode',
   'omp',
   'pi',
-  'antigravity'
+  'antigravity',
+  'cursor',
+  'hermes',
+  'copilot',
+  'opencode2',
+  'kimi',
+  'kiro'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+
+/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
+const BOT_AGENTS_OLDER_BUILDS_READ: readonly string[] = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity'
+]
+
+/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
+export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
+  readable: Bot[]
+  newer: Bot[]
+} {
+  return {
+    readable: bots.filter((bot) => BOT_AGENTS_OLDER_BUILDS_READ.includes(bot.agent)),
+    newer: bots.filter((bot) => !BOT_AGENTS_OLDER_BUILDS_READ.includes(bot.agent))
+  }
+}
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
@@ -123,6 +152,8 @@ export const BotSchema = z.object({
   folderWorkspaceId: z.string().min(1),
   agent: z.enum(BOT_AGENTS),
   avatar: z.string().nullable(),
+  /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
+  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),

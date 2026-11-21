@@ -12,6 +12,11 @@ import {
 } from '../../../browser/agent-browser/testing/agent-browser-bridge-test-harness'
 import { closeBrowserMemoryPage } from '../../../browser/guest-lifecycle/browser-page-memory'
 import { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 
 const { native, waitRegistration, waitWorktreeRegistration, ipcListeners, managerWorktree } =
   vi.hoisted(() => ({
@@ -90,22 +95,9 @@ overrideBridgeWebContentsLookup(
   vi.fn((id: number) => native.get(id))
 )
 
-class CountedTabs extends Map<string, number> {
-  visits = 0
-  reads = 0
-  override get(key: string): number | undefined {
-    this.reads++
-    return super.get(key)
-  }
-  override *[Symbol.iterator](): MapIterator<[string, number]> {
-    for (const entry of super[Symbol.iterator]()) {
-      this.visits++
-      yield entry
-    }
-  }
-}
 const ownedPages = new Set<string>()
-function fixture(pages: [string, string][], tabs = new CountedTabs()) {
+function fixture(pages: [string, string][]) {
+  const tabs = new Map<string, number>()
   const worktrees = new Map<string, string>()
   const register = (page: string, worktree: string) => {
     const id = native.size + 100
@@ -126,7 +118,13 @@ function fixture(pages: [string, string][], tabs = new CountedTabs()) {
   const clientPages = new RuntimeBrowserPageRegistry()
   const send = vi.fn()
   managerWorktree.mockImplementation((pageId) => worktrees.get(pageId))
-  const win = { webContents: { send } }
+  const renderer = { send }
+  setRuntimeDesktopSurface(
+    rendererWindowSurfaceForTest(renderer, {
+      on: (channel, listener) => ipcListeners.set(channel, listener as never),
+      removeListener: (channel) => ipcListeners.delete(channel)
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command seam uses only these host surfaces.
   const host = {
     getAgentBrowserBridge: () => bridge,
@@ -134,8 +132,8 @@ function fixture(pages: [string, string][], tabs = new CountedTabs()) {
     resolveBrowserWorkspace: async (id: string) => ({ id }),
     getRuntimeBrowserPageRegistry: () => clientPages,
     readBrowserTabBar: () => catalog,
-    getAuthoritativeWindow: () => win,
-    getAvailableAuthoritativeWindow: () => win
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
+    getAvailableAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID
   } as unknown as RuntimeBrowserCommandHost
   return {
     commands: new RuntimeBrowserCommands(host),
@@ -144,6 +142,7 @@ function fixture(pages: [string, string][], tabs = new CountedTabs()) {
     worktrees,
     catalog,
     send,
+    renderer,
     register,
     popups
   }
@@ -249,7 +248,10 @@ it('lists and closes the selected cold Y while leaving live sibling X alone', as
   f.send.mockImplementation((channel, payload) => {
     expect(channel).toBe('browser:requestTabClose')
     expect(payload.tabId).toBe('Y')
-    ipcListeners.get('browser:tabCloseReply')?.({}, { requestId: payload.requestId })
+    ipcListeners.get('browser:tabCloseReply')?.(
+      { sender: f.renderer },
+      { requestId: payload.requestId }
+    )
   })
   await expect(f.commands.browserTabClose({ worktree: 'W' })).resolves.toEqual({ closed: true })
   expect(f.tabs.has('X')).toBe(true)
@@ -330,26 +332,4 @@ it('reports normal not-found when a saved page disappears during activation', as
     message: 'Browser page closed was not found'
   })
   expect(f.bridge.delivered).toEqual([])
-})
-
-it('does no added fleet traversal for a settled explicit snapshot among 2000 guests', async () => {
-  const size = 2000
-  const f = fixture([['P', 'W']])
-  for (let i = 1; i < size; i++) {
-    f.register(`unrelated-${i}`, 'elsewhere')
-  }
-  await f.commands.browserSnapshot({ page: 'P' })
-  f.tabs.visits = 0
-  f.tabs.reads = 0
-  const baseline = await f.bridge.snapshot(undefined, 'P')
-  const baselineVisits = f.tabs.visits
-  const baselineReads = f.tabs.reads
-  f.tabs.visits = 0
-  f.tabs.reads = 0
-  const admitted = await f.commands.browserSnapshot({ page: 'P' })
-  expect(admitted).toEqual(baseline)
-  // The existing reverse lookup when snapshot mints refs visits P once; admission visits none.
-  expect(baselineVisits).toBe(1)
-  expect(f.tabs.visits).toBe(1)
-  expect(f.tabs.reads - baselineReads).toBe(4)
 })

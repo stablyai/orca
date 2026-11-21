@@ -4,6 +4,7 @@ import type {
 } from '@/lib/browser/navigation/http-link-destinations'
 import { resolveFileLinkPath } from './files/terminal-file-link-target'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'
+import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../../shared/file-links/file-uri-path'
 import type { LinkHandlerDeps } from './files/terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../../shared/terminal/links/terminal-osc-link-target'
 import { isTerminalOwnedLinkGesture } from './gestures/terminal-link-activation'
@@ -57,8 +58,12 @@ export function handleOscLink(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link handlers read only the MouseEvent fields TerminalLinkEvent picks.
   const mouseEvent = event as MouseEvent
   const cwd = deps.startupCwd || deps.worktreePath
-  const target = classifyTerminalOscLinkTarget(rawText, {
-    windowsPathsFirst: isWindowsAbsolutePathLike(cwd),
+  // Why: URL-style /C:/… targets name drive C: on any Windows host, including UNC and Git Bash /c/ cwds.
+  const windowsHost = isWindowsAbsolutePathLike(cwd) || isWindowsAbsolutePathLike(deps.worktreePath)
+  const linkText =
+    windowsHost && WINDOWS_DRIVE_PATH_PREFIX.test(rawText) ? rawText.slice(1) : rawText
+  const target = classifyTerminalOscLinkTarget(linkText, {
+    windowsPathsFirst: windowsHost,
     // Reject foreign file hosts except standard Windows UNC file://server/share paths.
     allowUncHost:
       navigator.userAgent.includes('Windows') &&

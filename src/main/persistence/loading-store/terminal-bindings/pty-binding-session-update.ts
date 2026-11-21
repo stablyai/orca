@@ -10,12 +10,14 @@ import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 import { reusedTerminalIdUnbinding } from './reused-terminal-id-unbind'
 
+/** Copy-on-write: returns a new session, never editing `previous` or its containers, and the workspaces it changed. */
 export function applyPtyBinding(
   args: PersistPtyBindingArgs,
-  session: WorkspaceSessionState,
+  previous: WorkspaceSessionState,
   bindingWorktreeId: string,
   paneKey: string
-): void {
+): { session: WorkspaceSessionState; workspaces: ReadonlySet<string> } {
+  const session = { ...previous }
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
   let terminalMembershipChanged = false
@@ -43,11 +45,14 @@ export function applyPtyBinding(
       : null
   const stamps =
     unbound?.terminalPtyIncarnationsByPaneKey ?? session.terminalPtyIncarnationsByPaneKey
-  const { [paneKey]: recordedIncarnation, ...otherIncarnations } = stamps ?? {}
-  if (args.incarnationId || (args.dropsIncarnation && recordedIncarnation)) {
-    session.terminalPtyIncarnationsByPaneKey = args.incarnationId
-      ? { ...stamps, [paneKey]: args.incarnationId }
-      : otherIncarnations
+  if (args.incarnationId || (args.dropsIncarnation && stamps?.[paneKey])) {
+    const nextStamps = { ...stamps }
+    if (args.incarnationId) {
+      nextStamps[paneKey] = args.incarnationId
+    } else {
+      delete nextStamps[paneKey]
+    }
+    session.terminalPtyIncarnationsByPaneKey = nextStamps
   }
   if (args.incarnationId && session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
     session.terminalSurfaceTombstonesByPaneKey = {
@@ -72,7 +77,7 @@ export function applyPtyBinding(
         args.ptyId
       )
     }
-    rows![bindingWorktreeId] = tabs!.map((t) => (t === tab ? boundTab : t))
+    rows = { ...rows, [bindingWorktreeId]: tabs!.map((t) => (t === tab ? boundTab : t)) }
   } else {
     terminalMembershipChanged = true
     // Persist spawn-created tabs before delayed renderer saves to keep their bindings from becoming orphans.
@@ -94,9 +99,11 @@ export function applyPtyBinding(
   }
   session.tabsByWorktree = rows
   // Host-initiated binds must set the write-once default-terminal guard too.
-  session.defaultTerminalTabsAppliedByWorktreeId = {
-    ...session.defaultTerminalTabsAppliedByWorktreeId,
-    [bindingWorktreeId]: true
+  if (session.defaultTerminalTabsAppliedByWorktreeId?.[bindingWorktreeId] !== true) {
+    session.defaultTerminalTabsAppliedByWorktreeId = {
+      ...session.defaultTerminalTabsAppliedByWorktreeId,
+      [bindingWorktreeId]: true
+    }
   }
   // Acknowledged spawns must survive a crash before the renderer records their activity.
   if (
@@ -113,7 +120,7 @@ export function applyPtyBinding(
   const storedLayout = layoutsByTab?.[args.tabId]
   if (leafKeyed && storedLayout) {
     const layout = { ...storedLayout }
-    layoutsByTab![args.tabId] = layout
+    layoutsByTab = { ...layoutsByTab, [args.tabId]: layout }
     if (!layout.root) {
       terminalMembershipChanged = true
       layout.root = { type: 'leaf', leafId: args.leafId }
@@ -154,4 +161,5 @@ export function applyPtyBinding(
   }
   session.terminalLayoutsByTabId = layoutsByTab
   advanceTopologyFence()
+  return { session, workspaces: new Set([bindingWorktreeId, ...(unbound?.workspaces ?? [])]) }
 }

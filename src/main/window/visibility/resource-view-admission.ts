@@ -12,7 +12,7 @@ export function assertResourceViewVisible(
 ): void {
   if (
     admission?.resourceManagerView &&
-    !getRuntimeDesktopSurface().isResourceViewVisible?.(event.sender)
+    !getRuntimeDesktopSurface().isResourceViewVisible?.(event.sender.id)
   ) {
     throw new Error('view_not_visible')
   }

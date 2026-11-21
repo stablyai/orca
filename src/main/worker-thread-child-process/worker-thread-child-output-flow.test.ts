@@ -95,11 +95,11 @@ it.each(['cancel-spawn', 'kill'] as const)(
     port.emit('message', { type: 'spawn', id: 2, spec: { program: 'kept', args: [] } })
     port.emit('message', { type: stop, id: 1 })
     port.emit('message', { type: 'stdin-end', id: 2 })
-    await nextTurn()
-    await nextTurn()
+    // macOS launches wait for their async PATH lookup first.
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
 
     expect(spawn).toHaveBeenCalledOnce()
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ program: 'kept' }))
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({ program: 'kept' })
     expect(events).toContainEqual({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
     expect(endStdin).toHaveBeenCalled()
   }

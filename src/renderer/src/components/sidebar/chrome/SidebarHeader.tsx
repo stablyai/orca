@@ -20,7 +20,7 @@ type SidebarHeaderProps = {
   activityBadgeTarget?: React.Ref<HTMLSpanElement>
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
-  /** Only with Bots above it, so the sidebar never folds down to nothing. */
+  /** Only with Bots present, so the sidebar never folds down to nothing. */
   collapsible?: boolean
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
@@ -89,6 +89,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
     <SidebarSectionHeader
       title={sidebarTitle}
       sectionId={groupBy === 'repo' ? 'projects' : 'workspaces'}
+      reorderable={collapsible}
       fold={fold}
       titleControl={
         <DropdownMenu>

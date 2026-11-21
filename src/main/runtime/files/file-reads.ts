@@ -145,7 +145,8 @@ export class RuntimeFileReads {
     implicitRootRelativePath: string | null,
     authorizedRootRelativePaths: string[],
     offset: number,
-    length: number
+    length: number,
+    media = false
   ): Promise<DocPreviewFileChunk> {
     const { target, provider } = await this.resolveDocPreviewTarget(
       worktreeSelector,
@@ -154,7 +155,7 @@ export class RuntimeFileReads {
       implicitRootRelativePath,
       authorizedRootRelativePaths
     )
-    return provider.readDocPreviewFileChunk(target, offset, length)
+    return provider.readDocPreviewFileChunk({ ...target, media }, offset, length)
   }
 
   private async resolveDocPreviewTarget(

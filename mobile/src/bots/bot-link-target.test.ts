@@ -4,11 +4,16 @@ import { parseBotLinkTarget } from './bot-link-target'
 const TOKEN = 'a'.repeat(43)
 
 describe('parseBotLinkTarget', () => {
-  it('opens a thread link without a session at the bot', () => {
+  it('opens a thread link without a session at that conversation', () => {
     expect(parseBotLinkTarget('orca://bot/atlas?conversation=slack%3AC1%3A123.4')).toEqual({
-      kind: 'bot',
-      botId: 'atlas'
+      kind: 'session',
+      botId: 'atlas',
+      conversation: { source: 'slack', externalId: 'C1:123.4' }
     })
+  })
+
+  it('opens a bare bot link at the bot', () => {
+    expect(parseBotLinkTarget('orca://bot/atlas')).toEqual({ kind: 'bot', botId: 'atlas' })
   })
 
   it('reads an access-request link', () => {

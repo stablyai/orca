@@ -63,6 +63,7 @@ export function HostCombobox({
   searchPlaceholder,
   searchFrom = 0,
   ariaLabel,
+  inline,
   size = 'default',
   notifyOnReselect = false,
   className,
@@ -80,6 +81,7 @@ export function HostCombobox({
   /** Search shows only from this many rows. */
   searchFrom?: number
   ariaLabel?: string
+  inline?: boolean
   size?: 'xs' | 'sm' | 'default'
   className?: string
   disabled?: boolean
@@ -92,6 +94,8 @@ export function HostCombobox({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [boundary, setBoundary] = useState<HTMLElement>()
   const commandRef = useRef<HTMLDivElement>(null)
   const selected = options.find((option) => option.id === value)
   const searchable = options.length >= searchFrom
@@ -104,6 +108,11 @@ export function HostCombobox({
     setOpen(next)
     if (next) {
       setQuery('')
+      if (inline) {
+        setBoundary(
+          triggerRef.current?.closest<HTMLElement>('[data-slot="dialog-content"]') ?? undefined
+        )
+      }
     }
     onOpenChange?.(next)
   }
@@ -112,15 +121,16 @@ export function HostCombobox({
     <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           id={id}
           type="button"
           variant="outline"
-          size={size}
+          size={inline ? 'xs' : size}
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
           disabled={disabled}
-          className={cn('w-full justify-between', className)}
+          className={cn(inline ? 'min-w-0 shrink' : 'w-full justify-between', className)}
         >
           {selected?.triggerContent ?? (
             <span className="min-w-0 truncate">
@@ -132,7 +142,13 @@ export function HostCombobox({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(20rem,calc(100vw-1rem))]"
+        side={inline ? 'top' : undefined}
+        collisionBoundary={boundary}
+        collisionPadding={inline ? 8 : undefined}
+        className={cn(
+          'w-[min(20rem,calc(100vw-1rem))] max-w-(--radix-popover-content-available-width)',
+          inline && 'flex flex-col'
+        )}
         onOpenAutoFocus={(event) => {
           // Without a search field, the list itself takes the arrow keys.
           if (!searchable) {
@@ -146,6 +162,7 @@ export function HostCombobox({
           tabIndex={-1}
           shouldFilter={false}
           density="menu"
+          className={inline ? 'min-h-0' : undefined}
           label={searchLabel}
         >
           {searchable ? (

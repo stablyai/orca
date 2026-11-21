@@ -286,7 +286,7 @@ export async function openBrowserExtensionTab(
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }
   const { browserPageId } = await createBrowserTabInRenderer(
-    { getAuthoritativeWindow: () => mainWindow },
+    { getAuthoritativeWindowId: () => mainWindow.id },
     url,
     placement.worktreeId,
     profile.id,
@@ -315,7 +315,7 @@ export async function closeBrowserExtensionTab(entry: BrowserExtensionTabEntry):
   if (!browserPageId || !mainWindow) {
     throw new BrowserExtensionApiError(`No tab with id: ${entry.contents.id}.`)
   }
-  await closeBrowserTabInRenderer(mainWindow, browserPageId, undefined)
+  await closeBrowserTabInRenderer(mainWindow.id, browserPageId, undefined)
 }
 
 /** tabs.update({active}): Orca tabs activate through the renderer's tab model; a popout's tab is its window. */
@@ -330,5 +330,5 @@ export async function activateBrowserExtensionTab(entry: BrowserExtensionTabEntr
   if (!browserPageId || !mainWindow) {
     throw new BrowserExtensionApiError(`No tab with id: ${entry.contents.id}.`)
   }
-  await activateBrowserTabInRenderer(mainWindow, browserPageId)
+  await activateBrowserTabInRenderer(mainWindow.id, browserPageId)
 }

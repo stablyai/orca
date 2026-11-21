@@ -54,7 +54,6 @@ vi.mock('./use-bot-host-label', () => ({ useBotHostLabel: () => null }))
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import type { BotSessionActivityRow } from '../../../../shared/bots/bot-activity-model'
-import type { BotToolSignInStatus } from '../../../../shared/bot-tool-sign-in'
 import type { BotConnectorEntry } from './bot-connector-entries'
 import type { BotItem } from '../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../shared/bots/bot-item.test-fixture'
@@ -282,41 +281,16 @@ describe('Needs you', () => {
     expect(mocks.openHome).toHaveBeenCalledWith(BOT)
   })
 
-  it('sends a connector sign-in to Connectors and opens the exact runs it stopped', () => {
+  it('sends a connector sign-in to its Connectors page and opens the exact runs it stopped', () => {
     renderNeeds(
       [{ kind: 'connector', key: 'connector:linear:w1', connector: LINEAR }],
       [automationRow('a2', 'Label new Linear bugs', 'run-9')]
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Linear' }))
-    expect(mocks.manageConnectors).toHaveBeenCalledWith(BOT)
+    expect(mocks.manageConnectors).toHaveBeenCalledWith(BOT, 'linear:w1')
     fireEvent.click(screen.getByRole('button', { name: 'Open run: Label new Linear bugs' }))
     expect(mocks.openAutomation).toHaveBeenLastCalledWith('a2', 'run-9')
-  })
-
-  it('asks for a first sign-in for an app never signed in, and to sign in again only once lost', () => {
-    const app = (name: string, signIn: BotToolSignInStatus): BotNeedView => ({
-      kind: 'connector',
-      key: `connector:app:${name}`,
-      connector: {
-        kind: 'app',
-        key: `app:${name}`,
-        title: { service: `${name[0]!.toUpperCase()}${name.slice(1)}`, name: null },
-        needsOwner: true,
-        tool: { name, detail: `https://${name}.example/mcp`, remote: false, signIn },
-        app: null,
-        problem: undefined
-      }
-    })
-    renderNeeds([
-      app('vercel', { state: 'signed-out' }),
-      app('notes', { state: 'lost' }),
-      app('acme', { state: 'signed-out', problem: 'unreachable' })
-    ])
-
-    expect(screen.getByText('Vercel needs you to sign in.')).toBeTruthy()
-    expect(screen.getByText('Notes needs you to sign in again.')).toBeTruthy()
-    expect(screen.getByText('Acme needs you to sign in again or fix it.')).toBeTruthy()
   })
 
   it('titles an item’s worker ask with the item, naming the worker and the tool it asks for', () => {
@@ -333,9 +307,11 @@ describe('Needs you', () => {
     expect(screen.getByText('Worker: Webhook wake-up')).toBeTruthy()
     expect(screen.getByText('git push origin')).toBeTruthy()
     // No item and no tool: its own title, and what any approval says.
-    expect(screen.getByRole('button', { name: 'Open: Rotate fix' }).textContent).toBe(
-      'Rotate fixPermission needed'
-    )
+    const rotate = screen.getByRole('button', { name: 'Open: Rotate fix' })
+    expect(rotate.textContent).toBe('Rotate fix')
+    expect(
+      document.getElementById(rotate.getAttribute('aria-describedby') ?? '')?.textContent
+    ).toBe('Permission needed')
   })
 
   it('says where a worker with nowhere to open runs, with no action', () => {

@@ -261,6 +261,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForSessionFn =
       deps?.getAgentProviderSessionRowsForSession ?? null
+    this.getPaneAgentIdentityFn = deps?.getPaneAgentIdentity ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
     this.getAcceptedAgentReply = deps?.getAcceptedAgentReply ?? (() => undefined)
     this.subscribeAgentStatusRowChanges = deps?.subscribeAgentStatusRowChanges ?? (() => () => {})

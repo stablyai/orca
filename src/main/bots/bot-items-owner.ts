@@ -1,6 +1,6 @@
 // The owner's writes from the panel (desktop or phone): comments, which move a Needs you item to In
-// progress, and any status on any number of items, each owing the item's chat a mail; and snoozes, which
-// mail nobody. A comment or status move brings a snoozed item back.
+// progress (one written while the bot asks is the answer), and any status on any number of items, each
+// owing the item's chat a mail; and snoozes, which mail nobody. A comment or status move brings a snoozed item back.
 import {
   botItemEventId,
   isOpenBotItemStatus,
@@ -46,7 +46,9 @@ export class BotItemsOwner extends BotItemsWrites {
     actor: BotItemOwnerActor,
     images: readonly BotItemCommentImage[] = [],
     now = Date.now(),
-    requestId?: string
+    requestId?: string,
+    /** The question event a quick reply answers: refused once the agent is asking another. */
+    questionEventId?: number
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
     if (!commentText.trim() && images.length === 0) {
@@ -57,6 +59,18 @@ export class BotItemsOwner extends BotItemsWrites {
       const made = requestId === undefined ? null : this.ownerCommentByRequest(uid, requestId)
       if (made !== null) {
         return { uid, eventId: made }
+      }
+      if (
+        questionEventId !== undefined &&
+        item.status === 'needs_you' &&
+        item.questionEvent !== null &&
+        item.questionEvent !== questionEventId &&
+        this.askedByBot(item.questionEvent)
+      ) {
+        throw new BotItemError(
+          'item_changed',
+          `Item ${item.number} has a new question. Read it, then reply.`
+        )
       }
       // While the bot asks, a comment is the answer: it names the question, and the move it makes says so.
       const answers =

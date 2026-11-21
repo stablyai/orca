@@ -1,6 +1,7 @@
 /** Parking removes pane byte parsers; run pane-less watchers until reveal, exit or teardown. */
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { discardPreHandlerPtyState } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { isParkRestorableTerminalPty } from '../retention/terminal-hidden-view-parking'
 
@@ -35,7 +36,7 @@ function startParkedTabWatchers(
     disposersByPtyId: new Map()
   }
   parkedWatchersByTabId.set(tab.id, entry)
-  const restorePolicy = parkRestorePolicyFromState(useAppStore.getState())
+  const restorePolicy = parkRestorePolicyFromState(useAppStore.getState(), readRuntimeStatuses())
   for (const pane of parkedTerminalTabCoverage(worktreeId, tab).panes) {
     startParkedPtyWatcher({
       worktreeId,
@@ -90,7 +91,7 @@ function reconcileParkedTabWatchers(
     dispose?.()
     state.clearRuntimePaneTitle(tab.id, paneId)
   }
-  const restorePolicy = parkRestorePolicyFromState(useAppStore.getState())
+  const restorePolicy = parkRestorePolicyFromState(useAppStore.getState(), readRuntimeStatuses())
   for (const ptyId of reconciliation.addedPtyIds) {
     const pane = expectedPanes.get(ptyId)
     if (pane) {
@@ -111,7 +112,7 @@ function watchablePanes(
   tab: ParkableTerminalTabModel
 ): Map<string, ParkedTerminalPaneCapture> {
   const state = useAppStore.getState()
-  const restorePolicy = parkRestorePolicyFromState(state)
+  const restorePolicy = parkRestorePolicyFromState(state, readRuntimeStatuses())
   return new Map(
     parkedTerminalTabCoverage(worktreeId, tab).panes.flatMap((pane) =>
       pane.ptyId &&

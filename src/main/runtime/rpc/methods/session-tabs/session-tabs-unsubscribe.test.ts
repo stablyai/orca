@@ -10,29 +10,36 @@ import { SESSION_TAB_METHODS } from './session-tabs'
 
 describe('session tab unsubscribe RPC methods', () => {
   it.each([
-    { subscriptionId: undefined, useCanonicalId: false },
-    { subscriptionId: 'sub-old', useCanonicalId: false },
-    { subscriptionId: undefined, useCanonicalId: true },
-    { subscriptionId: 'sub-old', useCanonicalId: true }
-  ])(
-    'unsubscribes a path alias after the initial snapshot resolves its spelling (%j)',
-    async ({ subscriptionId, useCanonicalId }) => {
-      const selector = 'id:repo::G:/git/example'
+    [
+      'one subscription by the requested alias',
+      'id:repo::G:/git/example',
+      'sub-old',
+      { 'sub-old': 1, 'sub-new': 0 }
+    ],
+    [
+      'all subscriptions by the resolved id',
+      'id:repo::G:\\git\\example',
+      undefined,
+      { 'sub-old': 1, 'sub-new': 1 }
+    ]
+  ] as const)(
+    'unsubscribes %s after the initial snapshot',
+    async (_, worktree, subscriptionId, expectedEnds) => {
       const { dispatcher, ends } = await subscribeTwiceToOneWorktree(
-        selector,
+        'id:repo::G:/git/example',
         'repo::G:\\git\\example'
       )
 
       await dispatcher.dispatchStreaming(
         request('session.tabs.unsubscribe', {
-          worktree: useCanonicalId ? 'id:repo::G:\\git\\example' : selector,
+          worktree,
           subscriptionId
         }),
         vi.fn(),
         { connectionId: 'conn-1' }
       )
 
-      expect(ends).toEqual({ 'sub-old': 1, 'sub-new': subscriptionId ? 0 : 1 })
+      expect(ends).toEqual(expectedEnds)
     }
   )
 })

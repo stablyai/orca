@@ -121,7 +121,7 @@ afterEach(() => {
 })
 
 describe('listCodexSessionFiles', () => {
-  it('scans per-account self-contained Codex homes that hold sessions', async () => {
+  it('scans self-contained account sessions and skips homes or sessions redirected outside storage', async () => {
     const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
     const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
     const accountSessionsDir = join(userDataDir, 'codex-accounts', 'acct-1', 'home', 'sessions')
@@ -148,6 +148,32 @@ describe('listCodexSessionFiles', () => {
       'utf-8'
     )
 
+    const redirectedAccountDir = join(userDataDir, 'codex-accounts', 'acct-redirected')
+    const externalHome = join(fakeHomeDir, 'redirected-account-home')
+    mkdirSync(redirectedAccountDir, { recursive: true })
+    mkdirSync(join(externalHome, 'sessions'), { recursive: true })
+    writeFileSync(join(externalHome, '.orca-managed-home'), 'acct-redirected\n', 'utf-8')
+    writeFileSync(join(externalHome, 'sessions', 'unrelated.jsonl'), '{}\n', 'utf-8')
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir'
+    symlinkSync(externalHome, join(redirectedAccountDir, 'home'), linkType)
+
+    const redirectedSessionsHome = join(
+      userDataDir,
+      'codex-accounts',
+      'acct-redirected-sessions',
+      'home'
+    )
+    const externalSessionsDir = join(fakeHomeDir, 'redirected-sessions')
+    mkdirSync(redirectedSessionsHome, { recursive: true })
+    mkdirSync(externalSessionsDir, { recursive: true })
+    writeFileSync(
+      join(redirectedSessionsHome, '.orca-managed-home'),
+      'acct-redirected-sessions\n',
+      'utf-8'
+    )
+    writeFileSync(join(externalSessionsDir, 'unrelated.jsonl'), '{}\n', 'utf-8')
+    symlinkSync(externalSessionsDir, join(redirectedSessionsHome, 'sessions'), linkType)
+
     expect(getCodexSessionDirectories()).toEqual([
       runtimeSessionsDir,
       systemSessionsDir,
@@ -159,41 +185,6 @@ describe('listCodexSessionFiles', () => {
     expect(result.dailyAggregates).toEqual([
       expect.objectContaining({ totalTokens: 42, eventCount: 1 })
     ])
-  })
-
-  it('does not scan an account home redirected outside managed storage', async () => {
-    const accountDir = join(userDataDir, 'codex-accounts', 'acct-redirected')
-    const externalHome = join(fakeHomeDir, 'redirected-account-home')
-    const externalSessionsDir = join(externalHome, 'sessions')
-    mkdirSync(accountDir, { recursive: true })
-    mkdirSync(externalSessionsDir, { recursive: true })
-    writeFileSync(join(externalHome, '.orca-managed-home'), 'acct-redirected\n', 'utf-8')
-    writeFileSync(join(externalSessionsDir, 'unrelated.jsonl'), '{}\n', 'utf-8')
-    symlinkSync(
-      externalHome,
-      join(accountDir, 'home'),
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-
-    expect(getCodexSessionDirectories()).not.toContain(join(accountDir, 'home', 'sessions'))
-    expect(await listCodexSessionFiles()).toEqual([])
-  })
-
-  it('does not scan a sessions root redirected outside an owned account home', async () => {
-    const accountHome = join(userDataDir, 'codex-accounts', 'acct-redirected-sessions', 'home')
-    const externalSessionsDir = join(fakeHomeDir, 'redirected-sessions')
-    mkdirSync(accountHome, { recursive: true })
-    mkdirSync(externalSessionsDir, { recursive: true })
-    writeFileSync(join(accountHome, '.orca-managed-home'), 'acct-redirected-sessions\n', 'utf-8')
-    writeFileSync(join(externalSessionsDir, 'unrelated.jsonl'), '{}\n', 'utf-8')
-    symlinkSync(
-      externalSessionsDir,
-      join(accountHome, 'sessions'),
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-
-    expect(getCodexSessionDirectories()).not.toContain(join(accountHome, 'sessions'))
-    expect(await listCodexSessionFiles()).toEqual([])
   })
 
   it('parses only source-side suffix after both sides of a legacy copy diverge', async () => {

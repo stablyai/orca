@@ -19,7 +19,8 @@ const state = {
 }
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((select: (value: typeof state) => unknown) => select(state), {
-    getState: () => state
+    getState: () => state,
+    subscribe: () => () => {}
   })
 }))
 vi.mock('@/store/repos/use-repository-catalog', () => ({

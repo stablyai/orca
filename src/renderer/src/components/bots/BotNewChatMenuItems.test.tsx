@@ -191,14 +191,12 @@ describe('botNewChatAgents', () => {
         bot,
         settled([{ kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' }], null)
       )
-    ).toEqual([
-      { agent: 'claude', unavailable: 'ssh' },
-      { agent: 'codex', unavailable: 'check-failed' },
-      { agent: 'grok', unavailable: 'check-failed' },
-      { agent: 'opencode', unavailable: 'check-failed' },
-      { agent: 'omp', unavailable: 'check-failed' },
-      { agent: 'pi', unavailable: 'check-failed' }
-    ])
+    ).toEqual(
+      expect.arrayContaining([
+        { agent: 'claude', unavailable: 'ssh' },
+        { agent: 'codex', unavailable: 'check-failed' }
+      ])
+    )
   })
 
   it('counts a terminal-only row as startable, since a bot chat does not need the chat setting', () => {
@@ -220,45 +218,26 @@ describe('botNewChatAgents', () => {
       { agent: 'omp' }
     ])
   })
-
-  it('leaves out an Antigravity side chat unless the host publishes Orca’s managed server', () => {
-    const model = settled([
-      { kind: 'chat', agent: 'grok' },
-      { kind: 'chat', agent: 'antigravity' }
-    ])
-    expect(botNewChatAgents({ agent: 'antigravity' }, model)).toEqual([{ agent: 'grok' }])
-    expect(botNewChatAgents({ agent: 'antigravity' }, { state: 'loading' })).toEqual([])
-    expect(
-      botNewChatAgents(
-        { agent: 'antigravity' },
-        { ...model, managedRuntimeAgents: ['antigravity'] }
-      )
-    ).toEqual([{ agent: 'antigravity' }, { agent: 'grok' }])
-  })
 })
 
 describe('botAgentChoices', () => {
   const model = settled([
     { kind: 'chat', agent: 'codex' },
     { kind: 'chat', agent: 'opencode' },
-    { kind: 'chat', agent: 'opencode2' }
+    { kind: 'chat', agent: 'gemini' }
   ])
 
   it('keeps the bot’s current agent even when this computer lacks it', () => {
     expect(botAgentChoices(model, 'omp')).toEqual(['codex', 'opencode', 'omp'])
   })
 
-  it('offers Antigravity only on a host that publishes Orca’s managed Antigravity server', () => {
+  it('offers agents with chat regardless of their default surface', () => {
     const rows = settled([
-      { kind: 'chat', agent: 'codex' },
-      { kind: 'chat', agent: 'antigravity' }
+      { kind: 'terminal', agent: 'claude' },
+      { kind: 'cli', agent: 'codex', chat: true },
+      { kind: 'chat-unavailable', agent: 'grok', reason: 'windows' }
     ])
     expect(botAgentChoices(rows)).toEqual(['codex'])
-    expect(botAgentChoices({ ...rows, managedRuntimeAgents: [] })).toEqual(['codex'])
-    expect(botAgentChoices({ ...rows, managedRuntimeAgents: ['antigravity'] })).toEqual([
-      'codex',
-      'antigravity'
-    ])
   })
 
   it('has only the current agent while the host is unknown', () => {

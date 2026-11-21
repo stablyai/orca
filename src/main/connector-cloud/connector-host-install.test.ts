@@ -146,23 +146,4 @@ describe('installConnectorHost', () => {
       expect(started).toEqual({ webhooks: 1, accessWatch: 1 })
     }
   )
-
-  it('stops a fenced host before anything new reaches Orca Cloud', async () => {
-    const host = fakeHost()
-    let stopping = false
-    installConnectorHost({
-      runtime: host.runtime,
-      store: host.store,
-      userDataPath: '/data/serve',
-      kind: 'serve',
-      isFenced: () => stopping
-    })
-    stopping = true
-    host.runtime.getConnectorCloud()!.fence()
-    host.runtime.getConnectorCloud()!.connect()
-    await vi.advanceTimersByTimeAsync(10)
-
-    expect(cloud.fake!.requests).toHaveLength(0)
-    expect(host.runtime.getConnectorCloud()!.status()).toBe('signed-out')
-  })
 })

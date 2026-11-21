@@ -8,7 +8,7 @@ export async function prepareOrcadSecretStoreAndMigrate(userDataPath: string): P
     await import('./orcad-plaintext-credential-migration')
   // Keep sealing keys outside disposable ORCA_USER_DATA roots.
   if (await prepareOrcadSecretStore(orcadCredentialRoot(), userDataPath)) {
-    migratePlaintextCredentials(getSecretStore())
+    await migratePlaintextCredentials(getSecretStore())
   }
   reportSecretProtectionGap({ dataFile: join(userDataPath, 'orca-data.json') })
 }
