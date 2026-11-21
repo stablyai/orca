@@ -24,7 +24,9 @@ const inputVariants = cva('', {
         'h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent',
       // Text edited in place, such as a name: one line of the surrounding type, no box, so nothing moves.
       inline:
-        'h-[1lh] rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 dark:bg-transparent'
+        'h-[1lh] rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 dark:bg-transparent',
+      // Text drawn by a layer behind the field, such as a greyed fixed prefix: the field shows only its caret and selection.
+      underlay: 'text-transparent caret-foreground'
     },
     density: {
       default: '',

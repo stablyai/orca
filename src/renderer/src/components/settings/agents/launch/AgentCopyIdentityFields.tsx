@@ -119,10 +119,11 @@ export function AgentCopyIdentityFields({
             aria-label={t('settings.agents.copyIdLabel', 'Copy ID')}
             aria-invalid={idProblem !== null}
             variant="code"
+            surface="underlay"
             spellCheck={false}
             autoCapitalize="off"
             autoComplete="off"
-            className="relative h-8 text-transparent caret-foreground"
+            className="relative h-8"
             onChange={(event) => {
               const field = event.currentTarget
               const edit = applyAgentCopyIdEdit(prefix, id, field.value, field.selectionEnd)
