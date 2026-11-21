@@ -45,8 +45,10 @@ function focusBackRow(row: HTMLElement | null | undefined): void {
   row?.scrollIntoView({ block: 'nearest' })
 }
 const rowKey = (item: BotItem): string => item.uid
-/** A one-line row with its gap; rows measure themselves once shown. */
+/** A one-line row with its gap, and one that names its chat on a second line; rows measure themselves
+ *  once shown, and a close estimate keeps that from moving the rows below. */
 const BOT_ITEM_ROW_HEIGHT_PX = 30
+const BOT_ITEM_PLACED_ROW_HEIGHT_PX = 46
 
 /** A group's members' items in one list: each row acts on its own bot and shows its face. */
 export type BotItemsListMembers = {
@@ -296,6 +298,14 @@ function BotItemGroup({
       setFocusing(false)
     }
   }, [])
+  // The focused row remounts when the group crosses the windowing threshold (an update adds or removes
+  // a row): the new row takes back the focus the old one lost.
+  const keepFocus = useCallback((node: HTMLElement | null) => {
+    const active = document.activeElement
+    if (node && (active === null || active === document.body)) {
+      node.querySelector<HTMLElement>('[data-bot-item-open]')?.focus({ preventScroll: true })
+    }
+  }, [])
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
@@ -417,7 +427,13 @@ function BotItemGroup({
                   // Short groups render unwindowed, where this key keeps each row on its item.
                   key={item.uid}
                   className="pb-0.5"
-                  ref={focusing && item.uid === items[focusIndex]?.uid ? focusRow : undefined}
+                  ref={
+                    focusing && item.uid === items[focusIndex]?.uid
+                      ? focusRow
+                      : item.uid === focusedUid
+                        ? keepFocus
+                        : undefined
+                  }
                   onFocus={() => setFocusedUid(item.uid)}
                   onBlur={(event) => {
                     if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -429,7 +445,9 @@ function BotItemGroup({
                 </div>
               )}
               scrollElement={scroller}
-              estimateRowHeightPx={BOT_ITEM_ROW_HEIGHT_PX}
+              estimateRowHeightPx={(item) =>
+                owner.placeOf(item) ? BOT_ITEM_PLACED_ROW_HEIGHT_PX : BOT_ITEM_ROW_HEIGHT_PX
+              }
               activeRowKey={focusing ? items[focusIndex]?.uid : undefined}
               keptRowKey={focusedUid ?? undefined}
             />

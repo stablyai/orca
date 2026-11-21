@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 
 // Small lists stay in natural flow; windowing pays off only at larger sizes.
@@ -91,7 +91,8 @@ export function VirtualizedList<TRow>({
   // State tracks scroller attachment; ancestor refs arrive after mount effects and alone would leave the virtualizer unobserved.
   scrollElement: HTMLDivElement | null
   // Callers supply different row padding; wrong initial estimates jump the scrollbar before measurement corrects them.
-  estimateRowHeightPx?: number
+  // A function estimates per row, for lists whose rows have known heights of their own.
+  estimateRowHeightPx?: number | ((row: TRow) => number)
   // Why: keyboard-driven lists must mount and reveal selections outside the current window.
   activeRowKey?: string
   // Mounted wherever it scrolls, without scrolling to it: a row holding keyboard focus keeps it.
@@ -105,10 +106,16 @@ export function VirtualizedList<TRow>({
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const virtualize = rows.length >= minimumRows
-  const activeIndex =
-    activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey)
-  const keptIndex =
-    keptRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === keptRowKey)
+  // Looked up once per rows and key, not on every scroll-driven render.
+  const activeIndex = useMemo(
+    () =>
+      activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey),
+    [rows, getRowKey, activeRowKey]
+  )
+  const keptIndex = useMemo(
+    () => (keptRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === keptRowKey)),
+    [rows, getRowKey, keptRowKey]
+  )
   const rangeExtractor = useCallback(
     (range: Parameters<typeof defaultRangeExtractor>[0]) => {
       const indexes = defaultRangeExtractor(range)
@@ -155,7 +162,13 @@ export function VirtualizedList<TRow>({
     // Why the null half: disabled nulls scrollOffset, so initialOffset() cannot latch 0 pre-attach.
     enabled: virtualize && scrollElement !== null,
     getScrollElement: () => scrollElement,
-    estimateSize: () => estimateRowHeightPx,
+    estimateSize: (index) => {
+      if (typeof estimateRowHeightPx === 'number') {
+        return estimateRowHeightPx
+      }
+      const row = rows[index]
+      return row === undefined ? VIRTUALIZED_LIST_ROW_HEIGHT_PX : estimateRowHeightPx(row)
+    },
     overscan: VIRTUALIZED_LIST_OVERSCAN,
     rangeExtractor,
     scrollMargin,

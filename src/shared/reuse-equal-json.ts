@@ -39,13 +39,16 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
     let byUid: Map<string, unknown> | null | undefined
     const merged = next.map((item: unknown, index) => {
       const atIndex = index < previous.length ? previous[index] : undefined
-      const uid = uidOf(item)
-      let match = atIndex
-      if (uid !== null && uidOf(atIndex) !== uid) {
-        byUid = byUid === undefined ? indexByUid(previous) : byUid
-        match = byUid ? byUid.get(uid) : atIndex
+      let kept = atIndex === undefined ? item : reuseEqualJson(atIndex, item)
+      // Changed at this place: a record whose `uid` moved pairs with the previous one carrying it.
+      if (kept !== atIndex) {
+        const uid = uidOf(item)
+        if (uid !== null && uidOf(atIndex) !== uid) {
+          byUid = byUid === undefined ? indexByUid(previous) : byUid
+          const match = byUid?.get(uid)
+          kept = match === undefined ? item : reuseEqualJson(match, item)
+        }
       }
-      const kept = match === undefined ? item : reuseEqualJson(match, item)
       same &&= kept === previous[index]
       return kept
     })
