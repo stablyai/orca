@@ -6,6 +6,7 @@ import {
 } from '../render-tree/markdown-preview-tree-content'
 
 import { splitMarkdownPreviewTable } from '../render-tree/markdown-preview-table-chunks'
+import { getDiffContentSignature } from '../../diff/sections/diff-content-signature'
 import type { Root as MarkdownRoot, Nodes as MarkdownNodes } from 'mdast'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
@@ -96,6 +97,63 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
   }
 }
 
+function hasHtmlProperty(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== false
+}
+
+function serializeBlockContent(node: Nodes): string {
+  if (node.type === 'text') {
+    return `T:${JSON.stringify(node.value)}`
+  }
+  if (node.type !== 'element') {
+    return `${node.type}:${'value' in node ? JSON.stringify(node.value) : ''}`
+  }
+  const isFootnoteRef = node.tagName === 'a' && hasHtmlProperty(node.properties.dataFootnoteRef)
+  const isFootnoteBackref =
+    node.tagName === 'a' && hasHtmlProperty(node.properties.dataFootnoteBackref)
+  // Ignore document-order-derived IDs and footnote counters so edits above do not perturb unchanged blocks.
+  const attrs = Object.entries(node.properties)
+    .filter(
+      ([key, value]) =>
+        key !== 'id' && !(isFootnoteBackref && key === 'ariaLabel') && hasHtmlProperty(value)
+    )
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => {
+      const normalized = Array.isArray(value)
+        ? value.join(' ')
+        : value === true
+          ? ''
+          : String(value)
+      return `${key}=${JSON.stringify(normalized)}`
+    })
+  const header = attrs.length ? `${node.tagName}[${attrs.join(',')}]` : node.tagName
+  if (isFootnoteRef) {
+    return `<${header}>(footnote-ref)`
+  }
+  if (isFootnoteBackref) {
+    return `<${header}>(footnote-backref)`
+  }
+  // Coalesce adjacent text nodes so enabling rehypeRaw on unrelated HTML elsewhere does not change signatures.
+  const serializedChildren: string[] = []
+  let pendingText = ''
+  const flushPendingText = (): void => {
+    if (pendingText) {
+      serializedChildren.push(`T:${JSON.stringify(pendingText)}`)
+      pendingText = ''
+    }
+  }
+  for (const child of node.children) {
+    if (child.type === 'text') {
+      pendingText += child.value
+    } else {
+      flushPendingText()
+      serializedChildren.push(serializeBlockContent(child))
+    }
+  }
+  flushPendingText()
+  return `<${header}>(${serializedChildren.join(',')})`
+}
+
 export function parseMarkdownPreviewDocument(content: string): {
   tree: Root
   document: MarkdownPreviewDocument
@@ -120,12 +178,15 @@ export function parseMarkdownPreviewDocument(content: string): {
   const blocks = tree.children.map((node, index) => {
     const anchors: string[] = []
     collectAnchors(node, anchors, headings)
-    const textLength = getMarkdownPreviewTreeText(node).length
+    const text = getMarkdownPreviewTreeText(node)
+    const serialized = serializeBlockContent(node)
     return {
       index,
       anchors,
       sourceColumn: node.position?.start.column,
-      estimate: Math.min(1200, Math.max(40, Math.ceil(textLength / 90) * 24 + 32)),
+      estimate: Math.min(1200, Math.max(40, Math.ceil(text.length / 90) * 24 + 32)),
+      // Serialized AST without source/id attrs distinguishes tags and formatting while resisting heading renumbering.
+      contentSignature: `${getDiffContentSignature(serialized)}:${serialized.length}`,
       ...sourceBounds(node)
     }
   })
