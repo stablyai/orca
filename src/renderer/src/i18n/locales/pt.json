@@ -2066,6 +2066,10 @@
           "devin": "Devin",
           "devinDesktop": "devin desktop"
         }
+      },
+      "about": {
+        "title": "Sobre",
+        "version": "Orca {{version}}"
       }
     },
     "openInApp": {
@@ -2102,7 +2106,10 @@
       "availableSoon": "Disponível para você {{relative}}",
       "availableOn": "Disponível para você em {{date}} ({{relative}})",
       "clearedTitle": "Orca {{version}} está pronto",
-      "released": "Lançado {{released}}"
+      "released": "Lançado {{released}}",
+      "1b4d825e0e": "Atraso de atualização",
+      "ab7e864374": "Sobre o atraso de atualização",
+      "ee1d96f74a": "Ignorar o atraso uma vez"
     },
     "groupHooks": {
       "invalidSetup": "O arquivo está presente, mas o Orca não encontrou um script de configuração válido.",
@@ -2126,6 +2133,12 @@
         "ownShort": "Skills próprias",
         "showMore": "Mostrar mais {{count}}"
       }
+    },
+    "automaticUpdates": {
+      "title": "Atualizações automáticas",
+      "description": "Nas instalações compatíveis para computador, o Orca baixa as atualizações elegíveis durante as verificações programadas e reinicia automaticamente para instalá-las.",
+      "info": "Sobre as atualizações automáticas",
+      "saveFailed": "Não foi possível salvar a configuração de atualizações automáticas."
     }
   },
   "auto": {
@@ -3250,6 +3263,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Issue vinculada",
         "listeningPort": "Porta em escuta"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "{{rcKey}}+clique verifica a versão candidata (RC) mais recente. {{perfKey}}+clique verifica a build de teste de desempenho mais recente.",
+        "localMacBuildHint": "⌥+clique permite escolher uma build local do macOS."
       }
     },
     "components": {
@@ -7454,9 +7471,6 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de versão",
-          "d89806cc89": "está pronto para instalar.",
-          "a6b37929dc": "Versão",
-          "8311da27ba": "está disponível.",
           "02dc082e70": "Não foi possível iniciar o download da atualização.",
           "ceb579abaf": "Verifica atualizações do app e instala uma versão mais recente do Orca.",
           "bd79d412f0": "Falha na verificação de atualização. {{value0}}",
@@ -7465,10 +7479,13 @@
           "f40d88390d": "Você está na versão mais recente.",
           "31fd7150cf": "Verificando atualizações...",
           "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
-          "e3b9d21c07": "está disponível. Atualize o Orca através do gerenciador de pacotes do seu sistema — o Orca não pode instalar esta versão por conta própria.",
           "6d27bd46e3": "Verificar Atualizações",
-          "857ca887da": "Baixar Atualização (",
-          "c0a8f827c7": "Reiniciar para Atualizar ("
+          "downloadUpdate": "Baixar atualização",
+          "restartToUpdate": "Reiniciar para atualizar",
+          "versionAvailable": "A versão {{version}} está disponível.",
+          "externallyManagedVersionAvailable": "A versão {{version}} está disponível. Atualize o Orca pelo gerenciador de pacotes do sistema. O Orca não pode instalar essa versão por conta própria.",
+          "versionReadyToInstall": "A versão {{version}} está pronta para instalar.",
+          "versionInstalling": "Instalando a versão {{version}}."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -7708,25 +7725,34 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Não foi possível alternar para essa build.",
-          "title": "Canal de versão",
-          "description": "Alterne canais de atualização ou vá para qualquer build publicada, incluindo versões mais antigas. Downgrades são permitidos e builds não revisadas podem estar quebradas.",
+          "title": "Canal de lançamento",
+          "description": "Mude o canal de atualização ou escolha qualquer build publicada, incluindo versões anteriores. Builds não verificadas podem não funcionar corretamente.",
           "devOnly": "Somente dev",
-          "channelAriaLabel": "Canal de atualização",
-          "hourlyWarning": "As builds por hora saem direto da main sem barreira de testes, e as do Windows não são assinadas. Mantenha uma build estável à mão.",
-          "dailyWarning": "As builds diárias saem direto da main sem barreira de testes, e as do Windows não são assinadas. Mantenha uma build estável à mão.",
-          "adhocWarning": "As builds adhoc vêm de uma branch que ainda não foi mesclada, e as do Windows não são assinadas. Quem a gerou pode abandoná-la — mantenha uma build estável à mão.",
+          "adhocWarning": "As builds para Windows não são assinadas. Quem criou a build pode deixar de mantê-la. Tenha uma versão estável à mão.",
           "loadingBuilds": "Carregando builds…",
           "noBuilds": "Nenhuma build encontrada",
           "refresh": "Atualizar lista de builds",
-          "switchTo": "Alternar para build",
+          "switchTo": "Mudar de build",
           "alreadyRunning": "Esta é a build que você está executando.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Alternar builds só está disponível no app desktop.",
           "devChannelUnsupportedAria": "{{value0}} (somente {{value1}})",
-          "devChannelUnsupported": "As builds {{value0}} são produzidas somente para {{value1}}. O Linux permanece em Stable ou RC.",
+          "devChannelUnsupported": "As builds do canal “{{value0}}” são produzidas somente para {{value1}}. No Linux, use {{stable}} ou {{rc}}.",
           "downloadInstaller": "Baixar instalador",
-          "manualInstallHint": "As builds {{value0}} não são assinadas no Windows, então o atualizador do app não consegue instalar uma sobre uma build assinada. Execute o instalador baixado uma vez — o Windows vai avisar sobre um publicador desconhecido — e toda troca posterior, inclusive de volta para Stable, funciona a partir daí.",
-          "cacheHint": "As listas de compilações ficam em cache por 5 minutos. Atualize para verificar se há novas compilações."
+          "manualInstallHint": "As builds do canal “{{value0}}” não são assinadas no Windows, então o atualizador do app não consegue instalar uma sobre uma build assinada. Execute o instalador baixado uma vez — o Windows vai avisar sobre um publicador desconhecido — e toda troca posterior, inclusive de volta ao canal “{{stable}}”, funciona a partir daí.",
+          "cacheHint": "A lista de builds fica em cache por 5 minutos. Atualize a lista para procurar novas builds.",
+          "stableLabel": "Estável",
+          "stableDescription": "Versões estáveis para uso geral.",
+          "rcLabel": "RC",
+          "rcDescription": "Versões candidatas publicadas antes de uma versão estável.",
+          "hourlyLabel": "Por hora",
+          "hourlyDescription": "Build gerada a cada hora a partir de main.",
+          "dailyLabel": "Diário",
+          "dailyDescription": "Build gerada uma vez por dia a partir de main.",
+          "adhocLabel": "Pontual",
+          "adhocDescription": "Builds pontuais de uma branch para experimentar alterações antes de integrá-las.",
+          "devChannelPlatforms": "macOS e Windows",
+          "scheduledWarning": "Essas builds são publicadas sem testes obrigatórios. As builds para Windows não são assinadas. Tenha uma versão estável à mão."
         },
         "ManageSessionsSection": {
           "33c2a1e1b4": "Encerrar sessão {{value0}}",
@@ -8377,7 +8403,8 @@
           "updating": "Atualizando servidores…",
           "serverCountOne": "1 servidor pareado",
           "fdd271abf0": "Servidores Orca Remotos",
-          "e4e5937469": "Verificar Atualizações"
+          "e4e5937469": "Verificar Atualizações",
+          "newerCount": "{{value0}} com versão mais recente que a deste aplicativo"
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Cliques em URL no terminal",
@@ -9677,8 +9704,8 @@
         },
         "ReleaseBuildPicker": {
           "build": "Build",
-          "searchLabel": "Buscar builds",
-          "searchPlaceholder": "Buscar builds…",
+          "searchLabel": "Pesquisar builds",
+          "searchPlaceholder": "Pesquisar builds…",
           "noMatches": "Nenhuma build encontrada."
         },
         "pluginInstallAction": {
@@ -23479,7 +23506,10 @@
       "rateLimitedInMinutes_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos.",
       "rateLimitedInMinutesSignedOut_one": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minuto ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinutesSignedOut_other": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
-      "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta."
+      "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
+      "automaticInstallCheckpointFailed": "O Orca não conseguiu salvar a janela atual antes de reiniciar. Tente instalar a atualização novamente.",
+      "automaticInstallTerminalBusy": "Alguns terminais seriam encerrados durante a reinicialização. O Orca tentará novamente em uma verificação posterior.",
+      "macStagingTimeout": "O macOS ainda está preparando a atualização. Se isso persistir, encerre e reabra o Orca."
     }
   },
   "jira": {

@@ -1202,6 +1202,12 @@
         "ownShort": "Kendi becerileri",
         "showMore": "{{count}} tane daha göster"
       }
+    },
+    "automaticUpdates": {
+      "title": "Otomatik güncellemeler",
+      "description": "Desteklenen masaüstü kurulumlarında Orca, düzenli denetimler sırasında uygun güncellemeleri indirir ve bunları yüklemek için otomatik olarak yeniden başlatılır.",
+      "info": "Otomatik güncellemeler hakkında",
+      "saveFailed": "Otomatik güncelleme ayarı kaydedilemedi."
     }
   },
   "menu": {
@@ -2140,6 +2146,10 @@
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
         "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
+        "localMacBuildHint": "⌥+tıklama yerel bir macOS derlemesi seçmenizi sağlar."
       }
     },
     "hooks": {
@@ -8246,9 +8256,6 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Sürüm notları",
-          "d89806cc89": "yüklenmeye hazır.",
-          "a6b37929dc": "Sürüm",
-          "8311da27ba": "kullanılabilir.",
           "02dc082e70": "Güncelleme indirmesi başlatılamadı.",
           "ceb579abaf": "Uygulama güncellemelerini kontrol edin ve daha yeni bir Orca sürümü yükleyin.",
           "bd79d412f0": "Güncelleme kontrolü başarısız oldu. {{value0}}",
@@ -8257,10 +8264,13 @@
           "f40d88390d": "En son sürümdesiniz.",
           "31fd7150cf": "Güncellemeler kontrol ediliyor...",
           "d69a09b672": "Güncellemeler açılışta otomatik olarak kontrol edilir.",
-          "e3b9d21c07": "kullanılabilir. Orca'yı sistem paket yöneticiniz aracılığıyla güncelleyin, Orca bu sürümü kendisi yükleyemez.",
           "6d27bd46e3": "Güncellemeleri Kontrol Et",
-          "857ca887da": "Güncellemeyi İndir (",
-          "c0a8f827c7": "Güncellemek İçin Yeniden Başlat ("
+          "downloadUpdate": "Güncellemeyi indir",
+          "restartToUpdate": "Güncellemek için yeniden başlat",
+          "versionAvailable": "{{version}} sürümü kullanılabilir.",
+          "externallyManagedVersionAvailable": "{{version}} sürümü kullanılabilir. Orca bu sürümü kendi başına yükleyemediği için sistem paket yöneticisini kullanarak güncelleyin.",
+          "versionReadyToInstall": "{{version}} sürümü yüklemeye hazır.",
+          "versionInstalling": "{{version}} sürümü yükleniyor."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Bir çalışma alanının Şunda Aç menüsünden kullanılabilir uygulamaları seçin.",
@@ -11997,7 +12007,8 @@
           "updating": "Sunucular güncelleniyor…",
           "serverCountOne": "1 eşleştirilmiş sunucu",
           "fdd271abf0": "Uzak Orca Sunucuları",
-          "e4e5937469": "Güncellemeleri Kontrol Et"
+          "e4e5937469": "Güncellemeleri Kontrol Et",
+          "newerCount": "{{value0}} tanesi bu uygulamadan daha yeni"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Sürüm kullanılamıyor",
@@ -12358,20 +12369,17 @@
           "setUpRecipes": "Tarifleri ayarla"
         },
         "ReleaseBuildPicker": {
-          "build": "Derleme",
-          "searchLabel": "Derleme ara",
-          "searchPlaceholder": "Derleme ara…",
-          "noMatches": "Eşleşen derleme yok."
+          "build": "Sürüm",
+          "searchLabel": "Sürüm ara",
+          "searchPlaceholder": "Sürüm ara…",
+          "noMatches": "Eşleşen sürüm yok."
         },
         "ReleaseChannelSection": {
           "switchFailed": "O sürüme geçilemedi.",
           "title": "Yayın kanalı",
           "description": "Güncelleme kanallarını değiştirin veya daha eskiler dahil yayınlanmış herhangi bir sürüme geçin. Eski sürüme dönmeye izin verilir ve incelenmemiş sürümler bozuk olabilir.",
           "devOnly": "Yalnızca geliştirici",
-          "channelAriaLabel": "Güncelleme kanalı",
-          "hourlyWarning": "Saatlik sürümler doğrudan main'den, test kapısı olmadan yayınlanır ve Windows sürümleri imzasızdır. Kararlı bir sürümü hazır tutun.",
-          "dailyWarning": "Günlük sürümler doğrudan main'den, test kapısı olmadan yayınlanır ve Windows sürümleri imzasızdır. Kararlı bir sürümü hazır tutun.",
-          "adhocWarning": "Adhoc sürümler henüz birleştirilmemiş bir branch'ten gelir ve Windows sürümleri imzasızdır. Kim oluşturduysa onu bırakabilir, kararlı bir sürümü hazır tutun.",
+          "adhocWarning": "Windows derlemeleri imzasızdır. Derlemeyi oluşturan kişi desteği bırakabilir. Kararlı bir sürümü elinizin altında bulundurun.",
           "loadingBuilds": "Sürümler yükleniyor…",
           "noBuilds": "Sürüm bulunamadı",
           "refresh": "Sürüm listesini yenile",
@@ -12381,9 +12389,21 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Sürüm değiştirme yalnızca masaüstü uygulamasında kullanılabilir.",
           "devChannelUnsupportedAria": "{{value0}} (yalnızca {{value1}})",
-          "devChannelUnsupported": "{{value0}} sürümleri yalnızca {{value1}} için üretilir. Linux, Kararlı veya RC'de kalır.",
+          "devChannelUnsupported": "“{{value0}}” kanalındaki derlemeler yalnızca {{value1}} için üretilir. Linux’ta {{stable}} ve {{rc}} kanallarını kullanabilirsiniz.",
           "downloadInstaller": "Yükleyiciyi indir",
-          "manualInstallHint": "{{value0}} sürümleri Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve Kararlı'ya dönüş dahil sonraki her geçiş buradan çalışır."
+          "manualInstallHint": "“{{value0}}” kanalındaki derlemeler Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve “{{stable}}” kanalına dönüş dahil sonraki her geçiş buradan çalışır.",
+          "stableLabel": "Kararlı",
+          "stableDescription": "Genel kullanım için kararlı sürümler.",
+          "rcLabel": "RC",
+          "rcDescription": "Kararlı sürümden önce yayımlanan sürüm adayları.",
+          "hourlyLabel": "Saatlik",
+          "hourlyDescription": "main dalından her saat derlenir.",
+          "dailyLabel": "Günlük",
+          "dailyDescription": "main dalından günde bir kez derlenir.",
+          "adhocLabel": "Tek seferlik",
+          "adhocDescription": "Değişiklikleri birleştirmeden önce denemek için bir daldan alınan tek seferlik derlemeler.",
+          "devChannelPlatforms": "macOS ve Windows",
+          "scheduledWarning": "Bu derlemeler zorunlu test olmadan yayımlanır. Windows derlemeleri imzasızdır. Kararlı bir sürümü elinizin altında bulundurun."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Sistem varsayılanı",
@@ -22641,7 +22661,10 @@
       "rateLimitedInMinutes_one": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin.",
       "rateLimitedInMinutes_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin.",
       "rateLimitedInMinutesSignedOut_one": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
-      "rateLimitedInMinutesSignedOut_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın."
+      "rateLimitedInMinutesSignedOut_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
+      "automaticInstallCheckpointFailed": "Orca, yeniden başlamadan önce geçerli pencereyi kaydedemedi. Güncellemeyi yeniden yüklemeyi deneyin.",
+      "automaticInstallTerminalBusy": "Yeniden başlatma bazı terminalleri kapatır. Orca daha sonraki bir güncelleme denetiminde yeniden dener.",
+      "macStagingTimeout": "macOS hâlâ güncellemeyi hazırlıyor. Bu durum sürerse Orca’dan çıkıp uygulamayı yeniden açın."
     }
   },
   "jira": {
