@@ -99,7 +99,7 @@ export class GoogleConnect {
 
   /** Asks Google whether the saved key still works; a clear answer is kept for this key. */
   async checkClient(): Promise<GoogleClientKeyState | null> {
-    const client = this.deps.client()
+    const client = await this.deps.client()
     if (!client) {
       return null
     }
@@ -111,17 +111,17 @@ export class GoogleConnect {
   }
 
   /** The last clear check of the saved key, if it was this key. */
-  clientCheck(): GoogleClientKeyState | null {
-    const client = this.deps.client()
+  async clientCheck(): Promise<GoogleClientKeyState | null> {
+    const client = await this.deps.client()
     return client && this.keyCheck?.key === keyOf(client) ? this.keyCheck.state : null
   }
 
-  client(): GoogleClientView | null {
-    const client = this.deps.client()
+  async client(): Promise<GoogleClientView | null> {
+    const client = await this.deps.client()
     return client ? googleClientView(client) : null
   }
 
-  importClient(fileText: string): GoogleClientView {
+  async importClient(fileText: string): Promise<GoogleClientView> {
     const parsed = parseGoogleClientFile(fileText)
     if (!parsed.ok) {
       throw new Error(parsed.message)
@@ -134,21 +134,21 @@ export class GoogleConnect {
       source: 'imported' as const,
       savedAt: this.deps.now()
     }
-    saveImportedGoogleClient(config)
+    await saveImportedGoogleClient(config)
     return googleClientView(config)
   }
 
   /** The client as a Desktop app file, for an admin to hand to teammates. */
-  exportClient(): string {
-    const client = this.deps.client()
+  async exportClient(): Promise<string> {
+    const client = await this.deps.client()
     if (!client) {
       throw new Error('There is no Google client on this computer to export.')
     }
     return googleClientFile(client)
   }
 
-  accounts(): GoogleAccountView[] {
-    return listGoogleAccounts().map((entry) =>
+  async accounts(): Promise<GoogleAccountView[]> {
+    return (await listGoogleAccounts()).map((entry) =>
       'record' in entry
         ? googleAccountView(entry.record)
         : {
@@ -165,11 +165,11 @@ export class GoogleConnect {
   async checkAccounts(): Promise<GoogleAccountView[]> {
     const deps = { http: this.deps.http, now: this.deps.now }
     await Promise.all(
-      listGoogleAccounts().map(async ({ email }) => {
+      (await listGoogleAccounts()).map(async ({ email }) => {
         // An unreadable account is listed as Reconnect; googleAccessToken says it isn't connected.
         try {
           const accessToken = await googleAccessToken(email, deps)
-          const record = readGoogleAccount(email)
+          const record = await readGoogleAccount(email)
           if (!record) {
             return
           }
@@ -180,7 +180,7 @@ export class GoogleConnect {
             choices: record.choices ?? grantedGoogleChoices(record.grantedScopes),
             ...(record.projectId ? { projectId: record.projectId } : {})
           })
-          saveGoogleAccount({ ...record, services, checkedAt: this.deps.now() })
+          await saveGoogleAccount({ ...record, services, checkedAt: this.deps.now() })
         } catch (error) {
           if (!(error instanceof GoogleAccountUnavailableError)) {
             throw error
@@ -195,12 +195,12 @@ export class GoogleConnect {
    * `services` defaults to what the named account already has, else everything; a named account
    * keeps what it has, so adding a service asks Google for the union.
    */
-  startSignIn(
+  async startSignIn(
     owner: string,
     request: Omit<GoogleSignInOptions, 'choices'> & { services?: readonly GoogleServiceChoice[] }
-  ): GoogleSignInStatus {
+  ): Promise<GoogleSignInStatus> {
     const { services, ...rest } = request
-    const existing = rest.loginHint ? readGoogleAccount(rest.loginHint) : null
+    const existing = rest.loginHint ? await readGoogleAccount(rest.loginHint) : null
     const had = existing ? (existing.choices ?? grantedGoogleChoices(existing.grantedScopes)) : []
     const choices = googleChoices([
       ...(services ?? (had.length > 0 ? had : GOOGLE_SERVICE_CHOICES)),
@@ -239,11 +239,11 @@ export class GoogleConnect {
     email: string,
     revoke: boolean
   ): Promise<{ removed: string; revoked: boolean | null }> {
-    if (!hasGoogleAccount(email)) {
+    if (!(await hasGoogleAccount(email))) {
       throw new Error(`${email} isn't connected on this computer.`)
     }
     // An account this host can't read is still removed; there is no token here to revoke.
-    const record = readGoogleAccount(email)
+    const record = await readGoogleAccount(email)
     let revoked: boolean | null = null
     if (revoke) {
       const token = record?.refreshToken ?? record?.accessToken
@@ -251,7 +251,7 @@ export class GoogleConnect {
         ? await revokeGoogleToken(this.deps.http, token).catch(() => false)
         : record !== null
     }
-    removeGoogleAccount(email)
+    await removeGoogleAccount(email)
     return { removed: email.toLowerCase(), revoked }
   }
 }

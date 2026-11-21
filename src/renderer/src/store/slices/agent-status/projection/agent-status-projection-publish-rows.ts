@@ -81,6 +81,7 @@ export function publishProjectionRows(
         data.notices.add(`list\0${next.worktreeId}`)
       }
     }
+    const hadOwner = data.ownerForSource.has(key)
     if (next.rows.length && next.worktreeId) {
       data.rowsForSource.set(
         key,
@@ -90,6 +91,9 @@ export function publishProjectionRows(
     } else {
       data.rowsForSource.delete(key)
       data.ownerForSource.delete(key)
+    }
+    if (hadOwner !== data.ownerForSource.has(key)) {
+      data.rowOwnersRevision++
     }
     const mobileBefore = data.mobileOwners.get(key)
     const mobileAfter =

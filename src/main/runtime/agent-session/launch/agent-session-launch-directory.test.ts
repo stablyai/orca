@@ -1,6 +1,5 @@
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
-import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,24 +10,6 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import { openTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
-const statFault = vi.hoisted(() => {
-  const fault: { error: Error | null } = { error: null }
-  return fault
-})
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromises>()
-  return {
-    ...actual,
-    stat: async (...args: Parameters<typeof actual.stat>) => {
-      if (statFault.error) {
-        throw statFault.error
-      }
-      return actual.stat(...args)
-    }
-  }
-})
-
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
 
@@ -36,16 +17,6 @@ const FLOATING: AgentSessionExecutionLocation = {
   executionHostId: 'local',
   wslDistro: null,
   workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
-  workspaceKind: 'folder'
-}
-void {
-  ...FLOATING,
-  workspaceId: 'repo-1::/repos/one',
-  workspaceKind: 'git-worktree'
-}
-void {
-  ...FLOATING,
-  workspaceId: 'folder:folder-1',
   workspaceKind: 'folder'
 }
 
@@ -94,8 +65,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  statFault.error = null
-  vi.restoreAllMocks()
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })

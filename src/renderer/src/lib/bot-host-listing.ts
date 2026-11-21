@@ -1,4 +1,9 @@
 // Which paired servers list bots here, kept in step with the server catalog and each server's connection.
+import {
+  runtimeStatusSubscriptionsFor,
+  subscribeStoreWithStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import { BOTS_MOBILE_RUNTIME_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 import type { BotChangeScope } from '../../../shared/bots/bot-change-scope'
 import {
@@ -27,14 +32,16 @@ import {
 import { keptBotHomes } from './bot-host-kept-homes'
 import { retainListedBotGroupHosts } from './bot-group-catalog-snapshot'
 import { emitBotsChangedWindowEvent } from './bots-changed-window-event'
+import { noteBotHostCameBack } from './bot-host-link-read'
 
-export type BotHostListingInput = Pick<
+type BotHostListingStoreState = Pick<
   AppState,
-  | 'runtimeEnvironments'
-  | 'runtimeStatusByEnvironmentId'
-  | 'runtimeEnvironmentCatalogHydrated'
-  | 'folderWorkspaces'
+  'runtimeEnvironments' | 'runtimeEnvironmentCatalogHydrated' | 'folderWorkspaces'
 >
+
+export type BotHostListingInput = BotHostListingStoreState & {
+  runtimeStatusByEnvironmentId: RuntimeStatuses
+}
 
 type HostRead = {
   state: (hostId: ExecutionHostId) => BotHostState | null
@@ -105,15 +112,30 @@ export function syncBotHostListing(input: BotHostListingInput, webClient: boolea
   const becameLive = setBotHostListing(listing)
   retainListedBotGroupHosts()
   for (const hostId of becameLive) {
+    // It may have changed while away: no view acts on a read from before, or one still out from then.
+    noteBotHostCameBack(hostId)
     emitBotsChangedWindowEvent(hostId)
   }
 }
 
-/** A paired server's bots changed, or its stream came back: every bot view re-reads that server, if listed. */
+/** A paired server's bots changed: every bot view re-reads that server, if listed. */
 export function emitPairedBotsChanged(environmentId: string, scope?: BotChangeScope): void {
   const hostId = toRuntimeExecutionHostId(environmentId)
   if (readBotHostState(hostId) === 'live') {
     emitBotsChangedWindowEvent(hostId, scope)
+  }
+}
+
+/**
+ * A paired server's event stream came back after changes were lost, though the server stayed listed:
+ * as when it comes back from offline, nothing acts on a read from before, or one still out from then,
+ * and every bot view re-reads it.
+ */
+export function emitPairedBotsStreamCameBack(environmentId: string): void {
+  const hostId = toRuntimeExecutionHostId(environmentId)
+  if (readBotHostState(hostId) === 'live') {
+    noteBotHostCameBack(hostId)
+    emitBotsChangedWindowEvent(hostId)
   }
 }
 
@@ -127,23 +149,35 @@ export function installBotHostListing(
   },
   webClient: boolean
 ): () => void {
-  syncBotHostListing(store.getState(), webClient)
+  const sync = (state: BotHostListingStoreState, statuses: RuntimeStatuses): void =>
+    syncBotHostListing(
+      { ...pickListingState(state), runtimeStatusByEnvironmentId: statuses },
+      webClient
+    )
+  sync(store.getState(), runtimeStatusSubscriptionsFor(store).readStatuses())
   // Homes are read once per flush; a catalog change only marks the connected servers dirty.
   setKeptBotHomesReader((hostId, list) =>
     keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
   )
-  const stopStore = store.subscribe((state, previous) => {
+  return subscribeStoreWithStatuses(store, (state, previous, statuses, previousStatuses) => {
     if (selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous)) {
       readLiveBotHostIds().forEach(markKeptBotHostDirty)
     }
     if (
       state.runtimeEnvironments === previous.runtimeEnvironments &&
-      state.runtimeStatusByEnvironmentId === previous.runtimeStatusByEnvironmentId &&
+      statuses === previousStatuses &&
       state.runtimeEnvironmentCatalogHydrated === previous.runtimeEnvironmentCatalogHydrated
     ) {
       return
     }
-    syncBotHostListing(state, webClient)
+    sync(state, statuses)
   })
-  return stopStore
+}
+
+function pickListingState(state: BotHostListingStoreState): BotHostListingStoreState {
+  return {
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+    folderWorkspaces: selectFolderWorkspaces(state)
+  }
 }

@@ -1,12 +1,7 @@
 // The desktop bot panels' English wording, for the phone's bot header and sheet.
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import {
-  formatAutomationDateTime,
-  getAutomationRunStatusLabel
-} from '../../../src/shared/automation-run-labels'
 import { formatAutomationSchedule } from '../../../src/shared/automations/scheduling/automation-schedules'
-import { automationRunDot } from '../../../src/shared/bots/bot-activity-model'
 import { botAutomationWhenParts } from '../../../src/shared/bots/bot-automation-when'
 import { foldBotStatus, type BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import { rollUpBotStatus } from '../../../src/shared/bots/bot-sidebar-workspaces'
@@ -21,60 +16,9 @@ import {
 import { translate } from '../i18n/mobile-i18n'
 import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
-import type { SheetActivityOrigin, SheetActivityRow } from './bot-sheet-operations'
 
 export function botAgentLabel(agent: AgentType): string {
   return agent === 'claude' ? 'Claude Code' : formatAgentTypeLabel(agent)
-}
-
-export function activityOriginLabel(origin: SheetActivityOrigin | null): string | null {
-  switch (origin?.kind) {
-    case 'chat':
-      return 'Started by your chat'
-    case 'thread':
-      return origin.source ? `Started by a ${CONNECTOR_SOURCE_NAMES[origin.source]} thread` : null
-    case 'automation':
-      return `Started by automation ${origin.name}`
-    case 'session':
-      return `Started in ${origin.label}`
-    case undefined:
-      return null
-  }
-}
-
-// The desktop's mapping; a status from a newer host draws idle.
-function runDotState(row: Extract<SheetActivityRow, { kind: 'run' }>): AgentDotState {
-  return row.dot ?? (row.status ? automationRunDot(row.status) : 'idle')
-}
-
-export type ActivityRowView = { title: string; detail: string | null; dot: AgentDotState }
-
-export function activityRowView(row: SheetActivityRow): ActivityRowView {
-  switch (row.kind) {
-    case 'worker':
-      return {
-        title: row.title || 'Worker',
-        detail: activityOriginLabel(row.origin),
-        dot: row.dot
-      }
-    case 'thread': {
-      const thread = row.source ? `${CONNECTOR_SOURCE_NAMES[row.source]} thread` : 'Thread'
-      return { title: row.title || thread, detail: thread, dot: row.dot }
-    }
-    case 'run': {
-      const status =
-        row.status && row.status !== 'completed' ? getAutomationRunStatusLabel(row.status) : null
-      return {
-        title: row.automationName,
-        detail: ['Run', formatAutomationDateTime(row.at), status].filter(Boolean).join(' · '),
-        dot: runDotState(row)
-      }
-    }
-  }
-}
-
-export function workersHeading(running: number): string {
-  return running === 0 ? 'Workers' : `Workers · ${running} running`
 }
 
 // The desktop's event words; an event a newer host sends falls back to its service's line.

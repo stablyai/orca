@@ -13,14 +13,13 @@ const contractGlobs = [
 // Older regression tests this job also runs; they get no work-count exception.
 const namedContracts = [
   'src/renderer/src/components/agent/launch-menu/use-new-tab-agent-menu-host-preferences.test.tsx',
+  'src/renderer/src/components/native-chat/subagents/use-structured-native-chat-subagents.performance.test.tsx',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 ]
-// Wall-clock budgets aren't contracts: this selection must run in seconds and never flake on a busy runner.
-const notContracts = ['src/main/bots/bot-chat-search-host.performance.test.ts']
 for (const contract of namedContracts) {
   if (!existsSync(resolve(contract))) {
     throw new Error(`Missing performance contract: ${contract}`)
@@ -35,9 +34,7 @@ export default defineConfig({
     projects: undefined,
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: [...contractGlobs, ...namedContracts],
-    exclude: [...(baseConfig.test?.exclude ?? []), ...notContracts],
     benchmark: { include: [] },
-    fileParallelism: false,
     retry: 0
   }
 })

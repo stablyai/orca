@@ -90,8 +90,8 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
     browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId),
   reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked),
   popupReleased: (opener) => browserManager.invalidateGuestMemoryProtection(opener),
-  openNewTabPopup: (source, request, observed) =>
-    browserManager.openNewTabPopup(source, request, observed),
+  openNewTabPopup: (source, request, observed, childOpener) =>
+    browserManager.openNewTabPopup(source, request, observed, childOpener),
   releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry

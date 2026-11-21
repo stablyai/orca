@@ -1,9 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import {
+  closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../store-lifecycle/journal-host-database-test-support'
@@ -59,7 +61,9 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
+  // source() opens a cached host database that closeAll() leaves open.
+  await closeTestJournalHostDatabase(root)
+  await removeTempDirs([root])
 })
 
 it.each([false, true])(

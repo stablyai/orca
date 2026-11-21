@@ -32,7 +32,8 @@ export type BotItemGroupId = (typeof BOT_ITEM_GROUP_IDS)[number]
 export const BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT: ReadonlySet<BotItemGroupId> = new Set([
   'planned',
   'snoozed',
-  'stale'
+  'stale',
+  'closed'
 ])
 
 export type BotItemGroups = Record<BotItemGroupId, BotItem[]>
