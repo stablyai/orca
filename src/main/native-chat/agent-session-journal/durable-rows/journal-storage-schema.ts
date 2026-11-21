@@ -134,6 +134,13 @@ const messageSource = z.object({
   orchestration: orchestration.nullable().optional()
 })
 
+const storedConnectorDelivery = z.object({
+  account: z.string(),
+  conversation: z.object({ source: z.string(), externalId: z.string() }),
+  deliveryId: z.string(),
+  carried: z.array(z.string()).optional()
+})
+
 const block = z.discriminatedUnion('type', [
   textBlock.extend({
     contextClear: z
@@ -198,13 +205,9 @@ export const storedMessageBody = messageBody.extend({
   origin: text,
   asker: storedConnectorAsker.optional(),
   connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
-  connectorDelivery: z
-    .object({
-      account: z.string(),
-      conversation: z.object({ source: z.string(), externalId: z.string() }),
-      deliveryId: z.string(),
-      carried: z.array(z.string()).optional()
-    })
+  connectorDelivery: storedConnectorDelivery.optional(),
+  connectorClaim: z
+    .object({ cutTurnId: z.string(), origin: z.array(storedConnectorDelivery) })
     .optional(),
   tookOver: z
     .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
