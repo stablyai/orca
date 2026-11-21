@@ -3,13 +3,14 @@ import { nativeChatSlotIndexOf } from '../conversation/slots/native-chat-transcr
 import type { NativeChatTranscriptSlot } from '../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatNavigationRequest } from '../viewport/navigation/use-native-chat-transcript-navigation'
 import type { useNativeChatHistoryJump } from '../viewport/navigation/use-native-chat-history-jump'
+import { subscribeLinkOpenRequests } from '@/lib/links/link-open-request'
 import { showQuotedText } from './native-chat-quote-highlight'
 import type { NativeChatQuoteJumpDeps } from './native-chat-quote-sources'
 
 export type NativeChatQuoteJump = NonNullable<NativeChatQuoteJumpDeps['jumpToMessage']>
 
-// About half a second: the landing draws a loaded row well before this.
-const SOURCE_FRAMES = 30
+// The landing draws a loaded row well before this, whatever the display's frame rate.
+const SOURCE_WAIT_MS = 500
 
 /** The transcript's jump to a quoted message; null outside a transcript. */
 export const NativeChatQuoteJumpContext = createContext<NativeChatQuoteJump | null>(null)
@@ -55,11 +56,13 @@ export function useNativeChatQuoteJump({
       }
       beginNavigation()
       let frame = 0
+      let deadline = 0
       const showWhenDrawn = (): void => {
         if (!isCurrent()) {
           return
         }
         frame++
+        deadline ||= performance.now() + SOURCE_WAIT_MS
         // By the message id: a tool run's member rows use data-index too.
         const source =
           frame < 2
@@ -69,7 +72,7 @@ export function useNativeChatQuoteJump({
               )
         if (source) {
           showQuotedText(source, text, place)
-        } else if (frame < SOURCE_FRAMES) {
+        } else if (performance.now() < deadline) {
           requestAnimationFrame(showWhenDrawn)
         } else {
           notifyMissing()
@@ -83,8 +86,10 @@ export function useNativeChatQuoteJump({
         return true
       }
       // A long chat keeps only its latest messages loaded, for example after a send. The link landing
-      // takes the reader off the end.
+      // takes the reader off the end. A newer link open stops the paging before it lands here.
+      const stop = subscribeLinkOpenRequests(beginNavigation)
       startHistoryJump({ kind: 'item', id: messageId }, (result) => {
+        stop()
         if (result === 'landed') {
           requestAnimationFrame(showWhenDrawn)
         } else if (result === 'missing' && isCurrent()) {
