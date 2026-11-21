@@ -198,7 +198,7 @@ export function NativeChatQueuedMessageCard({
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
       className={cn(
-        'group/queued relative px-2.5 py-1.5',
+        'group/queued relative flex items-start gap-1 py-1 pr-1 pl-2.5 hover:bg-accent/50 dark:hover:bg-accent/35',
         // Lit while the chat's composer shows Steer queued: the card that press would send.
         showsSteerShortcut &&
           '[[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-accent'
@@ -213,147 +213,151 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex items-center gap-1">
-        <span className="relative flex size-3.5 shrink-0 items-center justify-center">
-          {attention && !drag?.grip ? (
-            <AlertCircle className="size-3.5 text-destructive" aria-hidden />
-          ) : (
-            <ListEnd
-              className={cn(
-                'size-3.5 text-muted-foreground',
-                drag?.grip &&
-                  'group-hover/queued:opacity-0 group-focus-within/queued:opacity-0 [@media(hover:none)]:opacity-0'
-              )}
-              aria-hidden
-            />
-          )}
-          {drag?.grip}
-        </span>
-        <div className="min-w-0 flex-1">
-          {sender}
-          {expanded ? null : (
-            <p ref={measureLine} className="truncate text-sm" title={line}>
-              {line}
-            </p>
-          )}
-          {caption ? (
-            <p
-              className={
-                returned
-                  ? 'truncate text-xs text-destructive'
-                  : 'truncate text-xs text-muted-foreground'
-              }
-            >
-              {attention && drag?.grip ? (
-                <AlertCircle
-                  className="mr-1 inline size-3.5 align-text-bottom text-destructive"
-                  aria-hidden
-                />
-              ) : null}
-              {caption}
-            </p>
-          ) : null}
-        </div>
-        {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
-        {expanded || clipped ? (
-          <QueuedMessageExpandToggle
-            expanded={expanded}
-            controls={expanded ? textId : undefined}
-            onToggle={() => setExpanded(!expanded)}
+      <span className="relative flex h-7 w-3.5 shrink-0 items-center justify-center">
+        {attention && !drag?.grip ? (
+          <AlertCircle className="size-3.5 text-destructive" aria-hidden />
+        ) : (
+          <ListEnd
+            className={cn(
+              'size-3.5 text-muted-foreground',
+              drag?.grip &&
+                'group-hover/queued:opacity-0 group-focus-within/queued:opacity-0 [@media(hover:none)]:opacity-0'
+            )}
+            aria-hidden
           />
-        ) : null}
-        {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
-        {card.hold === 'sending' ? null : (
-          <>
-            {/* A command never steers: its Send shows only while the agent is idle. */}
-            {card.waitsForAgent ? null : (
+        )}
+        {drag?.grip}
+      </span>
+      {/* Expanded, the actions scroll with the text they belong to. */}
+      <div className={cn('min-w-0 flex-1', expanded && 'scrollbar-sleek max-h-62 overflow-y-auto')}>
+        {/* Floated so only the first line makes room; the hidden actions keep their space so text never shifts. */}
+        <div className="float-right ml-1 flex h-7 items-center">
+          {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
+          {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
+          {card.hold === 'sending' ? null : (
+            <span className="flex items-center can-hover:pointer-events-none can-hover:opacity-0 group-hover/queued:pointer-events-auto group-hover/queued:opacity-100 group-focus-within/queued:pointer-events-auto group-focus-within/queued:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+              {/* A command never steers: its Send shows only while the agent is idle. */}
+              {card.waitsForAgent ? null : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+                      size="xs"
+                      onClick={onSteer}
+                      disabled={steerHeld || busy}
+                    >
+                      <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
+                        {sendNow.steers ? (
+                          <CornerDownRight className="size-3" />
+                        ) : (
+                          <Send className="size-3" />
+                        )}
+                      </NativeChatPendingIcon>
+                      {sendNow.label}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    <span className="flex items-center gap-2">
+                      <span>{sendNow.hint}</span>
+                      {showsSteerShortcut ? (
+                        <ShortcutKeyCombo
+                          keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']}
+                        />
+                      ) : null}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
-                    size="xs"
-                    onClick={onSteer}
-                    disabled={steerHeld || busy}
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
+                    disabled={busy}
+                    onClick={onDelete}
                   >
-                    <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
-                      {sendNow.steers ? (
-                        <CornerDownRight className="size-3" />
-                      ) : (
-                        <Send className="size-3" />
-                      )}
+                    <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
+                      <Trash2 className="size-3.5" />
                     </NativeChatPendingIcon>
-                    {sendNow.label}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  <span className="flex items-center gap-2">
-                    <span>{sendNow.hint}</span>
-                    {showsSteerShortcut ? (
-                      <ShortcutKeyCombo
-                        keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']}
-                      />
-                    ) : null}
-                  </span>
+                  {t('components.native-chat.queuedMessages.delete', 'Delete')}
                 </TooltipContent>
               </Tooltip>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
-                  disabled={busy}
-                  onClick={onDelete}
-                >
-                  <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
-                    <Trash2 className="size-3.5" />
-                  </NativeChatPendingIcon>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {t('components.native-chat.queuedMessages.delete', 'Delete')}
-              </TooltipContent>
-            </Tooltip>
-            {/* The host refuses these edits: a command would become a message, a run the owner's words. */}
-            {!card.notEditable && onEdit ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t(
-                      'components.native-chat.queuedMessages.moreActions',
-                      'More actions'
-                    )}
-                    disabled={busy}
-                  >
-                    <MoreHorizontal className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem disabled={editDisabled} onSelect={onEdit}>
-                    <Pencil />
-                    {t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </>
+              {/* The host refuses these edits: a command would become a message, a run the owner's words. */}
+              {!card.notEditable && onEdit ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={t(
+                        'components.native-chat.queuedMessages.moreActions',
+                        'More actions'
+                      )}
+                      disabled={busy}
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem disabled={editDisabled} onSelect={onEdit}>
+                      <Pencil />
+                      {t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </span>
+          )}
+          {/* Holds the header chevron's column even when there is nothing more to show. */}
+          {expanded || clipped ? (
+            <QueuedMessageExpandToggle
+              expanded={expanded}
+              controls={expanded ? textId : undefined}
+              onToggle={() => setExpanded(!expanded)}
+            />
+          ) : (
+            <span aria-hidden className="size-6 shrink-0" />
+          )}
+        </div>
+        {sender}
+        {expanded ? (
+          <p
+            id={textId}
+            className="py-1 text-sm whitespace-pre-wrap break-words"
+            style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+          >
+            {line}
+          </p>
+        ) : (
+          <p ref={measureLine} className="truncate py-1 text-sm" title={line}>
+            {line}
+          </p>
         )}
+        {caption ? (
+          <p
+            className={
+              returned
+                ? 'truncate text-xs text-destructive'
+                : 'truncate text-xs text-muted-foreground'
+            }
+          >
+            {attention && drag?.grip ? (
+              <AlertCircle
+                className="mr-1 inline size-3.5 align-text-bottom text-destructive"
+                aria-hidden
+              />
+            ) : null}
+            {caption}
+          </p>
+        ) : null}
       </div>
-      {expanded ? (
-        <p
-          id={textId}
-          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
-          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
-        >
-          {line}
-        </p>
-      ) : null}
     </li>
   )
 }
