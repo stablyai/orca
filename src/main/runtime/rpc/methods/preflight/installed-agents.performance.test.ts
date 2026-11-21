@@ -26,36 +26,49 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+function checkoutInventory(count: number) {
+  const repo = storeRepo({ id: `inventory-${count}`, path: `/work/inventory-${count}` })
+  const meta: Record<string, WorktreeMeta> = {}
+  for (let index = 0; index < count; index += 1) {
+    meta[`${repo.id}::${repo.path}/${index}`] = storeWorktreeMeta({
+      hostId: 'local',
+      instanceId: `checkout-${index}`
+    })
+  }
+  const readMeta = vi.fn((id: string) => meta[id])
+  scan.mockResolvedValue({
+    ok: true,
+    worktrees: Array.from({ length: count }, (_, index) => ({
+      path: `${repo.path}/${index}`,
+      head: 'abc',
+      branch: `refs/heads/branch-${index}`,
+      isBare: false,
+      isMainWorktree: index === 0
+    }))
+  })
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getRepos: () => [repo],
+      getRepo: (id) => (id === repo.id ? repo : undefined),
+      getProjects: () => [],
+      getAllWorktreeMeta: () => meta,
+      getWorktreeMeta: (id: string) => meta[id],
+      getWorktreeMetaForHost: readMeta,
+      setWorktreeMeta: ({ id }: HostWorktreeTarget, changes: Partial<WorktreeMeta>) => {
+        meta[id] = { ...storeWorktreeMeta(), ...meta[id], ...changes }
+        return meta[id]
+      },
+      getAllWorktreeLineage: () => ({}),
+      getAllWorkspaceLineage: () => ({})
+    })
+  )
+  return { repo, runtime, readMeta }
+}
+
 describe('installed-agent workspace resolution bound', () => {
   // #45072 reuses the selected workspace so detection does not read its catalog a second time.
   it.each([750, 7500])('resolves the selected checkout once among %i worktrees', async (count) => {
-    const repo = storeRepo({ id: `inventory-${count}`, path: `/work/inventory-${count}` })
-    const meta: Record<string, WorktreeMeta> = {}
-    scan.mockResolvedValue({
-      ok: true,
-      worktrees: Array.from({ length: count }, (_, index) => ({
-        path: `${repo.path}/${index}`,
-        head: 'abc',
-        branch: `refs/heads/branch-${index}`,
-        isBare: false,
-        isMainWorktree: index === 0
-      }))
-    })
-    const runtime = new OrcaRuntimeService(
-      partialRuntimeStore({
-        getRepos: () => [repo],
-        getRepo: (id) => (id === repo.id ? repo : undefined),
-        getProjects: () => [],
-        getAllWorktreeMeta: () => meta,
-        getWorktreeMeta: (id: string) => meta[id],
-        setWorktreeMeta: ({ id }: HostWorktreeTarget, changes: Partial<WorktreeMeta>) => {
-          meta[id] = { ...storeWorktreeMeta(), ...meta[id], ...changes }
-          return meta[id]
-        },
-        getAllWorktreeLineage: () => ({}),
-        getAllWorkspaceLineage: () => ({})
-      })
-    )
+    const { repo, runtime } = checkoutInventory(count)
     const resolve = vi.spyOn(runtime, 'showManagedWorktree')
     vi.spyOn(detection, 'detectAgentsOnHost').mockResolvedValue(['codex'])
 
@@ -66,6 +79,23 @@ describe('installed-agent workspace resolution bound', () => {
 
     expect(result).toMatchObject({ agents: ['codex'] })
     expect(resolve).toHaveBeenCalledTimes(1)
+  })
+
+  // #45952: a cold missing-id lookup stamped every sibling before the full catalog stamped them again.
+  it.each([
+    [750, 750],
+    [7500, 7500]
+  ])('reads metadata once when a checkout is absent among %i worktrees', async (count, reads) => {
+    const { repo, runtime, readMeta } = checkoutInventory(count)
+
+    await expect(
+      listInstalledWorkspaceAgents(runtime, {
+        worktreeId: `${repo.id}::${repo.path}/removed`,
+        worktreeHostId: 'local'
+      })
+    ).rejects.toThrow('selector_not_found')
+
+    expect(readMeta).toHaveBeenCalledTimes(reads)
   })
 
   it.each([

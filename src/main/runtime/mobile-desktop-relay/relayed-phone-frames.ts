@@ -45,6 +45,7 @@ export function rewriteRelayedPhoneRequest(
       workspaceHost?.kind === 'runtime' &&
       target.environmentId === workspaceHost.environmentId
     ) {
+      // The receiving runtime names its own workspaces local, regardless of the desktop's alias.
       forwarded.params = { ...parsed.params, worktreeHostId: 'local' }
     }
   }

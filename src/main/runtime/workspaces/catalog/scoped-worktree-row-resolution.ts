@@ -58,14 +58,17 @@ export async function resolveScopedWorktreeIdRow(
         resolveLocalProjectRuntimesForRepos(store, [repo]),
         ownerCount
       )
-  // Stamp the whole scan as a full join would; only the projection below is narrowed.
-  const metaById = store.getAllWorktreeMeta() ?? {}
-  const ownerStamped = stampRepoWorktreeRows(deps, repo, ownerScan, metaById, ownerCount)
   // Accept one normalized equivalent id; multiple path matches remain ambiguous (#16243).
   const comparisonKey = worktreeIdentityKey(worktreeId)
   const equivalentIds = new Set(
     ownerScan ? (scanRowIndex(repo, ownerScan.worktrees).byIdentity.get(comparisonKey) ?? []) : []
   )
+  if (ownerScan?.ok && equivalentIds.size === 0) {
+    return null
+  }
+  // Stamp the whole scan as a full join would; only the projection below is narrowed.
+  const metaById = store.getAllWorktreeMeta() ?? {}
+  const ownerStamped = stampRepoWorktreeRows(deps, repo, ownerScan, metaById, ownerCount)
   const projectOwner = (ids: ReadonlySet<string>): RepoWorktreeRow[] =>
     projectRepoWorktreeRows(
       deps,
