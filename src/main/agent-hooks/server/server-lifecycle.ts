@@ -50,9 +50,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
       // Namespace dev endpoints per instance; packaged endpoints stay stable for PTY reconnect.
       this.configureEndpointPaths(options.userDataPath, options.endpointNamespace)
     }
-    if (this.endpointDir) {
-      void this.claudeAgentViews.restore(join(this.endpointDir, 'claude-agent-views.json'))
-    }
     this.token = randomUUID()
     this.endpointFileWritten = false
     this.closeStatusSnapshotWriter()
@@ -61,6 +58,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     }
     if (!isCurrent()) {
       return
+    }
+    if (this.endpointDir) {
+      void this.restoreClaudeAgentViews(join(this.endpointDir, 'claude-agent-views.json'))
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
@@ -108,7 +108,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(this.claudeAgentViews.receive(body)))
+          res.end(JSON.stringify(this.claudeAgentViews.receive(body, { sameMachine: true })))
           return
         }
         await this.initializeStatusHookOwner()

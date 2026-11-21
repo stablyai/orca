@@ -8,6 +8,7 @@ import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import type { EnrichedAgentHookEventPayload } from './server-types'
 import { respondAfterAgentToolPluginHooks } from '../tool-events/agent-tool-plugin-hooks'
 import { ClaudePermissionHookHolds } from './claude-permission-hook-hold'
 
@@ -37,6 +38,34 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       return
     }
     await respondAfterAgentToolPluginHooks(res, source, body, req.headers, accepted)
+  }
+
+  /** Restored entries count only for panes whose hydrated status still names that Claude session. */
+  protected restoreClaudeAgentViews(filePath: string): Promise<void> {
+    const hooksOn = this.statusHooksEnabled
+    return this.claudeAgentViews.restore(
+      filePath,
+      (view) =>
+        !hooksOn ||
+        this.getStatusSnapshotForPane(view.paneKey).some(
+          (row) =>
+            row.agentType === 'claude' &&
+            (!row.providerSession?.id || row.providerSession.id === view.sessionId)
+        )
+    )
+  }
+
+  // A pane's status row goes away with its agent or the pane, so its agent-view entry goes too.
+  protected override commitStatusRowMutation(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    after: EnrichedAgentHookEventPayload | null | undefined,
+    emit = true
+  ): boolean {
+    const committed = super.commitStatusRowMutation(before, after, emit)
+    if (before && before.paneKey !== after?.paneKey) {
+      this.claudeAgentViews.forget(before.paneKey, before.providerSession?.id)
+    }
+    return committed
   }
 
   setStatusHooksEnabled(enabled: boolean): void {

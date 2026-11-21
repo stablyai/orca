@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -94,6 +94,16 @@ describe('Claude agent view delivery', () => {
       await vi.waitFor(() => expect(existsSync(file)).toBe(true))
       before.close()
 
+      // A Claude that registers while the next main is still reading the file must not erase it.
+      const other = { ...identity, paneKey: 'tab:22222222-2222-4222-8222-222222222222' }
+      const racing = new ClaudeAgentViewBridge()
+      const restored = racing.restore(file)
+      racing.receive({ ...other, action: 'register', keybindings: binding('ctrl+alt+h') })
+      await restored
+      await vi.waitFor(() => expect(readFileSync(file, 'utf8')).toContain(other.paneKey))
+      expect(readFileSync(file, 'utf8')).toContain(identity.paneKey)
+      racing.close()
+
       const after = new ClaudeAgentViewBridge()
       await after.restore(file)
       const trigger = vi.fn(async () => true)
@@ -112,4 +122,50 @@ describe('Claude agent view delivery', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('types the shortcut the user binds now, since an idle mod does not re-read its keybindings', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-view-'))
+    try {
+      const keybindings = join(dir, 'keybindings.json')
+      writeFileSync(keybindings, binding('ctrl+alt+g'))
+      const bridge = new ClaudeAgentViewBridge()
+      bridge.receive(
+        {
+          ...identity,
+          action: 'register',
+          configDir: dir,
+          view: { agentId: 'previous', revision: 1 },
+          keybindings: binding('ctrl+alt+g')
+        },
+        { sameMachine: true }
+      )
+      writeFileSync(keybindings, binding('ctrl+alt+h'))
+      const trigger = vi.fn(async () => true)
+      const result = bridge.view({ ...identity, agentId: 'child', trigger })
+      await vi.waitFor(() =>
+        expect(trigger).toHaveBeenCalledWith('\u001b[104;7u', expect.any(Function))
+      )
+      bridge.receive({
+        ...identity,
+        action: 'ack',
+        ...bridge.receive({ ...identity, action: 'take' })
+      })
+      expect(await result).toEqual({ status: 'viewed' })
+
+      writeFileSync(keybindings, JSON.stringify({ bindings: [] }))
+      trigger.mockClear()
+      expect(await bridge.view({ ...identity, agentId: 'other-child', trigger })).toEqual({
+        status: 'unsupported'
+      })
+      expect(trigger).not.toHaveBeenCalled()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
+
+function binding(chord: string): string {
+  return JSON.stringify({
+    bindings: [{ context: 'Chat', bindings: { [chord]: 'command:orca-agent-view' } }]
+  })
+}

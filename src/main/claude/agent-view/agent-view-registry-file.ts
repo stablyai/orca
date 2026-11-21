@@ -22,6 +22,7 @@ export const ClaudeAgentViewIdentity = z.object({
 const RegisteredView = ClaudeAgentViewIdentity.extend({
   chord: z.string().refine((chord) => CLAUDE_AGENT_VIEW_SHORTCUTS.some((s) => s.chord === chord)),
   seenAt: z.number(),
+  configDir: z.string().min(1).max(4096).optional(),
   view: ClaudeAgentViewObservation.optional()
 })
 export type RegisteredClaudeAgentView = z.infer<typeof RegisteredView>
@@ -57,15 +58,45 @@ export class ClaudeAgentViewRegistryFile {
   private writing?: Promise<void>
   private latest?: readonly RegisteredClaudeAgentView[]
   private failed = false
+  private restoring = false
+  private savedDuringRestore = false
+  private closed = false
 
-  constructor(readonly filePath: string) {}
+  constructor(
+    readonly filePath: string,
+    private readonly current: () => readonly RegisteredClaudeAgentView[]
+  ) {}
 
-  load(): Promise<RegisteredClaudeAgentView[]> {
-    return readRegistry(this.filePath)
+  /** `merge` folds the saved entries into memory and says whether memory now differs from the file.
+   *  Saves wait until then, so an early registration cannot overwrite entries not merged yet. */
+  async restore(merge: (saved: RegisteredClaudeAgentView[]) => boolean): Promise<void> {
+    this.restoring = true
+    const saved = await readRegistry(this.filePath)
+    this.restoring = false
+    if (this.closed) {
+      return
+    }
+    const changed = merge(saved)
+    if (changed || this.savedDuringRestore) {
+      void this.save()
+    }
+    this.savedDuringRestore = false
   }
 
-  save(sessions: readonly RegisteredClaudeAgentView[]): Promise<void> {
-    this.latest = sessions
+  /** Stop: a write already queued still lands; nothing new is written. */
+  close(): void {
+    this.closed = true
+  }
+
+  save(): Promise<void> {
+    if (this.closed) {
+      return this.writing ?? Promise.resolve()
+    }
+    if (this.restoring) {
+      this.savedDuringRestore = true
+      return Promise.resolve()
+    }
+    this.latest = this.current()
     this.writing ??= this.drain().finally(() => {
       this.writing = undefined
     })

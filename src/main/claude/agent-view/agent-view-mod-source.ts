@@ -11,7 +11,8 @@ let endedSessionId
 let observedView
 let viewRevision = 0
 let retryDelay = 0
-let retryQueued = false
+let retryStartedAt = 0
+let timerQueued = false
 let announcedAt = 0
 
   async function post($, action, data = {}, session = identity) {
@@ -32,22 +33,29 @@ let announcedAt = 0
       headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
       body: JSON.stringify({ ...session, action, ...data })
     })
-    if (!response.ok) return undefined
-    if (!response.text) return {}
+    // 204 (Orca not current, or a relay that could not forward) is not delivered.
+    if (!response.ok || !response.text) return undefined
     try {
       const data = JSON.parse(response.text)
       return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
     } catch { return {} }
   }
 
-  // Bounded backoff (~2 min) rides out an Orca restart; idle Claudes never poll.
-  function retry($) {
-    if (retryQueued || retryDelay >= 64000) return
-    retryDelay = retryDelay ? retryDelay * 2 : 1000
-    retryQueued = true
+  function schedule($, delay) {
+    if (timerQueued) return
+    timerQueued = true
     try {
-      $.clock.after(retryDelay, () => { retryQueued = false; return announce($) })
-    } catch { retryQueued = false }
+      $.clock.after(delay, () => { timerQueued = false; return announce($) })
+    } catch { timerQueued = false }
+  }
+
+  // Undelivered: back off 1 s doubling to 60 s, for up to an hour (an Orca restart or quit).
+  async function retry($) {
+    const now = await $.clock.now()
+    if (!retryDelay) retryStartedAt = now
+    if (now - retryStartedAt > 3600000) return
+    retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 60000)
+    schedule($, retryDelay)
   }
 
   async function announce($) {
@@ -71,15 +79,18 @@ let announcedAt = 0
       try {
         result = await post($, 'register', {
           keybindings,
+          configDir,
           ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
         }, session)
       } catch {}
       if (!result) {
-        retry($)
+        await retry($)
         return {}
       }
       retryDelay = 0
       announcedAt = await $.clock.now()
+      // An older Orca forgets a pane after 15 s of quiet; keep its 5 s heartbeat.
+      if (!result.durable) schedule($, 5000)
       return result
     } catch {
       return {}
@@ -119,7 +130,7 @@ export function register(on) {
     return result
   })
 
-  // Picks up keybinding edits without a timer; at most one post per 30 s of turns.
+  // Re-announces after Orca dropped the pane (or missed a post); at most one post per 30 s of turns.
   try {
     on('turn.start', async ($, event, next) => {
       const result = await next(event)
@@ -134,13 +145,12 @@ export function register(on) {
     try {
       const session = identity
       if (!session || session.sessionId !== await $.session.id()) return {}
-      let request = await post($, 'take', {}, session)
-      if (request?.unknown) {
-        await announce($)
-        if (identity !== session) return {}
-        request = await post($, 'take', {}, session)
+      const request = await post($, 'take', {}, session)
+      if (!request || request.unknown) {
+        void announce($)
+        return {}
       }
-      if (!request?.requestId || request.expiresAt < await $.clock.now()) return {}
+      if (!request.requestId || request.expiresAt < await $.clock.now()) return {}
       if (identity !== session || session.sessionId !== await $.session.id()) return {}
       let deny
       try {
