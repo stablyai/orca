@@ -1,11 +1,18 @@
 import { CLAUDE_PRE_TOOL_USE_DECISION } from '../../agent-hooks/tool-events/agent-tool-plugin-hooks'
 import { CLAUDE_PERMISSION_REQUEST_DECISION } from '../../agent-hooks/server/claude-permission-hook-hold'
+import {
+  CLAUDE_MEMORY_PERMISSION_ALLOW,
+  CLAUDE_MEMORY_PERMISSION_DECISION
+} from '../claude-profile-memory-permission'
 
 /**
  * Lets Claude Code's PreToolUse hook print Orca's answer (plugins' `agent.tool.before`), and its
- * PermissionRequest hook print a coordinator's or person's answer, instead of a fixed `{}`. Every
- * other event still prints `{}` before it posts. The answer is printed only when it is a decision
- * for that same event; a timeout, an error or no answer prints `{}`, so Claude asks as usual.
+ * PermissionRequest hook print a coordinator's or person's answer, instead of a fixed `{}`.
+ * A Write, Edit, or MultiEdit whose path contains `/memory/` asks for one exact auto-memory allow
+ * and does not open that coordinator hold. The server still allows only a file under a profile
+ * `projects/<one>/memory/` directory. Every other event still prints `{}` before it posts. The
+ * answer is printed only when it is a decision for that same event; a timeout, an error or no
+ * answer prints `{}`, so Claude asks as usual.
  */
 export function buildPosixClaudeDecisionPreludeLines(): string[] {
   return [
@@ -27,7 +34,18 @@ export function buildPosixClaudeDecisionModeLines(): string[] {
     `  *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*) orca_hook_decides=${CLAUDE_PRE_TOOL_USE_DECISION}; max_time=8 ;;`,
     // Why 126 s: Orca answers within its 122 s hold; the managed entry's 130 s timeout outlasts both.
     // An async entry's output is ignored, so it answers `{}` first like any other event.
-    `  *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*) if [ -n "\${ORCA_HOOK_ASYNC:-}" ]; then printf '{}\\n'; orca_hook_printed=1; else orca_hook_decides=${CLAUDE_PERMISSION_REQUEST_DECISION}; max_time=126; fi ;;`,
+    // A memory write uses the short allow. The server rejects any path that is not a memory file.
+    `  *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*)`,
+    '    if [ -n "${ORCA_HOOK_ASYNC:-}" ]; then printf \'{}\\n\'; orca_hook_printed=1; else',
+    '      case "$payload" in',
+    `        *'"tool_name":"Write"'*|*'"tool_name": "Write"'*|*'"tool_name":"Edit"'*|*'"tool_name": "Edit"'*|*'"tool_name":"MultiEdit"'*|*'"tool_name": "MultiEdit"'*)`,
+    '          case "$payload" in',
+    `            *'/memory/'*) orca_hook_decides=${CLAUDE_MEMORY_PERMISSION_DECISION}; max_time=8 ;;`,
+    `            *) orca_hook_decides=${CLAUDE_PERMISSION_REQUEST_DECISION}; max_time=126 ;;`,
+    '          esac ;;',
+    `        *) orca_hook_decides=${CLAUDE_PERMISSION_REQUEST_DECISION}; max_time=126 ;;`,
+    '      esac',
+    '    fi ;;',
     "  *) printf '{}\\n'; orca_hook_printed=1 ;;",
     'esac'
   ]
@@ -54,6 +72,7 @@ export function wrapPosixClaudeDecisionPost(postLines: readonly string[]): strin
     'case "$orca_hook_decides:$orca_hook_reply" in',
     `  ${CLAUDE_PRE_TOOL_USE_DECISION}:'{"hookSpecificOutput":{"hookEventName":"PreToolUse"'*'}}') orca_hook_answer=$orca_hook_reply ;;`,
     `  ${CLAUDE_PERMISSION_REQUEST_DECISION}:'{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"'*'}}}') orca_hook_answer=$orca_hook_reply ;;`,
+    `  ${CLAUDE_MEMORY_PERMISSION_DECISION}:'${CLAUDE_MEMORY_PERMISSION_ALLOW}') orca_hook_answer=$orca_hook_reply ;;`,
     'esac'
   ]
 }
