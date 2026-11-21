@@ -126,4 +126,18 @@ describe('agent copy writes', () => {
     await act(() => result.current.remove(first))
     expect(saved().map((copy) => copy.id)).toEqual(['claude.b'])
   })
+
+  it("keeps the original copy's queued edit on it when a duplicate takes its old id meanwhile", async () => {
+    const { result, saved } = setup([{ id: 'claude.claude-copy', name: 'A', agent: 'claude' }])
+    await act(async () => {
+      const moved = result.current.changeId('claude.claude-copy', 'claude.b')
+      result.current.duplicate({ id: 'claude', label: 'Claude' })
+      const edited = result.current.rename('claude.claude-copy', 'Edited')
+      await Promise.all([moved, edited])
+    })
+    expect(saved()).toEqual([
+      { id: 'claude.b', name: 'Edited', agent: 'claude' },
+      expect.objectContaining({ id: 'claude.claude-copy', name: 'Claude copy' })
+    ])
+  })
 })
