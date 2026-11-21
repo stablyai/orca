@@ -140,7 +140,7 @@ export function checkTidyUpOps(
       if (found.some(fixed)) {
         return "names your owner's rule or an undated line, which only your owner changes"
       }
-      if (found.length > picked.length) {
+      if (picked.some((line) => groupOf(line).length > 1)) {
         return 'names a line MEMORY.md states more than once; only your owner tidies those'
       }
       return found.some(secretish)

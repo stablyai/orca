@@ -91,6 +91,12 @@ describe("Orca's checks on a tidy-up's ops", () => {
       'retire 1: names a line MEMORY.md states more than once; only your owner tidies those',
       'retire 2: names a line that looks like a secret, or sits under one; only your owner moves it'
     ])
+    // Naming every copy doesn't make a fact stated twice any easier to undo.
+    expect(
+      check([{ op: 'demote', lines: [ref(1, copies), ref(3, copies)], topic: 'x' }], copies).skipped
+    ).toEqual([
+      'demote 1: names a line MEMORY.md states more than once; only your owner tidies those'
+    ])
     const ranged = check(
       [{ op: 'demote', range: [ref(1, copies), ref(5, copies)], topic: 'x' }],
       copies
@@ -219,6 +225,14 @@ describe('the status move', () => {
       '- 2026-11-03 #4417 merged at a1b2c3d4',
       '- 2026-11-02 #4500 merged at b2c3d4e5'
     ].join('\n')
+    // A copy under a secret keeps the whole fact in place, so the plan never misses a live copy.
+    const hidden = [
+      '# M',
+      '- 2026-11-01 #4417 merged at a1b2c3d4',
+      '- 2026-11-01 token=sk-live-1234567890abcdef',
+      '- 2026-11-03 #4417 merged at a1b2c3d4'
+    ].join('\n')
+    expect(statusMigrationPlan(hidden, '2026-11-21')).toBeNull()
     expect(statusMigrationPlan(crowded, '2026-11-21')?.topics.get('journal/2026-11')).toEqual([
       '# Status moved out of MEMORY.md, 2026-11',
       '- 2026-11-02 #4500 merged at b2c3d4e5'

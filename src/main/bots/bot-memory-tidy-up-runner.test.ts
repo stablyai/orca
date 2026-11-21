@@ -815,7 +815,14 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
   it.each([
     ['the line a merge keeps changed', OLD.replace('are in Eastern', 'are in Pacific')],
     ['a line it moves was undated', OLD.replace('- 2026-10-02 times in', '- times in')],
-    ['a copy of a line it moves was written', `${OLD}- 2026-11-06 times in Eastern\n`]
+    ['a copy of a line it moves was written', `${OLD}- 2026-11-06 times in Eastern\n`],
+    [
+      'a secret-looking line was written above a line it moves',
+      OLD.replace(
+        '- 2026-10-02 times in',
+        '- 2026-10-01 token=sk-live-1234567890abcdef\n- 2026-10-02 times in'
+      )
+    ]
   ])('takes nothing out when %s during the run', async (_what, changed) => {
     const run = harness({
       memory: OLD,

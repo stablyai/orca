@@ -1,6 +1,7 @@
 // Writes a tidy-up's draft or ops: checked against the MEMORY.md the run read, then written onto the
 // files as they are now, memory/ first, so a line MEMORY.md loses is always kept somewhere.
-import type { BotMemoryChange } from '../../shared/bot-memory-lines'
+import type { BotMemoryChange, BotMemoryLine } from '../../shared/bot-memory-lines'
+import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { BotHomeFilesystem } from './bot-home'
 import type { BotMemoryRecord } from './bot-memory-record'
 import { checkTidyUpOps } from './bot-memory-ops'
@@ -15,6 +16,9 @@ import {
   tidyUpSummaryOf,
   writeTidyUpFiles
 } from './bot-memory-tidy-up-draft'
+
+const looksSecret = ({ line, after }: BotMemoryLine): boolean =>
+  redactSecretLike(line) !== line || (after !== null && redactSecretLike(after) !== after)
 
 type ApplyDeps = {
   memory: Pick<BotMemoryRecord, 'change'>
@@ -104,7 +108,14 @@ async function applyTidyUpPlan(
       folder,
       { kind: 'tidy-up' },
       (file) => (asked = tidyUpChangeFor(plan, file)),
-      (willMake) => writeTidyUpFiles(deps.fs, folder, plan, willMake, today, written)
+      async (willMake) => {
+        // What the file will really lose, with the anchors History stores from it: a secret-looking
+        // one (added since the run read the file) would make the row non-undoable, so refuse.
+        if (plan.groups && willMake.removed.some(looksSecret)) {
+          throw new TidyUpRefused(TIDY_UP_FAILURES.changed)
+        }
+        await writeTidyUpFiles(deps.fs, folder, plan, willMake, today, written)
+      }
     )
     return tidyUpSummaryOf(plan, asked, made, written)
   } catch (error) {

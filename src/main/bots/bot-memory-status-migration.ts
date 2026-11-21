@@ -41,34 +41,29 @@ export function journalTopic(today: string): string {
 export function statusMigrationPlan(memory: string, today: string): TidyUpPlan | null {
   const snapshot = memorySnapshot(memory)
   const key = (raw: string): string | null => botMemoryLineKey({ line: raw, after: null })
-  // Lines leave by their words, so a line whose copy must stay (undated, an owner rule) stays too.
-  const kept = new Set(
-    snapshot
-      .filter(({ fact }) => fact.date === null || !isStatusLine(fact.text))
-      .map(({ raw }) => key(raw))
-  )
-  // Whole groups of copies, oldest first, until the run's share is used. A group bigger than the
-  // share moves alone in its own run, so it drains instead of waiting forever.
-  const groups = new Map<string | null, typeof snapshot>()
+  // Every line grouped by its words first; a group moves only when it is one dated status line
+  // that neither looks like a secret nor sits under one: History restores one line per fact and
+  // can't keep a secret for Undo, so anything else stays for the owner.
+  const all = new Map<string | null, typeof snapshot>()
   for (const line of snapshot) {
-    // History can't keep a secret-looking line, or the one above it, for Undo: those stay.
-    const secret =
-      redactSecretLike(line.raw) !== line.raw ||
-      (line.after !== null && redactSecretLike(line.after) !== line.after)
-    if (
-      line.fact.date !== null &&
-      isStatusLine(line.fact.text) &&
-      !kept.has(key(line.raw)) &&
-      !secret
-    ) {
-      const group = groups.get(key(line.raw))
-      if (group) {
-        group.push(line)
-      } else {
-        groups.set(key(line.raw), [line])
-      }
+    const group = all.get(key(line.raw))
+    if (group) {
+      group.push(line)
+    } else {
+      all.set(key(line.raw), [line])
     }
   }
+  const secret = ({ raw, after }: (typeof snapshot)[number]): boolean =>
+    redactSecretLike(raw) !== raw || (after !== null && redactSecretLike(after) !== after)
+  const groups = new Map(
+    [...all].filter(
+      ([, group]) =>
+        group.length === 1 &&
+        group[0].fact.date !== null &&
+        isStatusLine(group[0].fact.text) &&
+        !secret(group[0])
+    )
+  )
   const oldest = new Map(
     [...groups.values()].map((group) => [
       group,
@@ -79,9 +74,7 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
     (oldest.get(a) ?? '').localeCompare(oldest.get(b) ?? '')
   )
   const status: typeof snapshot = []
-  // A fact stated more than once stays: History restores one line per fact, so Undo can't bring
-  // back every copy.
-  for (const group of byAge.filter((candidate) => candidate.length === 1)) {
+  for (const group of byAge) {
     if (status.length > 0 && status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
       continue
     }
