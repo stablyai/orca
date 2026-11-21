@@ -157,7 +157,8 @@ export function mergeSnapshotAndSessions(
       const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
       const repoId = worktree?.repoId ?? wt.repoId
       // A worktree stamped with a paired host belongs to that host alone, wherever its repo is tracked.
-      const recordHostId = ctx.ambiguousWorktreeIds?.has(wt.worktreeId)
+      const ambiguous = ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ?? false
+      const recordHostId = ambiguous
         ? null
         : canonicalExecutionHostId(ctx.worktreeById?.get(wt.worktreeId)?.hostId)
       const owned = recordHostId?.startsWith('runtime:')
@@ -173,8 +174,8 @@ export function mergeSnapshotAndSessions(
         hostLabel: host.hostLabel,
         readOnly: true,
         runtimeHostId: host.hostId,
-        // A repo placed on this host isn't enough: a worktree the catalog hasn't listed yet can't be selected.
-        unplaced: owned && ctx.worktreeById?.has(wt.worktreeId) ? undefined : true
+        // A repo placed on this host isn't enough: an unlisted or duplicated worktree can't be selected.
+        unplaced: owned && !ambiguous && ctx.worktreeById?.has(wt.worktreeId) ? undefined : true
       })
     }
   }

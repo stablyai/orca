@@ -150,4 +150,28 @@ describe('folder Resource Manager rows', () => {
       })
     ])
   })
+
+  it("keeps a duplicated worktree id's chats read-only even when its repo is on the paired machine", () => {
+    const chat = { agentSessionId: 'chat-4', agent: 'codex', name: null, cpu: 1, memory: 256 }
+    const repos = mergeSnapshotAndSessions(
+      null,
+      [],
+      context({
+        repoRuntimeHostIdById: new Map([['repo-1', 'runtime:paired']]),
+        worktreeById: new Map([['repo-1::/twin', { ...workspace, id: 'repo-1::/twin' }]]),
+        ambiguousWorktreeIds: new Set(['repo-1::/twin']),
+        runtimeHostResources: [
+          {
+            hostId: 'runtime:paired',
+            hostLabel: 'Studio',
+            worktrees: [{ ...oldRow, worktreeId: 'repo-1::/twin', repoId: 'repo-1', chats: [chat] }]
+          }
+        ]
+      })
+    )
+
+    expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
+      expect.objectContaining({ worktreeId: 'repo-1::/twin', unplaced: true })
+    ])
+  })
 })
