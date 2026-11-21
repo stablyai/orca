@@ -987,6 +987,9 @@
         "unknownPlatform": "Bilinmeyen platform \"{{platform}}\" yok sayıldı.",
         "conflictingOverrides": "Çakışan özel kısayollar yok sayıldı: {{actions}}.",
         "readFailed": "Tuş atamaları dosyası okunamadı: {{reason}}"
+      },
+      "groups": {
+        "bots": "Botlar"
       }
     },
     "ssh": {
@@ -1186,6 +1189,18 @@
         "everyNightLine": "Her gece 03.00'ten sonra veya bu bilgisayar uyandığında",
         "everyWeekLine": "Haftada bir, 03.00'ten sonra veya bu bilgisayar uyandığında",
         "everyDescriptionAwake": "Bilgisayar o saatte uykudaysa, uyandığında çalışır. Yalnızca yeni sohbet olan gecelerin ardından. Her düzenleme, kısa bir sohbet gibi {{agent}} planını kullanır."
+      },
+      "lookAround": {
+        "title": "Etrafa göz at"
+      },
+      "skills": {
+        "claudeOnly": "Yalnızca Claude",
+        "notClaude": "Claude için değil",
+        "notLoaded": "Hiçbir ajan bunu yüklemiyor",
+        "own": "{{bot}} botunun kendi becerileri",
+        "ownNone": "Henüz kendine ait becerisi yok.",
+        "ownShort": "Kendi becerileri",
+        "showMore": "{{count}} tane daha göster"
       }
     }
   },
@@ -19681,7 +19696,9 @@
         },
         "imageUnavailable": "Önizleme kullanılamıyor",
         "exitPlanMode": "Plan modundan çık",
-        "moreControls": "Diğer sohbet kontrolleri"
+        "moreControls": "Diğer sohbet kontrolleri",
+        "botFor": "Amaç: {{detail}}",
+        "bots": "Botlar"
       },
       "tool": {
         "exitCode": "çıkış {{value0}}",
@@ -20655,7 +20672,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git çalışma alanlarındaki commit edilmemiş veya izlenmeyen tüm değişiklikler kalıcı olarak silinecek.",
           "unavailable": "Değişiklikler kontrol edilemedi",
           "checking": "Değişiklikler kontrol ediliyor…",
           "checkingDetails": "Kontrol ediliyor…",
@@ -20675,7 +20691,6 @@
           "line_one": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}",
           "line_other": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}"
         },
-        "ignoredFilesLost": "Yok sayılan dosyalar kaybolacak: {{names}}",
         "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi"
       }
     },
@@ -21376,6 +21391,92 @@
       "switchedNoteTitle": "Yeni ajanlar Chat UI’da açılacak",
       "switchedNoteBody": "Terminali mi tercih ediyorsunuz? İstediğiniz zaman geri dönün: Ayarlar’da <term>Chat UI</term> arayın.",
       "openSettings": "Ayarları aç"
+    },
+    "botsTeammate": {
+      "activity": "Etkinlik",
+      "activityAdded": "<b>{{bot}}</b> bu öğeyi ekledi",
+      "activityMoved": "<b>{{who}}</b> bunu <b>{{status}}</b> durumuna taşıdı",
+      "activityWorker": "Çalışan başladı: <b>{{name}}</b>",
+      "addComment": "Yorum ekleyin…",
+      "agentDone": "Tamamlandı",
+      "agentRunning": "Çalışıyor",
+      "agents": "Kullandığınız ajanlarla çalışır",
+      "agentsFinished": "4 ajan işi tamamladı",
+      "alwaysOn": "Siz yokken işleri üstlenir.",
+      "alwaysOnLead": "Her zaman aktif.",
+      "answer": "Mevcut oturumları koru.",
+      "answering": "Yanıtlanan:",
+      "askAnything": "İstediğinizi sorun",
+      "askIn": "Herkes ona soru sorabilir",
+      "askInPlaces": "Slack, GitHub veya Linear üzerinden",
+      "checksPassed": "Kontroller geçti",
+      "closed": "Kapalı",
+      "cta": "Bot oluştur",
+      "description": "Bir ileti dizisinde isteğinizi iletin. İşi yapar, inceletir ve bir pull request ile geri döner.",
+      "docsBot": "Belge botu",
+      "groupAnswer": "Çakışmayı düzelttim. Sizin için hazır:",
+      "groupAsk": "Yeni ayarlar sayfasını yayınla.",
+      "groupBuilding": "Geliştiriyorum.",
+      "groupChat": "Birinden veya hepsinden bahsedin.",
+      "groupChatLead": "Botları tek bir sohbette bir araya getirin.",
+      "groupComposer": "{{group}} grubuna mesaj yazın, @ ile bir bottan bahsedin",
+      "groupDescription": "Birkaç botu bir grup sohbetine ekleyin ve onlara tek bir hedef verin. İşi paylaşır ve tek bir yanıtla geri dönerler.",
+      "groupDocs": "Ayarlar belgelerini güncelledim.",
+      "groupHand": "Her biri kendi payına düşen işi üstlenir.",
+      "groupHandLead": "İşleri birbirlerine devrederler.",
+      "groupName": "Lansman ekibi",
+      "groupOne": "Pull request ile birlikte.",
+      "groupOneLead": "Tek bir yanıt alırsınız.",
+      "groupPr": "#1302 Yeni ayarlar sayfası",
+      "groupReview": "Kaydet düğmesi küçük ekranlarda altbilgiyle çakışıyor.",
+      "groupTitle": "Botlar birlikte çalışır",
+      "idle": "Boşta",
+      "inProgress": "Devam ediyor",
+      "inProgressCount": "{{count}} devam ediyor",
+      "itemCsv": "CSV dışa aktarımını düzelt",
+      "itemDocs": "Belgeleri güncelle",
+      "itemMeta": "Öğe {{number}} · {{bot}} · şimdi",
+      "itemSafari": "Safari'deki oturum açma hatasını düzelt",
+      "items": "Öğeler",
+      "itemsAsk": "CSV dışa aktarımını ve Safari'deki oturum açma hatasını düzelt, belgeleri de güncelle.",
+      "itemsAsks": "Oradan yanıtlayın, devam eder.",
+      "itemsAsksLead": "Size öğe üzerinden sorar.",
+      "itemsDescription": "Aynı anda birkaç şey isteyin. Her birini tamamlanana kadar bir öğe olarak takip eder.",
+      "itemsList": "Verdiğiniz her görev.",
+      "itemsListLead": "Tüm işleri tek listede.",
+      "itemsMoves": "Devam ediyor, sonra kapalı.",
+      "itemsMovesLead": "İşi kendisi ilerletir.",
+      "itemsReply": "İlgileniyorum. Her birini bir öğe olarak takip ediyorum.",
+      "itemsTitle": "İşleri tek bir listede",
+      "learns": "Öğrettiklerinizi hatırlar.",
+      "learnsLead": "Çalıştıkça öğrenir.",
+      "needsYou": "Sizi bekliyor",
+      "needsYouCount": "{{count}} sizi bekliyor",
+      "nextPage": "Sonraki sayfa",
+      "now": "şimdi",
+      "pageAnnounce": "Sayfa {{number}} / {{count}}: {{title}}",
+      "pageNumber": "Sayfa {{number}}",
+      "previousPage": "Önceki sayfa",
+      "question": "Herkesin oturumu bir kez kapatılsın mı, yoksa mevcut oturumlar korunsun mu?",
+      "releaseBot": "Sürüm botu",
+      "reviewBot": "İnceleme botu",
+      "savedToMemory": "Belleğe kaydedildi",
+      "slackAsk": "ayarlar sayfası mobilde bozuluyor. İlgilenebilir misiniz?",
+      "slackMemory": "Bir dahaki sefere not: küçük ekran kırılma noktasında ayarları kontrol edin.",
+      "slackPrBody": "Güncellenmiş ekran görüntüsü testleriyle birlikte masaüstü ve mobil düzenleri.",
+      "slackPrFiles": "6 dosya",
+      "slackPrTitle": "#1284 Ayarlar sayfasını farklı ekranlara uyumlu hale getir",
+      "slackReady": "İncelemeye hazır.",
+      "slackReply": "İlgileniyorum. 4 ajanı paralel çalıştırıyorum.",
+      "slackReview": "Değişiklikleri inceledim. Küçük ekranlardaki iki boşluk sorununu düzelttim.",
+      "slackThread": "İleti dizisi",
+      "slackTyping": "{{name}} yazıyor",
+      "taskDesktop": "Masaüstü ayarlar düzeni",
+      "taskMobile": "Mobil ayarlar ekranı",
+      "taskScreenshots": "Ekran görüntüsü testleri",
+      "taskTypes": "Tür hataları",
+      "teamLead": "Ekibin bir parçası.",
+      "title": "Yapay zekâ takım arkadaşınız"
     }
   },
   "quickOpen": {
@@ -22241,7 +22342,6 @@
         "withIgnored": "{{what}} ve yok sayılan dosyalar kaybolacak",
         "ignoredOnly": "Yok sayılan dosyalar kaybolacak"
       },
-      "showChanges": "Değişiklikleri göster",
       "unsavedSuffix": "(kaydedilmedi)",
       "onHost": "{{host}} üzerinde",
       "forceDeletingEllipsis": "Zorla siliniyor…",
@@ -22952,7 +23052,8 @@
       "agents": "Ajanlar",
       "45347db2a3": "Sekmeler arası gezinme",
       "aab2837fa5": "Hızlı komutlar",
-      "3492a954c8": "Terminal bölmeleri"
+      "3492a954c8": "Terminal bölmeleri",
+      "bots": "Botlar"
     },
     "searchKeyword": {
       "worktreePaletteFormerTitle": "Worktree değiştir"
@@ -23462,7 +23563,8 @@
         "settingUp": "Proje seçili otomasyon sunucusunda hâlâ kuruluyor.",
         "error": "Proje seçili otomasyon sunucusunda kurulamadı.",
         "unsupported": "Seçili otomasyon sunucusu bu projeyi desteklemiyor."
-      }
+      },
+      "botProviderErrorNotSaved": "Botun turu başarısız oldu ancak bu çalıştırmada sağlayıcının hatası kaydedilmedi. Asıl sohbette daha fazla ayrıntı olabilir."
     },
     "extraAgentArgs": {
       "errors": {
@@ -23489,6 +23591,9 @@
       "reviewAction": "Kurulumu incele",
       "listSkipped": "Kurulum atlandı",
       "listSkippedTitle": "Dalının orca.yaml kurulum komutları değiştiği için son çalıştırma kurulumu atladı. Eylemler menüsünden inceleyin."
+    },
+    "botTarget": {
+      "hostNeedsUpdate": "Botlarının otomasyon kullanabilmesi için {host} üzerindeki Orca sunucusunu güncelleyin."
     }
   },
   "codeHost": {
@@ -23831,7 +23936,20 @@
     },
     "upcoming": {
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında"
+      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
+      "dueNow": "Zamanı geldi",
+      "every2h": "2 saatte bir",
+      "every4h": "4 saatte bir",
+      "lastNeededSignIn": "Son çalıştırması oturum açılması gerektiği için durdu",
+      "lookAroundSettings": "Göz atma ayarları",
+      "lookFirst": "İlk sohbetinizden sonra · ardından {{every}}",
+      "mornings": "her sabah",
+      "needsSignIn": "Giriş gerekli",
+      "runsEvery": "{{every}} çalışır",
+      "stopped": "Durduruldu",
+      "tidySettings": "Bellek toparlama ayarları",
+      "tidyUp": "Belleği toparla",
+      "twiceDaily": "günde iki kez"
     },
     "palette": {
       "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
@@ -23854,15 +23972,73 @@
       "section": "Botlar"
     },
     "templates": {
-      "browse": "Şablonlara göz at"
+      "browse": "Şablonlara göz at",
+      "allCategories": "Tümü",
+      "category": {
+        "personal": "Kişisel asistan",
+        "support": "Destek ve önceliklendirme"
+      },
+      "filterCategory": "Kategoriye göre filtrele"
     },
     "new": {
-      "fromTemplate": "Şablon"
+      "fromTemplate": "Şablon",
+      "agent": "Ajan",
+      "change": "Değiştir",
+      "colorButter": "Tereyağı sarısı",
+      "colorGraphite": "Grafit",
+      "colorInk": "Mürekkep",
+      "colorLavender": "Lavanta",
+      "colorMint": "Nane yeşili",
+      "colorPeach": "Şeftali",
+      "colorPink": "Pembe",
+      "colorSage": "Adaçayı yeşili",
+      "colorSky": "Gök Mavisi",
+      "colorSlate": "Arduvaz grisi",
+      "colorWhite": "Beyaz",
+      "computer": "Bilgisayar",
+      "computerAccountHint": "Botun çalıştığı yer; Orca oturumu {{account}} hesabıyla açık.",
+      "computerHint": "Botun çalıştığı yer.",
+      "folder": "Klasör: {{path}}",
+      "hostNeedsServer": "Orca sunucusu gerekli",
+      "hostNeedsServerHint": "Botları çalıştırmak için Ayarlar → Uzak Orca Sunucuları bölümünde {{host}} üzerinde bir Orca sunucusu kurun.",
+      "noChatAgents": "Bu bilgisayarda kullanılabilir sohbet ajanı yok.",
+      "pictureColor": "Arka plan rengi",
+      "pictureColorCustom": "Özel renk",
+      "useChatDefaults": "Sohbet varsayılanlarını kullan"
     },
     "apps": {
       "paste": {
         "remoteSignIn": "Uzaktan oturum açma"
-      }
+      },
+      "allApps": "Tüm uygulamalar",
+      "composio": {
+        "withComposio": "Composio ile"
+      },
+      "mcp": {
+        "addTitle": "{{app}} ekle",
+        "advanced": "Gelişmiş",
+        "datadog": {
+          "siteLabel": "Datadog sitesi"
+        },
+        "elsewhereLine": "{{place}} konumunda ekli. Başka bir tane eklemek için Yönet bölümünden kaldırın.",
+        "elsewhereOther": "Başka bir tane eklemek için Yönet bölümünden kaldırın.",
+        "elsewhereTitle": "{{app}} zaten {{bot}} üzerinde",
+        "gitlab": {
+          "hostHint": "Kendi yönettiğiniz kurulumlar veya Dedicated için. GitLab.com için boş bırakın.",
+          "hostLabel": "GitLab adresi (isteğe bağlı)"
+        },
+        "hostInvalid": "{{example}} gibi bir sunucu adı girin.",
+        "place": {
+          "australia": "Avustralya",
+          "europe": "Avrupa",
+          "japan": "Japonya",
+          "unitedKingdom": "Birleşik Krallık",
+          "usCentral": "Orta ABD",
+          "usEast": "Doğu ABD",
+          "usWest": "Batı ABD"
+        }
+      },
+      "onBot": "{{bot}} üzerinde"
     },
     "row": {
       "runsOn": "{{host}} üzerinde çalışıyor",
@@ -23887,8 +24063,45 @@
         "firstItem": "İlk öğe",
         "lastItem": "Son öğe",
         "previous": "Önceki öğe",
-        "next": "Sonraki öğe"
-      }
+        "next": "Sonraki öğe",
+        "subWhere": "Öğe {{number}} · {{chat}}"
+      },
+      "activity": {
+        "linked": "{{links}} bağlantılarını bağladı",
+        "you": "Siz"
+      },
+      "ask": {
+        "notSentYet": "henüz gönderilmedi",
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+      },
+      "chat": {
+        "moreItems": "+{{count}} tane daha"
+      },
+      "comment": {
+        "add": "Yorum ekleyin…",
+        "label": "Yorum",
+        "submit": "Yorum gönder"
+      },
+      "group": {
+        "new": "{{count}} yeni"
+      },
+      "loading": "Öğeler yükleniyor…",
+      "row": {
+        "more": "Daha fazla"
+      },
+      "snooze": {
+        "back": "Geri",
+        "menu": "Ertele",
+        "pickCustom": "Özel zaman",
+        "pickTitle": "Şu zamana kadar ertele",
+        "rowUntil": "{{when}} zamanına kadar",
+        "time": "Saat",
+        "week": "Bir hafta sonra"
+      },
+      "stale": {
+        "cancelAll": "Tümünü iptal et"
+      },
+      "tab": "Ana sayfa"
     },
     "hover": {
       "asksQuestion": "Yanıtınızı bekliyor",
@@ -23906,17 +24119,23 @@
     },
     "chats": {
       "home": "Home Chat",
-      "untitled": "Yeni sohbet"
+      "untitled": "Yeni sohbet",
+      "loading": "Sohbetler yükleniyor…",
+      "readFailed": "Bu botun sohbetleri okunamadı.",
+      "searchRetry": "Tekrar dene"
     },
     "needs": {
-      "chat": "{{name}} ile sohbetiniz"
+      "chat": "{{name}} ile sohbetiniz",
+      "worker": "Çalışan: {{name}}"
     },
     "panel": {
       "needYou_one": "Sizi bekleyen: {{count}}",
       "needYou_other": "Sizi bekleyen: {{count}}",
       "working": "{{count}} çalışıyor",
       "working_one": "{{count}} çalışıyor",
-      "working_other": "{{count}} çalışıyor"
+      "working_other": "{{count}} çalışıyor",
+      "disconnected": "Bağlantı kesildi",
+      "runsOn": "{{host}} üzerinde çalışır"
     },
     "usageLimit": {
       "continuesAt": "{{time}} saatinde devam eder",
@@ -23925,6 +24144,142 @@
       "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır",
       "hitShort": "Limite ulaşıldı",
       "hitTip": "{{agent}} kullanım limitine ulaştı · {{time}} saatinde sıfırlanır"
+    },
+    "access": {
+      "confirmApproveMany": "İstemlerini onaylayabilirler",
+      "confirmApproveOne": "{{person}} istemlerini onaylayabilir",
+      "confirmComputer": "Komut çalıştırma ve dosyaları değiştirme",
+      "confirmGitHub": "GitHub'da sizin adınıza yorum yapma ve push etme",
+      "confirmGoogle": "Google hesabınızı kullanma",
+      "confirmLinear": "Linear sorunlarını sizin adınıza güncelleme",
+      "confirmMaySkipApprovals": "Önce sormadan işlem yapabilir",
+      "confirmNoApprovals": "Önce sormadan işlem yapar",
+      "confirmWarning": "Sizin adınıza {{computer}} üzerinde işlem yapacaklar.",
+      "controlBrief": "Burada sizin adınıza işlem yapabilirler.",
+      "controlBriefIfAdded": "Eklediğiniz herkes burada sizin adınıza işlem yapabilir.",
+      "controlBriefIfAddedOnHost": "Eklediğiniz herkes {{computer}} üzerinde sizin adınıza işlem yapabilir.",
+      "controlBriefOnHost": "{{computer}} üzerinde sizin adınıza işlem yapabilirler.",
+      "controlMany": "{{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilirler: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilirler.",
+      "controlNone": "Eklediğiniz herkes {{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilir: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilir.",
+      "controlOne": "{{person}}, {{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilir: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilir.",
+      "executionComputer": "bu ajanın çalıştığı bilgisayar",
+      "here": "burada",
+      "reachSlack": "Slack'te @{{name}} olarak mesaj gönderme",
+      "reject": "Reddet",
+      "there": "orada",
+      "thisComputer": "bu bilgisayar",
+      "thisServer": "bu sunucu"
+    },
+    "automations": {
+      "failed": "Başarısız",
+      "newDraft": "Şunu yapan bir otomasyon kur: ",
+      "next": "Sonraki",
+      "openOnPage": "Otomasyonlar sayfasında aç",
+      "pauseShort": "Duraklat",
+      "paused": "Duraklatıldı",
+      "resumeShort": "Devam ettir",
+      "runNow": "Şimdi çalıştır",
+      "running": "Çalışıyor"
+    },
+    "cloudSignIn": {
+      "eventsHostChat": "{{source}} olayları için {{host}} üzerinde Orca Cloud oturumu açılması gerekiyor. Oturum açıldığında bu kuralı kaydedeceğim.",
+      "signIn": "Oturum aç",
+      "webhooksHostChat": "Webhook'lar için {{host}} üzerinde Orca Cloud oturumu açılması gerekiyor. Oturum açıldığında onu oluşturacağım.",
+      "webhooksNotReaching": "Orca Cloud {{name}} botuna ulaşamıyor, bu yüzden henüz webhook oluşturamıyor."
+    },
+    "errors": {
+      "unsavedDrafts": "Klasöründe kaydedilmemiş düzenleyici değişiklikleri var. Bunları kaydedin veya kapatın, ardından silmeyi tekrar deneyin."
+    },
+    "googleSetup": {
+      "pickHostKey": "İçe aktarılacak anahtar dosyasını seçin:",
+      "pickKeyHere": "Bu bilgisayarda bir dosya seçin"
+    },
+    "groups": {
+      "handoffsPaused": "{{count}} devirden sonra duraklatıldı. Devam etmek için yanıtlayın.",
+      "needsLocalBot": "Bu grubun bu bilgisayarda en az bir botu olmalı.",
+      "newGroup": "Yeni grup",
+      "pairedComputersOnly": "Gruplara yalnızca eşlenmiş bilgisayarlardan bot eklenebilir.",
+      "remoteAsked": "{{computer}} üzerinde soruldu",
+      "remoteMayAnswer": "{{computer}} üzerinde hâlâ yanıt verebilir.",
+      "remoteNeedsChat": "{{name}} botuyla bir kez sohbet açın, ardından gruba ekleyin.",
+      "remoteNotSent": "{{computer}} üzerine gönderilmedi",
+      "remoteNotice": "{{computer}} üzerinde yanıt vermedi",
+      "remoteReplied": "{{computer}} üzerinde yanıt verdi",
+      "remoteSending": "{{computer}} üzerinde soruluyor…",
+      "remoteShortened": "Kısaltıldı. Yanıtın tamamı {{computer}} üzerinde.",
+      "remoteStopped": "Burada durduruldu",
+      "remoteUnknown": "İletim durumu bilinmiyor",
+      "thisComputer": "Bu bilgisayar"
+    },
+    "host": {
+      "botWorkspaceUnavailable": "Bu ajanın çalışma alanı şu anda burada kullanılamıyor, bu yüzden sayfa orada açılamıyor.",
+      "signIn": {
+        "readAgain": "Tekrar dene",
+        "unconfigured": "{{host}} üzerindeki Orca, Orca Cloud oturum açma desteği olmadan derlenmiş. Oturum açmak için oraya Orca'nın yayın sürümünü yükleyin.",
+        "unread": "{{host}} üzerindeki Orca oturumu okunamadı.",
+        "updateFirst": "{{host}} üzerindeki Orca'yı güncelleyin, ardından buradan oturum açın."
+      }
+    },
+    "import": {
+      "menu": "Başka bir uygulamadan içe aktar…",
+      "nudgeDismiss": "Bir daha gösterme",
+      "nudgeMany": "{{app}} içinde {{count}} bot bulduk.",
+      "nudgeOne": "{{app}} içinde bir bot bulduk."
+    },
+    "section": {
+      "startFromScratch": "Sıfırdan başla",
+      "title": "Botlar"
+    },
+    "settingsView": {
+      "backToItems": "Ana sayfaya dön",
+      "itemsStale": {
+        "shortTitle": "Eskimiş sayılma süresi"
+      },
+      "lookAroundShort": {
+        "every2h": "2 sa",
+        "every4h": "4 sa",
+        "mornings": "Sabahları",
+        "twiceDaily": "Günde iki kez"
+      },
+      "memoryFiles_one": "{{count}} dosya",
+      "memoryFiles_other": "{{count}} dosya",
+      "shareAction": "Paylaş",
+      "sharing": "Paylaşım",
+      "sharingOn": "Açık",
+      "tidyUpShort": {
+        "night": "Her gece",
+        "week": "Haftalık"
+      },
+      "youAndOthers_one": "Siz ve {{count}} kişi daha",
+      "youAndOthers_other": "Siz ve {{count}} kişi daha"
+    },
+    "share": {
+      "cancelSignIn": "Oturum açmayı iptal et",
+      "duplicateSkill": "Aynı adla {{folder}} içinde · paylaşılmaz",
+      "linkNoLongerAvailable": "Bu paylaşım bağlantısı artık kullanılamıyor.",
+      "linkStatusUnavailable": "Paylaşım bağlantısı kontrol edilemedi",
+      "loadingLinks": "Paylaşılan bağlantılar yükleniyor…",
+      "notShared": "Paylaşılmıyor",
+      "previewChanged": "Önizleme değişti. Yayımlamadan önce inceleyin.",
+      "receive": {
+        "fromLinkMenu": "Bir bağlantıdan…"
+      },
+      "signInToPublish": "Yayımlamak için oturum aç",
+      "stopSharing": "Paylaşımı durdur"
+    },
+    "upNext": {
+      "lookNow": "Şimdi göz at",
+      "lookingShort": "Göz atılıyor",
+      "newCount": "{{count}} yeni"
+    },
+    "webhooks": {
+      "delete": {
+        "withAutomation": {
+          "confirm": "İkisini de sil",
+          "note": "Bu otomasyonu başka hiçbir şey başlatmadığı için çalıştırma geçmişiyle birlikte silinir. Webhook'un URL'si çalışmayı bırakır ve hâlâ bekleyen çağrılar iptal edilir.",
+          "title": "“{{automation}}” ve webhook'u silinsin mi?"
+        }
+      }
     }
   },
   "agentPicker": {

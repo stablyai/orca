@@ -18,7 +18,7 @@ import {
   subscribeBotGitHub
 } from './bot-github-state'
 import type { HttpLinkDestination } from './browser/navigation/http-link-routing'
-import { cancelConnectorConnect } from './connector-connect-state'
+import { cancelConnectorConnect, startConnectorConnect } from './connector-connect-state'
 
 export type GitHubInstallRecord = {
   bot: BotRef
@@ -166,6 +166,23 @@ export function openGitHubInstall(bot: BotRef & { name: string; github: unknown 
     before: null,
     inSystemBrowser: false,
     waiting: false
+  })
+}
+
+/** Links another GitHub login: the setup's own sign-in, with GitHub's account picker. One already
+ *  on GitHub ends on Done, since the new login's installations just join its rows. */
+export function addGitHubAccount(bot: BotRef & { name: string; github: unknown }): void {
+  openGitHubInstall(bot)
+  update({ turnedOn: bot.github !== null })
+  void startConnectorConnect(bot.hostId, 'github', {
+    switchAccount: true,
+    bot,
+    owner: gitHubSetupOwner(bot),
+    onOpened: (destination) => {
+      if (destination === 'orca-browser') {
+        minimizeGitHubInstall()
+      }
+    }
   })
 }
 

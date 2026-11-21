@@ -17,7 +17,14 @@ import {
   hostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { findLink, findLinkForPane, writeLink } from './external-conversation-links'
+import {
+  findLink,
+  findLinkForPane,
+  findLinkForSession,
+  findLinksForSession,
+  sessionRepliesInSlack,
+  writeLink
+} from './external-conversation-links'
 
 const WORKTREE = 'repo-1::/work/a'
 vi.mock('electron', () => ({
@@ -30,6 +37,7 @@ const WORKSPACE = { worktreeId: WORKTREE, sshHostId: null }
 const KEY = { source: 'slack', externalId: 'thread-1' } as const
 const FIRST_PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 const SECOND_PANE = 'tab-2:22222222-2222-4222-8222-222222222222'
+const THIRD_PANE = 'tab-3:33333333-3333-4333-8333-333333333333'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -87,13 +95,21 @@ describe('external conversation link lookups', () => {
     // A sort-stamp write leaves links alone; the relink after it must still be seen.
     store.setWorktreeMeta(TARGET, { lastActivityAt: 5 })
     expect(findLinkForPane(store, FIRST_PANE)?.link.paneKey).toBe(FIRST_PANE)
+    expect(findLinkForSession(store, `session-${FIRST_PANE}`)?.link.paneKey).toBe(FIRST_PANE)
+    expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(true)
+    expect(sessionRepliesInSlack(store, `session-${SECOND_PANE}`)).toBe(false)
 
     writeLink(store, WORKSPACE, link(SECOND_PANE))
     expect(findLinkForPane(store, FIRST_PANE)).toBeNull()
+    expect(findLinkForSession(store, `session-${FIRST_PANE}`)).toBeNull()
+    expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(false)
+    expect(sessionRepliesInSlack(store, `session-${SECOND_PANE}`)).toBe(true)
     expect(findLink(store, KEY)?.link.paneKey).toBe(SECOND_PANE)
 
     store.removeWorktreeMeta(TARGET)
     expect(findLinkForPane(store, SECOND_PANE)).toBeNull()
+    expect(findLinksForSession(store, `session-${SECOND_PANE}`)).toEqual([])
+    expect(sessionRepliesInSlack(store, `session-${SECOND_PANE}`)).toBe(false)
     expect(findLink(store, KEY)).toBeNull()
   })
 
@@ -118,16 +134,37 @@ describe('external conversation link lookups', () => {
       createdFrom: 'folder-scan'
     })
     const folder = store.createFolderWorkspace({ projectGroupId: group.id })
+    const secondFolder = store.createFolderWorkspace({ projectGroupId: group.id })
+    store.updateFolderWorkspace(folder.id, { sortOrder: 20 })
+    store.updateFolderWorkspace(secondFolder.id, { sortOrder: 10 })
     const workspace = { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }
+    const secondWorkspace = { worktreeId: folderWorkspaceKey(secondFolder.id), sshHostId: null }
     writeLink(store, workspace, link(FIRST_PANE))
     expect(findLinkForPane(store, FIRST_PANE)).toEqual({ workspace, link: link(FIRST_PANE) })
 
     store.updateFolderWorkspace(folder.id, { lastActivityAt: 5 })
     expect(findLinkForPane(store, FIRST_PANE)?.link.paneKey).toBe(FIRST_PANE)
+    expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(true)
 
     writeLink(store, workspace, link(SECOND_PANE))
+    writeLink(store, workspace, {
+      source: 'linear',
+      externalId: 'thread-2',
+      paneKey: THIRD_PANE,
+      sessionId: `session-${SECOND_PANE}`,
+      agent: 'claude',
+      createdAt: 2
+    })
     expect(findLinkForPane(store, FIRST_PANE)).toBeNull()
     expect(findLink(store, KEY)?.link.paneKey).toBe(SECOND_PANE)
+    expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(false)
+    expect(findLinksForSession(store, `session-${SECOND_PANE}`)).toHaveLength(2)
+    expect(sessionRepliesInSlack(store, `session-${SECOND_PANE}`)).toBe(true)
+
+    // Moving an empty folder above a linked one invalidates stale ranks before its first link lands.
+    store.updateFolderWorkspace(secondFolder.id, { sortOrder: 30 })
+    writeLink(store, secondWorkspace, link(FIRST_PANE))
+    expect(findLink(store, KEY)?.workspace).toEqual(secondWorkspace)
   })
 })
 
