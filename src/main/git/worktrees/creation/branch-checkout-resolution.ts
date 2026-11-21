@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   COMMIT_ID,
+  errorCode,
   forEachBounded,
   isSamePath,
   readLinkedCheckoutDir,
@@ -45,7 +46,7 @@ export async function resolveBranchCheckouts(
   // Per-worktree refs (refs/worktree/, refs/bisect/, refs/rewritten/) live in their own git dir.
   const readLooseRef = (ref: string, gitDir: string) => {
     const path = join(PER_WORKTREE_REF.test(ref) ? gitDir : commonDir, ref)
-    const known = looseRefs.get(path) ?? readRefFile(path)
+    const known = looseRefs.get(path) ?? readRefFile(path).catch(unlessUnreadable)
     looseRefs.set(path, known)
     return known
   }
@@ -145,6 +146,15 @@ export async function resolveBranchCheckouts(
     return { kind: 'unknown' }
   }
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
+}
+
+// Git cannot follow a ref it cannot read either, so that ref aliases nothing.
+function unlessUnreadable(error: unknown): string {
+  const code = errorCode(error)
+  if (code === 'EACCES' || code === 'EPERM') {
+    return ''
+  }
+  throw error
 }
 
 async function pathExists(path: string): Promise<boolean> {

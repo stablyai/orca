@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -459,6 +459,26 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       await refresh(repoPath)
 
       expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  // Windows has no chmod-unreadable files; root reads them anyway.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'still moves main while another checkout has a branch whose ref is unreadable',
+    async () => {
+      const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'unreadable')
+      git(repoPath, ['worktree', 'add', '--quiet', '-b', 'private', linkedPath])
+      const privateRef = join(repoPath, '.git', 'refs', 'heads', 'private')
+      await chmod(privateRef, 0)
+      try {
+        await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+      } finally {
+        await chmod(privateRef, 0o644)
+      }
+
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
     }
   )
 

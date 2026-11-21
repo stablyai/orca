@@ -99,9 +99,10 @@ async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
     if (!info.isFile() || info.size > MAX_REF_BYTES) {
       return UNRESOLVED_HEAD
     }
-    const buffer = Buffer.alloc(MAX_REF_BYTES + 1)
+    // One spare byte shows a file that grew past its stat.
+    const buffer = Buffer.allocUnsafe(info.size + 1)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-    return bytesRead > MAX_REF_BYTES
+    return bytesRead > info.size
       ? UNRESOLVED_HEAD
       : normalizeHead(buffer.toString('utf8', 0, bytesRead))
   } finally {
@@ -116,6 +117,16 @@ async function readRefContent(path: string): Promise<string> {
     rethrowUnlessMissing(error)
     return ''
   }
+}
+
+/** A linked git dir whose HEAD the files cannot tell, such as a reftable placeholder. */
+export function hasLinkedPlaceholderHead(state: GitDirState, commonDir: string): boolean {
+  for (const [gitDir, head] of state.heads) {
+    if (gitDir !== commonDir && head === UNRESOLVED_HEAD) {
+      return true
+    }
+  }
+  return false
 }
 
 const READ_CONCURRENCY = 16

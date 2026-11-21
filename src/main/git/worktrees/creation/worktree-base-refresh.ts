@@ -15,7 +15,7 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { isSamePath, readGitDirState, UNRESOLVED_HEAD } from './git-dir-branch-state'
+import { hasLinkedPlaceholderHead, isSamePath, readGitDirState } from './git-dir-branch-state'
 import { readOwnerCheckoutPath, resolveBranchCheckouts } from './branch-checkout-resolution'
 import {
   translateWslOutputPath,
@@ -214,9 +214,7 @@ function localBaseBranchGit(
         return { reserved: true }
       }
       // A linked reftable placeholder already needs Git's listing, whatever core.bare says.
-      const use = [...state.heads].some(
-        ([gitDir, head]) => gitDir !== commonDir.path && head === UNRESOLVED_HEAD
-      )
+      const use = hasLinkedPlaceholderHead(state, commonDir.path)
         ? { kind: 'unknown' as const }
         : await resolveBranchCheckouts(state, commonDir.path, fullRef, {
             bareCommonDir: await bareDirOf(repoPath, commonDir),
