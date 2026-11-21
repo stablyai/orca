@@ -45,8 +45,10 @@ export type HeldSimulatorInputSinks = {
 
 export type SimulatorKeyPressOutcome = 'sent' | 'held' | 'unsupported'
 
+// Named keys (Enter, Dead, F1) are one capitalized word; anything else, combining marks
+// included, is the character the key typed.
 function isPrintable(key: string): boolean {
-  return [...key].length === 1
+  return key.length > 0 && !/^[A-Z][A-Za-z0-9]+$/.test(key)
 }
 
 /**
@@ -61,16 +63,26 @@ export class HeldSimulatorInput {
   private generation = 0
   private layout = 0
   private framesDoneAt = 0
+  // Set while keys wait for earlier frames still going out; a new key's first frame would pass them.
+  private framesTimer: ReturnType<typeof setTimeout> | null = null
   // The latest sinks; release after an async commit uses them.
   private sinks: HeldSimulatorInputSinks | null = null
 
   get holding(): boolean {
-    return this.syncing || this.typing
+    return this.syncing || this.typing || this.framesTimer !== null
+  }
+
+  /** A layout sync is in flight, so the simulator's layout is not known yet. */
+  get syncingLayout(): boolean {
+    return this.syncing
   }
 
   /** `unsupported` means nothing was sent or held, so the host's own text input should take it. */
   pressKey(press: SimulatorKeyPress, sinks: HeldSimulatorInputSinks): SimulatorKeyPressOutcome {
     this.sinks = sinks
+    if (!this.holding && Date.now() < this.framesDoneAt) {
+      this.waitForFrames()
+    }
     if (this.holding) {
       this.held.push({ kind: 'key', press, layout: this.layout })
       return 'held'
@@ -106,6 +118,20 @@ export class HeldSimulatorInput {
     this.syncing = false
     this.typing = false
     this.framesDoneAt = 0
+    if (this.framesTimer !== null) {
+      clearTimeout(this.framesTimer)
+      this.framesTimer = null
+    }
+  }
+
+  private waitForFrames(): void {
+    const generation = this.generation
+    this.framesTimer = setTimeout(() => {
+      this.framesTimer = null
+      if (generation === this.generation) {
+        this.release()
+      }
+    }, this.framesDoneAt - Date.now())
   }
 
   // Commits typed back to back while one is in flight go as one, not one subprocess each.

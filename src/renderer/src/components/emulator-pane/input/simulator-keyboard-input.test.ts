@@ -119,4 +119,27 @@ describe('HeldSimulatorInput', () => {
 
     expect(delivered).toEqual(['text:你好', 'text:a', 'key:42', 'key:20'])
   })
+
+  it('holds a key pressed while released keys are still going out', async () => {
+    const input = new HeldSimulatorInput()
+    input.commitText('你', sinks())
+    for (const key of 'abc') {
+      input.pressKey(press(key, `Key${key.toUpperCase()}`), sinks())
+    }
+    // The commit settles and releases a-b-c as spaced frames; d is typed before they finish.
+    await vi.advanceTimersByTimeAsync(100)
+    expect(input.pressKey(press('d', 'KeyD'), sinks())).toBe('held')
+    await settle()
+
+    expect(delivered).toEqual(['text:你', 'key:4', 'key:5', 'key:6', 'key:7'])
+  })
+
+  it('types a held key with a combining mark as text', async () => {
+    const input = new HeldSimulatorInput()
+    input.commitText('你', sinks())
+    input.pressKey(press('ḍ̇', 'KeyD', { alt: true }), sinks())
+    await settle()
+
+    expect(delivered).toEqual(['text:你', 'text:ḍ̇'])
+  })
 })

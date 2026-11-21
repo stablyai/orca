@@ -171,6 +171,7 @@ export function useEmulatorScreenKeyboard({
       const simulatorDeadKey =
         !scrcpyKeyboard &&
         physicalKeysRef.current &&
+        !heldInput.syncingLayout &&
         (event.key === 'Dead' || (imeKey && physicalDeadKeyRef.current))
       // Android takes whatever character the host layout produced as text, Option and AltGr ones too.
       const androidText = scrcpyKeyboard !== null && [...event.key].length === 1

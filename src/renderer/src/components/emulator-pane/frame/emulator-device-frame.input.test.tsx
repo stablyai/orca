@@ -421,4 +421,37 @@ describe('EmulatorDeviceFrame input', () => {
 
     expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
+
+  it('leaves a dead key to the Mac while a layout sync is still in flight', async () => {
+    vi.useFakeTimers()
+    let layoutChanged: (event: { phase: string }) => void = () => {}
+    vi.stubGlobal('api', {
+      app: {
+        onKeyboardLayoutChanged: (listener: typeof layoutChanged) => {
+          layoutChanged = listener
+          return () => undefined
+        }
+      }
+    })
+    callRuntimeRpc.mockResolvedValue({ physicalKeys: true })
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const proxy = screen.querySelector<HTMLTextAreaElement>('[data-emulator-keyboard-proxy]')!
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+    })
+
+    // The Mac switches input source; the new layout may have no simulator twin.
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    act(() => layoutChanged({ phase: 'invalidated' }))
+    const deadKey = keyEvent('keydown', { altKey: true, code: 'KeyE', key: 'Dead' })
+    act(() => {
+      proxy.dispatchEvent(deadKey)
+    })
+
+    expect(deadKey.defaultPrevented).toBe(false)
+  })
 })
