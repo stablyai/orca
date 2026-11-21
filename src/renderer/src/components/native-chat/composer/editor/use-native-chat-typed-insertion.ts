@@ -4,7 +4,7 @@ import {
   type NativeChatComposerInput
 } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { withQuoteAppended } from '../../drafts/native-chat-selection-quote-draft'
+import { withQuoteInserted } from '../../drafts/native-chat-selection-quote-draft'
 import { dictationSeparators } from '../../../../../../shared/speech/dictation/dictation-transcript-spacing'
 
 /** Insert/focus through the composer input for paste and imperative callers. */
@@ -71,9 +71,11 @@ export function useNativeChatTypedInsertion(args: {
     (text: string): void => {
       const textarea = usableInput()
       if (textarea) {
-        // A quote the user adds lands after what they typed, as typing it would.
-        const next = withQuoteAppended({ text: textarea.value }, text).text
-        showDraft(textarea, next, next.length)
+        // A quote the user adds lands at the caret, as typing it would.
+        const { value, selectionStart, selectionEnd } = textarea
+        const from = selectionStart ?? value.length
+        const next = withQuoteInserted(value, text, from, selectionEnd ?? from)
+        showDraft(textarea, next.text, next.caret)
       }
     },
     [showDraft, usableInput]

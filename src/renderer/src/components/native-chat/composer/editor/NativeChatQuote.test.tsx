@@ -1,6 +1,14 @@
 // @vitest-environment happy-dom
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import {
@@ -9,6 +17,7 @@ import {
 } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { promptTextContent } from './native-chat-prompt-document-text'
+import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import { formatNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 afterEach(cleanup)
@@ -213,6 +222,31 @@ describe('quote chips in the composer', () => {
       expect(shown).toEqual(tokens)
     }
   )
+
+  // Add to chat: the quote goes where the caret is, on a line of its own; empty lines stay.
+  it.each([
+    ['on an empty line', 'top\n\n\nend', 5, 'top\n\n> q\n\n\nend'],
+    ['at the end, after empty lines', 'top\n\n\n', 6, 'top\n\n\n> q\n\n'],
+    ['inside a line: the rest is the comment', 'foobar', 3, 'foo\n> q\n\nbar']
+  ])('adds a quote at the caret %s', (_name, text, caret, added) => {
+    const { input, editor } = setup(text)
+    act(() => input.setSelectionRange(caret, caret))
+    const { result } = renderHook(() =>
+      useNativeChatTypedInsertion({
+        textareaRef: { current: input },
+        isComposing: () => false,
+        setDraft: vi.fn(),
+        setCaret: vi.fn(),
+        setActiveSuggestion: vi.fn()
+      })
+    )
+    act(() => result.current.appendText('> q\n\n'))
+    expect(input.value).toBe(added)
+    expect(chips(editor)).toBe(1)
+    // The caret is right after the chip, where the comment goes.
+    const after = added.indexOf('> q\n\n') + '> q\n\n'.length
+    expect([input.selectionStart, input.selectionEnd]).toEqual([after, after])
+  })
 
   it('shows text written after a chip through the composer API on the chip line', () => {
     const { input, editor } = setup('> q\n\n')
