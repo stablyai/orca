@@ -1,7 +1,7 @@
 // The owner's answer or comment on an item a bot raised in a group room reaches that bot as the
 // owner's post in the room, to it alone: an ordinary room turn, with the room's history, Stop and
 // membership rules, instead of mail the room session can't take.
-import { deliverTurn } from './bot-group-delivery'
+import { BOT_GROUP_CHANGED, deliverTurn } from './bot-group-delivery'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
 /** One post per item change: a resend or a retry after a crash finds it and posts nothing again. */
@@ -25,13 +25,18 @@ export async function postGroupItemMail(
   mail: GroupItemMail
 ): Promise<boolean> {
   const id = groupItemPostId(mail.id)
-  // A post made before answers for this change, whatever its member or the item's title is now.
-  const earlier = groups.store.message(id)
-  if (earlier) {
-    await Promise.all(earlier.turns.map((turn) => deliverTurn(groups, earlier, turn)))
-  } else if (!(await post(groups, sessionId, id, mail))) {
+  // A post made before (a retry, or a send that stored it and then failed) answers for this change,
+  // whatever its member or the item's title is now.
+  if (!groups.store.message(id) && !(await post(groups, sessionId, id, mail))) {
     return false
   }
+  const stored = groups.store.message(id)
+  if (!stored) {
+    return false
+  }
+  // A post this call made was admitted already; an earlier one still owed is delivered now.
+  await Promise.all(stored.turns.map((turn) => deliverTurn(groups, stored, turn)))
+  // Only a turn refused before it ran carries an error; one that ran and failed does not.
   return !groups.store.message(id)?.turns.some((turn) => turn.error !== undefined)
 }
 
@@ -62,7 +67,11 @@ async function post(
       )
       return true
     } catch (error) {
-      const changed = error instanceof Error && error.message.startsWith('The group changed.')
+      if (groups.store.message(id)) {
+        // Stored before it failed: the post answers for the change, so it never goes Home as well.
+        return true
+      }
+      const changed = error instanceof Error && error.message === BOT_GROUP_CHANGED
       if (!changed || attempt >= REVISION_ATTEMPTS) {
         // Nothing was posted: the room can't take it, so Home does.
         console.warn('[bot-groups] posting an item change in its room failed', error)

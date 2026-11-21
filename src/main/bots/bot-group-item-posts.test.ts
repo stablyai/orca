@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { groupItemPostId, postGroupItemMail } from './bot-group-item-posts'
+import { BOT_GROUP_CHANGED } from './bot-group-delivery'
 
 const mocks = groupNativeMocks()
 
@@ -73,12 +74,27 @@ describe("an owner's item answer in a group room", () => {
     const send = groups.send
     const changed = vi
       .spyOn(groups, 'send')
-      .mockRejectedValueOnce(
-        new Error('The group changed. Review the current members before sending.')
-      )
+      .mockRejectedValueOnce(new Error(BOT_GROUP_CHANGED))
       .mockImplementation(send)
     expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(true)
     expect(changed).toHaveBeenCalledTimes(2)
+    expect(delivered()).toEqual([scout.sessionId])
+  })
+
+  it('throws the stale-revision error it retries on, word for word', async () => {
+    const { groups, group } = await room()
+    await expect(
+      groups.send({ groupId: group.id, revision: group.revision - 1, messageId: 'm', text: 'hi' })
+    ).rejects.toThrow(new Error(BOT_GROUP_CHANGED))
+  })
+
+  it('answers with a post the send stored before it failed, delivering it and never going Home', async () => {
+    const { groups, group, scout } = await room()
+    vi.spyOn(groups.store, 'setLatest').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+    expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(true)
+    expect(groups.store.messages(group.id)).toHaveLength(1)
     expect(delivered()).toEqual([scout.sessionId])
   })
 
