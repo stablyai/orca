@@ -4,6 +4,7 @@ import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
+import { commitImeText, setImeComposition } from '../../terminal/ime/terminal-ime-cdp-composition'
 
 const savedCopyIds = (page: Page) =>
   page.evaluate(() => window.__store?.getState().settings?.agentCopies?.map((copy) => copy.id))
@@ -83,4 +84,102 @@ test('typing after backspace hit the prefix of an empty suffix lands in order', 
   await page.keyboard.type('code')
   await expect(field).toHaveValue('claude.code')
   expect(await caret(field)).toEqual([11, 11])
+})
+
+test('the caret stays after the prefix for Delete, Home, Ctrl+A, selections, pastes and IME', async ({
+  orcaPage: page,
+  electronApp
+}) => {
+  // A cold Orca start, then a settings save; the default 60s is tight on CI.
+  test.setTimeout(120_000)
+  const field = await openCopyIdField(page)
+  await field.click({ force: true })
+  const moveCaretTo = async (at: number): Promise<void> => {
+    await page.keyboard.press('Home')
+    for (let i = 0; i < at; i++) {
+      await page.keyboard.press('ArrowRight')
+    }
+  }
+
+  // Ctrl+A, then a word that starts with the prefix's first letter: every letter lands.
+  await page.keyboard.press('Control+A')
+  await page.keyboard.type('code-mode')
+  await expect(field).toHaveValue('claude.code-mode')
+  expect(await caret(field)).toEqual([16, 16])
+
+  // Delete before the dot leaves the id as it was and puts the caret after the prefix.
+  await moveCaretTo('claude'.length)
+  await page.keyboard.press('Delete')
+  await expect(field).toHaveValue('claude.code-mode')
+  expect(await caret(field)).toEqual([7, 7])
+  await page.keyboard.type('ab')
+  await expect(field).toHaveValue('claude.abcode-mode')
+  expect(await caret(field)).toEqual([9, 9])
+
+  // The same on an empty suffix.
+  await page.keyboard.press('Control+A')
+  await page.keyboard.press('Backspace')
+  await expect(field).toHaveValue('claude.')
+  await moveCaretTo('claude'.length)
+  await page.keyboard.press('Delete')
+  await page.keyboard.press('Delete')
+  await page.keyboard.type('code')
+  await expect(field).toHaveValue('claude.code')
+  expect(await caret(field)).toEqual([11, 11])
+
+  // Home, then typing, starts the suffix.
+  await page.keyboard.press('Home')
+  await page.keyboard.type('ab')
+  await expect(field).toHaveValue('claude.abcode')
+  expect(await caret(field)).toEqual([9, 9])
+
+  // A selection across the prefix (`de.ab`) replaces only its suffix part, even when the typed
+  // letter matches the prefix letter it covers.
+  await moveCaretTo('clau'.length)
+  for (let i = 0; i < 'de.ab'.length; i++) {
+    await page.keyboard.press('Shift+ArrowRight')
+  }
+  await page.keyboard.type('dx')
+  await expect(field).toHaveValue('claude.dxcode')
+  expect(await caret(field)).toEqual([9, 9])
+
+  // A whole id pasted with the caret inside the prefix lands at the suffix start.
+  await electronApp.evaluate(({ clipboard }) => clipboard.writeText('claude.xyz'))
+  await moveCaretTo(3)
+  await page.keyboard.press('Control+V')
+  await expect(field).toHaveValue('claude.xyzdxcode')
+  expect(await caret(field)).toEqual([10, 10])
+  await page.keyboard.type('-')
+  await expect(field).toHaveValue('claude.xyz-dxcode')
+
+  // The same into an empty suffix.
+  await page.keyboard.press('Control+A')
+  await page.keyboard.press('Backspace')
+  await moveCaretTo(3)
+  await page.keyboard.press('Control+V')
+  await expect(field).toHaveValue('claude.xyz')
+  expect(await caret(field)).toEqual([10, 10])
+
+  // An IME composition started inside the prefix composes and commits after it.
+  const cdp = await page.context().newCDPSession(page)
+  await moveCaretTo(2)
+  await setImeComposition(cdp, 'k')
+  await setImeComposition(cdp, 'か')
+  await commitImeText(cdp, 'か')
+  await expect(field).toHaveValue('claude.かxyz')
+  expect(await caret(field)).toEqual([8, 8])
+  await page.keyboard.type('q')
+  await expect(field).toHaveValue('claude.かqxyz')
+
+  // And after Backspace hit the prefix of an empty suffix.
+  await page.keyboard.press('Control+A')
+  await page.keyboard.press('Backspace')
+  await page.keyboard.press('Backspace')
+  await page.keyboard.press('Backspace')
+  await setImeComposition(cdp, 'n')
+  await setImeComposition(cdp, 'に')
+  await commitImeText(cdp, 'に')
+  await page.keyboard.type('x')
+  await expect(field).toHaveValue('claude.にx')
+  expect(await caret(field)).toEqual([9, 9])
 })

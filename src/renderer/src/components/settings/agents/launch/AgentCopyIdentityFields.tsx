@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
 import { readBotHostListed } from '@/lib/bot-catalog-snapshot'
@@ -26,8 +26,12 @@ export function AgentCopyIdentityFields({
   const id = `${prefix}${suffix}`
   const idInputRef = useRef<HTMLInputElement>(null)
   const idShadowRef = useRef<HTMLDivElement>(null)
-  // Where the caret goes after an edit the field rewrote, such as one that reached into the prefix.
-  const pendingCaretRef = useRef<number | null>(null)
+  // Where the caret goes after the latest edit. Each edit sets a new object, so an edit the field
+  // rejects whole (Backspace into the prefix leaves the id as it was) still renders and places it,
+  // and a placed caret is never placed again on a later render.
+  const [caretAfterEdit, setCaretAfterEdit] = useState<{ at: number } | null>(null)
+  // Where the selection started just before the edit the browser is making.
+  const editStartRef = useRef<number | null>(null)
   // The greyed prefix is drawn by a copy of the text behind the input, scrolled with it.
   const syncIdShadow = (): void => {
     if (idShadowRef.current && idInputRef.current) {
@@ -36,12 +40,25 @@ export function AgentCopyIdentityFields({
   }
   useLayoutEffect(() => {
     const input = idInputRef.current
-    if (input && pendingCaretRef.current !== null) {
-      input.setSelectionRange(pendingCaretRef.current, pendingCaretRef.current)
-      pendingCaretRef.current = null
+    const at = caretAfterEdit?.at
+    // Moving a caret that is already in place would disturb an IME composition for nothing.
+    if (input && at !== undefined && (input.selectionStart !== at || input.selectionEnd !== at)) {
+      input.setSelectionRange(at, at)
     }
-    syncIdShadow()
-  })
+  }, [caretAfterEdit])
+  useLayoutEffect(syncIdShadow)
+  useEffect(() => {
+    const input = idInputRef.current
+    if (!input) {
+      return
+    }
+    const onBeforeInput = (event: InputEvent): void => {
+      // A drop inserts where the pointer is, not at the selection.
+      editStartRef.current = event.inputType === 'insertFromDrop' ? null : input.selectionStart
+    }
+    input.addEventListener('beforeinput', onBeforeInput)
+    return () => input.removeEventListener('beforeinput', onBeforeInput)
+  }, [])
   // A bot runs as its copy by id, so the id stays put while one does.
   const boundBots = useBots()
     .filter((bot) => bot.agentCopy === copy.id)
@@ -126,11 +143,32 @@ export function AgentCopyIdentityFields({
             className="relative h-8"
             onChange={(event) => {
               const field = event.currentTarget
-              const edit = applyAgentCopyIdEdit(prefix, id, field.value, field.selectionEnd)
-              if (`${prefix}${edit.suffix}` !== field.value) {
-                pendingCaretRef.current = edit.caret
+              const edit = applyAgentCopyIdEdit(
+                prefix,
+                id,
+                field.value,
+                field.selectionEnd,
+                editStartRef.current
+              )
+              editStartRef.current = null
+              // Write a rewritten id straight back, so nothing rewrites the field again after the
+              // caret is placed: React restores a controlled value whose state did not change
+              // after its effects run, which sends the caret to the end.
+              const value = `${prefix}${edit.suffix}`
+              if (field.value !== value) {
+                field.value = value
               }
               setSuffix(edit.suffix)
+              setCaretAfterEdit({ at: edit.caret })
+            }}
+            onCompositionStart={(event) => {
+              // An IME composes in place, so start it after the prefix rather than inside it.
+              const field = event.currentTarget
+              const start = field.selectionStart ?? prefix.length
+              if (start < prefix.length) {
+                const end = Math.max(field.selectionEnd ?? start, prefix.length)
+                field.setSelectionRange(prefix.length, end)
+              }
             }}
             onScroll={syncIdShadow}
             onSelect={syncIdShadow}

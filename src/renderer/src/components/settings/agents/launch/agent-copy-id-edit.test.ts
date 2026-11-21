@@ -51,6 +51,41 @@ describe("an agent copy's id field", () => {
     })
   })
 
+  it('keeps a typed letter that matches the start of the selection it replaces', () => {
+    // Ctrl+A, then `c`: the selection started at 0, so the `c` is new text, not the old one.
+    expect(applyAgentCopyIdEdit(prefix, 'claude.abc', 'c', 1, 0)).toEqual({
+      suffix: 'c',
+      caret: 8
+    })
+    // `de.ab` selected across the prefix, then `d`.
+    expect(applyAgentCopyIdEdit(prefix, 'claude.abc', 'claudc', 5, 4)).toEqual({
+      suffix: 'dc',
+      caret: 8
+    })
+    // Without the selection start, the same strings read as a deletion.
+    expect(applyAgentCopyIdEdit(prefix, 'claude.abc', 'c', 1)).toEqual({ suffix: '', caret: 7 })
+  })
+
+  it('puts the caret after the prefix when an edit inside it changes nothing', () => {
+    // Backspace into the prefix of an empty suffix.
+    expect(applyAgentCopyIdEdit(prefix, 'claude.', 'claude', 6, 7)).toEqual({
+      suffix: '',
+      caret: 7
+    })
+    // Delete before the dot.
+    expect(applyAgentCopyIdEdit(prefix, 'claude.abc', 'claudeabc', 6, 6)).toEqual({
+      suffix: 'abc',
+      caret: 7
+    })
+  })
+
+  it('pastes a whole id at the suffix start when the caret is in the prefix', () => {
+    expect(applyAgentCopyIdEdit(prefix, 'claude.abc', 'claclaude.xyzude.abc', 13, 3)).toEqual({
+      suffix: 'xyzabc',
+      caret: 10
+    })
+  })
+
   it('keeps only the suffix of a pasted whole id', () => {
     // Pasted over the whole selected id.
     expect(applyAgentCopyIdEdit(prefix, 'claude.code-mode', 'claude.xyz', 10)).toEqual({

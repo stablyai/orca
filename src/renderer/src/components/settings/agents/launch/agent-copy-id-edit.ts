@@ -42,19 +42,25 @@ function commonEnd(a: string, b: string, limit: number): number {
  *
  * `before` is the value the field showed, `after` is the value the browser produced, and
  * `caret` is the caret after the edit, which places the change when the text around it repeats.
+ * `editStart` is where the selection started just before the edit: an edit never starts after
+ * it, so typing `c` over a selection that starts with `c` still inserts the `c`.
  */
 export function applyAgentCopyIdEdit(
   prefix: string,
   before: string,
   after: string,
-  caret: number | null
+  caret: number | null,
+  editStart: number | null = null
 ): AgentCopyIdEdit {
   const fixed = before.startsWith(prefix) ? before : prefix
   const oldSuffix = fixed.slice(prefix.length)
   // The inserted text ends at the caret, so only text after it can be the unchanged tail.
   const tailLimit = Math.min(fixed.length, caret === null ? after.length : after.length - caret)
   const tail = commonEnd(fixed, after, Math.max(0, tailLimit))
-  const head = commonStart(fixed, after, Math.min(fixed.length - tail, after.length - tail))
+  const head = Math.min(
+    commonStart(fixed, after, Math.min(fixed.length - tail, after.length - tail)),
+    editStart ?? Number.POSITIVE_INFINITY
+  )
   let inserted = after.slice(head, after.length - tail).replace(/\s+/g, '')
   const removeStart = Math.max(head, prefix.length) - prefix.length
   const removeEnd = Math.max(fixed.length - tail, prefix.length) - prefix.length
