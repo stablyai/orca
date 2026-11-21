@@ -70,35 +70,40 @@ export function prunedAwayEnglishSignature(root = process.cwd()) {
   return longest
 }
 
-export function findForbiddenBootPayloads(rendererDir, payloads) {
-  const { chunks } = readRendererBootGraph(rendererDir)
+function inspectBootChunks(chunks, payloads) {
   const violations = []
+  const twoByteChunks = []
+  const nodeOnlyChunks = []
   for (const chunk of chunks) {
     const code = fs.readFileSync(chunk.file, 'utf8')
+    const name = path.basename(chunk.file)
+    // V8 keeps a whole script as UTF-16 when any char is above U+00FF.
+    if (/[\u0100-\uffff]/.test(code)) {
+      twoByteChunks.push(name)
+    }
+    // The Node build of lru-cache calls diagnostics_channel at module load.
+    if (code.includes('lru-cache:metrics')) {
+      nodeOnlyChunks.push(name)
+    }
     for (const payload of payloads) {
       if (code.includes(payload.signature)) {
-        violations.push({ label: payload.label, chunk: path.basename(chunk.file) })
+        violations.push({ label: payload.label, chunk: name })
       }
     }
   }
-  return violations
-}
-
-// V8 keeps a whole script as UTF-16 when any char is above U+00FF, doubling that boot chunk's memory.
-export function findTwoByteBootChunks(rendererDir) {
-  return readRendererBootGraph(rendererDir)
-    .chunks.filter((chunk) => /[\u0100-\uffff]/.test(fs.readFileSync(chunk.file, 'utf8')))
-    .map((chunk) => path.basename(chunk.file))
+  return { violations, twoByteChunks, nodeOnlyChunks }
 }
 
 export function verifyRendererBootGraph(root = process.cwd()) {
   const rendererDir = path.join(root, RENDERER_BUILD_DIR)
   const { chunks, totalBytes } = readRendererBootGraph(rendererDir)
-  const violations = findForbiddenBootPayloads(rendererDir, bootGraphForbiddenPayloads(root))
+  const { violations, twoByteChunks, nodeOnlyChunks } = inspectBootChunks(
+    chunks,
+    bootGraphForbiddenPayloads(root)
+  )
   console.log(
     `Renderer boot graph: ${chunks.length} chunks, ${(totalBytes / 1024).toFixed(1)} KB minified.`
   )
-  const twoByteChunks = findTwoByteBootChunks(rendererDir)
   if (twoByteChunks.length > 0) {
     console.error('Boot chunks contain chars above U+00FF that output.charset cannot escape:')
     for (const chunk of twoByteChunks) {
@@ -116,5 +121,16 @@ export function verifyRendererBootGraph(root = process.cwd()) {
       'Load them after first paint (see primeTerminalWebglAddon) or from a route chunk.'
     )
   }
-  return twoByteChunks.length > 0 || violations.length > 0 ? 1 : 0
+  if (nodeOnlyChunks.length > 0) {
+    console.error(
+      'Renderer boot chunks bundled a Node-only dependency that crashes in the browser:'
+    )
+    for (const chunk of nodeOnlyChunks) {
+      console.error(`  lru-cache (node:diagnostics_channel) -> ${chunk}`)
+    }
+    console.error(
+      'Use the browser entry for the dependency. For @xterm/addon-ligatures, use lib/addon-ligatures.js.'
+    )
+  }
+  return twoByteChunks.length > 0 || violations.length > 0 || nodeOnlyChunks.length > 0 ? 1 : 0
 }

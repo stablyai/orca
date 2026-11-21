@@ -83,7 +83,7 @@ describe('the Composio events card', () => {
   it('by hand: the steps for the project’s events hook, kept on a reload, and Done finishes on the hook they showed', async () => {
     hostSays('none')
     const first = render(<ComposioSetupChatCard card={card} fallback="fallback" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'I’ll do it in Composio' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Manual setup' }))
     expect(await screen.findByText('Doing it in Composio')).toBeTruthy()
     expect(mocks.rpc).toHaveBeenCalledWith(expect.anything(), 'bots.composio.eventsByHand', {
       botId: 'bot-1',
@@ -107,7 +107,7 @@ describe('the Composio events card', () => {
   it('by hand: the steps follow the current project’s hook after a key change, never the old one', async () => {
     hostSays('none')
     render(<ComposioSetupChatCard card={card} fallback="fallback" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'I’ll do it in Composio' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Manual setup' }))
     expect(await screen.findByRole('button', { name: 'Open Composio' })).toBeTruthy()
     // Another project's key, with its own events hook.
     hostSays('other', false, { hookId: 'wh_b', signed: true })
@@ -133,7 +133,7 @@ describe('the Composio events card', () => {
       await waitFor(() =>
         expect(screen.getByRole('button', { name: setUp }).hasAttribute('disabled')).toBe(false)
       )
-      fireEvent.click(screen.getByRole('button', { name: 'I’ll do it in Composio' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Manual setup' }))
       expect(await screen.findByRole('button', { name: 'Open Composio' })).toBeTruthy()
       shown.unmount()
     }

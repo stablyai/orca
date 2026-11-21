@@ -37,6 +37,7 @@ export class AcpStructuredOptions {
       | 'modelEfforts'
       | 'familyEfforts'
       | 'withheldCommands'
+      | 'chatModelIds'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
@@ -144,7 +145,8 @@ export class AcpStructuredOptions {
     if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
       return false
     }
-    return value.length > 0 && this.currentValues()[key] === value
+    const native = (key === 'model' && this.dialect.chatModelIds?.get(value)) || value
+    return value.length > 0 && this.currentValues()[key] === native
   }
 
   notePick(key: string): void {
@@ -222,10 +224,11 @@ export class AcpStructuredOptions {
     }
     if (key === 'model') {
       const option = this.select('model')
+      const model = this.dialect.chatModelIds?.get(value) ?? value
       if (option) {
-        return { method: 'config', configId: option.id, value }
+        return { method: 'config', configId: option.id, value: model }
       }
-      return this.models ? { method: 'model', modelId: value } : null
+      return this.models ? { method: 'model', modelId: model } : null
     }
     if (key === 'effort') {
       const option = this.effortOption()

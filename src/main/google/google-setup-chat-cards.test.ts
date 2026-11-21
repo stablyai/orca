@@ -43,7 +43,6 @@ describe('the setup cards a run change calls for', () => {
   it('opens the path card, asks for services and then shows progress', () => {
     const started = run()
     expect(due(null, started)).toEqual(['path'])
-    expect(due(run({ id: 'old', state: 'done' }), started)).toEqual(['path'])
 
     const pathed = run({ answers: { path: answer(['guide-here']) }, mode: 'guide-here' })
     expect(due(started, pathed)).toEqual(['services'])

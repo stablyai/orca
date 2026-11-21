@@ -348,6 +348,10 @@ function installStatusProjection(): () => void {
       })
     }
   }
+  // Subscribed first so a closed chat's stand-in exists before the tab write retires its pane.
+  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
+    boundary(() => !disposed && reconcile(false))
+  )
   const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
     if (disposed) {
       return
@@ -357,9 +361,6 @@ function installStatusProjection(): () => void {
       boundary(() => reconcile(ownersChanged))
     }
   })
-  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
-    boundary(() => !disposed && reconcile(false))
-  )
   const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionIds) =>
     boundary(() => {
       if (disposed) {

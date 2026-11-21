@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
 import {
@@ -90,7 +91,7 @@ export async function runCliChatResume(
     if (chatClosed()) {
       return false
     }
-    const current = resolveCliChatResumeSource(useAppStore.getState(), {
+    const current = resolveCliChatResumeSource(useAppStore.getState(), readRuntimeStatuses(), {
       tab: { id: source.tabId, worktreeId: source.workspaceId },
       paneKey: source.paneKey
     })

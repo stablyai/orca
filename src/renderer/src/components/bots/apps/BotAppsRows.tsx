@@ -21,7 +21,11 @@ import {
 /** A direct app as the dialog lists it, under the name it shows, and whether the bot has it. */
 export type DirectRow = { name: string; added: boolean } & (
   | { app: Extract<BotDirectApp, { route: 'connector' }>; connector: BotConnector }
-  | { app: Extract<BotDirectApp, { route: 'mcp' }> }
+  | {
+      app: Extract<BotDirectApp, { route: 'mcp' }>
+      /** The site or host it was added at, when not the default. */
+      tag?: string
+    }
 )
 
 /** A connected row's action: the bot's Connectors tab. */
@@ -80,6 +84,7 @@ export function DirectAppRow({
       <BotAppRow
         logo={<BotAppBrandLogo app={'connector' in row ? row.connector : row.app} />}
         name={row.name}
+        tag={'tag' in row ? row.tag : undefined}
         line={directAppLine(row.app)}
         action={
           row.added ? (

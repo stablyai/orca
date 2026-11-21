@@ -306,8 +306,11 @@ describe('partition permission policy', () => {
     expect(prompts()).toHaveLength(1)
   })
 
-  it("keeps a paired server's pages off this computer's saved answers for the same profile id", async () => {
+  it('keeps paired permission answers separate from desktop and retains them across reopening', async () => {
     const install = await loadInstaller()
+    const policies = await import('./browser-session-partition-policies')
+    const permissionMemory =
+      await import('../../site-settings/permissions/browser-site-permission-memory')
     const store = await import('../../site-settings/permissions/browser-site-permission-store')
     store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
     store.setBrowserSitePermissionDecisions('default', 'https://a.test', ['clipboard'], 'allow')
@@ -317,8 +320,9 @@ describe('partition permission policy', () => {
     install(paired, { sitePermissions: 'session' })
     const check = (partition: string): boolean => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
-      const handler = sessionsByPartition.get(partition)?.setPermissionCheckHandler.mock
-        .calls[0]?.[0] as (
+      const handler = sessionsByPartition
+        .get(partition)
+        ?.setPermissionCheckHandler.mock.calls.at(-1)?.[0] as (
         webContents: { id: number; getURL: () => string },
         permission: string,
         requestingOrigin: string
@@ -328,39 +332,21 @@ describe('partition permission policy', () => {
 
     expect(check('persist:desktop-default')).toBe(true)
     expect(check('persist:paired-default')).toBe(false)
-  })
-
-  it("keeps a paired partition's answers after its last page closes and it reopens", async () => {
-    const install = await loadInstaller()
-    const policies = await import('./browser-session-partition-policies')
-    const permissionMemory =
-      await import('../../site-settings/permissions/browser-site-permission-memory')
-    const paired = profileFor('persist:paired-work')
-    install(paired, { sitePermissions: 'session' })
     permissionMemory
-      .sessionBrowserSitePermissions('persist:paired-work')
+      .sessionBrowserSitePermissions('persist:paired-default')
       .set('https://a.test', ['clipboard'], 'allow')
-    const sess = sessionsByPartition.get('persist:paired-work')
+    expect(check('persist:paired-default')).toBe(true)
+
+    const sess = sessionsByPartition.get('persist:paired-default')
     if (!sess) {
       throw new Error('Expected the paired session')
     }
-    const check = (): boolean => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered this handler on the fake session.
-      const handler = sess.setPermissionCheckHandler.mock.calls.at(-1)?.[0] as (
-        webContents: { id: number; getURL: () => string },
-        permission: string,
-        requestingOrigin: string
-      ) => boolean
-      return handler({ id: 1, getURL: () => 'https://a.test/' }, 'clipboard-read', 'https://a.test')
-    }
-    expect(check()).toBe(true)
-
     // Closing the last page clears the partition's policies; the next page installs them again.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the clear path only touches the fake session's handler setters and listeners.
     const electronSession = sess as unknown as Electron.Session
-    policies.clearBrowserSessionPartitionPolicies('persist:paired-work', electronSession)
+    policies.clearBrowserSessionPartitionPolicies('persist:paired-default', electronSession)
     install(paired, { sitePermissions: 'session' })
-    expect(check()).toBe(true)
+    expect(check('persist:paired-default')).toBe(true)
   })
 
   it('gives browsing pages File System Access but keeps it from pages another machine can script', async () => {

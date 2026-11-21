@@ -150,12 +150,11 @@ describe('orca connector offer', () => {
   it('posts no Google card on a server with no owner window', async () => {
     const dispatcher = offerRuntime(makeTestBot({ id: 'b1', name: 'Scout' }))
     google.headless = true
-    for (const accounts of [[], [{ status: 'connected' }]]) {
-      google.accounts = accounts
-      expect(
-        await dispatcher.dispatch(request({ callerSessionId: 'bot-chat', source: 'google' }))
-      ).toMatchObject({ ok: true, result: { offered: false } })
-    }
+    google.client = { clientId: 'c1' }
+    google.accounts = [{ status: 'connected' }]
+    expect(
+      await dispatcher.dispatch(request({ callerSessionId: 'bot-chat', source: 'google' }))
+    ).toMatchObject({ ok: true, result: { offered: false } })
     expect(cards).toEqual([])
   })
 

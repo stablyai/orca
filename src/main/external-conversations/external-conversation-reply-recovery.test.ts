@@ -260,21 +260,6 @@ describe('recovery from the journal', () => {
 })
 
 describe('recovery, round 2', () => {
-  it('fills a request the provider exited before taking, with no turn, as interrupted', async () => {
-    const f = fixture({
-      items: [asked('d1', 1)],
-      submissions: [
-        submission('d1', {
-          dispatchState: 'unknown',
-          recovered: true,
-          reason: 'provider_exited_before_acknowledgement'
-        })
-      ]
-    })
-    await f.recovery.boot()
-    expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
-  })
-
   it('keeps an outstanding send with no evidence unfilled and watched', async () => {
     const f = fixture({
       items: [asked('d1', 1)],

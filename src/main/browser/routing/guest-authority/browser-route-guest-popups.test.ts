@@ -3,9 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const popupMocks = vi.hoisted(() => ({ openPopupWithOriginBar: vi.fn() }))
 
-vi.mock('../../guest-lifecycle/popups/presentation/popup-origin-bar-window', () => ({
-  openPopupWithOriginBar: popupMocks.openPopupWithOriginBar
-}))
+vi.mock(
+  '../../guest-lifecycle/popups/presentation/popup-origin-bar-window',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    openPopupWithOriginBar: popupMocks.openPopupWithOriginBar
+  })
+)
 
 import {
   resetBrowserRouteGuestPopupOwnership,
@@ -36,6 +40,18 @@ describe('route guest OAuth popups', () => {
     expect(guest.openWindow('about:blank')).toEqual({ action: 'deny' })
     guest.emitInput('mouseDown')
     const allowed = guest.openWindow('about:blank')
+    registry.revokeNavigation(registry.claimGuestLifecycle(page)!)
+    allowed.createWindow?.(popupOptions(createPopupContents()))
+    expect(popups()[0]?.loaded).toBe(false)
+    expect(popups()[0]?.closed).toBe(true)
+  })
+
+  it('keeps a clicked new-tab open from becoming a tab once the route loses authority', () => {
+    // Up front the request waits for its child; once created, an opener-less child becomes a tab.
+    const openNewTabPopup = vi.fn((...args: unknown[]) => args.length === 4)
+    const { registry, guest, popups } = attachRegisteredGuest({ openNewTabPopup })
+    guest.emitInput('mouseDown')
+    const allowed = guest.openWindow('https://docs.example.com/picker', undefined, 'foreground-tab')
     registry.revokeNavigation(registry.claimGuestLifecycle(page)!)
     allowed.createWindow?.(popupOptions(createPopupContents()))
     expect(popups()[0]?.loaded).toBe(false)
@@ -106,7 +122,9 @@ function popupOptions(
 
 type OpenedPopup = { order: string[]; loaded: boolean; closed: boolean }
 
-function attachGuest() {
+function attachGuest({
+  openNewTabPopup
+}: { openNewTabPopup?: (...args: unknown[]) => boolean } = {}) {
   popupMocks.openPopupWithOriginBar.mockReset()
   const opened: OpenedPopup[] = []
   popupMocks.openPopupWithOriginBar.mockImplementation(
@@ -162,15 +180,16 @@ function attachGuest() {
       prepared = false
       return true
     },
-    retirePreparedPagesOwnedByRenderer: () => 0
+    retirePreparedPagesOwnedByRenderer: () => 0,
+    openNewTabPopup
   })
   const guest = createRouteGuest(routeSession)
   expect(registry.attachGuest(guest.guest)).toBe(true)
   return { registry, guest, popups: () => opened, blockedPopups: () => blocked }
 }
 
-function attachRegisteredGuest() {
-  const harness = attachGuest()
+function attachRegisteredGuest(dependencies: Parameters<typeof attachGuest>[0] = {}) {
+  const harness = attachGuest(dependencies)
   expect(harness.registry.registerGuest(page)).toBe(true)
   expect(harness.registry.grantNavigation(page)).toBe(true)
   return harness
@@ -183,6 +202,7 @@ function createRouteGuest(session: Session) {
     | ((details: {
         url: string
         postBody?: Electron.PostBody
+        disposition?: string
       }) => Electron.WindowOpenHandlerResponse)
     | null = null
   const guest = {
@@ -209,6 +229,7 @@ function createRouteGuest(session: Session) {
       handler: (details: {
         url: string
         postBody?: Electron.PostBody
+        disposition?: string
       }) => Electron.WindowOpenHandlerResponse
     ) => {
       windowOpenHandler = handler
@@ -221,8 +242,12 @@ function createRouteGuest(session: Session) {
         listener({}, { type })
       }
     },
-    openWindow: (url: string, postBody?: Electron.PostBody): Electron.WindowOpenHandlerResponse =>
-      windowOpenHandler?.({ url, postBody }) ?? { action: 'deny' },
+    openWindow: (
+      url: string,
+      postBody?: Electron.PostBody,
+      disposition?: string
+    ): Electron.WindowOpenHandlerResponse =>
+      windowOpenHandler?.({ url, postBody, disposition }) ?? { action: 'deny' },
     destroy: () => {
       destroyed = true
       for (const listener of listeners.get('destroyed') ?? []) {

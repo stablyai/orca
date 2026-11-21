@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host/execution-host'
@@ -17,6 +18,7 @@ import {
  * Fail open until settings/UI and terminal reconnect hydrate, or when the workspace is unknown; restored rows otherwise look asleep. */
 export function isWorkspaceNotificationMutedBySidebarFilters(
   state: AppState,
+  statuses: RuntimeStatuses,
   workspaceId: string
 ): boolean {
   if (
@@ -28,7 +30,7 @@ export function isWorkspaceNotificationMutedBySidebarFilters(
     return false
   }
   const repoMap = getIndexedRepoMap(state.repos)
-  const inputs = buildVisibleWorktreeOptionsFromState(state, repoMap)
+  const inputs = buildVisibleWorktreeOptionsFromState(state, statuses, repoMap)
   const scope = parseWorkspaceKey(workspaceId)
   if (scope?.type === 'folder') {
     const folder = selectFolderWorkspaces(state).find((item) => item.id === scope.folderWorkspaceId)

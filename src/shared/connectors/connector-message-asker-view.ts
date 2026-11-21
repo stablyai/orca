@@ -2,6 +2,7 @@
 // "Sam Lee · Slack" tag over it and the folded lines from people without access that came with it.
 import type { ConnectorMessageAsker, ConnectorNoAccessLine } from '../connector-message-asker'
 import { CONNECTOR_SOURCE_NAMES, type ConnectorSource } from './external-conversation-link'
+import { slackMarkupPlainText } from './slack-message-markup'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
@@ -130,7 +131,7 @@ export function connectorNoAccessView(
         name,
         initials: connectorAskerInitials(name),
         title: `${name} · ${sourceName} · ${noAccessLabel}`,
-        text: line.text
+        text: asker.source === 'slack' ? slackMarkupPlainText(line.text) : line.text
       }
     })
   }

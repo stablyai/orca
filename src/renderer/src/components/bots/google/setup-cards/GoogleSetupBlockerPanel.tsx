@@ -12,6 +12,7 @@ import {
   type GoogleSetupBlocker
 } from '../../../../../../shared/google/google-setup-blocker'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
+import { googleSetupActionAnswer } from '../../../../../../shared/google/google-setup-card-view'
 import {
   googleEnableApisUrl,
   withGoogleAccount
@@ -79,20 +80,21 @@ export function GoogleSetupBlockerPanel({
   const press = async (action: GoogleSetupAction): Promise<void> => {
     switch (action.id) {
       case 'make-new-key':
-        return answer(['redo', 'client'])
+      case 'continue-without':
+      case 'keep-account':
+      case 'continue':
+      case 'start-over':
+      case 'let-me':
+      case 'done': {
+        const answered = googleSetupActionAnswer(action, run)
+        return answered ? answerGoogleSetup(bot, answered.card, answered.values) : undefined
+      }
       case 'import-key':
         return file.pick()
       case 'allow':
         return signInThen(action.services, run.account)
       case 'sign-in-again':
         return signInThen(run.services, action.email)
-      case 'continue-without': {
-        const left = (run.services ?? []).filter((choice) => !action.services.includes(choice))
-        // The host offers it only with a service left; an answer needs at least one.
-        return left.length > 0 ? answerGoogleSetup(bot, 'services', left) : undefined
-      }
-      case 'keep-account':
-        return answerGoogleSetup(bot, 'account', [action.email])
       case 'turn-on': {
         // An imported app names no project or account on the run; its key and sign-in do.
         const projectId = run.projectId ?? client?.projectId
@@ -112,14 +114,6 @@ export function GoogleSetupBlockerPanel({
         return
       case 'check-again':
         return checkAgain()
-      case 'continue':
-        return answer(['resume'])
-      case 'start-over':
-        return answer(['start-over'])
-      case 'let-me':
-        return answer(['let-me', action.step])
-      case 'done':
-        return answer(['done', action.step])
     }
   }
   const act = (action: GoogleSetupAction): void => {

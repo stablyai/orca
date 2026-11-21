@@ -1,3 +1,4 @@
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
 import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
 import { commitTmuxSelectedStatus } from '../../../shared/agent-hook-listener/presence/tmux-selected-status'
@@ -14,6 +15,13 @@ import { tmuxCliWriterEvent } from './cli-writer-observation'
 import { agentSightingOf } from '../identity/pane-agent-identities'
 
 export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeBinder {
+  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
+  protected readHookRootEvidence: HookRootEvidenceReader | undefined
+
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
+    this.readHookRootEvidence = reader
+  }
+
   private tmuxOwner: TmuxAgentHookOwner | undefined
   private tmuxRootResolver: (paneKey: string) => Promise<TmuxManagedPty | null> = async () => null
 

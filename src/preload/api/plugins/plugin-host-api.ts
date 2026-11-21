@@ -205,11 +205,15 @@ export type PluginsApi = {
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
-  listMarketplaces: () => Promise<PluginMarketplaceHostSourceState[]>
+  listMarketplaces: (args?: {
+    waitForRefresh?: true
+  }) => Promise<PluginMarketplaceHostSourceState[]>
   addMarketplace: (source: PluginMarketplaceGitSource) => Promise<PluginMarketplaceHostSourceState>
   removeMarketplace: (args: { sourceId: string }) => Promise<PluginMarketplaceHostSourceState[]>
   refreshMarketplaces: (args?: { sourceId?: string }) => Promise<PluginMarketplaceHostSourceState[]>
-  listMarketplacePlugins: () => Promise<PluginMarketplaceHostListing[]>
+  listMarketplacePlugins: (args?: {
+    waitForRefresh?: true
+  }) => Promise<PluginMarketplaceHostListing[]>
   /** A catalog plugin that opens this file type, from cached catalogs only; never installs. */
   /** `editor` for a file Orca already opens as text: only custom editors are suggested. */
   suggestForFileType: (

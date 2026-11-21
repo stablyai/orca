@@ -93,6 +93,8 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
+  // Kiro's ACP pushes its own slash commands for each session.
+  kiro: null,
   omp: null,
   // No folder scan until Gemini's ACP is checked to load a picked skill.
   gemini: null

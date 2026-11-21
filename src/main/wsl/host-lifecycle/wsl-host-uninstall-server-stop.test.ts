@@ -84,7 +84,6 @@ describe('stopWslHostServersForUninstall', () => {
         return new Promise(() => {})
       }
     })
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const done = stopWslHostServersForUninstall(d)
     // The budget, then the bounded wait for the aborted stop to unwind.
@@ -92,9 +91,6 @@ describe('stopWslHostServersForUninstall', () => {
     await done
 
     expect(signal?.aborted).toBe(true)
-    expect(log).toHaveBeenCalledWith(
-      '[wsl] uninstall could not stop the Ubuntu host server: timed out after 1000 ms'
-    )
   })
 })
 

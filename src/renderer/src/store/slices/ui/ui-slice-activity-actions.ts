@@ -1,5 +1,6 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
 import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
@@ -61,7 +62,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             }
           }
           // A stamp already covering every known turn changes no reader; re-stamping costs a persisted UI write per click.
-          // Refresh it once a day anyway so hydration's 7-day expiry can't drop a stamp the user keeps renewing.
+          // Refresh it once a day anyway so hydration's newest-entries cap can't drop a stamp the user keeps renewing.
           if (
             s.acknowledgedAgentsByPaneKey[key] !== undefined &&
             prev >= known &&
@@ -117,7 +118,8 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             delete next[key]
           }
-          const turnTimestamp = s.agentStatusByPaneKey.get(key)?.stateStartedAt
+          const liveEntry = s.agentStatusByPaneKey.get(key)
+          const turnTimestamp = liveEntry ? agentAttentionTurnAt(liveEntry) : undefined
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp
