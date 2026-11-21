@@ -545,7 +545,7 @@ it('holds a delayed original Post after launch history overflows until the root 
   })
   server.reconcileEndedProcessForPaneKeys([PANE], { confirmedExit: true })
   expect(server.getStatusSnapshot()).toHaveLength(0)
-}, 10000)
+})
 
 it('honors a replayed drain without the earlier roster and discards its completion on a newer turn', async () => {
   const connectionId = 'ssh-agy'
