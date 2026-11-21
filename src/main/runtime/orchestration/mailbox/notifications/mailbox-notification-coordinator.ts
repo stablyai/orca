@@ -117,11 +117,6 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   retirePty(ptyId: string): void {
     this.deps.pointerDelivery.retirePty(ptyId)
-    try {
-      this.deps.getDb()?.forgetSettledPointerPty(ptyId)
-    } catch {
-      // Runtime teardown can close the DB before the last PTY exit is handled.
-    }
   }
 
   private resolveArrivedMailboxes(handle: string): {
