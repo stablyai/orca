@@ -237,14 +237,12 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   for (const [key, context] of Object.entries(state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)) {
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
-  const embedded = (
-    entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
-    worktreeId = entry.worktreeId
-  ) => {
+  for (const entry of statuses?.values() ?? []) {
     visits++
-    if (!entry?.orchestration) {
-      return
+    if (!entry.orchestration) {
+      continue
     }
+    const { worktreeId } = entry
     const row = canonical.get(entry.paneKey)
     const runtime = state.runtimeAgentOrchestrationByPaneKey?.[row?.key ?? entry.paneKey]
     if (
@@ -254,7 +252,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       runtime.dispatchId === entry.orchestration.dispatchId
     ) {
       // Matching graph facts already carry the context's producer, independently of execution routing.
-      return
+      continue
     }
     const tabId = parseAgentStatusPaneIdentity(entry.paneKey)?.tabId
     const terminalKey = worktreeId && tabId ? aliasKey(worktreeId, tabId) : null
@@ -279,9 +277,6 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     ) {
       adapt(entry.paneKey, entry.orchestration, host)
     }
-  }
-  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
-    embedded(entry)
   }
   const previous = cache?.contexts
   const equal =

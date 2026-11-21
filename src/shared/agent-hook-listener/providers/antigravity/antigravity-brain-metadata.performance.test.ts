@@ -30,8 +30,10 @@ it.each([100, 1000])(
     const dir = mkdtempSync(join(tmpdir(), 'agy-history-'))
     const state = createHookListenerState()
     const pane = getOrCreateAntigravityPaneState(state, 'pane')
+    const now = Date.now()
     pane.rootBrainDir = join(dir, 'root')
     pane.rootConversationId = 'root'
+    pane.leadObservedAt = now
     pane.leadModel = 'model-a'
     const descriptors = join(pane.rootBrainDir, '.system_generated', 'subagents')
     mkdirSync(descriptors, { recursive: true })
@@ -46,7 +48,7 @@ it.each([100, 1000])(
         join(descriptors, 'live.json'),
         '{"conversationId":"live","state":"SUBAGENT_STATE_ALIVE","subagentDescriptor":{"role":"Research"}}'
       )
-      recordAntigravityChildHook(pane, 'live', 'PreInvocation', { modelName: 'model-b' }, 1)
+      recordAntigravityChildHook(pane, 'live', 'PreInvocation', { modelName: 'model-b' }, now)
       vi.mocked(fsp.open).mockClear()
       vi.mocked(fsp.stat).mockClear()
       vi.mocked(fsp.readdir).mockClear()

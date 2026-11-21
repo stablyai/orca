@@ -157,7 +157,7 @@ export async function readAntigravityTranscriptPoll(
   const children: NonNullable<AntigravityTranscriptPollReads['children']> = []
   result.children = children
   const discovering = discoversAntigravityChildren(pane)
-  const candidates = []
+  const candidates: { child: TrackedAntigravityChild; revision: number }[] = []
   for (const child of pane.children.values()) {
     if (discovering || pane.verifiedChildren.has(child.id)) {
       candidates.push({ child, revision: child.revision })

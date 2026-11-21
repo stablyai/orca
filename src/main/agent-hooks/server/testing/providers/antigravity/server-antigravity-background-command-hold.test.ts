@@ -59,6 +59,39 @@ function programDone(): void {
 
 const state = () => server.getStatusSnapshot()[0]?.state
 const worker = (id: string) => ({ id, state: 'working' as const, startedAt: 1, description: id })
+const transcriptPollMs = 1000
+
+function fakeTranscriptClock(): void {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
+}
+
+async function waitForSettledRoster(ids: string[]): Promise<void> {
+  // The deadline starts the poll. Wait for the row publication while filesystem I/O catches up.
+  if (vi.isFakeTimers()) {
+    await vi.advanceTimersByTimeAsync(transcriptPollMs)
+  }
+  const matches = () => {
+    const row = server.getStatusSnapshotForPane(PANE)[0]
+    return (
+      row !== undefined &&
+      row.antigravitySpawnPending === undefined &&
+      (ids.length === 0
+        ? row.subagents === undefined
+        : row.subagents?.length === ids.length &&
+          ids.every((id, index) => row.subagents?.[index]?.id === id))
+    )
+  }
+  if (!matches()) {
+    await new Promise<void>((resolve) => {
+      const stop = server.subscribeStatusRowMutations(() => {
+        if (matches()) {
+          stop()
+          resolve()
+        }
+      })
+    })
+  }
+}
 
 const workflowCall = {
   stepIdx: 3,
@@ -127,14 +160,7 @@ async function parentStopsWhileSubagentRuns(ids = ['child']): Promise<void> {
   await agyHook('PostInvocation', {})
   await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
   await agyHook('PostInvocation', child)
-  await vi.waitFor(
-    () => {
-      const row = server.getStatusSnapshot()[0]
-      expect(row?.subagents).toHaveLength(ids.length)
-      expect(row?.antigravitySpawnPending).toBeUndefined()
-    },
-    { timeout: 10000 }
-  )
+  await waitForSettledRoster(ids)
 }
 
 const subagentIdleStop = () =>
@@ -146,8 +172,8 @@ it.each([
 ])(
   'ends the run on agy done that arrives %s its last subagent stops after the parent turn',
   async (_order, doneFirst) => {
+    fakeTranscriptClock()
     await parentStopsWhileSubagentRuns()
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
     if (doneFirst) {
       programDone()
     }
@@ -157,20 +183,23 @@ it.each([
     }
     expect(state()).toBe('working')
 
-    await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+    await waitForSettledRoster([])
+    expect(state()).toBe('working')
+    await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS - transcriptPollMs + 1)
     expect(state()).toBe('done')
   }
 )
 
 it("waits out the grace after a parent's busy Stop that lands after its subagent's", async () => {
+  fakeTranscriptClock()
   await agyHook('PreInvocation', { transcriptPath: brainWithChildDescriptor() })
   await agyHook('PreToolUse', subagentCall)
   await agyHook('PostToolUse', subagentCall)
   await agyHook('PreInvocation', child)
-  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1))
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
+  await waitForSettledRoster(['child'])
   await subagentIdleStop()
-  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1000)
+  await waitForSettledRoster([])
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS)
   await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
   programDone()
   expect(state()).toBe('working')
@@ -180,18 +209,19 @@ it("waits out the grace after a parent's busy Stop that lands after its subagent
 })
 
 it("keeps the run working when agy's done lands while a sibling subagent still works", async () => {
+  fakeTranscriptClock()
   await parentStopsWhileSubagentRuns(['child', 'sibling'])
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
   programDone()
   await subagentIdleStop()
 
-  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2)
+  await waitForSettledRoster(['sibling'])
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2 - transcriptPollMs)
   expect(state()).toBe('working')
   expect(server.getStatusSnapshot()[0]?.subagents?.map(({ id }) => id)).toEqual(['sibling'])
   await agyHook('Stop', { ...child, conversationId: 'sibling', fullyIdle: true })
-  await vi.advanceTimersByTimeAsync(1000)
+  await waitForSettledRoster([])
   expect(state()).toBe('working')
-  await vi.advanceTimersByTimeAsync(1001)
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS - transcriptPollMs + 1)
   expect(state()).toBe('done')
 })
 
@@ -225,14 +255,15 @@ it('discards a refused done when the program reports new work', async () => {
 })
 
 it('ends the run on agy done when the finished subagent leaves the row during the grace', async () => {
+  fakeTranscriptClock()
   await parentStopsWhileSubagentRuns()
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
   await subagentIdleStop()
   programDone()
   // The roster poll drops the finished child from the row before the grace ends.
-  await vi.advanceTimersByTimeAsync(1500)
+  await waitForSettledRoster([])
   expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  expect(state()).toBe('working')
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS - transcriptPollMs + 1)
   expect(state()).toBe('done')
 })
 
