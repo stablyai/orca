@@ -6,6 +6,11 @@ import type {
 } from './types'
 import { listClaudeTranscriptFiles } from './transcript-file-discovery'
 import {
+  createUsageAccountAttribution,
+  createUsageAccountRootResolver,
+  type UsageAccountRoot
+} from '../usage/usage-account-attribution'
+import {
   getClaudeUsageProcessedFileStat,
   readClaudeUsageScanFile,
   type ClaudeUsageScanFile
@@ -36,7 +41,8 @@ type ClaudeUsageFilePlan = {
 async function planClaudeUsageFile(
   filePath: string,
   previous: ClaudeUsagePersistedFile | undefined,
-  resumable: ReadonlySet<ClaudeUsagePersistedFile>
+  resumable: ReadonlySet<ClaudeUsagePersistedFile>,
+  reuseProjections: boolean
 ): Promise<ClaudeUsageFilePlan> {
   const fileInfo = await getClaudeUsageProcessedFileStat(filePath)
   const validProjection =
@@ -48,6 +54,7 @@ async function planClaudeUsageFile(
     previous.projectionVersion === CLAUDE_USAGE_PROJECTION_VERSION
   const previousId = previous?.physicalFileId ?? previous?.parseResumeState?.physicalFileId
   const reusable = Boolean(
+    reuseProjections &&
     validProjection &&
     previous.physicalFileId !== undefined &&
     typeof previous.ctimeMs === 'number' &&
@@ -57,7 +64,11 @@ async function planClaudeUsageFile(
     (!previousId || !fileInfo.physicalFileId || previousId === fileInfo.physicalFileId)
   )
   const resume =
-    !reusable && validProjection && fileInfo.size > previous.size && resumable.has(previous)
+    reuseProjections &&
+    !reusable &&
+    validProjection &&
+    fileInfo.size > previous.size &&
+    resumable.has(previous)
       ? previous.parseResumeState
       : null
   return {
@@ -76,7 +87,9 @@ export async function scanClaudeUsageFiles(
   previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
   onFilesScanned?: (count: number) => void,
   profileDirs?: string[],
-  verifiedSources?: ClaudeUsageVerifiedSources
+  verifiedSources?: ClaudeUsageVerifiedSources,
+  accountRoots: UsageAccountRoot[] = [],
+  reuseProjections = true
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -86,12 +99,28 @@ export async function scanClaudeUsageFiles(
   const normalized = normalizeClaudeUsageSourceFiles(previousProcessedFiles, verifiedSources)
   previousProcessedFiles = normalized.processedFiles
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
+  const accountAttribution = createUsageAccountAttribution(
+    previousProcessedFiles.map((file) => ({
+      keys: file.ownedDedupeKeys ?? [],
+      accountIds: file.ownedAccountIds
+    }))
+  )
+  const resolveAccount = createUsageAccountRootResolver(accountRoots)
+  const sourceAccounts = new Map<string, string | null>()
   const worktreeLookup = await buildWorktreeLookup(worktrees)
   const plans = new Map<string, ClaudeUsageFilePlan>()
   for (let index = 0; index < files.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = files.slice(index, index + FILE_SCAN_BATCH_SIZE)
     const batchPlans = await Promise.all(
-      batch.map((path) => planClaudeUsageFile(path, previousByPath.get(path), normalized.resumable))
+      batch.map(async (path) => {
+        sourceAccounts.set(path, await resolveAccount(path))
+        return planClaudeUsageFile(
+          path,
+          previousByPath.get(path),
+          normalized.resumable,
+          reuseProjections
+        )
+      })
     )
     for (const [offset, plan] of batchPlans.entries()) {
       plans.set(batch[offset], plan)
@@ -145,7 +174,13 @@ export async function scanClaudeUsageFiles(
         ownerByKey.set(key, path)
         return true
       },
-      previous
+      previous,
+      (key) =>
+        key
+          ? accountAttribution.observe(key, sourceAccounts.get(path) ?? null)
+          : previous
+            ? null
+            : (sourceAccounts.get(path) ?? null)
     )
     const retainedKeys = new Set(projected.ownedDedupeKeys)
     lateOwnerLoss ||= releasedKeys.some((key) => !retainedKeys.has(key))
@@ -174,6 +209,19 @@ export async function scanClaudeUsageFiles(
         continue
       }
       await publishRead(path, await readClaudeUsageScanFile(path), previous)
+      onFilesScanned?.(1)
+    }
+  }
+  for (const path of files) {
+    const current = projections.get(path)
+    if (
+      current &&
+      accountAttribution.needsReprojection({
+        keys: current.ownedDedupeKeys,
+        accountIds: current.ownedAccountIds
+      })
+    ) {
+      await publishRead(path, await readClaudeUsageScanFile(path), current)
       onFilesScanned?.(1)
     }
   }

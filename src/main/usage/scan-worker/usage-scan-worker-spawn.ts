@@ -1,3 +1,4 @@
+import type { UsageAccountRoot } from '../usage-account-attribution'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
@@ -49,14 +50,17 @@ function getSharedClient(): UsageScanWorkerClient {
 export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef,
-  profileDirs: string[]
+  profileDirs: string[],
+  accountRoots?: UsageAccountRoot[]
 ): Promise<{
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
   return scanClaudeUsageOnWorker(
     (body) =>
-      getSharedClient().scan(body.providerId === 'claude' ? { ...body, profileDirs } : body),
+      getSharedClient().scan(
+        body.providerId === 'claude' ? { ...body, profileDirs, accountRoots } : body
+      ),
     worktrees,
     sourceCache
   )
@@ -74,12 +78,18 @@ export function scanCodexUsageFilesViaWorker(
 
 export function scanOpenCodeUsageDatabasesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  sourceCache: UsageSourceCacheRef
+  sourceCache: UsageSourceCacheRef,
+  accountRoots?: UsageAccountRoot[]
 ): Promise<{
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
-  return scanOpenCodeUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+  return scanOpenCodeUsageOnWorker(
+    (body) =>
+      getSharedClient().scan(body.providerId === 'opencode' ? { ...body, accountRoots } : body),
+    worktrees,
+    sourceCache
+  )
 }
 
 export function scanMuseUsageFilesViaWorker(

@@ -185,6 +185,10 @@ export function configureRuntimeServices(
     requireHttps: isPackaged
   })
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  if (!core.invokeUsage) {
+    throw new Error('Usage backend must be initialized before runtime wiring')
+  }
+  runtime.usageHistory.setInvoker(core.invokeUsage)
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.

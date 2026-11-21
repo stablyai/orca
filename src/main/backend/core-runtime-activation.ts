@@ -5,7 +5,6 @@ import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
   describeOrcadBindExposure,
   resolveOrcadBindHost
@@ -221,24 +220,15 @@ export async function activateBackendRuntime(
   const { installGoogleSetupHostWatch } = await import('../google/google-setup-host-watch')
   registerCleanup(installGoogleSetupHostWatch(runtime))
 
-  // Restore prior desktop-pushed account selection before automations or CLI launches.
-  const { restoreOrcadHostAccountLaunchEnv } =
-    await import('../orcad/account-launch/orcad-host-account-launch-env-store')
-  restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
-  featureReadiness.open('accounts')
-
-  const { installOrcadSessionSearchService } =
-    await import('../orcad/host-runtime/orcad-session-search')
-  const { sessionSearchScopeCatalogFromStore } =
-    await import('../ai-vault-search/scope/session-search-store-scope-catalog')
-  sessionSearch = await installOrcadSessionSearchService({
+  const { installOrcadProfileRuntimeServices } =
+    await import('../orcad/orcad-profile-runtime-services')
+  sessionSearch = await installOrcadProfileRuntimeServices({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings(),
-    // Workspace/Project scopes resolve through this host's own registrations, read per search.
-    getScopeCatalog: () => sessionSearchScopeCatalogFromStore(profileStore, LOCAL_EXECUTION_HOST_ID)
+    store: profileStore,
+    runtime,
+    featureReadiness,
+    registerCleanup
   })
-  getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
-  featureReadiness.open('sessionSearch')
 
   const { startAgentStateRulesLiveUpdates } =
     await import('../runtime/agent-state-rules/agent-state-rules-live-update')

@@ -8,15 +8,13 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
+import type { SettingsHostScope } from '../settings/host-scope/settings-host-scope'
+import { SettingsHostScopeUnavailableNotice } from '../settings/host-scope/SettingsHostScopePicker'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
-  StatsHostCaption,
-  StatsHostScope,
-  StatsHostTooOldNotice,
-  type StatsHost
-} from './StatsHostScope'
-import { usageHostKey } from '../../store/slices/usage/usage-host'
-import type { StatsHostUsageSupport } from '../../store/slices/process-stats/stats'
-import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
+  getUsageOwnerHostScope,
+  useOwnerUsageRateLimits
+} from '../status-bar/usage/use-owner-usage-rate-limits'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -115,42 +113,41 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   return <AgentIcon agent={tab} size={14} />
 }
 
-const LOCAL_STATS_HOST: StatsHost = { target: { kind: 'local' }, name: null }
-
-/** Stats & Usage for the host picked in Settings; this computer when none is. */
-export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): React.JSX.Element {
-  return (
-    <StatsHostScope host={host}>
-      {(usageSupport, view) => (
-        <StatsPaneContent
-          key={usageHostKey(host.target)}
-          hostName={host.name}
-          usageSupport={usageSupport}
-          view={view}
-        />
-      )}
-    </StatsHostScope>
+export function StatsPane({
+  hostScope
+}: { hostScope?: SettingsHostScope } = {}): React.JSX.Element {
+  return hostScope?.available === false ? (
+    <SettingsHostScopeUnavailableNotice />
+  ) : (
+    <OwnedStatsPane hostScope={hostScope} />
   )
 }
 
-function StatsPaneContent({
-  hostName,
-  usageSupport,
-  view
-}: {
-  hostName: string | null
-  usageSupport: StatsHostUsageSupport
-  /** The store's view of this host; a new one (contact returned) reads it again. */
-  view: number
-}): React.JSX.Element {
+function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const localRateLimits = useAppStore((state) => state.rateLimits)
+  const environments = useAppStore((state) => state.runtimeEnvironments)
+  const selectedHost =
+    hostScope?.target.kind === 'local' && isWebClientLocation() && environments?.length === 1
+      ? { kind: 'environment' as const, environmentId: environments[0].id }
+      : hostScope?.target
+  const { remoteOwner } = useOwnerUsageRateLimits(localRateLimits)
+  const historyTarget = selectedHost ?? getUsageOwnerHostScope(remoteOwner)
+  const remoteHistory = historyTarget.kind === 'environment' || isWebClientLocation()
+  const historyOwnerLabel =
+    historyTarget.kind === 'environment'
+      ? (environments?.find((environment) => environment.id === historyTarget.environmentId)
+          ?.name ??
+        remoteOwner?.label ??
+        historyTarget.environmentId)
+      : t('stats.usage.localHost', 'This device')
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
   // Grok credits come from this computer's status bar, so a remote host has no Grok tab.
-  const usageOptions = hostName
+  const usageOptions = remoteHistory
     ? USAGE_ANALYTICS_OPTIONS.filter((option) => option.id !== 'grok')
     : USAGE_ANALYTICS_OPTIONS
   const activeUsageOption =
@@ -162,53 +159,14 @@ function StatsPaneContent({
 
   useEffect(() => {
     void fetchStatsSummary()
-  }, [view, fetchStatsSummary])
+  }, [fetchStatsSummary])
 
   return (
-    <div className="space-y-5">
-      {hostName ? <StatsHostCaption name={hostName} /> : null}
-      {summary ? (
-        <div className="space-y-3">
-          {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
-            <div className="flex min-h-[8rem] items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-              {t(
-                'auto.components.stats.StatsPane.73ed07859c',
-                'Start your first agent to begin tracking'
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3">
-                <StatCard
-                  label={t('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
-                  value={summary.totalAgentsSpawned.toLocaleString(intlLocale)}
-                  icon={<Bot className="size-4" />}
-                />
-                <StatCard
-                  label={t('auto.components.stats.StatsPane.1c96f433e2', 'Time agents worked')}
-                  value={formatDuration(summary.totalAgentTimeMs)}
-                  icon={<Clock className="size-4" />}
-                />
-                <StatCard
-                  label={t('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
-                  value={summary.totalPRsCreated.toLocaleString(intlLocale)}
-                  icon={<GitPullRequest className="size-4" />}
-                />
-              </div>
-              {formatTrackingSince(summary.firstEventAt, t, intlLocale) && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  {formatTrackingSince(summary.firstEventAt, t, intlLocale)}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      ) : null}
-
+    <div className="@container space-y-5">
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-foreground">
-            {t('auto.components.stats.StatsPane.c79f073d4c', 'Usage Analytics')}
+            {t('stats.usage.history.detail', 'History detail')}
           </h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -251,27 +209,95 @@ function StatsPaneContent({
         </div>
 
         {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
-        <div key={view}>
-          {usageSupport === 'checking' ? (
-            // Panes would start reads before the host says whether it can answer them.
-            <ClaudeUsageLoadingState title={activeUsageOption.label} />
-          ) : usageSupport === 'unsupported' && hostName ? (
-            <StatsHostTooOldNotice name={hostName} />
-          ) : activeUsageTab === 'overview' ? (
-            <UsageOverviewPane />
-          ) : activeUsageTab === 'claude' ? (
-            <ClaudeUsagePane />
-          ) : activeUsageTab === 'codex' ? (
-            <CodexUsagePane />
-          ) : activeUsageTab === 'opencode' ? (
-            <OpenCodeUsagePane />
-          ) : activeUsageTab === 'muse' ? (
-            <MuseUsagePane />
+        <div>
+          {activeUsageOption.id !== 'grok' ? (
+            <div className="space-y-4">
+              <UsageOverviewPane
+                key={JSON.stringify([
+                  historyTarget.kind,
+                  historyTarget.kind === 'environment' ? historyTarget.environmentId : null,
+                  activeUsageOption.id
+                ])}
+                target={historyTarget}
+                ownerLabel={historyOwnerLabel}
+                initialProvider={activeUsageOption.id === 'overview' ? 'all' : activeUsageOption.id}
+              />
+              {!remoteHistory && activeUsageOption.id !== 'overview' ? (
+                <details className="rounded-lg border border-border p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-foreground">
+                    {t('stats.usage.history.providerDetails', 'Original provider view')}
+                  </summary>
+                  <p className="my-3 text-xs text-muted-foreground">
+                    {t(
+                      'stats.usage.history.providerDetailsScope',
+                      'This provider view has its own period and project filters. Account filters above apply to the historical ledger.'
+                    )}
+                  </p>
+                  {activeUsageOption.id === 'claude' ? (
+                    <ClaudeUsagePane />
+                  ) : activeUsageOption.id === 'codex' ? (
+                    <CodexUsagePane />
+                  ) : activeUsageOption.id === 'opencode' ? (
+                    <OpenCodeUsagePane />
+                  ) : (
+                    <MuseUsagePane />
+                  )}
+                </details>
+              ) : null}
+            </div>
           ) : (
             <GrokUsagePane />
           )}
         </div>
       </div>
+      {summary ? (
+        <details className="rounded-lg border border-border p-4">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">
+            {t('stats.usage.activity.title', 'Local Orca activity · since first launch')}
+          </summary>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t(
+              'stats.usage.activity.scope',
+              'Local Orca events only. These counters use a different source and lifetime period from the historical log scan.'
+            )}
+          </p>
+          <div className="mt-3 space-y-3">
+            {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
+              <div className="flex min-h-[8rem] items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                {t(
+                  'auto.components.stats.StatsPane.73ed07859c',
+                  'Start your first agent to begin tracking'
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-3 @sm:grid-cols-3">
+                  <StatCard
+                    label={t('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
+                    value={summary.totalAgentsSpawned.toLocaleString(intlLocale)}
+                    icon={<Bot className="size-4" />}
+                  />
+                  <StatCard
+                    label={t('auto.components.stats.StatsPane.1c96f433e2', 'Time agents worked')}
+                    value={formatDuration(summary.totalAgentTimeMs)}
+                    icon={<Clock className="size-4" />}
+                  />
+                  <StatCard
+                    label={t('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
+                    value={summary.totalPRsCreated.toLocaleString(intlLocale)}
+                    icon={<GitPullRequest className="size-4" />}
+                  />
+                </div>
+                {formatTrackingSince(summary.firstEventAt, t, intlLocale) && (
+                  <p className="px-1 text-xs text-muted-foreground">
+                    {formatTrackingSince(summary.firstEventAt, t, intlLocale)}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </details>
+      ) : null}
     </div>
   )
 }

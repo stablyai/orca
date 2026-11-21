@@ -392,6 +392,9 @@ importers:
       '@types/chrome':
         specifier: 0.0.287
         version: 0.0.287
+      '@types/d3-shape':
+        specifier: 3.1.8
+        version: 3.1.8
       '@types/hast':
         specifier: ^3.0.4
         version: 3.0.5
@@ -464,6 +467,9 @@ importers:
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)
+      d3-shape:
+        specifier: 3.2.0
+        version: 3.2.0
       devalue:
         specifier: 6.0.3
         version: 6.0.3

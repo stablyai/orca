@@ -85,7 +85,7 @@ it('awaits loading before the first disabled cached snapshot and all historical 
   const service = createUsageService(createTestUsageStoreHost({ userDataPath: directory }))
   services.push(service)
   const settled = vi.fn()
-  const args = { scope: 'all', range: 'all', limit: 7, kind: 'model' }
+  const args = { scope: 'all', range: 'all', limit: 7, kind: 'model', includeHistory: true }
   const requests = [
     'getSnapshot',
     'getScanState',
@@ -106,7 +106,8 @@ it('awaits loading before the first disabled cached snapshot and all historical 
   const [snapshot, scanState, summary, daily] = await Promise.all(requests)
   expect(snapshot).toMatchObject({
     scanState: { enabled: false, isScanning: false, hasAnyClaudeData: true },
-    summary: { turns: 1, inputTokens: 7 }
+    summary: { turns: 1, inputTokens: 7 },
+    history: [expect.objectContaining({ newInputTokens: 7, outputTokens: 2 })]
   })
   expect(scanState).toMatchObject({ enabled: false, isScanning: false, hasAnyClaudeData: true })
   expect(summary).toMatchObject({ turns: 1, inputTokens: 7 })

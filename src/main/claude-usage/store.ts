@@ -1,3 +1,6 @@
+import { localUsageDay } from '../../shared/usage-history-range'
+import { filterUsageDaily } from '../usage/reporting/range-query/usage-scope-filters'
+import { projectClaudeUsageHistory } from '../usage/usage-history-projection'
 import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
@@ -85,9 +88,12 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
       scan: async (worktrees, sourceCache) => {
-        const profileDirs = await host.claudeProfileDirs()
+        const [profileDirs, accountRoots] = await Promise.all([
+          host.claudeProfileDirs(),
+          host.accountRoots?.('claude')
+        ])
         host.signal.throwIfAborted()
-        return scanClaudeUsageFilesViaWorker(worktrees, sourceCache, profileDirs)
+        return scanClaudeUsageFilesViaWorker(worktrees, sourceCache, profileDirs, accountRoots)
       },
       splitCacheFile: splitUsageCacheFileViaWorker
     })
@@ -96,10 +102,20 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   getSnapshot(
     scope: ClaudeUsageScope,
     range: ClaudeUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    includeHistory = false
   ): ClaudeUsageSnapshot {
     return {
       scanState: this.getScanState(),
+      ...(includeHistory
+        ? {
+            historyToday: localUsageDay(new Date()),
+            historyNeedsRescan: this.state.schemaVersion === 6,
+            history: projectClaudeUsageHistory(
+              filterUsageDaily(this.state.dailyAggregates, scope, range)
+            )
+          }
+        : {}),
       summary: buildSummary(this.state, scope, range),
       daily: buildDaily(this.state, scope, range),
       modelBreakdown: buildBreakdown(this.state, scope, range, 'model'),

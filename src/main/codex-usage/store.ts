@@ -1,3 +1,6 @@
+import { localUsageDay } from '../../shared/usage-history-range'
+import { filterUsageDaily } from '../usage/reporting/range-query/usage-scope-filters'
+import { projectEventUsageHistory } from '../usage/usage-history-projection'
 import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
@@ -85,10 +88,20 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   getSnapshot(
     scope: CodexUsageScope,
     range: CodexUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    includeHistory = false
   ): CodexUsageSnapshot {
     return {
       scanState: this.getScanState(),
+      ...(includeHistory
+        ? {
+            historyToday: localUsageDay(new Date()),
+            history: projectEventUsageHistory(
+              'codex',
+              filterUsageDaily(this.state.dailyAggregates, scope, range)
+            )
+          }
+        : {}),
       summary: buildSummary(this.state, scope, range),
       daily: buildDaily(this.state, scope, range),
       modelBreakdown: buildBreakdown(this.state, scope, range, 'model'),
