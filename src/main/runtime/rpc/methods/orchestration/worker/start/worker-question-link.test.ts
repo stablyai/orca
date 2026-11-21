@@ -38,15 +38,53 @@ describe('worker-start --for', () => {
     expect(linkWorkerToQuestion(db, id, caller, false)).toEqual({ question: id, linked: true })
   })
 
-  it('links a question still on its way to the caller, and records the take once the worker starts', () => {
+  it('links a question still on its way to the caller, and records the take once a worker starts', () => {
     const id = question('term_docs', 'arriving')
     const link = linkWorkerToQuestion(db, id, caller, false)
     expect(link).toMatchObject({ question: id, linked: true })
     expect(getQuestionTaker(db, id)).toBeNull()
-    if (link.linked) {
-      link.take?.()
-    }
+    expect(link.linked && link.take?.(true)).toEqual({ question: id, linked: true })
     expect(getQuestionTaker(db, id)).toBe('terminal:term_docs')
+  })
+
+  it('records no take when the start produced no worker', () => {
+    const id = question('term_docs', 'failed')
+    const link = linkWorkerToQuestion(db, id, caller, false)
+    expect(link.linked && link.take?.(false)).toEqual({
+      question: id,
+      linked: false,
+      why: `no worker started for ${id}`
+    })
+    expect(getQuestionTaker(db, id)).toBeNull()
+  })
+
+  it('reports no link when someone else took the question while the worker started', () => {
+    const id = question('term_docs', 'raced')
+    const link = linkWorkerToQuestion(db, id, caller, false)
+    db.markAsRead([id], { kind: 'terminal', handle: 'term_other' })
+    expect(link.linked && link.take?.(true)).toEqual({
+      question: id,
+      linked: false,
+      why: `${id} was taken by someone else while the worker started`
+    })
+  })
+
+  it("links a question sent to the caller's own Dispatch mailbox", () => {
+    const task = db.createTask({ spec: 'parent work', runId: 'run_legacy_local' })
+    const parent = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 10,
+      taskId: task.id,
+      startOptions: {}
+    })
+    db.db
+      .prepare('UPDATE dispatch_contexts SET assignee_handle = ? WHERE id = ?')
+      .run('term_docs', parent.dispatch.id)
+    const id = question(`dispatch:${parent.dispatch.id}`, 'helper')
+    expect(linkWorkerToQuestion(db, id, caller, false)).toMatchObject({
+      question: id,
+      linked: true
+    })
   })
 
   it('links a structured worker to the question its chat took', () => {
