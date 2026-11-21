@@ -53,7 +53,10 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       (view) =>
         unchecked ||
         (!this.claudeAgentEnded(view.paneKey) &&
-          this.getStatusSnapshotForPane(view.paneKey).some((row) => row.agentType === 'claude'))
+          // The mod keeps its launch pane key; a moved pane's row lives under the alias target.
+          this.getStatusSnapshotForPane(this.resolvePaneKeyAlias(view.paneKey)).some(
+            (row) => row.agentType === 'claude'
+          ))
     )
   }
 
