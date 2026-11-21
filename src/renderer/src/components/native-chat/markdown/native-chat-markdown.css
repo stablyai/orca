@@ -89,9 +89,4 @@
       opacity: 0;
     }
   }
-
-  /* A box per fading word lets its opacity run on the compositor instead of repainting. */
-  .native-chat-markdown[data-word-fade] [data-word] {
-    display: inline-block;
-  }
 }

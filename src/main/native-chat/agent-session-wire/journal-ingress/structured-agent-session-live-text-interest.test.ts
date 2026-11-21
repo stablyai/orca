@@ -9,10 +9,17 @@ it('admits no live operations while nobody views the stream, and resumes for a n
   const target = {
     liveTextReaders: () => (viewers > 0 ? { appends: true } : null)
   } as StructuredAgentSessionEventTarget
+  const reply = {
+    itemId: 'reply',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] }
+  }
   const publish = createLiveTextPublication(
     submit,
     () => target,
-    () => []
+    () => (viewers > 0 ? [reply] : [])
   )
   for (let window = 0; window < 1000; window++) {
     publish()
@@ -28,6 +35,21 @@ it('admits no live operations while every viewer is an older one that takes no s
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publication reads only this member of its target.
   const target = {
     liveTextReaders: () => ({ appends: false })
+  } as StructuredAgentSessionEventTarget
+  const publish = createLiveTextPublication(
+    submit,
+    () => target,
+    () => []
+  )
+  publish()
+  expect(submit).not.toHaveBeenCalled()
+})
+
+it('admits no live operations while every streaming row is one its viewers no longer take', () => {
+  const submit = vi.fn(() => ({ accepted: true as const }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publication reads only this member of its target.
+  const target = {
+    liveTextReaders: () => ({ appends: true, shown: true, takes: () => false })
   } as StructuredAgentSessionEventTarget
   const publish = createLiveTextPublication(
     submit,

@@ -32,10 +32,11 @@ export function createLiveTextPublication(
   target: () => StructuredAgentSessionEventTarget | null,
   read: LiveTextRead
 ): () => StructuredAgentSessionSinkAdmission {
-  // Asked each window, so a viewer who arrives mid-stream gets the next one.
+  // Asked each window, so a viewer who arrives mid-stream gets the next one. A window with no row
+  // to deliver (a shortened reply, one past the live limit) is not admitted; the read it takes is
+  // the one the publication would take, kept by the sources until the text grows.
   const nobodyTakes = (readers: LiveTextReaders | null | undefined): boolean =>
-    readers === null ||
-    ((readers?.appends === false || readers?.shown === false) && read(readers).length === 0)
+    readers === null || (readers !== undefined && read(readers).length === 0)
   return () =>
     nobodyTakes(target()?.liveTextReaders?.())
       ? { accepted: true }
