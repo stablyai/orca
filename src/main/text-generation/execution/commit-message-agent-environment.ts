@@ -105,11 +105,24 @@ async function resolveHostBaseEnv(
   }
 }
 
+function definedEnvPatch(patch: Record<string, string | undefined>): Record<string, string> {
+  const defined: Record<string, string> = {}
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined) {
+      defined[key] = value
+    }
+  }
+  return defined
+}
+
 export async function prepareLocalCommitMessageAgentEnv(
   agentId: string,
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined,
   target?: CommitMessageAgentRuntimeTarget
-): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; env?: NodeJS.ProcessEnv; accountPatch?: Record<string, string> }
+  | { ok: false; error: string }
+> {
   // Host agents need shell proxies/tokens; WSL resolves them in the guest.
   const hostBase = target?.runtime === 'wsl' ? undefined : await resolveHostBaseEnv(resolvers)
   // Shell-config agents short-circuit below; never put a Codex/Claude-style resolver agent on this path.
@@ -138,7 +151,8 @@ export async function prepareLocalCommitMessageAgentEnv(
           ok: true,
           env: codexHomeForTarget
             ? { ...withoutOrcaCodexHomeOverride(base), CODEX_HOME: codexHomeForTarget }
-            : withoutOrcaCodexHomeOverride(base)
+            : withoutOrcaCodexHomeOverride(base),
+          ...(codexHomeForTarget ? { accountPatch: { CODEX_HOME: codexHomeForTarget } } : {})
         }
       }
       if (codexHomePath && wslCodexHome) {
@@ -149,14 +163,16 @@ export async function prepareLocalCommitMessageAgentEnv(
         ok: true,
         env: codexHomePath
           ? { ...base, CODEX_HOME: codexHomePath }
-          : withoutOrcaCodexHomeOverride(base)
+          : withoutOrcaCodexHomeOverride(base),
+        ...(codexHomePath ? { accountPatch: { CODEX_HOME: codexHomePath } } : {})
       }
     }
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
       const preparation = await resolvers.prepareForClaudeLaunch(target)
+      const accountPatch = definedEnvPatch(preparation.envPatch)
       const env = applyClaudeEnvPatch({ ...base }, preparation.envPatch)
-      return { ok: true, env }
+      return { ok: true, env, accountPatch }
     }
   } catch (error) {
     console.error('[commit-message] Failed to prepare agent environment:', error)

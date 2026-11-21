@@ -1,16 +1,20 @@
+function wslEnvVariableName(token: string): string {
+  const slash = token.indexOf('/')
+  const name = slash === -1 ? token : token.slice(0, slash)
+  return name.toUpperCase()
+}
+
+/** One WSLENV entry per variable. A later registration replaces any earlier flag for that name. */
 export function addWslEnvKeys(
   env: Record<string, string | undefined>,
   keys: readonly string[]
 ): void {
   const existing = env.WSLENV ?? process.env.WSLENV ?? ''
-  const tokens = existing.split(':').filter(Boolean)
-  const tokenNames = new Set(tokens.map((token) => token.split('/')[0]))
+  let tokens = existing.split(':').filter(Boolean)
 
   for (const key of keys) {
-    if (!tokenNames.has(key)) {
-      tokens.push(key)
-      tokenNames.add(key)
-    }
+    const name = wslEnvVariableName(key)
+    tokens = [...tokens.filter((token) => wslEnvVariableName(token) !== name), key]
   }
 
   env.WSLENV = tokens.join(':')

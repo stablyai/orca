@@ -66,19 +66,28 @@ export function discoverCommitMessageModelsLocal(
   agentCommandOverride?: string,
   options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
-  return discoverModelsWithHostCache({ agentId, agentCommandOverride, env, options }, () =>
-    discoverModelsLocal({
+  return discoverModelsWithHostCache(
+    {
       agentId,
-      env,
       agentCommandOverride,
+      env,
       options,
-      backslash: commandBackslashMode({
-        kind: 'local',
-        cwd: options.cwd ?? '',
-        wslDistro: options.wslDistro
-      }),
-      spawnAgent: spawnSourceControlAgent
-    })
+      launchEnv: options.launchEnv,
+      accountPatch: options.accountPatch
+    },
+    () =>
+      discoverModelsLocal({
+        agentId,
+        env,
+        agentCommandOverride,
+        options,
+        backslash: commandBackslashMode({
+          kind: 'local',
+          cwd: options.cwd ?? '',
+          wslDistro: options.wslDistro
+        }),
+        spawnAgent: spawnSourceControlAgent
+      })
   )
 }
 

@@ -1,3 +1,4 @@
+import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { SourceControlAiSettingsInput } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -32,9 +33,18 @@ export type RuntimeGitTarget = {
   localGitOptions?: GitRuntimeOptions
 }
 
+/** Where a model probe runs. `executionHostId` is the owner; a nested SSH id is not a dial target. */
+export type ModelDiscoveryWorkspace = {
+  path: string
+  executionHostId: ExecutionHostId
+  wslDistro?: string
+}
+
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
-  getRuntimeSettings(): SourceControlAiSettingsInput
+  /** The same scope a terminal uses, including folder workspaces and SSH hosts. */
+  resolveModelDiscoveryWorkspace(selector: string): Promise<ModelDiscoveryWorkspace>
+  getRuntimeSettings(): SourceControlAiSettingsInput & AgentLaunchProfileSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined

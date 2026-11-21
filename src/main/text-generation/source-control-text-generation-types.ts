@@ -122,6 +122,8 @@ export type SourceControlAgentSpawnInput = {
   wslDistro?: string
   // WSL applies these in the guest; native callers already merge them into env.
   commandEnv?: Record<string, string>
+  /** Launch and account keys forwarded into a WSL guest even when they match the Windows parent. */
+  guestOverrides?: NodeJS.ProcessEnv
   preparation?: { script: string; args: string[] }
   literalArgIndices?: number[]
   stdinMode: 'ignore' | 'pipe'

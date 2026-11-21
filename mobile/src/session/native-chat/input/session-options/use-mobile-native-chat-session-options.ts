@@ -20,21 +20,24 @@ import type {
   SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-pty-session-options'
 import {
-  createNativeChatPtySessionOptions,
-  type NativeChatPtySessionOptionsSurface
-} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-pty-session-options'
-import {
-  readNativeChatSessionOptionCache,
-  writeNativeChatSessionOptionCache
-} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-cache'
-import {
-  createNativeChatSessionOptionRecord,
-  matchNativeChatCatalogModelId
+  matchNativeChatCatalogModelId,
+  selectedSessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
-import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+import {
+  clearMobileNativeChatAppliedReport,
+  rememberMobileNativeChatAppliedReport
+} from './mobile-native-chat-applied-report'
+import { syncMobileDiscoveredModels } from './mobile-native-chat-discovered-model-refresh'
+import {
+  agentDiscoversModels,
+  createMobileSurfaceEntry,
+  startMobileSessionOptionScope,
+  type MobileSessionOptionSurfaceEntry
+} from './mobile-native-chat-session-option-surface'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -53,20 +56,16 @@ export type MobileNativeChatSessionOptionsController = {
 }
 
 type PendingOperation = { identity: string; id: string }
-type SurfaceEntry = {
-  agent: string
-  canSwitchOmpModel: boolean
-  surface: NativeChatPtySessionOptionsSurface
-  /** The discovered list last handed to the surface. */
-  models: readonly CatalogModel[] | null
-  /** Set once the tab runs another agent: its late writes must not overwrite the new agent's cache. */
-  retired: boolean
-}
+type SurfaceEntry = MobileSessionOptionSurfaceEntry
 type HookArgs = {
   agent: string | null
   scopeKey: string | null
   reportedModel: string | null
   discoveredModels?: CatalogModel[] | null
+  /** The refresh that cleared `discoveredModels` failed, so a stale discovered route must drop. */
+  discoveryFailed?: boolean
+  /** False while the terminal is showing. Omitted stays in chat. */
+  chatVisible?: boolean
   modelSwitchCommand?: string
   dispatchCommand: (
     command: string,
@@ -81,90 +80,12 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
-// Kept across remounts: a repeated hook model is not fresh evidence, and reapplying it would revert a newer pick.
-const appliedReportByScope = new Map<string, string>()
-
-/** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
-function startScopeOverForAgent(scopeKey: string, agent: string): void {
-  const cachedAgent = readNativeChatSessionOptionCache(scopeKey)?.agent
-  if (cachedAgent !== undefined && cachedAgent !== agent) {
-    writeNativeChatSessionOptionCache(scopeKey, createNativeChatSessionOptionRecord(agent))
-    appliedReportByScope.delete(scopeKey)
-  }
-}
-
-function createMobileSurfaceEntry(args: {
-  agent: string
-  scopeKey: string
-  identity: string
-  canSwitchOmpModel: boolean
-  latest: { readonly current: HookArgs }
-  activeIdentity: { readonly current: string | null }
-}): SurfaceEntry | null {
-  const { agent, identity, latest, activeIdentity } = args
-  const midSession = getAgentSessionOptionCatalog(agent)?.modelApply.midSession
-  // Phone-only: desktop confirms a Claude model switch on its terminal screen; the phone cannot, so it never saves one as a launch default.
-  const modelSwitchUnconfirmable =
-    midSession?.kind === 'command' && midSession.detectAgentInteraction !== undefined
-  const surface = createNativeChatPtySessionOptions({
-    agent,
-    scopeKey: args.scopeKey,
-    mode: 'live',
-    modelLabel: sayMobileNativeChatSessionOption('model'),
-    canSwitchOmpModel: args.canSwitchOmpModel,
-    dispatchCommand: async (command, options) => {
-      // One controller serves every tab: a queued pick must not reach the tab opened since.
-      if (activeIdentity.current !== identity) {
-        throw new Error('The chat changed before the command was sent.')
-      }
-      const outcome = options?.delivery
-        ? await latest.current.dispatchCommand(command, { delivery: options.delivery })
-        : await latest.current.dispatchCommand(command)
-      if (entry.retired) {
-        throw new Error('The tab started another agent.')
-      }
-      // Desktop commits a pick only after the terminal confirms the write.
-      if (outcome === 'rejected' || outcome === 'unknown') {
-        throw new Error('The terminal did not accept the command.')
-      }
-    },
-    onAgentPicker: () => {
-      if (activeIdentity.current === identity) {
-        latest.current.onAgentPicker?.()
-      }
-    },
-    persistSelection: (pick) => {
-      // A pick that lands after the phone moved to another host's chat must not become that host's default.
-      if (
-        activeIdentity.current !== identity ||
-        (modelSwitchUnconfirmable && pick.optionId === 'model')
-      ) {
-        return
-      }
-      latest.current.writeSettings?.({
-        type: 'apply-picks',
-        agent,
-        picks: [modelSwitchUnconfirmable ? { ...pick, adoptModelAsLaunchDefault: false } : pick]
-      })
-    }
-  })
-  if (!surface) {
-    return null
-  }
-  const entry: SurfaceEntry = {
-    agent,
-    canSwitchOmpModel: args.canSwitchOmpModel,
-    models: null,
-    retired: false,
-    surface
-  }
-  return entry
-}
-
 export function useMobileNativeChatSessionOptions(
   args: HookArgs
 ): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, discoveredModels } = args
+  const discoveryFailed = args.discoveryFailed === true
+  const chatVisible = args.chatVisible !== false
   const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
   const identity = agent && scopeKey && catalog ? `${scopeKey}\0${agent}` : null
   const canSwitchOmpModel = args.modelSwitchCommand === 'orca-model'
@@ -184,6 +105,13 @@ export function useMobileNativeChatSessionOptions(
     }
   }, [identity])
 
+  const discoveryWired = Object.hasOwn(args, 'discoveredModels')
+  const awaitDiscovery =
+    chatVisible &&
+    discoveryWired &&
+    agentDiscoversModels(agent) &&
+    !discoveryFailed &&
+    discoveredModels == null
   const entry = useMemo(() => {
     if (!identity || !agent || !scopeKey) {
       return null
@@ -197,12 +125,13 @@ export function useMobileNativeChatSessionOptions(
     if (kept && kept.agent !== agent) {
       kept.retired = true
     }
-    startScopeOverForAgent(scopeKey, agent)
+    startMobileSessionOptionScope(scopeKey, agent)
     const created = createMobileSurfaceEntry({
       agent,
       scopeKey,
       identity,
       canSwitchOmpModel,
+      awaitingRefresh: awaitDiscovery,
       latest,
       activeIdentity: activeIdentityRef
     })
@@ -210,18 +139,25 @@ export function useMobileNativeChatSessionOptions(
       setBoundedScopeCacheEntry(surfaces, scopeKey, created)
     }
     return created
-  }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
+  }, [agent, awaitDiscovery, canSwitchOmpModel, identity, scopeKey, surfaces])
   const surface = entry?.surface ?? null
 
   useEffect(() => {
-    if (entry && discoveredModels && entry.models !== discoveredModels) {
-      entry.models = discoveredModels
-      entry.surface.replaceModels(discoveredModels)
+    if (!entry) {
+      return
     }
-  }, [discoveredModels, entry])
+    if (awaitDiscovery && !entry.models) {
+      entry.awaitingRefresh = true
+    }
+    syncMobileDiscoveredModels(entry, discoveredModels, discoveryFailed, scopeKey)
+  }, [awaitDiscovery, discoveredModels, discoveryFailed, entry, scopeKey])
 
   useEffect(() => {
-    if (!surface || !scopeKey || !catalog || !reportedModel) {
+    if (scopeKey && !chatVisible) {
+      clearMobileNativeChatAppliedReport(scopeKey)
+      return
+    }
+    if (!surface || !scopeKey || !catalog || !reportedModel || entry?.awaitingRefresh) {
       return
     }
     // Phone-only: desktop reads Claude's model from its terminal screen, which the phone cannot see, so Claude keeps the hook model too.
@@ -232,14 +168,26 @@ export function useMobileNativeChatSessionOptions(
         : matchNativeChatCatalogModelId(
             { ...catalog, models: discoveredModels ?? catalog.models },
             reportedModel,
-            { allowUnlisted: agent === 'codex' }
+            {
+              allowUnlisted: agent === 'codex',
+              selectedId: selectedSessionOptionValue(surface.getSnapshot(), 'model')
+            }
           )
-    if (!matched || appliedReportByScope.get(scopeKey) === matched) {
+    if (!matched || !rememberMobileNativeChatAppliedReport(scopeKey, matched)) {
       return
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, matched)
     surface.reportSessionOptions({ model: matched })
-  }, [agent, catalog, discoveredModels, reportedModel, scopeKey, surface])
+  }, [
+    agent,
+    catalog,
+    chatVisible,
+    discoveredModels,
+    discoveryFailed,
+    entry,
+    reportedModel,
+    scopeKey,
+    surface
+  ])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,

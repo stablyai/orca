@@ -71,6 +71,122 @@ describe('matchNativeChatCatalogModelId', () => {
     }
   })
 
+  it('prefers an exact-case id over an earlier case-insensitive match', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [
+        { id: 'sonnet', label: 'Sonnet', options: [] },
+        { id: 'Sonnet', label: 'Sonnet', options: [] }
+      ]
+    }
+    expect(matchNativeChatCatalogModelId(catalog, 'Sonnet')).toBe('Sonnet')
+  })
+
+  it('keeps the selected provider route when a report names only the shared base id', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [
+        { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', options: [] },
+        { id: 'provider-a/claude-sonnet-5-5', label: 'Sonnet 5.5', options: [] },
+        { id: 'provider-b/claude-sonnet-5-5', label: 'Sonnet 5.5', options: [] }
+      ]
+    }
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'claude-sonnet-5-5', {
+        selectedId: 'provider-b/claude-sonnet-5-5'
+      })
+    ).toBe('provider-b/claude-sonnet-5-5')
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'provider-a/claude-sonnet-5-5', {
+        selectedId: 'provider-b/claude-sonnet-5-5'
+      })
+    ).toBe('provider-a/claude-sonnet-5-5')
+  })
+
+  it('keeps the selected route when the only rows share a bare label', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [
+        { id: 'provider-a/claude-sonnet-5-5', label: 'claude-sonnet-5-5', options: [] },
+        { id: 'provider-b/claude-sonnet-5-5', label: 'claude-sonnet-5-5', options: [] }
+      ]
+    }
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'claude-sonnet-5-5', {
+        selectedId: 'provider-b/claude-sonnet-5-5'
+      })
+    ).toBe('provider-b/claude-sonnet-5-5')
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'provider-a/claude-sonnet-5-5', {
+        selectedId: 'provider-b/claude-sonnet-5-5'
+      })
+    ).toBe('provider-a/claude-sonnet-5-5')
+  })
+
+  it('keeps the selected provider route when a status report names its resolved model', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [
+        {
+          id: 'claude-sonnet-5-5',
+          label: 'Sonnet 5.5',
+          resolvedModel: 'claude-sonnet-5-5',
+          options: []
+        },
+        {
+          id: 'provider-b/sonnet',
+          label: 'Sonnet',
+          resolvedModel: 'claude-sonnet-5-5',
+          options: []
+        },
+        {
+          id: 'provider-a/sonnet',
+          label: 'Sonnet',
+          resolvedModel: 'claude-sonnet-5-5',
+          options: []
+        }
+      ]
+    }
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'claude-sonnet-5-5', {
+        selectedId: 'provider-b/sonnet'
+      })
+    ).toBe('provider-b/sonnet')
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'provider-a/sonnet', {
+        selectedId: 'provider-b/sonnet'
+      })
+    ).toBe('provider-a/sonnet')
+  })
+
+  it('switches to the explicit route when a case-variant full id is reported', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [
+        {
+          id: 'gateway/alias',
+          label: 'Alias',
+          resolvedModel: 'enterprise/model',
+          options: []
+        },
+        { id: 'enterprise/model', label: 'Enterprise', options: [] }
+      ]
+    }
+    expect(
+      matchNativeChatCatalogModelId(catalog, 'Enterprise/Model', { selectedId: 'gateway/alias' })
+    ).toBe('enterprise/model')
+  })
+
+  it('does not attribute a removed provider route to a different provider', () => {
+    const catalog = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [{ id: 'gateway/claude-sonnet-5-5', label: 'Gateway Sonnet', options: [] }]
+    }
+    expect(matchNativeChatCatalogModelId(catalog, 'enterprise-gateway/claude-sonnet-5-5')).not.toBe(
+      'gateway/claude-sonnet-5-5'
+    )
+  })
+
   it('keeps the reported selector as-is for a catalog that seeds no models', () => {
     // OMP’s unseeded catalog cannot outrank its exact hook-reported provider/id selector.
     const unseeded = { ...CLAUDE_SESSION_OPTION_CATALOG, models: [] }

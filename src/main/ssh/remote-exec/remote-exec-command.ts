@@ -257,6 +257,9 @@ async function execCommandOnce(
           sshChannelCloseConfirmed: false
         })
       }
+      if (stderr && onStderr) {
+        onStderr(redactRelayInstallMarkerTokens(stderr))
+      }
       if (terminationError) {
         // Local OpenSSH exit cannot prove remote command termination, especially through ControlMaster.
         if (!openedWithSystemSsh) {
@@ -269,22 +272,14 @@ async function execCommandOnce(
         const output = [stderr.trim(), payload.trim()].filter(Boolean).join('\n')
         settle(reject, sshCommandExitError(command, code, payload, output))
       } else {
-        if (stderr && onStderr) {
-          onStderr(redactRelayInstallMarkerTokens(stderr))
-        }
         settle(resolve, readPayload(stdout))
       }
     }
     const timeout = setTimeout(() => {
       requestTermination(
-        Object.assign(
-          new Error(
-            `Command "${redactRelayInstallMarkerTokens(command)}" timed out after ${
-              timeoutMs / 1000
-            }s`
-          ),
-          { code: SSH_EXEC_TIMEOUT_CODE }
-        )
+        Object.assign(new Error(`Remote command timed out after ${timeoutMs / 1000}s`), {
+          code: SSH_EXEC_TIMEOUT_CODE
+        })
       )
     }, timeoutMs)
 

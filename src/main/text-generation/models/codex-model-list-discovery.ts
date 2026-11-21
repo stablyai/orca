@@ -7,7 +7,7 @@ import { createCodexAppServerRecordDispatcher } from '../../codex/app-server/cod
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { listCodexModelPages } from '../../codex/structured/catalog/codex-structured-model-catalog'
 import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
-import { discoveredModelsResult } from './commit-message-model-discovery-policy'
+import { discoveredModelsResult, safeProbeErrorLog } from './commit-message-model-discovery-policy'
 import type {
   DiscoverCommitMessageModelsResult,
   SpawnedSourceControlAgentProcess
@@ -165,7 +165,7 @@ export function settleCodexModelListing(input: {
         return
       }
       endAppServer()
-      console.error('[commit-message] Model discovery failed:', error)
+      console.error('[commit-message] Model discovery failed:', safeProbeErrorLog(error))
       input.finish({
         success: false,
         error: `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`

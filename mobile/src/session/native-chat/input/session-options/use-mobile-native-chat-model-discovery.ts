@@ -7,6 +7,7 @@ import {
   mergeDiscoveredCatalogModels
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-discovered-catalog-models'
 import { defineRpcOperation, runRpcOperation } from '../../../../transport/rpc/rpc-operation'
+import type { UnvalidatedRpcRequestPort } from '../../../../transport/rpc/unvalidated-rpc-request-port'
 
 const discoveredModel = z.object({
   id: z.string().min(1),
@@ -44,6 +45,56 @@ const discoverModels = defineRpcOperation({
   }
 })
 
+type DiscoveryClient = UnvalidatedRpcRequestPort
+
+// In-flight only. The host keeps the 10 minute list and drops it on agent refresh; a client TTL
+// would keep serving the previous host after that clear, and must not be shared across RPC clients.
+const flightsByClient = new WeakMap<DiscoveryClient, Map<string, Promise<CatalogModel[] | null>>>()
+const clientPassIds = new WeakMap<DiscoveryClient, number>()
+let nextClientPassId = 1
+
+function clientPassId(client: DiscoveryClient): string {
+  const existing = clientPassIds.get(client)
+  if (existing !== undefined) {
+    return String(existing)
+  }
+  const created = nextClientPassId
+  nextClientPassId += 1
+  clientPassIds.set(client, created)
+  return String(created)
+}
+
+function flightsFor(client: DiscoveryClient): Map<string, Promise<CatalogModel[] | null>> {
+  const existing = flightsByClient.get(client)
+  if (existing) {
+    return existing
+  }
+  const created = new Map<string, Promise<CatalogModel[] | null>>()
+  flightsByClient.set(client, created)
+  return created
+}
+
+function startFlight(
+  flights: Map<string, Promise<CatalogModel[] | null>>,
+  scope: string,
+  load: () => Promise<CatalogModel[] | null>
+): Promise<CatalogModel[] | null> {
+  let flight = Promise.resolve<CatalogModel[] | null>(null)
+  flight = load().finally(() => {
+    if (flights.get(scope) === flight) {
+      flights.delete(scope)
+    }
+  })
+  flights.set(scope, flight)
+  return flight
+}
+
+export type MobileNativeChatModelDiscovery = {
+  models: CatalogModel[] | null
+  /** The current visit's probe failed. Hidden and in-flight visits stay false. */
+  failed: boolean
+}
+
 /** The runtime resolves the workspace's execution host, including SSH and folder workspaces. */
 export function useMobileNativeChatModelDiscovery(args: {
   client: Parameters<typeof runRpcOperation>[0] | null
@@ -51,13 +102,23 @@ export function useMobileNativeChatModelDiscovery(args: {
   hostId: string
   worktreeId: string
   enabled: boolean
-}): CatalogModel[] | null {
+}): MobileNativeChatModelDiscovery {
   const { client, agent, hostId, worktreeId, enabled } = args
   const scope = JSON.stringify([hostId, worktreeId, agent])
-  const [result, setResult] = useState<{
-    client: typeof client
-    scope: string
-    models: CatalogModel[]
+  const activePass =
+    enabled && client && worktreeId && agent ? `${clientPassId(client)}:${scope}` : ''
+  const [seenPass, setSeenPass] = useState(activePass)
+  const [visit, setVisit] = useState(0)
+  const passChanged = seenPass !== activePass
+  if (passChanged) {
+    setSeenPass(activePass)
+    setVisit(visit + 1)
+  }
+  const passKey = `${passChanged ? visit + 1 : visit}:${activePass}`
+  const [attempt, setAttempt] = useState<{
+    passKey: string
+    models: CatalogModel[] | null
+    failed: boolean
   } | null>(null)
   useEffect(() => {
     const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
@@ -65,22 +126,38 @@ export function useMobileNativeChatModelDiscovery(args: {
       return
     }
     let cancelled = false
-    void runRpcOperation(client, discoverModels, { worktree: `id:${worktreeId}`, agentId: agent })
-      .then((discovery) => {
-        if (cancelled) {
-          return
-        }
-        const models = discovery ? catalogModelsFromModelDiscovery(agent, discovery) : null
-        if (models !== null) {
-          setResult({ client, scope, models: mergeDiscoveredCatalogModels(agent, catalog, models) })
-        }
-      })
-      .catch(() => {
-        // Discovery failure leaves the authoritative hook model available.
-      })
+    const flights = flightsFor(client)
+    const flight =
+      flights.get(scope) ??
+      startFlight(flights, scope, () =>
+        runRpcOperation(client, discoverModels, {
+          worktree: `id:${worktreeId}`,
+          agentId: agent
+        })
+          .then((discovery) => {
+            const models = discovery ? catalogModelsFromModelDiscovery(agent, discovery) : null
+            return models === null ? null : mergeDiscoveredCatalogModels(agent, catalog, models)
+          })
+          .catch(() => null)
+      )
+    void flight.then((models) => {
+      if (cancelled) {
+        return
+      }
+      if (models) {
+        setAttempt({ passKey, models, failed: false })
+        return
+      }
+      // A failed refresh must not keep the previous catalog selectable.
+      setAttempt({ passKey, models: null, failed: true })
+    })
     return () => {
       cancelled = true
     }
-  }, [agent, client, enabled, scope, worktreeId])
-  return enabled && result?.client === client && result?.scope === scope ? result.models : null
+  }, [agent, client, enabled, passKey, scope, worktreeId])
+  const current = enabled && attempt?.passKey === passKey ? attempt : null
+  return {
+    models: current && !current.failed ? current.models : null,
+    failed: current?.failed === true
+  }
 }

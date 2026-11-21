@@ -10,6 +10,7 @@ import { wslAwareSpawn } from '../../git/command-runner/host-routing/wsl-aware-s
 import { AGENT_PANE_HOOK_ENV_KEYS } from '../../ipc/pty/host-env/spawn-env-keys'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { spawnSupervisedAgent } from './source-control-supervised-agent-spawn'
+import { publishWslGuestOverrides } from './wsl-guest-env-forwarding'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -33,7 +34,10 @@ const BACKGROUND_HOOK_ENV_KEYS = new Set<string>([
   ORCA_AGENT_HOOKS_DISABLED_ENV
 ])
 
-function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+function buildWslLauncherEnv(
+  explicitEnv: NodeJS.ProcessEnv | undefined,
+  overrides: NodeJS.ProcessEnv | undefined
+): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
   for (const key of WSL_LAUNCHER_ENV_KEYS) {
     const value = process.env[key]
@@ -41,8 +45,16 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
       env[key] = value
     }
   }
+  // Explicit launch/account keys are forwarded even when they equal the Windows parent.
+  const forced = new Set<string>()
+  for (const [key, value] of Object.entries(overrides ?? {})) {
+    if (value !== undefined) {
+      env[key] = value
+      forced.add(key)
+    }
+  }
   for (const [key, value] of Object.entries(explicitEnv ?? {})) {
-    if (value !== undefined && value !== process.env[key]) {
+    if (value !== undefined && !forced.has(key) && value !== process.env[key]) {
       env[key] = value
     }
   }
@@ -63,6 +75,16 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   spawnEnv[ORCA_AGENT_HOOKS_DISABLED_ENV] = '1'
   if (process.platform === 'win32' && wslDistro) {
     // Apply command assignments after guest login-shell setup, never to the Windows launcher.
+    // Launch overrides are exported in that shell so a profile function remains the command.
+    const launcherEnv = buildWslLauncherEnv(spawnEnv, input.guestOverrides)
+    const guestExports = publishWslGuestOverrides(launcherEnv).flatMap((assignment) => {
+      const splitAt = assignment.indexOf('=')
+      const key = assignment.slice(0, splitAt)
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+        return []
+      }
+      return [`export ${key}=${quotePosixShell(assignment.slice(splitAt + 1))}`]
+    })
     const assignments = Object.entries(input.commandEnv ?? {})
       .filter(([key]) => !BACKGROUND_HOOK_ENV_KEYS.has(key))
       .map(([key, value]) => `${key}=${value}`)
@@ -72,7 +94,7 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
       assignments.length ? [...assignments, input.binary, ...input.args] : input.args,
       {
         cwd: input.cwd,
-        env: buildWslLauncherEnv(spawnEnv),
+        env: launcherEnv,
         stdio: [input.stdinMode, 'pipe', 'pipe'],
         windowsHide: true,
         wslDistro,
@@ -84,6 +106,7 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
         wslShellCommand: [
           `command unset ${AGENT_PANE_HOOK_ENV_KEYS.join(' ')}`,
           `command export ${ORCA_AGENT_HOOKS_DISABLED_ENV}=1`,
+          ...guestExports,
           quotePosixShell(assignments.length ? '/usr/bin/env' : input.binary)
         ].join(' && '),
         ...(input.preparation ? { preparation: input.preparation } : {})

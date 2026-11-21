@@ -37,7 +37,7 @@ type PersistSelection = (args: {
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
   reportSessionOptions(values: Record<string, SessionOptionValue>): void
-  replaceModels(models: CatalogModel[]): void
+  replaceModels(models: readonly CatalogModel[], dropUnlistedSelection?: boolean): void
   /** The context window the host's model listing states for `modelId`, or null. */
   contextWindowTokens(modelId: string): number | null
 }
@@ -194,9 +194,19 @@ export function createNativeChatPtySessionOptions(
         publish()
       }
     },
-    replaceModels: (nextModels) => {
+    replaceModels: (nextModels, dropUnlistedSelection) => {
       models = [...nextModels]
       modelsAreDiscovered = true
+      if (dropUnlistedSelection) {
+        const tracked = typeof record.model?.value === 'string' ? record.model.value : null
+        const listed =
+          tracked !== null &&
+          (models.some((model) => model.id === tracked) ||
+            catalog.models.some((model) => model.id === tracked))
+        if (tracked && !listed) {
+          clearNativeChatSessionModel(record)
+        }
+      }
       publish()
     },
     contextWindowTokens: (modelId) =>

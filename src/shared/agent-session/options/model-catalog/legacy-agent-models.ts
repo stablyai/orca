@@ -68,6 +68,10 @@ function coveredClaudeAliases(models: readonly ListedModel[]): (model: ListedMod
     }
   }
   return (model) => {
+    // A provider route is a current choice, not an alias the versioned row replaced.
+    if (model.id.includes('/')) {
+      return null
+    }
     const alias = CLAUDE_ALIAS_ID.exec(model.id)
     const family = alias ? `${alias[1]}${alias[2] ?? ''}` : null
     const resolved = model.resolvedModel

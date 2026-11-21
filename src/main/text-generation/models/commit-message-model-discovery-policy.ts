@@ -5,8 +5,56 @@ import type { CommandTemplateBackslash } from '../../../shared/source-control/ai
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { planAgentBinary } from '../../../shared/agent-launch/startup/agent-command-plan'
 import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
-import { formatAgentCliFailureMessage } from '../failures/source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from '../source-control-text-generation-types'
+
+const ERRNO_CODE = /^E[A-Z0-9]{2,24}$/
+const SIGNAL_NAME = /^SIG[A-Z0-9]+$/
+
+/** Name plus a numeric JSON-RPC code or POSIX errno. Never `message` or `stack`. */
+export function safeProbeErrorLog(error: unknown): { name: string; code?: number | string } {
+  const name = error instanceof Error && error.name ? error.name : 'Error'
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return { name }
+  }
+  const code = error.code
+  if (typeof code === 'number' && Number.isInteger(code)) {
+    return { name, code }
+  }
+  if (typeof code === 'string' && ERRNO_CODE.test(code)) {
+    return { name, code }
+  }
+  return { name }
+}
+
+/** Exit summary with no stdout, stderr, or command text. */
+export function modelDiscoveryExitError(
+  label: string,
+  exitCode: number | null,
+  signal?: string | null
+): string {
+  if (typeof signal === 'string' && SIGNAL_NAME.test(signal)) {
+    return `${label} model discovery command exited with signal ${signal}.`
+  }
+  if (typeof exitCode === 'number' && Number.isInteger(exitCode)) {
+    return `${label} model discovery command exited with code ${exitCode}.`
+  }
+  return `${label} model discovery command exited.`
+}
+
+export function logModelDiscoveryExit(
+  label: string,
+  exitCode: number | null,
+  signal?: string | null
+): string {
+  const error = modelDiscoveryExitError(label, exitCode, signal)
+  const safeSignal = typeof signal === 'string' && SIGNAL_NAME.test(signal) ? signal : undefined
+  console.error('[commit-message] Model discovery failed:', {
+    label,
+    exitCode,
+    ...(safeSignal ? { signal: safeSignal } : {})
+  })
+  return error
+}
 
 export function staticModelDiscoveryResult(
   spec: AgentModelProbeSpec,
@@ -33,19 +81,11 @@ export function finalizeModelDiscoveryOutput(
   spec: AgentModelProbeSpec,
   stdout: string,
   stderr: string,
-  code: number | null
+  code: number | null,
+  signal?: string | null
 ): DiscoverCommitMessageModelsResult {
   if (code !== 0) {
-    console.error('[commit-message] Model discovery failed:', {
-      label: spec.label,
-      exitCode: code,
-      stdout,
-      stderr
-    })
-    return {
-      success: false,
-      error: formatAgentCliFailureMessage(spec.label, stdout, stderr, code)
-    }
+    return { success: false, error: logModelDiscoveryExit(spec.label, code, signal) }
   }
   const parse =
     spec.modelDiscovery && 'parse' in spec.modelDiscovery ? spec.modelDiscovery.parse : null

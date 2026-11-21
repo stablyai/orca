@@ -6,7 +6,11 @@ import type { CommitMessageDraftContext } from '../../../../shared/source-contro
 import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { withLinkedIssueDraftContext } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  ExecutionHostNotDispatchableError,
+  resolveGitRouteForHost
+} from '../../../providers/execution-host-provider-dispatch'
 import { getStagedCommitContext } from '../../../git/source-control/mutations/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../../providers/ssh-host-not-served-error'
 import { loadPullRequestLinkedIssue } from '../../../source-control/pull-request-linked-issue'
@@ -15,7 +19,6 @@ import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/exec
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
-  discoverCommitMessageModelsLocal,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings
@@ -44,6 +47,8 @@ import {
   pullRequestDraftGitExec,
   type RuntimeCommitMessageSettingsOverride
 } from './runtime-git-generation-context'
+import { modelDiscoveryLaunchEnv, withModelDiscoveryLaunchEnv } from './model-discovery-launch-env'
+import { discoverModelsForWorkspace } from './workspace-model-discovery'
 
 export class RuntimeGitGenerationCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -250,32 +255,42 @@ export class RuntimeGitGenerationCommands {
     agentId: string,
     settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
   ): Promise<DiscoverCommitMessageModelsResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const typedAgentId = agentId as TuiAgent
+    const workspace = await this.host.resolveModelDiscoveryWorkspace(worktreeSelector)
+    if (!isTuiAgent(agentId)) {
+      return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
+    }
+    const settings = this.host.getRuntimeSettings()
     const agentCommandOverride =
-      settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
-      this.host.getRuntimeSettings().agentCmdOverrides?.[typedAgentId]
-    const route = runtimeGitRouteForTarget(target)
+      settingsOverride?.agentCmdOverrides?.[agentId] ?? settings.agentCmdOverrides?.[agentId]
+    const launchEnv = modelDiscoveryLaunchEnv(agentId, settings)
+    const route = resolveGitRouteForHost(workspace.executionHostId)
+    if (route.kind === 'runtime') {
+      throw new ExecutionHostNotDispatchableError(route.hostId)
+    }
     if (route.kind === 'ssh') {
-      return {
-        success: false,
-        error: `No git provider for connection "${route.connectionId}"`
-      }
+      return discoverModelsForWorkspace({
+        agentId,
+        workspace,
+        env: withModelDiscoveryLaunchEnv(launchEnv),
+        launchEnv,
+        agentCommandOverride
+      })
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
-      typedAgentId,
+      agentId,
       this.host.getCommitMessageAgentEnvironment?.(),
-      localAgentRuntimeTargetForTarget(target)
+      workspace.wslDistro ? { runtime: 'wsl', wslDistro: workspace.wslDistro } : { runtime: 'host' }
     )
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    const { wslDistro } = localGitOptionsForTarget(target)
-    return discoverCommitMessageModelsLocal(
-      typedAgentId,
-      localEnv.env,
-      agentCommandOverride,
-      wslDistro ? { cwd: target.worktree.path, wslDistro } : undefined
-    )
+    return discoverModelsForWorkspace({
+      agentId,
+      workspace,
+      env: withModelDiscoveryLaunchEnv(launchEnv, localEnv.env, localEnv.accountPatch),
+      launchEnv,
+      accountPatch: localEnv.accountPatch,
+      agentCommandOverride
+    })
   }
 }
