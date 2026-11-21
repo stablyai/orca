@@ -268,13 +268,17 @@ export async function readBotShareable(
   }
   const sources = JSON.stringify([input.bot.agent, home.path, home.real, skillProjects])
   const readSkills = async (): Promise<BotShareSkill[]> => {
-    const listing = await (input.skillReads?.read(
-      input.bot.id,
-      sources,
-      input.reuseSkills === true,
-      listSkills
-    ) ?? listSkills())
-    leftOut.push(...listing.leftOut)
+    const listing = await (input.skillReads && input.session
+      ? input.skillReads.read(
+          `${input.bot.id}/${input.session}`,
+          sources,
+          input.reuseSkills === true,
+          listSkills
+        )
+      : listSkills())
+    for (const entry of listing.leftOut) {
+      leftOut.push(entry)
+    }
     return [...listing.skills]
   }
   const [skills, servers, memory, avatar] = await Promise.all([

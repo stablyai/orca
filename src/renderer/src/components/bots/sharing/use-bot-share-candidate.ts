@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotShareCandidateSummary } from '../../../../../shared/bots/bot-package'
 import { type BotRef, useStableBotRef } from '@/lib/bot-hosts'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { prepareBotShare, settleBotShare, type BotShareSelection } from './bot-share-rpc'
 
 export type BotShareCandidateState = {
@@ -46,6 +47,8 @@ export function useBotShareCandidate(
   const [building, setBuilding] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
+  // This dialog's skill listing on the bot's host: kept for its picks, never shared with another.
+  const [skillsSession] = useState(createNonSecureContextUuid)
 
   const setNote = useCallback((next: string) => {
     noteRef.current = next
@@ -67,9 +70,10 @@ export function useBotShareCandidate(
           bot,
           next,
           source === 'last'
-            ? { last: true }
+            ? { last: true, skillsSession }
             : {
                 setupNote: setupNote ?? noteRef.current,
+                skillsSession,
                 ...(source === 'local' ? { localOnly: true } : {}),
                 ...(reuseSkills ? { reuseSkills: true } : {})
               }
@@ -93,7 +97,7 @@ export function useBotShareCandidate(
       setBuilt({ candidate: result.value.candidate, selection: picked })
       return result.value.candidate
     },
-    [bot, setNote]
+    [bot, setNote, skillsSession]
   )
 
   const [begin, setBegin] = useState(startFrom)

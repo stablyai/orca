@@ -222,7 +222,8 @@ function appSession(
           : { status: 'reconnect-required' }
     }),
     candidates: new BotShareCandidates(join(root, name)),
-    readShareable: (entry) => readBotShareable({ bot: entry, home, automations: [], repos }),
+    readShareable: (entry, skills) =>
+      readBotShareable({ bot: entry, home, automations: [], repos, ...skills }),
     picks
   })
 }
@@ -474,5 +475,36 @@ describe('sharing a bot by link', () => {
       updatedAt: '2026-11-09T15:12:00.000Z',
       digest: published.version.packageDigest
     })
+  })
+
+  // STA-16989: a build its dialog replaced must not pack after the new one and drop its preview.
+  it("keeps the newer build's preview when it replaces an older build of the same dialog", async () => {
+    const home = join(root, 'home')
+    await writeHome(home, '# Release notes\n')
+    for (let index = 0; index < 20; index += 1) {
+      const skill = `skill-${index}`
+      await mkdir(join(home, 'skills', skill), { recursive: true })
+      await writeFile(
+        join(home, 'skills', skill, 'SKILL.md'),
+        `---\nname: ${skill}\ndescription: Steps\n---\n`
+      )
+    }
+    const service = appSession(fakeCloud(), home, 'run-1')
+    const dialog = { localOnly: true, session: 'dialog-1' }
+
+    const [older, newer] = await Promise.allSettled([
+      service.prepare(bot, {}, dialog),
+      service.prepare(bot, {}, dialog)
+    ])
+
+    expect(older).toMatchObject({
+      status: 'rejected',
+      reason: expect.objectContaining({ message: BOT_SHARE_ERRORS.prepareAgain })
+    })
+    if (newer.status !== 'fulfilled') {
+      throw newer.reason
+    }
+    const soul = await service.view(bot, newer.value.candidate.candidateId, 'soul')
+    expect(soul.map((file) => file.text)).toEqual(['# Release notes\n'])
   })
 })

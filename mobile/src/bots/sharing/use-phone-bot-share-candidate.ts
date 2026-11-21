@@ -1,6 +1,7 @@
 // What a Publish or Update link would send, built on the bot's computer from the picks on screen;
 // the desktop's useBotShareCandidate.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botShareErrorMessage } from './bot-share-copy'
 import {
@@ -48,6 +49,8 @@ export function usePhoneBotShareCandidate(
   const [building, setBuilding] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
+  // This sheet's skill listing on the bot's computer: kept for its picks, never shared with another.
+  const [skillsSession] = useState(randomV4Uuid)
 
   const setNote = useCallback((next: string) => {
     noteRef.current = next
@@ -74,9 +77,10 @@ export function usePhoneBotShareCandidate(
             botId,
             ...next,
             ...(source === 'last'
-              ? { last: true }
+              ? { last: true, skillsSession }
               : {
                   setupNote: setupNote ?? noteRef.current,
+                  skillsSession,
                   ...(source === 'local' ? { localOnly: true } : {}),
                   ...(reuseSkills ? { reuseSkills: true } : {})
                 })
@@ -103,7 +107,7 @@ export function usePhoneBotShareCandidate(
       setBuilt({ candidate: result.candidate, selection: picked })
       return result.candidate
     },
-    [client, botId, setNote]
+    [client, botId, setNote, skillsSession]
   )
 
   // A link read after the first build: a shared bot builds again from its last picks.

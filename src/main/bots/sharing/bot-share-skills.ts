@@ -55,9 +55,10 @@ type Source = {
 async function homeSources(
   bot: Pick<Bot, 'agent'>,
   home: Home,
-  leftOut: BotShareLeftOut[]
+  leftOut: BotShareLeftOut[],
+  signal?: AbortSignal
 ): Promise<Source[]> {
-  const own = await readBotOwnSkills(home.path)
+  const own = await readBotOwnSkills(home.path, signal)
   const agentFirst: BotAgentSkillsFolder[] =
     bot.agent === 'claude' ? ['claude', 'agents'] : ['agents', 'claude']
   const folders: { folder: string; skills: ScannedSkill[] }[] = [
@@ -116,7 +117,7 @@ export async function readShareSkills(
   signal?: AbortSignal
 ): Promise<BotShareSkill[]> {
   const sources = [
-    ...(await homeSources(bot, home, leftOut)),
+    ...(await homeSources(bot, home, leftOut, signal)),
     ...(await projectSources(projects, signal))
   ]
   const valid: { skill: ScannedSkill; source: Source }[] = []
@@ -249,6 +250,11 @@ export function unpackableWhy(error: unknown): 'link' | 'size' | 'unreadable' {
  *  discovery admits a skill by) is another skill, listed or left out on its own, so it is skipped
  *  unread and never rides along in this one's preview or archive. Any other SKILL.md is a document. */
 export async function ownSkillFiles(directory: string): Promise<ObservedSkillPackage['files']> {
+  // `directory` is the real folder the listing checked, which may be older than this read: one no
+  // longer at its own real path (a link put in place of it or a folder above it) is not that folder.
+  if ((await realpath(directory)) !== directory) {
+    throw new Error('skill-package-link')
+  }
   const { files } = await observeSkillPackage(
     directory,
     SKILL_PACKAGE_OBSERVATION_LIMITS,

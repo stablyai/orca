@@ -25,8 +25,11 @@ export const BotSharePrepare = z.object({
   last: z.boolean().optional(),
   /** Build a review without waiting for the cloud package lookup. */
   localOnly: z.boolean().optional(),
-  /** Only the picks changed on an open dialog: list the skills its last build listed, unwalked.
-   *  A host that predates this ignores it and reads them again. */
+  /** The open dialog this build is for: its skill listing is kept for its picks, and its newer
+   *  fresh build replaces its older one. A host that predates this ignores it. */
+  skillsSession: z.string().min(1).max(100).optional(),
+  /** Only the picks changed in `skillsSession`: list the skills it last listed, unwalked. A host
+   *  that predates this ignores it and reads them again. */
   reuseSkills: z.boolean().optional()
 })
 

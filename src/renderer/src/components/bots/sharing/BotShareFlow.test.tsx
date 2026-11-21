@@ -191,6 +191,28 @@ it('never publishes a candidate built for other picks after a rebuild fails', as
   expect(screen.getByRole('button', { name: 'Publish link' }).hasAttribute('disabled')).toBe(true)
 })
 
+// STA-16989: a pick reuses the dialog's skill listing on the bot's host; opening and Retry read it.
+it('asks to reuse its skill listing only for a pick, never on open or Retry', async () => {
+  calls.failMemory = true
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+  const prepares = () =>
+    calls.rpc.filter(({ method }) => method === 'bots.share.prepare').map(({ params }) => params)
+  await waitFor(() => expect(prepares().at(-1)).toMatchObject({ memory: ['area-owners'] }))
+  await waitFor(() => expect(prepares().filter((params) => params.memory)).toHaveLength(2))
+
+  const sent = prepares()
+  expect(sent[0]?.skillsSession).toEqual(expect.any(String))
+  expect(new Set(sent.map((params) => params.skillsSession)).size).toBe(1)
+  expect(sent[0]).not.toHaveProperty('reuseSkills')
+  expect(sent.filter((params) => params.reuseSkills)).toEqual([
+    expect.objectContaining({ memory: ['area-owners'], reuseSkills: true })
+  ])
+  expect(sent.at(-1)).not.toHaveProperty('reuseSkills')
+})
+
 it('lists a same-named skill that is left out with the folder it is in', async () => {
   calls.skills = [
     {
@@ -325,7 +347,11 @@ it('updates the link from the picks and note it was last published with', async 
   fireEvent.click(screen.getByRole('button', { name: 'Update link' }))
 
   expect(await screen.findByText('Updated just now')).toBeDefined()
-  expect(calls.rpc[0]?.params).toEqual({ botId: 'bot-1', last: true })
+  expect(calls.rpc[0]?.params).toEqual({
+    botId: 'bot-1',
+    last: true,
+    skillsSession: expect.any(String)
+  })
   expect(calls.rpc[1]?.params).toEqual({
     botId: 'bot-1',
     candidateId: 'c1',
@@ -505,7 +531,11 @@ it('starts a bot without a live link from the defaults, not its last published p
   render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
 
   await readyButton('Publish link')
-  expect(calls.rpc[0]?.params).toEqual({ botId: 'bot-1', setupNote: '' })
+  expect(calls.rpc[0]?.params).toEqual({
+    botId: 'bot-1',
+    setupNote: '',
+    skillsSession: expect.any(String)
+  })
   expect(screen.getByRole('switch', { name: 'Include memory' }).getAttribute('aria-checked')).toBe(
     'false'
   )

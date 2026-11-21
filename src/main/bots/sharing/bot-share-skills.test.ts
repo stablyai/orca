@@ -1,4 +1,4 @@
-import { chmod, link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -7,7 +7,9 @@ import { makeTestBot } from '../bot.test-fixture'
 import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { BotShareCandidates } from './bot-package-export'
 import { botSharePartFiles } from './bot-share-part-view'
+import type { BotShareLeftOut } from '../../../shared/bots/bot-package'
 import { BotShareSkillReads } from './bot-share-skill-reads'
+import { readShareSkills } from './bot-share-skills'
 import { readBotShareable } from './bot-share-sources'
 
 let root: string
@@ -293,6 +295,7 @@ describe('the skills a Share dialog lists across its picks', () => {
         automations: [],
         repos: repos(),
         skillReads,
+        session: 'dialog-1',
         reuseSkills
       })
       return { skills: shareable.skills.map((skill) => skill.name), leftOut: shareable.leftOut }
@@ -309,5 +312,56 @@ describe('the skills a Share dialog lists across its picks', () => {
       skills: ['triage'],
       leftOut: []
     })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves out a listed skill whose folder was swapped for a link before a pick packs it',
+    async () => {
+      await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+      await write(root, 'elsewhere/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+      await write(root, 'elsewhere/deploy/secret.txt', 'not the project')
+      const skillReads = new BotShareSkillReads()
+      const build = (reuseSkills: boolean) =>
+        readBotShareable({
+          bot,
+          home,
+          automations: [],
+          repos: repos(),
+          skillReads,
+          session: 'dialog-1',
+          reuseSkills
+        })
+      await build(false)
+      await rm(join(project, '.agents/skills/deploy'), { recursive: true })
+      await symlink(join(root, 'elsewhere/deploy'), join(project, '.agents/skills/deploy'))
+
+      const candidates = new BotShareCandidates(join(root, 'candidates'))
+      const summary = await candidates.prepare({
+        bot,
+        shareable: await build(true),
+        selection: {},
+        packageId: 'p'
+      })
+      expect(summary.bot.skills).toEqual([])
+      expect(summary.leftOut).toContainEqual({ kind: 'skill', name: 'deploy', why: 'link' })
+      await candidates.dispose()
+    }
+  )
+
+  it('stops a replaced read without recording anything', async () => {
+    await write(home, 'skills/triage/SKILL.md', skillText('triage', 'Own copy'))
+    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+    const leftOut: BotShareLeftOut[] = []
+
+    const read = readShareSkills(
+      bot,
+      { path: home, real: await realpath(home) },
+      leftOut,
+      [{ name: 'team-skills', path: project }],
+      AbortSignal.abort()
+    )
+
+    await expect(read).rejects.toMatchObject({ name: 'AbortError' })
+    expect(leftOut).toEqual([])
   })
 })

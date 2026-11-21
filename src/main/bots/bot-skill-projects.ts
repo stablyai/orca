@@ -73,6 +73,7 @@ export async function scanSkillsFolder(
   signal?: AbortSignal
 ): Promise<ScannedSkill[]> {
   const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'), signal)
+  signal?.throwIfAborted()
   const admitted = await Promise.all(files.map(admittedSkill))
   const byFolder = new Map<string, ScannedSkill>()
   for (const skill of admitted) {
