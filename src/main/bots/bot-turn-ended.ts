@@ -71,12 +71,14 @@ async function activeWorkSlot(
   sessionId: string,
   message: AgentJournalMessageItem
 ): Promise<BotActiveWorkSection | null | undefined> {
+  // One deadline for both steps, so the turn waits no longer than the existing bound.
+  const deadline = Date.now() + BOT_WORK_NOTE_TIMEOUT_MS
   const gate = await withTimeout(
     readBotActiveWork(runtime, botId, sessionId, message),
     BOT_WORK_NOTE_TIMEOUT_MS,
     null
   )
-  return gate ? withTimeout(gate.section, BOT_WORK_NOTE_TIMEOUT_MS, undefined) : null
+  return gate ? withTimeout(gate.section, Math.max(0, deadline - Date.now()), undefined) : null
 }
 
 export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
@@ -100,17 +102,19 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       ),
     groupRoomOf: (sessionId) => botGroupRoomOfSession(runtime, sessionId),
     // A stalled read never holds a message back: past the bound, this turn goes without it.
-    // With the bot's live work, which rides the same resend-on-change key; a read past the bound
-    // keeps what the chat last got.
+    // With the bot's live work, which rides the same resend-on-change key; only an owner turn's
+    // slow live-work read keeps what the chat last got.
     recentChats: async (botId, sessionId, message) =>
       joinedTurnSections(
         sections,
         sessionId,
         await Promise.all([
+          // A slow read drops the recent chats (null), never keeps a section a turn for another
+          // audience got.
           withTimeout(
             readBotRecentChats(runtime, botId, sessionId, message),
             BOT_WORK_NOTE_TIMEOUT_MS,
-            undefined
+            null
           ),
           activeWorkSlot(runtime, botId, sessionId, message)
         ])

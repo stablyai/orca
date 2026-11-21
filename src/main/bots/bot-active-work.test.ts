@@ -232,3 +232,15 @@ describe('the Active work block, kept honest', () => {
     )
   })
 })
+
+describe('the Active work budget', () => {
+  it('fits the whole block, fence and "N more" included, when titles force a long fence', () => {
+    const items = Array.from({ length: 15 }, (_, index) => ({
+      ...item(index + 1, 'working', index),
+      title: '>'.repeat(60)
+    }))
+    const text = botActiveWorkSection(items, []).text
+    expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(1_500)
+    expect(text).toMatch(/\(\d+ more:/)
+  })
+})
