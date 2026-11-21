@@ -177,6 +177,14 @@ describe('the Chats tab', () => {
     expect(screen.getByText('Worker r1')).toBeTruthy()
   })
 
+  it("keeps a replying chat's last message, with its state at the line's end", () => {
+    showTree({ chats: [{ ...rollout, live: 'replying', preview: 'Two PRs merged.' }] })
+    renderPanel()
+
+    expect(screen.getByText('Two PRs merged.')).toBeTruthy()
+    expect(screen.getByText('Replying…')).toBeTruthy()
+  })
+
   it('opens the chat that is already in front when its row is pressed, without unfolding it', () => {
     frontTab('rollout')
     showTree({ chats: [rollout] })
