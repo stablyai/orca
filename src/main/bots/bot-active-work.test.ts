@@ -3,12 +3,13 @@ import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { botActiveWorkSection, joinedTurnSections, type TurnSectionsMemo } from './bot-active-work'
 import { type BotActiveWorkReads, createBotActiveWorkReader } from './bot-active-work-read'
 
-const item = (number: number, status: 'needs_you' | 'working', lastActivityAt: number) => ({
+type Item = Parameters<typeof botActiveWorkSection>[0][number]
+const item = (number: number, status: 'needs_you' | 'working', lastActivityAt: number): Item => ({
   number,
   title: `Item ${number}`,
   status,
   lastActivityAt,
-  snoozedUntil: null as number | null,
+  snoozedUntil: null,
   links: []
 })
 const worker = (
@@ -144,7 +145,7 @@ describe("a turn's joined sections", () => {
 })
 
 describe("a bot's Active work reads", () => {
-  type Fake = ReturnType<typeof item>
+  type Fake = Item
   const record = (number: number, at: number): Fake => item(number, 'needs_you', at)
   const reads = (overrides: Partial<BotActiveWorkReads<Fake>> = {}): BotActiveWorkReads<Fake> => ({
     askers: async () => [{ kind: 'owner' }],
