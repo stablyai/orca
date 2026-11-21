@@ -11,7 +11,13 @@ export type MobileComposio = {
   status: { key: string; added: boolean } | null
   /** Null until read and while no key is saved; a failed read keeps the last. */
   connections: {
-    connections: { app: string; status: string; label: string | null }[]
+    connections: {
+      app: string
+      name?: string
+      status: string
+      label: string | null
+      id?: string
+    }[]
     pending: { app: string; url: string }[]
   } | null
 }
@@ -19,7 +25,8 @@ export type MobileComposio = {
 const EMPTY: MobileComposio = { status: null, connections: null }
 
 type Entry = {
-  client: RpcClient
+  /** Held only while a card shows, so a closed or replaced client isn't kept for the app's life. */
+  client: RpcClient | null
   botId: string
   view: MobileComposio
   readers: number
@@ -37,8 +44,8 @@ const listeners = new Set<() => void>()
 
 const keyOf = (hostKey: string, botId: string): string => `${hostKey}\u0000${botId}`
 
-async function readOnce(entry: Entry): Promise<MobileComposio | null> {
-  const { client, botId } = entry
+async function readOnce(entry: Entry, client: RpcClient): Promise<MobileComposio | null> {
+  const { botId } = entry
   const status = await composioStatusRead
     .request(client, { botId })
     .then((response) => composioStatusRead.interpret(response))
@@ -59,7 +66,7 @@ async function readOnce(entry: Entry): Promise<MobileComposio | null> {
 
 async function read(key: string): Promise<void> {
   const entry = entries.get(key)
-  if (!entry) {
+  if (!entry?.client) {
     return
   }
   if (entry.reading) {
@@ -70,11 +77,16 @@ async function read(key: string): Promise<void> {
   try {
     do {
       entry.again = false
-      const view = await readOnce(entry)
+      const client: RpcClient | null = entry.client
+      if (!client) {
+        return
+      }
+      const view = await readOnce(entry, client)
       if (entries.get(key) !== entry) {
         return
       }
-      if (view) {
+      // A reply read through a client the cards no longer hold is dropped.
+      if (view && entry.client === client) {
         entry.replied = true
         entry.view = view
         for (const listener of listeners) {
@@ -89,7 +101,7 @@ async function read(key: string): Promise<void> {
 
 function attach(key: string, client: RpcClient, botId: string): () => void {
   let entry = entries.get(key)
-  if (entry && entry.client !== client) {
+  if (entry?.client && entry.client !== client) {
     entry.stop?.()
     entries.delete(key)
     entry = undefined
@@ -108,6 +120,7 @@ function attach(key: string, client: RpcClient, botId: string): () => void {
     entries.set(key, entry)
   }
   const attached = entry
+  attached.client = client
   attached.readers += 1
   // The refresh reads once as it starts.
   if (!attached.stop) {
@@ -125,6 +138,9 @@ function attach(key: string, client: RpcClient, botId: string): () => void {
     if (attached.readers === 0) {
       attached.stop?.()
       attached.stop = null
+      attached.client = null
+      // The next showing may read through another client; it waits for that client's own reply.
+      attached.replied = false
     }
   }
 }

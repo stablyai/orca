@@ -226,12 +226,12 @@ describe('chat-image requests', () => {
 describe('project-folder-link listings', () => {
   beforeEach(async () => {
     await mkdir(join(outside, 'guides'))
-    await symlink(outside, join(project, 'linked'), 'dir')
+    await symlink(outside, join(project, 'linked'), 'junction')
   })
 
   it('refuse links in Orca floating folder, which is not a project', async () => {
     const floatingLink = join(userData.path, 'floating-workspace', 'linked')
-    await symlink(outside, floatingLink, 'dir')
+    await symlink(outside, floatingLink, 'junction')
 
     expect(
       await settles(resolveLocalListRequestPath(floatingLink, PROJECT_FOLDER_LINK, makeStore({})))

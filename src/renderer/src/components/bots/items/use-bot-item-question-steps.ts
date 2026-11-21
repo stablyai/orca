@@ -19,7 +19,8 @@ import {
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
   botItemWaitingAsk,
-  botItemWaitingLine
+  botItemWaitingLine,
+  type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemPendingComment } from '../../../../../shared/bots/bot-item-pending-comments'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
@@ -78,24 +79,28 @@ export function useBotItemQuestionSteps(
   bot: Bot,
   item: BotItem,
   events: readonly BotItemEvent[],
-  /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused. */
-  send: (text: string, paths?: readonly string[], questionId?: string) => void,
+  /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused;
+   *  `plain`: it answers none. */
+  send: (text: string, paths?: readonly string[], questionId?: string, plain?: boolean) => void,
   pending: readonly BotItemPendingComment[]
 ): {
   steps: BotItemQuestionSteps | null
   sent: BotItemSentAnswers | null
   /** A quick reply of one question, posted at once as it always has. */
   quick: (text: string) => void
-  /** The comment box's send: "Replying to" a line of several questions, it answers that line. */
+  /** The comment box's send: it answers only the question its "Replying to" names; with none named
+   *  (its × closed), the comment answers nothing. */
   fromBox: (text: string, paths: readonly string[], replyingTo: string | null) => void
   /** What the comment box replies to: with several questions, the line the step is on. */
-  waitingLine: { id: string; line: string; replies: boolean } | null
+  waitingLine: BotItemWaitingLine | null
 } {
   // As cheap as the box's own waiting-line read, on each render.
   const asked = botItemWaitingAsk(item, events)
   const waiting = asked && asked.shape.decisions.length > 1 ? asked : null
   const askId = waiting?.askId ?? ''
   const shape = waiting?.shape ?? NO_ASK
+  // One question, or one in prose: the box names it until its × closes.
+  const oneLine = waiting ? null : botItemWaitingLine(item, events)
   const { held, hold } = useBotItemHeldAnswers(botItemHeldAnswersScope(bot, item.uid, askId), shape)
   const [chosen, setChosen] = useState<{ askId: string; index: number } | null>(null)
   const [sent, setSent] = useState<BotItemSentAnswers | null>(null)
@@ -126,15 +131,16 @@ export function useBotItemQuestionSteps(
   const fromBox = useLatestHandler(
     (text: string, paths: readonly string[], replyingTo: string | null) => {
       if (!waiting) {
-        send(text, paths)
+        send(text, paths, undefined, oneLine !== null && replyingTo === null)
       } else if (replyingTo === `${askId}:${current}`) {
         answer(current, text, paths)
       } else {
+        // Held answers name their lines; the comment rides along answering none.
         const answered = botItemAnswersText(shape, kept)
         if (answered) {
           post(kept, `${answered}\n${text}`, paths)
         } else {
-          send(text, paths)
+          send(text, paths, undefined, true)
         }
       }
     }
@@ -163,9 +169,10 @@ export function useBotItemQuestionSteps(
     waitingLine: stepLine
       ? {
           id: `${askId}:${steps.current}`,
+          eventId: askId,
           line: botItemQuestionLine(stepLine.question),
           replies: stepLine.replies.length > 0
         }
-      : botItemWaitingLine(item, events)
+      : oneLine
   }
 }

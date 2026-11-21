@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
@@ -205,9 +205,10 @@ export function AutomationRunDetailsPage({
             </AutomationsPageTitle>
             <AutomationRunStatusLabel status={run.status} pill />
             <span className="flex-1" />
-            {(['newer', 'older'] as const).map((step) => {
+            {/* Why: left reads as back in time, so Older sits left and Newer right. */}
+            {(['older', 'newer'] as const).map((step) => {
               const target = step === 'newer' ? newer : older
-              const Icon = step === 'newer' ? ChevronUp : ChevronDown
+              const Icon = step === 'newer' ? ChevronRight : ChevronLeft
               return (
                 <Tooltip key={step}>
                   <TooltipTrigger asChild>

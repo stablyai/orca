@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { realFolderUnderRoot } from '../../filesystem/real-folder-under-root'
 
 const header = (agentName: string) =>
   `<!-- Orca writes this file for ${agentName} chats in this folder; edits are replaced. -->`
@@ -29,14 +30,22 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink or a file that cannot be read stays untouched. */
+ *  A symlink on the way, or a file that cannot be read, stays untouched. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string,
   text: string
 ): Promise<void> {
-  const target = join(cwd, path)
+  const realCwd = await realpath(cwd).catch(() => cwd)
+  const folders = dirname(path)
+    .split(/[\\/]/)
+    .filter((segment) => segment && segment !== '.')
+  // A linked folder on the way would carry the bot's instructions somewhere else.
+  if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
+    return
+  }
+  const target = join(realCwd, path)
   let existing: string | null = null
   let mode = 0o600
   const info = await lstat(target).catch(() => null)

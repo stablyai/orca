@@ -169,6 +169,24 @@
       "showMoreWorkers_one": "Show {{count}} more worker",
       "showMoreWorkers_other": "Show {{count}} more workers"
     },
+    "groups": {
+      "items": {
+        "needsYouCount_one": "{{count}} needs you",
+        "needsYouCount_other": "{{count}} needs you",
+        "outsideRoom_one": "{{count}} more outside this room",
+        "outsideRoom_other": "{{count}} more outside this room",
+        "outsideThread_one": "{{count}} more outside this thread",
+        "outsideThread_other": "{{count}} more outside this thread",
+        "outside_one": "{{count}} more outside this group",
+        "outside_other": "{{count}} more outside this group",
+        "workingCount_one": "{{count}} working",
+        "workingCount_other": "{{count}} working"
+      }
+    },
+    "import": {
+      "folderItems_one": "{{count}} item",
+      "folderItems_other": "{{count}} items"
+    },
     "items": {
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
@@ -185,9 +203,23 @@
         "moveFailed_other": "Couldn’t move {{count}} items: {{why}}"
       }
     },
+    "memory": {
+      "topicLines_one": "{{count}} line",
+      "topicLines_other": "{{count}} lines"
+    },
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
+    },
+    "settings": {
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "requests_one": "{{count}} request",
+      "requests_other": "{{count}} requests"
+    },
+    "skills": {
+      "count_one": "{{count}} skill",
+      "count_other": "{{count}} skills"
     },
     "upNext": {
       "showMore_one": "Show {{count}} more",
@@ -260,6 +292,10 @@
         "starts": "Webhook · starts “{{automation}}”",
         "title": "Webhook"
       }
+    },
+    "goal": {
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks"
     },
     "mcp": {
       "status": {
@@ -351,10 +387,6 @@
     "turnStatus": {
       "seconds_one": "{{count}}s",
       "seconds_other": "{{count}}s"
-    },
-    "goal": {
-      "checks_one": "{{count}} check",
-      "checks_other": "{{count}} checks"
     }
   },
   "components": {

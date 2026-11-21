@@ -45,6 +45,17 @@ describe('Hermes context file', () => {
     expect(await readFile(target, 'utf8')).toBe('Important rules.\n')
   })
 
+  it.skipIf(process.platform === 'win32')('writes nothing through a linked folder', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'kimi-outside-'))
+    try {
+      await symlink(outside, join(dir, '.kimi-code'))
+      await writeFolderContextFile(dir, '.kimi-code/AGENTS.md', 'Kimi Code', 'private text')
+      await expect(readFile(join(outside, 'AGENTS.md'), 'utf8')).rejects.toThrow()
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
+  })
+
   it.skipIf(process.platform === 'win32')('leaves a dangling symlink alone', async () => {
     await symlink(join(dir, 'missing.md'), join(dir, HERMES_CONTEXT_FILE))
     await writeHermesContextFile(dir, 'text')

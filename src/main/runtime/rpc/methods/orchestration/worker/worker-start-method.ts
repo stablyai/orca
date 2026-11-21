@@ -29,6 +29,7 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-sess
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
+import { linkWorkerToQuestion, withQuestionLink } from './start/worker-question-link'
 
 type WorkerStartContext = Pick<
   RpcContext,
@@ -85,6 +86,13 @@ export async function startWorker(
   const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
     prepared
   const db = runtime.getOrchestrationDb()
+  const questionLink =
+    params.forQuestion !== undefined
+      ? linkWorkerToQuestion(db, params.forQuestion, coordinator, params.on !== undefined)
+      : undefined
+  const linkedParams =
+    questionLink && !questionLink.linked ? { ...params, forQuestion: undefined } : params
+  const withLink = <T>(started: T): T => withQuestionLink(questionLink, started)
   const mode = decideWorkerStartMode({
     params,
     settings: readWorkerStartModeSettings(runtime)
@@ -92,7 +100,7 @@ export async function startWorker(
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({
-      params,
+      params: linkedParams,
       runtime,
       db,
       bindRunId: () => bindRun().run.id,
@@ -102,10 +110,15 @@ export async function startWorker(
       callerSession: orchestrationCaller
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
+    return withLink(
+      withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
+    )
   }
   const receipt = await startLocalWorker({
-    params: { ...params, timeoutMs: resolveWorkerStartReadinessTimeoutMs(params.timeoutMs) },
+    params: {
+      ...linkedParams,
+      timeoutMs: resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
+    },
     runtime,
     db,
     bindRun: () => bindRun().run,
@@ -119,7 +132,7 @@ export async function startWorker(
     followUp
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-  const started = withRun(withWorkerStartNext(receipt))
+  const started = withLink(withRun(withWorkerStartNext(receipt)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
     : started

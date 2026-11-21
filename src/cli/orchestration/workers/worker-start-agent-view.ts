@@ -21,6 +21,8 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   turnStart?: string
   next?: string
   keptOpen?: true
+  /** `--for`: whether the worker was linked to that question, and why not. */
+  forQuestion?: { question: string; linked: boolean; why?: string }
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
@@ -51,6 +53,7 @@ type WorkerStartFields = {
   nextCommands?: string[]
   keptOpen?: true
   linkedItem?: WorkerStartReceipt['linkedItem']
+  questionNotLinked?: string
   next?: string
 }
 
@@ -90,6 +93,10 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
         keptOpen: value.keptOpen,
         linkedItem: value.linkedItem,
+        questionNotLinked:
+          value.forQuestion && !value.forQuestion.linked
+            ? `${value.forQuestion.question}: ${value.forQuestion.why ?? 'not linked'}`
+            : undefined,
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery

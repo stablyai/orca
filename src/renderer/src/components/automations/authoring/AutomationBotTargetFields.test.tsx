@@ -7,9 +7,12 @@ import type { AutomationBotTarget } from '../../../../../shared/automations/auto
 import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
-import { botTargetError, isSameBotTarget } from './automation-bot-save'
+import { botTargetError } from './automation-bot-save'
 import { botResultsPlace } from '../../../../../shared/automation-bot-target'
-import { withBotResultsPlace } from './automation-bot-results-to'
+import {
+  isSameBotTarget,
+  withBotResultsPlace
+} from '../../../../../shared/automations/bot-automation-target-edit'
 
 vi.mock('./AutomationSchedulePicker', () => ({ AutomationSchedulePicker: () => null }))
 vi.mock('./AutomationWorkspaceField', () => ({

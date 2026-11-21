@@ -673,6 +673,10 @@
       "existingTitle": "Adicionar no host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "existingAccept": "Adicionar no host"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} precisam de você",
+      "needsYou": "Precisa de você"
     }
   },
   "tray": {
@@ -799,6 +803,92 @@
       "terminalSaveFailed": "Não foi possível mudar para o terminal. Desative a interface de chat em Configurações → Interface de chat.",
       "switched": "A interface de chat agora é o padrão para novos agentes. Você pode voltar a qualquer momento em Configurações → Interface de chat.",
       "dismiss": "Descartar"
+    },
+    "botsTeammate": {
+      "activity": "Atividade",
+      "activityAdded": "<b>{{bot}}</b> adicionou este item",
+      "activityMoved": "<b>{{who}}</b> moveu isto para <b>{{status}}</b>",
+      "activityWorker": "Worker iniciado: <b>{{name}}</b>",
+      "addComment": "Adicione um comentário…",
+      "agentDone": "Concluído",
+      "agentRunning": "Em execução",
+      "agents": "Trabalha com os agentes que você usa",
+      "agentsFinished": "4 agentes terminaram",
+      "alwaysOn": "Assume o trabalho enquanto você está fora.",
+      "alwaysOnLead": "Sempre ativo.",
+      "answer": "Manter as sessões atuais.",
+      "answering": "Respondendo:",
+      "askAnything": "Pergunte qualquer coisa",
+      "askIn": "Qualquer pessoa pode pedir a ele no",
+      "askInPlaces": "Slack, GitHub ou Linear",
+      "checksPassed": "Verificações aprovadas",
+      "closed": "Fechado",
+      "cta": "Criar um bot",
+      "description": "Peça a ele em uma thread. Ele faz o trabalho, providencia a revisão e traz um pull request.",
+      "docsBot": "Bot de documentação",
+      "groupAnswer": "Corrigi a sobreposição. Pronto para você:",
+      "groupAsk": "Entregue a nova página de configurações.",
+      "groupBuilding": "Desenvolvendo.",
+      "groupChat": "Mencione um ou todos eles.",
+      "groupChatLead": "Coloque os bots em um chat.",
+      "groupComposer": "Mande uma mensagem para {{group}}, @ para mencionar um bot",
+      "groupDescription": "Coloque alguns bots em um chat em grupo e dê a eles um objetivo. Eles dividem o trabalho e trazem uma resposta.",
+      "groupDocs": "Atualizei a documentação das configurações.",
+      "groupHand": "Cada um assume sua parte.",
+      "groupHandLead": "Eles repassam tarefas entre si.",
+      "groupName": "Equipe de lançamento",
+      "groupOne": "Com o pull request.",
+      "groupOneLead": "Você recebe uma resposta.",
+      "groupPr": "#1302 Nova página de configurações",
+      "groupReview": "O botão de salvar se sobrepõe ao rodapé em telas pequenas.",
+      "groupTitle": "Bots trabalham juntos",
+      "idle": "Inativo",
+      "inProgress": "Em andamento",
+      "inProgressCount": "{{count}} em andamento",
+      "itemCsv": "Corrigir a exportação de CSV",
+      "itemDocs": "Atualizar a documentação",
+      "itemMeta": "Item {{number}} · {{bot}} · agora",
+      "itemSafari": "Corrigir o bug de login no Safari",
+      "items": "Itens",
+      "itemsAsk": "Corrija a exportação de CSV, o bug de login no Safari e atualize a documentação.",
+      "itemsAsks": "Responda ali e ele continua.",
+      "itemsAsksLead": "Ele pergunta a você no item.",
+      "itemsDescription": "Peça várias coisas de uma vez. Ele acompanha cada uma como um item até a conclusão.",
+      "itemsList": "Cada tarefa que você passa para ele.",
+      "itemsListLead": "Uma lista com todo o trabalho dele.",
+      "itemsMoves": "Em andamento, depois fechado.",
+      "itemsMovesLead": "Ele faz o item avançar sozinho.",
+      "itemsReply": "Pode deixar. Vou acompanhar cada tarefa como um item.",
+      "itemsTitle": "O trabalho dele em uma lista",
+      "learns": "Lembra do que você ensina a ele.",
+      "learnsLead": "Aprende enquanto trabalha.",
+      "needsYou": "Precisa de você",
+      "needsYouCount": "{{count}} precisa de você",
+      "nextPage": "Próxima página",
+      "now": "agora",
+      "pageAnnounce": "Página {{number}} de {{count}}: {{title}}",
+      "pageNumber": "Página {{number}}",
+      "previousPage": "Página anterior",
+      "question": "Desconectar todos uma vez ou manter as sessões atuais?",
+      "releaseBot": "Bot de lançamento",
+      "reviewBot": "Bot de revisão",
+      "savedToMemory": "Salvo na memória",
+      "slackAsk": "a página de configurações não funciona no celular. Você pode cuidar disso?",
+      "slackMemory": "Anotado para a próxima vez: verificar as configurações no breakpoint de telas pequenas.",
+      "slackPrBody": "Layouts para desktop e celular, com testes de captura de tela atualizados.",
+      "slackPrFiles": "6 arquivos",
+      "slackPrTitle": "#1284 Tornar a página de configurações responsiva",
+      "slackReady": "Pronto para revisão.",
+      "slackReply": "Pode deixar. Executando 4 agentes em paralelo.",
+      "slackReview": "Revisei o diff. Corrigi dois problemas de espaçamento em telas pequenas.",
+      "slackThread": "Thread",
+      "slackTyping": "{{name}} está digitando",
+      "taskDesktop": "Layout das configurações para desktop",
+      "taskMobile": "Tela de configurações para celular",
+      "taskScreenshots": "Testes de captura de tela",
+      "taskTypes": "Erros de tipo",
+      "teamLead": "Parte da equipe.",
+      "title": "Seu colega de equipe de IA"
     }
   },
   "rendererRecovery": {
@@ -1914,6 +2004,9 @@
         "unknownPlatform": "A plataforma desconhecida \"{{platform}}\" foi ignorada.",
         "conflictingOverrides": "Atalhos personalizados conflitantes foram ignorados: {{actions}}.",
         "readFailed": "Não foi possível ler o arquivo de atalhos: {{reason}}"
+      },
+      "groups": {
+        "bots": "Bots"
       }
     },
     "network": {
@@ -1977,6 +2070,10 @@
           "devin": "Devin",
           "devinDesktop": "devin desktop"
         }
+      },
+      "about": {
+        "title": "Sobre",
+        "version": "Orca {{version}}"
       }
     },
     "openInApp": {
@@ -2013,7 +2110,10 @@
       "availableSoon": "Disponível para você {{relative}}",
       "availableOn": "Disponível para você em {{date}} ({{relative}})",
       "clearedTitle": "Orca {{version}} está pronto",
-      "released": "Lançado {{released}}"
+      "released": "Lançado {{released}}",
+      "1b4d825e0e": "Atraso de atualização",
+      "ab7e864374": "Sobre o atraso de atualização",
+      "ee1d96f74a": "Ignorar o atraso uma vez"
     },
     "groupHooks": {
       "invalidSetup": "O arquivo está presente, mas o Orca não encontrou um script de configuração válido.",
@@ -2024,7 +2124,25 @@
         "everyNightLine": "Todas as noites após as 3h, ou assim que este computador estiver ativo",
         "everyWeekLine": "Uma vez por semana após as 3h, ou assim que este computador estiver ativo",
         "everyDescriptionAwake": "Se este computador estiver em repouso nesse horário, a organização roda assim que ele estiver ativo. Só depois de noites com novos chats. Cada organização usa seu plano do {{agent}}, como um chat curto."
+      },
+      "lookAround": {
+        "title": "Dar uma olhada"
+      },
+      "skills": {
+        "claudeOnly": "Somente Claude",
+        "notClaude": "Não é para Claude",
+        "notLoaded": "Nenhum agente carrega",
+        "own": "Skills próprias de {{bot}}",
+        "ownNone": "Ainda não tem skills próprias.",
+        "ownShort": "Skills próprias",
+        "showMore": "Mostrar mais {{count}}"
       }
+    },
+    "automaticUpdates": {
+      "title": "Atualizações automáticas",
+      "description": "Nas instalações compatíveis para computador, o Orca baixa as atualizações elegíveis durante as verificações programadas e reinicia automaticamente para instalá-las.",
+      "info": "Sobre as atualizações automáticas",
+      "saveFailed": "Não foi possível salvar a configuração de atualizações automáticas."
     }
   },
   "auto": {
@@ -3149,6 +3267,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Issue vinculada",
         "listeningPort": "Porta em escuta"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "{{rcKey}}+clique verifica a versão candidata (RC) mais recente. {{perfKey}}+clique verifica a build de teste de desempenho mais recente.",
+        "localMacBuildHint": "⌥+clique permite escolher uma build local do macOS."
       }
     },
     "components": {
@@ -7353,21 +7475,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de versão",
-          "d89806cc89": "está pronto para instalar.",
-          "a6b37929dc": "Versão",
-          "8311da27ba": "está disponível.",
           "02dc082e70": "Não foi possível iniciar o download da atualização.",
           "ceb579abaf": "Verifica atualizações do app e instala uma versão mais recente do Orca.",
           "bd79d412f0": "Falha na verificação de atualização. {{value0}}",
           "b9ad70c30d": "Erro de atualização. {{value0}}",
-          "2a48034c4c": "Baixando v{{value0}}... {{value1}}%",
           "f40d88390d": "Você está na versão mais recente.",
           "31fd7150cf": "Verificando atualizações...",
           "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
-          "e3b9d21c07": "está disponível. Atualize o Orca através do gerenciador de pacotes do seu sistema — o Orca não pode instalar esta versão por conta própria.",
           "6d27bd46e3": "Verificar Atualizações",
-          "857ca887da": "Baixar Atualização (",
-          "c0a8f827c7": "Reiniciar para Atualizar ("
+          "downloadUpdate": "Baixar atualização",
+          "restartToUpdate": "Reiniciar para atualizar",
+          "versionAvailable": "A versão {{version}} está disponível.",
+          "externallyManagedVersionAvailable": "A versão {{version}} está disponível. Atualize o Orca pelo gerenciador de pacotes do sistema. O Orca não pode instalar essa versão por conta própria.",
+          "versionReadyToInstall": "A versão {{version}} está pronta para instalar.",
+          "versionInstalling": "Instalando a versão {{version}}.",
+          "downloadingVersion": "Baixando a versão {{version}} ({{percent}}%)…"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -7606,26 +7728,35 @@
           "empty": "Os catálogos configurados não listam nenhum plugin."
         },
         "ReleaseChannelSection": {
-          "switchFailed": "Não foi possível alternar para essa build.",
-          "title": "Canal de versão",
-          "description": "Alterne canais de atualização ou vá para qualquer build publicada, incluindo versões mais antigas. Downgrades são permitidos e builds não revisadas podem estar quebradas.",
+          "switchFailed": "Não foi possível mudar para essa versão.",
+          "title": "Canal de atualização",
+          "description": "Mude de canal de atualização ou escolha uma versão publicada, inclusive uma anterior. Versões não verificadas podem falhar.",
           "devOnly": "Somente dev",
-          "channelAriaLabel": "Canal de atualização",
-          "hourlyWarning": "As builds por hora saem direto da main sem barreira de testes, e as do Windows não são assinadas. Mantenha uma build estável à mão.",
-          "dailyWarning": "As builds diárias saem direto da main sem barreira de testes, e as do Windows não são assinadas. Mantenha uma build estável à mão.",
-          "adhocWarning": "As builds adhoc vêm de uma branch que ainda não foi mesclada, e as do Windows não são assinadas. Quem a gerou pode abandoná-la — mantenha uma build estável à mão.",
-          "loadingBuilds": "Carregando builds…",
-          "noBuilds": "Nenhuma build encontrada",
-          "refresh": "Atualizar lista de builds",
-          "switchTo": "Alternar para build",
-          "alreadyRunning": "Esta é a build que você está executando.",
+          "adhocWarning": "As versões para Windows não são assinadas. Quem gerou a versão pode deixar de mantê-la. Tenha uma versão estável à mão.",
+          "loadingBuilds": "Carregando versões…",
+          "noBuilds": "Nenhuma versão encontrada",
+          "refresh": "Atualizar lista de versões",
+          "switchTo": "Mudar de versão",
+          "alreadyRunning": "Esta é a versão em uso.",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "Alternar builds só está disponível no app desktop.",
+          "webUnavailable": "Só é possível mudar de versão no aplicativo para computador.",
           "devChannelUnsupportedAria": "{{value0}} (somente {{value1}})",
-          "devChannelUnsupported": "As builds {{value0}} são produzidas somente para {{value1}}. O Linux permanece em Stable ou RC.",
+          "devChannelUnsupported": "As versões do canal “{{value0}}” estão disponíveis apenas para {{value1}}. No Linux, use {{stable}} ou {{rc}}.",
           "downloadInstaller": "Baixar instalador",
-          "manualInstallHint": "As builds {{value0}} não são assinadas no Windows, então o atualizador do app não consegue instalar uma sobre uma build assinada. Execute o instalador baixado uma vez — o Windows vai avisar sobre um publicador desconhecido — e toda troca posterior, inclusive de volta para Stable, funciona a partir daí.",
-          "cacheHint": "As listas de compilações ficam em cache por 5 minutos. Atualize para verificar se há novas compilações."
+          "manualInstallHint": "As versões do canal “{{value0}}” não são assinadas no Windows. O atualizador do aplicativo não consegue instalá-las sobre uma versão assinada. Execute o instalador baixado uma vez. O Windows vai avisar sobre um editor desconhecido. Depois, você pode mudar de versão aqui, inclusive voltar ao canal “{{stable}}”.",
+          "cacheHint": "A lista de versões fica em cache por 5 minutos. Atualize a lista para procurar novas versões.",
+          "stableLabel": "Estável",
+          "stableDescription": "Versões estáveis para uso geral.",
+          "rcLabel": "RC",
+          "rcDescription": "Versões candidatas publicadas antes de uma versão estável.",
+          "hourlyLabel": "Por hora",
+          "hourlyDescription": "Versão gerada a cada hora a partir de main.",
+          "dailyLabel": "Diário",
+          "dailyDescription": "Versão gerada uma vez por dia a partir de main.",
+          "adhocLabel": "Pontual",
+          "adhocDescription": "Versões pontuais de uma branch para experimentar alterações antes de integrá-las.",
+          "devChannelPlatforms": "macOS e Windows",
+          "scheduledWarning": "Essas versões são publicadas sem testes obrigatórios. As versões para Windows não são assinadas. Tenha uma versão estável à mão."
         },
         "ManageSessionsSection": {
           "33c2a1e1b4": "Encerrar sessão {{value0}}",
@@ -8276,7 +8407,8 @@
           "updating": "Atualizando servidores…",
           "serverCountOne": "1 servidor pareado",
           "fdd271abf0": "Servidores Orca Remotos",
-          "e4e5937469": "Verificar Atualizações"
+          "e4e5937469": "Verificar Atualizações",
+          "newerCount": "{{value0}} com versão mais recente que a deste aplicativo"
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Cliques em URL no terminal",
@@ -9575,10 +9707,10 @@
           "resultUpdateSkippedAgent": "{{result}} · Atualização ignorada em {{agent}}: {{reason}}"
         },
         "ReleaseBuildPicker": {
-          "build": "Build",
-          "searchLabel": "Buscar builds",
-          "searchPlaceholder": "Buscar builds…",
-          "noMatches": "Nenhuma build encontrada."
+          "build": "Versão",
+          "searchLabel": "Pesquisar versões",
+          "searchPlaceholder": "Pesquisar versões…",
+          "noMatches": "Nenhuma versão correspondente."
         },
         "pluginInstallAction": {
           "installed": "{{value0}} instalado",
@@ -20657,6 +20789,7 @@
         "optionUpdateFailed": "Não foi possível atualizar a opção",
         "optionValue": {
           "none": "Nenhum",
+          "off": "Desativado",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Baixo",
@@ -20711,6 +20844,10 @@
         "permissionAuto": "Aprovar por mim",
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccess": "Acesso total",
+        "permissionAgentSettings": "Configurações do {{agent}}",
+        "permissionAgentSettingsUsedHint": "Usa suas configurações de permissão do {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Usa suas configurações de permissão do {{agent}}. O Orca não consegue exibir este modo.",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}",
         "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
         "permissionFullAccessSharedDescription": "Nunca pede aprovação antes de edições ou comandos",
@@ -20724,7 +20861,10 @@
         },
         "imageUnavailable": "Prévia indisponível",
         "exitPlanMode": "Sair do modo de planejamento",
-        "moreControls": "Mais controles do chat"
+        "moreControls": "Mais controles do chat",
+        "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
+        "botFor": "Para: {{detail}}",
+        "bots": "Bots"
       },
       "tool": {
         "exitCode": "saída {{value0}}",
@@ -21594,7 +21734,6 @@
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (não é uma branch)",
-        "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
@@ -21676,6 +21815,60 @@
       },
       "automationSaved": {
         "openFullPage": "Abrir página"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Não iniciado",
+          "connected": "Conectado",
+          "disabled": "Desativado",
+          "failed": "Falhou",
+          "failedReason": "Falhou: {{error}}",
+          "needsAuth": "Login necessário",
+          "needsAuthAfterSend": "Login necessário. Envie uma mensagem para entrar aqui.",
+          "pending": "Conectando…",
+          "tools_many": "{{count}} ferramentas",
+          "tools_one": "{{count}} ferramenta",
+          "tools_other": "{{count}} ferramentas"
+        },
+        "signIn": {
+          "external": "Conclua na página que foi aberta",
+          "waiting": "Aguardando login…",
+          "waitingBrowser": "Aguardando seu navegador…",
+          "action": "Entrar",
+          "remote": "Após entrar, o navegador chega a uma página que não carrega. Copie o endereço dessa página e cole aqui.",
+          "done": "Concluído",
+          "finish": "Concluir",
+          "openAgain": "Abrir novamente",
+          "addressLabel": "Endereço da página de login",
+          "unfinished": "O login ainda não foi concluído. Conclua-o na página aberta e pressione “Concluído”."
+        },
+        "title": "Servidores MCP",
+        "close": "Fechar",
+        "loading": "Carregando…",
+        "notRunning": "Conectam ao enviar sua próxima mensagem",
+        "unsupported": "Atualize o Orca no host deste chat para gerenciá-los aqui",
+        "readFailed": "Erro ao carregar",
+        "retry": "Recarregar",
+        "empty": "Nenhum configurado para este chat",
+        "cancel": "Cancelar",
+        "reconnect": "Reconectar",
+        "toggle": "Usar {{name}}",
+        "actionFailed": "Não foi possível realizar a ação. Tente novamente.",
+        "summary": {
+          "connected": "Conectados: {{count}}",
+          "needsAuth_one": "{{count}} precisa de login",
+          "needsAuth_other": "{{count}} precisam de login",
+          "failed": "Com falha: {{count}}",
+          "signingIn": "entrando em {{name}}",
+          "needsAuth_many": "{{count}} precisam de login"
+        },
+        "source": {
+          "project": "Projeto",
+          "local": "Local",
+          "user": "Usuário",
+          "plugin": "Plugin",
+          "session": "Sessão"
+        }
       }
     },
     "tab": {
@@ -21978,7 +22171,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Quaisquer alterações sem commit ou não rastreadas nos espaços de trabalho Git serão excluídas permanentemente.",
           "unavailable": "Não foi possível verificar as alterações",
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
@@ -22002,7 +22194,6 @@
           "line_other": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}",
           "line_many": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}"
         },
-        "ignoredFilesLost": "Os arquivos ignorados serão perdidos: {{names}}",
         "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados"
       }
     },
@@ -23016,7 +23207,6 @@
         "withIgnored": "{{what}} e os arquivos ignorados serão perdidos",
         "ignoredOnly": "Os arquivos ignorados serão perdidos"
       },
-      "showChanges": "Mostrar alterações",
       "unsavedSuffix": "(não salvo)",
       "onHost": "Em {{host}}",
       "forceDeletingEllipsis": "Forçando exclusão…",
@@ -23298,8 +23488,8 @@
     "failure": {
       "releaseNotReady": "Uma versão mais recente ainda não está disponível para este dispositivo. Verifique novamente mais tarde.",
       "updateServerUnreachable": "Não foi possível acessar o servidor de atualização. Tente novamente em alguns minutos.",
-      "channelUnsupportedPlatform": "As builds {{channel}} são produzidas apenas para macOS e Windows.",
-      "unsignedDevChannel": "As builds {{channel}} não são assinadas, e esta build assinada só instala atualizações assinadas pelo publicador do Orca. Baixe o instalador na página de releases e execute-o uma vez — depois disso, as atualizações funcionam normalmente, inclusive para voltar ao Stable.",
+      "channelUnsupportedPlatform": "As versões do canal “{{channel}}” estão disponíveis apenas para macOS e Windows.",
+      "unsignedDevChannel": "As versões do canal “{{channel}}” não são assinadas. A versão assinada atual só instala atualizações assinadas pelo editor do Orca. Baixe o instalador na página de versões e execute-o uma vez. Depois, as atualizações voltam a funcionar normalmente, inclusive para voltar ao canal estável.",
       "linuxPackageMissing": "O pacote baixado não está mais no cache de atualizações. Baixe a atualização novamente ou obtenha-a na página oficial de releases.",
       "linuxPackageNotRegular": "O pacote baixado não é mais um arquivo válido no cache de atualizações. Baixe a atualização novamente ou obtenha-a na página oficial de releases.",
       "linuxPackageHashMismatch": "O pacote baixado não corresponde mais ao release verificado, por isso o Orca não o encaminhará a um gerenciador de pacotes. Baixe a atualização novamente ou obtenha-a na página oficial de releases.",
@@ -23314,8 +23504,8 @@
       "unknownReleaseChannel": "Canal de versão desconhecido \"{{channel}}\".",
       "invalidReleaseTag": "\"{{tag}}\" não é uma tag de release válida.",
       "releaseRepoNotFound": "Nenhum repositório de releases encontrado em {{repo}}.",
-      "releaseListFailed": "Não foi possível listar as builds {{channel}} (HTTP {{status}}).",
-      "releaseListUnreadable": "Não foi possível ler a lista de releases de {{channel}}.",
+      "releaseListFailed": "Não foi possível obter a lista de versões do canal “{{channel}}” (HTTP {{status}}).",
+      "releaseListUnreadable": "Não foi possível ler a lista de versões do canal “{{channel}}”.",
       "rateLimitedSoon": "Limite de taxa do GitHub atingido. Tente novamente em alguns minutos.",
       "rateLimitedSoonSignedOut": "Limite de taxa do GitHub atingido. Tente novamente em alguns minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinute": "Limite de taxa do GitHub atingido. Tente novamente em cerca de um minuto.",
@@ -23325,7 +23515,10 @@
       "rateLimitedInMinutes_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos.",
       "rateLimitedInMinutesSignedOut_one": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minuto ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinutesSignedOut_other": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
-      "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta."
+      "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
+      "automaticInstallCheckpointFailed": "O Orca não conseguiu salvar a janela atual antes de reiniciar. Tente instalar a atualização novamente.",
+      "automaticInstallTerminalBusy": "Alguns terminais seriam encerrados durante a reinicialização. O Orca tentará novamente em uma verificação posterior.",
+      "macStagingTimeout": "O macOS ainda está preparando a atualização. Se isso persistir, encerre e reabra o Orca."
     }
   },
   "jira": {
@@ -23673,7 +23866,9 @@
       "128cce6e6d": "Definir Título…",
       "e9da9f872a": "Enviar Notas de Revisão ao Agente",
       "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
-      "d286d1ab85": "Limpar Título do Painel"
+      "d286d1ab85": "Limpar Título do Painel",
+      "botItemPrevious": "Item anterior",
+      "botItemNext": "Próximo item"
     },
     "group": {
       "global": "Global",
@@ -23686,7 +23881,8 @@
       "agents": "Agentes",
       "45347db2a3": "Navegação entre abas",
       "aab2837fa5": "Comandos Rápidos",
-      "3492a954c8": "Painéis do terminal"
+      "3492a954c8": "Painéis do terminal",
+      "bots": "Bots"
     },
     "searchKeyword": {
       "worktreePaletteFormerTitle": "Alternar worktree"
@@ -23870,6 +24066,9 @@
     "linkedMessageMissing": "Não foi possível encontrar essa mensagem.",
     "math": {
       "scrollDisplayEquation": "Rolar equação em bloco"
+    },
+    "messageTime": {
+      "yesterday": "Ontem {{time}}"
     }
   },
   "runtime": {
@@ -24288,7 +24487,8 @@
         "error": "A configuração do projeto falhou no host selecionado para a automação.",
         "unsupported": "O host selecionado para a automação não oferece suporte a este projeto."
       },
-      "agentInterrupted": "O agente foi interrompido antes de terminar esta execução."
+      "agentInterrupted": "O agente foi interrompido antes de terminar esta execução.",
+      "botProviderErrorNotSaved": "O turno do bot falhou, mas esta execução não salvou o erro do provedor. O Chat original pode ter mais detalhes."
     },
     "extraAgentArgs": {
       "errors": {
@@ -24315,6 +24515,9 @@
       "reviewAction": "Revisar configuração",
       "listSkipped": "Configuração pulada",
       "listSkippedTitle": "A última execução pulou a configuração porque os comandos de configuração no orca.yaml da branch mudaram. Revise-os no menu de ações."
+    },
+    "botTarget": {
+      "hostNeedsUpdate": "Atualize o servidor Orca em {host} para que os bots dele possam ter automações."
     }
   },
   "codeHost": {
@@ -24744,14 +24947,30 @@
       "title": "Atividade"
     },
     "connectors": {
-      "tab": "Conectores"
+      "tab": "Conectores",
+      "needYou_many": "{{count}} precisam de você",
+      "needYou_one": "{{count}} precisa de você",
+      "needYou_other": "{{count}} precisam de você"
     },
     "files": {
       "tab": "Arquivos"
     },
     "upcoming": {
       "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
-      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo"
+      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
+      "dueNow": "Previsto para agora",
+      "every2h": "a cada 2 horas",
+      "every4h": "a cada 4 horas",
+      "lastNeededSignIn": "A última execução parou para você entrar",
+      "lookAroundSettings": "Configurações das olhadas",
+      "lookFirst": "Após seu primeiro chat · depois {{every}}",
+      "mornings": "todas as manhãs",
+      "needsSignIn": "Precisa entrar",
+      "runsEvery": "Executa {{every}}",
+      "stopped": "Parado",
+      "tidySettings": "Configurações de arrumação da memória",
+      "tidyUp": "Arrumar memória",
+      "twiceDaily": "duas vezes ao dia"
     },
     "palette": {
       "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",
@@ -24775,17 +24994,321 @@
       "section": "Bots"
     },
     "templates": {
-      "browse": "Ver modelos"
+      "browse": "Ver modelos",
+      "allCategories": "Todos",
+      "category": {
+        "personal": "Assistente pessoal",
+        "support": "Suporte e triagem"
+      },
+      "filterCategory": "Filtrar por categoria"
     },
     "new": {
-      "fromTemplate": "Modelo"
+      "fromTemplate": "Modelo",
+      "agent": "Agente",
+      "change": "Alterar",
+      "colorButter": "Manteiga",
+      "colorGraphite": "Grafite",
+      "colorInk": "Tinta",
+      "colorLavender": "Lavanda",
+      "colorMint": "Menta",
+      "colorPeach": "Pêssego",
+      "colorPink": "Rosa",
+      "colorSage": "Sálvia",
+      "colorSky": "Céu",
+      "colorSlate": "Ardósia",
+      "colorWhite": "Branco",
+      "computer": "Computador",
+      "computerAccountHint": "Onde o bot é executado, conectado ao Orca como {{account}}.",
+      "computerHint": "Onde o bot é executado.",
+      "folder": "Pasta: {{path}}",
+      "hostNeedsServer": "Precisa de um servidor Orca",
+      "hostNeedsServerHint": "Configure um servidor Orca em {{host}} em Configurações → Servidores Orca Remotos para executar bots.",
+      "noChatAgents": "Nenhum agente de chat disponível neste computador.",
+      "pictureColor": "Cor de fundo",
+      "pictureColorCustom": "Cor personalizada",
+      "useChatDefaults": "Usar os padrões do chat"
     },
     "googleSetup": {
-      "otherAccount": "Trocar de conta"
+      "otherAccount": "Trocar de conta",
+      "pickHostKey": "Escolha o arquivo de chave para importar:",
+      "pickKeyHere": "Escolher um arquivo neste computador"
     },
     "apps": {
       "paste": {
         "remoteSignIn": "Login remoto"
+      },
+      "allApps": "Todos os apps",
+      "composio": {
+        "withComposio": "Com Composio"
+      },
+      "mcp": {
+        "addTitle": "Adicionar {{app}}",
+        "advanced": "Avançado",
+        "datadog": {
+          "siteLabel": "Site do Datadog"
+        },
+        "elsewhereLine": "Foi adicionado em {{place}}. Remova-o em Gerenciar para adicionar outro.",
+        "elsewhereOther": "Remova-o em Gerenciar para adicionar outro.",
+        "elsewhereTitle": "{{app}} já está em {{bot}}",
+        "gitlab": {
+          "hostHint": "Para instalações autogerenciadas ou Dedicated. Deixe em branco para GitLab.com.",
+          "hostLabel": "Endereço do GitLab (opcional)"
+        },
+        "hostInvalid": "Digite um nome de host, como {{example}}.",
+        "place": {
+          "australia": "Austrália",
+          "europe": "Europa",
+          "japan": "Japão",
+          "unitedKingdom": "Reino Unido",
+          "usCentral": "Centro dos EUA",
+          "usEast": "Leste dos EUA",
+          "usWest": "Oeste dos EUA"
+        }
+      },
+      "onBot": "Em {{bot}}"
+    },
+    "row": {
+      "runsOn": "Em execução em {{host}}",
+      "disconnected": "Desconectado",
+      "hostDisconnected": "{{host}} desconectado",
+      "idle": "Inativo",
+      "paused": "Pausado",
+      "reading": "Lendo sua mensagem",
+      "replying": "Respondendo",
+      "replyingIn": "Respondendo em {{place}}",
+      "replyingOn": "Respondendo a {{place}}",
+      "waitingCount": "Eventos pendentes: {{count}}",
+      "waitingFor": "Aguardando {{label}}",
+      "waitingForUntil": "Aguardando {{label}} · até {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} de {{total}}",
+        "navigation": "Item {{index}} de {{total}}",
+        "loadingNext": "Carregando o próximo item",
+        "shown": "Item {{index}} de {{total}}: {{title}}",
+        "firstItem": "Primeiro item",
+        "lastItem": "Último item",
+        "previous": "Item anterior",
+        "next": "Próximo item",
+        "subWhere": "Item {{number}} · {{chat}}"
+      },
+      "activity": {
+        "linked": "vinculou {{links}}",
+        "you": "Você"
+      },
+      "ask": {
+        "notSentYet": "ainda não enviado",
+        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+      },
+      "chat": {
+        "moreItems": "+{{count}} a mais"
+      },
+      "comment": {
+        "add": "Adicione um comentário…",
+        "label": "Comentário",
+        "submit": "Comentar"
+      },
+      "group": {
+        "new": "Novos: {{count}}"
+      },
+      "loading": "Carregando itens…",
+      "row": {
+        "more": "Mais"
+      },
+      "snooze": {
+        "back": "Voltar",
+        "menu": "Adiar",
+        "pickCustom": "Horário personalizado",
+        "pickTitle": "Adiar até",
+        "rowUntil": "até {{when}}",
+        "time": "Horário",
+        "week": "Em uma semana"
+      },
+      "stale": {
+        "cancelAll": "Cancelar todos"
+      },
+      "tab": "Início"
+    },
+    "hover": {
+      "asksQuestion": "Aguardando sua resposta",
+      "wantsApproval": "Solicita sua aprovação",
+      "signIn": "Login necessário",
+      "access": "Solicitou acesso",
+      "review": "Revisar",
+      "openHome": "Abrir Home de {{name}}",
+      "needsYouHeading_one": "{{count}} assunto para você",
+      "needsYouHeading_many": "{{count}} assuntos para você",
+      "needsYouHeading_other": "{{count}} assuntos para você",
+      "moreAsks_one": "Mais {{count}} solicitação",
+      "moreAsks_many": "Mais {{count}} solicitações",
+      "moreAsks_other": "Mais {{count}} solicitações",
+      "itemsNeedYou_one": "{{count}} item que marcou para você",
+      "itemsNeedYou_many": "{{count}} itens que marcou para você",
+      "itemsNeedYou_other": "{{count}} itens que marcou para você"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Novo chat",
+      "loading": "Carregando chats…",
+      "readFailed": "Não foi possível ler os chats deste bot.",
+      "searchRetry": "Tentar novamente"
+    },
+    "needs": {
+      "chat": "Seu chat com {{name}}",
+      "worker": "Worker: {{name}}"
+    },
+    "panel": {
+      "needYou_many": "{{count}} precisam de você",
+      "needYou_one": "{{count}} precisa de você",
+      "needYou_other": "{{count}} precisam de você",
+      "working": "{{count}} trabalhando",
+      "working_many": "{{count}} trabalhando",
+      "working_one": "{{count}} trabalhando",
+      "working_other": "{{count}} trabalhando",
+      "disconnected": "Desconectado",
+      "runsOn": "Executa em {{host}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continua às {{time}}",
+      "continuesShort": "Continua {{time}}",
+      "continuesTip": "Continua automaticamente às {{time}}",
+      "hitLimit": "Limite atingido · reinicia às {{time}}",
+      "hitShort": "Limite atingido",
+      "hitTip": "{{agent}} atingiu o limite de uso · reinicia às {{time}}"
+    },
+    "access": {
+      "confirmApproveMany": "Eles podem aprovar as solicitações dele",
+      "confirmApproveOne": "{{person}} pode aprovar as solicitações dele",
+      "confirmComputer": "Executar comandos e alterar arquivos",
+      "confirmGitHub": "Comentar e fazer push no GitHub como você",
+      "confirmGoogle": "Usar sua conta do Google",
+      "confirmLinear": "Atualizar issues do Linear como você",
+      "confirmMaySkipApprovals": "Pode agir sem perguntar antes",
+      "confirmNoApprovals": "Age sem perguntar antes",
+      "confirmWarning": "Eles vão agir como você em {{computer}}.",
+      "controlBrief": "Eles podem agir como você aqui.",
+      "controlBriefIfAdded": "Qualquer pessoa que você adicionar pode agir como você aqui.",
+      "controlBriefIfAddedOnHost": "Qualquer pessoa que você adicionar pode agir como você em {{computer}}.",
+      "controlBriefOnHost": "Eles podem agir como você em {{computer}}.",
+      "controlMany": "Eles podem usar {{name}} para trabalhar em {{computer}} como você: executar comandos, abrir e alterar arquivos e usar suas contas conectadas.",
+      "controlNone": "Qualquer pessoa que você adicionar pode usar {{name}} para trabalhar em {{computer}} como você: executar comandos, abrir e alterar arquivos e usar suas contas conectadas.",
+      "controlOne": "{{person}} pode usar {{name}} para trabalhar em {{computer}} como você: executar comandos, abrir e alterar arquivos e usar suas contas conectadas.",
+      "executionComputer": "o computador em que este agente é executado",
+      "here": "aqui",
+      "reachSlack": "Postar no Slack como @{{name}}",
+      "reject": "Rejeitar",
+      "there": "lá",
+      "thisComputer": "este computador",
+      "thisServer": "este servidor"
+    },
+    "automations": {
+      "failed": "Falhou",
+      "newDraft": "Configure uma automação que ",
+      "next": "Próximo",
+      "openOnPage": "Abrir na página de Automações",
+      "pauseShort": "Pausar",
+      "paused": "Pausada",
+      "resumeShort": "Retomar",
+      "runNow": "Executar agora",
+      "running": "Em execução"
+    },
+    "cloudSignIn": {
+      "eventsHostChat": "Eventos do {{source}} exigem que {{host}} esteja conectado ao Orca Cloud. Vou salvar esta regra assim que estiver.",
+      "signIn": "Entrar",
+      "webhooksHostChat": "Webhooks exigem que {{host}} esteja conectado ao Orca Cloud. Vou criá-lo assim que estiver.",
+      "webhooksNotReaching": "O Orca Cloud não está chegando a {{name}}, então ainda não pode criar webhooks."
+    },
+    "errors": {
+      "unsavedDrafts": "A pasta dele tem alterações não salvas no editor. Salve ou feche os arquivos e tente excluir novamente."
+    },
+    "groups": {
+      "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar.",
+      "needsLocalBot": "Este grupo precisa de pelo menos um bot neste computador.",
+      "newGroup": "Novo grupo",
+      "pairedComputersOnly": "Os grupos só podem adicionar bots de computadores pareados.",
+      "remoteAsked": "Pergunta enviada em {{computer}}",
+      "remoteMayAnswer": "Ainda pode responder em {{computer}}.",
+      "remoteNeedsChat": "Abra um chat com {{name}} uma vez e adicione-o ao grupo.",
+      "remoteNotSent": "Não enviado para {{computer}}",
+      "remoteNotice": "Não respondeu em {{computer}}",
+      "remoteReplied": "Respondeu em {{computer}}",
+      "remoteSending": "Perguntando em {{computer}}…",
+      "remoteShortened": "Resposta abreviada. A resposta completa está em {{computer}}.",
+      "remoteStopped": "Parado aqui",
+      "remoteUnknown": "Entrega desconhecida",
+      "thisComputer": "Este computador"
+    },
+    "host": {
+      "botWorkspaceUnavailable": "O espaço de trabalho deste agente não está disponível aqui agora, então a página não pode ser aberta nele.",
+      "signIn": {
+        "readAgain": "Tentar novamente",
+        "unconfigured": "O Orca em {{host}} foi compilado sem login no Orca Cloud. Instale a versão oficial do Orca lá para entrar.",
+        "unread": "Não foi possível ler o login do Orca de {{host}}.",
+        "updateFirst": "Atualize o Orca em {{host}} e faça login nele por aqui."
+      }
+    },
+    "import": {
+      "menu": "Importar de outro app…",
+      "nudgeDismiss": "Não mostrar novamente",
+      "nudgeMany": "Encontramos {{count}} bots no {{app}}.",
+      "nudgeOne": "Encontramos um bot no {{app}}."
+    },
+    "section": {
+      "startFromScratch": "Começar do zero",
+      "title": "Bots"
+    },
+    "settingsView": {
+      "backToItems": "Voltar para Início",
+      "itemsStale": {
+        "shortTitle": "Parados após"
+      },
+      "lookAroundShort": {
+        "every2h": "2h",
+        "every4h": "4h",
+        "mornings": "De manhã",
+        "twiceDaily": "Duas vezes ao dia"
+      },
+      "memoryFiles_many": "{{count}} arquivos",
+      "memoryFiles_one": "{{count}} arquivo",
+      "memoryFiles_other": "{{count}} arquivos",
+      "shareAction": "Compartilhar",
+      "sharing": "Compartilhamento",
+      "sharingOn": "Ativado",
+      "tidyUpShort": {
+        "night": "Todas as noites",
+        "week": "Semanal"
+      },
+      "youAndOthers_many": "Você e mais {{count}} pessoas",
+      "youAndOthers_one": "Você e mais {{count}} pessoa",
+      "youAndOthers_other": "Você e mais {{count}} pessoas"
+    },
+    "share": {
+      "cancelSignIn": "Cancelar login",
+      "duplicateSkill": "Mesmo nome, em {{folder}} · não compartilhada",
+      "linkNoLongerAvailable": "Este link de compartilhamento não está mais disponível.",
+      "linkStatusUnavailable": "Não foi possível verificar o link de compartilhamento",
+      "loadingLinks": "Carregando links compartilhados…",
+      "notShared": "Não compartilhado",
+      "previewChanged": "A prévia mudou. Revise-a antes de publicar.",
+      "receive": {
+        "fromLinkMenu": "De um link…"
+      },
+      "signInToPublish": "Entrar para publicar",
+      "stopSharing": "Parar de compartilhar"
+    },
+    "upNext": {
+      "lookNow": "Dar uma olhada agora",
+      "lookingShort": "Dando uma olhada",
+      "newCount": "Novas: {{count}}"
+    },
+    "webhooks": {
+      "delete": {
+        "withAutomation": {
+          "confirm": "Excluir ambos",
+          "note": "Nada mais inicia esta automação, então ela é excluída com seu histórico de execuções. A URL do webhook para de funcionar e as chamadas ainda pendentes são canceladas.",
+          "title": "Excluir “{{automation}}” e seu webhook?"
+        }
       }
     }
   },

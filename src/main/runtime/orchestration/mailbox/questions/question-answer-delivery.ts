@@ -88,7 +88,9 @@ export async function waitForQuestionAnswer(args: {
     if (current.status === 'answered') {
       // This caller shows the answer, so its Dispatch mail must not deliver it again.
       if (current.answer_message_id) {
-        args.runtime.getOrchestrationDb().markAsReadAndDelivered([current.answer_message_id])
+        args.runtime
+          .getOrchestrationDb()
+          .markAsReadAndDelivered([current.answer_message_id], { kind: 'orca' })
       }
       return {
         answer: current.answer_body,

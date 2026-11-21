@@ -53,6 +53,8 @@ export function usePhoneBotItemPendingComments({
     failed: (error) => showToast(error instanceof Error ? error.message : String(error)),
     requestIds,
     // The phone's ask card answers through its own send, so typed comments carry no question.
-    questionIds: false
+    questionIds: false,
+    // Nor do they ever opt out of answering: the phone's box has no reply mark to close.
+    plain: false
   })
 }

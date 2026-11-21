@@ -35,6 +35,7 @@ import { BotItemActivityList } from './BotItemActivityList'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
+import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
@@ -202,8 +203,13 @@ export function BotItemBody({
     isVisible: true
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
-  const sendComment = (text: string, paths: readonly string[] = [], questionId?: string): void => {
-    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId)
+  const sendComment = (
+    text: string,
+    paths: readonly string[] = [],
+    questionId?: string,
+    plain?: boolean
+  ): void => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId, plain)
     jumpToLatest()
   }
   const sendLatest = useLatestHandler(sendComment)
@@ -383,6 +389,9 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
+                onShowQuestion={(eventId) =>
+                  revealBotItemComment(scrollRef.current, eventId, 'flash')
+                }
                 onSend={fromBox}
               />
             )}

@@ -40,6 +40,21 @@ vi.mock('../components/composer-input/TextField', () => ({
   TextField: 'TextField'
 }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../platform/media-picking/media-picker', () => ({ useMediaPicker: () => ({}) }))
+vi.mock('./MobileBotAvatar', () => ({ MobileBotAvatar: () => null }))
+vi.mock('./soul-memory/MobileBotSoulAndMemory', () => ({
+  MobileBotSoulPage: () => null,
+  MobileBotMemoryPage: () => null
+}))
+vi.mock('./soul-memory/use-bot-home-files', () => ({
+  useBotMemoryTopicNames: () => null,
+  botMemoryTopicCount: () => 0
+}))
+vi.mock('./skills/MobileBotSkills', () => ({
+  useBotSkillScan: () => null,
+  botSkillSourceCount: () => null,
+  MobileBotSkillsPage: () => null
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -48,6 +63,9 @@ vi.mock('../platform/external-links/external-link', () => ({
 }))
 vi.mock('./bot-sheet-operations', () => ({
   botUpdate: { request: mocks.update, interpret: (reply: unknown) => reply }
+}))
+vi.mock('./tools/bot-tool-operations', () => ({
+  botToolsListRead: { request: async () => ({}), interpret: () => ({ own: [], inherited: [] }) }
 }))
 vi.mock('./bot-up-next-operations', () => ({
   suggestionStart: {
@@ -106,7 +124,8 @@ const routeBot: RouteBot = {
   applyBot: () => {},
   refresh: () => {},
   reads: 0,
-  itemReads: 0
+  itemReads: 0,
+  hostKey: 'host'
 }
 
 const suggestion = (id: string, title: string) => ({
@@ -149,22 +168,26 @@ function press(root: ReactTestInstance, label: string) {
   act(() => target?.props.onPress())
 }
 
+// Look around is a page of Settings, as on the desktop.
 function settings(lookNow = vi.fn()) {
-  return render(
+  const root = render(
     createElement(MobileBotSettingsTab, {
       routeBot,
       client,
       showToast: () => {},
       online: true,
       hostName: 'Studio Mac',
+      home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
       accessRequests: null,
-      lookAround: { onLookNow: lookNow, busy: false }
+      upNext: { lookNow, busy: false }
     })
   )
+  press(root, 'Look around, Every 4 hours, 8 AM to 8 PM')
+  return root
 }
 
 describe('Look around in the phone’s bot Settings', () => {
-  it('picks How often on its own page, then returns to Settings', async () => {
+  it('picks How often on its own page, then returns to Look around', async () => {
     const root = settings()
     press(root, 'How often, Every 4 hours, 8 AM to 8 PM')
     expect(texts(root)).toContain('Each morning at 8 AM')
@@ -202,16 +225,17 @@ describe('Look around in the phone’s bot Settings', () => {
     expect(lookNow).toHaveBeenCalledOnce()
   })
 
-  it('shows nothing on a host that does not look around', () => {
+  it('shows nothing for an agent that does not look around', () => {
     const root = render(
       createElement(MobileBotSettingsTab, {
-        routeBot,
+        routeBot: { ...routeBot, bot: { ...bot, agent: 'grok' } },
         client,
         showToast: () => {},
         online: true,
         hostName: 'Studio Mac',
+        home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
         accessRequests: null,
-        lookAround: null
+        upNext: { lookNow: vi.fn(), busy: false }
       })
     )
     expect(texts(root)).not.toContain('Look around')

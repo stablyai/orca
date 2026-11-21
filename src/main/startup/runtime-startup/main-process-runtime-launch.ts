@@ -130,6 +130,12 @@ function installRuntimeRpc(
       return true
     }
   })
+  // Pairing and revocation complete in main with no renderer call, so push them to open lists.
+  runtimeRpc.setOnPairedDevicesChanged(() => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('mobile:devicesChanged')
+    }
+  })
   // Repeated direct-auth failures need a re-pairing explanation rather than silent nonconnection.
   runtimeRpc.setOnUnpairedDeviceAuthFailure(() => {
     // Retain the one-shot across the runtime-start/renderer-mount race.

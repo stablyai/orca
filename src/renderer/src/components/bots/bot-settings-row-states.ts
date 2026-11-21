@@ -9,7 +9,7 @@ import {
   type LookAroundEvery
 } from '../../../../shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../../shared/bots/bot-tidy-up'
-import { botToolTitle } from '../../../../shared/bots/bot-tool-labels'
+import { botToolsLine } from '../../../../shared/bots/bot-tool-labels'
 
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
 const DATE = { month: 'short', day: 'numeric' } as const
@@ -130,26 +130,20 @@ export function toolsLine(
   agentLabel: string,
   intlLocale?: string
 ): string | null {
-  if (!tools) {
-    return null
-  }
-  const own = tools.own.map((tool) => botToolTitle(tool.name))
-  const inherited = tools.inherited.length
-  if (own.length === 0) {
-    return inherited > 0
-      ? translate('bots.settingsPage.toolsFrom', '{{count}} from {{agent}}', {
-          count: inherited,
-          agent: agentLabel
-        })
-      : none()
-  }
-  const names = nameList(own, intlLocale)
-  return inherited > 0
-    ? `${names} · ${translate('bots.settingsPage.toolsMore', '{{count}} more from {{agent}}', {
-        count: inherited,
+  return botToolsLine(tools, {
+    none: none(),
+    from: (count) =>
+      translate('bots.settingsPage.toolsFrom', '{{count}} from {{agent}}', {
+        count,
         agent: agentLabel
-      })}`
-    : names
+      }),
+    more: (count) =>
+      translate('bots.settingsPage.toolsMore', '{{count}} more from {{agent}}', {
+        count,
+        agent: agentLabel
+      }),
+    list: (names) => nameList(names, intlLocale)
+  })
 }
 
 /** Names, or "None". */

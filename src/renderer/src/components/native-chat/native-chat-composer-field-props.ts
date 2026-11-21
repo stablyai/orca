@@ -67,6 +67,8 @@ export type NativeChatComposerFieldProps = {
   onChoosePickerItem: (item: NativeChatPickerItem) => void
   onRetrySkills: () => void
   onChooseMentionFile: (path: string) => void
+  /** The pointer moved onto an `@` row, which takes the one highlight. */
+  onHoverMentionOption?: (index: number) => void
   onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
   onDictationToggle: () => void

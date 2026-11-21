@@ -57,6 +57,10 @@ vi.mock('../../../../platform/clipboard/clipboard', () => ({
   })
 }))
 vi.mock('../../../../hooks/use-now', () => ({ useNow: () => 1_000_000 }))
+vi.mock('../../../../platform/external-links/external-link', () => ({
+  openExternalLink: (url: string) => state.links.push(url)
+}))
+vi.mock('../../../../components/composer-input/TextField', () => ({ TextField: 'TextField' }))
 vi.mock('../../../../worktree/execution-hosts/use-route-capability', () => ({
   useRouteCapability: () => true
 }))
@@ -154,6 +158,11 @@ async function render(node: ReactNode, send = vi.fn(async () => true)) {
         pill.props.onPress()
         // Let the press's host calls answer.
         await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    },
+    type: async (text: string) => {
+      await act(async () => {
+        root.find((n) => String(n.type) === 'TextField').props.onChangeText(text)
       })
     },
     buttons: () =>
@@ -352,17 +361,62 @@ describe('tool added card', () => {
     addedAt: 1
   }
 
-  it('points a tool that needs a sign-in to the computer, and removes it', async () => {
-    answer({
-      'bots.tools.list': { own: [{ ...added.tool, signIn: { state: 'signed-out' } }] },
-      'bots.tools.remove': {}
+  it('signs a tool in from the address its browser landed on, pasted back', async () => {
+    const waiting = {
+      flowId: 'flow-1',
+      revision: 1,
+      expiresAt: 4_000_000_000_000,
+      state: 'waiting',
+      authorizationUrl: 'https://mcp.notion.com/authorize?client_id=c&state=st-9',
+      redirectUri: 'http://127.0.0.1:49731/callback'
+    }
+    let signedIn = false
+    state.rpc.mockImplementation(async (method: string) => {
+      if (method === 'bots.tools.signIn.wait') {
+        return new Promise(() => {})
+      }
+      const result = {
+        'bots.tools.list': {
+          own: [{ ...added.tool, signIn: { state: signedIn ? 'signed-in' : 'signed-out' } }]
+        },
+        'bots.tools.signIn.start': waiting,
+        'bots.tools.signIn.finish': { ...waiting, revision: 3, state: 'done' }
+      }[method]
+      if (method === 'bots.tools.signIn.finish') {
+        signedIn = true
+      }
+      return { id: '1', ok: true, result }
     })
     const card = await render(
       mobileNativeChatOtherBotCard({ kind: 'toolAdded', value: added }, context)
     )
-    expect(card.text()).toContain('Notion')
-    expect(card.text()).toContain('Sign in on your computer')
+    expect(card.text()).toContain('Needs sign-in')
+    await card.press('Sign in')
+    expect(sent('bots.tools.signIn.start')).toEqual([
+      { botId: 'atlas', name: 'notion', mode: 'paste' }
+    ])
+    expect(state.links).toEqual([waiting.authorizationUrl])
+    expect(card.text()).toContain('After you sign in, paste the address you landed on.')
+
+    await card.type('http://127.0.0.1:49731/callback?code=abc&state=other')
+    await card.press('Finish')
+    expect(card.text()).toContain('That address isn’t from this sign-in.')
+    expect(sent('bots.tools.signIn.finish')).toEqual([])
+
+    await card.type('http://127.0.0.1:49731/callback?code=abc&state=st-9')
+    await card.press('Finish')
+    expect(sent('bots.tools.signIn.finish')).toEqual([
+      { flowId: 'flow-1', query: 'code=abc&state=st-9' }
+    ])
+    expect(card.text()).toContain('Signed in')
     expect(card.buttons()).toEqual(['Remove'])
+  })
+
+  it('removes the tool', async () => {
+    answer({ 'bots.tools.list': { own: [added.tool] }, 'bots.tools.remove': {} })
+    const card = await render(
+      mobileNativeChatOtherBotCard({ kind: 'toolAdded', value: added }, context)
+    )
     await card.press('Remove')
     expect(sent('bots.tools.remove')).toEqual([{ botId: 'atlas', name: 'notion' }])
   })

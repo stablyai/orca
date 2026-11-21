@@ -21,6 +21,7 @@ import {
 } from '../bots/bot-group'
 import {
   BrowserClientFileChannelAbortParams,
+  BrowserClientFileChannelBeginParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
 } from '../browser/client-hosting/browser-client-file-channel-protocol'
@@ -108,6 +109,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault/ai-vault-params'
@@ -142,6 +144,7 @@ import {
 } from './bots-composio-params'
 import {
   BotGitHubDefaultBot,
+  BotGitHubUnlink,
   BotGitHubUsers,
   BotLinearDefaultBot,
   BotLinearMembers,
@@ -509,6 +512,7 @@ import {
 } from './google-read-params'
 import {
   GoogleSetupAnswer,
+  GoogleSetupImportHostKey,
   GoogleSetupRead,
   GoogleSetupStart,
   GoogleSetupWrite
@@ -1115,6 +1119,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
   'agentSession.currentRequests': CurrentRequestsParams,
+  'agentSession.delete': OptionsParams,
   'agentSession.ensure': AttachParams,
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,
@@ -1164,6 +1169,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
+  'aiVault.prepareSessionHandoffPrompt': AiVaultPrepareSessionHandoffPromptParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,
@@ -1229,9 +1235,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.delete': BotDelete,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
-  'bots.github.unlink': null,
+  'bots.github.unlink': BotGitHubUnlink,
   'bots.github.users': BotGitHubUsers,
   'bots.googleSetup.answer': GoogleSetupAnswer,
+  'bots.googleSetup.importHostKey': GoogleSetupImportHostKey,
   'bots.googleSetup.read': GoogleSetupRead,
   'bots.googleSetup.start': GoogleSetupStart,
   'bots.googleSetup.write': GoogleSetupWrite,
@@ -1332,6 +1339,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.commandResult': BrowserClientHostCommandResultParams,
   'browser.clientHost.commandResultChunk': BrowserClientHostCommandResultChunkParams,
   'browser.clientHost.fileChannel.abort': BrowserClientFileChannelAbortParams,
+  'browser.clientHost.fileChannel.begin': BrowserClientFileChannelBeginParams,
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,

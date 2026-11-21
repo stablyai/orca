@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { botItemEventId } from '../../shared/bots/bot-items'
 import SyncDatabase from '../sqlite/sync-database'
 import type { BotItemAddInput, BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
@@ -70,6 +71,38 @@ describe('bot items store', () => {
     const events = store.events(uid, 0, 50)
     expect(events.at(-2)?.data).toEqual({ text: 'Legal said yes.' })
     expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working' })
+  })
+
+  it("keeps a plain comment from answering the bot's question, while any other answers it", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(uid, { status: 'needs_you', comment: 'Where should the card show?' }, owner)
+    const asked = store.get(uid)?.questionEvent
+
+    store.ownerComment(
+      uid,
+      'Which one is the paired server?',
+      ownerActor,
+      [],
+      1,
+      undefined,
+      undefined,
+      true
+    )
+    expect(store.events(uid, 0, 50).at(-1)?.data).toEqual({
+      text: 'Which one is the paired server?',
+      plain: true
+    })
+    expect(store.get(uid)?.status).toBe('needs_you')
+    expect(store.get(uid)?.questionEvent).toBe(asked)
+
+    store.ownerComment(uid, 'Above the composer.', ownerActor, [], 2)
+    const events = store.events(uid, 0, 50)
+    expect(events.at(-2)?.data).toEqual({
+      text: 'Above the composer.',
+      answers: botItemEventId(asked!)
+    })
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
   })
 
   it("marks the newest event anyone but the owner made, so the owner's own changes stay seen", () => {
