@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  SERVE_APPIMAGE_RELAUNCH_ENV,
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
@@ -81,6 +82,24 @@ describe('serve update handoff', () => {
     expect(hasServeUpdateSupervisor()).toBe(false)
     expect(requestServeUpdateHandoff('1.0.61')).toBe(false)
   })
+
+  it.runIf(process.platform === 'linux').each([
+    { relaunch: '/opt/apps/Orca.AppImage', appImage: '/opt/apps/Orca.AppImage', supervised: true },
+    { relaunch: '', appImage: '/opt/apps/Orca.AppImage', supervised: false },
+    // The updater would replace a file the supervisor does not watch.
+    { relaunch: '/opt/apps/Orca.AppImage', appImage: '/home/me/Orca.AppImage', supervised: false },
+    { relaunch: '/opt/apps/Orca.AppImage', appImage: undefined, supervised: false }
+  ])(
+    'treats a Linux serve as supervised only when the updater replaces the watched AppImage (%o)',
+    async ({ relaunch, appImage, supervised }) => {
+      vi.stubEnv(SERVE_APPIMAGE_RELAUNCH_ENV, relaunch)
+      vi.stubEnv('APPIMAGE', appImage)
+      const { hasServeUpdateSupervisor } = await import('./serve-update-handoff')
+
+      expect(hasServeUpdateSupervisor()).toBe(supervised)
+      vi.unstubAllEnvs()
+    }
+  )
 
   it.runIf(process.platform === 'darwin')(
     'accepts a handoff path through an alias of the same user-data directory',

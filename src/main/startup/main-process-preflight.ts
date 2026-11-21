@@ -121,6 +121,11 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
 }
 
 function initializeMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  // electron-updater runs a just-installed AppImage once with this flag; that run must not launch Orca.
+  if (process.platform === 'linux' && process.env.APPIMAGE_EXIT_AFTER_INSTALL === 'true') {
+    app.exit(0)
+    return false
+  }
   const isDev = !app.isPackaged
   // Resolve Windows appData before recovery/instance-lock steps can read userData.
   ensureWindowsAppDataPath(app)
