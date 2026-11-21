@@ -108,6 +108,13 @@ export function WorkspaceCleanupRuleChangeDialog({
     () => (newKeys && currentKeys ? cleanupExistingRuleNotice(rows, newKeys, currentKeys) : null),
     [rows, newKeys, currentKeys]
   )
+  // The note matters only while a row that isn't New will still be deleted.
+  const deletesExisting =
+    selected.visibleCount < rows.length &&
+    rows.some((row) => {
+      const key = cleanupChangeRowKey(row)
+      return !newKeys?.has(key) && !request?.selection.has(key)
+    })
   const reviewed = request?.reviewed
   const proposedRules = reviewed
     ? reviewed.change.scope === 'global'
@@ -331,15 +338,7 @@ export function WorkspaceCleanupRuleChangeDialog({
               )}
               {deletedBytes > 0 ? ` · ${formatBytes(deletedBytes)}` : null}
             </p>
-            {selected.count && !disablingProtection ? (
-              <p>
-                {t(
-                  'components.settings.workspaceCleanup.change.keptPinned',
-                  'Kept workspaces get pinned.'
-                )}
-              </p>
-            ) : null}
-            {existing === 'all' ? (
+            {existing === 'all' && deletesExisting ? (
               <p>
                 {t(
                   'components.settings.workspaceCleanup.change.alreadySet',

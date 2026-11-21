@@ -23453,7 +23453,6 @@
           "moreMatches_one": "1 more workspace matches now. Review and confirm again.",
           "moreMatches_other": "{{count}} more workspaces match now. Review and confirm again.",
           "new": "New",
-          "keptPinned": "Kept workspaces get pinned.",
           "alreadySet": "Rows without New are already set to be deleted.",
           "cancelCurrent": "Cancel won't stop current rules from deleting some of these.",
           "keepTooLate": "Couldn't keep {{name}} because deletion has already started. Rule not changed.",

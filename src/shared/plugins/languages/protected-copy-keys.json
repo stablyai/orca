@@ -1190,7 +1190,6 @@
     "components.settings.workspaceCleanup.change.keepTooLate",
     "components.settings.workspaceCleanup.change.keptDeleted",
     "components.settings.workspaceCleanup.change.keptDeletedCount",
-    "components.settings.workspaceCleanup.change.keptPinned",
     "components.settings.workspaceCleanup.change.moreMatches",
     "components.settings.workspaceCleanup.change.new",
     "components.settings.workspaceCleanup.change.pinFailed",

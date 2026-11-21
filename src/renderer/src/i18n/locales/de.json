@@ -20801,7 +20801,6 @@
           "moreMatches_one": "1 weiterer Arbeitsbereich entspricht jetzt den Regeln. Prüfe und bestätige erneut.",
           "moreMatches_other": "{{count}} weitere Arbeitsbereiche entsprechen jetzt den Regeln. Prüfe und bestätige erneut.",
           "new": "Neu",
-          "keptPinned": "Behaltene Arbeitsbereiche werden angeheftet.",
           "alreadySet": "Zeilen ohne Neu sind bereits zum Löschen vorgesehen.",
           "cancelCurrent": "Abbrechen verhindert nicht, dass aktuelle Regeln einige dieser Arbeitsbereiche löschen.",
           "apply": "Anwenden",

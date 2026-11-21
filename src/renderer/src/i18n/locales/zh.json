@@ -21873,7 +21873,6 @@
           "moreMatches_one": "现在又有 1 个工作区匹配。请检查并再次确认。",
           "moreMatches_other": "现在又有 {{count}} 个工作区匹配。请检查并再次确认。",
           "new": "新增",
-          "keptPinned": "选为保留的工作区会被固定。",
           "alreadySet": "没有“新增”标记的行已被设为删除。",
           "cancelCurrent": "即使取消，当前规则仍会删除其中一些工作区。",
           "keepTooLate": "{{name}} 的删除已开始，无法保留。规则未更改。",

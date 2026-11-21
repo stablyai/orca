@@ -69,6 +69,22 @@ export const allKept = defineFixture({
     return <Example value={value} />
   }
 })
+/** A long project name in the title; capture at the main window's 600 px minimum for the narrowest dialog. */
+const LONG_PROJECT_NAME = 'Customer onboarding analytics and billing reconciliation service'
+export const longProject = defineFixture({
+  width: 600,
+  render: () => <Example value={{ ...request(2), projectName: LONG_PROJECT_NAME }} />
+})
+export const longProjectAllKept = defineFixture({
+  width: 600,
+  render: () => {
+    const value = { ...request(2), projectName: LONG_PROJECT_NAME }
+    for (const row of value.rows) {
+      value.selection.toggle(row)
+    }
+    return <Example value={value} />
+  }
+})
 export const days = defineFixture({
   width: 640,
   render: () => <Example value={{ ...request(), kind: 'change', setting: 'inactive' }} />
