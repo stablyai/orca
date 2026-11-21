@@ -10,6 +10,7 @@ import {
   matchesWebSessionIntentOwner
 } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { WebSessionIntentOwner } from '@/runtime/web-session-tabs-sync/identity/web-session-intent-owner'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
@@ -33,7 +34,7 @@ export type ClosedTerminalTabSnapshot = {
 }
 
 export function captureClosedTerminalTabSnapshot(
-  tab: Pick<ClosedTerminalTabSnapshot, 'startupCwd' | 'shellOverride' | 'customTitle' | 'color'>,
+  tab: Pick<TerminalTab, 'startupCwd' | 'shellOverride' | 'customTitle' | 'color'>,
   position?: RecentlyClosedTabPosition,
   environmentId?: string
 ): ClosedTerminalTabSnapshot | null {
