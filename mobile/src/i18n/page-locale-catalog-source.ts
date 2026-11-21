@@ -3,6 +3,7 @@ import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { SHA256_PATTERN } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
+  MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_METHOD,
   MobileWebBundleLocaleCatalogResultSchema
 } from '../../../src/shared/mobile-web-bundle/locale-catalog-contract'
 import { withTimeoutResult } from '../../../src/shared/concurrency/promise-timeout-fallback'
@@ -13,9 +14,17 @@ import {
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-storage/page-device-store'
 import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
+import type { RpcMethodName } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import { captureRpcOperationSettlement, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcOperation } from '../transport/rpc/rpc-operation-contract'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { importBundledLocaleCatalog } from './bundled-locale-catalogs'
+import {
+  LocaleCatalogRangeReplySchema,
+  readLocaleCatalogInRanges,
+  type LocaleCatalogAnswer
+} from './page-locale-catalog-ranges'
 import {
   announceLocaleCatalog as announce,
   publishPageLocaleCatalogLoader,
@@ -49,8 +58,16 @@ const localeCatalogRead = defineRpcOperation({
   )
 })
 
+const localeCatalogRangeRead = defineRpcOperation({
+  name: 'mobileWeb.bundle-locale-catalog-range',
+  method: MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_METHOD,
+  acceptance: 'require-result-or-throw',
+  barrier: 'on-settle',
+  read: rpcResultVariant('mobile-web-bundle-locale-catalog-range', LocaleCatalogRangeReplySchema)
+})
+
 const syncing = new Set<CatalogLocale>()
-// The stored read plus a relay round trip with the largest catalog fit well inside; past it the page opens in English.
+// The stored read plus a relay round trip per window of the largest catalog (three at most) fit well inside; past it the page opens in English.
 const FIRST_PAINT_CATALOG_WAIT_MS = 3_000
 
 const storeKey = (locale: CatalogLocale): string => `i18n-catalog:${locale}`
@@ -136,41 +153,83 @@ function beforeConnectionLoss<T>(client: CatalogClient, work: Promise<T>): Promi
   })
 }
 
-// One request. On an answer the copy becomes the page's and the store's.
-async function askHost(
-  { client, store }: CatalogSource,
-  locale: CatalogLocale,
-  known: HeldCatalog | undefined
-): Promise<HeldCatalog> {
+// A refusal or a reply this page cannot read, as opposed to no answer at all.
+class CatalogRefused extends Error {
+  constructor(
+    locale: CatalogLocale,
+    readonly methodUnavailable: boolean
+  ) {
+    super(
+      methodUnavailable
+        ? '[i18n] this desktop serves no language catalogs'
+        : `[i18n] the desktop answered no ${locale} catalog`
+    )
+  }
+}
+
+// One request: the decoded reply, or why there is none.
+async function send<Method extends RpcMethodName, Variant extends string, Value>(
+  client: CatalogClient,
+  operation: RpcOperation<Method, 'require-result-or-throw', Variant, Value, 'on-settle'>,
+  params: RpcSendParams<Method>,
+  locale: CatalogLocale
+): Promise<Value> {
   const generation = generationOf(client)
-  const settled = await captureRpcOperationSettlement(client, localeCatalogRead, {
-    locale,
-    ...(known ? { knownSha256: known.sha256 } : {})
-  })
+  const settled = await captureRpcOperationSettlement(client, operation, params)
   if (settled.status === 'rejected') {
     throw new CatalogSendFailed(`[i18n] the ${locale} catalog request got no answer`, generation)
   }
   const { outcome } = settled
   if (outcome.kind === 'decoded') {
-    const { sha256, catalog } = outcome.value
-    // A null catalog only confirms the copy the phone named.
-    const next = catalog !== null ? { sha256, catalog } : known?.sha256 === sha256 ? known : null
-    if (next) {
-      if (next !== known) {
-        // After the first paint: encoding the copy is main-thread work nothing waits on.
-        setTimeout(() => {
-          writeStoredCatalog(store, locale, next)
-        }, 0)
-      }
-      return next
-    }
+    return outcome.value
   }
   const refusal = outcome.kind === 'outer-refused' ? outcome.error : undefined
-  throw new Error(
-    isMobileMethodUnavailableError(refusal?.code, refusal?.message)
-      ? '[i18n] this desktop serves no language catalogs'
-      : `[i18n] the desktop answered no ${locale} catalog`
-  )
+  throw new CatalogRefused(locale, isMobileMethodUnavailableError(refusal?.code, refusal?.message))
+}
+
+async function readCatalog(
+  client: CatalogClient,
+  locale: CatalogLocale,
+  known: HeldCatalog | undefined
+): Promise<LocaleCatalogAnswer> {
+  const knownSha256 = known ? { knownSha256: known.sha256 } : {}
+  const window = (offset: number) =>
+    send(
+      client,
+      localeCatalogRangeRead,
+      { locale, offset, ...(offset === 0 ? knownSha256 : {}) },
+      locale
+    )
+  try {
+    return await readLocaleCatalogInRanges(locale, window)
+  } catch (error) {
+    // Only a host that predates ranges refuses the method, and it serves every catalog whole.
+    if (error instanceof CatalogRefused && error.methodUnavailable) {
+      return send(client, localeCatalogRead, { locale, ...knownSha256 }, locale)
+    }
+    throw error
+  }
+}
+
+// One read. On an answer the copy becomes the page's and the store's.
+async function askHost(
+  { client, store }: CatalogSource,
+  locale: CatalogLocale,
+  known: HeldCatalog | undefined
+): Promise<HeldCatalog> {
+  const { sha256, catalog } = await readCatalog(client, locale, known)
+  // A null catalog only confirms the copy the phone named.
+  const next = catalog !== null ? { sha256, catalog } : known?.sha256 === sha256 ? known : null
+  if (!next) {
+    throw new CatalogRefused(locale, false)
+  }
+  if (next !== known) {
+    // After the first paint: encoding the copy is main-thread work nothing waits on.
+    setTimeout(() => {
+      writeStoredCatalog(store, locale, next)
+    }, 0)
+  }
+  return next
 }
 
 // Asks until the host answers, resending once per new connection; a refusal ends it.

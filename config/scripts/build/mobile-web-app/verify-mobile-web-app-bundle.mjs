@@ -12,13 +12,9 @@ import {
 } from '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
-const manifestContract = join(
-  projectDir,
-  'src',
-  'shared',
-  'mobile-web-bundle',
-  'manifest-contract.ts'
-)
+const bundleContractDir = join(projectDir, 'src', 'shared', 'mobile-web-bundle')
+const manifestContract = join(bundleContractDir, 'manifest-contract.ts')
+const localeCatalogContract = join(bundleContractDir, 'locale-catalog-contract.ts')
 
 // Derive asset ceiling as chunks+images+document so chunk overflow reports splitting cause before generic count; flat ceiling drifts as routes grow.
 export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunkCount = 0) {
@@ -29,8 +25,15 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
-export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
+// The host sends a catalog in windows: one window's base64, inside its reply JSON, is sealed and
+// base64'd again (16/9 with the envelope), and must still fit the relay's 1 MiB frame.
+const MOBILE_WEB_APP_RELAY_FRAME_BYTES = 1024 * 1024
+const HOST_CATALOG_RANGE_ENVELOPE_BYTES = 4 * 1024
+
+function hostCatalogRangeReplyBytes(rangeBytes) {
+  const replyJsonBytes = Math.ceil(rangeBytes / 3) * 4 + HOST_CATALOG_RANGE_ENVELOPE_BYTES
+  return Math.ceil(replyJsonBytes / 3) * 4
+}
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
@@ -129,10 +132,10 @@ function fail(message) {
   throw new VerificationError(message)
 }
 
-// Load phone’s manifest asset ceiling from contract through esbuild, which resolves extensionless TS imports; never copy native shell count.
-export async function readMobileWebBundleMaxAssets() {
+// Load a contract's numbers through esbuild, which resolves extensionless TS imports; never copy them here.
+async function readContractNumbers(contract, names) {
   const { outputFiles } = await esbuild.build({
-    entryPoints: [manifestContract],
+    entryPoints: [contract],
     bundle: true,
     write: false,
     format: 'esm',
@@ -140,13 +143,52 @@ export async function readMobileWebBundleMaxAssets() {
     logLevel: 'silent'
   })
   const source = Buffer.from(outputFiles[0].contents).toString('base64')
-  const { MOBILE_WEB_BUNDLE_MAX_ASSETS: ceiling } = await import(
-    `data:text/javascript;base64,${source}`
-  )
-  if (typeof ceiling !== 'number') {
-    fail(`${manifestContract} exports no MOBILE_WEB_BUNDLE_MAX_ASSETS to bound the build with`)
+  const exports = await import(`data:text/javascript;base64,${source}`)
+  for (const name of names) {
+    if (typeof exports[name] !== 'number') {
+      fail(`${contract} exports no ${name} to bound the build with`)
+    }
   }
-  return ceiling
+  return exports
+}
+
+// The phone's manifest asset ceiling; never copy the native shell's count.
+export async function readMobileWebBundleMaxAssets() {
+  const { MOBILE_WEB_BUNDLE_MAX_ASSETS } = await readContractNumbers(manifestContract, [
+    'MOBILE_WEB_BUNDLE_MAX_ASSETS'
+  ])
+  return MOBILE_WEB_BUNDLE_MAX_ASSETS
+}
+
+// The grid the host cuts catalogs on and the largest catalog the page reassembles.
+export async function readHostCatalogLimits() {
+  const names = [
+    'MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_BYTES',
+    'MOBILE_WEB_BUNDLE_LOCALE_CATALOG_MAX_BYTES'
+  ]
+  const contract = await readContractNumbers(localeCatalogContract, names)
+  return {
+    rangeBytes: contract.MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_BYTES,
+    maxBytes: contract.MOBILE_WEB_BUNDLE_LOCALE_CATALOG_MAX_BYTES
+  }
+}
+
+// A catalog over one reply is fine: the host sends it in windows, which pages that predate them never ask for.
+export function assertHostCatalogsFitRanges(catalogs, { rangeBytes, maxBytes }) {
+  const replyBytes = hostCatalogRangeReplyBytes(rangeBytes)
+  if (replyBytes > MOBILE_WEB_APP_RELAY_FRAME_BYTES) {
+    fail(
+      `a ${String(rangeBytes)}-byte host catalog window seals to ${String(replyBytes)} bytes, ` +
+        `over the ${String(MOBILE_WEB_APP_RELAY_FRAME_BYTES)}-byte relay frame`
+    )
+  }
+  const oversized = catalogs.find((catalog) => catalog.byteLength > maxBytes)
+  if (oversized) {
+    fail(
+      `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
+        `${String(maxBytes)} the page reassembles from ${String(rangeBytes)}-byte windows`
+    )
+  }
 }
 
 // Reject derived asset allowance beyond phone’s map limit: shells reject whole oversized manifest, not just extras; re-sweep shared routes to tighten envelope.
@@ -211,15 +253,8 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (hostCatalogsOf(first.manifest) !== hostCatalogsOf(manifest)) {
     fail(`${bundleDir} is stale: its host language catalogs differ from a fresh build's`)
   }
-  const oversized = (manifest.catalogs ?? []).find(
-    (catalog) => catalog.byteLength > MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES
-  )
-  if (oversized) {
-    fail(
-      `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
-        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
-    )
-  }
+  const hostCatalogLimits = await readHostCatalogLimits()
+  assertHostCatalogsFitRanges(manifest.catalogs ?? [], hostCatalogLimits)
   const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
   if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
@@ -255,7 +290,23 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return { ...manifest, catalogBytes: first.catalogBytes }
+  return { ...manifest, catalogBytes: first.catalogBytes, hostCatalogLimits }
+}
+
+// The largest host catalog and the windows it takes, so a catalog nearing the cap shows before it fails.
+function describeLargestHostCatalog({ catalogs = [], hostCatalogLimits }) {
+  const largest = catalogs.reduce(
+    (found, catalog) => (found === null || catalog.byteLength > found.byteLength ? catalog : found),
+    null
+  )
+  if (largest === null) {
+    return 'no host catalogs'
+  }
+  const windows = Math.ceil(largest.byteLength / hostCatalogLimits.rangeBytes)
+  return (
+    `largest host catalog ${largest.locale} ${String(largest.byteLength)}/` +
+    `${String(hostCatalogLimits.maxBytes)} bytes in ${String(windows)} window(s)`
+  )
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -266,6 +317,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
         `${String(manifest.totalBytes)} total bytes, ` +
         `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
+        `${describeLargestHostCatalog(manifest)}, ` +
         `reproducible buildId ${manifest.buildId}`
     )
   } catch (error) {

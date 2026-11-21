@@ -6,6 +6,9 @@ import type { MobileWebBundleAsset } from '../../../../../shared/mobile-web-bund
 // Include content-hash buildId so live dev rebuilds cannot reuse verdicts for previous bytes.
 const verdicts = new Map<string, Promise<boolean>>()
 
+/** An asset or a host-only catalog: a file under the bundle root and the hash its manifest entry names. */
+type HashedFile = Pick<MobileWebBundleAsset, 'path' | 'sha256'>
+
 /** Tests own the process, so they own the cache; nothing in the app may call this. */
 export function resetMobileWebBundleAssetVerdictsForTests(): void {
   verdicts.clear()
@@ -15,7 +18,7 @@ export function resetMobileWebBundleAssetVerdictsForTests(): void {
 export function verifyMobileWebBundleAsset(
   root: string,
   buildId: string,
-  asset: MobileWebBundleAsset
+  asset: HashedFile
 ): Promise<boolean> {
   const key = `${buildId} ${asset.path}`
   const cached = verdicts.get(key)
@@ -36,7 +39,7 @@ export function verifyMobileWebBundleAsset(
   return verdict
 }
 
-async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boolean> {
+async function hashAsset(root: string, asset: HashedFile): Promise<boolean> {
   const handle = await open(join(root, asset.path), 'r')
   try {
     const hash = createHash('sha256')
