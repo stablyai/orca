@@ -24,7 +24,7 @@ vi.mock('../pane/absent-pane-owner', async (importOriginal) => ({
 }))
 vi.mock('../../../daemon/providers/routing/daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: () => true,
-  recheckNewerProtocolHold: () => true
+  recheckNewerProtocolHold: async () => true
 }))
 vi.mock('../provider/registry', async (importOriginal) => ({
   ...(await importOriginal<typeof RegistryModule>()),

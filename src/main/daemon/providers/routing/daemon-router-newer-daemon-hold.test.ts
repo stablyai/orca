@@ -7,7 +7,7 @@ import type {
 
 vi.mock('./daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: () => true,
-  recheckNewerProtocolHold: () => true
+  recheckNewerProtocolHold: async () => true
 }))
 
 const { LegacyDaemonExitProof } = await import('./daemon-legacy-exit-proof')

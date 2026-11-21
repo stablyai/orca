@@ -21,8 +21,8 @@ export function heldSessionId(opts: PtyHeldSpawnRequest, routed: boolean): strin
 }
 
 /** No compatible daemon runs the id: refuse, unless every held newer daemon has exited since startup. */
-function holdUnlessNewerDaemonsExited(): void {
-  if (recheckNewerProtocolHold()) {
+export async function holdUnlessNewerDaemonsExited(): Promise<void> {
+  if (await recheckNewerProtocolHold()) {
     throw new Error(NEWER_DAEMON_HOLD_ERROR)
   }
 }
@@ -51,7 +51,7 @@ export async function resolveHeldOwner(
       return live[0]
     }
     if (live.length === 0) {
-      holdUnlessNewerDaemonsExited()
+      await holdUnlessNewerDaemonsExited()
       return undefined
     }
   }
@@ -62,7 +62,7 @@ export async function resolveHeldOwner(
   if (resolution.kind === 'unknown') {
     throw new Error(NEWER_DAEMON_HOLD_ERROR)
   }
-  holdUnlessNewerDaemonsExited()
+  await holdUnlessNewerDaemonsExited()
   return undefined
 }
 
@@ -187,7 +187,7 @@ export class DaemonRouterHeldSpawnGate {
       return owner ?? (await resolveHeldOwner(sessionId, ownerResolver, [current]))
     }
     // The lookup above already asked the current daemon and every older one.
-    holdUnlessNewerDaemonsExited()
+    await holdUnlessNewerDaemonsExited()
     return undefined
   }
 }

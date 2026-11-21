@@ -18,6 +18,10 @@ import {
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import {
+  heldSpawnRefusal,
+  holdUnlessNewerDaemonsExited
+} from '../../daemon/providers/routing/daemon-router-newer-daemon-hold'
+import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
 } from '../pty/process-inspection'
@@ -75,6 +79,12 @@ export class LocalPtyProvider implements IPtyProvider {
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     return spawnLocalPty(args, () => this.opts)
   }
+
+  // With the daemon down no compatible daemon can answer for a saved id, so only this process's own PTYs pass.
+  refuseHeldSpawn: IPtyProvider['refuseHeldSpawn'] = heldSpawnRefusal(
+    (id) => this.hasPty(id),
+    () => Promise.resolve().then(holdUnlessNewerDaemonsExited)
+  )
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
   async attach(_id: string): Promise<void> {}

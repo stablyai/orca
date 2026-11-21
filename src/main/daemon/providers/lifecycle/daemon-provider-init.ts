@@ -78,8 +78,17 @@ export async function initDaemonPtyProvider(
     )
   })
 
+  // Newer protocols only hold their tabs; found even when this daemon fails and local PTYs stand in.
+  const newerHolds = discoverNewerProtocolHolds(runtimeDir)
+  const newerHoldsSettled = newerHolds.catch(() => {})
   // Publish the spawner and adapter together after initialization succeeds.
-  const info = await newSpawner.ensureRunning()
+  let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+  try {
+    info = await newSpawner.ensureRunning()
+  } catch (error) {
+    await newerHoldsSettled
+    throw error
+  }
   // Reclaim superseded hosts after every adoption or spawn, retaining current and live-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
@@ -131,10 +140,9 @@ export async function initDaemonPtyProvider(
     await newAdapter.establishLifecycleLease()
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
-    // Adopt older daemons; newer protocols only hold their tabs.
     const [discoveredLegacyAdapters] = await Promise.all([
       createLegacyDaemonAdapters(runtimeDir),
-      discoverNewerProtocolHolds(runtimeDir)
+      newerHolds
     ])
     legacyAdapters = discoveredLegacyAdapters
     routedAdapter =

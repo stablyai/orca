@@ -1,6 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../../shared/terminal/daemon/newer-daemon-hold'
 import { holdForNewerDaemon } from '../spawn/newer-daemon-hold-pane'
+import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store/index'
 import { isWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
@@ -123,26 +124,36 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     try {
       session.clearPaneMode2031State()
       session.clearHiddenOutputRestoreState()
-      const attachDetached = (): void => {
+      // Settles when the host answers, so Try again keeps the banner and input off until then.
+      const attachDetached = (): Promise<HeldPaneReopenOutcome> => {
+        let settle!: (outcome: HeldPaneReopenOutcome) => void
+        const answered = new Promise<HeldPaneReopenOutcome>((resolve) => (settle = resolve))
         const outputCallbacks = session.captureTransportOutputCallbacks((message: string) => {
+          settle({ reopened: false, agentResumed: false })
           // A host holding this pane for its newer Orca shows the hold, and Try again re-attaches.
           if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
-            holdForNewerDaemon(session, null, false, async () => {
-              attachDetached()
-              return { reopened: true, agentResumed: false }
-            })
+            holdForNewerDaemon(session, null, false, attachDetached)
             return
           }
           session.reportError(message)
         }, null)
+        const { onConnect } = outputCallbacks.callbacks
+        // Synchronous attach failures still throw to the caller.
         session.transport.attach({
           existingPtyId: attachPtyId,
           cols: session.cols,
           rows: session.rows,
-          callbacks: outputCallbacks.callbacks
+          callbacks: {
+            ...outputCallbacks.callbacks,
+            onConnect: () => {
+              onConnect()
+              settle({ reopened: true, agentResumed: false })
+            }
+          }
         })
+        return answered
       }
-      attachDetached()
+      void attachDetached()
       const attachedPtyId = session.transport.getPtyId() ?? attachPtyId
       session.bindActivePanePty(attachedPtyId, {
         updateTabPtyId: 'if-missing',
