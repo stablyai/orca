@@ -143,7 +143,11 @@ function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
       cpu,
       memory,
       sessions: Array.isArray(row.sessions) ? row.sessions.flatMap(parseSessionMemory) : [],
-      chats: Array.isArray(row.chats) ? row.chats.flatMap(parseChatMemory) : [],
+      // Absent rather than empty, so terminal-only replies allocate nothing for chats.
+      chats:
+        Array.isArray(row.chats) && row.chats.length > 0
+          ? row.chats.flatMap(parseChatMemory)
+          : undefined,
       history: Array.isArray(row.history)
         ? row.history.flatMap((sample) => finiteNumber(sample) ?? [])
         : []

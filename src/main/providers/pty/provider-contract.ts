@@ -218,6 +218,8 @@ export type IPtyProvider = {
     targetOwnerOnly?: boolean
     /** Diagnostic display only: include generations whose routing owner is unverifiable. */
     includeUnrouted?: boolean
+    /** False once the caller no longer wants the answer, so an outdated read is not repeated for no one. */
+    isWanted?: () => boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>

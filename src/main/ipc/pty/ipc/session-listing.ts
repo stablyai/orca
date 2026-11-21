@@ -48,6 +48,15 @@ export function installPtySessionListingIpcHandler(deps: {
         }
       }
       assertResourceViewVisible(event, viewAdmission)
+      // A hidden or closed Resource Manager drops the reply, so its outdated reads are not repeated.
+      const isWanted = (): boolean => {
+        try {
+          assertResourceViewVisible(event, viewAdmission)
+          return true
+        } catch {
+          return false
+        }
+      }
       const deduped = new Map<string, PtyListedSession>()
       const admission = new PtyProcessListAdmission()
       const diagnostic = scope?.includeUnrouted === true
@@ -63,11 +72,11 @@ export function installPtySessionListingIpcHandler(deps: {
         ({ provider, hostId }) => {
           assertResourceViewVisible(event, viewAdmission)
           if (diagnostic && hostId === LOCAL_EXECUTION_HOST_ID) {
-            return provider.listProcesses({ includeUnrouted: true })
+            return provider.listProcesses({ includeUnrouted: true, isWanted })
           }
           return hostId === LOCAL_EXECUTION_HOST_ID || scope !== undefined
-            ? provider.listProcesses()
-            : provider.listProcesses().catch(() => [])
+            ? provider.listProcesses({ isWanted })
+            : provider.listProcesses({ isWanted }).catch(() => [])
         },
         ({ provider, hostId }, sessions) => {
           const seen = new Set<string>()

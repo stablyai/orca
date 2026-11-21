@@ -148,8 +148,8 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     // Retries share the first read's budget, so a busy host still answers within one timeout.
     const deadlineMs = opts?.deadlineMs ?? Date.now() + OWNER_RESOLUTION_TIMEOUT_MS
     for (let attempt = 0; ; attempt++) {
-      // A re-read admitted after the budget ran out would list the daemon for no caller.
-      if (attempt > 0 && Date.now() >= deadlineMs) {
+      // A re-read admitted after the budget ran out, or after the caller left, would list the daemon for no one.
+      if (attempt > 0 && (Date.now() >= deadlineMs || opts?.isWanted?.() === false)) {
         throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
       }
       const pending = this.inventory(false, { ...opts, deadlineMs }, true)
@@ -162,15 +162,16 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
         throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
       }
       const inventory = await pending
+      // A provider that failed would fail again; only an outdated but answered read is worth repeating.
+      if (inventory.failure) {
+        throw inventory.failure.error
+      }
       if (inventory.epoch !== this.epoch) {
         // A spawn or exit during the read only outdated it; the daemon itself answered.
         if (attempt < STALE_INVENTORY_RETRIES) {
           continue
         }
         throw new TerminalSessionOwnerUnverifiedError('stale inventory')
-      }
-      if (inventory.failure) {
-        throw inventory.failure.error
       }
       return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
     }

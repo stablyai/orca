@@ -46,8 +46,8 @@ export type UnifiedWorktreeRow = {
   /** Paired server that sampled this row; absent for this machine and SSH rows. */
   hostLabel?: string
   sessions: UnifiedSessionRow[]
-  /** Chat agents the sampling machine attributed to this workspace. */
-  chats: ChatAgentMemory[]
+  /** Chat agents the sampling machine attributed to this workspace; absent when it has none. */
+  chats?: readonly ChatAgentMemory[]
   browsers: BrowserWorkspace[]
 }
 

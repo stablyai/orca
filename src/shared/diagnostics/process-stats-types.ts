@@ -39,7 +39,7 @@ export type SessionMemory = UsageValues & {
 }
 
 /** A chat agent's process tree (its CLI and the processes running under it), in its workspace. */
-export type ChatAgentMemory = UsageValues & {
+export type ChatAgentMemory = Pick<UsageValues, 'cpu' | 'memory'> & {
   agentSessionId: string
   /** Agent id such as `claude`; clients name it. */
   agent: string

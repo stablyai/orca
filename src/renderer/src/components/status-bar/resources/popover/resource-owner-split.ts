@@ -47,7 +47,7 @@ export function sharedAgentProcessUsage(
   isListed: (worktree: WorktreeMemory) => boolean
 ): { cpu: number; memory: number } | null {
   const total = snapshot.agentProcesses
-  if (!total) {
+  if (!total || total.memory <= 0) {
     return null
   }
   let cpu = total.cpu

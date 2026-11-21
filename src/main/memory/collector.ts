@@ -206,7 +206,14 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     if (agentSessionId !== null && chat) {
       const bucket = bucketFor(chat.worktreeId)
       addUsage(bucket, usage)
-      ;(bucket.chats ??= []).push({ agentSessionId, agent: chat.agent, name: chat.name, ...usage })
+      const { cpu, memory } = usage
+      ;(bucket.chats ??= []).push({
+        agentSessionId,
+        agent: chat.agent,
+        name: chat.name,
+        cpu,
+        memory
+      })
     }
   }
 
