@@ -1,4 +1,8 @@
 import type { GroupHookCheckResult } from '../../../shared/project/groups/project-group-hooks'
+import type {
+  ExistingCheckoutSuggestion,
+  FindExistingCheckoutsArgs
+} from '../../../shared/project/host-setup/existing-checkout-suggestions'
 import type { RepoCreateFailure } from '../../../shared/repository/creation/repo-create-failure-copy'
 import type {
   CloneTargetArgs,
@@ -129,6 +133,7 @@ export type ProjectsApi = {
   listHostSetups: () => Promise<ProjectHostSetup[]>
   createHostSetup: (args: ProjectHostSetupCreateArgs) => Promise<ProjectHostSetupCreateResult>
   setupExistingFolder: (args: ProjectHostSetupExistingFolderArgs) => Promise<ProjectHostSetupResult>
+  findExistingCheckouts: (args: FindExistingCheckoutsArgs) => Promise<ExistingCheckoutSuggestion[]>
   updateHostSetup: (args: ProjectHostSetupUpdateArgs) => Promise<ProjectHostSetupUpdateResult>
   deleteHostSetup: (args: ProjectHostSetupDeleteArgs) => Promise<ProjectHostSetupDeleteResult>
 }

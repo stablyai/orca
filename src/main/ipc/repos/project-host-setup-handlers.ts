@@ -34,6 +34,9 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import { ProjectHostSetupFindExistingCheckouts } from '../../../shared/rpc-contract/projects/project-runtime-params'
+import { findExistingCheckouts } from '../../git/repositories/discovery/existing-checkout-discovery'
+import type { ExistingCheckoutSuggestion } from '../../../shared/project/host-setup/existing-checkout-suggestions'
 import { sshHostWithoutServerMessage } from '../../../shared/project/host-setup/project-host-setup-target'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
@@ -117,6 +120,18 @@ export function registerProjectHostSetupHandlers(
       }
       notifyReposChanged(mainWindow)
       return result
+    }
+  )
+
+  ipcMain.handle(
+    'projectHostSetups:findExistingCheckouts',
+    async (_event, rawArgs: unknown): Promise<ExistingCheckoutSuggestion[]> => {
+      const args = parseProjectGroupIpcArgs(
+        ProjectHostSetupFindExistingCheckouts,
+        rawArgs,
+        'project_host_setup_find_checkouts_invalid_args'
+      )
+      return findExistingCheckouts({ ...args, workspaceDir: store.getSettings().workspaceDir })
     }
   )
 

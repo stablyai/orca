@@ -15661,7 +15661,12 @@
             "browseFolderHelp": "Используйте существующую рабочую копию или папку на этом компьютере.",
             "cloneFromUrl": "Клонировать по URL",
             "cloneFromUrlHelp": "Клонируйте этот репозиторий на {{host}}.",
-            "saveLocation": "Задать расположение"
+            "saveLocation": "Задать расположение",
+            "existingCheckoutsSearching": "Поиск существующих копий на этом хосте…",
+            "existingCheckoutsHeading": "Найдено на этом хосте",
+            "existingCheckoutsUse": "Использовать эту папку",
+            "existingCheckoutsSameRemote": "Тот же remote",
+            "existingCheckoutsSameName": "То же имя"
           },
           "SmartWorkspaceNameField": {
             "e57c53727c": "Добавить проект",

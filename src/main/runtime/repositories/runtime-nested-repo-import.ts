@@ -19,6 +19,11 @@ import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/ho
 import { getRepoName } from '../../git/repositories/repository-name'
 import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
+import { findExistingCheckouts } from '../../git/repositories/discovery/existing-checkout-discovery'
+import type {
+  ExistingCheckoutSuggestion,
+  FindExistingCheckoutsArgs
+} from '../../../shared/project/host-setup/existing-checkout-suggestions'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
@@ -49,6 +54,13 @@ export class RuntimeNestedRepoImport {
     await refuseWslHostWindowsDrivePath(path)
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+  }
+
+  async findExistingCheckouts(
+    args: FindExistingCheckoutsArgs
+  ): Promise<{ suggestions: ExistingCheckoutSuggestion[] }> {
+    const workspaceDir = this.deps.getStore()?.getSettings().workspaceDir
+    return { suggestions: await findExistingCheckouts({ ...args, workspaceDir }) }
   }
 
   async import(args: {

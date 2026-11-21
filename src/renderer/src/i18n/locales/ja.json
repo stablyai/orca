@@ -15405,7 +15405,12 @@
             "browseFolderHelp": "このホスト上の既存のチェックアウトまたはフォルダーを使用します。",
             "cloneFromUrl": "URL からクローン",
             "cloneFromUrlHelp": "このリポジトリのクローンを {{host}} に作成します。",
-            "saveLocation": "場所を設定する"
+            "saveLocation": "場所を設定する",
+            "existingCheckoutsSearching": "このホストで既存のチェックアウトを検索しています…",
+            "existingCheckoutsHeading": "このホストで見つかりました",
+            "existingCheckoutsUse": "このフォルダーを使用",
+            "existingCheckoutsSameRemote": "同じリモート",
+            "existingCheckoutsSameName": "同じ名前"
           },
           "projectCombobox": {
             "recentHeading": "最近",

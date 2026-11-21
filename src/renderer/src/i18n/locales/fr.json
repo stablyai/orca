@@ -15172,7 +15172,12 @@
             "browseFolderHelp": "Utilisez un checkout ou un dossier existant sur cet hôte.",
             "cloneFromUrl": "Cloner depuis une URL",
             "cloneFromUrlHelp": "Clonez ce dépôt sur {{host}}.",
-            "saveLocation": "Définir l'emplacement"
+            "saveLocation": "Définir l'emplacement",
+            "existingCheckoutsSearching": "Recherche de copies existantes sur cet hôte…",
+            "existingCheckoutsHeading": "Trouvé sur cet hôte",
+            "existingCheckoutsUse": "Utiliser ce dossier",
+            "existingCheckoutsSameRemote": "Même dépôt distant",
+            "existingCheckoutsSameName": "Même nom"
           },
           "SmartWorkspaceNameField": {
             "e57c53727c": "Ajouter un projet...",

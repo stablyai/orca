@@ -16637,7 +16637,12 @@
             "browseFolderHelp": "Use an existing checkout or folder on this host.",
             "cloneFromUrl": "Clone from URL",
             "cloneFromUrlHelp": "Clone this repository onto {{host}}.",
-            "saveLocation": "Set location"
+            "saveLocation": "Set location",
+            "existingCheckoutsSearching": "Looking for existing checkouts on this host…",
+            "existingCheckoutsHeading": "Found on this host",
+            "existingCheckoutsUse": "Use this folder",
+            "existingCheckoutsSameRemote": "Same remote",
+            "existingCheckoutsSameName": "Same name"
           },
           "SmartWorkspaceNameField": {
             "e57c53727c": "Add project...",

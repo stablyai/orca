@@ -14973,7 +14973,12 @@
             "browseFolderHelp": "Usa un checkout o una carpeta existente en este host.",
             "cloneFromUrl": "Clonar desde URL",
             "cloneFromUrlHelp": "Clona este repositorio en {{host}}.",
-            "saveLocation": "Establecer ubicación"
+            "saveLocation": "Establecer ubicación",
+            "existingCheckoutsSearching": "Buscando copias existentes en este host…",
+            "existingCheckoutsHeading": "Encontrado en este host",
+            "existingCheckoutsUse": "Usar esta carpeta",
+            "existingCheckoutsSameRemote": "Mismo remoto",
+            "existingCheckoutsSameName": "Mismo nombre"
           },
           "projectCombobox": {
             "recentHeading": "Recientes",

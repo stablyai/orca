@@ -14600,7 +14600,12 @@
             "browseFolderHelp": "이 호스트의 기존 체크아웃 또는 폴더를 사용하십시오.",
             "cloneFromUrl": "URL에서 복제",
             "cloneFromUrlHelp": "이 저장소를 {{host}}에 복제하세요.",
-            "saveLocation": "위치 설정"
+            "saveLocation": "위치 설정",
+            "existingCheckoutsSearching": "이 호스트에서 기존 체크아웃을 찾는 중…",
+            "existingCheckoutsHeading": "이 호스트에서 찾음",
+            "existingCheckoutsUse": "이 폴더 사용",
+            "existingCheckoutsSameRemote": "같은 원격",
+            "existingCheckoutsSameName": "같은 이름"
           },
           "projectCombobox": {
             "recentHeading": "최근",

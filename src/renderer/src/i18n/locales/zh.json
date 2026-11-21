@@ -15726,7 +15726,12 @@
             "browseFolderHelp": "使用此主机上已有的检出目录或文件夹",
             "cloneFromUrl": "从 URL 克隆",
             "cloneFromUrlHelp": "将此仓库克隆到 {{host}}",
-            "saveLocation": "设置位置"
+            "saveLocation": "设置位置",
+            "existingCheckoutsSearching": "正在此主机上查找现有检出…",
+            "existingCheckoutsHeading": "在此主机上找到",
+            "existingCheckoutsUse": "使用此文件夹",
+            "existingCheckoutsSameRemote": "相同远程",
+            "existingCheckoutsSameName": "相同名称"
           },
           "projectCombobox": {
             "recentHeading": "最近",

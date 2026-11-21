@@ -14999,7 +14999,12 @@
             "browseFolderHelp": "使用此主機上已有的檢出或資料夾。",
             "cloneFromUrl": "從 URL 複製",
             "cloneFromUrlHelp": "將此存放庫複製到 {{host}} 上。",
-            "saveLocation": "設定位置"
+            "saveLocation": "設定位置",
+            "existingCheckoutsSearching": "正在此主機上尋找現有的簽出…",
+            "existingCheckoutsHeading": "在此主機上找到",
+            "existingCheckoutsUse": "使用此資料夾",
+            "existingCheckoutsSameRemote": "相同遠端",
+            "existingCheckoutsSameName": "相同名稱"
           },
           "SmartWorkspaceNameField": {
             "e57c53727c": "新增專案...",
