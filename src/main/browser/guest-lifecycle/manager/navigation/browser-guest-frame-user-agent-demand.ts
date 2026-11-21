@@ -7,6 +7,7 @@ import {
   setBrowserGuestFrameUserAgentDemand,
   setBrowserGuestPageUserAgentDemand
 } from '../../../identity/requests/browser-session-ua-demand'
+import { browserSessionHeaderListenerIgnoresDemand } from '../../../identity/requests/browser-session-ua'
 import { rewritesRequestHeaders } from './browser-manager-navigation'
 
 // An unloading frame leaves the frame tree just after its pagehide.
@@ -162,13 +163,17 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   // Electron 43 reports frame creation but not removal, and route popups run no guest preload to
   // report an iframe's unload. So only while a popup has a site iframe, its tracked frames (only
   // those, not the frame tree) are rechecked, backing off from 2 s to 32 s; a new site iframe
-  // starts over, and the checks stop once demand is gone.
+  // starts over, and the checks stop once demand is gone or can't change the header listener.
+  const popupSiteFramesMatter = (): boolean =>
+    !contents.isDestroyed() &&
+    getBrowserGuestFrameUserAgentDemand(id).size > 0 &&
+    !browserSessionHeaderListenerIgnoresDemand(session)
   let recheck: NodeJS.Timeout | null = null
   let recheckDelay = POPUP_FRAME_RECHECK_MS.first
   const scheduleRecheck = (): void => {
     recheck = setTimeout(() => {
       recheck = null
-      if (contents.isDestroyed() || getBrowserGuestFrameUserAgentDemand(id).size === 0) {
+      if (!popupSiteFramesMatter()) {
         return
       }
       scheduleRemovalCheck(contents)
@@ -179,7 +184,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   }
   const watchPopupSiteFrames = (): void => {
     recheckDelay = POPUP_FRAME_RECHECK_MS.first
-    if (!recheck && getBrowserGuestFrameUserAgentDemand(id).size > 0) {
+    if (!recheck && popupSiteFramesMatter()) {
       scheduleRecheck()
     }
   }

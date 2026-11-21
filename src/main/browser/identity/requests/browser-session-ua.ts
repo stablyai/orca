@@ -31,6 +31,14 @@ export type BrowserSessionRequestUserAgentResolver = (args: {
 }) => BrowserTabIdentity | undefined
 
 // Rewrite only hints Chromium emitted; desktop hints remain browser-owned.
+/** Clean mode and extensions keep the header listener installed whatever tabs demand. */
+export function browserSessionHeaderListenerIgnoresDemand(sess: Session): boolean {
+  return (
+    getBrowserProcessUserAgentIdentity().mode === 'clean' ||
+    (sess.extensions?.getAllExtensions().length ?? 0) > 0
+  )
+}
+
 export function installBrowserSessionUserAgentPolicy(
   sess: Session,
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
@@ -95,9 +103,7 @@ export function installBrowserSessionUserAgentPolicy(
   let release: (() => void) | null = null
   const refresh = (): void => {
     const needed =
-      getBrowserProcessUserAgentIdentity().mode === 'clean' ||
-      (sess.extensions?.getAllExtensions().length ?? 0) > 0 ||
-      hasBrowserSessionUserAgentDemand(sess)
+      browserSessionHeaderListenerIgnoresDemand(sess) || hasBrowserSessionUserAgentDemand(sess)
     if (needed && !release) {
       release = listen()
     } else if (!needed && release) {

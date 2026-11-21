@@ -15,6 +15,9 @@ it("reads a form POST result from Chromium's history entry in real Electron", as
     post: 'form-data',
     // A 303 turns the POST into a GET page; a 307 re-POSTs.
     seeOther: 'none',
-    temporary: 'form-data'
+    temporary: 'form-data',
+    // History API updates drop the body; it is still readable as the first one starts.
+    replaced: { before: 'form-data', after: 'none' },
+    savedSelect: { savesType: true, formData: 'none' }
   })
 }, 60_000)

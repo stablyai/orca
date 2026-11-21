@@ -7,6 +7,7 @@ export {
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
+import { readBrowserGuestCurrentFormData } from './browser-page-state-form-data'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -19,6 +20,7 @@ type ProtectionOwner = {
   navigating: boolean
   currentEdited: boolean
   currentPost: boolean
+  currentPostChecked: boolean
   mediaGranted: boolean
   unavailable: boolean
   // Null until the private observer reports them for the current challenge.
@@ -115,6 +117,7 @@ export function installBrowserGuestDiscardProtection(
     navigating: false,
     currentEdited: false,
     currentPost: false,
+    currentPostChecked: false,
     mediaGranted: false,
     pictureInPicture: null,
     pdf: null
@@ -203,6 +206,12 @@ export function installBrowserGuestDiscardProtection(
     if (details.isMainFrame && !details.isSameDocument) {
       owner.navigating = true
       invalidate()
+    } else if (details.isMainFrame && !owner.currentPostChecked) {
+      // History API updates drop the entry's form body while the POST result stays on screen, so
+      // read it once per document before the first one lands.
+      owner.currentPostChecked = true
+      owner.currentPost ||= readBrowserGuestCurrentFormData(guest) !== 'none'
+      publish()
     } else if (!details.isMainFrame) {
       publish()
     }
@@ -211,6 +220,7 @@ export function installBrowserGuestDiscardProtection(
     owner.currentEdited = false
     // Set when a discard finds Chromium recorded a form body; read only then, not on every load.
     owner.currentPost = false
+    owner.currentPostChecked = false
     owner.mediaGranted = false
     publish()
   }

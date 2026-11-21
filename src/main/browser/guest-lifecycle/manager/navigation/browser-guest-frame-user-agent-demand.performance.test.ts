@@ -4,6 +4,9 @@ vi.mock('electron', () => ({ webFrameMain: { fromId: vi.fn() } }))
 vi.mock('../../../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({})
 }))
+vi.mock('../../../identity/requests/browser-session-ua', () => ({
+  browserSessionHeaderListenerIgnoresDemand: () => false
+}))
 vi.mock('../../../identity/browser-tab-identity', () => ({ resolveBrowserTabIdentity: () => ({}) }))
 // Only a Teams address needs a header rewrite here.
 vi.mock('./browser-manager-navigation', () => ({
