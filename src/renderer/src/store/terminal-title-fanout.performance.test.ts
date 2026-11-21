@@ -139,8 +139,7 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   })
 
   // One terminal title change, as pane title observation applies it.
-  store.getState().setRuntimePaneTitle('tab-0', 1, 'build: step 2')
-  store.getState().updateTabTitle('tab-0', 'build: step 2')
+  store.getState().setRuntimePaneTitle('tab-0', 1, 'build: step 2', { alsoTabTitle: true })
   expect(store.getState().runtimePaneTitlesByTabId['tab-0']?.[1]).toBe('build: step 2')
   expect(store.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('build: step 2')
   stopMeasuring()
@@ -164,7 +163,7 @@ function titleNotifications(apply: () => void): number {
   return notifications
 }
 
-it('a parked pane title that drives its tab notifies store subscribers once, and not at all when unchanged', () => {
+it('a pane title that drives its tab notifies store subscribers once, and not at all when unchanged', () => {
   useAppStore.setState({
     tabsByWorktree: { 'wt-0': [makeTab({ id: 'tab-0', worktreeId: 'wt-0', createdAt: 0 })] },
     unifiedTabsByWorktree: { 'wt-0': [unifiedTerminalTab('wt-0', 'tab-0')] },
