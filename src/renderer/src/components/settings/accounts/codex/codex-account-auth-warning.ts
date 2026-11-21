@@ -3,10 +3,7 @@ import type {
   RateLimitRuntimeTarget
 } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexSystemDefaultIdentity } from '../../../../../../shared/agent-accounts/managed-account-types'
-import {
-  isCodexApiKeyRateLimitError,
-  isCodexAuthError
-} from '../../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { isCodexAuthError } from '../../../../../../shared/agent-accounts/codex/codex-auth-errors'
 
 type AccountRuntime = {
   runtime: 'host' | 'wsl'
@@ -52,12 +49,12 @@ export function getCodexAccountAuthWarning(args: {
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
     return null
   }
-  // WSL system defaults have no resolved authKind, so the API-key guard above cannot fire for them.
+  // WSL system defaults have no resolved authKind; the fetcher marks a home it proved has no ChatGPT login instead.
   if (
     args.accountId === null &&
     args.authKind === undefined &&
     args.runtime.runtime === 'wsl' &&
-    isCodexApiKeyRateLimitError(args.limits.error)
+    args.limits.usageMetadata?.failureKind === 'usage-unavailable'
   ) {
     return null
   }
