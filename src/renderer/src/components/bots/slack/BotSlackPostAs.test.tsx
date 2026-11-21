@@ -9,16 +9,19 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 const mocks = vi.hoisted(() => {
   const state: {
     open: ReturnType<typeof vi.fn>
+    serverOpen: ReturnType<typeof vi.fn>
     setPostAs: ReturnType<typeof vi.fn>
     calledFor: string[]
   } = {
     open: vi.fn(),
+    serverOpen: vi.fn(),
     setPostAs: vi.fn(),
     calledFor: []
   }
   return state
 })
-vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: mocks.open }))
+// A server's Orca browser: never used for Slack's pages.
+vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: mocks.serverOpen }))
 vi.mock('@/lib/bot-connector-host-calls', () => ({
   botSlackCalls: (hostId: string) => {
     mocks.calledFor.push(hostId)
@@ -70,6 +73,8 @@ const pairedBot: Bot = stampBotHost(SERVER, {
 
 afterEach(() => {
   cleanup()
+  Reflect.deleteProperty(window, 'api')
+  mocks.serverOpen.mockReset()
   mocks.open.mockReset()
   mocks.setPostAs.mockReset()
   mocks.calledFor = []
@@ -78,13 +83,33 @@ afterEach(() => {
 describe('BotSlackPostAs', () => {
   it("opens a paired bot's approval in this computer's browser, never the server's", async () => {
     mocks.setPostAs.mockResolvedValue({ ok: true, value: { authorizeUrl: AUTHORIZE } })
-    mocks.open.mockReturnValue('system-browser')
+    mocks.open.mockResolvedValue(undefined)
+    Object.assign(window, { api: { shell: { openUrl: mocks.open } } })
     render(<BotSlackPostAs bot={pairedBot} slack={slack} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
     await waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(1))
-    expect(mocks.open).toHaveBeenCalledWith('local', AUTHORIZE, { local: 'system' })
+    expect(mocks.open).toHaveBeenCalledWith(AUTHORIZE)
+    expect(mocks.serverOpen).not.toHaveBeenCalled()
     // The change itself is still asked of the bot's own computer.
     expect(mocks.calledFor).toContain(SERVER)
+  })
+
+  it('keeps Approve in Slack to try again when the browser could not be opened', async () => {
+    mocks.setPostAs.mockResolvedValue({ ok: true, value: { authorizeUrl: AUTHORIZE } })
+    mocks.open.mockRejectedValue(new Error('no default browser'))
+    Object.assign(window, { api: { shell: { openUrl: mocks.open } } })
+    render(<BotSlackPostAs bot={pairedBot} slack={slack} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+    await waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Approve in Slack' })).toHaveProperty(
+        'disabled',
+        false
+      )
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+    await waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(2))
   })
 })

@@ -14,6 +14,8 @@ import { cn } from '@/lib/class-names'
 import { BotHowToAsk } from '../BotHowToAsk'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import type { SlackHandOffOffer } from './use-slack-hand-off-offer'
+import { useSlackTeamName } from './SlackWorkspacesSettings'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 
 /** This desktop's own Orca account, offered for the one workspace whose token lapsed on the host. */
 export type SlackReconnectOffer = { email: string; teamId: string }
@@ -72,6 +74,9 @@ export function SlackReconnectStep({
   const t = useTranslate()
   // A refused paste comes back here with its error: the field stays in view.
   const [pasting, setPasting] = useState(error !== null)
+  // The workspace Use it puts the app in, by name, as this desktop's own bots there read it.
+  const offerTeam = offer?.teamId ?? ''
+  const workspace = useSlackTeamName(LOCAL_EXECUTION_HOST_ID, offerTeam)
   const why =
     mine && ownEmail
       ? t(
@@ -104,11 +109,18 @@ export function SlackReconnectStep({
           label={t('bots.slack.reconnect.about', 'About Slack tokens')}
           why={[
             why,
-            t(
-              'bots.slack.reconnect.useDetail',
-              'Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.',
-              { email: offer.email, host: hostName }
-            )
+            // Its id until the name is known: then the line without it.
+            workspace && workspace !== offerTeam
+              ? t(
+                  'bots.slack.reconnect.useDetailIn',
+                  'Use it sets up this bot’s Slack app in {{workspace}} with {{email}}’s token. {{host}} only gets this bot’s app.',
+                  { workspace, email: offer.email, host: hostName }
+                )
+              : t(
+                  'bots.slack.reconnect.useDetail',
+                  'Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.',
+                  { email: offer.email, host: hostName }
+                )
           ]}
         >
           <Trans

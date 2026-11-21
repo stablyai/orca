@@ -1,20 +1,30 @@
 // Slack's pages for a bot on any computer open in this computer's browser, for the person here.
 // The config-token page has no return, and Slack's approval returns to Orca Cloud, never to the
 // bot's computer, so neither needs the host's network. One Slack login then makes the token and
-// approves the app. No bot is passed: a server's page would open in one of its bots' workspaces.
+// approves the app. Never a server's Orca browser, which opens in one of its bots' workspaces.
 import { toast } from 'sonner'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
-import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-routing'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { translate } from '@/i18n/i18n'
 import { botSlackErrorMessage } from './bot-slack-copy'
 
 const SLACK_APPS_URL = 'https://api.slack.com/apps'
+const SLACK_ORIGIN = 'https://slack.com'
+const SLACK_AUTHORIZE_PATH = /^\/oauth\/v2\/authorize(?:[?#]|$)/
 
 /** The setup flow's code for a refused approval link; botSlackErrorMessage says it. */
 export const NOT_SLACK_LINK = 'not_slack_link'
 
-/** Slack's own approval page: the only link a host's answer may open in this computer's browser. */
+/**
+ * Slack's own approval page: the only link a host's answer may open or copy here. Checked as
+ * written, not only as parsed, so a link copied as-is is the one that was checked. Hosts are
+ * case-insensitive; everything else must be spelled exactly.
+ */
 export function isSlackAuthorizeUrl(url: string): boolean {
+  if (
+    url.slice(0, SLACK_ORIGIN.length).toLowerCase() !== SLACK_ORIGIN ||
+    !SLACK_AUTHORIZE_PATH.test(url.slice(SLACK_ORIGIN.length))
+  ) {
+    return false
+  }
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -31,16 +41,29 @@ export function isSlackAuthorizeUrl(url: string): boolean {
   )
 }
 
+/** True once this computer's browser took the page; says so when it didn't. */
+async function openHere(url: string): Promise<boolean> {
+  try {
+    await window.api.shell.openUrl(url)
+    return true
+  } catch {
+    toast.error(
+      translate('bots.slack.setup.browserFailed', 'Orca couldn’t open your browser. Try again.')
+    )
+    return false
+  }
+}
+
 /** Where Slack lists "Your App Configuration Tokens". */
-export function openSlackAppsHere(): HttpLinkDestination | 'unrouted' {
-  return openBotHostPageOrSay(LOCAL_EXECUTION_HOST_ID, SLACK_APPS_URL, { local: 'system' })
+export function openSlackAppsHere(): Promise<boolean> {
+  return openHere(SLACK_APPS_URL)
 }
 
 /** Slack's approval page; anything else is refused with a toast (the setup flow refuses it first). */
-export function openSlackApprovalHere(url: string): HttpLinkDestination | 'unrouted' {
+export function openSlackApprovalHere(url: string): Promise<boolean> {
   if (!isSlackAuthorizeUrl(url)) {
     toast.error(botSlackErrorMessage(NOT_SLACK_LINK, null))
-    return 'unrouted'
+    return Promise.resolve(false)
   }
-  return openBotHostPageOrSay(LOCAL_EXECUTION_HOST_ID, url, { local: 'system' })
+  return openHere(url)
 }

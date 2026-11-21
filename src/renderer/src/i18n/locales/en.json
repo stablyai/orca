@@ -27186,7 +27186,8 @@
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "browserFailed": "Orca couldn’t open your browser. Try again."
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -27274,6 +27275,7 @@
         "submit": "Reconnect",
         "about": "About Slack tokens",
         "useDetail": "Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.",
+        "useDetailIn": "Use it sets up this bot’s Slack app in {{workspace}} with {{email}}’s token. {{host}} only gets this bot’s app.",
         "hostExpiredMac": "<host>{{host}}</host>’s expired. This Mac’s works.",
         "hostExpired": "<host>{{host}}</host>’s expired. This computer’s works.",
         "pasteInstead": "Paste a token instead",

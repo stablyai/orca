@@ -71,7 +71,10 @@ const existing = (value: unknown): object => (typeof value === 'object' && value
 
 function stub(scene: Scene): void {
   publishBots(scene.mineInLabs ? [mine, mineInLabs] : [mine])
-  const teamNames: Record<string, string> = { T1: 'Acme', T2: 'Acme Labs' }
+  const teamNames: Record<string, string> = {
+    T1: scene.long ? 'Acme Platform Engineering and Developer Experience' : 'Acme',
+    T2: 'Acme Labs'
+  }
   Reflect.set(window.api, 'runtime', {
     ...existing(window.api.runtime),
     call: async ({ method, params }: { method: string; params?: { botId?: string } }) => {

@@ -2,6 +2,7 @@
 // One run of "Add <bot> to Slack": its steps from the cloud's state, Slack's install page, and the
 // token form; the dialog draws them.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import { useBots } from '@/lib/bot-catalog'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import { refreshBotSlack, slackReturnUrl, slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
@@ -10,11 +11,12 @@ import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-sl
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { isSlackAuthorizeUrl, NOT_SLACK_LINK, openSlackApprovalHere } from './slack-page-here'
+import { openBotHostPageOrSay } from '@/lib/bot-host-page'
+import { shownSlackSetupStep } from './slack-setup-shown-step'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { hostBots, knownSlackTeam, otherSlackTeams } from './slack-setup-teams'
 import {
   slackInstallLink as installLink,
-  slackInstallState,
   useSlackLinkExpired,
   type SlackInstallLink
 } from './slack-install-link'
@@ -129,7 +131,10 @@ export function useBotSlackSetup(
       if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
         // Remembered at once: stepping aside mounts the flow anew, which must not open Slack again.
         remember(teamId, link)
-        if (openSlackApprovalHere(link.authorizeUrl) === 'orca-browser') {
+        if (
+          openBotHostPageOrSay(bot.hostId, link.authorizeUrl, { bot, local: 'system' }) ===
+          'orca-browser'
+        ) {
           onStepAside?.()
         }
       }
@@ -264,11 +269,18 @@ export function useBotSlackSetup(
       const grant = await botSlackCalls(mine ? LOCAL_EXECUTION_HOST_ID : bot.hostId).saveGrant({
         refreshToken
       })
-      if (!grant.ok) {
+      // A reconnect is for its one workspace: a token for another is kept there, and goes no further.
+      const otherTeam = grant.ok && step.teamId !== undefined && grant.value.teamId !== step.teamId
+      if (!grant.ok || otherTeam) {
         setStep({
           kind: 'token',
           reconnect,
-          error: botSlackErrorMessage(grant.error, mine ? null : hostName),
+          error: grant.ok
+            ? translate(
+                'bots.slack.workspaces.otherTeam',
+                'That token is for another workspace. Orca keeps it for that workspace.'
+              )
+            : botSlackErrorMessage(grant.error, mine ? null : hostName),
           ...(step.teamId ? { teamId: step.teamId } : {}),
           ...(mine ? { mine } : {})
         })
@@ -287,15 +299,14 @@ export function useBotSlackSetup(
     if (!link) {
       return
     }
-    const opened = openSlackApprovalHere(link.authorizeUrl)
-    if (opened === 'unrouted') {
-      return
-    }
-    wait(step.teamId, link, false)
-    if (opened === 'orca-browser') {
-      onStepAside?.()
-    }
-  }, [step, wait, onStepAside])
+    const { teamId: approving } = step
+    // Waits only once this computer's browser took Slack's page; a failed launch stays here.
+    void openSlackApprovalHere(link.authorizeUrl).then((opened) => {
+      if (opened) {
+        wait(approving, link, false)
+      }
+    })
+  }, [step, wait])
 
   const copyLink = useCallback(async () => {
     if ((step.kind !== 'ready' && step.kind !== 'waiting') || !step.link) {
@@ -315,22 +326,7 @@ export function useBotSlackSetup(
     step.kind === 'waiting' && view.status === 'ready'
       ? slackTeamState(view.slack, step.teamId)
       : null
-  // Still behind, on required or optional permissions: the approval this flow waits for isn't in.
-  const installed = waited?.state === 'installed' && !waited.updateNeeded && !waited.updateAvailable
-  const otherUser = waited?.state === 'created' && waited.oauthFailure === 'other_user'
-  const shown: BotSlackSetupStep = (() => {
-    if (step.kind !== 'waiting' && step.kind !== 'ready') {
-      return step
-    }
-    if (installed) {
-      const setupState = step.link ? slackInstallState(step.link.authorizeUrl) : null
-      return { kind: 'installed', teamId: step.teamId, ...(setupState ? { setupState } : {}) }
-    }
-    if (otherUser) {
-      return { kind: 'other-user', teamId: step.teamId }
-    }
-    return expired ? { kind: 'expired', teamId: step.teamId } : step
-  })()
+  const shown = shownSlackSetupStep(step, waited, expired)
 
   // Once per open: a bot re-read while setup runs (each refresh does) is a new object and a new
   // `start`, and running it again would open Slack again while the update still waits.

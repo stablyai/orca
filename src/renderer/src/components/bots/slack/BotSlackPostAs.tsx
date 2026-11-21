@@ -106,7 +106,8 @@ export function BotSlackPostAs({
       return
     }
     if (result.value && 'authorizeUrl' in result.value) {
-      openSlackApprovalHere(result.value.authorizeUrl)
+      // A failed launch says so; Approve in Slack stays, to try again.
+      await openSlackApprovalHere(result.value.authorizeUrl)
     }
     await refreshBotSlack(bot)
   }

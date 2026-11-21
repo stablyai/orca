@@ -1,19 +1,17 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 
-const opened = vi.hoisted((): { result: string; calls: unknown[][] } => ({
-  result: 'system',
-  calls: []
-}))
-vi.mock('@/lib/bot-host-page', () => ({
-  openBotHostPageOrSay: (...args: unknown[]) => {
-    opened.calls.push(args)
-    return opened.result
+// This computer's browser: whether it takes the page, and every page it was given.
+const opened: { fails: boolean; urls: string[] } = { fails: false, urls: [] }
+const openUrl = async (url: string): Promise<void> => {
+  opened.urls.push(url)
+  if (opened.fails) {
+    throw new Error('no default browser')
   }
-}))
+}
 
 // Made-up values with only the prefixes Slack gives its two tokens.
 const REFRESH = 'xoxe-refresh-example'
@@ -22,7 +20,7 @@ const ACCESS = 'xoxe.xoxp-access-example'
 function shown(clipboard: string) {
   const onSubmit = vi.fn()
   const readClipboardText = vi.fn(async () => clipboard)
-  vi.stubGlobal('api', { ui: { readClipboardText } })
+  vi.stubGlobal('api', { ui: { readClipboardText }, shell: { openUrl } })
   render(
     <SlackConfigTokenForm
       submitLabel="Create Slack app"
@@ -34,18 +32,24 @@ function shown(clipboard: string) {
   return { onSubmit, readClipboardText }
 }
 
+/** Clicks Get config token and lets the browser's answer land. */
+async function getConfigToken(): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
+  await act(async () => {})
+}
+
 afterEach(() => {
-  opened.result = 'system'
-  opened.calls = []
+  opened.fails = false
+  opened.urls = []
   cleanup()
   vi.unstubAllGlobals()
 })
 
 describe('SlackConfigTokenForm', () => {
-  it("opens Slack's page in this computer's browser, with no bot whose workspace could host it", () => {
+  it("opens Slack's page in this computer's browser", async () => {
     shown('')
-    fireEvent.click(screen.getByRole('button', { name: 'Get config token' }))
-    expect(opened.calls).toEqual([['local', 'https://api.slack.com/apps', { local: 'system' }]])
+    await getConfigToken()
+    expect(opened.urls).toEqual(['https://api.slack.com/apps'])
   })
 
   it('fills the field with the token copied in Slack when the window comes back, and sends only on submit', async () => {
@@ -53,7 +57,7 @@ describe('SlackConfigTokenForm', () => {
     // Nothing is read until Slack's page was opened from here.
     fireEvent.focus(window)
     expect(readClipboardText).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
+    await getConfigToken()
     fireEvent.focus(window)
     const field = screen.getByLabelText<HTMLInputElement>('Configuration refresh token')
     await waitFor(() => expect(field.value).toBe(REFRESH))
@@ -66,13 +70,12 @@ describe('SlackConfigTokenForm', () => {
 
   it('reads the clipboard once per opening, and not at all when Slack’s page did not open', async () => {
     const { onSubmit, readClipboardText } = shown('just some notes')
-    const open = screen.getByRole('button', { name: /Get config token/ })
-    fireEvent.click(open)
+    await getConfigToken()
     fireEvent.focus(window)
     fireEvent.focus(window)
     await waitFor(() => expect(readClipboardText).toHaveBeenCalledTimes(1))
-    opened.result = 'unrouted'
-    fireEvent.click(open)
+    opened.fails = true
+    await getConfigToken()
     fireEvent.focus(window)
     expect(readClipboardText).toHaveBeenCalledTimes(1)
     expect(onSubmit).not.toHaveBeenCalled()
@@ -82,8 +85,9 @@ describe('SlackConfigTokenForm', () => {
     let resolve: (text: string) => void = () => {}
     const { onSubmit, readClipboardText } = shown('')
     readClipboardText.mockReturnValue(new Promise<string>((done) => (resolve = done)))
-    fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
+    await getConfigToken()
     fireEvent.focus(window)
+    expect(readClipboardText).toHaveBeenCalledTimes(1)
     fireEvent.paste(screen.getByLabelText('Configuration refresh token'), {
       clipboardData: { getData: () => REFRESH }
     })
@@ -97,8 +101,9 @@ describe('SlackConfigTokenForm', () => {
     let resolve: (text: string) => void = () => {}
     const { onSubmit, readClipboardText } = shown('')
     readClipboardText.mockReturnValue(new Promise<string>((done) => (resolve = done)))
-    fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
+    await getConfigToken()
     fireEvent.focus(window)
+    expect(readClipboardText).toHaveBeenCalledTimes(1)
     cleanup()
     resolve(REFRESH)
     await Promise.resolve()

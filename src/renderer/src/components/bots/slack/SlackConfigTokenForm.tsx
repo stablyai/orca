@@ -83,7 +83,10 @@ export function SlackConfigTokenForm({
   }
 
   const openSlack = (): void => {
-    awaitingCopy.current = openSlackAppsHere() !== 'unrouted'
+    // The copied token is looked for only once this computer's browser took Slack's page.
+    void openSlackAppsHere().then((opened) => {
+      awaitingCopy.current = opened
+    })
   }
 
   useEffect(

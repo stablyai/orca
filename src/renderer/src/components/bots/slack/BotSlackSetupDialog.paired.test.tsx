@@ -114,6 +114,8 @@ const host = (): Record<string, Fake> => ({
 })
 const redeem = vi.fn()
 const writeClipboardText = vi.fn()
+// This computer's browser, where Slack's pages open for a bot on any computer.
+const openUrl = vi.fn()
 
 function serverState(state: ConnectorBotSlackState): void {
   mocks.hosts[SERVER].state.mockResolvedValue(ok(state))
@@ -153,7 +155,10 @@ beforeEach(() => {
   mocks.open.mockReset().mockReturnValue('orca-browser')
   redeem.mockReset()
   writeClipboardText.mockReset().mockResolvedValue(undefined)
-  Object.assign(window, { api: { slackHandOff: { redeem }, ui: { writeClipboardText } } })
+  openUrl.mockReset().mockResolvedValue(undefined)
+  Object.assign(window, {
+    api: { slackHandOff: { redeem }, ui: { writeClipboardText }, shell: { openUrl } }
+  })
   useAppStore.setState({
     orcaProfileAuthStatus: {
       ...ORCA_CONNECTED,
@@ -238,11 +243,10 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(screen.queryByRole('button', { name: /^Use it/ })).toBeNull()
     expect(screen.queryByText(/already has a token for/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Open Slack app settings' }))
-    // No `bot`: a server's page would otherwise open in one of its bots' workspaces.
-    expect(mocks.open).toHaveBeenCalledTimes(1)
-    expect(mocks.open).toHaveBeenCalledWith('local', 'https://api.slack.com/apps', {
-      local: 'system'
-    })
+    // This computer's browser, never the server's, whose page opens in one of its bots' workspaces.
+    await waitFor(() => expect(openUrl).toHaveBeenCalledWith('https://api.slack.com/apps'))
+    expect(openUrl).toHaveBeenCalledTimes(1)
+    expect(mocks.open).not.toHaveBeenCalled()
 
     fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
       target: { value: 'xoxe-1-new' }
@@ -259,13 +263,13 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     mocks.hosts[SERVER].setUpApp.mockResolvedValue(
       ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
     )
-    mocks.open.mockReturnValue('system-browser')
     openDialog()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
-    expect(mocks.open).toHaveBeenCalledTimes(1)
-    expect(mocks.open).toHaveBeenCalledWith('local', AUTHORIZE, { local: 'system' })
     expect(await screen.findByText('Waiting for Slack…')).toBeTruthy()
+    expect(openUrl).toHaveBeenCalledTimes(1)
+    expect(openUrl).toHaveBeenCalledWith(AUTHORIZE)
+    expect(mocks.open).not.toHaveBeenCalled()
 
     // Approved in this computer's browser: the server's cloud state is what the wait reads.
     serverState({
@@ -299,7 +303,70 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
     expect(mocks.open).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
     expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('stays on Approve in Slack when this computer’s browser could not be opened', async () => {
+    mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
+    serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].setUpApp.mockResolvedValue(
+      ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+    )
+    openUrl.mockRejectedValue(new Error('no default browser'))
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+    await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+    // Not waiting on a page that never opened: Approve again, or Copy link, are still here.
+    expect(screen.queryByText('Waiting for Slack…')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Approve in Slack' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
+  })
+
+  it('keeps a reconnect to its workspace when the pasted token is for another one', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hostEmail = 'me@example.test'
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue(ok({ teamId: 'T2' }))
+    openDialog()
+
+    fireEvent.change(await screen.findByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-1-other' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    expect(
+      await screen.findByText(
+        'That token is for another workspace. Orca keeps it for that workspace.'
+      )
+    ).toBeTruthy()
+    expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-other' })
+    expect(mocks.hosts[SERVER].setUpApp).not.toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: 'T2' })
+    )
+  })
+
+  it('keeps this desktop’s own reconnect to its workspace when the pasted token is for another', async () => {
+    serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].handOff.mockResolvedValue(ok({ code: 'one-time', expiresAt: 1 }))
+    // This desktop's own token lapsed too: its reconnect is for T1, the hand-off's workspace.
+    redeem.mockResolvedValue({ ok: false, error: 'grant_expired' })
+    mocks.hosts.local.saveGrant.mockResolvedValue(ok({ teamId: 'T2' }))
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use it →' }))
+    fireEvent.change(await screen.findByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-1-other' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    expect(
+      await screen.findByText(
+        'That token is for another workspace. Orca keeps it for that workspace.'
+      )
+    ).toBeTruthy()
+    expect(mocks.hosts.local.saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-other' })
+    expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledTimes(1)
+    expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
   })
 
   it("reconnects a server's workspace from Settings with Slack's page in this computer's browser", async () => {
@@ -318,9 +385,8 @@ describe('BotSlackSetupDialog on a paired computer', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Reconnect' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Get config token' }))
-    expect(mocks.open).toHaveBeenCalledWith('local', 'https://api.slack.com/apps', {
-      local: 'system'
-    })
+    await waitFor(() => expect(openUrl).toHaveBeenCalledWith('https://api.slack.com/apps'))
+    expect(mocks.open).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
       target: { value: 'xoxe-1-new' }
     })
@@ -339,6 +405,16 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     const use = await screen.findByRole('button', { name: 'Use it' })
     // A credential hand-off: never focused on open, so Enter can't spend this account's token unseen.
     expect(document.activeElement).not.toBe(use)
+    // Whose token, and into which workspace, before anything is spent.
+    fireEvent.focusIn(screen.getByRole('button', { name: 'About Slack tokens' }))
+    expect(
+      (
+        await screen.findAllByText(
+          'Use it sets up this bot’s Slack app in Acme with me@example.test’s token. m4 only gets this bot’s app.',
+          { exact: false }
+        )
+      ).length
+    ).toBeGreaterThan(0)
     expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
     // Open, the paste form's Cancel · Reconnect is the only footer: Use it steps aside.
     fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
