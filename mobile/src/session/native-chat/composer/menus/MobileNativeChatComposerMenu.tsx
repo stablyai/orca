@@ -2,8 +2,9 @@ import { MobileNativeChatComposerMenuReservation } from '../field/MobileNativeCh
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { AtSign, FileText, Package, Terminal } from 'lucide-react-native'
+import { AtSign, FileText, Folder, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import { isFolderPath } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -85,7 +86,9 @@ function MenuRow({
         ? Terminal
         : row.kind === 'member'
           ? AtSign
-          : FileText
+          : isFolderPath(row.path)
+            ? Folder
+            : FileText
   const description = row.kind === 'file' || row.kind === 'member' ? null : row.description
   const label = row.kind === 'file' ? row.path : row.kind === 'member' ? row.name : row.token
   return (

@@ -161,7 +161,7 @@ function scoreQuickOpenTerms(
   for (const { text: term, withoutSeparators } of terms) {
     let termScore = fuzzyMatchIndexedFile(term, file)
     if (termScore === null && withoutSeparators !== undefined) {
-      const filenameStart = file.lowerPath.lastIndexOf('/') + 1
+      const filenameStart = file.lowerPath.lastIndexOf('/', file.lowerPath.length - 2) + 1
       const parentStart = file.lowerPath.lastIndexOf('/', filenameStart - 2) + 1
       const fallback =
         fuzzyMatchIndexedFile(term, file, withoutSeparators) ??
@@ -187,10 +187,12 @@ function scoreQuickOpenTerms(
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
   const searchPath = composeQuickOpenText(path.replace(/\\/g, '/'))
   const lowerPath = composeQuickOpenText(searchPath.toLowerCase())
+  // A folder ends in `/`; its name is the segment before it.
+  const nameEnd = lowerPath.endsWith('/') ? lowerPath.length - 1 : lowerPath.length
   const file = {
     path,
     lowerPath,
-    lowerFilename: lowerPath.slice(lowerPath.lastIndexOf('/') + 1),
+    lowerFilename: lowerPath.slice(lowerPath.lastIndexOf('/', nameEnd - 1) + 1, nameEnd),
     inputIndex
   }
   if (/[A-Z]/.test(searchPath)) {
