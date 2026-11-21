@@ -18,6 +18,7 @@ export const ORCAD_SERVER_BUILD_TARGET = 'node24'
 // Host entry points must load before Orca selects its bundled runtime.
 const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
+  agentImageFit: 'src/main/native-chat/agent-images/agent-image-fit-worker-entry.ts',
   environmentStore:
     'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts',
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
