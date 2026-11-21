@@ -210,8 +210,8 @@ export function DeleteWorktreeChangesSummary({
         {text}
       </span>
       {note ? (
-        // The note gives way first so a narrow line keeps the loss sentence.
-        <span ref={noteRef} className="min-w-0 shrink-[1000] truncate text-muted-foreground">
+        // A zero flex basis gives the note only leftover room, so the main sentence stays whole.
+        <span ref={noteRef} className="min-w-0 flex-1 truncate text-muted-foreground">
           · {note}
         </span>
       ) : null}
