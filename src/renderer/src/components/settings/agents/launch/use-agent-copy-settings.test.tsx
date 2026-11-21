@@ -108,4 +108,22 @@ describe('agent copy writes', () => {
     })
     expect(saved()).toEqual([])
   })
+
+  it('sends edits to a duplicate that took a vacated id to the duplicate', async () => {
+    const { result, saved } = setup([])
+    const claude = { id: 'claude' as const, label: 'Claude' }
+    await act(async () => {
+      result.current.duplicate(claude)
+      await vi.waitFor(() => expect(saved()).toHaveLength(1))
+    })
+    const first = saved()[0]!.id
+    await act(() => result.current.changeId(first, 'claude.b'))
+    await act(async () => {
+      result.current.duplicate(claude)
+      await vi.waitFor(() => expect(saved()).toHaveLength(2))
+    })
+    expect(saved()[1]!.id).toBe(first)
+    await act(() => result.current.remove(first))
+    expect(saved().map((copy) => copy.id)).toEqual(['claude.b'])
+  })
 })

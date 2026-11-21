@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
+import { readBotHostListed } from '@/lib/bot-catalog-snapshot'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { Input } from '../../../ui/input'
 import {
   agentCopyBase,
@@ -26,20 +28,27 @@ export function AgentCopyIdentityFields({
   const boundBots = useBots()
     .filter((bot) => bot.agentCopy === copy.id)
     .map((bot) => bot.name)
+  // Until this computer's bot list has been read, an empty list proves nothing.
+  const botsListed = readBotHostListed(LOCAL_EXECUTION_HOST_ID)
   const idProblem =
-    id !== copy.id && boundBots.length > 0
-      ? t('settings.agents.copyIdInUse', 'Used by {{bots}}. Change what they run as first.', {
-          bots: boundBots.join(', ')
-        })
-      : agentCopyBase(id) !== copy.agent || !id.startsWith(`${copy.agent}.`)
-        ? t(
-            'settings.agents.copyIdInvalid',
-            'Use {{agent}}. followed by lowercase letters, digits and dashes.',
-            { agent: copy.agent }
-          )
-        : taken.includes(id)
-          ? t('settings.agents.copyIdTaken', 'Another copy has this ID.')
-          : null
+    id !== copy.id && !botsListed
+      ? t(
+          'settings.agents.copyIdBotsUnknown',
+          "Orca hasn't read this computer's bots yet, so the ID can't change until it has."
+        )
+      : id !== copy.id && boundBots.length > 0
+        ? t('settings.agents.copyIdInUse', 'Used by {{bots}}. Change what they run as first.', {
+            bots: boundBots.join(', ')
+          })
+        : agentCopyBase(id) !== copy.agent || !id.startsWith(`${copy.agent}.`)
+          ? t(
+              'settings.agents.copyIdInvalid',
+              'Use {{agent}}. followed by lowercase letters, digits and dashes.',
+              { agent: copy.agent }
+            )
+          : taken.includes(id)
+            ? t('settings.agents.copyIdTaken', 'Another copy has this ID.')
+            : null
   const commitName = (): void => {
     const trimmed = name.trim()
     if (!trimmed) {

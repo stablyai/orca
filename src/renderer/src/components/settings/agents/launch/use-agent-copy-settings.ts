@@ -126,6 +126,8 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
       })
       const source = from ? applyAgentCopy(settings, from) : settings
       made = createAgentCopy(agent.id, name, { ...source, agentCopies: copies })
+      // The new copy may take an id an earlier rename vacated; that rename no longer forwards it.
+      renamed.current.delete(made.id)
       // Set before the save lands, so the new card arrives open.
       setCreated(made.id)
       return [...copies, made]
