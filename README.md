@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <strong>The open-source agent IDE — now with bots inside.</strong><br/>
-  Most bots end in a chat thread. An Orca bot hands you the worktree.
+  <strong>Bots inside your agent IDE.</strong><br/>
+  Open source. Bring your own everything: your Claude Code or Codex, your local or remote machines, your tools. Ask from Slack or your phone. When it needs you, it's one tab away.
 </p>
 
 <h3 align="center"><a href="https://orca.dev/download"><ins>Download Orca</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Explore bots →</ins></a></h3>
@@ -34,7 +34,7 @@
 
 ### Orca Bots
 
-Ask a bot in Slack, Linear, or GitHub to fix a bug, then come back to a tested pull request. Bots run on your own Claude Code or Codex, and any bot's work opens in Orca to review or jump in.
+Ask a bot in Slack, Linear, or GitHub to fix a bug, and come back to a tested pull request. It runs on your own Claude Code or Codex. Open its work in Orca to review it or step in.
 
 [Overview](https://orca.dev/bots) · [Security](https://orca.dev/docs/bots/security) · [Docs →](https://orca.dev/docs/bots)
 
@@ -215,8 +215,8 @@ Put agents, terminals, browsers, and diffs side by side in split panes shaped to
 
 **Also in the box:**
 
-- **[Bot Schedules &amp; Triggers](https://orca.dev/docs/bots#put-it-on-a-schedule)**: ask a bot to run every weekday at 9, or when a pull request opens, a check fails, or a webhook fires.
-- **[Bot Memory in Markdown](https://orca.dev/docs/bots/security#what-you-can-review)**: each bot's soul and memory are plain `SOUL.md` and `MEMORY.md` files you can read and edit.
+- **[Bot Schedules &amp; Triggers](https://orca.dev/docs/bots#put-it-on-a-schedule)**: run a bot every weekday at 9, or when a pull request opens, a check fails, or a webhook fires.
+- **[Bot Memory in Markdown](https://orca.dev/docs/bots/security#what-you-can-review)**: a bot's soul and memory are plain Markdown files (`SOUL.md`, `MEMORY.md`) you can read and edit.
 - **[Drag Files to Agents](https://orca.dev/docs/editing/file-explorer)**: drag files from the explorer, or images from your desktop, straight into an agent's prompt.
 - **[Jump Anywhere](https://orca.dev/docs/model/quick-open)**: one shortcut jumps to any workspace or tab across every repo and host.
 - **[Rich Previews](https://orca.dev/docs/editing/viewers)**: open images, PDFs, and Markdown right in the workspace, next to the agent that made them.
