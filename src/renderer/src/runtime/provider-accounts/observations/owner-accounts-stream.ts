@@ -16,13 +16,22 @@ export type OwnerAccountsState = {
   failure: OwnerAccountsFailure | null
 }
 
-type Stream = { state: OwnerAccountsState | null; listeners: Set<() => void>; close: () => void }
+/** A host's environment id, or null for this device's own live accounts and usage. */
+export type OwnerAccountsKey = string | null
+
+type Stream = {
+  state: OwnerAccountsState | null
+  revision: number
+  listeners: Set<() => void>
+  close: () => void
+}
 
 // One accounts stream per host, shared by every reader while any is mounted; no cache after that.
-const streams = new Map<string, Stream>()
+const streams = new Map<OwnerAccountsKey, Stream>()
 
 function publish(stream: Stream, state: OwnerAccountsState): void {
   stream.state = state
+  stream.revision += 1
   stream.listeners.forEach((listener) => listener())
 }
 
@@ -31,7 +40,7 @@ function snapshotState(snapshot: ProviderAccountsSnapshot): OwnerAccountsState {
   return { snapshot, failure: snapshot.rateLimits ? null : 'usage-not-published' }
 }
 
-function connect(environmentId: string, stream: Stream): void {
+function connect(environmentId: OwnerAccountsKey, stream: Stream): void {
   let closed = false
   const timers: ReturnType<typeof setTimeout>[] = []
   // Each open makes the host refresh stale usage.
@@ -50,7 +59,7 @@ function connect(environmentId: string, stream: Stream): void {
   }
   timers.push(setTimeout(reopen, STALE_REOPEN_MS))
   const watcher = watchProviderAccounts(
-    { kind: 'environment', environmentId },
+    environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
     {
       onSnapshot: (snapshot) => {
         if (!closed) {
@@ -60,7 +69,8 @@ function connect(environmentId: string, stream: Stream): void {
       // Why: timeout, closed stream and RPC failure all mean the owner's usage is unverifiable.
       onError: lost,
       onClosedAfterSnapshot: lost
-    }
+    },
+    { liveLocalUsage: true }
   )
   const stop = (): void => {
     closed = true
@@ -70,10 +80,13 @@ function connect(environmentId: string, stream: Stream): void {
   stream.close = stop
 }
 
-export function subscribeOwnerAccounts(environmentId: string, listener: () => void): () => void {
+export function subscribeOwnerAccounts(
+  environmentId: OwnerAccountsKey,
+  listener: () => void
+): () => void {
   let stream = streams.get(environmentId)
   if (!stream) {
-    stream = { state: null, listeners: new Set(), close: () => {} }
+    stream = { state: null, revision: 0, listeners: new Set(), close: () => {} }
     streams.set(environmentId, stream)
     connect(environmentId, stream)
   }
@@ -88,17 +101,23 @@ export function subscribeOwnerAccounts(environmentId: string, listener: () => vo
   }
 }
 
-export function readOwnerAccounts(environmentId: string): OwnerAccountsState | null {
+export function readOwnerAccounts(environmentId: OwnerAccountsKey): OwnerAccountsState | null {
   return streams.get(environmentId)?.state ?? null
 }
 
-/** A direct read of the host (forced refresh) lands where every reader sees it. */
+/** Changes with every publish, so a slow direct read can tell that newer state arrived. */
+export function readOwnerAccountsRevision(environmentId: OwnerAccountsKey): number | null {
+  return streams.get(environmentId)?.revision ?? null
+}
+
+/** A direct read of the host (forced refresh) lands where every reader sees it, unless the stream moved on. */
 export function applyOwnerAccountsSnapshot(
-  environmentId: string,
-  snapshot: ProviderAccountsSnapshot
+  environmentId: OwnerAccountsKey,
+  snapshot: ProviderAccountsSnapshot,
+  readAtRevision?: number | null
 ): void {
   const stream = streams.get(environmentId)
-  if (stream) {
+  if (stream && (readAtRevision === undefined || stream.revision === readAtRevision)) {
     publish(stream, snapshotState(snapshot))
   }
 }

@@ -138,6 +138,7 @@ function ownerUsage(): OwnerUsageRateLimits & { accounts: ProviderAccountsSnapsh
     owner: { target: mocks.owner, wslHostDistro: null },
     rateLimits,
     accounts: { claude: { accounts: [], activeAccountId: null }, codex: accounts, rateLimits },
+    accountsUnverifiable: false,
     remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
     refreshRemote: null
   }
