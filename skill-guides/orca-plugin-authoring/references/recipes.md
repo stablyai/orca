@@ -36,6 +36,10 @@ plugin is `trusted-worker`. `ORCA plugin create <dir> --template worker-panel` s
   in Orca's Settings: `{ key, title, type: 'string'|'number'|'integer'|'boolean', default, enum,
   minimum, maximum, multiline, ... }`. `settings.get(key)` reads the user's value or the default.
 
+## Handling inputs in an HTML panel
+
+HTML plugin panels run in a sandbox that blocks form submission. Use a `type="button"` control and handle its `click` in the panel, then pass the validated values through the existing Orca bridge. For keyboard submission, handle Enter on the relevant inputs and call the same function. Read or validate the fields in that function because the browser's form-submit validation and `submit` event do not run.
+
 ## Live agent status in a panel
 
 `sandboxed-ui` is enough; capabilities `agent:read` and `workspace:read`. Panels hear workspace and
