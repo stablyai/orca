@@ -87,6 +87,19 @@ describe('ACP standing instructions on the session', () => {
     expect(refuses.sent('session/new')).toEqual([])
   })
 
+  it('opens a session without optional ones the agent does not take', async () => {
+    const rig = await openAcpAdapterRig({
+      launch: {
+        sessionMeta: APPEND,
+        takesSessionMeta: antigravityTakesSystemPrompt,
+        sessionMetaOptional: true
+      }
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toBeUndefined()
+    expect(rig.sent('session/new')[0]?.params).not.toHaveProperty('_meta')
+  })
+
   it('keeps folder instructions in place only while a new session opens, never for a reopen', async () => {
     const events: string[] = []
     let sentNew = (): number => 0

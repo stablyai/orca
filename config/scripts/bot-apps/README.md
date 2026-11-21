@@ -1,6 +1,6 @@
 # Bot app check
 
-`BOT_MCP_APPS` in `src/shared/bots/bot-mcp-apps.ts` is the list of vendor MCP servers that a bot's **Add to** menu offers. The weekly `Bot App Check` workflow probes each one live so a server that stops working the way we list it gets noticed before users hit it.
+`BOT_MCP_APPS` in `src/shared/bots/bot-mcp-apps.ts` is the list of vendor MCP servers that a bot's **Add to** menu offers. The weekly `Bot App Check` workflow probes each one live (an app with a URL `variable` at each of its `choices`, or at its default host) so a server that stops working the way we list it gets noticed before users hit it.
 
 ```sh
 node config/scripts/bot-apps/bot-app-catalog-smoke.mjs [report.json]

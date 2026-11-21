@@ -55,6 +55,8 @@ export type SessionOptionDescriptor = {
   disabledReason?: SessionOptionDisabledReason
   /** Active value when a saved selection intentionally waits for a later input. */
   activeValue?: string
+  /** Model-pill display only: a provider fallback runs in place of currentValue, which stays the selection. */
+  fallbackModel?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }

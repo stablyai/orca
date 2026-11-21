@@ -5,7 +5,12 @@ import type {
   AgentJournalThreadGoal
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import {
+  claudeRecord,
+  claudeText,
+  type ClaudeMessageEnvelope
+} from './claude-structured-item-translation'
+import { sliceAtCodeUnitLimit } from '../../../../shared/text/surrogate-safe-text-slice'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
 
@@ -116,6 +121,27 @@ export class ClaudeThreadGoal {
     this.row = next ? { identity, text } : null
     this.modelWorked = false
     return goalRow(text, next)
+  }
+
+  goalCheckText(envelope: ClaudeMessageEnvelope): string | null {
+    const goal = this.current
+    const text = claudeText(claudeRecord(envelope.content[0])?.text)
+    if (!goal || goal.status !== 'active' || !text) {
+      return null
+    }
+    const shortened = sliceAtCodeUnitLimit(goal.objective, 500)
+    const labels = [goal.objective]
+    if (shortened.length < goal.objective.length) {
+      labels.push(`${shortened}… [+${goal.objective.length - shortened.length} chars]`)
+    }
+    const prefix = labels
+      .map((label) => `Stop hook feedback:\n[${label}]: `)
+      .find((value) => text.startsWith(value))
+    if (!prefix) {
+      return null
+    }
+    const reason = text.slice(prefix.length).trim()
+    return /\n\[[^\n]+\]: /u.test(reason) ? null : reason
   }
 
   observe(message: Record<string, unknown>): void {

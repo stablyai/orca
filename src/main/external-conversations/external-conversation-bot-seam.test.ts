@@ -19,6 +19,7 @@ import { chatPaneKey } from './external-conversation-chat'
 import type { LinkableChat } from './external-conversation-chat-delivery'
 import { findLink } from './external-conversation-links'
 import type { ExternalConversationHost } from './external-conversation-host'
+import type { AskerImages } from './connector-asker-images'
 import type { ConversationPlaceNamer } from './external-conversation-place'
 import { harness } from './external-conversation-seam.test-fixture'
 import type { ConversationKey } from './external-conversation-types'
@@ -32,10 +33,12 @@ function botSeam(
   chat: StructuredAgentSessionHost | null,
   refusal: ReturnType<ConversationBots['refusal']> = null,
   nameChannel?: ConversationPlaceNamer,
-  promptsAudience = false
+  promptsAudience = false,
+  askerImages?: AskerImages
 ) {
   const h = harness(undefined, undefined, {
     ...(nameChannel ? { nameChannel } : {}),
+    ...(askerImages ? { askerImages } : {}),
     promptsAudience: () => promptsAudience
   })
   h.folders.push({ id: 'bot-home' })
@@ -170,6 +173,41 @@ describe('a connector conversation in a bot’s home', () => {
       ...stored,
       source: 'slack'
     })
+  })
+
+  it('sends a request’s images with its words, and its words alone when none can be had', async () => {
+    const { host, dispatch } = hostTestState()
+    await attach()
+    const askerImages = vi
+      .fn<AskerImages>()
+      .mockResolvedValueOnce(['/attachments/shot.png'])
+      .mockRejectedValueOnce(new Error('cloud down'))
+    const h = botSeam(host, null, undefined, false, askerImages)
+    const asker = {
+      userId: 'U0SAM',
+      role: 'member' as const,
+      place: { kind: 'public_channel' as const, id: 'C9' },
+      text: 'what is wrong here?\n\n[image: shot.png, file F0SHOT]',
+      context: [],
+      messageRef: 'slack:T1:C9:1700000000.0001:1700000000.0001'
+    }
+    const target = { kind: 'bot' as const, botId: 'b1' }
+    await h.seam.start(h.host, THREAD, 'd1', { agent: 'codex', target, prompt: asker.text, asker })
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    expect(askerImages.mock.calls[0]?.[0]).toMatchObject({
+      botId: 'b1',
+      conversation: THREAD,
+      asker: { messageRef: asker.messageRef }
+    })
+    expect(dispatch.mock.calls[0]?.[0].body.blocks).toEqual([
+      { type: 'text', text: connectorAskerPrompt('slack', asker) },
+      { type: 'image-ref', path: '/attachments/shot.png' }
+    ])
+    await h.seam.send(h.host, THREAD, 'd2', { text: asker.text, asker })
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    expect(dispatch.mock.calls[1]?.[0].body.blocks).toEqual([
+      { type: 'text', text: connectorAskerPrompt('slack', asker) }
+    ])
   })
 
   it("keeps the thread's channel name on its link, looked up once", async () => {
@@ -455,7 +493,7 @@ describe('a connector conversation in a bot’s home', () => {
   it('refuses an agent no bot can be before opening anything', async () => {
     const h = botSeam(null)
 
-    await expect(start(h, 'd1', 'bot', 'gemini')).resolves.toMatchObject({
+    await expect(start(h, 'd1', 'bot', 'aider')).resolves.toMatchObject({
       initial: { outcome: 'refused', reason: 'unsupported_agent' }
     })
     expect(h.bots.open).not.toHaveBeenCalled()

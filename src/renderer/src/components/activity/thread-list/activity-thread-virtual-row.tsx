@@ -6,6 +6,7 @@ import { ActivityThreadContextMenu } from './activity-thread-context-menu'
 import { ActivityThreadRow } from './activity-thread-row'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
+import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 
 type ContextMenuProps = Parameters<typeof ActivityThreadContextMenu>[0]
 
@@ -26,7 +27,8 @@ export function ActivityThreadVirtualRow({
   canJumpToWorkspace,
   canMarkThreadUnread,
   compactMode,
-  showJumpAction
+  showJumpAction,
+  groupBy
 }: {
   item: ActivityVirtualItemDescriptor
   collapsed: boolean
@@ -45,6 +47,7 @@ export function ActivityThreadVirtualRow({
   canMarkThreadUnread: (thread: AgentPaneThread) => boolean
   compactMode: boolean
   showJumpAction: boolean
+  groupBy: ActivityGroupBy
 }): React.JSX.Element {
   const t = useTranslate()
   if (item.type === 'header') {
@@ -97,6 +100,7 @@ export function ActivityThreadVirtualRow({
             compactMode={compactMode}
             disableMarkUnread={!canMarkThreadUnread(item.thread)}
             showJumpAction={showJumpAction}
+            groupBy={groupBy}
             previewSuppressed={menuOpen}
           />
         </div>

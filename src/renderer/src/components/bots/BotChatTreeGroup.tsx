@@ -12,6 +12,7 @@ import { UsageLimitStopMark, usageLimitStopText } from './BotUsageLimitMark'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   CHAT_TREE_CAPS,
+  chatFoldCounts,
   chatFoldSummary,
   chatRunningCount,
   chatWaitingCount,
@@ -86,9 +87,9 @@ export function BotChatLine({
       </>
     )
   }
-  const summary = folded ? chatFoldSummary(chat) : null
-  if (summary) {
-    return <>{summary}</>
+  const counts = folded ? chatFoldCounts(chat) : null
+  if (counts) {
+    return <>{chatFoldSummary(t, counts)}</>
   }
   const closed = chat.closedAt
     ? t('bots.chats.closedOn', 'closed {{date}}', {

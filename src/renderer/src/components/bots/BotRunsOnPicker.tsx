@@ -1,4 +1,5 @@
-// "Runs on <host> with <agent>": the folded row in New bot and Import from another app.
+// Where a new bot runs: Computer and Agent side by side in New bot, or the folded "Runs on <host> with
+// <agent>" row in Import from another app.
 import React from 'react'
 import { Trans } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
@@ -21,6 +22,7 @@ import {
 } from './bot-create-hosts'
 import { BotComputerPicker } from './BotComputerPicker'
 import { botAgentLabel, botFolderDisplay } from './bot-presentation'
+import type { BotPermissionIntent } from './use-bot-agent-setup'
 import { nativeChatSessionChoiceShortLabel } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
 
@@ -51,6 +53,7 @@ export function BotRunsOnPicker({
   model,
   choices,
   onSetupChange,
+  keptPermission,
   onAddHost,
   name,
   variant = 'row'
@@ -63,12 +66,14 @@ export function BotRunsOnPicker({
   model: NewTabAgentMenuModel
   /** The agents that computer has. */
   choices: readonly BotAgent[]
-  onSetupChange: (setup: BotAgentSetup) => void
+  onSetupChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
+  /** A bot from a link: the owner's permission, kept apart from the agent (`useBotAgentSetup`). */
+  keptPermission?: BotPermissionIntent
   onAddHost?: (mode: 'ssh' | 'server') => void
   /** The bot's name, for its folder. */
   name?: string
-  /** `row` is a boxed summary; `caption` centers the summary above the fields. */
-  variant?: 'row' | 'caption'
+  /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side. */
+  variant?: 'row' | 'fields'
 }): React.JSX.Element {
   const t = useTranslate()
   const { host, otherAccount } = hostChoice
@@ -79,14 +84,14 @@ export function BotRunsOnPicker({
     t
   )
   const chosen = setup.agent
-  const caption = variant === 'caption'
+  const fields = variant === 'fields'
   const computerHint =
     blockedHint ??
     (otherAccount
       ? t('bots.new.computerAccountHint', 'Where the bot runs, signed in to Orca as {{account}}.', {
           account: otherAccount
         })
-      : caption
+      : fields
         ? null
         : t('bots.new.computerHint', 'Where the bot runs.'))
   const noAgents = model.state === 'settled' && choices.length === 0
@@ -119,10 +124,7 @@ export function BotRunsOnPicker({
       components={{
         host: (
           <span className="inline-flex items-center gap-1 font-medium text-foreground">
-            <HostRowIcon
-              hostId={host.hostId}
-              className={caption ? 'size-3 shrink-0 text-muted-foreground' : undefined}
-            />
+            <HostRowIcon hostId={host.hostId} />
             {host.label}
           </span>
         ),
@@ -131,22 +133,23 @@ export function BotRunsOnPicker({
         ),
         agent: (
           <span className="inline-flex items-center gap-1 font-medium text-foreground">
-            {noAgents ? null : <AgentIcon agent={chosen} size={caption ? 12 : 14} />}
+            {noAgents ? null : <AgentIcon agent={chosen} size={14} />}
             {noAgents ? t('bots.new.agent', 'Agent') : botAgentLabel(chosen)}
           </span>
         )
       }}
     />
   )
+  const labelVariant = fields ? 'settings' : undefined
   const controls = (
     <>
-      <div className="space-y-1">
-        <Label>{t('bots.new.computer', 'Computer')}</Label>
+      <div className="min-w-0 space-y-1">
+        <Label variant={labelVariant}>{t('bots.new.computer', 'Computer')}</Label>
         <BotComputerPicker hostChoice={hostChoice} onAddHost={onAddHost} />
         {computerHint ? <p className="text-2xs text-muted-foreground">{computerHint}</p> : null}
       </div>
-      <div className="space-y-1">
-        <Label>{t('bots.new.agent', 'Agent')}</Label>
+      <div className="min-w-0 space-y-1">
+        <Label variant={labelVariant}>{t('bots.new.agent', 'Agent')}</Label>
         {noAgentsHint ? (
           <p className="text-2xs text-muted-foreground">{noAgentsHint}</p>
         ) : (
@@ -156,40 +159,16 @@ export function BotRunsOnPicker({
             choices={choices.length ? choices : [chosen]}
             value={setup}
             onChange={onSetupChange}
-            showChatDefaultHint={!caption}
+            keptPermission={keptPermission}
+            showChatDefaultHint={!fields}
           />
         )}
       </div>
       {name !== undefined ? <BotFolderPreview name={name} host={host} /> : null}
     </>
   )
-  if (caption) {
-    const status = blockedHint ?? noAgentsHint
-    return (
-      <Collapsible className="group/runs-on">
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="group mx-auto flex flex-wrap items-center justify-center gap-x-1 rounded-md px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            {runsOn}
-            {picked ? <span>({picked})</span> : null}
-            <span aria-hidden>·</span>
-            <span className="underline decoration-current/40 underline-offset-2 group-hover:decoration-current">
-              {t('bots.new.change', 'Change')}
-            </span>
-          </button>
-        </CollapsibleTrigger>
-        {status ? (
-          <p className="mt-1 text-center text-2xs text-muted-foreground group-data-[state=open]/runs-on:hidden">
-            {status}
-          </p>
-        ) : null}
-        <CollapsibleContent animation="height">
-          <div className="mt-3 space-y-3 border-t border-border pt-3">{controls}</div>
-        </CollapsibleContent>
-      </Collapsible>
-    )
+  if (fields) {
+    return <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">{controls}</div>
   }
   return (
     <Collapsible>

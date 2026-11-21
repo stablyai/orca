@@ -15,6 +15,7 @@ import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import {
   CHAT_TREE_CAPS,
   botOwnChatTree,
+  chatFoldCounts,
   chatFoldSummary,
   type BotChatTreeChat,
   type BotChatTreeWorker
@@ -59,9 +60,9 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
     const waiting = t('bots.chats.waiting', 'Waiting for you')
     return place ? `${place} · ${waiting}` : waiting
   }
-  const summary = folded ? chatFoldSummary(chat) : null
-  if (summary) {
-    return summary
+  const counts = folded ? chatFoldCounts(chat) : null
+  if (counts) {
+    return chatFoldSummary(t, counts)
   }
   const preview =
     chat.preview ??

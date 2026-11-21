@@ -419,7 +419,7 @@ it("names a worker's mail by its task and agent once its terminal tab is gone", 
   db.markWorkerDispatchReady(next.dispatch.id)
   const crewName = names().captureCrewInputs()(
     { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
-    started.dispatch.id,
+    { dispatchId: started.dispatch.id, taskTitle: 'Fix the login page' },
     null
   )
   expect(crewName).toBe('Fix the login page')

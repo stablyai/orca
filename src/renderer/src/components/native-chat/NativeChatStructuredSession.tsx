@@ -252,7 +252,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     composerError,
     install,
     hostSendGate,
-    hostNotice: botServerDown ? null : hostNotice
+    hostNotice: botServerDown ? null : hostNotice,
+    kickoffSignIn: bot.signInOwed
   })
   return (
     <NativeChatAntigravityAuthProvider target={install.antigravityAuth}>
@@ -379,7 +380,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   <BotServerOutageCard key={hostOutage.environmentId} outage={hostOutage} />
                 ) : null}
                 {composerShown && (
-                  <NativeChatInstallSlot install={install} agentLabel={agentLabel} />
+                  <NativeChatInstallSlot
+                    install={install}
+                    agentLabel={agentLabel}
+                    inCard={viewState.kind === 'ready' && bot.setupFailed}
+                  />
                 )}
                 {subagents.statusBar}
                 {composerShown ? (

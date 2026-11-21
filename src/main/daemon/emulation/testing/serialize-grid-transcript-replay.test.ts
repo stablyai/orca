@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from '../../../../shared/terminal/testing/agent-tui-ansi-fuzz-stream'
-import type { SerializeFuzzCase, SerializeFuzzStep } from './serialize-grid-fuzz-stream'
+import type { SerializeFuzzCase, SerializeFuzzStep } from './serialize-grid-replay-case'
 import {
   loadOldSerializer,
   NEW_SERIALIZER,
@@ -13,7 +13,7 @@ import {
 } from './serialize-grid-roundtrip'
 
 // Replay captured PTY streams with synthetic resizes and random snapshot boundaries.
-// ORCA_OLD_SERIALIZE_ADDON enables baseline comparisons; see serialize-grid.differential.fuzz.test.ts.
+// ORCA_OLD_SERIALIZE_ADDON enables baseline comparisons with a build from build-serialize-addon-at-ref.mjs.
 // SERIALIZE_TRANSCRIPT_DIR adds local captures (<name>.txt + .meta.json); SERIALIZE_TRANSCRIPT_SEEDS defaults to 2.
 
 const FIXTURE_DIRS = [
@@ -40,6 +40,8 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
   'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
   'opencode-cmd-2-0-21-timed-warm-server': 21,
+  'opencode-2-3-2-boot': 6,
+  'opencode-2-3-2-submitted': 3,
   // Narrow captures also restore a cursor one column short and leak the pen’s bold attribute.
   'opencode-2-0-21-timed-narrow-pane': 6,
   // Codex 0.157 header borders restore with an extra attribute bit.
@@ -76,6 +78,10 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
   'hermes-0-22-slash-setup': 2,
+  // Pi 1.6: the draft's row-1 logo cells restore with an extra dim bit; the wrapped draft's dim
+  // editor rule (row 25) restores with a stray RGB foreground under the jitter schedule.
+  'pi-1-6-composer-draft': 16,
+  'pi-1-6-composer-draft-wrapped': 2,
   // Agy/Cline/Prime reproduce background leaks; Prime also has cursor-row diffs after alt-screen repaint.
   'antigravity-1-2-14-busy-thinking': 2,
   'antigravity-1-2-14-command-palette': 4,

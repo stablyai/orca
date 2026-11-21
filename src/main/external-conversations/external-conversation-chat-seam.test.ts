@@ -735,17 +735,6 @@ describe('a conversation linked to a native chat', () => {
     await eventually(() => expect(ended(events)).toHaveLength(1))
   })
 
-  it('stops the chat’s turn through its own Stop', async () => {
-    const { host, cancelTurn } = hostTestState()
-    await attach()
-    const { seam, ...h } = linkedSeam(installedChats(host).chats)
-    await seedApproval()
-    await agentReady(host, HOST_TEST_SESSION)
-
-    await expect(seam.cancel(h.host, KEY, 'c1')).resolves.toEqual({ outcome: 'accepted' })
-    expect(cancelTurn).toHaveBeenCalledOnce()
-  })
-
   it('takes a Stop bound to the running turn, and refuses one bound to any other', async () => {
     const { host, cancelTurn } = hostTestState()
     await attach()

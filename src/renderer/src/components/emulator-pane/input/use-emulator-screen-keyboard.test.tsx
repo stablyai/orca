@@ -16,14 +16,24 @@ const scrcpyKeyboard = {
 }
 
 function AndroidPane(): React.JSX.Element {
-  const { handleKeyDown } = useEmulatorScreenKeyboard({
-    cancelKeyboardFrames: () => {},
-    canInteract: true,
-    scrcpyKeyboard,
-    sendKeyboardFrames: () => true,
-    worktreeId: 'wt-1'
-  })
-  return <div aria-label="screen" tabIndex={0} onKeyDown={handleKeyDown} />
+  const { handleKeyDown, keyboardProxyRef, onKeyboardProxyCompositionEnd, onKeyboardProxyInput } =
+    useEmulatorScreenKeyboard({
+      cancelKeyboardFrames: () => {},
+      canInteract: true,
+      scrcpyKeyboard,
+      sendKeyboardFrames: () => true,
+      worktreeId: 'wt-1'
+    })
+  return (
+    <div aria-label="screen" tabIndex={0} onKeyDown={handleKeyDown}>
+      <textarea
+        aria-label="proxy"
+        ref={keyboardProxyRef}
+        onCompositionEnd={onKeyboardProxyCompositionEnd}
+        onInput={onKeyboardProxyInput}
+      />
+    </div>
+  )
 }
 
 let container: HTMLDivElement
@@ -77,6 +87,29 @@ describe('Android emulator pane keys', () => {
     expect(scrcpyKeyboard.sendKey).toHaveBeenCalledWith('backspace', false)
   })
 
+  it('sends text a host input method committed, once, as text', () => {
+    press({ key: 'Enter' })
+    const proxy = container.querySelector<HTMLTextAreaElement>('[aria-label="proxy"]')!
+    // The key that starts a composition isn't composing yet; Chromium marks it keyCode 229.
+    const composingKey = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'k' })
+    Object.defineProperty(composingKey, 'keyCode', { value: 229 })
+    act(() => {
+      proxy.dispatchEvent(composingKey)
+      // Kotoeri shows its reading while composing; only the commit is typed.
+      proxy.value = 'か'
+      proxy.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }))
+      proxy.value = '漢字'
+      proxy.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '漢字' }))
+      // The emoji picker inserts without composing.
+      proxy.value = '😀'
+      proxy.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: false }))
+    })
+
+    expect(composingKey.defaultPrevented).toBe(false)
+    expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['漢字'], ['😀']])
+    expect(proxy.value).toBe('')
+  })
+
   it('sends Mac Option characters as text', () => {
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0)' })
     press({ key: 'Enter' })
@@ -84,5 +117,58 @@ describe('Android emulator pane keys', () => {
     press({ key: '@', altKey: true })
 
     expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['@']])
+  })
+})
+
+describe('iOS simulator pane keys', () => {
+  it('drops keys buffered for a capture that ended before its layout sync finished', async () => {
+    const { callRuntimeRpc } = await import('@/runtime/rpc/calls/runtime-rpc-call')
+    const replies: (() => void)[] = []
+    vi.mocked(callRuntimeRpc).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          replies.push(() => resolve({ physicalKeys: true }))
+        })
+    )
+    const sent: number[] = []
+    function IosPane(): React.JSX.Element {
+      const { handleKeyDown, enableKeyboardCapture } = useEmulatorScreenKeyboard({
+        cancelKeyboardFrames: () => {},
+        canInteract: true,
+        scrcpyKeyboard: null,
+        sendKeyboardFrames: (frames) => {
+          sent.push(frames.length)
+          return true
+        },
+        worktreeId: 'wt-1'
+      })
+      return (
+        <div
+          aria-label="ios"
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          onFocus={enableKeyboardCapture}
+        />
+      )
+    }
+    act(() => root.render(<IosPane />))
+    const screen = container.querySelector<HTMLDivElement>('[aria-label="ios"]')!
+    const key = (init: KeyboardEventInit) =>
+      act(() => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+        Object.defineProperty(event, 'getModifierState', { value: () => false })
+        screen.dispatchEvent(event)
+      })
+
+    key({ key: 'Enter', code: 'Enter' })
+    key({ key: 'a', code: 'KeyA' })
+    key({ key: 'Escape', code: 'Escape' })
+    key({ key: 'Enter', code: 'Enter' })
+    key({ key: 'b', code: 'KeyB' })
+    await act(async () => {
+      replies.forEach((resolve) => resolve())
+    })
+
+    expect(sent).toEqual([2])
   })
 })

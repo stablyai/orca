@@ -1,4 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clientInstances,
   emitSshEvent,
@@ -165,8 +168,20 @@ describe('SshConnection', () => {
   })
 
   describe('keyboard-interactive MFA', () => {
+    let emptyHome = ''
+    const passwordTarget = () => createTarget({ identityAgent: 'none' })
+
+    beforeEach(() => {
+      emptyHome = mkdtempSync(join(tmpdir(), 'orca-ssh-mfa-home-'))
+      vi.stubEnv('HOME', emptyHome)
+      vi.stubEnv('USERPROFILE', emptyHome)
+    })
+
+    afterEach(() => {
+      rmSync(emptyHome, { recursive: true, force: true })
+    })
+
     it('completes password + keyboard-interactive MFA auth and forwards the prompt', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = [
         new Error('All configured authentication methods failed'),
         'silent'
@@ -174,7 +189,7 @@ describe('SshConnection', () => {
       const onCredentialRequest = vi.fn(async (_targetId: string, kind: string) =>
         kind === 'password' ? 'password-123' : '1'
       )
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       await vi.waitFor(() => {
@@ -216,13 +231,12 @@ describe('SshConnection', () => {
     })
 
     it('auto-answers a keyboard-interactive password prompt with the cached password (echo=false)', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = [
         new Error('All configured authentication methods failed'),
         'silent'
       ]
       const onCredentialRequest = vi.fn(async () => 'password-123')
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       await vi.waitFor(() => {
@@ -247,12 +261,11 @@ describe('SshConnection', () => {
     })
 
     it('caches a password collected through a keyboard-interactive prompt, but never caches an OTP', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = ['silent']
       const onCredentialRequest = vi.fn(async (_targetId: string, kind: string) =>
         kind === 'password' ? 'password-123' : '654321'
       )
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       await vi.waitFor(() =>
@@ -320,10 +333,9 @@ describe('SshConnection', () => {
     })
 
     it('re-prompts instead of replaying the cached password on a second keyboard-interactive round', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = ['silent']
       const onCredentialRequest = vi.fn(async () => 'password-123')
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       await vi.waitFor(() =>
@@ -366,10 +378,9 @@ describe('SshConnection', () => {
     })
 
     it('does not fall back to the password prompt after a cancelled keyboard-interactive prompt', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = ['silent']
       const onCredentialRequest = vi.fn(async () => null)
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       connectPromise.catch(() => {})
@@ -393,7 +404,6 @@ describe('SshConnection', () => {
     })
 
     it('does not restore the password cache when a prompt resolves after disconnect', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = ['silent']
       let answer: (value: string) => void = () => {}
       const onCredentialRequest = vi.fn(
@@ -402,7 +412,7 @@ describe('SshConnection', () => {
             answer = resolve
           })
       )
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
       const connecting = conn.connect()
       connecting.catch(() => {})
       await vi.waitFor(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
@@ -425,9 +435,8 @@ describe('SshConnection', () => {
     })
 
     it('does not treat a missing credential callback as user cancellation', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = ['silent']
-      const conn = new SshConnection(createTarget(), createCallbacks())
+      const conn = new SshConnection(passwordTarget(), createCallbacks())
       const connecting = conn.connect()
       connecting.catch(() => {})
       await vi.waitFor(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
@@ -440,13 +449,12 @@ describe('SshConnection', () => {
     })
 
     it('fails auth (not cancellation) when the server rejects an incorrect MFA answer', async () => {
-      vi.stubEnv('SSH_AUTH_SOCK', '')
       ssh2Mock.connectSequence = [
         'silent',
         new Error('All configured authentication methods failed')
       ]
       const onCredentialRequest = vi.fn(async () => '000000')
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const conn = new SshConnection(passwordTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       connectPromise.catch(() => {})

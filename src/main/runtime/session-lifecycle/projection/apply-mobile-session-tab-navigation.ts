@@ -198,8 +198,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       activeTab
     )
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 
   protected persistHeadlessTerminalActiveLeaf(

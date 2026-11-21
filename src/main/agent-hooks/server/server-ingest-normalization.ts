@@ -14,6 +14,7 @@ import {
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { withStopTranscriptReadsSkipped } from '../../../shared/agent-hook-listener/transcript-lines'
+import { droidStopTranscriptPath } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
 import {
   isAgentHookSource,
   type AgentHookSource
@@ -135,8 +136,8 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.normalizeLocalHookPayloadNow(source, body, isReplay)
     )
     retainTmuxHookWriterTopology(value.event, body)
-    const stopTranscriptPath = skipped.at(-1)
-    return stopTranscriptPath ? { ...value, stopTranscriptPath } : value
+    const droidVerdictTranscriptPath = droidStopTranscriptPath(source, value.event, body)
+    return { ...value, stopTranscriptPath: skipped.at(-1), droidVerdictTranscriptPath }
   }
 
   private normalizeLocalHookPayloadNow(

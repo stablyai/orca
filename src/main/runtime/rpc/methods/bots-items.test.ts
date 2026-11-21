@@ -10,6 +10,8 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsHost, type BotItemsHostDeps } from '../../../bots/bot-items-runtime'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
+import type { BotItemEvent } from '../../../../shared/bots/bot-items'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { BotsDbWorkerClient } from '../../../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores } from '../../../bots/db-worker/bots-db-worker-entry'
 import { inProcessBotsDbWorker } from '../../../bots/db-worker/bots-db-worker.test-fixture'
@@ -419,6 +421,95 @@ describe('bot items over RPC', () => {
             })
           ])
         }
+      })
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      itemChat.sessionId = null
+    }
+  })
+
+  it("attaches a bot's --file files to its comment and its status comment; one unreadable file posts nothing", async () => {
+    const { dispatcher } = itemsRuntime()
+    const store = new AgentSessionAttachmentStore(
+      join(paths.userData, 'agent-session-attachments'),
+      { hasSession: () => true }
+    )
+    const claim = vi.fn(async (_sessionId: string, _body: AgentJournalMessageItem) => undefined)
+    setAgentSessionAttachmentStore(store, claim)
+    itemChat.sessionId = 'ranger-live'
+    try {
+      await dispatcher.dispatch(
+        request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Install dialog' })
+      )
+      const shot = join(paths.userData, 'after.png')
+      const log = join(paths.userData, 'run.log')
+      writeFileSync(shot, Buffer.alloc(4))
+      writeFileSync(log, 'ok')
+      const comment = (params: Record<string, unknown>) =>
+        dispatcher.dispatch(
+          request('bots.items.comment', { callerSessionId: RANGER_CHAT, item: '1', ...params })
+        )
+
+      expect(
+        await comment({ text: 'Fixed.', files: [shot, join(paths.userData, 'gone.png')] })
+      ).toMatchObject({
+        ok: false,
+        error: { message: "gone.png can't be read. Nothing was posted." }
+      })
+      expect(await comment({ text: '', files: [shot, log] })).toMatchObject({ ok: true })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'needs_you',
+            comment: 'Which one?',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: true })
+      // What the write would refuse is refused before a file is copied or claimed.
+      expect(await comment({ text: 'x'.repeat(7_990), files: [log] })).toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringMatching(/^The comment and its files' paths come to \d+ characters/)
+        }
+      })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'canceled',
+            comment: 'Dropping it.',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: false, error: { message: 'Canceling needs a reason: --reason "..."' } })
+      expect(claim).toHaveBeenCalledTimes(2)
+      const shown = await dispatcher.dispatch(
+        request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1' })
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a successful bots.items.show reply carries its events, which the matcher below checks.
+      const { events } = (shown as { result: { events: BotItemEvent[] } }).result
+      const comments = events.filter((event) => event.kind === 'commented')
+      expect(comments).toHaveLength(2)
+      expect(comments[0]?.data.images).toMatchObject([
+        { name: 'after.png', bytes: 4, path: expect.stringContaining(store.rootDir) }
+      ])
+      expect(comments[0]?.data.text).toMatch(/^@\S+agent-session-attachments\S+run\.log$/)
+      expect(claim).toHaveBeenNthCalledWith(1, 'ranger-live', {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: comments[0]?.data.text },
+          { type: 'image-ref', path: comments[0]?.data.images?.[0]?.path }
+        ]
+      })
+      expect(claim).toHaveBeenNthCalledWith(2, 'ranger-live', expect.anything())
+      expect(comments[1]?.data).toMatchObject({
+        text: 'Which one?',
+        images: [{ name: 'after.png', bytes: 4 }]
       })
     } finally {
       setAgentSessionAttachmentStore(null)

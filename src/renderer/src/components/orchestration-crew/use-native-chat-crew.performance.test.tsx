@@ -42,6 +42,11 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   }
 }))
 
+const panel = vi.hoisted(() => ({ enabled: true }))
+vi.mock('./use-orchestration-panel-enabled', () => ({
+  useOrchestrationPanelEnabled: () => panel.enabled
+}))
+
 vi.mock('../native-chat/tools/tasks/NativeChatBackgroundTasksStatus', () => ({
   NativeChatBackgroundTasksStatus: () => {
     rpc.stripRenders++
@@ -95,6 +100,20 @@ it('follows each visible chat once: ten panes of three chats hold three subscrip
   await act(async () => {})
   expect(rpc.live).toBe(0)
   view.unmount()
+})
+
+it('follows no chat while the crew panel is suspended', async () => {
+  panel.enabled = false
+  rpc.calls.length = 0
+  try {
+    const view = render(<Panes windowVisible />)
+    await act(async () => {})
+    expect(rpc.calls).toEqual([])
+    expect(rpc.live).toBe(0)
+    view.unmount()
+  } finally {
+    panel.enabled = true
+  }
 })
 
 const NO_WORK: StructuredSessionBackgroundTasksView = {

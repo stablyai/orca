@@ -1,4 +1,4 @@
-import { useState, type Ref } from 'react'
+import { useRef, useState, type Ref } from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
@@ -7,7 +7,7 @@ import { AgentPickerAgentTabs, AgentPickerBlankTerminalPane } from './AgentPicke
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
-import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
+import { chatUnavailableLabel, entrySetupLabel } from './launch-menu/agent-menu-row-presentation'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit
@@ -30,7 +30,9 @@ export type AgentLaunchPickerDropdownPick = (
   draft?: AgentPickerDraft,
   entry?: AgentPickerEntry,
   /** Set when the user named where the agent opens. */
-  surface?: AgentPickerSurface
+  surface?: AgentPickerSurface,
+  /** The user chose the draft's permission in this pane, even one it already showed. */
+  permissionPicked?: boolean
 ) => void
 
 type AgentLaunchPickerDropdownProps = {
@@ -183,6 +185,8 @@ function AgentLaunchPickerPane({
     open: true
   })
   const current = agent === entry.agent
+  // Why: a form that keeps a permission apart from the agent must tell a chosen one from one only shown.
+  const permissionPicked = useRef(false)
   /** Takes the pane's setup into the form; `surface` when the user named where it opens. */
   const commit = (close: boolean, surface?: AgentPickerSurface) => {
     const draft = setup.getDraft()
@@ -194,7 +198,7 @@ function AgentLaunchPickerPane({
     if (!setup.accept(picked, !close)) {
       return
     }
-    onPick(entry.agent, picked, entry, surface)
+    onPick(entry.agent, picked, entry, surface, permissionPicked.current)
     if (close) {
       onClose()
     }
@@ -274,6 +278,13 @@ function AgentLaunchPickerPane({
         searchChoices: blankTerminal ? [blankTerminal] : undefined
       }}
       onDraftChange={(draft, edit) => {
+        // Same as chats clears the permission through a choice edit, so a changed one counts too.
+        if (
+          edit === 'permission' ||
+          setup.getDraft()?.choices.permissionMode !== draft.choices.permissionMode
+        ) {
+          permissionPicked.current = true
+        }
         setup.change(draft)
         // Effort, speed and a kept permission apply at once to the agent in use; another agent's wait.
         if (current && (edit === 'choice' || edit === 'speed' || edit === 'permission')) {
@@ -333,6 +344,9 @@ function AgentLaunchOpenAs({
         primary={entry.defaultSurface}
         onSelect={onChoose}
       />
+      {entrySetupLabel(entry, t) ? (
+        <span className="ml-auto text-xs text-muted-foreground">{entrySetupLabel(entry, t)}</span>
+      ) : null}
     </div>
   )
 }

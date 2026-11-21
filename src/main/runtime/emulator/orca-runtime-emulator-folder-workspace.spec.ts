@@ -67,7 +67,7 @@ export function registerOrcaRuntimeEmulatorFolderWorkspaceTests(): void {
       } as never)
       runtime.setEmulatorBridge(bridge as never)
       Object.assign(runtime, {
-        getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } })
+        getAuthoritativeWindowId: () => 1
       })
 
       const attach = runtime.emulatorAttach({

@@ -60,7 +60,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
     } else {
       this.admitSavedStatus(saved.document)
     }
-    this.pruneUnplacedSleepingPanes()
+    this.pruneUnplacedPanes()
     // Repairs and a migrated legacy file are saved now; an unchanged store writes nothing.
     this.runStatusPersist()
   }
@@ -97,7 +97,9 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           ? rawEntry
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
-      if (entry && (entry.paneSleep || entry.receivedAt >= ttlCutoff)) {
+      const pastTtl = entry !== null && !entry.paneSleep && entry.receivedAt < ttlCutoff
+      // A placed pane's idle agent outlives the TTL; its launch authority expires with it.
+      if (entry && (!pastTtl || this.placementKeepsRow(entry))) {
         // A shared host still runs this conversation after the restart.
         if (
           entry.providerSession &&
@@ -108,7 +110,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
         ) {
           entry.executionHost = 'shared'
         }
-        const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
+        const launchTokenHash = pastTtl ? null : readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
           this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)
           const evidence = this.toAuthorityEvidence(entry, launchTokenHash)
@@ -165,8 +167,16 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
         dropped += 1
       }
     }
-    for (const exit of readPersistedAgentExits(file.agentExits, ttlCutoff)) {
-      recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
+    for (const exit of readPersistedAgentExits(file.agentExits, -Infinity)) {
+      // A row kept past the TTL keeps its exit, or the pane would read as live again.
+      if (
+        exit.at >= ttlCutoff ||
+        exit.paneKeys.some((key) =>
+          this.state.lastStatusByPaneKey.has(this.resolvePaneKeyAlias(key))
+        )
+      ) {
+        recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
+      }
     }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)

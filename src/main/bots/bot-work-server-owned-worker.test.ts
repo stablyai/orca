@@ -13,6 +13,7 @@ import {
   openRemoteRunLink,
   remoteServerPin
 } from '../runtime/orchestration/db/remote-owned/remote-run-links'
+import type { BotWorkRecord } from './bot-work-record'
 import { botWorkHostOf, prepareBotWorkerStart, runtimeBotWork } from './bot-work-runtime'
 
 let userData = ''
@@ -31,6 +32,7 @@ const TURN = { botId: 'bot-1', address: { source: 'slack', externalId: 'T1:C1:1.
 
 describe("a bot's worker-start --on a server that owns its workers", () => {
   let db: OrchestrationDb
+  let openedBotWork: BotWorkRecord | undefined
 
   beforeEach(() => {
     userData = mkdtempSync(join(tmpdir(), 'bot-work-server-owned-'))
@@ -38,6 +40,8 @@ describe("a bot's worker-start --on a server that owns its workers", () => {
   })
 
   afterEach(() => {
+    openedBotWork?.store().dispose()
+    openedBotWork = undefined
     db.close()
     rmSync(userData, { recursive: true, force: true })
   })
@@ -58,6 +62,7 @@ describe("a bot's worker-start --on a server that owns its workers", () => {
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a server-owned worker reads only these members.
     const botWork = runtimeBotWork(runtime as unknown as Parameters<typeof runtimeBotWork>[0])
+    openedBotWork = botWork
 
     const recordStart = prepareBotWorkerStart(
       {

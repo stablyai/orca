@@ -18,10 +18,12 @@ vi.mock('../../orca-profiles/profile-storage-paths', async () => {
 vi.mock('../agent-session/launch/structured-agent-launch-support', () => ({
   resolveHostStructuredAgentLaunchEnvironment: hostEnvironment
 }))
+vi.mock('../../antigravity/agy-credential-presence', () => ({
+  agyCredentialPresence: async () => 'present'
+}))
 vi.mock('../../antigravity/antigravity-host-acp', async (importOriginal) => ({
   ...(await importOriginal<typeof HostAcp>()),
-  hasAgyCredential: async () => true,
-  antigravityHostAcpReady: async () => true
+  checkAntigravityHostAcp: async () => 'ready'
 }))
 
 const folders: string[] = []

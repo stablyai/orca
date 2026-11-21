@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
-import { botChatFoldKey, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import {
+  botChatFoldKey,
+  chatFoldSummary,
+  type BotChatTreeChat
+} from '../../../../shared/bots/bot-chat-tree'
 import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
 import {
   botSidebarWorkerPagingLabel,
@@ -128,11 +132,13 @@ function chatTitle(t: ReturnType<typeof useTranslate>, chat: BotChatTreeChat): s
   return chat.origin === 'home' ? t('bots.chats.home', 'Home Chat') : chat.title
 }
 
-function trailingText(trailing: BotSidebarChatTrailing | null): string | null {
+function trailingText(t: Translate, trailing: BotSidebarChatTrailing | null): string | null {
   if (!trailing) {
     return null
   }
-  return trailing.kind === 'summary' ? trailing.text : formatShortTimeAgo(trailing.at)
+  return trailing.kind === 'summary'
+    ? chatFoldSummary(t, trailing.counts)
+    : formatShortTimeAgo(trailing.at)
 }
 
 function BotSidebarChat({
@@ -155,7 +161,7 @@ function BotSidebarChat({
   const { active, toggle } = useBotChatPress(bot, chat.chatId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
-  const trailing = trailingText(view.trailing)
+  const trailing = trailingText(t, view.trailing)
   // A press only switches to the chat; only the chevron shows or hides its workers.
   const pressRow = (event: { detail: number; repeat?: boolean }): void => {
     if (event.detail > 1 || event.repeat) {

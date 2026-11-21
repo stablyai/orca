@@ -4,6 +4,7 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { ProviderProcessExit } from '../../provider-process/managed-provider-process'
 import { providerExitStatusText } from '../../provider-process/provider-process-exit-status'
+import { STDERR_TAIL_MAX_CHARS } from '../../provider-process/managed-provider-process'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRefusal } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
@@ -46,7 +47,12 @@ export function claudeStreamJsonExitError(
   status: ProviderProcessExit | null,
   cause?: Error
 ): Error {
-  const detail = stderrTail.trim()
+  // A full tail starts mid-line; drop that fragment so the first line shown is whole.
+  const detail = (
+    stderrTail.length >= STDERR_TAIL_MAX_CHARS
+      ? stderrTail.slice(stderrTail.indexOf('\n') + 1)
+      : stderrTail
+  ).trim()
   // Retain exit status and stderr through wrappers for refused-start diagnostics.
   const how = providerExitStatusText(status)
   const message = `claude stream-json exited${how ? ` ${how}` : ''}${detail ? `: ${detail}` : ''}`

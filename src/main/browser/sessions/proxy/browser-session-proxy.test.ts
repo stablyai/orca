@@ -1,3 +1,4 @@
+import { session } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionsByPartition, fromPartition, fromPartitionMock } = vi.hoisted(() => {
@@ -46,49 +47,45 @@ describe('browser session proxy', () => {
     vi.restoreAllMocks()
   })
 
-  it('settles an in-flight new partition on the latest swept policy', async () => {
+  it('applies a new proxy only to the partition that remains active during installation', async () => {
     let proxyUrl = 'http://old.example:8080'
-    let finishFirstWrite: (() => void) | undefined
     setBrowserNetworkProxySettingsResolver(() => ({ httpProxyUrl: proxyUrl }))
-    const sess = fromPartition('persist:orca-browser-session-pending')
-    sess.setProxy.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (finishFirstWrite = resolve))
-    )
+    const activePartition = 'persist:orca-browser-session-pending'
+    const retiredPartition = 'persist:orca-browser-session-restored'
+    const active = fromPartition(activePartition)
+    const retired = fromPartition(retiredPartition)
+    const activeWrite = Promise.withResolvers<void>()
+    const retiredWrite = Promise.withResolvers<void>()
+    active.setProxy.mockReturnValueOnce(activeWrite.promise)
+    retired.setProxy.mockReturnValueOnce(retiredWrite.promise)
 
-    const pendingInstallation = applyProxyToBrowserSession(sess as never)
-    await vi.waitFor(() => expect(sess.setProxy).toHaveBeenCalledTimes(1))
-    proxyUrl = 'http://new.example:8080'
-    await applyBrowserSessionProxies([], { httpProxyUrl: proxyUrl })
-    finishFirstWrite?.()
-    await pendingInstallation
+    const activeSession = session.fromPartition(activePartition)
+    const retiredSession = session.fromPartition(retiredPartition)
+    const activeInstallation = applyProxyToBrowserSession(activeSession)
+    const retiredInstallation = applyProxyToBrowserSession(retiredSession)
+    try {
+      await vi.waitFor(() => {
+        expect(active.setProxy).toHaveBeenCalled()
+        expect(retired.setProxy).toHaveBeenCalled()
+      })
+      invalidateBrowserSessionProxyApplication(retiredSession)
+      const release = releaseProxySessionApplication(retiredSession)
+      proxyUrl = 'http://new.example:8080'
+      await applyBrowserSessionProxies([], { httpProxyUrl: proxyUrl })
+      activeWrite.resolve()
+      retiredWrite.resolve()
+      await Promise.all([activeInstallation, retiredInstallation, release])
 
-    expect(sess.setProxy.mock.calls).toEqual([
-      [{ mode: 'fixed_servers', proxyRules: 'http://old.example:8080' }],
-      [{ mode: 'fixed_servers', proxyRules: 'http://new.example:8080' }]
-    ])
-  })
-
-  it('does not reapply policy after an in-flight partition is invalidated', async () => {
-    let proxyUrl = 'http://old.example:8080'
-    let finishFirstWrite: (() => void) | undefined
-    setBrowserNetworkProxySettingsResolver(() => ({ httpProxyUrl: proxyUrl }))
-    const sess = fromPartition('persist:orca-browser-session-restored')
-    sess.setProxy.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (finishFirstWrite = resolve))
-    )
-
-    const restoredInstallation = applyProxyToBrowserSession(sess as never)
-    await vi.waitFor(() => expect(sess.setProxy).toHaveBeenCalledTimes(1))
-    invalidateBrowserSessionProxyApplication(sess as never)
-    const release = releaseProxySessionApplication(sess as never)
-    proxyUrl = 'http://new.example:8080'
-    await applyBrowserSessionProxies([], { httpProxyUrl: proxyUrl })
-    finishFirstWrite?.()
-    await Promise.all([restoredInstallation, release])
-
-    expect(sess.setProxy.mock.calls).toEqual([
-      [{ mode: 'fixed_servers', proxyRules: 'http://old.example:8080' }],
-      [{ mode: 'system' }]
-    ])
+      const oldProxy = { mode: 'fixed_servers', proxyRules: 'http://old.example:8080' }
+      expect(active.setProxy.mock.calls).toEqual([
+        [oldProxy],
+        [{ mode: 'fixed_servers', proxyRules: 'http://new.example:8080' }]
+      ])
+      expect(retired.setProxy.mock.calls).toEqual([[oldProxy], [{ mode: 'system' }]])
+    } finally {
+      activeWrite.resolve()
+      retiredWrite.resolve()
+      await Promise.allSettled([activeInstallation, retiredInstallation])
+    }
   })
 })

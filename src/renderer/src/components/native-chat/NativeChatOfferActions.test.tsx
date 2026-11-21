@@ -91,7 +91,7 @@ function Offer({ id }: { id: string }): React.JSX.Element {
   const offer = useNativeChatOffer(atlas.id, id)
   return (
     <section data-testid={id}>
-      <NativeChatOfferActions offer={offer} done={false}>
+      <NativeChatOfferActions offer={offer}>
         <button type="button">Connect</button>
       </NativeChatOfferActions>
     </section>
@@ -99,7 +99,7 @@ function Offer({ id }: { id: string }): React.JSX.Element {
 }
 
 const notNowIn = (id: string) =>
-  within(screen.getByTestId(id)).queryByRole('button', { name: 'Dismiss' })
+  within(screen.getByTestId(id)).queryByRole('button', { name: 'Not now' })
 
 beforeEach(() => {
   send = vi.fn(async (_text: string) => true)
@@ -113,7 +113,7 @@ afterEach(cleanup)
 describe('an offer card', () => {
   it('sends once on a double click', async () => {
     show(<Offer id="a" />)
-    const dismiss = screen.getByRole('button', { name: 'Dismiss' })
+    const dismiss = screen.getByRole('button', { name: 'Not now' })
     await act(async () => {
       fireEvent.click(dismiss)
       fireEvent.click(dismiss)
@@ -125,21 +125,21 @@ describe('an offer card', () => {
   it('sends nothing when another device answered first, and shows that answer', async () => {
     host.bots = [{ ...atlas, offerAnswers: [{ cardId: 'a', dismissed: true }] }]
     show(<Offer id="a" />)
-    await press(screen.getByRole('button', { name: 'Dismiss' }))
+    await press(screen.getByRole('button', { name: 'Not now' }))
     expect(send).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
     expect(notNowIn('a')).toBeNull()
   })
 
-  it('sends no Dismiss once another device took the action', async () => {
+  it('sends no Not now once another device took the action', async () => {
     host.bots = [{ ...atlas, offerAnswers: [{ cardId: 'a', sent: { chosen: [] } }] }]
     show(<Offer id="a" />)
-    await press(screen.getByRole('button', { name: 'Dismiss' }))
+    await press(screen.getByRole('button', { name: 'Not now' }))
     expect(send).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('keeps another card’s Dismiss after a reload, and the dismissed one’s gone', async () => {
+  it('keeps another card’s Not now after a reload, and the dismissed one’s gone', async () => {
     const cards = (
       <>
         <Offer id="a" />
@@ -147,7 +147,7 @@ describe('an offer card', () => {
       </>
     )
     show(cards)
-    await press(within(screen.getByTestId('b')).getByRole('button', { name: 'Dismiss' }))
+    await press(within(screen.getByTestId('b')).getByRole('button', { name: 'Not now' }))
     expect(send).toHaveBeenCalledWith('Dismiss')
     expect(notNowIn('a')).not.toBeNull()
     expect(notNowIn('b')).toBeNull()
@@ -237,7 +237,7 @@ describe('an offer card', () => {
       </>
     )
     show(cards)
-    await press(within(screen.getByTestId('newest')).getByRole('button', { name: 'Dismiss' }))
+    await press(within(screen.getByTestId('newest')).getByRole('button', { name: 'Not now' }))
     await reload(cards)
     expect(within(screen.getByTestId('old')).getByText('Asked to import 1 item')).toBeTruthy()
     expect(within(screen.getByTestId('old')).queryByRole('button')).toBeNull()

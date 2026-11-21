@@ -122,7 +122,7 @@ runs:
       uses: ./.github/actions/setup-pnpm
 
     # Desktop-only jobs should not miss their download cache when mobile dependencies change.
-    # Hosted Linux downloads all ~1,200 packages in ~8s, so a ~650 MB store per lockfile costs quota for no time.
+    # Hosted Linux and Windows install all ~1,200 packages in ~8s/~14s, so a ~650 MB store per lockfile costs quota for no time.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
@@ -130,7 +130,7 @@ runs:
       with:
         node-version-file: package.json
         check-latest: true
-        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && !(runner.os == 'Linux' && runner.environment == 'github-hosted') && 'pnpm' || '' }}
+        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && !((runner.os == 'Linux' || runner.os == 'Windows') && runner.environment == 'github-hosted') && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
         package-manager-cache: false
 
@@ -141,7 +141,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         check-latest: true
-        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && !(runner.os == 'Linux' && runner.environment == 'github-hosted') && 'pnpm' || '' }}
+        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && !((runner.os == 'Linux' || runner.os == 'Windows') && runner.environment == 'github-hosted') && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
         package-manager-cache: false
 
@@ -150,7 +150,7 @@ runs:
       id: pnpm-store
       if: >-
         github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' &&
-        !(runner.os == 'Linux' && runner.environment == 'github-hosted') &&
+        !((runner.os == 'Linux' || runner.os == 'Windows') && runner.environment == 'github-hosted') &&
         !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') &&
         (runner.os != 'Windows' ||
         !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) &&
@@ -177,7 +177,7 @@ runs:
       id: pnpm-store-restore
       if: >-
         github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' &&
-        !(runner.os == 'Linux' && runner.environment == 'github-hosted') &&
+        !((runner.os == 'Linux' || runner.os == 'Windows') && runner.environment == 'github-hosted') &&
         !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') &&
         (runner.os != 'Windows' ||
         !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) &&

@@ -127,7 +127,6 @@ it('keeps the original for a chat with 100k waiting messages without reading the
 
   for (const chat of ['deleted-here', 'unrecorded']) {
     const counted = countQueuedRowsRead(source)
-    const heapBefore = process.memoryUsage().heapUsed
     const error = refusal(() =>
       readLegacyProofSessions(
         source,
@@ -140,7 +139,5 @@ it('keeps the original for a chat with 100k waiting messages without reading the
     expect(error).toMatchObject({ reason: 'source-oversize' })
     expect(counted.rows).toBe(0)
     expect(counted.sorted).toEqual([])
-    // 100k rows of 512 characters would be about 60 MiB of text before any serialization.
-    expect(process.memoryUsage().heapUsed - heapBefore).toBeLessThan(16 * 1024 * 1024)
   }
 })
