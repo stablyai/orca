@@ -4,6 +4,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/ag
 import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import { fixture, groupNativeMocks, journal } from './bot-group-native-runtime.test-fixture'
 import { noteBotGroupMemberReply } from './bot-group-latest'
+import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
 
 const live = vi.hoisted((): { turnItemId: string | null } => ({ turnItemId: null }))
 vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
@@ -28,7 +29,7 @@ async function sentPrompt(operationId: string): Promise<string> {
 
 /** A room of Scout and Forge whose members' chats answer with the replies `reply` records. */
 async function room() {
-  const { groups, runtime, startWorker, orchestration } = fixture()
+  const { groups, runtime, startWorker, orchestration, mails } = fixture()
   const created = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
   groups.store.put({ ...created, replyMode: { kind: 'mentions' } })
   const replies = new Map<string, { operationId: string; text: string; at: number }[]>()
@@ -68,6 +69,7 @@ async function room() {
     runtime,
     startWorker,
     orchestration,
+    mails,
     group: created,
     post,
     finish,
@@ -75,6 +77,32 @@ async function room() {
     reply,
     lines,
     newest
+  }
+}
+
+/** The mail lane's notice to a member for one mail. */
+function mailNotice(sessionId: string, operationId: string, messageId: string, from: string) {
+  return {
+    sessionId,
+    dispatchId: null,
+    operationId,
+    expectedRuntimeFence: 1,
+    stillOwed: () => true,
+    body: {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [],
+      from: {
+        kind: 'agent' as const,
+        senders: [],
+        orchestration: {
+          message: 'mail-notice' as const,
+          mailbox: sessionId,
+          dispatchId: null,
+          messages: [{ messageId, runId: 'run', from }]
+        }
+      }
+    }
   }
 }
 
@@ -237,32 +265,38 @@ describe('group @Name hand-offs', () => {
     await reply(asked, 'Started a worker.')
     const done = worker.send(scout.sessionId, 'worker_done')
     orchestration.completeDispatch(worker.dispatchId)
-    groups.reserveMailTurn({
-      sessionId: scout.sessionId,
-      dispatchId: null,
-      operationId: 'report-op',
-      expectedRuntimeFence: 1,
-      stillOwed: () => true,
-      body: {
-        kind: 'message',
-        role: 'user',
-        blocks: [],
-        from: {
-          kind: 'agent',
-          senders: [],
-          orchestration: {
-            message: 'mail-notice',
-            mailbox: scout.sessionId,
-            dispatchId: null,
-            messages: [{ messageId: done.id, runId: 'run', from: 'term_worker' }]
-          }
-        }
-      }
-    })
+    groups.reserveMailTurn(mailNotice(scout.sessionId, 'report-op', done.id, 'term_worker'))
     const report = newest()
     expect(report.turns[0]).toMatchObject({ operationId: 'report-op', mailbox: true })
     await reply(report, 'Build done. @Forge please test')
     expect(newest()).toMatchObject({ mentioned: true, rootRequestId: asked.id })
+    expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
+  })
+
+  it("starts the member's turn on an item change made outside the room, and follows its mention", async () => {
+    const { groups, group, mails, post, reply, newest } = await room()
+    const [scout] = groups.store.get(group.id).members
+    const asked = await post('@Scout plan')
+    await reply(asked, 'Asked my owner on item #1.')
+    await groups.stop(group.id)
+    const answer = {
+      id: 'item-mail-1',
+      thread_id: null,
+      from_handle: BOT_ITEM_MAIL_SENDER,
+      type: 'status',
+      subject: 'Your owner answered (#1 Pick a database)'
+    }
+    mails.set(answer.id, answer)
+    expect(groups.narrowMailBatch(scout!.sessionId, [answer])).toEqual({
+      messages: [answer],
+      ended: []
+    })
+    groups.reserveMailTurn(mailNotice(scout!.sessionId, 'item-op', answer.id, BOT_ITEM_MAIL_SENDER))
+    const line = newest()
+    expect(line).toMatchObject({ fromItems: true, author: { kind: 'bot', id: 'bot-0' } })
+    expect(line.turns[0]).toMatchObject({ operationId: 'item-op', mailbox: true })
+    await reply(line, 'Going with Postgres. @Forge set it up')
+    expect(newest()).toMatchObject({ mentioned: true, rootRequestId: line.id })
     expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
   })
 
