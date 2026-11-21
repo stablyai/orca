@@ -120,12 +120,18 @@ function onArgvReadAt(inputAt: (atMs: number) => void): (monotonicMs: number) =>
 }
 
 const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
-  runPs: async (fresh, inputAt) => {
+  runPs: async (mode, inputAt) => {
     const stdout =
       process.platform === 'darwin'
         ? await captureDarwinProcessTable(
-            (args, timeout, ps) =>
-              captureProcessTable(args, timeout, ps, !fresh, onArgvReadAt(inputAt)),
+            (args, timeoutMs, subprocess) =>
+              captureProcessTable(args, {
+                timeoutMs,
+                subprocess,
+                background: mode === 'poll',
+                onArgvReadAt: onArgvReadAt(inputAt),
+                freshArgv: mode === 'after-boundary'
+              }),
             assertWholeCapture,
             PS_TIMEOUT_MS
           )
@@ -141,15 +147,12 @@ const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>
 
 // Separate shell reader avoids macOS terminal-name costs and waiting on full captures it cannot use.
 const shellForegroundReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
-  runPs: async (fresh, inputAt) =>
+  runPs: async (mode, inputAt) =>
     parseShellForegroundRows(
-      await captureProcessTable(
-        SHELL_FOREGROUND_PS_ARGS,
-        PS_TIMEOUT_MS,
-        false,
-        !fresh,
-        onArgvReadAt(inputAt)
-      )
+      await captureProcessTable(SHELL_FOREGROUND_PS_ARGS, {
+        background: mode === 'poll',
+        onArgvReadAt: onArgvReadAt(inputAt)
+      })
     ),
   now: () => Date.now()
 })

@@ -6,10 +6,12 @@ import {
 
 type Snapshot<T> = { value: T; capturedAtMs: number; completedAtMs: number }
 
+type ProcessTableCaptureMode = 'poll' | 'fresh' | 'after-boundary'
+
 type ProcessTableSnapshotReaderDeps<T> = {
-  /** `fresh`: an authoritative read waiting on this capture; anything else is a display poll. `inputAt` takes the
+  /** `inputAt` takes the
    * time (in `now()`'s clock) of any input older than the capture itself, such as recovered argv. */
-  runPs: (fresh: boolean, inputAt: (atMs: number) => void) => Promise<T>
+  runPs: (mode: ProcessTableCaptureMode, inputAt: (atMs: number) => void) => Promise<T>
   now: () => number
   ttlMs?: number
 }
@@ -35,12 +37,12 @@ export function createProcessTableSnapshotReader<T = string>(
   let sequence = 0
   let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
 
-  async function runSnapshot(fresh = false): Promise<T> {
+  async function runSnapshot(mode: ProcessTableCaptureMode = 'poll'): Promise<T> {
     // Stamp evidence age at capture start (or its oldest input), TTL at completion: slow captures must remain old
     // yet still coalesce instead of spawning one whole-machine ps per caller on loaded hosts.
     let capturedAtMs = deps.now()
     inFlightCapturedAtMs = capturedAtMs
-    const promise = deps.runPs(fresh, (atMs) => {
+    const promise = deps.runPs(mode, (atMs) => {
       capturedAtMs = Math.min(capturedAtMs, atMs)
       inFlightCapturedAtMs = capturedAtMs
     })
@@ -99,7 +101,7 @@ export function createProcessTableSnapshotReader<T = string>(
       await waitForPromiseWithSignal(prior, signal).catch(() => undefined)
       return captureAfter(afterMs, signal)
     }
-    return waitForPromiseWithSignal(runSnapshot(true), signal)
+    return waitForPromiseWithSignal(runSnapshot('after-boundary'), signal)
   }
 
   function getFreshSnapshot(): Promise<T> {
@@ -128,7 +130,7 @@ export function createProcessTableSnapshotReader<T = string>(
       if (entry.startSequence <= requestSequence) {
         throw new Error('fresh process snapshot did not start after request')
       }
-      return runSnapshot(true)
+      return runSnapshot('fresh')
     })
     freshQueued = entry
     const clearQueued = (): void => {
