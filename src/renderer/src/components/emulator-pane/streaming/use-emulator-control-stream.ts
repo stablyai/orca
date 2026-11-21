@@ -11,7 +11,7 @@ import { RotateOrientation } from '../../../../../shared/rpc-contract/emulator/e
 import type { EmulatorStreamOrientation } from '../frame/emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750
-const KEYBOARD_FRAME_DELAY_MS = 4
+export const KEYBOARD_FRAME_DELAY_MS = 4
 const SERVE_SIM_CONFIG_MESSAGE_TAG = 130
 
 // serve-sim pushes {width, height, orientation} on connect and on every rotate, fold or resize.
@@ -33,6 +33,22 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
   } catch {
     return undefined
   }
+}
+
+// Android keycode names (see android-input-mapping.ts) for the named keys; others type as text.
+export const ANDROID_KEY_BUTTONS: Readonly<Record<string, string>> = {
+  Enter: 'enter',
+  Tab: 'tab',
+  Backspace: 'backspace',
+  Delete: 'forward_delete',
+  ArrowUp: 'dpad_up',
+  ArrowDown: 'dpad_down',
+  ArrowLeft: 'dpad_left',
+  ArrowRight: 'dpad_right',
+  Home: 'move_home',
+  End: 'move_end',
+  PageUp: 'page_up',
+  PageDown: 'page_down'
 }
 
 export type ScrcpyKeyboard = {

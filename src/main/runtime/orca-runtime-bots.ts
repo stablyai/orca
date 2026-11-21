@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Worktree } from '../../shared/worktree/types'
@@ -15,7 +16,7 @@ import {
   lookAroundFileIo,
   lookAroundStoreFile
 } from '../bots/bot-look-around-store'
-import { botHomeFolder, botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
@@ -150,8 +151,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       readShareable: (bot) =>
         readBotShareable({
           bot,
-          home: botHomeFolder(bot),
-          automations: this.store?.listAutomations?.() ?? []
+          automations: this.store?.listAutomations?.() ?? [],
+          repos: this.listRepos()
         })
     })
     return this.botShareService
@@ -163,15 +164,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     operation
   ) => operation()
 
-  private botSessionHooks: BotSessionHooks = {
-    turnEnded: () => {},
-    requestFailed: () => {},
-    groupRoomOf: () => null,
-    recentChats: async () => null,
-    unansweredQuestionNote: async () => null,
-    chatsOf: async () => [],
-    sendItemMail: async () => false
-  }
+  private botSessionHooks: BotSessionHooks = UNSET_BOT_SESSION_HOOKS
 
   /** Set by the runtime: a bot turn ended (bot-request-outcome.ts); a member session's group room;
    *  a bot's other chats lately; an owner item change's mail. */
@@ -200,8 +193,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return this.agentOrchestrationProjection.buildByPaneKey()
   }
 
-  /** The paired servers' bots as an `@` pick of one last read them. */
-  private readonly pairedBotRosters = pairedBotRosterCache(this)
+  /** The paired servers' rosters as last read, for an `@` pick and a send that misses here. */
+  readonly pairedBotRosters = pairedBotRosterCache(this)
 
   /** What the work record reads: orchestration, worktrees and the conversation store. */
   private readonly botWorkRuntime: BotWorkRuntime & BotHomeLineage = {
@@ -278,7 +271,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
-        pairedBotRosters: this.pairedBotRosters,
+        pairedBotRosters: this.pairedBotRosters.read,
         scrubToolSecrets: (bot) => this.scrubBotToolSecrets(bot)
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>

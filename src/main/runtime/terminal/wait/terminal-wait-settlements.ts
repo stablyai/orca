@@ -114,6 +114,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
       return
     }
+    // As a tui-idle wait does: a reattached idle agent prints nothing, so ask for the paint that settles it.
+    this.requestReattachedRepaint(ptyId)
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
