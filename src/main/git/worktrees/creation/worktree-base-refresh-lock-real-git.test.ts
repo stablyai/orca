@@ -505,6 +505,17 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     expect(git(repoPath, ['rev-parse', 'refs/heads/actual'])).toBe(localOid)
   })
 
+  it('still moves main while another checkout has a branch aliased to itself', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['worktree', 'add', '--quiet', '-b', 'topic', join(repoPath, '..', 'cyclic')])
+    git(repoPath, ['symbolic-ref', 'refs/heads/topic', 'refs/heads/topic'])
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
+
   it('moves main in a bare repo whose core.bare is unset', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     await rm(lockPath, { force: true })

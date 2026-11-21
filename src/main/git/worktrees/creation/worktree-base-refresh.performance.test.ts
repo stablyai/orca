@@ -234,8 +234,9 @@ it.each([3, 30])(
       git(join(dirname(repoPath), `wt-${index}`), ['checkout', '--quiet', '-b', `topic-${index}`])
     }
     const heads = join(repoPath, '.git', 'refs', 'heads')
+    // An alias out of refs/ is one the files cannot follow.
     await writeFile(join(heads, 'loop-a'), 'ref: refs/heads/loop-b\n')
-    await writeFile(join(heads, 'loop-b'), 'ref: refs/heads/loop-a\n')
+    await writeFile(join(heads, 'loop-b'), 'ref: elsewhere/loop\n')
     await writeFile(join(repoPath, '.git', 'worktrees', 'wt-0', 'HEAD'), 'ref: refs/heads/loop-a\n')
     const suggest = () =>
       getLocalBaseRefUpdateSuggestionForWorktreeCreate(
@@ -254,13 +255,13 @@ it.each([3, 30])(
 )
 
 it.each([3, 30])(
-  'remembers which checkout a looping per-worktree alias lives in among %i branch worktrees',
+  'remembers which checkout an odd per-worktree alias lives in among %i branch worktrees',
   async (linked) => {
     const { repoPath } = await createRepo(linked)
     for (let index = 0; index < linked; index += 1) {
       git(join(dirname(repoPath), `wt-${index}`), ['checkout', '--quiet', '-b', `topic-${index}`])
     }
-    // The same alias name resolves in the first checkout and loops in the last.
+    // The same alias name resolves in the first checkout and leaves refs/ in the last.
     const aliasIn = async (name: string, target: string) => {
       const gitDir = join(repoPath, '.git', 'worktrees', name)
       await mkdir(join(gitDir, 'refs', 'worktree'), { recursive: true })
@@ -268,7 +269,7 @@ it.each([3, 30])(
       await writeFile(join(gitDir, 'HEAD'), 'ref: refs/worktree/alias\n')
     }
     await aliasIn('wt-0', 'refs/heads/topic-0')
-    await aliasIn(`wt-${linked - 1}`, 'refs/worktree/alias')
+    await aliasIn(`wt-${linked - 1}`, 'elsewhere/alias')
     const suggest = () =>
       getLocalBaseRefUpdateSuggestionForWorktreeCreate(
         repoPath,
@@ -280,7 +281,7 @@ it.each([3, 30])(
 
     await suggest()
 
-    // main itself plus the looping alias.
+    // main itself plus the odd alias.
     expect(refOpens.count).toBeLessThanOrEqual(3)
   }
 )

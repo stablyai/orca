@@ -136,6 +136,8 @@ async function resolveFromFiles(
       return
     }
     let ref = start
+    // Git resolves a cyclic alias to nothing, so a cycle that never reached the branch owns nothing.
+    const seen = new Set([start])
     for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown && !stop(); hop += 1) {
       // Packed and missing refs are never symrefs.
       const loose = await readLooseRef(ref, gitDir)
@@ -146,6 +148,10 @@ async function resolveFromFiles(
       if (!ref.startsWith('refs/') || loose === UNRESOLVED_HEAD) {
         break
       }
+      if (seen.has(ref)) {
+        return
+      }
+      seen.add(ref)
       if (foldRef(ref) === target) {
         owners.push(gitDir)
         return
