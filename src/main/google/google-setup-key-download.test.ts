@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { StandingDownloadClaim } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import type { GoogleSetupRun } from '../../shared/google/google-setup-run'
 import {
+  abortClaimedClientDownload,
   beginClientDownload,
   setClientDownloadClaimant,
   writeClaimedClientDownload
@@ -226,21 +227,21 @@ describe("a paired desktop's key download, claimed as it begins", () => {
     }
   })
 
-  it('fails a claimed download whose desktop goes quiet, so the agent hears it never arrived', async () => {
-    vi.useFakeTimers()
+  it('fails a claimed download when its desktop disconnects, so the agent hears it never arrived', async () => {
     const { deps } = setup([run()])
     setClientDownloadClaimant(googleSetupClientDownloadClaimant(deps))
+    const stopWatching = vi.fn()
     try {
-      expect(beginClientDownload('t3', start)).toBe(true)
-      await vi.advanceTimersByTimeAsync(3 * 60_000 + 1)
-      expect(deps.keyRefused).toHaveBeenCalledExactlyOnceWith(
-        'ivy',
-        'the download stopped arriving from the desktop.'
+      expect(beginClientDownload('t3', start, stopWatching)).toBe(true)
+      const disconnected = 'the desktop disconnected before the download finished.'
+      expect(abortClaimedClientDownload('setup-page', 't3', disconnected)).toBe(true)
+      await vi.waitFor(() =>
+        expect(deps.keyRefused).toHaveBeenCalledExactlyOnceWith('ivy', disconnected)
       )
+      expect(stopWatching).toHaveBeenCalledOnce()
       expect(deps.importKey).not.toHaveBeenCalled()
     } finally {
       setClientDownloadClaimant(null)
-      vi.useRealTimers()
     }
   })
 })

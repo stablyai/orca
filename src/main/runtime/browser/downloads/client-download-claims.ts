@@ -26,12 +26,8 @@ type Pending = {
   chunks: Buffer[]
   received: number
   tooLarge: boolean
-  /** Fails a download whose desktop went quiet (a dropped connection sends no abort). */
-  idle: ReturnType<typeof setTimeout> | null
+  onSettled: () => void
 }
-
-// The same quiet spell after which the workspace path gives up on a transfer.
-const IDLE_MS = 3 * 60_000
 
 // A desktop that begins and then vanishes must not hold memory forever.
 const MAX_PENDING = 16
@@ -55,9 +51,7 @@ function settle(key: string, download: { bytes: Buffer } | { reason: string }): 
     return
   }
   pending.delete(key)
-  if (entry.idle) {
-    clearTimeout(entry.idle)
-  }
+  entry.onSettled()
   settled.add(key)
   if (settled.size > MAX_SETTLED) {
     const [oldest] = settled
@@ -68,19 +62,13 @@ function settle(key: string, download: { bytes: Buffer } | { reason: string }): 
   })
 }
 
-function armIdle(key: string, entry: Pending): void {
-  if (entry.idle) {
-    clearTimeout(entry.idle)
-  }
-  entry.idle = setTimeout(
-    () => settle(key, { reason: 'the download stopped arriving from the desktop.' }),
-    IDLE_MS
-  )
-  entry.idle.unref?.()
-}
-
-/** Resolves whether a claimant took the download as it began. */
-export function beginClientDownload(transferId: string, start: ClientDownloadStart): boolean {
+/** Resolves whether a claimant took the download as it began; `onSettled` runs once it is handed
+ *  over or dropped, so the caller can stop watching the desktop's connection. */
+export function beginClientDownload(
+  transferId: string,
+  start: ClientDownloadStart,
+  onSettled: () => void = () => {}
+): boolean {
   const claim = claimant?.(start) ?? null
   if (!claim) {
     return false
@@ -89,10 +77,14 @@ export function beginClientDownload(transferId: string, start: ClientDownloadSta
     const [oldest] = pending.keys()
     settle(oldest, { reason: 'the download was dropped while too many were waiting.' })
   }
-  const entry: Pending = { start, claim, chunks: [], received: 0, tooLarge: false, idle: null }
-  const key = keyOf(start.browserPageId, transferId)
-  pending.set(key, entry)
-  armIdle(key, entry)
+  pending.set(keyOf(start.browserPageId, transferId), {
+    start,
+    claim,
+    chunks: [],
+    received: 0,
+    tooLarge: false,
+    onSettled
+  })
   return true
 }
 
@@ -120,7 +112,6 @@ export function writeClaimedClientDownload(chunk: {
     settle(key, { reason: 'the download stream broke.' })
     throw new Error('browser_client_download_transfer_stale')
   }
-  armIdle(key, entry)
   const bytes = Buffer.from(chunk.contentBase64, 'base64')
   entry.received += bytes.byteLength
   if (entry.received > entry.claim.maxBytes) {
@@ -141,12 +132,17 @@ export function writeClaimedClientDownload(chunk: {
   return { workspaceRelativePath: entry.claim.label }
 }
 
-/** A cancelled or failed claimed download still reaches its claimant, so it can clean up. */
-export function abortClaimedClientDownload(browserPageId: string, transferId: string): boolean {
+/** A cancelled, failed or disconnected claimed download still reaches its claimant, so it can
+ *  clean up and say why. */
+export function abortClaimedClientDownload(
+  browserPageId: string,
+  transferId: string,
+  reason = 'the download was canceled.'
+): boolean {
   const key = keyOf(browserPageId, transferId)
   if (!pending.has(key)) {
     return settled.has(key)
   }
-  settle(key, { reason: 'the download was canceled.' })
+  settle(key, { reason })
   return true
 }

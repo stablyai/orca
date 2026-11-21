@@ -101,13 +101,33 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelBeginParams,
     handler: (params, context) => {
       const page = requireFileChannelPage(params, context)
-      const claimed = beginClientDownload(params.transferId, {
-        browserPageId: page.browserPageId,
-        workspaceId: page.workspaceId,
-        pageHostGeneration: params.pageHostGeneration,
-        filename: params.filename,
-        documentUrl: params.documentUrl
-      })
+      const { runtime, connectionId } = context
+      // File transfers belong to one desktop connection (they don't survive a reconnect), and a
+      // dropped connection sends no abort: its close fails the claim, so the agent hears why.
+      const watch = `client-download-claim:${page.browserPageId}:${params.transferId}`
+      const claimed = beginClientDownload(
+        params.transferId,
+        {
+          browserPageId: page.browserPageId,
+          workspaceId: page.workspaceId,
+          pageHostGeneration: params.pageHostGeneration,
+          filename: params.filename,
+          documentUrl: params.documentUrl
+        },
+        () => runtime.cleanupSubscription(watch)
+      )
+      if (claimed) {
+        runtime.registerSubscriptionCleanup(
+          watch,
+          () =>
+            void abortClaimedClientDownload(
+              page.browserPageId,
+              params.transferId,
+              'the desktop disconnected before the download finished.'
+            ),
+          connectionId
+        )
+      }
       return { accepted: true as const, claimed }
     }
   }),
