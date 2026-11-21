@@ -74,7 +74,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Replaces the pairing key and installation id and removes every paired device, so clients must pair again. Use it on each copy of a machine image that was made after Orca had run, so the copies stop sharing one identity.',
       'Asks for confirmation in a terminal; pass --yes to skip it. Stop Orca (the desktop app or `orca serve`) for this profile first; the command refuses while it runs.',
-      'To have each copy rotate on its own instead, start `orca serve` with ORCA_INSTANCE_ID set to a value unique to that instance (for example the cloud-init instance id). When the value differs from the one recorded with the current identity, Orca rotates it at startup. The first value seen is only recorded, and an unset variable never rotates anything.'
+      'To have each copy rotate on its own instead, start `orca serve` with ORCA_INSTANCE_ID set to a value unique to that instance (for example the cloud-init instance id). When the value differs from the one recorded with the current identity, Orca rotates it at startup. The first value seen is only recorded; unsetting the variable does not trigger rotation.',
+      'On macOS, a profile that already recorded its hardware identity also rotates when moved or copied to another Mac. The first hardware observation keeps existing pairings. Older copies without that observation still need reset-identity once.'
     ],
     examples: ['orca serve reset-identity', 'orca serve reset-identity --yes']
   },

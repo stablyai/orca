@@ -248,7 +248,9 @@ Copies of a machine image share the server identity: the pairing key, the paired
 
 - With `ORCA_INSTANCE_ID` set, Orca records the value with the server identity. If a later start sees a different value, Orca creates a new identity and removes all paired devices on that copy, so clients pair with it again.
 - The first value Orca sees on an existing server is only recorded, so setting the variable later keeps existing pairings. Use a value that stays the same across restarts of one instance; a value that changes on every boot forces a new pairing each time.
-- When `ORCA_INSTANCE_ID` is not set, Orca never changes the identity on its own.
+- On macOS, Orca also records a hash of the Mac's hardware identity. After that first observation, moving or copying the profile to another Mac (including with Migration Assistant) creates a new pairing identity on the destination. The original Mac keeps its identity, so mobile can pair with both computers separately. Moving to a replacement Mac requires pairing clients with that Mac again too.
+- The first hardware observation only records the current Mac; upgrading never resets existing pairings. Copies made before that observation still need `orca serve reset-identity` once. If the hardware identity is temporarily unavailable, Orca keeps the current identity and its previous observation.
+- Outside macOS, an unset `ORCA_INSTANCE_ID` never triggers automatic rotation. Linux containers, WSL, and Windows keep the explicit-instance behavior above.
 - If Orca cannot write the new identity (for example on a full or read-only disk), it keeps serving the current one unchanged, logs an error, and tries again on the next start.
 - `orca serve reset-identity` does the same reset on demand. Stop Orca on that machine first; the command asks for confirmation, or pass `--yes`.
 - Each reset moves the replaced files into a new folder under `orca-identity-backups` in the Orca data directory (the five most recent are kept). To undo an unwanted reset, stop Orca and copy the files from that folder back into the data directory.

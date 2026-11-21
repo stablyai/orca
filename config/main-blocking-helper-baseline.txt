@@ -1165,7 +1165,7 @@
 1 src/main/runtime/files/staged-file-save-commands.ts
 1 src/main/runtime/files/staged-file-saves.ts
 2 src/main/runtime/files/watch/file-watches.ts
-16 src/main/runtime/host-instance-identity.ts
+19 src/main/runtime/host-instance-identity.ts # macOS identity check only at pairing startup/manual reset; reuses the cached bounded hardware probe
 3 src/main/runtime/hosts/platform-probe/host-descriptor.ts
 3 src/main/runtime/hosts/runtime-status.ts
 1 src/main/runtime/integrations/git/runtime-git-command-target.ts

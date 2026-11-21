@@ -127,13 +127,17 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
 function logHostIdentityOutcome(outcome: HostIdentityOutcome): void {
   if (outcome.kind === 'kept') {
     console.error(
-      '[runtime] Could not apply ORCA_INSTANCE_ID; serving the existing pairing identity unchanged. Orca retries on the next start.',
+      '[runtime] Could not record or apply the host identity; serving the existing pairing identity unchanged. Orca retries on the next start.',
       outcome.error
     )
   } else if (outcome.kind === 'rotated' && outcome.reason === 'instance_changed') {
     // Loud on purpose: a value that changes on every start would un-pair clients each time.
     console.error(
       '[runtime] ORCA_INSTANCE_ID differs from the value recorded with this pairing identity, so Orca created a new identity and removed all paired devices. Clients must pair with this host again. If this host was not copied, set ORCA_INSTANCE_ID to a value that stays the same across restarts.'
+    )
+  } else if (outcome.kind === 'rotated' && outcome.reason === 'machine_changed') {
+    console.error(
+      '[runtime] This pairing identity was copied or moved from another Mac. Orca created a new identity and removed the copied paired devices. Clients must pair with this Mac again.'
     )
   } else if (outcome.kind === 'rotated') {
     console.error(
