@@ -160,3 +160,20 @@ it('resumes a legacy copy that a stopped swap left moved aside', async () => {
   expect(result).toMatchObject({ outcome: 'resume', codexHomePath: legacyHome })
   expect(readFileSync(copy, 'utf-8')).toContain('{"turn":1}')
 })
+
+it('refuses to resume as a fresh chat while a copy moved aside has an unreadable marker', async () => {
+  const relativePath = join('2026', '10', '05', `rollout-2026-10-05T10-00-00-${sessionId}.jsonl`)
+  const legacyHome = join(homes.system, 'legacy')
+  const copy = join(legacyHome, 'sessions', relativePath)
+  mkdirSync(dirname(copy), { recursive: true })
+  writeFileSync(`${copy}.orca-legacy-copy.1`, '{"turn":1}\n')
+  // A marker that exists but can't be read as a file.
+  mkdirSync(join(legacyHome, '.orca-session-copies', `${relativePath}.json`), { recursive: true })
+
+  await expect(
+    prepareCodexSessionResumeForLaunch({
+      providerSession: { key: 'session_id', id: sessionId, transcriptPath: copy },
+      target: { runtime: 'host' }
+    })
+  ).rejects.toThrow(/Retry resume/)
+})

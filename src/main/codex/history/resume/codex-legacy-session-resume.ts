@@ -27,6 +27,7 @@ import {
   swapLegacySessionCopy
 } from '../bridges/codex-legacy-session-copy'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { legacyCopyLocks } from '../bridges/codex-legacy-session-copy-lock-holder'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -47,7 +48,10 @@ export async function settleLegacySessionCopyBeforeResume(
     resolve(transcriptPath)
   )
   if (relativePath) {
-    await settleLegacySessionCopyName({ managedHome, relativePath })
+    // A copy left moved aside keeps its bytes; resuming without its name would start a new chat.
+    await settleLegacySessionCopyName({ managedHome, relativePath }).catch((error: unknown) => {
+      throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
+    })
   }
 }
 
@@ -82,7 +86,7 @@ export async function prepareLegacySharedCodexSessionResume(
   const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
   if (relativePath && !options.leaveSwapToAccountRestart) {
     // Before Codex starts, so this resume can't be writing the copy as it's swapped.
-    await swapLegacySessionCopy({ managedHome: legacyCodexHomePath, relativePath })
+    await swapLegacySessionCopyBeforeCodex({ managedHome: legacyCodexHomePath, relativePath })
   }
   if (!options.isHostSystemDefaultRealHomeSelected()) {
     return { useRealCodexHome: false }
@@ -119,6 +123,18 @@ export async function prepareLegacySharedCodexSessionResume(
   return { useRealCodexHome: true }
 }
 
+// The Codex about to start takes the coordination lock this swap's hold would otherwise keep.
+async function swapLegacySessionCopyBeforeCodex(args: {
+  managedHome: string
+  relativePath: string
+}): Promise<void> {
+  try {
+    await swapLegacySessionCopy(args)
+  } finally {
+    await legacyCopyLocks.releaseIfIdle()
+  }
+}
+
 /** Explicit account restarts must move the verified rollout before changing credentials. */
 export async function prepareCodexAccountRestartResume(args: {
   sourceHome: string
@@ -147,7 +163,7 @@ export async function prepareCodexAccountRestartResume(args: {
       (error: unknown) => !isDefinitiveAbsence(error)
     ))
   ) {
-    await swapLegacySessionCopy({ managedHome: legacyCodexHomePath, relativePath })
+    await swapLegacySessionCopyBeforeCodex({ managedHome: legacyCodexHomePath, relativePath })
   }
   await materializeLegacyRollout(args.transcriptPath, targetPath, paths.auditLogPath)
   return args.targetHome

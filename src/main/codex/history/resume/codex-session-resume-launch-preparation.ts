@@ -73,9 +73,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     await settleLegacySessionCopyBeforeResume(
       args.providerSession.transcriptPath,
       resolveOrcaManagedCodexHomePath()
-    ).catch((error: unknown) => {
-      console.warn('[codex-session-resume] Could not settle a legacy session copy:', error)
-    })
+    )
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath: args.providerSession.transcriptPath,
