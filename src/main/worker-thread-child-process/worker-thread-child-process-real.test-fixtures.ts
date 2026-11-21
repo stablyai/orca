@@ -28,7 +28,14 @@ export function installRealWorkerThreadChildProcesses(options: { latchRemoval?: 
     const spawn = vi
       .spyOn(workerProcesses, 'spawnProcessOnWorkerThread')
       .mockImplementation((spec) => currentHost.spawn(spec))
-    restoreSpawn = () => spawn.mockRestore()
+    // The production worker never boots here; captures pick a worker by its readiness.
+    const ready = vi.spyOn(workerProcesses, 'whenSpawnWorkerReady').mockResolvedValue(true)
+    const readyNow = vi.spyOn(workerProcesses, 'spawnWorkerReadyNow').mockReturnValue(true)
+    restoreSpawn = () => {
+      spawn.mockRestore()
+      ready.mockRestore()
+      readyNow.mockRestore()
+    }
   })
   afterEach(() => {
     restoreSpawn?.()

@@ -33,10 +33,19 @@ type CaptureCallback = (
  * On POSIX, main keeps what only its launch does: canStart rechecked at creation, and a probed CLI selection run under its own name. */
 export async function capturesOnWorker(
   command: string,
-  options: { canStart?: () => boolean; spawnOnWorkerThread?: boolean }
+  options: {
+    canStart?: () => boolean
+    spawnOnWorkerThread?: boolean
+    worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
+  }
 ): Promise<boolean> {
   if (process.platform === 'win32') {
     return options.spawnOnWorkerThread !== false && whenSpawnWorkerReady()
+  }
+  // Only the worker checks a guarded checkout's identity right before Git starts; canStart is
+  // still rechecked at dispatch, and on main the guard is refused rather than skipped.
+  if (options.worktreeCheckoutGuard) {
+    return options.spawnOnWorkerThread === true && whenSpawnWorkerReady()
   }
   if (options.canStart || hasLocalCommandSelection(command)) {
     return false

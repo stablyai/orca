@@ -20,7 +20,7 @@ import type {
   WorkerThreadChildProcessHost
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 import { createWorkerThreadChildProcessTestEntry } from '../../../worker-thread-child-process/worker-thread-child-process-worker.test-fixtures'
-import { workerExecFile } from './worker-exec-file'
+import { capturesOnWorker, workerExecFile } from './worker-exec-file'
 import { execFileCapture } from './exec-file-capture'
 
 const state = vi.hoisted(() => {
@@ -173,6 +173,27 @@ describe.skipIf(process.platform === 'win32')('POSIX captured Git on the worker'
     expect(proxy).not.toHaveBeenCalled()
     proxy.mockRestore()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'starts a guarded checkout delete on the worker even with a start gate, or not at all',
+    async () => {
+      await createHost()
+      const identity = {
+        instanceId: 'A',
+        root: '/checkout',
+        rootKey: 'root',
+        markerKey: 'marker',
+        gitDir: '/repo/.git/worktrees/checkout',
+        adminKey: 'admin',
+        nonce: 'nonce'
+      }
+      const worktreeCheckoutGuard = { identity }
+      const gated = { canStart: () => true, worktreeCheckoutGuard }
+      expect(await capturesOnWorker('git', { ...gated, spawnOnWorkerThread: true })).toBe(true)
+      // Without the worker, exec-file-capture refuses it as unverifiable instead of running it on main.
+      expect(await capturesOnWorker('git', gated)).toBe(false)
+    }
+  )
 
   it('returns output far past the worker high-water mark intact', async () => {
     await createHost()
