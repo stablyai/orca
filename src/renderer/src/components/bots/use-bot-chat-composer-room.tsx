@@ -35,10 +35,11 @@ import { botMentionServer } from './bot-mention-server'
 
 /** `@` lists the owner's bots above files, each with what it is for, sent as `[Bot: <name>](bot:<id>)`
  *  so the host tells the agent how to ask them; in a bot's own chat that bot comes first, for its other
- *  chats, where chats can be picked. A chat on this computer lists its paired servers' bots too, after
- *  its own, with the server's pill, named `(bot:<id>@<server>)`, which this computer reaches with
- *  `--on`; a server that is down dims its bots in place. A chat on a server lists only that server's.
- *  Paused bots show but can't be picked. */
+ *  chats, where chats can be picked. Every chat lists this computer's and its paired servers' bots too,
+ *  after its own host's, with the host's pill; a server's are named `(bot:<id>@<server>)`, which this
+ *  computer reaches with `--on`, and a server that is down dims its bots in place; a server's chat
+ *  can't reach other hosts yet, so it names theirs without asking them. Paused bots show but can't be
+ *  picked. */
 export function useBotChatComposerRoom(
   workspaceId: string | undefined,
   hostId: ExecutionHostId | null,
@@ -53,7 +54,11 @@ export function useBotChatComposerRoom(
     const own = self ? here.find((bot) => isSameBot(bot, self)) : undefined
     const others = here.filter((bot) => bot !== own)
     const first = [...(own && selfChats ? [own] : []), ...others]
-    return hostId === LOCAL_EXECUTION_HOST_ID ? [...first, ...bots.filter(isOnPairedServer)] : first
+    const elsewhere = bots.filter(
+      (bot) =>
+        bot.hostId !== hostId && (bot.hostId === LOCAL_EXECUTION_HOST_ID || isOnPairedServer(bot))
+    )
+    return [...first, ...elsewhere]
   }, [bots, self, hostId, selfChats])
   const live = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds, readLiveBotHostIds)
   const hostLabels = useBotHostLabels(
@@ -93,9 +98,12 @@ export function useBotChatComposerRoom(
         if (!bot) {
           return undefined
         }
-        return bot.hostId === hostId
-          ? botMentionToken(bot)
-          : botMentionToken(bot, undefined, botMentionServer(bot.hostId) ?? undefined)
+        if (bot.hostId === hostId) {
+          return botMentionToken(bot)
+        }
+        // No token names this computer from a server's chat yet, so its bots go by plain name.
+        const server = botMentionServer(bot.hostId)
+        return server === null ? undefined : botMentionToken(bot, undefined, server)
       },
       placeholder: t(
         'bots.chat.mentionPlaceholder',
@@ -119,7 +127,7 @@ export function BotChatRoom({
   children: ReactNode
 }): React.JSX.Element {
   const workspaceId = useNativeChatTabOwnerWorktreeId(tabId)
-  // The visual owner names the host the chat's agent runs on; only that host's bots can be asked.
+  // The visual owner names the host the chat's agent runs on; only that host's bots' chats can be picked.
   const target = useContext(NativeChatVisualOwnerContext)?.target
   const hostId = target ? getRuntimeTargetHostId(target) : null
   const self = useBotForWorkspace(workspaceId ?? null)

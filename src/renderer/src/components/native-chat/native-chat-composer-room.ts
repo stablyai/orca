@@ -136,7 +136,14 @@ export function useNativeChatComposerMentions(
       ? NO_MATCHES
       : { files: [...pickable, ...agents], loading: false, failed: false }
   }, [room, query, agents, pickable, workspaceFiles])
-  const botIdOf = useCallback((value: string) => memberOf(room, value)?.id ?? null, [room])
+  // Another host's bot (it carries a host pill) can share an id with this host's, so it never drills.
+  const botIdOf = useCallback(
+    (value: string) => {
+      const member = memberOf(room, value)
+      return member && !member.host ? (member.id ?? null) : null
+    },
+    [room]
+  )
   const chooseMention = useCallback(
     (value: string) => {
       const agent = crewAgents.references.get(value)
