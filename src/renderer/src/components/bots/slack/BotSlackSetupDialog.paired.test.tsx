@@ -373,6 +373,58 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(document.activeElement).toBe(about)
   })
 
+  // Focus when the offer arrives or goes: a control that goes away or is hidden hands focus to where
+  // the step now asks for input; one that stays keeps it.
+  it.each([
+    ['the empty field, now hidden', null, /Paste a token instead/],
+    ['Cancel, which moves to the footer', 'Cancel', /Paste a token instead/],
+    ['Reconnect, which moves beside a typed token', 'Reconnect', 'field']
+  ] as const)(
+    'when the offer arrives late, focus on %s goes where the step asks for input',
+    async (_label, focused, target) => {
+      serverState({ state: 'grant_expired', teamId: 'T1' })
+      const signedIn = useAppStore.getState().orcaProfileAuthStatus
+      useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+      openDialog()
+
+      const field = await screen.findByLabelText('Configuration refresh token')
+      if (target === 'field') {
+        fireEvent.change(field, { target: { value: 'xoxe-typed' } })
+      }
+      if (focused) {
+        const button = screen.getByRole('button', { name: focused })
+        act(() => button.focus())
+        expect(document.activeElement).toBe(button)
+      }
+      act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
+
+      await screen.findByRole('button', { name: 'Use it' })
+      expect(document.activeElement).toBe(
+        target === 'field'
+          ? screen.getByLabelText('Configuration refresh token')
+          : screen.getByRole('button', { name: target })
+      )
+    }
+  )
+
+  it.each([['Use it'], ['Paste a token instead'], ['Cancel']])(
+    'when the offer goes away, focus on %s, which goes away, moves to the field',
+    async (name) => {
+      serverState({ state: 'grant_expired', teamId: 'T1' })
+      openDialog()
+
+      await screen.findByRole('button', { name: 'Use it' })
+      const button = screen.getByRole('button', { name: new RegExp(`^${name}`) })
+      act(() => button.focus())
+      act(() =>
+        useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+      )
+
+      await screen.findByText('Paste a new token to reconnect.')
+      expect(document.activeElement).toBe(screen.getByLabelText('Configuration refresh token'))
+    }
+  )
+
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {
     mocks.hostEmail = 'me@example.test'
     serverState({ state: 'not_created' })

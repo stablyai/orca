@@ -1,6 +1,6 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The expired-token step: this desktop's own working token first when it has one, else a short paste.
-import React, { useId, useRef, useState } from 'react'
+import React, { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Trans } from 'react-i18next'
 import { ChevronRight, Info } from 'lucide-react'
@@ -109,6 +109,28 @@ export function SlackReconnectStep({
       setPasting(true)
     }
   }
+  // An offer arriving or going removes or hides controls. Focus left on one of them goes to where
+  // the step now asks for input: the field, or the disclosure while the field is behind it.
+  // Focus still on a control that stays (the ⓘ, the field, the dialog's close) is left alone.
+  const stepRef = useRef<HTMLDivElement>(null)
+  const pasteToggleRef = useRef<HTMLButtonElement>(null)
+  const focusedFor = useRef(offered)
+  useLayoutEffect(() => {
+    if (focusedFor.current === offered) {
+      return
+    }
+    focusedFor.current = offered
+    const active = document.activeElement
+    const lost =
+      !active ||
+      active === document.body ||
+      (stepRef.current?.contains(active) === true && active.closest('[hidden]') !== null)
+    if (lost) {
+      const target =
+        offered && !pasting ? pasteToggleRef.current : pasteRef.current?.querySelector('input')
+      target?.focus()
+    }
+  }, [offered, pasting])
   const kept = t(
     'bots.slack.reconnect.kept',
     'Orca Cloud keeps the new token encrypted, so your next bots here need one click.'
@@ -117,7 +139,7 @@ export function SlackReconnectStep({
   // One form at one place in the tree for both versions: an offer that arrives or goes while the
   // step is open only changes its props, so a token typed into it is kept.
   return (
-    <div className="space-y-4">
+    <div ref={stepRef} className="space-y-4">
       {offered ? (
         <LineWithWhy
           label={t('bots.slack.reconnect.about', 'About Slack tokens')}
@@ -168,6 +190,7 @@ export function SlackReconnectStep({
       <div>
         {offered ? (
           <Button
+            ref={pasteToggleRef}
             type="button"
             variant="link-muted"
             size="inline"
