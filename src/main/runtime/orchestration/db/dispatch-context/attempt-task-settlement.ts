@@ -7,6 +7,37 @@ import {
   transitionLifecycleWithDb
 } from '../lifecycle-transition'
 import { currentRemoteAttempt, remoteHoldOnTask } from '../remote-owned/remote-placements'
+import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
+
+/** Keeps the sentence when the replacement is missing or is the Dispatch already named. */
+function withCurrentDispatch(
+  reason: string,
+  reportedDispatchId: string,
+  currentDispatchId: string | undefined
+): string {
+  if (!currentDispatchId || currentDispatchId === reportedDispatchId) {
+    return reason
+  }
+  return `${reason} The current dispatch is ${currentDispatchId}.`
+}
+
+export function inactiveDispatchAlreadySettledReason(
+  reportedDispatchId: string,
+  taskId: string,
+  currentDispatchId: string | undefined
+): string {
+  const reason = `inactive dispatch ${reportedDispatchId}: it or task ${taskId} is already settled.`
+  return withCurrentDispatch(reason, reportedDispatchId, currentDispatchId)
+}
+
+export function staleDispatchReason(
+  reportedDispatchId: string,
+  taskId: string,
+  currentDispatchId: string | undefined
+): string {
+  const reason = `Dispatch ${reportedDispatchId} is not the current dispatch for task ${taskId}.`
+  return withCurrentDispatch(reason, reportedDispatchId, currentDispatchId)
+}
 
 /**
  * The Task half of settlement, shared by every attempt wherever it ran: the Task takes the
@@ -122,14 +153,23 @@ function settleRemoteAttemptResultInTransaction(
     return {
       action: 'rejected',
       code: 'inactive_dispatch',
-      reason: `inactive dispatch ${params.dispatchId}: it or task ${params.taskId} is already settled.`
+      reason: inactiveDispatchAlreadySettledReason(
+        params.dispatchId,
+        params.taskId,
+        getActiveDispatchForTask(db, params.taskId)?.id
+      )
     }
   }
-  if (currentRemoteAttempt(db, params.taskId)?.dispatch_id !== params.dispatchId) {
+  const remoteAttemptId = currentRemoteAttempt(db, params.taskId)?.dispatch_id
+  if (remoteAttemptId !== params.dispatchId) {
     return {
       action: 'rejected',
       code: 'stale_dispatch',
-      reason: `Dispatch ${params.dispatchId} is not the current dispatch for task ${params.taskId}.`
+      reason: staleDispatchReason(
+        params.dispatchId,
+        params.taskId,
+        remoteAttemptId ?? getActiveDispatchForTask(db, params.taskId)?.id
+      )
     }
   }
   const conflictingWorker = findConflictingActiveAttempt(db, params.taskId, params.dispatchId)
