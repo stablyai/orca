@@ -115,14 +115,17 @@ function plainSrc(id: BotMascotId, color: string | null): string {
   return color ? pictureSrc(id, color, '', (svg) => svg) : BOT_MASCOT_URLS[id]
 }
 
-// The art a picture of `size` draws: the large bake once it has arrived, the small one until then.
-function outfitArt(
+// What `id` wears at `size`. A large picture wears nothing until its large art has arrived, so it never
+// shows the small bake scaled up; then its whole look (art and any face) appears at once.
+function wornLayer(
   id: BotMascotId,
-  layer: BotOutfitLayer,
-  largeArt: BotOutfitLargeArt | null | undefined
-): { art: string; size: BotPictureSize } {
-  const large = largeArt?.[id]?.art
-  return large ? { art: large, size: 'large' } : { art: layer.art, size: 'small' }
+  outfit: BotAvatarOutfit | null,
+  layers: BotOutfitLayers | null | undefined,
+  largeArt: BotOutfitLargeArt | null | undefined,
+  size: BotPictureSize
+): BotOutfitLayer | undefined {
+  const layer = outfit && layers ? layers[id] : undefined
+  return size === 'large' && !largeArt?.[id] ? undefined : layer
 }
 
 const faces = new Map<string, string>()
@@ -132,20 +135,21 @@ function tileLook(
   id: BotMascotId,
   outfit: BotAvatarOutfit | null,
   layers: BotOutfitLayers | null | undefined,
-  largeArt: BotOutfitLargeArt | null | undefined
+  largeArt: BotOutfitLargeArt | null | undefined,
+  size: BotPictureSize
 ): BotMascotTileLook {
-  const layer = outfit && layers ? layers[id] : undefined
+  const layer = wornLayer(id, outfit, layers, largeArt, size)
   if (!layer) {
     return { face: null, outfit: null }
   }
-  const { art, size } = outfitArt(id, layer, largeArt)
+  const large = size === 'large' ? largeArt?.[id] : undefined
   const image = cached(
     arts,
     `${id}|${outfit}|${size}`,
-    () => ({ src: artSrc(art), at: layer.at }),
+    () => ({ src: artSrc(large ? large.art : layer.art), at: layer.at }),
     MAX_OUTFIT_ART
   )
-  const faceArt = size === 'large' ? largeArt?.[id]?.faceArt : layer.faceArt
+  const faceArt = large ? large.faceArt : layer.faceArt
   const face = faceArt
     ? cached(faces, `${id}|${outfit}|${size}`, () => artSrc(faceArt), MAX_OUTFIT_ART)
     : null
@@ -165,7 +169,7 @@ export function useBotMascotTileLooks(
   const worn = outfit ?? null
   const layers = useBotOutfitLayers(worn)
   const largeArt = useBotOutfitLargeArt(worn, size === 'large')
-  return (id) => tileLook(id, worn, layers, largeArt)
+  return (id) => tileLook(id, worn, layers, largeArt, size)
 }
 
 /** One mascot's picture in layers, its SVG on `color` with the outfit's art apart from it: the art
@@ -183,11 +187,11 @@ export function useBotMascotLayers(
   if (!id) {
     return null
   }
-  const layer = worn && layers ? layers[id] : undefined
+  const layer = wornLayer(id, worn, layers, largeArt, size)
   const src = layer?.face
     ? pictureSrc(id, tile, `${worn}|faced`, (svg) => faceMascotSvg(svg, layer))
     : plainSrc(id, tile)
-  return { src, outfit: tileLook(id, worn, layers, largeArt).outfit }
+  return { src, outfit: tileLook(id, worn, layers, largeArt, size).outfit }
 }
 
 /** useBotMascotLayers for a mascot that is always there. */
