@@ -7222,7 +7222,7 @@
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
           "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
           "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
-          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree, local changes, and its branch if merged."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",

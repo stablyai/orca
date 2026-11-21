@@ -6388,7 +6388,7 @@
           "removeWithChildrenGit_few": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространства</descendants> из git и удалить их папки рабочих пространств.",
           "removeWithChildrenGit_many": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространств</descendants> из git и удалить их папки рабочих пространств.",
           "removeSingleFolderFromOrca": "Удаляет его из Orca. Папка на диске сохраняется.",
-          "deleteSingleWorktreeAndBranch": "Удаляет рабочее дерево и его ветку (несмерженная ветка сохраняется)."
+          "deleteSingleWorktreeAndBranch": "Удаляет рабочее дерево и локальные изменения. Ветка удаляется, если она уже слита."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Показать загруженные пути",
