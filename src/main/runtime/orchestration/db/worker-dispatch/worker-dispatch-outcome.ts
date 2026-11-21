@@ -28,17 +28,19 @@ export function retainWorkerLaunchObservation(
   }
 }
 
+/** `from: 'start_unknown'` is a start whose turn was seen only later: it lifts the block that put on its Task. */
 export function markWorkerDispatchReady(
   this: OrchestrationDb,
   dispatchId: string,
-  effects?: unknown[]
+  effects?: unknown[],
+  from: 'starting' | 'start_unknown' = 'starting'
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
-    if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
-      throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
+    if (!dispatch || dispatch.status !== 'pending' || worker?.state !== from) {
+      throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not ${from}.`)
     }
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
@@ -49,13 +51,22 @@ export function markWorkerDispatchReady(
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
-      from: 'starting',
+      from,
       to: 'ready',
       projection: {
         stage: 'input_accepted',
+        ...(from === 'start_unknown' ? { last_error: null } : {}),
         effects: effects ? JSON.stringify(effects) : worker.effects
       }
     })
+    if (from === 'start_unknown' && this.getTask(dispatch.task_id)?.status === 'blocked') {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'task',
+        id: dispatch.task_id,
+        from: 'blocked',
+        to: 'dispatched'
+      })
+    }
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

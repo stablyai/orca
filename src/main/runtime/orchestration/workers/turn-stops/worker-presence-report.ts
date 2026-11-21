@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
+import { observeWorkerWorking } from './worker-working-observation'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
 import {
   hasRelayedWorkerReport,
@@ -34,7 +35,8 @@ export type WorkerRest = Pick<
   | 'turnStartedAt'
   | 'mailTaken'
   | 'requestError'
-> & { reason: 'finished' | 'errored' | 'needs-input' }
+  | 'startSurface'
+> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' }
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
@@ -84,11 +86,7 @@ export function observeWorker(
   const dispatchId = workerTurnStopDispatchId(target)
   const current = readWorkerPresence(db, dispatchId)
   if (observation.presence === 'working') {
-    const fence = observation.newTurn ? `turn:${(current?.generation ?? 0) + 1}` : null
-    const next = nextWorkerPresence(current, { presence: 'working', fence, report: null })
-    if (next.changed) {
-      writeWorkerPresence(db, dispatchId, next)
-    }
+    observeWorkerWorking(db, target, observation.newTurn === true)
     return false
   }
   if (observation.presence === 'gone') {

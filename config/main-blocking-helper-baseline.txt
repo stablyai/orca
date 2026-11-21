@@ -1209,7 +1209,7 @@
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
-11 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts
+12 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts # the same ready transaction lifts the Task block of a start seen only late, inside orchestration DB writes that were already synchronous
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stage.ts
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
