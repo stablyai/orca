@@ -35,6 +35,10 @@ The Orca mobile companion is an iOS/Android app that pairs with your desktop Orc
 
 The mobile app is intentionally not a full editor — it's a remote control for the desktop you already have running.
 
+## Plugins
+
+Plugins don't carry over to mobile yet. Panels, commands, status bar items and themes from plugins installed on the paired desktop or server don't appear in the mobile app. The same goes for panels in the browser client that `orca serve` prints. Plugins keep running on the host, and their panels show only in the Orca desktop app. Follow [#16835](https://github.com/stablyai/orca/issues/16835) for mobile plugin support.
+
 ## Pairing
 
 1. On desktop, open Orca's pairing flow from the account / status menu. Orca shows a pairing code. Treat it as a secret and share it only with the device you want to authorize.
