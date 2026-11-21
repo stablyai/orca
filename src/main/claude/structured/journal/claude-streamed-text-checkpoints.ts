@@ -9,8 +9,6 @@ import type {
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import {
-  AGENT_SESSION_TEXT_IDLE_SAVE_MS,
-  AGENT_SESSION_DELTA_SHOWN_ONLY,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
@@ -92,17 +90,13 @@ export function createClaudeStreamedTextCheckpoints(
     return agentJournalLinkageFields(deps.producer.settledLinkageFor(scope).linkage)
   }
 
-  const persist = (
-    key: string,
-    text: string,
-    force: boolean
-  ): void | typeof AGENT_SESSION_DELTA_SHOWN_ONLY => {
+  const persist = (key: string, text: string, force: boolean): void => {
     latestText.set(key, text)
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
     if (!force && checkpointLength > 0 && text.length < nextLength) {
       live.publish()
-      return AGENT_SESSION_DELTA_SHOWN_ONLY
+      return
     }
     const identity = identities.get(key)
     if (!identity) {
@@ -117,15 +111,7 @@ export function createClaudeStreamedTextCheckpoints(
   const coalescer = createAgentSessionDeltaCoalescer({
     ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    emit: (key, text) => persist(key, text, false),
-    idle: {
-      ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
-      run: (key, text) => {
-        if (checkpointLengths.get(key) !== text.length) {
-          persist(key, text, true)
-        }
-      }
-    }
+    emit: (key, text) => persist(key, text, false)
   })
 
   const live = new StructuredAgentSessionLiveTextRows(

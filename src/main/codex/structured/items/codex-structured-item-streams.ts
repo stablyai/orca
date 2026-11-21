@@ -2,10 +2,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  AGENT_SESSION_TEXT_IDLE_SAVE_MS,
-  createAgentSessionDeltaCoalescer
-} from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
@@ -142,17 +139,7 @@ export function createCodexStructuredItemStreams(
       }
       return save
     },
-    emit: (key, text) => persist(key, text, false),
-    idle: {
-      ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
-      applies: isText,
-      // A refused save stays pending for the next barrier; quiet never retries on its own.
-      run: (key, text) => {
-        if (checkpointLengths.get(key) !== text.length) {
-          persist(key, text, true)
-        }
-      }
-    }
+    emit: (key, text) => persist(key, text, false)
   })
 
   const live = new StructuredAgentSessionLiveTextRows(

@@ -8,7 +8,6 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import '../items/codex-structured-item-translation'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { AGENT_SESSION_TEXT_IDLE_SAVE_MS } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 
 import '../prompts/codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
@@ -45,11 +44,7 @@ function recorder() {
 function manualWindow() {
   const pending: (() => void)[] = []
   return {
-    // Quiet-save timers are not coalescing windows; these tests drive windows only.
-    schedule: (run: () => void, ms: number) => {
-      if (ms >= AGENT_SESSION_TEXT_IDLE_SAVE_MS) {
-        return () => {}
-      }
+    schedule: (run: () => void) => {
       pending.push(run)
       return () => {
         const index = pending.indexOf(run)
@@ -121,7 +116,7 @@ describe('Codex streamed checkpoint admission', () => {
   })
 })
 
-it('shows a paused Codex reply tail without a save and saves it once the stream goes quiet', () => {
+it('shows a paused Codex reply tail without saving it', () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
   try {
     const tap = recorder()
@@ -164,11 +159,8 @@ it('shows a paused Codex reply tail without a save and saves it once the stream 
     vi.advanceTimersByTime(60)
     expect(shown).toEqual([`${prefix} paused tail`])
     expect(tap.rows).toHaveLength(saves)
-    vi.advanceTimersByTime(1000)
-    expect(tap.rows).toHaveLength(saves + 1)
-    expect(tap.rows.at(-1)?.body).toMatchObject({
-      blocks: [{ type: 'text', text: `${prefix} paused tail` }]
-    })
+    vi.advanceTimersByTime(60_000)
+    expect(tap.rows).toHaveLength(saves)
     translator.dispose()
   } finally {
     vi.useRealTimers()

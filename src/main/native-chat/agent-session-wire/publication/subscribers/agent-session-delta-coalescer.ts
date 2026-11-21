@@ -4,8 +4,6 @@ import { appendWithinUtf8ByteLimit } from './agent-session-delta-prefix'
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
 
 export const AGENT_SESSION_DELTA_COALESCE_MS = 60
-/** Quiet time after the last delta before a stream's unsaved text is saved. */
-export const AGENT_SESSION_TEXT_IDLE_SAVE_MS = 1000
 
 /** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
@@ -19,21 +17,11 @@ export type AgentSessionDeltaSnapshot = {
   truncated: boolean
 }
 
-/** What `emit` returns when it took the snapshot without saving it (only shown it live). */
-export const AGENT_SESSION_DELTA_SHOWN_ONLY = 'shown-only'
-
 export type AgentSessionDeltaCoalescerDeps = {
   /** Emit the complete snapshot, not the increment. */
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
   /** False skips an accepted snapshot; emit reports actual sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
-  /** Runs once a stream `applies` to has had no text for `ms`; each later quiet save of that stream
-   *  needs twice the quiet, so however sparse its deltas a stream gets only logarithmically many. */
-  idle?: {
-    ms: number
-    applies?: (key: string) => boolean
-    run: (key: string, text: string) => void
-  }
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -84,9 +72,6 @@ export function createAgentSessionDeltaCoalescer(
       observedBytes: number
       truncated: boolean
       dirty: boolean
-      appendedAt: number
-      quietMs: number
-      cancelIdle: (() => void) | null
     }
   >()
   let totalRetainedBytes = 0
@@ -112,10 +97,6 @@ export function createAgentSessionDeltaCoalescer(
       return false
     }
     stream.dirty = false
-    // A save starts the quiet-save backoff over, so the next pause still saves within a second.
-    if (emitted !== AGENT_SESSION_DELTA_SHOWN_ONLY) {
-      stream.quietMs = deps.idle?.ms ?? 0
-    }
     return true
   }
 
@@ -132,27 +113,6 @@ export function createAgentSessionDeltaCoalescer(
     const text = stream.chunks.length === 1 ? stream.chunks[0] : stream.chunks.join('')
     stream.chunks = text ? [text] : []
     return text
-  }
-
-  // Measured from the last delta, never the last save, so continuous streaming saves nothing extra.
-  const armIdle = (key: string, stream: Stream, ms: number): void => {
-    const idle = deps.idle
-    if (!idle) {
-      return
-    }
-    stream.cancelIdle = schedule(() => {
-      stream.cancelIdle = null
-      if (streams.get(key) !== stream) {
-        return
-      }
-      const quiet = performance.now() - stream.appendedAt
-      if (quiet < stream.quietMs) {
-        armIdle(key, stream, stream.quietMs - quiet)
-        return
-      }
-      stream.quietMs *= 2
-      idle.run(key, joined(stream))
-    }, ms)
   }
 
   const flushAll = (): boolean => {
@@ -190,7 +150,6 @@ export function createAgentSessionDeltaCoalescer(
             const evicted = streams.get(oldest)
             if (evicted) {
               totalRetainedBytes -= evicted.retainedBytes
-              evicted.cancelIdle?.()
             }
             streams.delete(oldest)
             evictable.delete(oldest)
@@ -203,10 +162,7 @@ export function createAgentSessionDeltaCoalescer(
           textLength: 0,
           observedBytes: 0,
           truncated: false,
-          dirty: false,
-          appendedAt: 0,
-          quietMs: deps.idle?.ms ?? 0,
-          cancelIdle: null
+          dirty: false
         }
         if (!deps.isProtected?.(key)) {
           evictable.add(key)
@@ -236,10 +192,6 @@ export function createAgentSessionDeltaCoalescer(
         stream.dirty = true
       }
       streams.set(key, stream)
-      stream.appendedAt = performance.now()
-      if (!stream.cancelIdle && deps.idle?.applies?.(key) !== false) {
-        armIdle(key, stream, stream.quietMs)
-      }
       // Share one timer across streams to bound wakeups per window.
       scheduleFlush()
       return true
@@ -249,7 +201,6 @@ export function createAgentSessionDeltaCoalescer(
     forget: (key) => {
       const stream = streams.get(key)
       if (stream) {
-        stream.cancelIdle?.()
         totalRetainedBytes -= stream.retainedBytes
         streams.delete(key)
         evictable.delete(key)
@@ -258,9 +209,6 @@ export function createAgentSessionDeltaCoalescer(
     dispose: () => {
       cancelTimer?.()
       cancelTimer = null
-      for (const stream of streams.values()) {
-        stream.cancelIdle?.()
-      }
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
