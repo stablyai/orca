@@ -188,12 +188,15 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.automations.AutomationDetail.active': { zh: '已启用' },
   'auto.components.automations.ExternalAutomationManagers.b3feba84c7': { zh: '已启用' },
   'bots.settingsPage.active': { zh: '已启用' },
+  // Bot offer badges report completion. The general “Created” value labels a timestamp.
+  'components.native-chat.botCreateOffer.created': { ja: '作成済み' },
+  'chat.botCards.offer.created': { ja: '作成済み' },
   'settings.bots.active': { zh: '已启用' },
   'settings.bots.tools.sourcePlaceholder': { zh: 'https://… 或 npx …' },
   // Bots: "Next" labels the next run time; "New" badges an unseen chat or a just-added install.
   'bots.automations.next': { zh: '下次运行', ja: '次回', ko: '다음 실행' },
-  'bots.chats.newTag': { zh: '新' },
-  'bots.github.setup.new': { zh: '新增' },
+  'bots.chats.newTag': { zh: '新', ko: '신규' },
+  'bots.github.setup.new': { zh: '新增', ko: '신규' },
   // Bots: "Review" opens items, an access request, a finished setup or a tidy-up, not a code review (评审).
   'bots.hover.review': { zh: '查看' },
   'bots.accessRequest.review': { zh: '审核' },

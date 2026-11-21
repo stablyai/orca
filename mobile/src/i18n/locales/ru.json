@@ -354,7 +354,8 @@
       "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
       "signIn": "Войти",
       "signInHint": "Открывает терминал на компьютере с этим чатом",
-      "forkedFrom": "Ответвление от"
+      "forkedFrom": "Ответвление от",
+      "botCreated": "Бот создан"
     },
     "ciResultLine": {
       "failingLead": "CI с ошибками в",
@@ -813,6 +814,82 @@
         "needsAuth_many": "{{count}} требуют входа"
       },
       "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь."
+    },
+    "botCards": {
+      "request": {
+        "notSentTo": "Не отправлено",
+        "asked": "Спросил",
+        "handedTo": "Передано",
+        "paused": "{{bot}} приостановлен.",
+        "botsOff": "Боты выключены.",
+        "couldNotTake": "{{bot}} не смог взяться за это.",
+        "answered": "✓ отвечено",
+        "done": "✓ готово",
+        "notAnswered": "без ответа",
+        "waitingOnYou": "ждёт вас",
+        "working": "работает…",
+        "hasIt": "у него",
+        "openChat": "Открыть его чат"
+      },
+      "offer": {
+        "unknownAgent": "{{bot}} использует агента, которого это приложение не знает. Измените, чтобы выбрать другого.",
+        "takesOverOne": "Берёт 1 рабочее пространство",
+        "takesOverMany": "Берёт рабочие пространства: {{count}}",
+        "created": "Создано",
+        "createdAskedOne": "Создан · попросили взять 1 рабочее пространство",
+        "createdAskedMany": "Создан · попросили взять рабочие пространства: {{count}}",
+        "createdTookOverSome": "Создан · взял {{taken}} из {{count}} рабочих пространств",
+        "createdTookOverOne": "Создан · взял 1 рабочее пространство",
+        "createdTookOverMany": "Создан · взял рабочие пространства: {{count}}",
+        "deleted": "Создан, затем удалён",
+        "nameTaken": "У вас уже есть бот с именем {{name}}.",
+        "rename": "Переименовать",
+        "edit": "Правка",
+        "create": "Создать бота",
+        "open": "Открыть",
+        "origin": "Предложено {{bot}}",
+        "originTemplate": "Из {{template}}, предложено {{bot}}",
+        "watches": "Следит",
+        "does": "Делает",
+        "reports": "Сообщает",
+        "willPropose": "Предложит",
+        "takesOver": "Берёт на себя",
+        "template": "Шаблон",
+        "dismiss": "Скрыть",
+        "notSent": "Не удалось отправить это боту. Попробуйте ещё раз.",
+        "askedMany": "Запрошено рабочих пространств: {{count}}",
+        "askedOne": "Запрошено 1 рабочее пространство",
+        "tookOverMany": "Передано рабочих пространств: {{count}}",
+        "tookOverOne": "Передано 1 рабочее пространство",
+        "tookOverSome": "Передано рабочих пространств: {{taken}} из {{count}}"
+      },
+      "toolAdded": {
+        "heading": "Инструмент добавлен",
+        "removed": "Удалено",
+        "remove": "Удалить"
+      },
+      "webhook": {
+        "title": "Вебхук",
+        "starts": "Вебхук · запускает «{{automation}}»",
+        "sampleNote": "Пример запускает настоящий запуск.",
+        "sendSample": "Отправить пример вызова",
+        "secretAdd": "Добавить секрет подписи…",
+        "secretChange": "Секрет подписи: {{sender}} · Изменить…",
+        "paused": "Приостановлено",
+        "orphaned": "Не подключено",
+        "pending": "Настройка",
+        "noCalls": "Вызовов пока нет",
+        "lastCall": "Последний вызов {{ago}}",
+        "copied": "Скопировано",
+        "copyUrl": "Скопировать URL",
+        "copyFailed": "Повторить копирование"
+      },
+      "memory": {
+        "added": "Добавлено",
+        "removed": "Удалено",
+        "noteChanged": "Заметка изменена",
+        "indexChanged": "MEMORY.md изменён"
+      }
     }
   },
   "common": {
@@ -837,7 +914,10 @@
     "settings": "Настройки",
     "unknown": "Неизвестно",
     "waitingForHost": "Ожидание сервера…",
-    "connectingToHost": "Подключение к серверу…"
+    "connectingToHost": "Подключение к серверу…",
+    "loadError": {
+      "generic": "Что-то пошло не так. Попробуйте ещё раз."
+    }
   },
   "components": {
     "accountsSnapshot": {
@@ -1277,7 +1357,8 @@
     "native-chat": {
       "composer": {
         "planMode": "План",
-        "exitPlanMode": "Выйти из режима планирования"
+        "exitPlanMode": "Выйти из режима планирования",
+        "pastedTextLabel": "Вставленный текст"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
@@ -1716,6 +1797,18 @@
       "showUsageFor": "Показать использование для",
       "updatedAgo": "Обновлено {{time}} назад",
       "updatedJustNow": "Обновлено только что"
+    },
+    "bots": {
+      "noBotsTitle": "Ботов пока нет",
+      "pairDesktop": "Сопрягите компьютер, чтобы видеть здесь его ботов.",
+      "seeAll": "Все боты",
+      "updateOneBody": "Его версия Orca пока не умеет показывать ботов на телефоне.",
+      "updateManyTitle": "Обновите Orca на компьютерах",
+      "updateManyBody": "Их версия Orca пока не умеет показывать ботов на телефоне.",
+      "offOneBody": "Чтобы включить их, откройте Orca на {{host}} и перейдите в Настройки › Боты › Включить ботов.",
+      "offServerBody": "Чтобы включить их, откройте Orca на {{desktop}} и перейдите в Настройки › Боты › Включить ботов на {{host}}.",
+      "offManyTitle": "Боты выключены на ваших компьютерах",
+      "offManyBody": "Чтобы включить их, откройте Orca на каждом компьютере и перейдите в Настройки › Боты › Включить ботов."
     }
   },
   "hooks": {
@@ -4647,7 +4740,11 @@
       "offline": "{{name}} не в сети. Откройте ссылку снова, когда компьютер подключится.",
       "chatOpenFailed": "{{name}} не смог открыть этот чат. Попробуйте открыть ссылку снова.",
       "unreachableSingle": "Не удалось подключиться к {{name}}. Убедитесь, что Orca запущена на этом компьютере, и повторите попытку.",
-      "workspaceDeleted": "Рабочая область этого чата удалена на {{name}}."
+      "workspaceDeleted": "Рабочая область этого чата удалена на {{name}}.",
+      "updateOrca": "Обновить Orca",
+      "openRequestFailed": "Не удалось открыть запрос",
+      "botNotFound": "Бот не найден",
+      "openOn": "Открыть {{name}} на"
     },
     "settings": {
       "remove": "Удалить",
@@ -4707,7 +4804,20 @@
       "requests_many": "{{count}} запросов",
       "deleteDetailNoPath": "Его папка с душой и памятью остаётся на {{host}}.",
       "backToAgent": "Назад к агенту и модели",
-      "useChatDefaults": "Использовать настройки чата по умолчанию"
+      "useChatDefaults": "Использовать настройки чата по умолчанию",
+      "declineName": "Отклонить {{name}}",
+      "reviewName": "Рассмотреть {{name}}",
+      "removeConfirmTitle": "Удалить {{name}}?",
+      "removeConfirmMessage": "{{name}} больше не может обращаться к {{botName}}.",
+      "active": "Активен",
+      "activeDetail": "Отвечает на сообщения и запускает автоматизации.",
+      "permissions": "Разрешения",
+      "sameAsChats": "Как в чатах",
+      "notifications": "Уведомления",
+      "needsPermission": "Требуется разрешение",
+      "taskComplete": "Задача выполнена",
+      "couldNotFinish": "Не удалось завершить",
+      "couldNotFinishDetail": "Запуск автоматизации или исполнитель завершился с ошибкой."
     },
     "newHomeChat": {
       "action": "Новый главный чат",
@@ -4723,14 +4833,29 @@
       "detail": "Читает подключённые приложения и проекты, чтобы предложить следующие шаги. Только чтение. Каждый осмотр расходует лимиты вашего тарифа агента, а Orca должна быть запущена на хосте.",
       "lookNow": "Осмотреться сейчас",
       "notYet": "Пока нет",
-      "backToLookAround": "Назад к осмотру"
+      "backToLookAround": "Назад к осмотру",
+      "title": "Осмотреться",
+      "on": "Предложить следующие шаги",
+      "every": "Как часто",
+      "weekdaysOnly": "Только по будням",
+      "focus": "Что искать",
+      "anything": "Всё, что ждёт вас",
+      "lastLooked": "Последний осмотр",
+      "focusPlaceholder": "PR, которые ждут меня, вопросы в #eng, задачи со сроком на этой неделе",
+      "focusDetail": "Необязательно. Если оставить пустым, он будет искать всё, что ждёт вас.",
+      "back": "Назад к настройкам"
     },
     "connectorOffer": {
       "slack": "Общайтесь с ботом в каналах и личных сообщениях Slack.",
       "google": "Пусть бот работает в вашей почте Gmail, Календаре и Drive и запускает автоматизации по новым письмам.",
       "linear": "Поручайте боту задачи, упоминая его через @ или назначая, и запускайте автоматизации по событиям Linear.",
       "github": "Поручайте боту работу, упоминая его через @, и запускайте автоматизации по событиям GitHub.",
-      "heading": "Подключить сервис"
+      "heading": "Подключить сервис",
+      "connected": "Подключён",
+      "onComputer": "Подключите его в Orca на компьютере через карточку в этом чате.",
+      "addGitHubAccess": "Добавьте репозитории или организации в Orca на компьютере через карточку в этом чате.",
+      "addWorkspace": "Добавьте ещё рабочее пространство в Orca на компьютере через карточку в этом чате.",
+      "paused": "Приостановлено, пока {{host}} не войдёт в Orca."
     },
     "groups": {
       "group": "Группа",
@@ -4773,7 +4898,46 @@
       "newThreadTab": "Новая ветка",
       "newThreadHint": "начинает заново",
       "newThread": "Новая ветка в {{name}}",
-      "handoffsPaused": "Приостановлено. Передач: {{count}}. Ответьте, чтобы продолжить."
+      "handoffsPaused": "Приостановлено. Передач: {{count}}. Ответьте, чтобы продолжить.",
+      "manageMembers": "Управлять участниками",
+      "newGroup": "Новая группа",
+      "cancel": "Отмена",
+      "back": "Назад",
+      "groupActions": "Действия группы",
+      "pendingRequests": "Ожидающие запросы",
+      "needsYou": "· Ждёт вас",
+      "valuePending": " · ожидают: {{value0}}",
+      "manageMembersMenu": "Управлять участниками…",
+      "allBots": "Все боты",
+      "onlyWhenMentioned": "Только при упоминании",
+      "stopValue": "Остановить {{value0}}",
+      "replyToValue": "Ответить {{value0}}",
+      "waitingForTheNativeSession": "Ожидание собственного сеанса…",
+      "create": "Создать",
+      "removingDefault": "Если удалить {{name}}, «Ответы» сменятся на «Только при упоминании».",
+      "loadEarlierMessages": "Загрузить предыдущие сообщения",
+      "memberRemoved": "Участник удалён",
+      "composerPlaceholder": "Напишите группе, @ — упомянуть бота",
+      "repliesValue": "Ответы: {{value0}}",
+      "whoAnswers": "Кто отвечает на ваши сообщения",
+      "peerAsked": "{{from}} спросил {{to}}",
+      "peerFollowedUp": "{{bot}} напомнил",
+      "peerReplyRead": "{{reader}} прочитал ответ {{peer}}",
+      "deleteTitle": "Удалить {{name}}?",
+      "deleteDescription": "Её боты не удаляются.",
+      "deleteConfirm": "Удалить группу",
+      "deleteGroupMenu": "Удалить группу…",
+      "you": "Вы",
+      "pickTwo": "Выберите 2 или больше ботов",
+      "nameIt": "Назовите группу",
+      "save": "Сохранить",
+      "namePlaceholder": "Назовите свою группу",
+      "useSuggestion": "Использовать «{{name}}»",
+      "suggestTwo": "{{a}} и {{b}}",
+      "suggestThree": "{{a}}, {{b}} и {{c}}",
+      "suggestMore": "{{a}}, {{b}} и ещё {{count}}",
+      "pickOne": "Выберите бота",
+      "needsTwoBots": "Нужно 2 бота на {{host}}"
     },
     "templates": {
       "title": "Шаблоны ботов",
@@ -4790,50 +4954,302 @@
       "backToTemplates": "Назад к шаблонам",
       "category": {
         "support": "Поддержка и разбор обращений",
-        "personal": "Личный помощник"
-      }
+        "personal": "Личный помощник",
+        "coding": "Программирование",
+        "releases": "Релизы и CI",
+        "planning": "Планирование и документация",
+        "ops": "Эксплуатация"
+      },
+      "blank": "Пустой бот",
+      "blankLine": "Расскажите ему в первом чате, для чего он.",
+      "byOrca": "{{category}} · от Orca",
+      "originTemplateNamed": "Из шаблона {{template}}",
+      "noMatch": "Нет шаблонов по запросу «{{query}}»"
     },
     "tidyUp": {
       "title": "Уход за памятью",
       "never": "Пока нет",
       "footer": "Меняет только файлы памяти. Расходует лимиты вашего тарифа агента, как короткий чат. На вашем компьютере должна быть запущена Orca.",
       "undoNote": "«Отменить» возвращает MEMORY.md к состоянию до этой уборки сразу целиком. Полная история и редактирование памяти доступны на компьютере в разделе Настройки → Память.",
-      "backToTidyUp": "Назад к уходу за памятью"
+      "backToTidyUp": "Назад к уходу за памятью",
+      "nowRunning": "Уборка уже идёт.",
+      "nowBusy": "Чат ещё работает. Попробуйте снова, когда он закончит.",
+      "nowFailed": "Не удалось начать уборку. Попробуйте ещё раз.",
+      "undoSuperseded": "Память изменилась после этой уборки, поэтому оставлена как есть.",
+      "undoFailed": "Не удалось отменить уборку.",
+      "everyNight": "Каждую ночь",
+      "everyWeek": "Раз в неделю",
+      "on": "Приводить память в порядок ночью",
+      "turnedOff": "Выключено после 10 неудачных уборок подряд.",
+      "every": "Как часто",
+      "lastTidied": "Последняя уборка",
+      "tidying": "Уборка…",
+      "now": "Убрать сейчас",
+      "merged": "Объединено повторяющихся строк: {{count}}",
+      "replaced": "Помечено как заменённое: {{fact}}",
+      "filed": "Строки ({{count}}) разложены в memory/{{topic}}.md",
+      "moved": "Старые строки перенесены в архив: {{count}}",
+      "readChats": "прочитано чатов: {{count}}",
+      "took": "заняло {{value}} мин",
+      "learned": "Узнано из чатов",
+      "tidied": "Убрано",
+      "undone": "Отменено",
+      "undoAll": "Отменить эту уборку",
+      "undo": "Отменить действие",
+      "summaryTitle": "Последняя уборка",
+      "undoStale": "С тех пор прошла более новая уборка. Проверьте её, прежде чем отменять."
     },
     "items": {
       "filter": {
         "clearAll": "Сбросить фильтры",
-        "chat": "Чат"
+        "chat": "Чат",
+        "needsYou": "Только «Ждёт вас»",
+        "label": "Фильтр элементов",
+        "all": "Все чаты",
+        "remove": "Убрать фильтр {{name}}",
+        "clear": "Сбросить фильтр"
       },
       "tab": "Элементы",
       "activity": {
         "notSent": "Не отправлено.",
         "retry": "Повторить",
         "discard": "Отменить изменения",
-        "mayHaveArrived": "Возможно, доставлено."
+        "mayHaveArrived": "Возможно, доставлено.",
+        "changed": "изменил {{field}}",
+        "closed": "отметил как выполненное",
+        "canceled": "отменил это",
+        "reopened": "открыл снова",
+        "moved": "переместил это в",
+        "madeNeedsYou": "добавил этот элемент как «Ждёт вас»",
+        "made": "добавил этот элемент",
+        "linked": "связал {{links}}",
+        "workerStarted": "Исполнитель запущен:",
+        "workerFailed": "Исполнитель остановлен:",
+        "workerFinished": "Исполнитель завершил работу:",
+        "noComments": "Комментариев пока нет.",
+        "snoozed": "отложил это до {{when}}",
+        "snoozedBare": "отложил это",
+        "unsnoozed": "вернул из отложенных",
+        "snoozeEnded": "Вернулся из отложенных раньше срока"
       },
       "comment": {
-        "replyingTo": "Ответ на:"
+        "replyingTo": "Ответ на:",
+        "offline": "{{host}} не в сети. Ваш комментарий сохранён; комментирование снова заработает, когда он вернётся.",
+        "label": "Комментарий",
+        "add": "Добавить комментарий…",
+        "submit": "Комментарий",
+        "fileOnComputer": "Откройте {{name}} на компьютере.",
+        "reply": "Ответьте своими словами",
+        "replyTo": "Ответ для {{name}}…",
+        "showLess": "Свернуть"
       },
       "view": {
         "title": "Элемент",
         "placeOf": "{{index}} из {{total}}",
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
-        "subWhere": "Элемент {{number}} · {{chat}}"
+        "subWhere": "Элемент {{number}} · {{chat}}",
+        "canceledNote": "Отменено:",
+        "doneNote": "Готово:",
+        "links": "Ссылки",
+        "activity": "События",
+        "showEarlier": "Показать более ранние",
+        "showLess": "Свернуть",
+        "showMore": "Показать больше"
       },
       "ask": {
-        "notNow": "Не сейчас"
+        "notNow": "Не сейчас",
+        "recommended": "Рекомендуется"
       },
       "write": {
-        "offline": "{{host}} не в сети."
+        "offline": "{{host}} не в сети.",
+        "unknown": "Соединение прервалось во время отправки, поэтому сообщение могло дойти. После переподключения проверьте активность, прежде чем отправлять снова."
       },
       "thisComputer": "Компьютер",
-      "readFailedClosedPage": "Не удалось прочитать больше закрытых элементов."
+      "readFailedClosedPage": "Не удалось прочитать больше закрытых элементов.",
+      "chat": {
+        "opensInItems": "Открывается в «Элементах»",
+        "moreItems": "+{{count}} ещё",
+        "commentOn": "Включено",
+        "marked": "Выполнено: {{items}}",
+        "canceled": "Отменено: {{items}}",
+        "added": "Добавлено: {{items}}",
+        "askedYou": "Задан вопрос о {{items}}",
+        "moved": "{{items}} перемещено в {{status}}",
+        "commented": "Комментарий к {{items}}",
+        "updated": "Обновлено: {{items}}",
+        "linkedMany": "Ссылки ({{count}}) связаны с {{items}}",
+        "linked": "{{link}} связано с {{items}}",
+        "aWorker": "исполнитель",
+        "youMarkedManyDone": "Вы отметили элементы как выполненные ({{count}}): {{items}}",
+        "youCanceledMany": "Вы отменили элементы ({{count}}): {{items}}",
+        "youMovedMany": "Вы переместили элементы ({{count}}) в {{status}}: {{items}}",
+        "youMarked": "Вы отметили {{items}} как выполненное",
+        "youCanceled": "Вы отменили {{items}}",
+        "youMoved": "Вы переместили {{items}} в {{status}}",
+        "youChanged": "Вы изменили {{items}}",
+        "changes": "{{from}} → {{to}} · изменений: {{count}}",
+        "chipLabel": "{{title}}, {{status}}",
+        "addedAndMoved": "Добавлено и перемещено в {{status}}: {{items}}",
+        "addedAndAsked": "Добавлено и задан вопрос: {{items}}",
+        "addedAndDone": "Добавлено и выполнено: {{items}}",
+        "addedAndCanceled": "Добавлено и отменено: {{items}}",
+        "openChat": "Открыть {{chat}}",
+        "byChat": {
+          "moved": "{{chat}}: {{items}} перемещено в {{status}}",
+          "askedYou": "{{chat}}: вопрос о {{items}}",
+          "marked": "{{chat}}: выполнено {{items}}",
+          "canceled": "{{chat}}: отменено {{items}}",
+          "added": "{{chat}}: добавлено {{items}}",
+          "commented": "{{chat}}: комментарий к {{items}}",
+          "updated": "{{chat}}: обновлено {{items}}",
+          "linkedMany": "{{chat}}: ссылки ({{count}}) связаны с {{items}}",
+          "linked": "{{chat}}: {{link}} связано с {{items}}"
+        },
+        "anotherChat": "Другой чат"
+      },
+      "status": {
+        "planned": "Запланировано",
+        "working": "В работе",
+        "needsYou": "Ждёт вас",
+        "done": "Готово",
+        "canceled": "Отменено"
+      },
+      "needYouCount_one": "{{count}} элемент ждёт вас",
+      "needYouCount_other": "{{count}} элемента ждут вас",
+      "needYouCount_few": "{{count}} элемента ждут вас",
+      "needYouCount_many": "{{count}} элементов ждут вас",
+      "homeChat": "Главный чат",
+      "chatFallback": "Чат",
+      "field": {
+        "doneMeansLower": "готово означает",
+        "description": "описание",
+        "title": "заголовок",
+        "status": "Статус",
+        "chat": "Чат",
+        "doneMeans": "Готово означает",
+        "snoozed": "Отложено"
+      },
+      "link": {
+        "notRead": "Ещё не прочитано",
+        "merged": "Слит",
+        "draft": "Черновик",
+        "closed": "Закрыто",
+        "open": "Открыт",
+        "checksPassing": "Проверки пройдены",
+        "checksFailing": "Проверки завершились с ошибками",
+        "checksPending": "Проверки ожидаются",
+        "pr": "PR #{{number}}",
+        "issue": "Задача #{{number}}",
+        "serverPr": "PR для работы на сервере пока не показывается",
+        "openInBrowser": "Открыть в браузере",
+        "copyLink": "Копировать ссылку",
+        "copyPath": "Копировать путь",
+        "fileOutside": "{{path}} не в папке этого бота"
+      },
+      "open": {
+        "failed": "Не удалось открыть этот элемент.",
+        "notFound": "{{host}} не нашёл его. Возможно, он принадлежит боту на другом компьютере.",
+        "noAnswer": "{{host}} не ответил."
+      },
+      "retry": "Повторить",
+      "loading": "Загрузка элементов…",
+      "readFailedShort": "Не удалось загрузить элементы.",
+      "lastRead": "Показаны последние прочитанные элементы.",
+      "row": {
+        "select": "Выбрать {{title}}"
+      },
+      "selected": "Выбрано: {{count}}",
+      "pill": {
+        "moveTo": "Переместить в",
+        "clear": "Снять выделение",
+        "moveCount_one": "Переместить {{count}} элемент в",
+        "moveCount_other": "Переместить {{count}} элемента в",
+        "moveCount_few": "Переместить {{count}} элемента в",
+        "moveCount_many": "Переместить {{count}} элементов в"
+      },
+      "menu": {
+        "select": "Выбрать",
+        "done": "Готово",
+        "changeStatus": "Изменить статус",
+        "openChat": "Открыть {{chat}}",
+        "cancelShort": "Отмена"
+      },
+      "stale": {
+        "confirm_one": "Отменить {{count}} устаревший элемент?",
+        "confirm_other": "Отменить {{count}} устаревших элемента?",
+        "confirm_few": "Отменить {{count}} устаревших элемента?",
+        "confirm_many": "Отменить {{count}} устаревших элементов?",
+        "confirmWhy": "Причина отправлена боту: «{{reason}}» Ничего не удаляется.",
+        "reason": "Нет активности (дней: {{count}}).",
+        "cancelAll": "Отменить все"
+      },
+      "cancel": {
+        "keep": "Оставить",
+        "confirmMany": "Отменить ({{count}})",
+        "titleMany": "Отменить элементы ({{count}})?",
+        "titleOne": "Отменить {{title}}?",
+        "why": "Бот увидит причину. Ничего не удаляется.",
+        "placeholder": "Причина",
+        "confirmOne": "Отменить элемент",
+        "offline": "{{host}} не в сети. Ваша причина сохранена; {{action}} снова заработает, когда он вернётся."
+      },
+      "strip": {
+        "view": "Вид"
+      },
+      "group": {
+        "stale": "Устарела",
+        "closed": "Закрыто",
+        "new": "Новых: {{count}}",
+        "showMore": "Показать ещё {{count}}",
+        "snoozed": "Отложено"
+      },
+      "empty": {
+        "title": "Пока нет элементов",
+        "body": "Когда {{bot}} возьмётся за что-то для вас, это появится здесь вместе с тем, что он делает и что ему от вас нужно.",
+        "needsYou": "Ничего не ждёт вас.",
+        "filtered": "Нет подходящих элементов."
+      },
+      "toast": {
+        "markedDone": "{{title}} отмечено как выполненное",
+        "canceledOne": "{{title}} отменено",
+        "movedOne": "{{title}} перемещено в {{status}}",
+        "movedMany": "Элементы ({{count}}) перемещены в {{status}}",
+        "doneFailed": "Не удалось отметить как выполненное: {{why}}",
+        "moveFailed_one": "Не удалось переместить {{count}} элемент: {{why}}",
+        "moveFailed_other": "Не удалось переместить {{count}} элемента: {{why}}",
+        "moveFailed_few": "Не удалось переместить {{count}} элемента: {{why}}",
+        "moveFailed_many": "Не удалось переместить {{count}} элементов: {{why}}",
+        "snoozeFailed": "Не удалось отложить: {{why}}",
+        "unsnoozedOne": "{{title}} возвращено из отложенных",
+        "snoozedOne": "{{title}} отложено до {{when}}",
+        "unsnoozedMany": "Возвращено из отложенных: {{count}}",
+        "snoozedMany": "Элементы ({{count}}) отложены до {{when}}"
+      },
+      "snooze": {
+        "rowUntil": "до {{when}}",
+        "sheet": "Отложить…",
+        "pick": "Выбрать время…",
+        "unsnooze": "Вернуть из отложенных",
+        "today": "Сегодня",
+        "tomorrow": "Завтра",
+        "until": "Отложено до {{when}}",
+        "pickTitle": "Отложить до",
+        "pickDay": "До какого дня отложить?",
+        "pickHour": "В какое время?"
+      },
+      "readFailedTitle": "Не удалось загрузить элементы"
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",
-      "access": "{{person}} просит доступ"
+      "access": "{{person}} просит доступ",
+      "permissionTool": "Разрешение · {{tool}}",
+      "permission": "Нужно разрешение",
+      "waiting": "Ждёт вас",
+      "whereItRuns": "{{need}} · откройте там, где он работает",
+      "worker": "Исполнитель: {{name}}",
+      "actionFor": "{{action}}: {{title}}",
+      "open": "Открыть"
     },
     "waits": {
       "cancel": "Отмена",
@@ -5205,10 +5621,208 @@
     },
     "saveFailed": "Не удалось сохранить",
     "chats": {
-      "readFailedTitle": "Не удалось загрузить чаты"
+      "readFailedTitle": "Не удалось загрузить чаты",
+      "replying": "Отвечает…",
+      "waiting": "Ждёт вас",
+      "sayHi": "Поздоровайтесь с {{name}}",
+      "closedShort": "закрыт",
+      "needsYou": "Ждёт вас",
+      "askingBot": "Спрашивает {{name}}",
+      "handedOver": "Передано",
+      "fromClosedChat": "Из закрытого чата",
+      "automationTerminal": "Запуск автоматизации · терминал",
+      "untitledWorker": "Исполнитель",
+      "home": "Главный чат",
+      "untitled": "Новый чат",
+      "fold": "Свернуть {{name}}",
+      "unfold": "Развернуть {{name}}",
+      "unread": "Непрочитанные",
+      "moreRunningStep": "Показать ещё 8 · выполняющихся: {{count}}",
+      "moreRunning": "Показать ещё выполняющиеся: {{count}}",
+      "earlierStep": "Показать ещё 8 · более ранних: {{count}}",
+      "earlier": "Показать более ранние: {{count}}",
+      "showFewer": "Показать меньше",
+      "title": "Чаты",
+      "search": "Поиск по чатам и исполнителям",
+      "noMatch": "Нет подходящих чатов или исполнителей.",
+      "empty": "Здесь появляются побочные чаты, ветки Slack и Linear и запуски автоматизаций — каждый с исполнителями, которых он запускает.",
+      "newTag": "Новый",
+      "olderStep": "Показать ещё 8 · более старых: {{count}}",
+      "older": "Показать более старые: {{count}}",
+      "terminalRunDesktopOnly": "Запуск в терминале · откройте его в «Автоматизациях» на компьютере",
+      "searchFailed": "Не удалось выполнить поиск по чатам этого бота.",
+      "searchRetry": "Повторить попытку",
+      "loadingChats": "Загрузка чатов",
+      "handedOverInline": "передано",
+      "fromClosedChatInline": "из закрытого чата",
+      "statusUnknown": "Статус неизвестен",
+      "kindSlack": "Ветка Slack",
+      "kindLinear": "Задача Linear",
+      "kindGithub": "Ветка GitHub",
+      "kindAutomation": "Запуск автоматизации",
+      "kindSide": "Побочный чат",
+      "replyingState": "Отвечает",
+      "showEightMoreWorkers": "Показать ещё 8 исполнителей",
+      "showMoreWorkers_one": "Показать ещё {{count}} исполнителя",
+      "showMoreWorkers_other": "Показать ещё {{count}} исполнителя",
+      "showMoreWorkers_few": "Показать ещё {{count}} исполнителей",
+      "showMoreWorkers_many": "Показать ещё {{count}} исполнителей",
+      "moreMatches_one": "Ещё {{count}} совпадение. Введите имя полнее, чтобы сузить поиск.",
+      "moreMatches_other": "Ещё {{count}} совпадения. Введите имя полнее, чтобы сузить поиск.",
+      "moreMatches_few": "Ещё {{count}} совпадения. Введите имя полнее, чтобы сузить поиск.",
+      "moreMatches_many": "Ещё {{count}} совпадений. Введите имя полнее, чтобы сузить поиск.",
+      "runningCount": "В работе: {{count}}",
+      "waitingCount": "Ждут: {{count}}"
     },
     "panel": {
-      "backTo": "Назад к {{name}}"
+      "backTo": "Назад к {{name}}",
+      "needYou_one": "{{count}} требует внимания",
+      "needYou_other": "{{count}} требуют внимания",
+      "needYou_few": "{{count}} требуют внимания",
+      "needYou_many": "{{count}} требуют внимания",
+      "working": "{{count}} работают",
+      "itemsNeedYou": "Элементы, ждут вас: {{count}}",
+      "chats": "Чаты",
+      "files": "Файлы"
+    },
+    "activity": {
+      "readFailed": "Не удалось загрузить активность.",
+      "loading": "Загрузка активности…",
+      "unavailable": "Активность недоступна на этом хосте.",
+      "retry": "Повторить",
+      "lastRead": "Показана последняя прочитанная активность.",
+      "readFailedTitle": "Не удалось загрузить активность",
+      "unavailableTitle": "Активность недоступна"
+    },
+    "automations": {
+      "couldNotFinish": "Не удалось завершить",
+      "runNow": "Запустить сейчас",
+      "pause": "Приостановить {{name}}",
+      "resume": "Возобновить {{name}}",
+      "empty": "Попросите в чате настроить автоматизацию.",
+      "newAutomation": "Новая автоматизация",
+      "runQueued": "Запуск автоматизации поставлен в очередь.",
+      "runFailed": "Не удалось начать запуск",
+      "emptyTitle": "Автоматизаций пока нет"
+    },
+    "sheet": {
+      "activity": "События",
+      "automations": "Автоматизации",
+      "settings": "Настройки",
+      "hint": "Активность, автоматизации и настройки"
+    },
+    "events": {
+      "slack": {
+        "mentioned": "Когда вас упоминают в Slack",
+        "message": "При сообщении в Slack",
+        "reaction": "При реакции в Slack"
+      },
+      "github": {
+        "issueOpened": "Когда задача открыта",
+        "prOpened": "Когда пул-реквест открыт",
+        "prPushed": "При push в пул-реквест",
+        "prMerged": "Когда пул-реквест слит",
+        "comment": "При комментарии на GitHub",
+        "reviewComment": "При комментарии в ревью",
+        "review": "При ревью пул-реквеста",
+        "mentioned": "При упоминании на GitHub",
+        "reviewRequested": "Когда запрошено ревью",
+        "assigned": "При назначении на GitHub",
+        "ciFailed": "Когда CI не проходит",
+        "ciPassed": "Когда CI проходит",
+        "prConflicted": "Когда в пул-реквесте конфликты",
+        "prClosed": "Когда пул-реквест закрыт",
+        "prReady": "Когда пул-реквест готов к проверке",
+        "labeled": "Когда добавлена метка",
+        "issueClosed": "Когда задача закрыта",
+        "deployFinished": "Когда завершается развёртывание",
+        "securityAlert": "При оповещении безопасности",
+        "workflowFinished": "Когда завершается запуск workflow"
+      },
+      "linear": {
+        "assigned": "При назначении в Linear",
+        "mentioned": "При упоминании в Linear",
+        "issueCreated": "Когда создана задача Linear",
+        "issueMoved": "Когда задача Linear перемещена"
+      },
+      "slackFallback": "По событию Slack",
+      "githubFallback": "По событию GitHub",
+      "linearFallback": "По событию Linear",
+      "webhookFallback": "Когда вызван его вебхук",
+      "anyFallback": "По событию"
+    },
+    "chatStartFailed": "Не удалось начать чат",
+    "upNext": {
+      "title": "Предложения",
+      "looked": "Осмотрелся {{time}}",
+      "yesterdayAt": "вчера {{time}}",
+      "looking": "Осматривается…",
+      "start": "Начать",
+      "dismiss": "Скрыть",
+      "dismissTitle": "Скрыть {{title}}",
+      "showMore_one": "Показать ещё {{count}}",
+      "showMore_other": "Показать ещё {{count}}",
+      "showMore_few": "Показать ещё {{count}}",
+      "showMore_many": "Показать ещё {{count}}",
+      "empty": "После последнего осмотра предложений нет.",
+      "notYet": "{{name}} ещё не осматривался. Запустите осмотр в настройках, или он сам будет осматриваться несколько раз в день.",
+      "startFailed": "Этого предложения больше нет в списке.",
+      "lookNowRunning": "Уже осматривается.",
+      "lookNowPaused": "Включите бота, чтобы он осмотрелся.",
+      "lookNowFailed": "Не удалось начать осмотр. Попробуйте ещё раз.",
+      "showMore": "Показать ещё {{count}}",
+      "newInUpNext": "Новых в «Предложениях»: {{count}}"
+    },
+    "new": {
+      "failed": "Не удалось создать бота",
+      "title": "Новый бот",
+      "runsOnHost": "Работает на {{host}}.",
+      "shuffle": "Другое изображение",
+      "namePlaceholder": "Назовите бота",
+      "create": "Создать",
+      "fromTemplate": "Использовать шаблон",
+      "takesOverList": "Берёт {{names}}. Их агенты продолжают работать.",
+      "runsOn": "Где работает",
+      "cantReach": "Нет связи с {{host}}. Выберите другой компьютер.",
+      "otherAccount": "{{host}} использует собственную учётную запись Orca ({{email}}). Его боты публикуют и подключаются от её имени.",
+      "agent": "Агент",
+      "computer": "Компьютер",
+      "computerMessage": "Где работает бот.",
+      "agentOn": "На {{host}}.",
+      "botsOffOn": "Боты на {{host}} выключены",
+      "updateDesktopFirst": "Сначала обновите Orca на {{host}}",
+      "checking": "Проверка…"
+    },
+    "workspaces": {
+      "show": "Показать рабочие пространства {{name}}",
+      "hide": "Скрыть рабочие пространства {{name}}"
+    },
+    "section": {
+      "title": "Боты",
+      "summary": "{{title}}, ботов: {{total}}, ждут вас: {{attention}}, непрочитанных: {{unread}}, работают: {{working}}",
+      "newBot": "Новый бот"
+    },
+    "list": {
+      "updateOrcaOn": "Обновить Orca на {{host}}",
+      "cantReach": "Нет связи с {{host}}. Его боты появятся, когда он вернётся.",
+      "noBotsYet": "Ботов пока нет.",
+      "offline": "Не в сети",
+      "updateToSee": "Обновите Orca на {{host}}, чтобы видеть его ботов.",
+      "offEnd": "Боты на {{host}} выключены.",
+      "updateToCreate": "Обновите Orca на {{host}}, чтобы создавать ботов с телефона."
+    },
+    "row": {
+      "replyingIn": "Отвечает в {{place}}",
+      "replyingOn": "Отвечает на {{place}}",
+      "paused": "Приостановлено",
+      "reading": "Читает ваше сообщение",
+      "replying": "Отвечает",
+      "waitingCount": "Ожидание событий: {{count}}",
+      "waitingFor": "Ожидание: {{label}}",
+      "waitingForUntil": "Ожидание: {{label}} · до {{time}}"
+    },
+    "chat": {
+      "nothingToReport": "Нечего сообщить"
     }
   }
 }

@@ -346,7 +346,8 @@
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
       "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
-      "forkedFrom": "분기 원본"
+      "forkedFrom": "분기 원본",
+      "botCreated": "봇이 만들어짐"
     },
     "ciResultLine": {
       "failingLead": "CI 실패:",
@@ -733,6 +734,82 @@
         "failed": "실패: {{count}}"
       },
       "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요."
+    },
+    "botCards": {
+      "request": {
+        "notSentTo": "보내지 않은 대상",
+        "asked": "요청함",
+        "handedTo": "넘긴 대상",
+        "paused": "{{bot}}이(가) 일시 중지되었습니다.",
+        "botsOff": "봇이 꺼져 있습니다.",
+        "couldNotTake": "{{bot}}이(가) 맡을 수 없었습니다.",
+        "answered": "✓ 답변함",
+        "done": "✓ 완료",
+        "notAnswered": "답변 안 함",
+        "waitingOnYou": "나를 기다리는 중",
+        "working": "작업 중…",
+        "hasIt": "맡음",
+        "openChat": "채팅 열기"
+      },
+      "offer": {
+        "unknownAgent": "{{bot}}이(가) 이 앱이 모르는 에이전트를 실행합니다. 편집해서 선택하세요.",
+        "takesOverOne": "워크스페이스 1개를 맡음",
+        "takesOverMany": "워크스페이스 {{count}}개를 맡음",
+        "created": "생성됨",
+        "createdAskedOne": "만들어짐 · 워크스페이스 1개를 맡도록 요청함",
+        "createdAskedMany": "만들어짐 · 워크스페이스 {{count}}개를 맡도록 요청함",
+        "createdTookOverSome": "만들어짐 · 워크스페이스 {{count}}개 중 {{taken}}개를 맡음",
+        "createdTookOverOne": "만들어짐 · 워크스페이스 1개를 맡음",
+        "createdTookOverMany": "만들어짐 · 워크스페이스 {{count}}개를 맡음",
+        "deleted": "만들어진 후 삭제됨",
+        "nameTaken": "이미 {{name}}(이)라는 봇이 있습니다.",
+        "rename": "이름 바꾸기",
+        "edit": "편집",
+        "create": "봇 만들기",
+        "open": "열기",
+        "origin": "{{bot}}이(가) 제안함",
+        "originTemplate": "{{template}}에서, {{bot}}이(가) 제안함",
+        "watches": "지켜보는 것",
+        "does": "하는 일",
+        "reports": "보고",
+        "willPropose": "제안할 것",
+        "takesOver": "맡는 것",
+        "template": "템플릿",
+        "dismiss": "닫기",
+        "notSent": "봇에게 보내지 못했습니다. 다시 시도하세요.",
+        "askedMany": "워크스페이스 {{count}}개 인수를 요청함",
+        "askedOne": "워크스페이스 1개 인수를 요청함",
+        "tookOverMany": "워크스페이스 {{count}}개를 인수함",
+        "tookOverOne": "워크스페이스 1개를 인수함",
+        "tookOverSome": "워크스페이스 {{count}}개 중 {{taken}}개를 인수함"
+      },
+      "toolAdded": {
+        "heading": "도구를 추가함",
+        "removed": "제거됨",
+        "remove": "제거"
+      },
+      "webhook": {
+        "title": "웹훅",
+        "starts": "웹훅 · ‘{{automation}}’ 시작",
+        "sampleNote": "샘플은 실제 실행을 시작합니다.",
+        "sendSample": "샘플 호출 보내기",
+        "secretAdd": "서명 시크릿 추가…",
+        "secretChange": "서명 시크릿: {{sender}} · 변경…",
+        "paused": "일시중지됨",
+        "orphaned": "연결되지 않음",
+        "pending": "설정 중",
+        "noCalls": "아직 호출 없음",
+        "lastCall": "마지막 호출 {{ago}}",
+        "copied": "복사됨",
+        "copyUrl": "URL 복사",
+        "copyFailed": "복사 다시 시도"
+      },
+      "memory": {
+        "added": "추가됨",
+        "removed": "제거됨",
+        "noteChanged": "메모가 변경됨",
+        "indexChanged": "MEMORY.md가 변경됨"
+      }
     }
   },
   "common": {
@@ -757,7 +834,10 @@
     "settings": "설정",
     "unknown": "알 수 없음",
     "waitingForHost": "호스트 대기 중…",
-    "connectingToHost": "호스트에 연결 중…"
+    "connectingToHost": "호스트에 연결 중…",
+    "loadError": {
+      "generic": "문제가 발생했습니다. 다시 시도하세요."
+    }
   },
   "components": {
     "accountsSnapshot": {
@@ -1189,7 +1269,8 @@
     "native-chat": {
       "composer": {
         "planMode": "계획",
-        "exitPlanMode": "계획 모드 종료"
+        "exitPlanMode": "계획 모드 종료",
+        "pastedTextLabel": "붙여넣은 텍스트"
       },
       "goal": {
         "sentAsGoal": "목표로 보냄"
@@ -1624,6 +1705,18 @@
       "showUsageFor": "사용량을 볼 데스크톱",
       "updatedAgo": "{{time}} 전 업데이트됨",
       "updatedJustNow": "방금 업데이트됨"
+    },
+    "bots": {
+      "noBotsTitle": "아직 봇이 없습니다",
+      "pairDesktop": "데스크톱을 페어링하면 여기에서 그 봇을 볼 수 있습니다.",
+      "seeAll": "모든 봇 보기",
+      "updateOneBody": "이 Orca 버전은 아직 휴대폰에 봇을 표시할 수 없습니다.",
+      "updateManyTitle": "컴퓨터의 Orca 업데이트",
+      "updateManyBody": "해당 Orca 버전은 아직 휴대폰에 봇을 표시할 수 없습니다.",
+      "offOneBody": "켜려면 {{host}}에서 Orca를 열고 설정 › 봇 › 봇 사용으로 이동하세요.",
+      "offServerBody": "켜려면 {{desktop}}에서 Orca를 열고 설정 › 봇 › {{host}}에서 봇 사용으로 이동하세요.",
+      "offManyTitle": "컴퓨터에서 봇이 꺼져 있습니다",
+      "offManyBody": "켜려면 각 컴퓨터에서 Orca를 열고 설정 › 봇 › 봇 사용으로 이동하세요."
     }
   },
   "hooks": {
@@ -4439,7 +4532,11 @@
       "offline": "{{name}}이(가) 오프라인입니다. 다시 연결되면 링크를 다시 여세요.",
       "chatOpenFailed": "{{name}}에서 이 채팅을 열 수 없습니다. 링크를 다시 시도하세요.",
       "unreachableSingle": "{{name}}에 연결할 수 없습니다. 해당 컴퓨터에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
-      "workspaceDeleted": "이 채팅의 작업 공간이 {{name}}에서 삭제되었습니다."
+      "workspaceDeleted": "이 채팅의 작업 공간이 {{name}}에서 삭제되었습니다.",
+      "updateOrca": "Orca 업데이트",
+      "openRequestFailed": "요청을 열지 못함",
+      "botNotFound": "봇을 찾을 수 없음",
+      "openOn": "{{name}} 열 위치"
     },
     "settings": {
       "remove": "제거",
@@ -4497,7 +4594,20 @@
       "copyFailed": "복사하지 못함",
       "deleteDetailNoPath": "소울과 메모리가 있는 폴더는 {{host}}에 남습니다.",
       "backToAgent": "에이전트 및 모델로 돌아가기",
-      "useChatDefaults": "채팅 기본값 사용"
+      "useChatDefaults": "채팅 기본값 사용",
+      "declineName": "{{name}} 거절",
+      "reviewName": "{{name}} 검토",
+      "removeConfirmTitle": "{{name}}을(를) 제거하시겠습니까?",
+      "removeConfirmMessage": "{{name}}님은 더 이상 {{botName}}에게 요청할 수 없습니다.",
+      "active": "활성",
+      "activeDetail": "메시지에 답하고 자동화를 실행합니다.",
+      "permissions": "권한",
+      "sameAsChats": "채팅과 동일",
+      "notifications": "알림",
+      "needsPermission": "권한 필요",
+      "taskComplete": "작업 완료",
+      "couldNotFinish": "완료하지 못함",
+      "couldNotFinishDetail": "자동화 실행이나 워커가 실패할 때."
     },
     "newHomeChat": {
       "action": "새 홈 채팅",
@@ -4513,14 +4623,29 @@
       "detail": "연결된 앱과 프로젝트를 읽고 다음 단계를 제안합니다. 읽기 전용입니다. 둘러볼 때마다 에이전트 요금제를 사용하며, 호스트에서 Orca가 실행 중이어야 합니다.",
       "lookNow": "지금 둘러보기",
       "notYet": "아직 없음",
-      "backToLookAround": "둘러보기로 돌아가기"
+      "backToLookAround": "둘러보기로 돌아가기",
+      "title": "둘러보기",
+      "on": "다음 단계 제안",
+      "every": "빈도",
+      "weekdaysOnly": "평일만",
+      "focus": "찾을 대상",
+      "anything": "나를 기다리는 모든 것",
+      "lastLooked": "마지막 둘러보기",
+      "focusPlaceholder": "나를 기다리는 PR, #eng의 질문, 이번 주 마감 이슈",
+      "focusDetail": "선택 사항. 비워 두면 나를 기다리는 모든 것을 찾습니다.",
+      "back": "설정으로 돌아가기"
     },
     "connectorOffer": {
       "slack": "Slack 채널과 다이렉트 메시지에서 봇과 채팅하세요.",
       "google": "봇이 Gmail, 캘린더, Drive에서 작업하게 하고, 새 메일로 자동화를 시작하세요.",
       "linear": "봇을 @멘션하거나 할당해 이슈를 맡기고, Linear 이벤트로 자동화를 시작하세요.",
       "github": "봇을 @멘션해 작업을 맡기고, GitHub 이벤트로 자동화를 시작하세요.",
-      "heading": "서비스 연결"
+      "heading": "서비스 연결",
+      "connected": "연결됨",
+      "onComputer": "이 채팅의 카드에서, 컴퓨터의 Orca로 연결하세요.",
+      "addGitHubAccess": "이 채팅의 카드에서, 컴퓨터의 Orca로 저장소나 조직을 추가하세요.",
+      "addWorkspace": "이 채팅의 카드에서, 컴퓨터의 Orca로 다른 워크스페이스를 추가하세요.",
+      "paused": "{{host}}이(가) Orca에 로그인할 때까지 일시 중지됨."
     },
     "groups": {
       "group": "그룹",
@@ -4553,7 +4678,46 @@
       "newThreadTab": "새 스레드",
       "newThreadHint": "새로 시작",
       "newThread": "{{name}}의 새 스레드",
-      "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요."
+      "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요.",
+      "manageMembers": "멤버 관리",
+      "newGroup": "새 그룹",
+      "cancel": "취소",
+      "back": "뒤로",
+      "groupActions": "그룹 작업",
+      "pendingRequests": "대기 중인 요청",
+      "needsYou": "· 확인 필요",
+      "valuePending": " · {{value0}}개 대기 중",
+      "manageMembersMenu": "멤버 관리…",
+      "allBots": "모든 봇",
+      "onlyWhenMentioned": "멘션될 때만",
+      "stopValue": "{{value0}} 중지",
+      "replyToValue": "{{value0}}에 답장",
+      "waitingForTheNativeSession": "기본 세션을 기다리는 중…",
+      "create": "생성",
+      "removingDefault": "{{name}}을(를) 제거하면 답장이 멘션될 때만으로 바뀝니다.",
+      "loadEarlierMessages": "이전 메시지 로드",
+      "memberRemoved": "멤버가 제거됨",
+      "composerPlaceholder": "그룹에 메시지 보내기, @로 봇 멘션",
+      "repliesValue": "답장: {{value0}}",
+      "whoAnswers": "내 메시지에 답하는 봇",
+      "peerAsked": "{{from}}이(가) {{to}}에게 물어봄",
+      "peerFollowedUp": "{{bot}}이(가) 후속 조치함",
+      "peerReplyRead": "{{reader}}이(가) {{peer}}의 답장을 읽음",
+      "deleteTitle": "{{name}}을(를) 삭제할까요?",
+      "deleteDescription": "그룹의 봇은 삭제되지 않습니다.",
+      "deleteConfirm": "그룹 삭제",
+      "deleteGroupMenu": "그룹 삭제…",
+      "you": "나",
+      "pickTwo": "봇을 2개 이상 선택하세요",
+      "nameIt": "그룹 이름 지정",
+      "save": "저장",
+      "namePlaceholder": "그룹 이름을 지어 주세요",
+      "useSuggestion": "‘{{name}}’ 사용",
+      "suggestTwo": "{{a}}, {{b}}",
+      "suggestThree": "{{a}}, {{b}}, {{c}}",
+      "suggestMore": "{{a}}, {{b}} 외 {{count}}개",
+      "pickOne": "봇 선택",
+      "needsTwoBots": "{{host}}에 봇이 2개 필요합니다"
     },
     "templates": {
       "title": "봇 템플릿",
@@ -4570,50 +4734,294 @@
       "backToTemplates": "템플릿으로 돌아가기",
       "category": {
         "support": "지원 및 분류",
-        "personal": "개인 비서"
-      }
+        "personal": "개인 비서",
+        "coding": "코딩",
+        "releases": "릴리스 및 CI",
+        "planning": "계획 및 문서",
+        "ops": "운영"
+      },
+      "blank": "빈 봇",
+      "blankLine": "첫 채팅에서 용도를 알려 주세요.",
+      "byOrca": "{{category}} · Orca 제공",
+      "originTemplateNamed": "{{template}} 템플릿에서",
+      "noMatch": "‘{{query}}’과(와) 일치하는 템플릿이 없습니다"
     },
     "tidyUp": {
       "title": "메모리 관리",
       "never": "아직 없음",
       "footer": "메모리 파일만 변경합니다. 짧은 채팅처럼 에이전트 요금제를 사용합니다. 컴퓨터에서 Orca가 실행 중이어야 합니다.",
       "undoNote": "실행 취소하면 MEMORY.md가 이 정리 이전 상태로 한 번에 돌아갑니다. 전체 기록과 메모리 편집은 컴퓨터의 설정 → 메모리에서 이용할 수 있습니다.",
-      "backToTidyUp": "메모리 관리로 돌아가기"
+      "backToTidyUp": "메모리 관리로 돌아가기",
+      "nowRunning": "이미 정리 중입니다.",
+      "nowBusy": "아직 작업 중인 채팅이 있습니다. 끝나면 다시 시도하세요.",
+      "nowFailed": "정리를 시작하지 못했습니다. 다시 시도하세요.",
+      "undoSuperseded": "이 정리 이후 메모리가 변경되어 그대로 두었습니다.",
+      "undoFailed": "정리를 실행 취소하지 못했습니다.",
+      "everyNight": "매일 밤",
+      "everyWeek": "일주일에 한 번",
+      "on": "밤사이 메모리 정리",
+      "turnedOff": "정리가 10번 연속 실패해 꺼졌습니다.",
+      "every": "빈도",
+      "lastTidied": "마지막 정리",
+      "tidying": "정리 중…",
+      "now": "지금 정리",
+      "merged": "반복된 줄 {{count}}개를 합침",
+      "replaced": "대체됨으로 표시: {{fact}}",
+      "filed": "{{count}}줄을 memory/{{topic}}.md에 정리함",
+      "moved": "오래된 줄 {{count}}개를 보관함으로 옮김",
+      "readChats": "채팅 {{count}}개 읽음",
+      "took": "{{value}}분 걸림",
+      "learned": "채팅에서 배운 것",
+      "tidied": "정리됨",
+      "undone": "실행 취소됨",
+      "undoAll": "이 정리 실행 취소",
+      "undo": "실행 취소",
+      "summaryTitle": "마지막 정리",
+      "undoStale": "그 이후 더 새로운 정리가 실행되었습니다. 실행 취소하기 전에 검토하세요."
     },
     "items": {
       "filter": {
         "clearAll": "필터 지우기",
-        "chat": "채팅"
+        "chat": "채팅",
+        "needsYou": "확인 필요만",
+        "label": "항목 필터",
+        "all": "모든 채팅",
+        "remove": "{{name}} 필터 제거",
+        "clear": "필터 지우기"
       },
       "tab": "항목",
       "activity": {
         "notSent": "보내지 않음.",
         "retry": "다시 시도",
         "discard": "버리기",
-        "mayHaveArrived": "전달되었을 수 있습니다."
+        "mayHaveArrived": "전달되었을 수 있습니다.",
+        "changed": "이(가) {{field}}을(를) 변경함",
+        "closed": "이(가) 이것을 완료로 표시함",
+        "canceled": "이(가) 이것을 취소함",
+        "reopened": "이(가) 이것을 다시 엶",
+        "moved": "이(가) 이것을 다음으로 옮김:",
+        "madeNeedsYou": "이(가) 이 항목을 확인 필요로 추가함",
+        "made": "이(가) 이 항목을 추가함",
+        "linked": "이(가) {{links}}을(를) 연결함",
+        "workerStarted": "워커 시작됨:",
+        "workerFailed": "워커 중지됨:",
+        "workerFinished": "워커 완료됨:",
+        "noComments": "아직 댓글이 없습니다.",
+        "snoozed": "이(가) {{when}}까지 다시 알림으로 미룸",
+        "snoozedBare": "이(가) 다시 알림으로 미룸",
+        "unsnoozed": "이(가) 다시 알림을 해제함",
+        "snoozeEnded": "다시 알림에서 일찍 돌아옴"
       },
       "comment": {
-        "replyingTo": "답장 대상:"
+        "replyingTo": "답장 대상:",
+        "offline": "{{host}}이(가) 오프라인입니다. 댓글은 보관되며, 돌아오면 댓글이 다시 작동합니다.",
+        "label": "댓글",
+        "add": "댓글 추가…",
+        "submit": "댓글",
+        "fileOnComputer": "컴퓨터에서 {{name}}을(를) 여세요.",
+        "reply": "직접 답장하기",
+        "replyTo": "{{name}}에게 답장…",
+        "showLess": "간략히 보기"
       },
       "view": {
         "title": "항목",
         "placeOf": "{{total}}개 중 {{index}}번째",
         "previous": "이전 항목",
         "next": "다음 항목",
-        "subWhere": "항목 {{number}} · {{chat}}"
+        "subWhere": "항목 {{number}} · {{chat}}",
+        "canceledNote": "취소됨:",
+        "doneNote": "완료:",
+        "links": "링크",
+        "activity": "활동",
+        "showEarlier": "이전 항목 표시",
+        "showLess": "간략히 보기",
+        "showMore": "더 보기"
       },
       "ask": {
-        "notNow": "나중에"
+        "notNow": "나중에",
+        "recommended": "추천"
       },
       "write": {
-        "offline": "{{host}}이(가) 오프라인입니다."
+        "offline": "{{host}}이(가) 오프라인입니다.",
+        "unknown": "보내는 중에 연결이 끊어져 도착했을 수 있습니다. 다시 연결되면 다시 보내기 전에 활동을 확인하세요."
       },
       "thisComputer": "컴퓨터",
-      "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다."
+      "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
+      "chat": {
+        "opensInItems": "항목에서 열림",
+        "moreItems": "+{{count}}개 더",
+        "commentOn": "켜짐",
+        "marked": "{{items}}을(를) 완료로 표시함",
+        "canceled": "{{items}} 취소함",
+        "added": "{{items}} 추가함",
+        "askedYou": "{{items}}에 대해 나에게 질문함",
+        "moved": "{{items}}을(를) {{status}}(으)로 옮김",
+        "commented": "{{items}}에 댓글을 남김",
+        "updated": "{{items}} 업데이트함",
+        "linkedMany": "링크 {{count}}개를 {{items}}에 연결함",
+        "linked": "{{link}}을(를) {{items}}에 연결함",
+        "aWorker": "워커",
+        "youMarkedManyDone": "항목 {{count}}개를 완료로 표시했습니다: {{items}}",
+        "youCanceledMany": "항목 {{count}}개를 취소했습니다: {{items}}",
+        "youMovedMany": "항목 {{count}}개를 {{status}}(으)로 옮겼습니다: {{items}}",
+        "youMarked": "{{items}}을(를) 완료로 표시했습니다",
+        "youCanceled": "{{items}}을(를) 취소했습니다",
+        "youMoved": "{{items}}을(를) {{status}}(으)로 옮겼습니다",
+        "youChanged": "{{items}}을(를) 변경했습니다",
+        "changes": "{{from}} → {{to}} · 변경 {{count}}개",
+        "chipLabel": "{{title}}, {{status}}",
+        "addedAndMoved": "{{items}} 추가 후 {{status}}(으)로 옮김",
+        "addedAndAsked": "{{items}} 추가 후 나에게 질문함",
+        "addedAndDone": "{{items}} 추가 후 완료로 표시함",
+        "addedAndCanceled": "{{items}} 추가 후 취소함",
+        "openChat": "{{chat}} 열기",
+        "byChat": {
+          "moved": "{{chat}}이(가) {{items}}을(를) {{status}}(으)로 옮김",
+          "askedYou": "{{chat}}이(가) {{items}}에 대해 나에게 질문함",
+          "marked": "{{chat}}이(가) {{items}}을(를) 완료로 표시함",
+          "canceled": "{{chat}}이(가) {{items}}을(를) 취소함",
+          "added": "{{chat}}이(가) {{items}}을(를) 추가함",
+          "commented": "{{chat}}이(가) {{items}}에 댓글을 남김",
+          "updated": "{{chat}}이(가) {{items}}을(를) 업데이트함",
+          "linkedMany": "{{chat}}이(가) 링크 {{count}}개를 {{items}}에 연결함",
+          "linked": "{{chat}}이(가) {{link}}을(를) {{items}}에 연결함"
+        },
+        "anotherChat": "다른 채팅"
+      },
+      "status": {
+        "planned": "계획됨",
+        "working": "진행 중",
+        "needsYou": "확인 필요",
+        "done": "완료",
+        "canceled": "취소됨"
+      },
+      "needYouCount_one": "확인이 필요한 항목 {{count}}개",
+      "needYouCount_other": "확인이 필요한 항목 {{count}}개",
+      "homeChat": "홈 채팅",
+      "chatFallback": "채팅",
+      "field": {
+        "doneMeansLower": "완료 기준",
+        "description": "설명",
+        "title": "제목",
+        "status": "상태",
+        "chat": "채팅",
+        "doneMeans": "완료 기준",
+        "snoozed": "다시 알림"
+      },
+      "link": {
+        "notRead": "아직 읽지 않음",
+        "merged": "병합됨",
+        "draft": "초안",
+        "closed": "닫힘",
+        "open": "열림",
+        "checksPassing": "검사 통과",
+        "checksFailing": "검사 실패",
+        "checksPending": "체크 대기 중",
+        "pr": "PR #{{number}}",
+        "issue": "이슈 #{{number}}",
+        "serverPr": "서버 작업의 PR은 아직 표시되지 않음",
+        "openInBrowser": "브라우저에서 열기",
+        "copyLink": "링크 복사",
+        "copyPath": "경로 복사",
+        "fileOutside": "{{path}}이(가) 이 봇의 폴더에 없습니다"
+      },
+      "open": {
+        "failed": "이 항목을 열지 못했습니다.",
+        "notFound": "{{host}}에서 찾지 못했습니다. 다른 컴퓨터의 봇 항목일 수 있습니다.",
+        "noAnswer": "{{host}}이(가) 응답하지 않았습니다."
+      },
+      "retry": "다시 시도",
+      "loading": "항목 불러오는 중…",
+      "readFailedShort": "항목을 불러오지 못했습니다.",
+      "lastRead": "마지막으로 읽은 항목을 표시합니다.",
+      "row": {
+        "select": "{{title}} 선택"
+      },
+      "selected": "{{count}}개 선택됨",
+      "pill": {
+        "moveTo": "옮길 위치",
+        "clear": "선택 해제",
+        "moveCount_one": "항목 {{count}}개 옮길 위치",
+        "moveCount_other": "항목 {{count}}개 옮길 위치"
+      },
+      "menu": {
+        "select": "선택",
+        "done": "완료",
+        "changeStatus": "상태 변경",
+        "openChat": "{{chat}} 열기",
+        "cancelShort": "취소"
+      },
+      "stale": {
+        "confirm_one": "오래된 항목 {{count}}개를 취소할까요?",
+        "confirm_other": "오래된 항목 {{count}}개를 취소할까요?",
+        "confirmWhy": "봇에게 보낸 이유: ‘{{reason}}’ 아무것도 삭제되지 않습니다.",
+        "reason": "{{count}}일 동안 활동이 없습니다.",
+        "cancelAll": "모두 취소"
+      },
+      "cancel": {
+        "keep": "유지",
+        "confirmMany": "{{count}}개 취소",
+        "titleMany": "항목 {{count}}개를 취소할까요?",
+        "titleOne": "{{title}}을(를) 취소할까요?",
+        "why": "봇은 이유를 볼 수 있습니다. 아무것도 삭제되지 않습니다.",
+        "placeholder": "이유",
+        "confirmOne": "항목 취소",
+        "offline": "{{host}}이(가) 오프라인입니다. 이유는 보관되며, 돌아오면 {{action}}이(가) 다시 작동합니다."
+      },
+      "strip": {
+        "view": "보기"
+      },
+      "group": {
+        "stale": "오래됨",
+        "closed": "닫힘",
+        "new": "새 항목 {{count}}개",
+        "showMore": "{{count}} 더 보기",
+        "snoozed": "다시 알림"
+      },
+      "empty": {
+        "title": "아직 항목 없음",
+        "body": "{{bot}}이(가) 나를 위해 무언가를 맡으면, 무엇을 하고 있고 나에게 무엇이 필요한지와 함께 여기에 표시됩니다.",
+        "needsYou": "확인이 필요한 것이 없습니다.",
+        "filtered": "일치하는 항목이 없습니다."
+      },
+      "toast": {
+        "markedDone": "{{title}}을(를) 완료로 표시함",
+        "canceledOne": "{{title}} 취소함",
+        "movedOne": "{{title}}을(를) {{status}}(으)로 옮김",
+        "movedMany": "항목 {{count}}개를 {{status}}(으)로 옮김",
+        "doneFailed": "완료로 표시하지 못함: {{why}}",
+        "moveFailed_one": "옮기지 못함: {{why}}",
+        "moveFailed_other": "항목 {{count}}개를 옮기지 못함: {{why}}",
+        "snoozeFailed": "미루지 못함: {{why}}",
+        "unsnoozedOne": "{{title}}의 다시 알림 해제함",
+        "snoozedOne": "{{title}}을(를) {{when}}까지 미룸",
+        "unsnoozedMany": "항목 {{count}}개의 다시 알림 해제함",
+        "snoozedMany": "항목 {{count}}개를 {{when}}까지 미룸"
+      },
+      "snooze": {
+        "rowUntil": "{{when}}까지",
+        "sheet": "다시 알림…",
+        "pick": "시간 선택…",
+        "unsnooze": "다시 알림 해제",
+        "today": "오늘",
+        "tomorrow": "내일",
+        "until": "{{when}}까지 다시 알림",
+        "pickTitle": "다시 알림 시점",
+        "pickDay": "어느 날까지 다시 알림으로 미룰까요?",
+        "pickHour": "몇 시로 할까요?"
+      },
+      "readFailedTitle": "항목을 불러오지 못함"
     },
     "needs": {
       "chat": "{{name}} 채팅",
-      "access": "{{person}}님이 접근 권한을 요청함"
+      "access": "{{person}}님이 접근 권한을 요청함",
+      "permissionTool": "권한 · {{tool}}",
+      "permission": "권한 필요",
+      "waiting": "나를 기다리는 중",
+      "whereItRuns": "{{need}} · 실행 중인 곳에서 여세요",
+      "worker": "워커: {{name}}",
+      "actionFor": "{{action}}: {{title}}",
+      "open": "열기"
     },
     "waits": {
       "cancel": "취소",
@@ -4979,10 +5387,200 @@
     },
     "saveFailed": "저장하지 못함",
     "chats": {
-      "readFailedTitle": "채팅을 불러오지 못함"
+      "readFailedTitle": "채팅을 불러오지 못함",
+      "replying": "답장 중…",
+      "waiting": "나를 기다리는 중",
+      "sayHi": "{{name}}에게 인사하기",
+      "closedShort": "닫힘",
+      "needsYou": "확인 필요",
+      "askingBot": "{{name}}에게 요청 중",
+      "handedOver": "인계됨",
+      "fromClosedChat": "닫힌 채팅에서",
+      "automationTerminal": "자동화 실행 · 터미널",
+      "untitledWorker": "워커",
+      "home": "홈 채팅",
+      "untitled": "새 채팅",
+      "fold": "{{name}} 접기",
+      "unfold": "{{name}} 펼치기",
+      "unread": "읽지 않음",
+      "moreRunningStep": "8개 더 보기 · 실행 중 {{count}}개 더",
+      "moreRunning": "실행 중인 항목 {{count}}개 더 보기",
+      "earlierStep": "8개 더 보기 · 이전 항목 {{count}}개",
+      "earlier": "이전 항목 {{count}}개 보기",
+      "showFewer": "간략히 표시",
+      "title": "채팅",
+      "search": "채팅 및 워커 검색",
+      "noMatch": "일치하는 채팅이나 워커가 없습니다.",
+      "empty": "사이드 채팅, Slack 및 Linear 스레드, 자동화 실행이 여기에 표시되며 각각 시작한 워커도 함께 표시됩니다.",
+      "newTag": "신규",
+      "olderStep": "8개 더 표시 · 이전 항목 {{count}}개",
+      "older": "이전 항목 {{count}}개 표시",
+      "terminalRunDesktopOnly": "터미널 실행 · 컴퓨터의 자동화에서 여세요",
+      "searchFailed": "이 봇의 채팅을 검색하지 못했습니다.",
+      "searchRetry": "다시 시도하세요",
+      "loadingChats": "채팅 불러오는 중",
+      "handedOverInline": "인계됨",
+      "fromClosedChatInline": "닫힌 채팅에서",
+      "statusUnknown": "상태 알 수 없음",
+      "kindSlack": "Slack 스레드",
+      "kindLinear": "Linear 이슈",
+      "kindGithub": "GitHub 스레드",
+      "kindAutomation": "자동화 실행",
+      "kindSide": "사이드 채팅",
+      "replyingState": "답장 중",
+      "showEightMoreWorkers": "워커 8개 더 표시",
+      "showMoreWorkers_one": "워커 {{count}}개 더 표시",
+      "showMoreWorkers_other": "워커 {{count}}개 더 표시",
+      "moreMatches_one": "{{count}}개가 더 일치합니다. 이름을 더 입력해 범위를 좁히세요.",
+      "moreMatches_other": "{{count}}개가 더 일치합니다. 이름을 더 입력해 범위를 좁히세요.",
+      "runningCount": "{{count}}개 실행 중",
+      "waitingCount": "{{count}}개 대기 중"
     },
     "panel": {
-      "backTo": "{{name}}(으)로 돌아가기"
+      "backTo": "{{name}}(으)로 돌아가기",
+      "needYou_one": "확인 필요 {{count}}개",
+      "needYou_other": "확인 필요 {{count}}개",
+      "working": "{{count}}개 작업 중",
+      "itemsNeedYou": "항목, 확인 필요 {{count}}개",
+      "chats": "채팅",
+      "files": "파일"
+    },
+    "activity": {
+      "readFailed": "활동을 불러오지 못했습니다.",
+      "loading": "활동 불러오는 중…",
+      "unavailable": "이 호스트에서는 활동을 사용할 수 없습니다.",
+      "retry": "다시 시도",
+      "lastRead": "마지막으로 읽은 활동을 표시합니다.",
+      "readFailedTitle": "활동을 불러오지 못함",
+      "unavailableTitle": "활동 사용 불가"
+    },
+    "automations": {
+      "couldNotFinish": "완료하지 못함",
+      "runNow": "지금 실행",
+      "pause": "{{name}} 일시 중지",
+      "resume": "{{name}} 재개",
+      "empty": "자동화 설정은 채팅에서 요청하세요.",
+      "newAutomation": "새 자동화",
+      "runQueued": "자동화 실행이 대기 중입니다.",
+      "runFailed": "실행을 시작하지 못함",
+      "emptyTitle": "아직 자동화가 없습니다"
+    },
+    "sheet": {
+      "activity": "활동",
+      "automations": "자동화",
+      "settings": "설정",
+      "hint": "활동, 자동화, 설정"
+    },
+    "events": {
+      "slack": {
+        "mentioned": "Slack에서 내가 멘션되면",
+        "message": "Slack 메시지가 오면",
+        "reaction": "Slack 반응이 달리면"
+      },
+      "github": {
+        "issueOpened": "이슈가 열리면",
+        "prOpened": "PR이 열리면",
+        "prPushed": "PR에 푸시되면",
+        "prMerged": "PR이 병합되면",
+        "comment": "GitHub 댓글이 달리면",
+        "reviewComment": "리뷰 댓글이 달리면",
+        "review": "PR 리뷰가 달리면",
+        "mentioned": "GitHub에서 멘션되면",
+        "reviewRequested": "리뷰가 요청되면",
+        "assigned": "GitHub에서 할당되면",
+        "ciFailed": "CI가 실패하면",
+        "ciPassed": "CI가 통과하면",
+        "prConflicted": "PR에 충돌이 있으면",
+        "prClosed": "PR이 닫히면",
+        "prReady": "PR이 리뷰 준비가 되면",
+        "labeled": "라벨이 추가되면",
+        "issueClosed": "이슈가 닫히면",
+        "deployFinished": "배포가 끝나면",
+        "securityAlert": "보안 경고가 있으면",
+        "workflowFinished": "워크플로 실행이 끝나면"
+      },
+      "linear": {
+        "assigned": "Linear에서 할당되면",
+        "mentioned": "Linear에서 멘션되면",
+        "issueCreated": "Linear 이슈가 생성되면",
+        "issueMoved": "Linear 이슈가 이동하면"
+      },
+      "slackFallback": "Slack 이벤트 시",
+      "githubFallback": "GitHub 이벤트 시",
+      "linearFallback": "Linear 이벤트 시",
+      "webhookFallback": "웹훅이 호출되면",
+      "anyFallback": "이벤트 시"
+    },
+    "chatStartFailed": "채팅을 시작하지 못함",
+    "upNext": {
+      "title": "제안",
+      "looked": "{{time}} 둘러봄",
+      "yesterdayAt": "어제 {{time}}",
+      "looking": "둘러보는 중…",
+      "start": "시작",
+      "dismiss": "닫기",
+      "dismissTitle": "{{title}} 닫기",
+      "showMore_one": "{{count}} 더 보기",
+      "showMore_other": "{{count}} 더 보기",
+      "empty": "지난 둘러보기에서 제안이 없었습니다.",
+      "notYet": "{{name}}은(는) 아직 둘러보지 않았습니다. 설정에서 지금 둘러보거나, 하루에 몇 번 자동으로 둘러봅니다.",
+      "startFailed": "그 제안은 더 이상 목록에 없습니다.",
+      "lookNowRunning": "이미 둘러보는 중입니다.",
+      "lookNowPaused": "둘러보려면 봇을 켜세요.",
+      "lookNowFailed": "둘러보기를 시작하지 못했습니다. 다시 시도하세요.",
+      "showMore": "{{count}} 더 보기",
+      "newInUpNext": "제안에 새 항목 {{count}}개"
+    },
+    "new": {
+      "failed": "봇을 만들지 못함",
+      "title": "새 봇",
+      "runsOnHost": "{{host}}에서 실행됩니다.",
+      "shuffle": "다른 사진",
+      "namePlaceholder": "봇 이름을 지어 주세요",
+      "create": "생성",
+      "fromTemplate": "템플릿 사용",
+      "takesOverList": "{{names}}을(를) 맡습니다. 에이전트는 계속 실행됩니다.",
+      "runsOn": "실행 위치",
+      "cantReach": "{{host}}에 연결할 수 없습니다. 다른 컴퓨터를 고르세요.",
+      "otherAccount": "{{host}}은(는) 자체 Orca 계정({{email}})을 사용합니다. 그 봇은 이 계정으로 게시하고 연결합니다.",
+      "agent": "에이전트",
+      "computer": "컴퓨터",
+      "computerMessage": "봇이 실행되는 곳.",
+      "agentOn": "{{host}}에.",
+      "botsOffOn": "{{host}}에서 봇이 꺼져 있음",
+      "updateDesktopFirst": "먼저 {{host}}의 Orca를 업데이트하세요",
+      "checking": "확인 중…"
+    },
+    "workspaces": {
+      "show": "{{name}}의 워크스페이스 보기",
+      "hide": "{{name}}의 워크스페이스 숨기기"
+    },
+    "section": {
+      "title": "봇",
+      "summary": "{{title}}, 봇 {{total}}개, 확인 필요 {{attention}}개, 읽지 않음 {{unread}}개, 작업 중 {{working}}개",
+      "newBot": "새 봇"
+    },
+    "list": {
+      "updateOrcaOn": "{{host}}의 Orca 업데이트",
+      "cantReach": "{{host}}에 연결할 수 없습니다. 돌아오면 그 봇이 표시됩니다.",
+      "noBotsYet": "아직 봇이 없습니다.",
+      "offline": "오프라인",
+      "updateToSee": "봇을 보려면 {{host}}의 Orca를 업데이트하세요.",
+      "offEnd": "{{host}}에서 봇이 꺼져 있습니다.",
+      "updateToCreate": "휴대폰에서 봇을 만들려면 {{host}}의 Orca를 업데이트하세요."
+    },
+    "row": {
+      "replyingIn": "{{place}}에서 답장 중",
+      "replyingOn": "{{place}}에서 답장 중",
+      "paused": "일시중지됨",
+      "reading": "메시지 읽는 중",
+      "replying": "답장 중",
+      "waitingCount": "이벤트 {{count}}개 대기 중",
+      "waitingFor": "{{label}} 대기 중",
+      "waitingForUntil": "{{label}} 대기 중 · {{time}}까지"
+    },
+    "chat": {
+      "nothingToReport": "보고할 내용 없음"
     }
   }
 }

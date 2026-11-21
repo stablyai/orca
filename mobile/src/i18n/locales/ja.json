@@ -346,7 +346,8 @@
       "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
       "signIn": "サインイン",
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
-      "forkedFrom": "分岐元"
+      "forkedFrom": "分岐元",
+      "botCreated": "ボットを作成しました"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗:",
@@ -733,6 +734,82 @@
         "failed": "失敗: {{count}}"
       },
       "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。"
+    },
+    "botCards": {
+      "request": {
+        "notSentTo": "未送信",
+        "asked": "質問済み",
+        "handedTo": "引き渡し先",
+        "paused": "{{bot}} は一時停止中です。",
+        "botsOff": "ボットはオフです。",
+        "couldNotTake": "{{bot}} は引き受けられませんでした。",
+        "answered": "✓ 回答済み",
+        "done": "✓ 完了",
+        "notAnswered": "未回答",
+        "waitingOnYou": "あなたを待っています",
+        "working": "作業中…",
+        "hasIt": "が担当",
+        "openChat": "チャットを開く"
+      },
+      "offer": {
+        "unknownAgent": "{{bot}} はこのアプリが認識しない Agent を使っています。編集して選び直してください。",
+        "takesOverOne": "ワークスペース 1 件を引き継ぎ",
+        "takesOverMany": "ワークスペース {{count}} 件を引き継ぎ",
+        "created": "作成済み",
+        "createdAskedOne": "作成済み · ワークスペース 1 件の引き継ぎを依頼",
+        "createdAskedMany": "作成済み · ワークスペース {{count}} 件の引き継ぎを依頼",
+        "createdTookOverSome": "作成済み · ワークスペース {{count}} 件中 {{taken}} 件を引き継ぎ",
+        "createdTookOverOne": "作成済み · ワークスペース 1 件を引き継ぎ",
+        "createdTookOverMany": "作成済み · ワークスペース {{count}} 件を引き継ぎ",
+        "deleted": "作成後に削除",
+        "nameTaken": "{{name}} という名前のボットはすでにあります。",
+        "rename": "名前を変更する",
+        "edit": "編集",
+        "create": "ボットを作成",
+        "open": "オープン",
+        "origin": "{{bot}} が提案",
+        "originTemplate": "{{template}} から、{{bot}} が提案",
+        "watches": "監視対象",
+        "does": "すること",
+        "reports": "報告先",
+        "willPropose": "提案予定",
+        "takesOver": "引き継ぐもの",
+        "template": "テンプレート",
+        "dismiss": "閉じる",
+        "notSent": "ボットに送信できませんでした。再試行してください。",
+        "askedMany": "{{count}} 個のワークスペースの引き継ぎを依頼",
+        "askedOne": "1 個のワークスペースの引き継ぎを依頼",
+        "tookOverMany": "{{count}} 個のワークスペースを引き継ぎました",
+        "tookOverOne": "1 個のワークスペースを引き継ぎました",
+        "tookOverSome": "{{count}} 個中 {{taken}} 個のワークスペースを引き継ぎました"
+      },
+      "toolAdded": {
+        "heading": "ツールを追加しました",
+        "removed": "削除しました",
+        "remove": "削除"
+      },
+      "webhook": {
+        "title": "Webhook",
+        "starts": "Webhook · 「{{automation}}」を開始",
+        "sampleNote": "サンプルは実際の実行を開始します。",
+        "sendSample": "サンプル呼び出しを送信",
+        "secretAdd": "署名シークレットを追加…",
+        "secretChange": "署名シークレット: {{sender}} · 変更…",
+        "paused": "一時停止中",
+        "orphaned": "未接続",
+        "pending": "設定中",
+        "noCalls": "まだ呼び出しはありません",
+        "lastCall": "最後の呼び出し {{ago}}",
+        "copied": "コピーしました",
+        "copyUrl": "URLをコピー",
+        "copyFailed": "コピーを再試行"
+      },
+      "memory": {
+        "added": "追加した",
+        "removed": "削除しました",
+        "noteChanged": "メモが変更されました",
+        "indexChanged": "MEMORY.md が変更されました"
+      }
     }
   },
   "common": {
@@ -757,7 +834,10 @@
     "settings": "設定",
     "unknown": "不明",
     "waitingForHost": "ホストの接続待ち…",
-    "connectingToHost": "ホストに接続中…"
+    "connectingToHost": "ホストに接続中…",
+    "loadError": {
+      "generic": "問題が発生しました。再試行してください。"
+    }
   },
   "components": {
     "accountsSnapshot": {
@@ -1189,7 +1269,8 @@
     "native-chat": {
       "composer": {
         "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了"
+        "exitPlanMode": "プランモードを終了",
+        "pastedTextLabel": "貼り付けたテキスト"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -1624,6 +1705,18 @@
       "showUsageFor": "使用状況を表示するデスクトップ",
       "updatedAgo": "{{time}}前に更新",
       "updatedJustNow": "たった今更新"
+    },
+    "bots": {
+      "noBotsTitle": "ボットはまだありません",
+      "pairDesktop": "デスクトップをペアリングすると、ここにそのボットが表示されます。",
+      "seeAll": "すべてのボットを見る",
+      "updateOneBody": "この Orca のバージョンでは、まだスマートフォンにボットを表示できません。",
+      "updateManyTitle": "コンピュータの Orca を更新",
+      "updateManyBody": "お使いの Orca のバージョンでは、まだスマートフォンにボットを表示できません。",
+      "offOneBody": "オンにするには、{{host}} で Orca を開き、設定 › ボット › ボットを有効にする に進んでください。",
+      "offServerBody": "オンにするには、{{desktop}} で Orca を開き、設定 › ボット › {{host}} でボットを有効にする に進んでください。",
+      "offManyTitle": "コンピュータでボットがオフになっています",
+      "offManyBody": "オンにするには、各コンピュータで Orca を開き、設定 › ボット › ボットを有効にする に進んでください。"
     }
   },
   "hooks": {
@@ -4524,7 +4617,11 @@
       "offline": "{{name}}はオフラインです。オンラインに戻ったらリンクを開き直してください。",
       "chatOpenFailed": "{{name}}でこのチャットを開けませんでした。リンクをもう一度お試しください。",
       "unreachableSingle": "{{name}}に接続できませんでした。そのコンピュータでOrcaが起動していることを確認し、もう一度お試しください。",
-      "workspaceDeleted": "このチャットのワークスペースは{{name}}で削除されました。"
+      "workspaceDeleted": "このチャットのワークスペースは{{name}}で削除されました。",
+      "updateOrca": "Orca を更新",
+      "openRequestFailed": "リクエストを開けませんでした",
+      "botNotFound": "ボットが見つかりません",
+      "openOn": "{{name}} を開く場所"
     },
     "settings": {
       "remove": "削除",
@@ -4582,7 +4679,20 @@
       "copyFailed": "コピーできませんでした",
       "deleteDetailNoPath": "ソウルとメモリーを含むフォルダーは {{host}} に残ります。",
       "backToAgent": "Agent とモデルに戻る",
-      "useChatDefaults": "チャットのデフォルトを使用"
+      "useChatDefaults": "チャットのデフォルトを使用",
+      "declineName": "{{name}} を拒否",
+      "reviewName": "{{name}} を確認",
+      "removeConfirmTitle": "{{name}} を削除しますか？",
+      "removeConfirmMessage": "{{name}} は {{botName}} に質問できなくなりました。",
+      "active": "アクティブ",
+      "activeDetail": "メッセージに返信し、オートメーションを実行します。",
+      "permissions": "権限",
+      "sameAsChats": "チャットと同じ",
+      "notifications": "通知",
+      "needsPermission": "許可が必要",
+      "taskComplete": "タスク完了",
+      "couldNotFinish": "完了できませんでした",
+      "couldNotFinishDetail": "オートメーションの実行またはワーカーが失敗したとき。"
     },
     "newHomeChat": {
       "action": "新規ホームチャット",
@@ -4598,14 +4708,29 @@
       "detail": "接続済みのアプリとプロジェクトを読んで次のステップを提案します。読み取り専用です。見回りのたびに Agent のプランを使います。ホストで Orca が起動している必要があります。",
       "lookNow": "今すぐ見回り",
       "notYet": "まだ",
-      "backToLookAround": "見回りに戻る"
+      "backToLookAround": "見回りに戻る",
+      "title": "見回り",
+      "on": "次のステップを提案",
+      "every": "頻度",
+      "weekdaysOnly": "平日のみ",
+      "focus": "探すもの",
+      "anything": "あなたを待機中ものすべて",
+      "lastLooked": "最後の見回り",
+      "focusPlaceholder": "自分待ちの PR、#eng の質問、今週期限の Issue",
+      "focusDetail": "任意。空欄の場合は、あなたを待機中ものすべてを探します。",
+      "back": "設定に戻る"
     },
     "connectorOffer": {
       "slack": "Slack のチャンネルやダイレクトメッセージからボットとチャットできます。",
       "google": "Gmail、カレンダー、Drive でボットに作業させ、新着メールでオートメーションを開始します。",
       "linear": "@メンションまたは割り当てでボットに Issue を任せ、Linear のイベントでオートメーションを開始します。",
       "github": "@メンションでボットに作業を任せ、GitHub のイベントでオートメーションを開始します。",
-      "heading": "サービスを接続"
+      "heading": "サービスを接続",
+      "connected": "接続済み",
+      "onComputer": "このチャットのカードから、コンピュータの Orca で接続してください。",
+      "addGitHubAccess": "このチャットのカードから、コンピュータの Orca でリポジトリまたは組織を追加してください。",
+      "addWorkspace": "このチャットのカードから、コンピュータの Orca で別のワークスペースを追加してください。",
+      "paused": "{{host}} が Orca にサインインするまで一時停止中です。"
     },
     "groups": {
       "group": "グループ",
@@ -4638,7 +4763,46 @@
       "newThreadTab": "新規スレッド",
       "newThreadHint": "新しく始まります",
       "newThread": "{{name}} の新規スレッド",
-      "handoffsPaused": "引き継ぎを {{count}} 回行ったため一時停止しました。続けるには返信してください。"
+      "handoffsPaused": "引き継ぎを {{count}} 回行ったため一時停止しました。続けるには返信してください。",
+      "manageMembers": "メンバーを管理",
+      "newGroup": "新規グループ",
+      "cancel": "キャンセル",
+      "back": "戻る",
+      "groupActions": "グループの操作",
+      "pendingRequests": "保留中のリクエスト",
+      "needsYou": "· 対応が必要",
+      "valuePending": " · 保留中 {{value0}} 件",
+      "manageMembersMenu": "メンバーを管理…",
+      "allBots": "すべてのボット",
+      "onlyWhenMentioned": "メンションされたときのみ",
+      "stopValue": "{{value0}} を停止してください",
+      "replyToValue": "{{value0}} に返信",
+      "waitingForTheNativeSession": "ネイティブセッションを待っています…",
+      "create": "作成",
+      "removingDefault": "{{name}} を削除すると、「返信」が「メンションされたときのみ」に変わります。",
+      "loadEarlierMessages": "以前のメッセージをロードする",
+      "memberRemoved": "メンバーを削除しました",
+      "composerPlaceholder": "グループにメッセージ。@ でボットをメンション",
+      "repliesValue": "返信: {{value0}}",
+      "whoAnswers": "メッセージに返信するボット",
+      "peerAsked": "{{from}} が {{to}} に質問しました",
+      "peerFollowedUp": "{{bot}} がフォローアップしました",
+      "peerReplyRead": "{{reader}} が {{peer}} の返信を読みました",
+      "deleteTitle": "{{name}} を削除しますか?",
+      "deleteDescription": "グループ内のボットは削除されません。",
+      "deleteConfirm": "グループの削除",
+      "deleteGroupMenu": "グループを削除…",
+      "you": "あなた",
+      "pickTwo": "ボットを 2 つ以上選んでください",
+      "nameIt": "グループに名前を付ける",
+      "save": "保存",
+      "namePlaceholder": "グループに名前を付けてください",
+      "useSuggestion": "「{{name}}」を使用",
+      "suggestTwo": "{{a}} と {{b}}",
+      "suggestThree": "{{a}}、{{b}}、{{c}}",
+      "suggestMore": "{{a}}、{{b}} ほか {{count}} 件",
+      "pickOne": "ボットを選択",
+      "needsTwoBots": "{{host}} にボットが 2 つ必要です"
     },
     "templates": {
       "title": "ボットテンプレート",
@@ -4655,50 +4819,294 @@
       "backToTemplates": "テンプレートに戻る",
       "category": {
         "support": "サポートとトリアージ",
-        "personal": "パーソナルアシスタント"
-      }
+        "personal": "パーソナルアシスタント",
+        "coding": "コーディング",
+        "releases": "リリースと CI",
+        "planning": "計画とドキュメント",
+        "ops": "運用"
+      },
+      "blank": "空のボット",
+      "blankLine": "最初のチャットで用途を伝えてください。",
+      "byOrca": "{{category}} · Orca 提供",
+      "originTemplateNamed": "{{template}} テンプレートから",
+      "noMatch": "「{{query}}」に一致するテンプレートはありません"
     },
     "tidyUp": {
       "title": "メモリーのメンテナンス",
       "never": "まだ",
       "footer": "変更するのはメモリーファイルだけです。短いチャットと同様に Agent のプランを使います。コンピュータで Orca が起動している必要があります。",
       "undoNote": "元に戻すと、MEMORY.md がこの整理の前の状態に一括で戻ります。履歴全体の確認とメモリーの編集は、コンピュータの「設定 → メモリー」で行えます。",
-      "backToTidyUp": "メモリーのメンテナンスに戻る"
+      "backToTidyUp": "メモリーのメンテナンスに戻る",
+      "nowRunning": "すでに整理中です。",
+      "nowBusy": "チャットがまだ作業中です。終わってから再試行してください。",
+      "nowFailed": "整理を開始できませんでした。再試行してください。",
+      "undoSuperseded": "この整理の後にメモリーが変更されたため、そのままにしました。",
+      "undoFailed": "整理を元に戻せませんでした。",
+      "everyNight": "毎晩",
+      "everyWeek": "週 1 回",
+      "on": "夜間にメモリーを整理",
+      "turnedOff": "整理が 10 回連続で失敗したためオフにしました。",
+      "every": "頻度",
+      "lastTidied": "最後の整理",
+      "tidying": "整理中…",
+      "now": "今すぐ整理",
+      "merged": "重複した {{count}} 行をまとめました",
+      "replaced": "置き換え済みに設定: {{fact}}",
+      "filed": "{{count}} 行を memory/{{topic}}.md に振り分けました",
+      "moved": "古い行 {{count}} 件をアーカイブに移動しました",
+      "readChats": "{{count}} 件のチャットを読みました",
+      "took": "{{value}} 分かかりました",
+      "learned": "チャットから学んだこと",
+      "tidied": "整理済み",
+      "undone": "元に戻しました",
+      "undoAll": "この整理を元に戻す",
+      "undo": "元に戻す",
+      "summaryTitle": "最後の整理",
+      "undoStale": "その後に新規整理が実行されています。元に戻す前に確認してください。"
     },
     "items": {
       "filter": {
         "clearAll": "フィルターをクリア",
-        "chat": "チャット"
+        "chat": "チャット",
+        "needsYou": "対応が必要なもののみ",
+        "label": "項目を絞り込む",
+        "all": "すべてのチャット",
+        "remove": "フィルター {{name}} を解除",
+        "clear": "フィルターをクリア"
       },
       "tab": "アイテム",
       "activity": {
         "notSent": "送信されていません。",
         "retry": "再試行",
         "discard": "破棄",
-        "mayHaveArrived": "届いている可能性があります。"
+        "mayHaveArrived": "届いている可能性があります。",
+        "changed": "が {{field}} を変更しました",
+        "closed": "が完了にしました",
+        "canceled": "がキャンセルしました",
+        "reopened": "がこの Issue を再オープンしました",
+        "moved": "が移動しました:",
+        "madeNeedsYou": "がこの項目を「対応が必要」として追加しました",
+        "made": "がこの項目を追加しました",
+        "linked": "が {{links}} をリンクしました",
+        "workerStarted": "ワーカーが開始:",
+        "workerFailed": "ワーカーが停止:",
+        "workerFinished": "ワーカーが完了:",
+        "noComments": "コメントはまだありません。",
+        "snoozed": "が {{when}} までスヌーズしました",
+        "snoozedBare": "がスヌーズしました",
+        "unsnoozed": "がスヌーズを解除しました",
+        "snoozeEnded": "スヌーズから早めに戻りました"
       },
       "comment": {
-        "replyingTo": "返信先:"
+        "replyingTo": "返信先:",
+        "offline": "{{host}} はオフラインです。コメントは保存されています。戻るとコメントが再び使えます。",
+        "label": "コメント",
+        "add": "コメントを追加…",
+        "submit": "コメント",
+        "fileOnComputer": "{{name}} はコンピュータで開いてください。",
+        "reply": "自分の言葉で返信",
+        "replyTo": "{{name}} に返信…",
+        "showLess": "表示を少なくする"
       },
       "view": {
         "title": "アイテム",
         "placeOf": "{{total}} 件中 {{index}} 件目",
         "previous": "前の項目",
         "next": "次の項目",
-        "subWhere": "項目 {{number}} · {{chat}}"
+        "subWhere": "項目 {{number}} · {{chat}}",
+        "canceledNote": "キャンセル:",
+        "doneNote": "完了:",
+        "links": "リンク",
+        "activity": "アクティビティ",
+        "showEarlier": "以前のものを表示",
+        "showLess": "表示を少なくする",
+        "showMore": "もっと見る"
       },
       "ask": {
-        "notNow": "後で"
+        "notNow": "後で",
+        "recommended": "おすすめ"
       },
       "write": {
-        "offline": "{{host}} はオフラインです。"
+        "offline": "{{host}} はオフラインです。",
+        "unknown": "送信中に接続が切れたため、届いている可能性があります。再接続したら、もう一度送る前にアクティビティを確認してください。"
       },
       "thisComputer": "コンピュータ",
-      "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。"
+      "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
+      "chat": {
+        "opensInItems": "項目で開きます",
+        "moreItems": "+{{count}} 件",
+        "commentOn": "オン",
+        "marked": "{{items}} を完了にしました",
+        "canceled": "{{items}} をキャンセルしました",
+        "added": "{{items}} を追加しました",
+        "askedYou": "{{items}} について質問しました",
+        "moved": "{{items}} を {{status}} に移動しました",
+        "commented": "{{items}} にコメントしました",
+        "updated": "{{items}} を更新しました",
+        "linkedMany": "{{count}} 件のリンクを {{items}} にリンクしました",
+        "linked": "{{link}} を {{items}} にリンクしました",
+        "aWorker": "ワーカー",
+        "youMarkedManyDone": "{{count}} 件を完了にしました: {{items}}",
+        "youCanceledMany": "{{count}} 件をキャンセルしました: {{items}}",
+        "youMovedMany": "{{count}} 件を {{status}} に移動しました: {{items}}",
+        "youMarked": "{{items}} を完了にしました",
+        "youCanceled": "{{items}} をキャンセルしました",
+        "youMoved": "{{items}} を {{status}} に移動しました",
+        "youChanged": "{{items}} を変更しました",
+        "changes": "{{from}} → {{to}} · {{count}} 件の変更",
+        "chipLabel": "{{title}}、{{status}}",
+        "addedAndMoved": "{{items}} を追加して {{status}} に移動しました",
+        "addedAndAsked": "{{items}} を追加して質問しました",
+        "addedAndDone": "{{items}} を追加して完了にしました",
+        "addedAndCanceled": "{{items}} を追加してキャンセルしました",
+        "openChat": "{{chat}} を開く",
+        "byChat": {
+          "moved": "{{chat}} が {{items}} を {{status}} に移動しました",
+          "askedYou": "{{chat}} が {{items}} について質問しました",
+          "marked": "{{chat}} が {{items}} を完了にしました",
+          "canceled": "{{chat}} が {{items}} をキャンセルしました",
+          "added": "{{chat}} が {{items}} を追加しました",
+          "commented": "{{chat}} が {{items}} にコメントしました",
+          "updated": "{{chat}} が {{items}} を更新しました",
+          "linkedMany": "{{chat}} が {{count}} 件のリンクを {{items}} にリンクしました",
+          "linked": "{{chat}} が {{link}} を {{items}} にリンクしました"
+        },
+        "anotherChat": "別のチャット"
+      },
+      "status": {
+        "planned": "予定",
+        "working": "進行中",
+        "needsYou": "対応が必要",
+        "done": "完了",
+        "canceled": "キャンセル済み"
+      },
+      "needYouCount_one": "対応が必要な項目 {{count}} 件",
+      "needYouCount_other": "対応が必要な項目 {{count}} 件",
+      "homeChat": "ホームチャット",
+      "chatFallback": "チャット",
+      "field": {
+        "doneMeansLower": "完了の条件",
+        "description": "説明",
+        "title": "タイトル",
+        "status": "状態",
+        "chat": "チャット",
+        "doneMeans": "完了の条件",
+        "snoozed": "スヌーズ中"
+      },
+      "link": {
+        "notRead": "未読",
+        "merged": "マージ済み",
+        "draft": "下書き",
+        "closed": "クローズ",
+        "open": "オープン",
+        "checksPassing": "チェック成功",
+        "checksFailing": "チェック失敗",
+        "checksPending": "保留中のチェック",
+        "pr": "PR #{{number}}",
+        "issue": "Issue #{{number}}",
+        "serverPr": "サーバー上の作業の PR はまだ表示されません",
+        "openInBrowser": "ブラウザで開く",
+        "copyLink": "リンクをコピー",
+        "copyPath": "パスをコピー",
+        "fileOutside": "{{path}} はこのボットのフォルダー内にありません"
+      },
+      "open": {
+        "failed": "この項目を開けませんでした。",
+        "notFound": "{{host}} で見つかりませんでした。別のコンピュータ上のボットのものかもしれません。",
+        "noAnswer": "{{host}} から応答がありませんでした。"
+      },
+      "retry": "再試行",
+      "loading": "項目を読み込み中…",
+      "readFailedShort": "項目を読み込めませんでした。",
+      "lastRead": "最後に読み込んだ項目を表示しています。",
+      "row": {
+        "select": "{{title}} を選択"
+      },
+      "selected": "{{count}} 件選択中",
+      "pill": {
+        "moveTo": "移動先",
+        "clear": "選択を解除",
+        "moveCount_one": "{{count}} 件の項目を移動:",
+        "moveCount_other": "{{count}} 件の項目を移動:"
+      },
+      "menu": {
+        "select": "選択",
+        "done": "完了",
+        "changeStatus": "ステータスを変更",
+        "openChat": "{{chat}} を開く",
+        "cancelShort": "キャンセル"
+      },
+      "stale": {
+        "confirm_one": "{{count}} 件の停滞した項目をキャンセルしますか？",
+        "confirm_other": "{{count}} 件の停滞した項目をキャンセルしますか？",
+        "confirmWhy": "ボットに送った理由: 「{{reason}}」 何も削除されません。",
+        "reason": "{{count}} 日間アクティビティがありません。",
+        "cancelAll": "すべてキャンセル"
+      },
+      "cancel": {
+        "keep": "保持",
+        "confirmMany": "{{count}} 件をキャンセル",
+        "titleMany": "{{count}} 件の項目をキャンセルしますか？",
+        "titleOne": "{{title}} をキャンセルしますか？",
+        "why": "理由はボットに伝わります。何も削除されません。",
+        "placeholder": "理由",
+        "confirmOne": "項目をキャンセル",
+        "offline": "{{host}} はオフラインです。理由は保存されています。戻ると {{action}} が再び使えます。"
+      },
+      "strip": {
+        "view": "表示"
+      },
+      "group": {
+        "stale": "古いメモ",
+        "closed": "クローズ",
+        "new": "新着 {{count}} 件",
+        "showMore": "さらに {{count}} 個を表示",
+        "snoozed": "スヌーズ中"
+      },
+      "empty": {
+        "title": "項目はまだありません",
+        "body": "{{bot}} があなたのために何かを引き受けると、何をしているか、あなたに何が必要かと一緒にここに表示されます。",
+        "needsYou": "対応が必要なものはありません。",
+        "filtered": "一致する項目はありません。"
+      },
+      "toast": {
+        "markedDone": "{{title}} を完了にしました",
+        "canceledOne": "{{title}} をキャンセルしました",
+        "movedOne": "{{title}} を {{status}} に移動しました",
+        "movedMany": "{{count}} 件を {{status}} に移動しました",
+        "doneFailed": "完了にできませんでした: {{why}}",
+        "moveFailed_one": "移動できませんでした: {{why}}",
+        "moveFailed_other": "{{count}} 件を移動できませんでした: {{why}}",
+        "snoozeFailed": "スヌーズできませんでした: {{why}}",
+        "unsnoozedOne": "{{title}} のスヌーズを解除しました",
+        "snoozedOne": "{{title}} を {{when}} までスヌーズしました",
+        "unsnoozedMany": "{{count}} 件のスヌーズを解除しました",
+        "snoozedMany": "{{count}} 件を {{when}} までスヌーズしました"
+      },
+      "snooze": {
+        "rowUntil": "{{when}} まで",
+        "sheet": "スヌーズ…",
+        "pick": "時刻を選択…",
+        "unsnooze": "スヌーズを解除",
+        "today": "今日",
+        "tomorrow": "明日",
+        "until": "{{when}} までスヌーズ中",
+        "pickTitle": "スヌーズの期限",
+        "pickDay": "何日までスヌーズしますか？",
+        "pickHour": "何時にしますか？"
+      },
+      "readFailedTitle": "項目を読み込めませんでした"
     },
     "needs": {
       "chat": "{{name}} とのチャット",
-      "access": "{{person}} がアクセスをリクエストしました"
+      "access": "{{person}} がアクセスをリクエストしました",
+      "permissionTool": "権限 · {{tool}}",
+      "permission": "権限が必要です",
+      "waiting": "あなたを待っています",
+      "whereItRuns": "{{need}} · 実行されている場所で開いてください",
+      "worker": "ワーカー: {{name}}",
+      "actionFor": "{{action}}: {{title}}",
+      "open": "オープン"
     },
     "waits": {
       "cancel": "キャンセル",
@@ -5064,10 +5472,200 @@
     },
     "saveFailed": "保存できませんでした",
     "chats": {
-      "readFailedTitle": "チャットを読み込めませんでした"
+      "readFailedTitle": "チャットを読み込めませんでした",
+      "replying": "返信中…",
+      "waiting": "あなたを待っています",
+      "sayHi": "{{name}} にあいさつしましょう",
+      "closedShort": "閉まっている",
+      "needsYou": "対応が必要",
+      "askingBot": "{{name}} に質問中",
+      "handedOver": "引き継ぎ済み",
+      "fromClosedChat": "閉じたチャットから",
+      "automationTerminal": "オートメーションの実行 · ターミナル",
+      "untitledWorker": "ワーカー",
+      "home": "ホームチャット",
+      "untitled": "新規チャット",
+      "fold": "{{name}} を折りたたむ",
+      "unfold": "{{name}} を展開",
+      "unread": "未読",
+      "moreRunningStep": "さらに 8 件を表示 · 実行中 {{count}} 件",
+      "moreRunning": "実行中をさらに {{count}} 件表示",
+      "earlierStep": "さらに 8 件を表示 · 以前の {{count}} 件",
+      "earlier": "以前の {{count}} 件を表示",
+      "showFewer": "表示数を減らす",
+      "title": "チャット",
+      "search": "チャットとワーカーを検索",
+      "noMatch": "一致するチャットやワーカーはありません。",
+      "empty": "サイドチャット、Slack と Linear のスレッド、オートメーションの実行がここに表示され、それぞれが開始したワーカーも表示されます。",
+      "newTag": "新規",
+      "olderStep": "さらに 8 件を表示 · 以前の {{count}} 件",
+      "older": "以前の {{count}} 件を表示",
+      "terminalRunDesktopOnly": "ターミナルでの実行 · コンピュータのオートメーションで開いてください",
+      "searchFailed": "このボットのチャットを検索できませんでした。",
+      "searchRetry": "再試行",
+      "loadingChats": "チャットを読み込み中",
+      "handedOverInline": "引き継ぎ済み",
+      "fromClosedChatInline": "閉じたチャットから",
+      "statusUnknown": "ステータス不明",
+      "kindSlack": "Slack スレッド",
+      "kindLinear": "Linear Issue",
+      "kindGithub": "GitHub のスレッド",
+      "kindAutomation": "オートメーションの実行",
+      "kindSide": "サイドチャット",
+      "replyingState": "返信中",
+      "showEightMoreWorkers": "ワーカーをさらに 8 件表示",
+      "showMoreWorkers_one": "ワーカーをさらに {{count}} 件表示",
+      "showMoreWorkers_other": "ワーカーをさらに {{count}} 件表示",
+      "moreMatches_one": "ほかに {{count}} 件一致します。名前をさらに入力して絞り込んでください。",
+      "moreMatches_other": "ほかに {{count}} 件一致します。名前をさらに入力して絞り込んでください。",
+      "runningCount": "{{count}} 件実行中",
+      "waitingCount": "{{count}} 個が待機中"
     },
     "panel": {
-      "backTo": "{{name}} に戻る"
+      "backTo": "{{name}} に戻る",
+      "needYou_one": "{{count}} 件が対応待ち",
+      "needYou_other": "{{count}} 件があなたの対応待ち",
+      "working": "実行中 {{count}} 件",
+      "itemsNeedYou": "項目、対応が必要 {{count}} 件",
+      "chats": "チャット",
+      "files": "ファイル"
+    },
+    "activity": {
+      "readFailed": "アクティビティを読み込めませんでした。",
+      "loading": "アクティビティを読み込み中…",
+      "unavailable": "このホストではアクティビティを利用できません。",
+      "retry": "再試行",
+      "lastRead": "最後に読み込んだアクティビティを表示しています。",
+      "readFailedTitle": "アクティビティを読み込めませんでした",
+      "unavailableTitle": "アクティビティは利用できません"
+    },
+    "automations": {
+      "couldNotFinish": "完了できませんでした",
+      "runNow": "今すぐ実行",
+      "pause": "{{name}} を一時停止",
+      "resume": "{{name}} を再開",
+      "empty": "オートメーションの設定はチャットで依頼してください。",
+      "newAutomation": "新規自動化",
+      "runQueued": "オートメーション実行がキューに入れられました。",
+      "runFailed": "実行を開始できませんでした",
+      "emptyTitle": "自動化はまだありません"
+    },
+    "sheet": {
+      "activity": "アクティビティ",
+      "automations": "自動化",
+      "settings": "設定",
+      "hint": "アクティビティ、オートメーション、設定"
+    },
+    "events": {
+      "slack": {
+        "mentioned": "Slack であなたがメンションされたとき",
+        "message": "Slack のメッセージ時",
+        "reaction": "Slack のリアクション時"
+      },
+      "github": {
+        "issueOpened": "Issue がオープンされたとき",
+        "prOpened": "PR がオープンされたとき",
+        "prPushed": "PR へのプッシュ時",
+        "prMerged": "PR がマージされたとき",
+        "comment": "GitHub のコメント時",
+        "reviewComment": "レビューコメント時",
+        "review": "PR のレビュー時",
+        "mentioned": "GitHub でメンションされたとき",
+        "reviewRequested": "レビューがリクエストされたとき",
+        "assigned": "GitHub で割り当てられたとき",
+        "ciFailed": "CI が失敗したとき",
+        "ciPassed": "CI が成功したとき",
+        "prConflicted": "PR にコンフリクトがあるとき",
+        "prClosed": "PR がクローズされたとき",
+        "prReady": "PR がレビュー可能になったとき",
+        "labeled": "ラベルが追加されたとき",
+        "issueClosed": "Issue がクローズされたとき",
+        "deployFinished": "デプロイが完了したとき",
+        "securityAlert": "セキュリティアラート時",
+        "workflowFinished": "ワークフローの実行が完了したとき"
+      },
+      "linear": {
+        "assigned": "Linear で割り当てられたとき",
+        "mentioned": "Linear でメンションされたとき",
+        "issueCreated": "Linear の Issue が作成されたとき",
+        "issueMoved": "Linear の Issue が移動したとき"
+      },
+      "slackFallback": "Slack のイベント時",
+      "githubFallback": "GitHub のイベント時",
+      "linearFallback": "Linear のイベント時",
+      "webhookFallback": "Webhook が呼び出されたとき",
+      "anyFallback": "イベント時"
+    },
+    "chatStartFailed": "チャットを開始できませんでした",
+    "upNext": {
+      "title": "提案",
+      "looked": "{{time}}に見回り",
+      "yesterdayAt": "昨日 {{time}}",
+      "looking": "見回り中…",
+      "start": "開始",
+      "dismiss": "閉じる",
+      "dismissTitle": "{{title}} を閉じる",
+      "showMore_one": "さらに {{count}} 個を表示",
+      "showMore_other": "さらに {{count}} 個を表示",
+      "empty": "前回の見回りでは提案はありませんでした。",
+      "notYet": "{{name}} はまだ見回りをしていません。設定から今すぐ実行するか、1 日に数回自動で実行されるのを待ってください。",
+      "startFailed": "その提案は表示されなくなりました。",
+      "lookNowRunning": "すでに見回り中です。",
+      "lookNowPaused": "見回りするにはボットをオンにしてください。",
+      "lookNowFailed": "見回りを開始できませんでした。再試行してください。",
+      "showMore": "さらに {{count}} 個を表示",
+      "newInUpNext": "提案に新着 {{count}} 件"
+    },
+    "new": {
+      "failed": "ボットを作成できませんでした",
+      "title": "新規ボット",
+      "runsOnHost": "{{host}} で実行します。",
+      "shuffle": "別の画像",
+      "namePlaceholder": "ボットに名前を付けてください",
+      "create": "作成",
+      "fromTemplate": "テンプレートを使用する",
+      "takesOverList": "{{names}} を引き継ぎます。Agent は動作を続けます。",
+      "runsOn": "実行場所",
+      "cantReach": "{{host}} に接続できません。別のコンピュータを選んでください。",
+      "otherAccount": "{{host}} は独自の Orca アカウント（{{email}}）を使っています。そのボットはこのアカウントとして投稿・接続します。",
+      "agent": "Agent",
+      "computer": "コンピュータ",
+      "computerMessage": "ボットが動作する場所。",
+      "agentOn": "{{host}} に。",
+      "botsOffOn": "{{host}} ではボットがオフです",
+      "updateDesktopFirst": "先に {{host}} の Orca を更新してください",
+      "checking": "確認中…"
+    },
+    "workspaces": {
+      "show": "{{name}} のワークスペースを表示",
+      "hide": "{{name}} のワークスペースを非表示"
+    },
+    "section": {
+      "title": "ボット",
+      "summary": "{{title}}、ボット {{total}} 件、対応が必要 {{attention}} 件、未読 {{unread}} 件、作業中 {{working}} 件",
+      "newBot": "新規ボット"
+    },
+    "list": {
+      "updateOrcaOn": "{{host}} の Orca を更新",
+      "cantReach": "{{host}} に接続できません。戻るとそのボットが表示されます。",
+      "noBotsYet": "ボットはまだありません。",
+      "offline": "オフライン",
+      "updateToSee": "ボットを表示するには、{{host}} の Orca を更新してください。",
+      "offEnd": "{{host}} ではボットがオフです。",
+      "updateToCreate": "スマートフォンからボットを作成するには、{{host}} の Orca を更新してください。"
+    },
+    "row": {
+      "replyingIn": "{{place}} で返信中",
+      "replyingOn": "{{place}} で返信中",
+      "paused": "一時停止中",
+      "reading": "メッセージを読んでいます",
+      "replying": "返信中",
+      "waitingCount": "{{count}} 件のイベントを待機中",
+      "waitingFor": "{{label}} を待機中",
+      "waitingForUntil": "{{label}} を待機中 · {{time}} まで"
+    },
+    "chat": {
+      "nothingToReport": "報告することはありません"
     }
   }
 }

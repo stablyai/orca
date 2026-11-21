@@ -346,7 +346,8 @@
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
       "signIn": "登入",
       "signInHint": "在執行此聊天的電腦上開啟終端機",
-      "forkedFrom": "分支來源"
+      "forkedFrom": "分支來源",
+      "botCreated": "機器人已建立"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗:",
@@ -733,6 +734,82 @@
         "failed": "失敗：{{count}}"
       },
       "pasteHint": "當瀏覽器前往無法載入的頁面時，請複製網址並貼到這裡。"
+    },
+    "botCards": {
+      "request": {
+        "notSentTo": "未傳送給",
+        "asked": "已詢問",
+        "handedTo": "已移交給",
+        "paused": "{{bot}} 已暫停。",
+        "botsOff": "機器人已關閉。",
+        "couldNotTake": "{{bot}} 無法接手。",
+        "answered": "✓ 已回答",
+        "done": "✓ 已完成",
+        "notAnswered": "未回答",
+        "waitingOnYou": "等你處理",
+        "working": "正在工作…",
+        "hasIt": "負責中",
+        "openChat": "開啟它的聊天"
+      },
+      "offer": {
+        "unknownAgent": "{{bot}} 執行的代理程式此應用程式無法識別。請編輯以選擇一個。",
+        "takesOverOne": "接手 1 個工作區",
+        "takesOverMany": "接手 {{count}} 個工作區",
+        "created": "已建立",
+        "createdAskedOne": "已建立 · 已請求接手 1 個工作區",
+        "createdAskedMany": "已建立 · 已請求接手 {{count}} 個工作區",
+        "createdTookOverSome": "已建立 · 已接手 {{count}} 個工作區中的 {{taken}} 個",
+        "createdTookOverOne": "已建立 · 已接手 1 個工作區",
+        "createdTookOverMany": "已建立 · 已接手 {{count}} 個工作區",
+        "deleted": "已建立，隨後被刪除",
+        "nameTaken": "你已有名為 {{name}} 的機器人。",
+        "rename": "重新命名",
+        "edit": "編輯",
+        "create": "建立機器人",
+        "open": "開啟",
+        "origin": "由 {{bot}} 提議",
+        "originTemplate": "來自 {{template}}，由 {{bot}} 提議",
+        "watches": "關注",
+        "does": "做什麼",
+        "reports": "彙報",
+        "willPropose": "將提議",
+        "takesOver": "接手",
+        "template": "範本",
+        "dismiss": "關閉",
+        "notSent": "無法傳送給機器人。請重試。",
+        "askedMany": "請求接手 {{count}} 個工作區",
+        "askedOne": "請求接手 1 個工作區",
+        "tookOverMany": "已接手 {{count}} 個工作區",
+        "tookOverOne": "已接手 1 個工作區",
+        "tookOverSome": "已接手 {{count}} 個工作區中的 {{taken}} 個"
+      },
+      "toolAdded": {
+        "heading": "已新增工具",
+        "removed": "已移除",
+        "remove": "移除"
+      },
+      "webhook": {
+        "title": "Webhook",
+        "starts": "Webhook · 啟動「{{automation}}」",
+        "sampleNote": "示例會啟動一次真實執行。",
+        "sendSample": "傳送示例呼叫",
+        "secretAdd": "新增簽名金鑰…",
+        "secretChange": "簽名金鑰：{{sender}} · 更改…",
+        "paused": "已暫停",
+        "orphaned": "未連線",
+        "pending": "設定中",
+        "noCalls": "還沒有呼叫",
+        "lastCall": "上次呼叫 {{ago}}",
+        "copied": "已複製",
+        "copyUrl": "複製網址",
+        "copyFailed": "重試複製"
+      },
+      "memory": {
+        "added": "已新增",
+        "removed": "已移除",
+        "noteChanged": "筆記已更改",
+        "indexChanged": "MEMORY.md 已更改"
+      }
     }
   },
   "common": {
@@ -1192,7 +1269,8 @@
     "native-chat": {
       "composer": {
         "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式"
+        "exitPlanMode": "結束計畫模式",
+        "pastedTextLabel": "已貼上的文字"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
@@ -1627,6 +1705,18 @@
       "showUsageFor": "選擇要顯示用量的電腦",
       "updatedAgo": "{{time}}前更新",
       "updatedJustNow": "剛剛更新"
+    },
+    "bots": {
+      "noBotsTitle": "還沒有機器人",
+      "pairDesktop": "配對一臺電腦即可在這裡看到它的機器人。",
+      "seeAll": "檢視所有機器人",
+      "updateOneBody": "它的 Orca 版本暫時無法在手機上顯示機器人。",
+      "updateManyTitle": "更新你電腦上的 Orca",
+      "updateManyBody": "它們的 Orca 版本暫時無法在手機上顯示機器人。",
+      "offOneBody": "要開啟，請在 {{host}} 上開啟 Orca，前往「設定 › 機器人 › 啟用機器人」。",
+      "offServerBody": "要開啟，請在 {{desktop}} 上開啟 Orca，前往「設定 › 機器人 › 在 {{host}} 上啟用機器人」。",
+      "offManyTitle": "你的電腦上的機器人已關閉",
+      "offManyBody": "要開啟，請在每臺電腦上開啟 Orca，前往「設定 › 機器人 › 啟用機器人」。"
     }
   },
   "hooks": {
@@ -4437,7 +4527,11 @@
       "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
       "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
       "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
-      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
+      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。",
+      "updateOrca": "更新 Orca",
+      "openRequestFailed": "無法開啟請求",
+      "botNotFound": "未找到機器人",
+      "openOn": "在以下位置開啟 {{name}}"
     },
     "settings": {
       "remove": "移除",
@@ -4495,7 +4589,20 @@
       "copyFailed": "無法複製",
       "deleteDetailNoPath": "它的資料夾會保留在 {{host}} 上，包含靈魂和記憶。",
       "backToAgent": "返回代理程式和模型",
-      "useChatDefaults": "使用聊天預設設定"
+      "useChatDefaults": "使用聊天預設設定",
+      "declineName": "拒絕 {{name}}",
+      "reviewName": "檢視 {{name}}",
+      "removeConfirmTitle": "要移除 {{name}} 嗎？",
+      "removeConfirmMessage": "{{name}} 無法再向 {{botName}} 提問。",
+      "active": "目前",
+      "activeDetail": "回覆訊息並執行自動化。",
+      "permissions": "權限",
+      "sameAsChats": "與聊天相同",
+      "notifications": "通知",
+      "needsPermission": "需要權限",
+      "taskComplete": "任務完成",
+      "couldNotFinish": "無法完成",
+      "couldNotFinishDetail": "自動化執行或工作者失敗時。"
     },
     "newHomeChat": {
       "action": "新的主聊天",
@@ -4511,14 +4618,29 @@
       "detail": "讀取已連線的應用程式和專案以建議下一步。唯讀。每次檢視都會使用你的代理程式方案，且主機上必須正在執行 Orca。",
       "lookNow": "立即檢視",
       "notYet": "尚未",
-      "backToLookAround": "返回四處看看"
+      "backToLookAround": "返回四處看看",
+      "title": "四處看看",
+      "on": "建議下一步",
+      "every": "頻率",
+      "weekdaysOnly": "僅工作日",
+      "focus": "查詢內容",
+      "anything": "所有在等你處理的事",
+      "lastLooked": "上次檢視",
+      "focusPlaceholder": "等我處理的 PR、#eng 中的問題、本週到期的議題",
+      "focusDetail": "可選。留空則查詢所有在等你處理的事。",
+      "back": "返回設定"
     },
     "connectorOffer": {
       "slack": "在 Slack 頻道和私信中與機器人聊天。",
       "google": "讓機器人在你的 Gmail、行事曆和 Drive 中工作，並在收到新郵件時啟動自動化。",
       "linear": "透過 @ 提及機器人或將議題分配給它來交辦工作，並在 Linear 事件發生時啟動自動化。",
       "github": "透過 @提及 給機器人派活，並在 GitHub 事件發生時啟動自動化。",
-      "heading": "連線服務"
+      "heading": "連線服務",
+      "connected": "已連線",
+      "onComputer": "請透過此聊天中的卡片，在電腦上的 Orca 中連線。",
+      "addGitHubAccess": "請透過此聊天中的卡片，在電腦上的 Orca 中新增存放庫或組織。",
+      "addWorkspace": "請透過此聊天中的卡片，在電腦上的 Orca 中新增另一個工作區。",
+      "paused": "已暫停，直到 {{host}} 登入 Orca。"
     },
     "groups": {
       "group": "群組",
@@ -4551,7 +4673,46 @@
       "newThreadTab": "建立討論串",
       "newThreadHint": "重新開始",
       "newThread": "在 {{name}} 中建立討論串",
-      "handoffsPaused": "移交 {{count}} 次後已暫停。回覆即可繼續。"
+      "handoffsPaused": "移交 {{count}} 次後已暫停。回覆即可繼續。",
+      "manageMembers": "管理成員",
+      "newGroup": "建立群組",
+      "cancel": "取消",
+      "back": "返回",
+      "groupActions": "群組操作",
+      "pendingRequests": "待處理的請求",
+      "needsYou": "· 需要你處理",
+      "valuePending": " · {{value0}} 個待處理",
+      "manageMembersMenu": "管理成員…",
+      "allBots": "所有機器人",
+      "onlyWhenMentioned": "僅在被提及時",
+      "stopValue": "停止 {{value0}}",
+      "replyToValue": "回覆 {{value0}}",
+      "waitingForTheNativeSession": "正在等待原生會話…",
+      "create": "建立",
+      "removingDefault": "移除 {{name}} 後，「回覆」會改為「僅在被提及時」。",
+      "loadEarlierMessages": "載入更早的訊息",
+      "memberRemoved": "已移除成員",
+      "composerPlaceholder": "給群組發訊息，@ 提及機器人",
+      "repliesValue": "回覆：{{value0}}",
+      "whoAnswers": "誰來回復你的訊息",
+      "peerAsked": "{{from}} 詢問了 {{to}}",
+      "peerFollowedUp": "{{bot}} 跟進了",
+      "peerReplyRead": "{{reader}} 已讀 {{peer}} 的回覆",
+      "deleteTitle": "要刪除 {{name}} 嗎？",
+      "deleteDescription": "其中的機器人不會被刪除。",
+      "deleteConfirm": "刪除群組",
+      "deleteGroupMenu": "刪除群組…",
+      "you": "你",
+      "pickTwo": "選擇 2 個或更多機器人",
+      "nameIt": "為群組命名",
+      "save": "儲存",
+      "namePlaceholder": "為你的群組命名",
+      "useSuggestion": "使用「{{name}}」",
+      "suggestTwo": "{{a}} 和 {{b}}",
+      "suggestThree": "{{a}}、{{b}} 和 {{c}}",
+      "suggestMore": "{{a}}、{{b}} 和另外 {{count}} 個",
+      "pickOne": "選擇一個機器人",
+      "needsTwoBots": "需要 {{host}} 上有 2 個機器人"
     },
     "templates": {
       "title": "機器人範本",
@@ -4568,50 +4729,294 @@
       "backToTemplates": "返回範本",
       "category": {
         "support": "支援與分流",
-        "personal": "個人助理"
-      }
+        "personal": "個人助理",
+        "coding": "程式設計",
+        "releases": "釋出與 CI",
+        "planning": "規劃與文件",
+        "ops": "運維"
+      },
+      "blank": "空白機器人",
+      "blankLine": "在第一次聊天中告訴它用途。",
+      "byOrca": "{{category}} · 由 Orca 提供",
+      "originTemplateNamed": "來自 {{template}} 範本",
+      "noMatch": "沒有與「{{query}}」匹配的範本"
     },
     "tidyUp": {
       "title": "記憶維護",
       "never": "尚未",
       "footer": "僅更改記憶檔案。與簡短聊天一樣，會使用你的代理程式方案。你的電腦上必須正在執行 Orca。",
       "undoNote": "復原會一次將 MEMORY.md 恢復到此次整理之前的狀態。完整歷史記錄和記憶編輯功能位於電腦上的「設定 → 記憶」。",
-      "backToTidyUp": "返回記憶維護"
+      "backToTidyUp": "返回記憶維護",
+      "nowRunning": "已在整理中。",
+      "nowBusy": "仍有聊天在工作。請在其完成後重試。",
+      "nowFailed": "無法開始整理。請重試。",
+      "undoSuperseded": "此次整理後記憶已更改，因此保持原樣。",
+      "undoFailed": "無法復原整理。",
+      "everyNight": "每晚",
+      "everyWeek": "每週一次",
+      "on": "夜間整理記憶",
+      "turnedOff": "連續 10 次整理失敗，已關閉。",
+      "every": "頻率",
+      "lastTidied": "上次整理",
+      "tidying": "正在整理…",
+      "now": "立即整理",
+      "merged": "已合併 {{count}} 行重複內容",
+      "replaced": "已標記為被替換：{{fact}}",
+      "filed": "已將 {{count}} 行歸入 memory/{{topic}}.md",
+      "moved": "已將 {{count}} 行舊內容移到歸檔",
+      "readChats": "讀取了 {{count}} 個聊天",
+      "took": "用時 {{value}} 分鐘",
+      "learned": "從聊天中學到",
+      "tidied": "已整理",
+      "undone": "已復原",
+      "undoAll": "復原此次整理",
+      "undo": "復原",
+      "summaryTitle": "上次整理",
+      "undoStale": "之後又執行了一次更新的整理。復原前請先檢視。"
     },
     "items": {
       "filter": {
         "clearAll": "清除篩選",
-        "chat": "聊天"
+        "chat": "聊天",
+        "needsYou": "僅顯示需要你處理的",
+        "label": "篩選事項",
+        "all": "所有聊天",
+        "remove": "移除篩選條件 {{name}}",
+        "clear": "清除篩選"
       },
       "tab": "項目",
       "activity": {
         "notSent": "未傳送。",
         "retry": "重試",
         "discard": "放棄",
-        "mayHaveArrived": "可能已送達。"
+        "mayHaveArrived": "可能已送達。",
+        "changed": "更改了{{field}}",
+        "closed": "將此項標記為完成",
+        "canceled": "取消了此項",
+        "reopened": "重新開啟了此項",
+        "moved": "將此項移到",
+        "madeNeedsYou": "將此事項新增為「需要你處理」",
+        "made": "新增了此事項",
+        "linked": "關聯了 {{links}}",
+        "workerStarted": "工作者已啟動：",
+        "workerFailed": "工作者已停止：",
+        "workerFinished": "工作者已完成：",
+        "noComments": "還沒有留言。",
+        "snoozed": "將此項推遲到 {{when}}",
+        "snoozedBare": "推遲了此項",
+        "unsnoozed": "取消了推遲",
+        "snoozeEnded": "提前結束推遲"
       },
       "comment": {
-        "replyingTo": "回覆："
+        "replyingTo": "回覆：",
+        "offline": "{{host}} 已離線。你的評論已保留；它恢復後即可再次評論。",
+        "label": "評論",
+        "add": "新增留言…",
+        "submit": "評論",
+        "fileOnComputer": "請在電腦上開啟 {{name}}。",
+        "reply": "用你自己的話回覆",
+        "replyTo": "回覆 {{name}}…",
+        "showLess": "顯示較少"
       },
       "view": {
         "title": "項目",
         "placeOf": "第 {{index}} 個，共 {{total}} 個",
         "previous": "上一個項目",
         "next": "下一個項目",
-        "subWhere": "事項 {{number}} · {{chat}}"
+        "subWhere": "事項 {{number}} · {{chat}}",
+        "canceledNote": "已取消：",
+        "doneNote": "已完成：",
+        "links": "連結",
+        "activity": "活動",
+        "showEarlier": "顯示更早的",
+        "showLess": "顯示較少",
+        "showMore": "顯示更多"
       },
       "ask": {
-        "notNow": "暫不"
+        "notNow": "暫不",
+        "recommended": "推薦"
       },
       "write": {
-        "offline": "{{host}} 已離線。"
+        "offline": "{{host}} 已離線。",
+        "unknown": "傳送時連線中斷，訊息可能已送達。重新連線後，請先檢視活動再重新傳送。"
       },
       "thisComputer": "電腦",
-      "readFailedClosedPage": "無法讀取更多已關閉的事項。"
+      "readFailedClosedPage": "無法讀取更多已關閉的事項。",
+      "chat": {
+        "opensInItems": "在「事項」中開啟",
+        "moreItems": "另有 {{count}} 個",
+        "commentOn": "開啟",
+        "marked": "將 {{items}} 標記為完成",
+        "canceled": "取消了 {{items}}",
+        "added": "新增了 {{items}}",
+        "askedYou": "就 {{items}} 向你提問",
+        "moved": "將 {{items}} 移到 {{status}}",
+        "commented": "評論了 {{items}}",
+        "updated": "更新了 {{items}}",
+        "linkedMany": "將 {{count}} 個連結關聯到 {{items}}",
+        "linked": "將 {{link}} 關聯到 {{items}}",
+        "aWorker": "一個工作者",
+        "youMarkedManyDone": "你將 {{count}} 個事項標記為完成：{{items}}",
+        "youCanceledMany": "你取消了 {{count}} 個事項：{{items}}",
+        "youMovedMany": "你將 {{count}} 個事項移到 {{status}}：{{items}}",
+        "youMarked": "你將 {{items}} 標記為完成",
+        "youCanceled": "你取消了 {{items}}",
+        "youMoved": "你將 {{items}} 移到 {{status}}",
+        "youChanged": "你更改了 {{items}}",
+        "changes": "{{from}} → {{to}} · {{count}} 處更改",
+        "chipLabel": "{{title}}，{{status}}",
+        "addedAndMoved": "新增了 {{items}} 並移到 {{status}}",
+        "addedAndAsked": "新增了 {{items}} 並向你提問",
+        "addedAndDone": "新增了 {{items}} 並標記為完成",
+        "addedAndCanceled": "新增並取消了 {{items}}",
+        "openChat": "開啟 {{chat}}",
+        "byChat": {
+          "moved": "{{chat}} 將 {{items}} 移到 {{status}}",
+          "askedYou": "{{chat}} 就 {{items}} 向你提問",
+          "marked": "{{chat}} 將 {{items}} 標記為完成",
+          "canceled": "{{chat}} 取消了 {{items}}",
+          "added": "{{chat}} 新增了 {{items}}",
+          "commented": "{{chat}} 評論了 {{items}}",
+          "updated": "{{chat}} 更新了 {{items}}",
+          "linkedMany": "{{chat}} 將 {{count}} 個連結關聯到 {{items}}",
+          "linked": "{{chat}} 將 {{link}} 關聯到 {{items}}"
+        },
+        "anotherChat": "另一個聊天"
+      },
+      "status": {
+        "planned": "已計劃",
+        "working": "進行中",
+        "needsYou": "需要你處理",
+        "done": "完成",
+        "canceled": "已取消"
+      },
+      "needYouCount_one": "{{count}} 個事項需要你處理",
+      "needYouCount_other": "{{count}} 個事項需要你處理",
+      "homeChat": "主聊天",
+      "chatFallback": "聊天",
+      "field": {
+        "doneMeansLower": "完成標準",
+        "description": "描述",
+        "title": "標題",
+        "status": "狀態",
+        "chat": "聊天",
+        "doneMeans": "完成標準",
+        "snoozed": "已推遲"
+      },
+      "link": {
+        "notRead": "尚未讀取",
+        "merged": "已合併",
+        "draft": "草稿",
+        "closed": "已關閉",
+        "open": "開啟中",
+        "checksPassing": "檢查已通過",
+        "checksFailing": "檢查未通過",
+        "checksPending": "等待檢查",
+        "pr": "PR #{{number}}",
+        "issue": "議題 #{{number}}",
+        "serverPr": "伺服器上的工作暫不顯示 PR",
+        "openInBrowser": "在瀏覽器中開啟",
+        "copyLink": "複製連結",
+        "copyPath": "複製路徑",
+        "fileOutside": "{{path}} 不在此機器人的資料夾中"
+      },
+      "open": {
+        "failed": "無法開啟此事項。",
+        "notFound": "{{host}} 沒有找到它。它可能屬於另一臺電腦上的機器人。",
+        "noAnswer": "{{host}} 沒有回應。"
+      },
+      "retry": "重試",
+      "loading": "正在載入事項…",
+      "readFailedShort": "無法載入事項。",
+      "lastRead": "正在顯示上次讀取的事項。",
+      "row": {
+        "select": "選擇 {{title}}"
+      },
+      "selected": "已選取 {{count}} 項",
+      "pill": {
+        "moveTo": "移到",
+        "clear": "清除選擇",
+        "moveCount_one": "將 {{count}} 個事項移到",
+        "moveCount_other": "將 {{count}} 個事項移到"
+      },
+      "menu": {
+        "select": "選擇",
+        "done": "完成",
+        "changeStatus": "更改狀態",
+        "openChat": "開啟 {{chat}}",
+        "cancelShort": "取消"
+      },
+      "stale": {
+        "confirm_one": "要取消 {{count}} 個停滯的事項嗎？",
+        "confirm_other": "要取消 {{count}} 個停滯的事項嗎？",
+        "confirmWhy": "已傳送給機器人的原因：「{{reason}}」 不會刪除任何內容。",
+        "reason": "已 {{count}} 天沒有活動。",
+        "cancelAll": "全部取消"
+      },
+      "cancel": {
+        "keep": "保留",
+        "confirmMany": "取消 {{count}} 項",
+        "titleMany": "要取消 {{count}} 個事項嗎？",
+        "titleOne": "要取消 {{title}} 嗎？",
+        "why": "機器人會看到原因。不會刪除任何內容。",
+        "placeholder": "原因",
+        "confirmOne": "取消事項",
+        "offline": "{{host}} 已離線。你的原因已保留；它恢復後 {{action}} 即可再次使用。"
+      },
+      "strip": {
+        "view": "檢視"
+      },
+      "group": {
+        "stale": "已過時",
+        "closed": "已關閉",
+        "new": "{{count}} 條新內容",
+        "showMore": "顯示另外 {{count}} 個",
+        "snoozed": "已推遲"
+      },
+      "empty": {
+        "title": "還沒有事項",
+        "body": "當 {{bot}} 為你接手某件事時，會顯示在這裡，包括它在做什麼以及需要你做什麼。",
+        "needsYou": "沒有需要你處理的事項。",
+        "filtered": "沒有匹配的事項。"
+      },
+      "toast": {
+        "markedDone": "已將 {{title}} 標記為完成",
+        "canceledOne": "已取消 {{title}}",
+        "movedOne": "已將 {{title}} 移到 {{status}}",
+        "movedMany": "已將 {{count}} 個事項移到 {{status}}",
+        "doneFailed": "無法標記為完成：{{why}}",
+        "moveFailed_one": "無法移動：{{why}}",
+        "moveFailed_other": "無法移動 {{count}} 個事項：{{why}}",
+        "snoozeFailed": "無法推遲：{{why}}",
+        "unsnoozedOne": "已取消 {{title}} 的推遲",
+        "snoozedOne": "已將 {{title}} 推遲到 {{when}}",
+        "unsnoozedMany": "已取消 {{count}} 個事項的推遲",
+        "snoozedMany": "已將 {{count}} 個事項推遲到 {{when}}"
+      },
+      "snooze": {
+        "rowUntil": "直到 {{when}}",
+        "sheet": "推遲…",
+        "pick": "選擇時間…",
+        "unsnooze": "取消推遲",
+        "today": "今天",
+        "tomorrow": "明天",
+        "until": "已推遲到 {{when}}",
+        "pickTitle": "推遲到",
+        "pickDay": "推遲到哪一天？",
+        "pickHour": "幾點？"
+      },
+      "readFailedTitle": "無法載入事項"
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",
-      "access": "{{person}} 申請了存取權限"
+      "access": "{{person}} 申請了存取權限",
+      "permissionTool": "權限 · {{tool}}",
+      "permission": "需要權限",
+      "waiting": "等待你操作",
+      "whereItRuns": "{{need}} · 在其執行的位置開啟",
+      "worker": "工作者：{{name}}",
+      "actionFor": "{{action}}：{{title}}",
+      "open": "開啟"
     },
     "waits": {
       "cancel": "取消",
@@ -4977,10 +5382,200 @@
     },
     "saveFailed": "無法儲存",
     "chats": {
-      "readFailedTitle": "無法載入聊天"
+      "readFailedTitle": "無法載入聊天",
+      "replying": "正在回覆…",
+      "waiting": "等待你操作",
+      "sayHi": "向 {{name}} 打個招呼",
+      "closedShort": "已關閉",
+      "needsYou": "需要你處理",
+      "askingBot": "正在向 {{name}} 提問",
+      "handedOver": "已移交",
+      "fromClosedChat": "來自已關閉的聊天",
+      "automationTerminal": "自動化執行 · 終端",
+      "untitledWorker": "工作者",
+      "home": "主聊天",
+      "untitled": "新聊天",
+      "fold": "摺疊 {{name}}",
+      "unfold": "展開 {{name}}",
+      "unread": "未讀",
+      "moreRunningStep": "再顯示 8 個 · 另有 {{count}} 個執行中",
+      "moreRunning": "再顯示 {{count}} 個執行中的",
+      "earlierStep": "再顯示 8 個 · 更早的 {{count}} 個",
+      "earlier": "顯示更早的 {{count}} 個",
+      "showFewer": "顯示較少",
+      "title": "聊天",
+      "search": "搜尋聊天和工作者",
+      "noMatch": "沒有匹配的聊天或工作者。",
+      "empty": "旁聊、Slack 和 Linear 討論串以及自動化執行會顯示在這裡，每項都帶有它啟動的工作者。",
+      "newTag": "新",
+      "olderStep": "再顯示 8 個 · 更早的 {{count}} 個",
+      "older": "顯示更早的 {{count}} 個",
+      "terminalRunDesktopOnly": "終端執行 · 請在電腦上的「自動化」中開啟",
+      "searchFailed": "無法搜尋此機器人的聊天。",
+      "searchRetry": "重試",
+      "loadingChats": "正在載入聊天",
+      "handedOverInline": "已移交",
+      "fromClosedChatInline": "來自已關閉的聊天",
+      "statusUnknown": "狀態未知",
+      "kindSlack": "Slack 討論串",
+      "kindLinear": "Linear 議題",
+      "kindGithub": "GitHub 討論串",
+      "kindAutomation": "自動化執行",
+      "kindSide": "旁聊",
+      "replyingState": "正在回覆",
+      "showEightMoreWorkers": "再顯示 8 個工作者",
+      "showMoreWorkers_one": "再顯示 {{count}} 個工作者",
+      "showMoreWorkers_other": "再顯示 {{count}} 個工作者",
+      "moreMatches_one": "還有 {{count}} 個匹配。輸入更多名稱以縮小範圍。",
+      "moreMatches_other": "還有 {{count}} 個匹配。輸入更多名稱以縮小範圍。",
+      "runningCount": "{{count}} 個正在執行",
+      "waitingCount": "{{count}} 個等待中"
     },
     "panel": {
-      "backTo": "返回 {{name}}"
+      "backTo": "返回 {{name}}",
+      "needYou_one": "{{count}} 個需要您處理",
+      "needYou_other": "{{count}} 個需要您處理",
+      "working": "{{count}} 個執行中",
+      "itemsNeedYou": "事項，{{count}} 個需要你處理",
+      "chats": "聊天",
+      "files": "檔案"
+    },
+    "activity": {
+      "readFailed": "無法載入活動。",
+      "loading": "正在載入活動…",
+      "unavailable": "此主機上無法使用活動。",
+      "retry": "重試",
+      "lastRead": "正在顯示上次讀取的活動。",
+      "readFailedTitle": "無法載入活動",
+      "unavailableTitle": "活動不可用"
+    },
+    "automations": {
+      "couldNotFinish": "無法完成",
+      "runNow": "立即執行",
+      "pause": "暫停 {{name}}",
+      "resume": "恢復 {{name}}",
+      "empty": "請在聊天中讓它設定自動化。",
+      "newAutomation": "新增自動化",
+      "runQueued": "自動化執行排隊。",
+      "runFailed": "無法啟動執行",
+      "emptyTitle": "尚無自動化"
+    },
+    "sheet": {
+      "activity": "活動",
+      "automations": "自動化",
+      "settings": "設定",
+      "hint": "活動、自動化和設定"
+    },
+    "events": {
+      "slack": {
+        "mentioned": "你在 Slack 中被提及時",
+        "message": "有 Slack 訊息時",
+        "reaction": "有 Slack 表情回應時"
+      },
+      "github": {
+        "issueOpened": "議題建立時",
+        "prOpened": "PR 建立時",
+        "prPushed": "向 PR 推送時",
+        "prMerged": "PR 合併時",
+        "comment": "有 GitHub 評論時",
+        "reviewComment": "有審查評論時",
+        "review": "有 PR 審查時",
+        "mentioned": "在 GitHub 上被提及時",
+        "reviewRequested": "請求審查時",
+        "assigned": "在 GitHub 上被分配時",
+        "ciFailed": "CI 失敗時",
+        "ciPassed": "CI 透過時",
+        "prConflicted": "PR 有衝突時",
+        "prClosed": "PR 關閉時",
+        "prReady": "PR 可供審查時",
+        "labeled": "新增標籤時",
+        "issueClosed": "議題關閉時",
+        "deployFinished": "部署完成時",
+        "securityAlert": "有安全警報時",
+        "workflowFinished": "工作流執行完成時"
+      },
+      "linear": {
+        "assigned": "在 Linear 中被分配時",
+        "mentioned": "在 Linear 中被提及時",
+        "issueCreated": "建立 Linear 議題時",
+        "issueMoved": "Linear 議題狀態變化時"
+      },
+      "slackFallback": "Slack 事件發生時",
+      "githubFallback": "GitHub 事件發生時",
+      "linearFallback": "Linear 事件發生時",
+      "webhookFallback": "其 Webhook 被呼叫時",
+      "anyFallback": "事件發生時"
+    },
+    "chatStartFailed": "無法開始聊天",
+    "upNext": {
+      "title": "建議",
+      "looked": "{{time}} 檢視過",
+      "yesterdayAt": "昨天 {{time}}",
+      "looking": "正在檢視…",
+      "start": "開始",
+      "dismiss": "關閉",
+      "dismissTitle": "忽略 {{title}}",
+      "showMore_one": "顯示另外 {{count}} 個",
+      "showMore_other": "顯示另外 {{count}} 個",
+      "empty": "上次檢視沒有建議。",
+      "notYet": "{{name}} 還沒有檢視過。可在設定中立即檢視，或它每天會自行檢視幾次。",
+      "startFailed": "該建議已不在列表中。",
+      "lookNowRunning": "已在檢視中。",
+      "lookNowPaused": "開啟機器人後它才能四處檢視。",
+      "lookNowFailed": "無法開始檢視。請重試。",
+      "showMore": "顯示另外 {{count}} 個",
+      "newInUpNext": "「建議」中有 {{count}} 條新內容"
+    },
+    "new": {
+      "failed": "無法建立機器人",
+      "title": "建立機器人",
+      "runsOnHost": "在 {{host}} 上執行。",
+      "shuffle": "另一張圖片",
+      "namePlaceholder": "為你的機器人命名",
+      "create": "建立",
+      "fromTemplate": "使用範本",
+      "takesOverList": "接手 {{names}}。它們的代理程式會繼續執行。",
+      "runsOn": "執行於",
+      "cantReach": "無法連線 {{host}}。請選擇另一臺電腦。",
+      "otherAccount": "{{host}} 使用自己的 Orca 帳戶（{{email}}）。其機器人以該帳戶發帖和連線。",
+      "agent": "代理程式",
+      "computer": "電腦",
+      "computerMessage": "機器人執行的位置。",
+      "agentOn": "在 {{host}} 上。",
+      "botsOffOn": "{{host}} 上的機器人已關閉",
+      "updateDesktopFirst": "請先更新 {{host}} 上的 Orca",
+      "checking": "檢查中…"
+    },
+    "workspaces": {
+      "show": "顯示 {{name}} 的工作區",
+      "hide": "隱藏 {{name}} 的工作區"
+    },
+    "section": {
+      "title": "機器人",
+      "summary": "{{title}}，{{total}} 個機器人，{{attention}} 個需要你處理，{{unread}} 條未讀，{{working}} 個正在工作",
+      "newBot": "建立機器人"
+    },
+    "list": {
+      "updateOrcaOn": "更新 {{host}} 上的 Orca",
+      "cantReach": "無法連線 {{host}}。它恢復後會顯示其機器人。",
+      "noBotsYet": "還沒有機器人。",
+      "offline": "離線",
+      "updateToSee": "請更新 {{host}} 上的 Orca 以檢視其機器人。",
+      "offEnd": "{{host}} 上的機器人已關閉。",
+      "updateToCreate": "請更新 {{host}} 上的 Orca，以便從手機建立機器人。"
+    },
+    "row": {
+      "replyingIn": "正在 {{place}} 中回覆",
+      "replyingOn": "正在 {{place}} 上回復",
+      "paused": "已暫停",
+      "reading": "正在讀取你的訊息",
+      "replying": "正在回覆",
+      "waitingCount": "正在等待 {{count}} 個事件",
+      "waitingFor": "正在等待 {{label}}",
+      "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}"
+    },
+    "chat": {
+      "nothingToReport": "沒有要報告的內容"
     }
   }
 }

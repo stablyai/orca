@@ -350,7 +350,8 @@
       "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}.",
       "signIn": "Iniciar sesión",
       "signInHint": "Abre una terminal en el ordenador que ejecuta este chat",
-      "forkedFrom": "Rama creada desde"
+      "forkedFrom": "Rama creada desde",
+      "botCreated": "Bot creado"
     },
     "ciResultLine": {
       "failingLead": "CI fallando en",
@@ -776,6 +777,82 @@
         "needsAuth_many": "{{count}} requieren iniciar sesión"
       },
       "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí."
+    },
+    "botCards": {
+      "request": {
+        "notSentTo": "No enviado a",
+        "asked": "Preguntado",
+        "handedTo": "Traspasado a",
+        "paused": "{{bot}} está en pausa.",
+        "botsOff": "Los bots están desactivados.",
+        "couldNotTake": "{{bot}} no pudo encargarse.",
+        "answered": "✓ respondido",
+        "done": "✓ hecho",
+        "notAnswered": "sin responder",
+        "waitingOnYou": "esperándote",
+        "working": "trabajando…",
+        "hasIt": "lo tiene",
+        "openChat": "Abrir su chat"
+      },
+      "offer": {
+        "unknownAgent": "{{bot}} usa un agente que esta app no conoce. Edítalo para elegir uno.",
+        "takesOverOne": "Asume 1 espacio de trabajo",
+        "takesOverMany": "Asume {{count}} espacios de trabajo",
+        "created": "Creado",
+        "createdAskedOne": "Creado · se le pidió asumir 1 espacio de trabajo",
+        "createdAskedMany": "Creado · se le pidió asumir {{count}} espacios de trabajo",
+        "createdTookOverSome": "Creado · asumió {{taken}} de {{count}} espacios de trabajo",
+        "createdTookOverOne": "Creado · asumió 1 espacio de trabajo",
+        "createdTookOverMany": "Creado · asumió {{count}} espacios de trabajo",
+        "deleted": "Creado y luego eliminado",
+        "nameTaken": "Ya tienes un bot llamado {{name}}.",
+        "rename": "Renombrar",
+        "edit": "Editar",
+        "create": "Crear bot",
+        "open": "Abrir",
+        "origin": "Propuesto por {{bot}}",
+        "originTemplate": "De {{template}}, propuesto por {{bot}}",
+        "watches": "Observa",
+        "does": "Hace",
+        "reports": "Informa",
+        "willPropose": "Propondrá",
+        "takesOver": "Asume",
+        "template": "Plantilla",
+        "dismiss": "Descartar",
+        "notSent": "No se pudo enviar al bot. Vuelve a intentarlo.",
+        "askedMany": "Pidió hacerse cargo de {{count}} espacios de trabajo",
+        "askedOne": "Pidió hacerse cargo de 1 espacio de trabajo",
+        "tookOverMany": "Se hizo cargo de {{count}} espacios de trabajo",
+        "tookOverOne": "Se hizo cargo de 1 espacio de trabajo",
+        "tookOverSome": "Se hizo cargo de {{taken}} de {{count}} espacios de trabajo"
+      },
+      "toolAdded": {
+        "heading": "Se añadió una herramienta",
+        "removed": "Quitado",
+        "remove": "Eliminar"
+      },
+      "webhook": {
+        "title": "Webhook",
+        "starts": "Webhook · inicia “{{automation}}”",
+        "sampleNote": "Una muestra inicia una ejecución real.",
+        "sendSample": "Enviar una llamada de muestra",
+        "secretAdd": "Añadir secreto de firma…",
+        "secretChange": "Secreto de firma: {{sender}} · Cambiar…",
+        "paused": "En pausa",
+        "orphaned": "No conectado",
+        "pending": "Configurando",
+        "noCalls": "Aún no hay llamadas",
+        "lastCall": "Última llamada {{ago}}",
+        "copied": "copiado",
+        "copyUrl": "Copiar URL",
+        "copyFailed": "Reintentar copia"
+      },
+      "memory": {
+        "added": "Añadida",
+        "removed": "Quitado",
+        "noteChanged": "Nota cambiada",
+        "indexChanged": "MEMORY.md cambió"
+      }
     }
   },
   "common": {
@@ -800,7 +877,10 @@
     "settings": "Ajustes",
     "unknown": "Desconocido",
     "waitingForHost": "Esperando al host…",
-    "connectingToHost": "Conectando con el host…"
+    "connectingToHost": "Conectando con el host…",
+    "loadError": {
+      "generic": "Algo salió mal. Vuelve a intentarlo."
+    }
   },
   "components": {
     "accountsSnapshot": {
@@ -1236,7 +1316,8 @@
     "native-chat": {
       "composer": {
         "planMode": "Planificar",
-        "exitPlanMode": "Salir del modo de planificación"
+        "exitPlanMode": "Salir del modo de planificación",
+        "pastedTextLabel": "Texto pegado"
       },
       "goal": {
         "sentAsGoal": "Enviado como objetivo"
@@ -1673,6 +1754,18 @@
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Actualizado hace {{time}}",
       "updatedJustNow": "Actualizado ahora mismo"
+    },
+    "bots": {
+      "noBotsTitle": "Aún no hay bots",
+      "pairDesktop": "Empareja un escritorio para ver sus bots aquí.",
+      "seeAll": "Ver todos los bots",
+      "updateOneBody": "Su versión de Orca aún no puede mostrar bots en tu teléfono.",
+      "updateManyTitle": "Actualiza Orca en tus equipos",
+      "updateManyBody": "Su versión de Orca aún no puede mostrar bots en tu teléfono.",
+      "offOneBody": "Para activarlos, abre Orca en {{host}} y ve a Ajustes › Bots › Activar bots.",
+      "offServerBody": "Para activarlos, abre Orca en {{desktop}} y ve a Ajustes › Bots › Activar bots en {{host}}.",
+      "offManyTitle": "Los bots están desactivados en tus equipos",
+      "offManyBody": "Para activarlos, abre Orca en cada equipo y ve a Ajustes › Bots › Activar bots."
     }
   },
   "hooks": {
@@ -4547,7 +4640,11 @@
       "offline": "{{name}} está desconectado. Vuelve a abrir el enlace cuando se conecte.",
       "chatOpenFailed": "{{name}} no pudo abrir este chat. Vuelve a intentar el enlace.",
       "unreachableSingle": "No se pudo conectar con {{name}}. Asegúrate de que Orca esté abierto allí e inténtalo de nuevo.",
-      "workspaceDeleted": "El espacio de trabajo de este chat se eliminó en {{name}}."
+      "workspaceDeleted": "El espacio de trabajo de este chat se eliminó en {{name}}.",
+      "updateOrca": "Actualizar Orca",
+      "openRequestFailed": "No se pudo abrir la solicitud",
+      "botNotFound": "Bot no encontrado",
+      "openOn": "Abrir {{name}} en"
     },
     "settings": {
       "remove": "Eliminar",
@@ -4606,7 +4703,20 @@
       "deleteDetailNoPath": "Su carpeta se queda en {{host}}, con su alma y su memoria.",
       "backToAgent": "Volver a Agente y modelo",
       "useChatDefaults": "Usar los valores predeterminados del chat",
-      "requests_many": "{{count}} solicitudes"
+      "requests_many": "{{count}} solicitudes",
+      "declineName": "Rechazar a {{name}}",
+      "reviewName": "Revisar a {{name}}",
+      "removeConfirmTitle": "¿Eliminar {{name}}?",
+      "removeConfirmMessage": "{{name}} ya no puede preguntar a {{botName}}.",
+      "active": "Activo",
+      "activeDetail": "Responde mensajes y ejecuta automatizaciones.",
+      "permissions": "Permisos",
+      "sameAsChats": "Igual que los chats",
+      "notifications": "Notificaciones",
+      "needsPermission": "Necesita permiso",
+      "taskComplete": "Tarea completada",
+      "couldNotFinish": "No pudo terminar",
+      "couldNotFinishDetail": "Falla una ejecución de automatización o un worker."
     },
     "newHomeChat": {
       "action": "Nuevo chat principal",
@@ -4622,14 +4732,29 @@
       "detail": "Lee las apps y proyectos conectados para sugerir próximos pasos. Solo lectura. Cada revisión usa tu plan de agente y Orca debe estar ejecutándose en el host.",
       "lookNow": "Revisar ahora",
       "notYet": "Aún no",
-      "backToLookAround": "Volver a Revisar"
+      "backToLookAround": "Volver a Revisar",
+      "title": "Revisar",
+      "on": "Sugerir próximos pasos",
+      "every": "Con qué frecuencia",
+      "weekdaysOnly": "Solo días laborables",
+      "focus": "Buscar",
+      "anything": "Todo lo que te espera",
+      "lastLooked": "Última revisión",
+      "focusPlaceholder": "PR que me esperan, preguntas en #eng, issues que vencen esta semana",
+      "focusDetail": "Opcional. Si lo dejas vacío, busca todo lo que te espera.",
+      "back": "Volver a Ajustes"
     },
     "connectorOffer": {
       "slack": "Chatea con el bot desde canales y mensajes directos de Slack.",
       "google": "Deja que el bot trabaje en tu Gmail, Calendar y Drive, e inicia automatizaciones con correo nuevo.",
       "linear": "Pásale issues al bot mencionándolo con @ o asignándoselos, e inicia automatizaciones con eventos de Linear.",
       "github": "Pásale trabajo al bot mencionándolo con @ e inicia automatizaciones con eventos de GitHub.",
-      "heading": "Conectar un servicio"
+      "heading": "Conectar un servicio",
+      "connected": "Conectado",
+      "onComputer": "Conéctalo en Orca en tu equipo, desde la tarjeta de este chat.",
+      "addGitHubAccess": "Añade repositorios u organizaciones en Orca en tu equipo, desde la tarjeta de este chat.",
+      "addWorkspace": "Añade otro workspace en Orca en tu equipo, desde la tarjeta de este chat.",
+      "paused": "En pausa hasta que {{host}} inicie sesión en Orca."
     },
     "groups": {
       "group": "Grupo",
@@ -4667,7 +4792,46 @@
       "newThreadTab": "Nuevo hilo",
       "newThreadHint": "empieza de cero",
       "newThread": "Nuevo hilo en {{name}}",
-      "handoffsPaused": "En pausa tras {{count}} traspasos. Responde para continuar."
+      "handoffsPaused": "En pausa tras {{count}} traspasos. Responde para continuar.",
+      "manageMembers": "Gestionar miembros",
+      "newGroup": "Nuevo grupo",
+      "cancel": "Cancelar",
+      "back": "Atrás",
+      "groupActions": "Acciones del grupo",
+      "pendingRequests": "Solicitudes pendientes",
+      "needsYou": "· Te necesita",
+      "valuePending": " · {{value0}} pendientes",
+      "manageMembersMenu": "Gestionar miembros…",
+      "allBots": "Todos los bots",
+      "onlyWhenMentioned": "Solo cuando lo mencionen",
+      "stopValue": "Detener {{value0}}",
+      "replyToValue": "Responder a {{value0}}",
+      "waitingForTheNativeSession": "Esperando la sesión nativa…",
+      "create": "Crear",
+      "removingDefault": "Si quitas a {{name}}, Respuestas cambia a Solo cuando lo mencionen.",
+      "loadEarlierMessages": "Cargar mensajes anteriores",
+      "memberRemoved": "Miembro quitado",
+      "composerPlaceholder": "Escribe al grupo, @ para mencionar un bot",
+      "repliesValue": "Respuestas: {{value0}}",
+      "whoAnswers": "Quién responde a tus mensajes",
+      "peerAsked": "{{from}} preguntó a {{to}}",
+      "peerFollowedUp": "{{bot}} hizo seguimiento",
+      "peerReplyRead": "{{reader}} leyó la respuesta de {{peer}}",
+      "deleteTitle": "¿Eliminar {{name}}?",
+      "deleteDescription": "Sus bots no se eliminan.",
+      "deleteConfirm": "Eliminar grupo",
+      "deleteGroupMenu": "Eliminar grupo…",
+      "you": "Tú",
+      "pickTwo": "Elige 2 o más bots",
+      "nameIt": "Ponle nombre al grupo",
+      "save": "Guardar",
+      "namePlaceholder": "Ponle nombre a tu grupo",
+      "useSuggestion": "Usar “{{name}}”",
+      "suggestTwo": "{{a}} y {{b}}",
+      "suggestThree": "{{a}}, {{b}} y {{c}}",
+      "suggestMore": "{{a}}, {{b}} y {{count}} más",
+      "pickOne": "Elige un bot",
+      "needsTwoBots": "Necesita 2 bots en {{host}}"
     },
     "templates": {
       "title": "Plantillas de bots",
@@ -4684,50 +4848,298 @@
       "backToTemplates": "Volver a las plantillas",
       "category": {
         "support": "Soporte y clasificación",
-        "personal": "Asistente personal"
-      }
+        "personal": "Asistente personal",
+        "coding": "Programación",
+        "releases": "Versiones y CI",
+        "planning": "Planificación y documentación",
+        "ops": "Operaciones"
+      },
+      "blank": "Bot en blanco",
+      "blankLine": "Dile para qué sirve en su primer chat.",
+      "byOrca": "{{category}} · de Orca",
+      "originTemplateNamed": "De la plantilla {{template}}",
+      "noMatch": "Ninguna plantilla coincide con “{{query}}”"
     },
     "tidyUp": {
       "title": "Mantenimiento de la memoria",
       "never": "Aún no",
       "footer": "Solo cambia archivos de memoria. Usa tu plan de agente, como un chat corto. Orca debe estar ejecutándose en tu ordenador.",
       "undoNote": "Deshacer devuelve MEMORY.md al estado anterior a esta ordenación, de una sola vez. El historial completo y la edición de la memoria están en tu ordenador, en Ajustes → Memoria.",
-      "backToTidyUp": "Volver a Mantenimiento de la memoria"
+      "backToTidyUp": "Volver a Mantenimiento de la memoria",
+      "nowRunning": "Ya está ordenando.",
+      "nowBusy": "Un chat aún está trabajando. Vuelve a intentarlo cuando termine.",
+      "nowFailed": "No se pudo iniciar la ordenación. Vuelve a intentarlo.",
+      "undoSuperseded": "La memoria cambió desde esta ordenación, así que se dejó como está.",
+      "undoFailed": "No se pudo deshacer la ordenación.",
+      "everyNight": "Cada noche",
+      "everyWeek": "Una vez por semana",
+      "on": "Ordenar la memoria por la noche",
+      "turnedOff": "Desactivado tras fallar 10 ordenaciones seguidas.",
+      "every": "Con qué frecuencia",
+      "lastTidied": "Última ordenación",
+      "tidying": "Ordenando…",
+      "now": "Ordenar ahora",
+      "merged": "Se combinaron {{count}} líneas repetidas",
+      "replaced": "Marcado como reemplazado: {{fact}}",
+      "filed": "Se archivaron {{count}} líneas en memory/{{topic}}.md",
+      "moved": "Se movieron {{count}} líneas antiguas al archivo",
+      "readChats": "leyó {{count}} chats",
+      "took": "tardó {{value}} min",
+      "learned": "Aprendido de los chats",
+      "tidied": "Ordenado",
+      "undone": "Deshecho",
+      "undoAll": "Deshacer esta ordenación",
+      "undo": "Deshacer",
+      "summaryTitle": "Última ordenación",
+      "undoStale": "Desde entonces se ejecutó una ordenación más reciente. Revísala antes de deshacer."
     },
     "items": {
       "filter": {
         "clearAll": "Borrar filtros",
-        "chat": "Chat"
+        "chat": "Chat",
+        "needsYou": "Solo Te necesita",
+        "label": "Filtrar elementos",
+        "all": "Todos los chats",
+        "remove": "Quitar filtro {{name}}",
+        "clear": "Borrar filtro"
       },
       "tab": "Elementos",
       "activity": {
         "notSent": "No enviado.",
         "retry": "Reintentar",
         "discard": "Descartar",
-        "mayHaveArrived": "Puede que haya llegado."
+        "mayHaveArrived": "Puede que haya llegado.",
+        "changed": "cambió {{field}}",
+        "closed": "marcó esto como hecho",
+        "canceled": "canceló esto",
+        "reopened": "reabrió esto",
+        "moved": "movió esto a",
+        "madeNeedsYou": "añadió este elemento como Te necesita",
+        "made": "añadió este elemento",
+        "linked": "vinculó {{links}}",
+        "workerStarted": "Worker iniciado:",
+        "workerFailed": "Worker detenido:",
+        "workerFinished": "Worker terminado:",
+        "noComments": "Aún no hay comentarios.",
+        "snoozed": "pospuso esto hasta {{when}}",
+        "snoozedBare": "pospuso esto",
+        "unsnoozed": "dejó de posponer esto",
+        "snoozeEnded": "Volvió antes de lo previsto"
       },
       "comment": {
-        "replyingTo": "En respuesta a:"
+        "replyingTo": "En respuesta a:",
+        "offline": "{{host}} está sin conexión. Tu comentario se guarda; Comentar volverá a funcionar cuando vuelva.",
+        "label": "Comentario",
+        "add": "Añade un comentario…",
+        "submit": "Comentario",
+        "fileOnComputer": "Abre {{name}} en tu computadora.",
+        "reply": "Responde con tus propias palabras",
+        "replyTo": "Responder a {{name}}…",
+        "showLess": "Mostrar menos"
       },
       "view": {
         "title": "Elemento",
         "placeOf": "{{index}} de {{total}}",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "subWhere": "Elemento {{number}} · {{chat}}"
+        "subWhere": "Elemento {{number}} · {{chat}}",
+        "canceledNote": "Cancelado:",
+        "doneNote": "Hecho:",
+        "links": "Enlaces",
+        "activity": "Actividad",
+        "showEarlier": "Mostrar anteriores",
+        "showLess": "Mostrar menos",
+        "showMore": "Mostrar más"
       },
       "ask": {
-        "notNow": "Ahora no"
+        "notNow": "Ahora no",
+        "recommended": "Recomendado"
       },
       "write": {
-        "offline": "{{host}} está sin conexión."
+        "offline": "{{host}} está sin conexión.",
+        "unknown": "La conexión se cortó durante el envío, así que puede que haya llegado. Revisa Actividad cuando se reconecte antes de volver a enviarlo."
       },
       "thisComputer": "El ordenador",
-      "readFailedClosedPage": "No se pudieron leer más elementos cerrados."
+      "readFailedClosedPage": "No se pudieron leer más elementos cerrados.",
+      "chat": {
+        "opensInItems": "Se abre en Elementos",
+        "moreItems": "+{{count}} más",
+        "commentOn": "Activado",
+        "marked": "Marcó {{items}} como hecho",
+        "canceled": "Canceló {{items}}",
+        "added": "Añadió {{items}}",
+        "askedYou": "Te preguntó sobre {{items}}",
+        "moved": "Movió {{items}} a {{status}}",
+        "commented": "Comentó en {{items}}",
+        "updated": "Actualizó {{items}}",
+        "linkedMany": "Vinculó {{count}} enlaces a {{items}}",
+        "linked": "Vinculó {{link}} a {{items}}",
+        "aWorker": "un worker",
+        "youMarkedManyDone": "Marcaste {{count}} elementos como hechos: {{items}}",
+        "youCanceledMany": "Cancelaste {{count}} elementos: {{items}}",
+        "youMovedMany": "Moviste {{count}} elementos a {{status}}: {{items}}",
+        "youMarked": "Marcaste {{items}} como hecho",
+        "youCanceled": "Cancelaste {{items}}",
+        "youMoved": "Moviste {{items}} a {{status}}",
+        "youChanged": "Cambiaste {{items}}",
+        "changes": "{{from}} → {{to}} · {{count}} cambios",
+        "chipLabel": "{{title}}, {{status}}",
+        "addedAndMoved": "Añadió {{items}} y lo movió a {{status}}",
+        "addedAndAsked": "Añadió {{items}} y te preguntó",
+        "addedAndDone": "Añadió {{items}} y lo marcó como hecho",
+        "addedAndCanceled": "Añadió y canceló {{items}}",
+        "openChat": "Abrir {{chat}}",
+        "byChat": {
+          "moved": "{{chat}} movió {{items}} a {{status}}",
+          "askedYou": "{{chat}} te preguntó sobre {{items}}",
+          "marked": "{{chat}} marcó {{items}} como hecho",
+          "canceled": "{{chat}} canceló {{items}}",
+          "added": "{{chat}} añadió {{items}}",
+          "commented": "{{chat}} comentó en {{items}}",
+          "updated": "{{chat}} actualizó {{items}}",
+          "linkedMany": "{{chat}} vinculó {{count}} enlaces a {{items}}",
+          "linked": "{{chat}} vinculó {{link}} a {{items}}"
+        },
+        "anotherChat": "Otro chat"
+      },
+      "status": {
+        "planned": "Planificado",
+        "working": "En curso",
+        "needsYou": "Te necesita",
+        "done": "Hecho",
+        "canceled": "Cancelado"
+      },
+      "needYouCount_one": "{{count}} elemento te necesita",
+      "needYouCount_other": "{{count}} elementos te necesitan",
+      "needYouCount_many": "{{count}} elementos te necesitan",
+      "homeChat": "Chat principal",
+      "chatFallback": "Chat",
+      "field": {
+        "doneMeansLower": "hecho significa",
+        "description": "descripción",
+        "title": "título",
+        "status": "Estado",
+        "chat": "Chat",
+        "doneMeans": "Hecho significa",
+        "snoozed": "Pospuesto"
+      },
+      "link": {
+        "notRead": "Sin leer",
+        "merged": "Mergeado",
+        "draft": "Borrador",
+        "closed": "Cerrado",
+        "open": "Abierto",
+        "checksPassing": "Checks correctos",
+        "checksFailing": "Checks fallando",
+        "checksPending": "Checks pendientes",
+        "pr": "PR #{{number}}",
+        "issue": "Issue #{{number}}",
+        "serverPr": "El PR aún no se muestra para el trabajo en el servidor",
+        "openInBrowser": "Abrir en el navegador",
+        "copyLink": "Copiar enlace",
+        "copyPath": "Copiar ruta",
+        "fileOutside": "{{path}} no está en la carpeta de este bot"
+      },
+      "open": {
+        "failed": "No se pudo abrir este elemento.",
+        "notFound": "{{host}} no lo encontró. Puede que pertenezca a un bot de otro equipo.",
+        "noAnswer": "{{host}} no respondió."
+      },
+      "retry": "Reintentar",
+      "loading": "Cargando elementos…",
+      "readFailedShort": "No se pudieron cargar los elementos.",
+      "lastRead": "Se muestran los últimos elementos leídos.",
+      "row": {
+        "select": "Seleccionar {{title}}"
+      },
+      "selected": "{{count}} seleccionados",
+      "pill": {
+        "moveTo": "Mover a",
+        "clear": "Borrar selección",
+        "moveCount_one": "Mover {{count}} elemento a",
+        "moveCount_other": "Mover {{count}} elementos a",
+        "moveCount_many": "Mover {{count}} elementos a"
+      },
+      "menu": {
+        "select": "Seleccionar",
+        "done": "Hecho",
+        "changeStatus": "Cambiar estado",
+        "openChat": "Abrir {{chat}}",
+        "cancelShort": "Cancelar"
+      },
+      "stale": {
+        "confirm_one": "¿Cancelar {{count}} elemento inactivo?",
+        "confirm_other": "¿Cancelar {{count}} elementos inactivos?",
+        "confirm_many": "¿Cancelar {{count}} elementos inactivos?",
+        "confirmWhy": "Motivo enviado al bot: “{{reason}}” No se elimina nada.",
+        "reason": "Sin actividad durante {{count}} días.",
+        "cancelAll": "Cancelar todo"
+      },
+      "cancel": {
+        "keep": "Mantener",
+        "confirmMany": "Cancelar {{count}}",
+        "titleMany": "¿Cancelar {{count}} elementos?",
+        "titleOne": "¿Cancelar {{title}}?",
+        "why": "El bot ve el motivo. No se elimina nada.",
+        "placeholder": "Motivo",
+        "confirmOne": "Cancelar elemento",
+        "offline": "{{host}} está sin conexión. Tu motivo se guarda; {{action}} volverá a funcionar cuando vuelva."
+      },
+      "strip": {
+        "view": "Vista"
+      },
+      "group": {
+        "stale": "Desactualizada",
+        "closed": "Cerrado",
+        "new": "{{count}} nuevos",
+        "showMore": "Mostrar {{count}} más",
+        "snoozed": "Pospuesto"
+      },
+      "empty": {
+        "title": "Aún no hay elementos",
+        "body": "Cuando {{bot}} se encargue de algo por ti, aparecerá aquí con lo que está haciendo y lo que necesita de ti.",
+        "needsYou": "Nada te necesita.",
+        "filtered": "Ningún elemento coincide."
+      },
+      "toast": {
+        "markedDone": "Se marcó {{title}} como hecho",
+        "canceledOne": "Se canceló {{title}}",
+        "movedOne": "Se movió {{title}} a {{status}}",
+        "movedMany": "Se movieron {{count}} elementos a {{status}}",
+        "doneFailed": "No se pudo marcar como hecho: {{why}}",
+        "moveFailed_one": "No se pudo mover: {{why}}",
+        "moveFailed_other": "No se pudieron mover {{count}} elementos: {{why}}",
+        "moveFailed_many": "No se pudieron mover {{count}} elementos: {{why}}",
+        "snoozeFailed": "No se pudo posponer: {{why}}",
+        "unsnoozedOne": "Se dejó de posponer {{title}}",
+        "snoozedOne": "Se pospuso {{title}} hasta {{when}}",
+        "unsnoozedMany": "Se dejaron de posponer {{count}} elementos",
+        "snoozedMany": "Se pospusieron {{count}} elementos hasta {{when}}"
+      },
+      "snooze": {
+        "rowUntil": "hasta {{when}}",
+        "sheet": "Posponer…",
+        "pick": "Elegir una hora…",
+        "unsnooze": "Dejar de posponer",
+        "today": "Hoy",
+        "tomorrow": "Mañana",
+        "until": "Pospuesto hasta {{when}}",
+        "pickTitle": "Posponer hasta",
+        "pickDay": "¿Posponer hasta qué día?",
+        "pickHour": "¿A qué hora?"
+      },
+      "readFailedTitle": "No se pudieron cargar los elementos"
     },
     "needs": {
       "chat": "Tu chat con {{name}}",
-      "access": "{{person}} pidió acceso"
+      "access": "{{person}} pidió acceso",
+      "permissionTool": "Permiso · {{tool}}",
+      "permission": "Se necesita permiso",
+      "waiting": "Esperándote",
+      "whereItRuns": "{{need}} · ábrelo donde se ejecuta",
+      "worker": "Worker: {{name}}",
+      "actionFor": "{{action}}: {{title}}",
+      "open": "Abrir"
     },
     "waits": {
       "cancel": "Cancelar",
@@ -5096,10 +5508,204 @@
     },
     "saveFailed": "No se pudo guardar",
     "chats": {
-      "readFailedTitle": "No se pudieron cargar los chats"
+      "readFailedTitle": "No se pudieron cargar los chats",
+      "replying": "Respondiendo…",
+      "waiting": "Esperándote",
+      "sayHi": "Saluda a {{name}}",
+      "closedShort": "cerrada",
+      "needsYou": "Te necesita",
+      "askingBot": "Preguntando a {{name}}",
+      "handedOver": "Traspasado",
+      "fromClosedChat": "De un chat cerrado",
+      "automationTerminal": "Ejecución de automatización · terminal",
+      "untitledWorker": "Worker",
+      "home": "Chat principal",
+      "untitled": "Nuevo chat",
+      "fold": "Contraer {{name}}",
+      "unfold": "Expandir {{name}}",
+      "unread": "Sin leer",
+      "moreRunningStep": "Mostrar 8 más · {{count}} más en ejecución",
+      "moreRunning": "Mostrar {{count}} más en ejecución",
+      "earlierStep": "Mostrar 8 más · {{count}} anteriores",
+      "earlier": "Mostrar {{count}} anteriores",
+      "showFewer": "Mostrar menos",
+      "title": "Chats",
+      "search": "Buscar chats y workers",
+      "noMatch": "Ningún chat ni worker coincide.",
+      "empty": "Aquí aparecen los chats secundarios, los hilos de Slack y Linear y las ejecuciones de automatizaciones, cada uno con los workers que inicia.",
+      "newTag": "Nuevo",
+      "olderStep": "Mostrar 8 más · {{count}} anteriores",
+      "older": "Mostrar {{count}} anteriores",
+      "terminalRunDesktopOnly": "Ejecución en terminal · ábrela en Automatizaciones en el equipo",
+      "searchFailed": "No se pudieron buscar los chats de este bot.",
+      "searchRetry": "Probar de nuevo",
+      "loadingChats": "Cargando chats",
+      "handedOverInline": "traspasado",
+      "fromClosedChatInline": "de un chat cerrado",
+      "statusUnknown": "Estado desconocido",
+      "kindSlack": "Hilo de Slack",
+      "kindLinear": "Issue de Linear",
+      "kindGithub": "Hilo de GitHub",
+      "kindAutomation": "Ejecución de automatización",
+      "kindSide": "Chat secundario",
+      "replyingState": "Respondiendo",
+      "showEightMoreWorkers": "Mostrar 8 workers más",
+      "showMoreWorkers_one": "Mostrar {{count}} worker más",
+      "showMoreWorkers_other": "Mostrar {{count}} workers más",
+      "showMoreWorkers_many": "Mostrar {{count}} workers más",
+      "moreMatches_one": "{{count}} coincidencia más. Escribe más del nombre para acotar.",
+      "moreMatches_other": "{{count}} coincidencias más. Escribe más del nombre para acotar.",
+      "moreMatches_many": "{{count}} coincidencias más. Escribe más del nombre para acotar.",
+      "runningCount": "{{count}} en ejecución",
+      "waitingCount": "{{count}} en espera"
     },
     "panel": {
-      "backTo": "Volver a {{name}}"
+      "backTo": "Volver a {{name}}",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_other": "{{count}} te necesitan",
+      "needYou_many": "{{count}} te necesitan",
+      "working": "{{count}} trabajando",
+      "itemsNeedYou": "Elementos, {{count}} te necesitan",
+      "chats": "Chats",
+      "files": "Archivos"
+    },
+    "activity": {
+      "readFailed": "No se pudo cargar la actividad.",
+      "loading": "Cargando actividad…",
+      "unavailable": "La actividad no está disponible en este host.",
+      "retry": "Reintentar",
+      "lastRead": "Se muestra la última actividad leída.",
+      "readFailedTitle": "No se pudo cargar la actividad",
+      "unavailableTitle": "Actividad no disponible"
+    },
+    "automations": {
+      "couldNotFinish": "No pudo terminar",
+      "runNow": "Ejecutar ahora",
+      "pause": "Pausar {{name}}",
+      "resume": "Reanudar {{name}}",
+      "empty": "Pide en el chat que configure una automatización.",
+      "newAutomation": "Nueva automatización",
+      "runQueued": "Ejecución de automatización en cola.",
+      "runFailed": "No se pudo iniciar la ejecución",
+      "emptyTitle": "Aún no hay automatizaciones"
+    },
+    "sheet": {
+      "activity": "Actividad",
+      "automations": "Automatizaciones",
+      "settings": "Ajustes",
+      "hint": "Actividad, automatizaciones y ajustes"
+    },
+    "events": {
+      "slack": {
+        "mentioned": "Cuando te mencionan en Slack",
+        "message": "Con un mensaje de Slack",
+        "reaction": "Con una reacción de Slack"
+      },
+      "github": {
+        "issueOpened": "Cuando se abre un issue",
+        "prOpened": "Cuando se abre un pull request",
+        "prPushed": "En un push a un pull request",
+        "prMerged": "Cuando se fusiona un pull request",
+        "comment": "En un comentario de GitHub",
+        "reviewComment": "En un comentario de revisión",
+        "review": "En una revisión de pull request",
+        "mentioned": "Cuando te mencionan en GitHub",
+        "reviewRequested": "Cuando se solicita una revisión",
+        "assigned": "Cuando te asignan en GitHub",
+        "ciFailed": "Cuando falla la CI",
+        "ciPassed": "Cuando pasa la CI",
+        "prConflicted": "Cuando un pull request tiene conflictos",
+        "prClosed": "Cuando se cierra un pull request",
+        "prReady": "Cuando un pull request está listo para revisión",
+        "labeled": "Cuando se añade una etiqueta",
+        "issueClosed": "Cuando se cierra un issue",
+        "deployFinished": "Cuando termina un despliegue",
+        "securityAlert": "En una alerta de seguridad",
+        "workflowFinished": "Cuando termina una ejecución de workflow"
+      },
+      "linear": {
+        "assigned": "Cuando te asignan en Linear",
+        "mentioned": "Cuando te mencionan en Linear",
+        "issueCreated": "Cuando se crea un issue de Linear",
+        "issueMoved": "Cuando se mueve un issue de Linear"
+      },
+      "slackFallback": "Con un evento de Slack",
+      "githubFallback": "Con un evento de GitHub",
+      "linearFallback": "Con un evento de Linear",
+      "webhookFallback": "Cuando se llama a su webhook",
+      "anyFallback": "Con un evento"
+    },
+    "chatStartFailed": "No se pudo iniciar el chat",
+    "upNext": {
+      "title": "Sugerencias",
+      "looked": "Revisó {{time}}",
+      "yesterdayAt": "ayer {{time}}",
+      "looking": "Revisando…",
+      "start": "Comenzar",
+      "dismiss": "Descartar",
+      "dismissTitle": "Descartar {{title}}",
+      "showMore_one": "Mostrar {{count}} más",
+      "showMore_other": "Mostrar {{count}} más",
+      "showMore_many": "Mostrar {{count}} más",
+      "empty": "No hay sugerencias de la última revisión.",
+      "notYet": "{{name}} aún no ha revisado nada. Revisa ahora en Ajustes, o lo hará solo varias veces al día.",
+      "startFailed": "Esa sugerencia ya no aparece.",
+      "lookNowRunning": "Ya está revisando.",
+      "lookNowPaused": "Activa el bot para que revise.",
+      "lookNowFailed": "No se pudo iniciar una revisión. Vuelve a intentarlo.",
+      "showMore": "Mostrar {{count}} más",
+      "newInUpNext": "{{count}} nuevas en Sugerencias"
+    },
+    "new": {
+      "failed": "No se pudo crear el bot",
+      "title": "Nuevo bot",
+      "runsOnHost": "Se ejecuta en {{host}}.",
+      "shuffle": "Otra imagen",
+      "namePlaceholder": "Ponle nombre a tu bot",
+      "create": "Crear",
+      "fromTemplate": "Usar plantilla",
+      "takesOverList": "Asume {{names}}. Sus agentes siguen ejecutándose.",
+      "runsOn": "Se ejecuta en",
+      "cantReach": "No se puede conectar con {{host}}. Elige otro equipo.",
+      "otherAccount": "{{host}} usa su propia cuenta de Orca ({{email}}). Sus bots publican y se conectan con esa cuenta.",
+      "agent": "Agente",
+      "computer": "Ordenador",
+      "computerMessage": "Dónde se ejecuta el bot.",
+      "agentOn": "En {{host}}.",
+      "botsOffOn": "Los bots están desactivados en {{host}}",
+      "updateDesktopFirst": "Actualiza primero Orca en {{host}}",
+      "checking": "Comprobando…"
+    },
+    "workspaces": {
+      "show": "Mostrar los espacios de trabajo de {{name}}",
+      "hide": "Ocultar los espacios de trabajo de {{name}}"
+    },
+    "section": {
+      "title": "Bots",
+      "summary": "{{title}}, {{total}} bots, {{attention}} te necesitan, {{unread}} sin leer, {{working}} trabajando",
+      "newBot": "Nuevo bot"
+    },
+    "list": {
+      "updateOrcaOn": "Actualizar Orca en {{host}}",
+      "cantReach": "No se puede conectar con {{host}}. Sus bots aparecerán cuando vuelva.",
+      "noBotsYet": "Aún no hay bots.",
+      "offline": "Sin conexión",
+      "updateToSee": "Actualiza Orca en {{host}} para ver sus bots.",
+      "offEnd": "Los bots están desactivados en {{host}}.",
+      "updateToCreate": "Actualiza Orca en {{host}} para crear bots desde tu teléfono."
+    },
+    "row": {
+      "replyingIn": "Respondiendo en {{place}}",
+      "replyingOn": "Respondiendo en {{place}}",
+      "paused": "En pausa",
+      "reading": "Leyendo tu mensaje",
+      "replying": "Respondiendo",
+      "waitingCount": "Esperando {{count}} eventos",
+      "waitingFor": "Esperando {{label}}",
+      "waitingForUntil": "Esperando {{label}} · hasta {{time}}"
+    },
+    "chat": {
+      "nothingToReport": "Nada que informar"
     }
   }
 }

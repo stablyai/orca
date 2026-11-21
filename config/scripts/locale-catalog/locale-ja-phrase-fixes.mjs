@@ -276,7 +276,7 @@ export const JA_PHRASE_FIXES = [
     replacement: 'その他の PR 操作',
     whenEnIncludes: 'More PR actions'
   },
-  { pattern: /アクション/g, replacement: '操作', whenEnIncludes: 'action' },
+  { pattern: /アクション/g, replacement: '操作', whenEnMatches: /\bactions?\b/i },
   // Orca's host covers SSH hosts and this computer; skipped where the English also says server.
   {
     pattern: /(ランタイム)?サーバー/g,

@@ -346,7 +346,8 @@
       "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",
       "signIn": "Oturum aç",
       "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
-      "forkedFrom": "Çatallandığı kaynak"
+      "forkedFrom": "Çatallandığı kaynak",
+      "botCreated": "Bot oluşturuldu"
     },
     "ciResultLine": {
       "failingLead": "CI başarısız:",
@@ -739,6 +740,82 @@
         "failed": "Başarısız: {{count}}"
       },
       "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın."
+    },
+    "botCards": {
+      "request": {
+        "notSentTo": "Gönderilmedi:",
+        "asked": "Soruldu",
+        "handedTo": "Devredildi:",
+        "paused": "{{bot}} duraklatıldı.",
+        "botsOff": "Botlar kapalı.",
+        "couldNotTake": "{{bot}} bunu alamadı.",
+        "answered": "✓ yanıtlandı",
+        "done": "✓ bitti",
+        "notAnswered": "yanıtlanmadı",
+        "waitingOnYou": "sizi bekliyor",
+        "working": "çalışıyor…",
+        "hasIt": "onda",
+        "openChat": "Sohbetini aç"
+      },
+      "offer": {
+        "unknownAgent": "{{bot}}, bu uygulamanın tanımadığı bir ajan çalıştırıyor. Birini seçmek için düzenleyin.",
+        "takesOverOne": "1 çalışma alanını devralır",
+        "takesOverMany": "{{count}} çalışma alanını devralır",
+        "created": "Oluşturuldu",
+        "createdAskedOne": "Oluşturuldu · 1 çalışma alanını devralması istendi",
+        "createdAskedMany": "Oluşturuldu · {{count}} çalışma alanını devralması istendi",
+        "createdTookOverSome": "Oluşturuldu · {{count}} çalışma alanından {{taken}} tanesini devraldı",
+        "createdTookOverOne": "Oluşturuldu · 1 çalışma alanını devraldı",
+        "createdTookOverMany": "Oluşturuldu · {{count}} çalışma alanını devraldı",
+        "deleted": "Oluşturuldu, sonra silindi",
+        "nameTaken": "Zaten {{name}} adlı bir botunuz var.",
+        "rename": "Yeniden Adlandır",
+        "edit": "Düzenle",
+        "create": "Bot oluştur",
+        "open": "Aç",
+        "origin": "{{bot}} tarafından önerildi",
+        "originTemplate": "{{template}} şablonundan, {{bot}} tarafından önerildi",
+        "watches": "İzler",
+        "does": "Yapar",
+        "reports": "Raporlar",
+        "willPropose": "Önerecek",
+        "takesOver": "Devralır",
+        "template": "Şablon",
+        "dismiss": "Kapat",
+        "notSent": "Bu bota gönderilemedi. Tekrar deneyin.",
+        "askedMany": "{{count}} çalışma alanını devralmak istedi",
+        "askedOne": "1 çalışma alanını devralmak istedi",
+        "tookOverMany": "{{count}} çalışma alanını devraldı",
+        "tookOverOne": "1 çalışma alanını devraldı",
+        "tookOverSome": "{{count}} çalışma alanından {{taken}} tanesini devraldı"
+      },
+      "toolAdded": {
+        "heading": "Araç eklendi",
+        "removed": "Kaldırıldı",
+        "remove": "Kaldır"
+      },
+      "webhook": {
+        "title": "Webhook",
+        "starts": "Webhook · “{{automation}}” başlatır",
+        "sampleNote": "Örnek, gerçek bir çalıştırma başlatır.",
+        "sendSample": "Örnek çağrı gönder",
+        "secretAdd": "İmzalama sırrı ekle…",
+        "secretChange": "İmzalama sırrı: {{sender}} · Değiştir…",
+        "paused": "Duraklatıldı",
+        "orphaned": "Bağlı değil",
+        "pending": "Kuruluyor",
+        "noCalls": "Henüz çağrı yok",
+        "lastCall": "Son çağrı {{ago}}",
+        "copied": "Kopyalandı",
+        "copyUrl": "URL'yi kopyala",
+        "copyFailed": "Kopyalamayı yeniden dene"
+      },
+      "memory": {
+        "added": "Eklendi",
+        "removed": "Kaldırıldı",
+        "noteChanged": "Not değişti",
+        "indexChanged": "MEMORY.md değişti"
+      }
     }
   },
   "common": {
@@ -763,7 +840,10 @@
     "settings": "Ayarlar",
     "unknown": "Bilinmiyor",
     "waitingForHost": "Sunucu bekleniyor…",
-    "connectingToHost": "Sunucuya bağlanılıyor…"
+    "connectingToHost": "Sunucuya bağlanılıyor…",
+    "loadError": {
+      "generic": "Bir sorun oluştu. Tekrar deneyin."
+    }
   },
   "components": {
     "accountsSnapshot": {
@@ -1195,7 +1275,8 @@
     "native-chat": {
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Plan modundan çık"
+        "exitPlanMode": "Plan modundan çık",
+        "pastedTextLabel": "Yapıştırılan metin"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
@@ -1630,6 +1711,18 @@
       "showUsageFor": "Kullanımı gösterilecek masaüstü",
       "updatedAgo": "{{time}} önce güncellendi",
       "updatedJustNow": "Az önce güncellendi"
+    },
+    "bots": {
+      "noBotsTitle": "Henüz bot yok",
+      "pairDesktop": "Botlarını burada görmek için bir masaüstünü eşleyin.",
+      "seeAll": "Tüm botları gör",
+      "updateOneBody": "Orca sürümü henüz botları telefonunuzda gösteremiyor.",
+      "updateManyTitle": "Bilgisayarlarınızdaki Orca'yı güncelleyin",
+      "updateManyBody": "Orca sürümleri henüz botları telefonunuzda gösteremiyor.",
+      "offOneBody": "Açmak için {{host}} üzerinde Orca'yı açın ve Ayarlar › Botlar › Botları etkinleştir'e gidin.",
+      "offServerBody": "Açmak için {{desktop}} üzerinde Orca'yı açın ve Ayarlar › Botlar › {{host}} üzerinde botları etkinleştir'e gidin.",
+      "offManyTitle": "Bilgisayarlarınızda botlar kapalı",
+      "offManyBody": "Açmak için her bilgisayarda Orca'yı açın ve Ayarlar › Botlar › Botları etkinleştir'e gidin."
     }
   },
   "hooks": {
@@ -4443,7 +4536,11 @@
       "offline": "{{name}} çevrimdışı. Yeniden bağlandığında bağlantıyı tekrar açın.",
       "chatOpenFailed": "{{name}} bu sohbeti açamadı. Bağlantıyı yeniden deneyin.",
       "unreachableSingle": "{{name}} ile bağlantı kurulamadı. Orada Orca’nın çalıştığından emin olun ve yeniden deneyin.",
-      "workspaceDeleted": "Bu sohbetin çalışma alanı {{name}} üzerinde silindi."
+      "workspaceDeleted": "Bu sohbetin çalışma alanı {{name}} üzerinde silindi.",
+      "updateOrca": "Orca'yı güncelle",
+      "openRequestFailed": "İstek açılamadı",
+      "botNotFound": "Bot bulunamadı",
+      "openOn": "{{name}} botunu şurada aç"
     },
     "settings": {
       "remove": "Kaldır",
@@ -4501,7 +4598,20 @@
       "copyFailed": "Kopyalanamadı",
       "deleteDetailNoPath": "Klasörü, ruhu ve belleğiyle birlikte {{host}} üzerinde kalır.",
       "backToAgent": "Ajan ve model bölümüne dön",
-      "useChatDefaults": "Sohbet varsayılanlarını kullan"
+      "useChatDefaults": "Sohbet varsayılanlarını kullan",
+      "declineName": "{{name}} isteğini reddet",
+      "reviewName": "{{name}} isteğini incele",
+      "removeConfirmTitle": "{{name}} kaldırılsın mı?",
+      "removeConfirmMessage": "{{name}} artık {{botName}} botuna soramaz.",
+      "active": "Etkin",
+      "activeDetail": "Mesajları yanıtlar ve otomasyonları çalıştırır.",
+      "permissions": "İzinler",
+      "sameAsChats": "Sohbetlerle aynı",
+      "notifications": "Bildirimler",
+      "needsPermission": "İzin gerekiyor",
+      "taskComplete": "Görev tamamlandı",
+      "couldNotFinish": "Tamamlanamadı",
+      "couldNotFinishDetail": "Bir otomasyon çalıştırması veya çalışan başarısız olur."
     },
     "newHomeChat": {
       "action": "Yeni Ana sohbet",
@@ -4517,14 +4627,29 @@
       "detail": "Sonraki adımları önermek için bağlı uygulamaları ve projeleri okur. Salt okunur. Her göz atma ajan planınızı kullanır ve Orca ana makinede çalışıyor olmalı.",
       "lookNow": "Şimdi göz at",
       "notYet": "Henüz göz atılmadı",
-      "backToLookAround": "Göz at bölümüne dön"
+      "backToLookAround": "Göz at bölümüne dön",
+      "title": "Göz at",
+      "on": "Sonraki adımları öner",
+      "every": "Ne sıklıkla",
+      "weekdaysOnly": "Yalnızca hafta içi",
+      "focus": "Ne aranacak",
+      "anything": "Sizi bekleyen her şey",
+      "lastLooked": "Son göz atma",
+      "focusPlaceholder": "Beni bekleyen PR'lar, #eng içindeki sorular, bu hafta teslim edilecek sorunlar",
+      "focusDetail": "İsteğe bağlı. Boş bırakırsanız sizi bekleyen her şeye bakar.",
+      "back": "Ayarlara dön"
     },
     "connectorOffer": {
       "slack": "Slack kanallarından ve doğrudan mesajlardan botla sohbet edin.",
       "google": "Botun Gmail, Takvim ve Drive'ınızda çalışmasını sağlayın ve yeni e-postalarda otomasyon başlatın.",
       "linear": "Botu @ ile anarak veya atayarak ona sorun verin ve Linear olaylarında otomasyon başlatın.",
       "github": "Botu @ ile anarak ona iş verin ve GitHub olaylarında otomasyon başlatın.",
-      "heading": "Bir hizmet bağla"
+      "heading": "Bir hizmet bağla",
+      "connected": "Bağlandı",
+      "onComputer": "Bu sohbetteki karttan, bilgisayarınızdaki Orca'da bağlayın.",
+      "addGitHubAccess": "Bu sohbetteki karttan, bilgisayarınızdaki Orca'da depo veya kuruluş ekleyin.",
+      "addWorkspace": "Bu sohbetteki karttan, bilgisayarınızdaki Orca'da başka bir çalışma alanı ekleyin.",
+      "paused": "{{host}} Orca’ya giriş yapana kadar duraklatıldı."
     },
     "groups": {
       "group": "Grup",
@@ -4557,7 +4682,46 @@
       "newThreadTab": "Yeni ileti dizisi",
       "newThreadHint": "sıfırdan başlar",
       "newThread": "{{name}} içinde yeni ileti dizisi",
-      "handoffsPaused": "{{count}} devirden sonra duraklatıldı. Devam etmek için yanıtlayın."
+      "handoffsPaused": "{{count}} devirden sonra duraklatıldı. Devam etmek için yanıtlayın.",
+      "manageMembers": "Üyeleri yönet",
+      "newGroup": "Yeni grup",
+      "cancel": "İptal",
+      "back": "Geri",
+      "groupActions": "Grup işlemleri",
+      "pendingRequests": "Bekleyen istekler",
+      "needsYou": "· Sizi bekliyor",
+      "valuePending": " · {{value0}} bekliyor",
+      "manageMembersMenu": "Üyeleri yönet…",
+      "allBots": "Tüm botlar",
+      "onlyWhenMentioned": "Yalnızca anıldığında",
+      "stopValue": "{{value0}} durdur",
+      "replyToValue": "{{value0}} kullanıcısına yanıtla",
+      "waitingForTheNativeSession": "Yerel oturum bekleniyor…",
+      "create": "Oluştur",
+      "removingDefault": "{{name}} kaldırılırsa Yanıtlar, Yalnızca anıldığında olarak değişir.",
+      "loadEarlierMessages": "Önceki mesajları yükle",
+      "memberRemoved": "Üye kaldırıldı",
+      "composerPlaceholder": "Gruba mesaj yazın, bir botu anmak için @",
+      "repliesValue": "Yanıtlar: {{value0}}",
+      "whoAnswers": "Mesajlarınızı kim yanıtlar",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
+      "peerFollowedUp": "{{bot}} takip etti",
+      "peerReplyRead": "{{reader}}, {{peer}} yanıtını okudu",
+      "deleteTitle": "{{name}} silinsin mi?",
+      "deleteDescription": "Botları silinmez.",
+      "deleteConfirm": "Grubu sil",
+      "deleteGroupMenu": "Grubu sil…",
+      "you": "Siz",
+      "pickTwo": "2 veya daha fazla bot seçin",
+      "nameIt": "Gruba ad verin",
+      "save": "Kaydet",
+      "namePlaceholder": "Grubunuza ad verin",
+      "useSuggestion": "“{{name}}” kullan",
+      "suggestTwo": "{{a}} ve {{b}}",
+      "suggestThree": "{{a}}, {{b}} ve {{c}}",
+      "suggestMore": "{{a}}, {{b}} ve {{count}} tane daha",
+      "pickOne": "Bir bot seçin",
+      "needsTwoBots": "{{host}} üzerinde 2 bot gerekir"
     },
     "templates": {
       "title": "Bot şablonları",
@@ -4574,50 +4738,294 @@
       "backToTemplates": "Şablonlara dön",
       "category": {
         "support": "Destek ve triyaj",
-        "personal": "Kişisel asistan"
-      }
+        "personal": "Kişisel asistan",
+        "coding": "Kodlama",
+        "releases": "Sürümler ve CI",
+        "planning": "Planlama ve belgeler",
+        "ops": "Operasyon"
+      },
+      "blank": "Boş bot",
+      "blankLine": "İlk sohbetinde ne için olduğunu söyleyin.",
+      "byOrca": "{{category}} · Orca'dan",
+      "originTemplateNamed": "{{template}} şablonundan",
+      "noMatch": "“{{query}}” ile eşleşen şablon yok"
     },
     "tidyUp": {
       "title": "Bellek bakımı",
       "never": "Henüz toparlanmadı",
       "footer": "Yalnızca bellek dosyalarını değiştirir. Kısa bir sohbet gibi ajan planınızı kullanır. Orca bilgisayarınızda çalışıyor olmalı.",
       "undoNote": "Geri al, MEMORY.md dosyasını tek seferde bu toparlamadan önceki haline döndürür. Geçmişin tamamına ve bellek düzenlemeye bilgisayarınızda, Ayarlar → Bellek bölümünden erişebilirsiniz.",
-      "backToTidyUp": "Bellek bakımına dön"
+      "backToTidyUp": "Bellek bakımına dön",
+      "nowRunning": "Zaten toparlıyor.",
+      "nowBusy": "Bir sohbet hâlâ çalışıyor. Bittiğinde tekrar deneyin.",
+      "nowFailed": "Toparlama başlatılamadı. Tekrar deneyin.",
+      "undoSuperseded": "Bellek bu toparlamadan sonra değişti, bu yüzden olduğu gibi bırakıldı.",
+      "undoFailed": "Toparlama geri alınamadı.",
+      "everyNight": "Her gece",
+      "everyWeek": "Haftada bir",
+      "on": "Belleği gece boyunca toparla",
+      "turnedOff": "Art arda 10 toparlama başarısız olduğu için kapatıldı.",
+      "every": "Ne sıklıkla",
+      "lastTidied": "Son toparlama",
+      "tidying": "Toparlanıyor…",
+      "now": "Şimdi toparla",
+      "merged": "{{count}} yinelenen satır birleştirildi",
+      "replaced": "Değiştirildi olarak işaretlendi: {{fact}}",
+      "filed": "{{count}} satır memory/{{topic}}.md dosyasına yerleştirildi",
+      "moved": "{{count}} eski satır arşive taşındı",
+      "readChats": "{{count}} sohbet okundu",
+      "took": "{{value}} dk sürdü",
+      "learned": "Sohbetlerden öğrenildi",
+      "tidied": "Toparlandı",
+      "undone": "Geri alındı",
+      "undoAll": "Bu toparlamayı geri al",
+      "undo": "Geri al",
+      "summaryTitle": "Son toparlama",
+      "undoStale": "O zamandan beri daha yeni bir toparlama çalıştı. Geri almadan önce onu inceleyin."
     },
     "items": {
       "filter": {
         "clearAll": "Filtreleri temizle",
-        "chat": "Sohbet"
+        "chat": "Sohbet",
+        "needsYou": "Yalnızca Sizi bekleyenler",
+        "label": "Öğeleri filtrele",
+        "all": "Tüm sohbetler",
+        "remove": "{{name}} filtresini kaldır",
+        "clear": "Filtreyi temizle"
       },
       "tab": "Öğeler",
       "activity": {
         "notSent": "Gönderilmedi.",
         "retry": "Yeniden dene",
         "discard": "Vazgeç",
-        "mayHaveArrived": "Ulaşmış olabilir."
+        "mayHaveArrived": "Ulaşmış olabilir.",
+        "changed": "{{field}} alanını değiştirdi",
+        "closed": "bunu bitti olarak işaretledi",
+        "canceled": "bunu iptal etti",
+        "reopened": "bunu yeniden açtı",
+        "moved": "bunu şuraya taşıdı:",
+        "madeNeedsYou": "bu öğeyi Sizi bekliyor olarak ekledi",
+        "made": "bu öğeyi ekledi",
+        "linked": "{{links}} bağladı",
+        "workerStarted": "Çalışan başladı:",
+        "workerFailed": "Çalışan durdu:",
+        "workerFinished": "Çalışan bitirdi:",
+        "noComments": "Henüz yorum yok.",
+        "snoozed": "bunu {{when}} zamanına kadar erteledi",
+        "snoozedBare": "bunu erteledi",
+        "unsnoozed": "ertelemeyi kaldırdı",
+        "snoozeEnded": "Ertelemeden erken döndü"
       },
       "comment": {
-        "replyingTo": "Şunu yanıtlıyor:"
+        "replyingTo": "Şunu yanıtlıyor:",
+        "offline": "{{host}} çevrimdışı. Yorumunuz saklanır; geri geldiğinde Yorum yeniden çalışır.",
+        "label": "Yorum",
+        "add": "Yorum ekleyin…",
+        "submit": "Yorum",
+        "fileOnComputer": "{{name}} öğesini bilgisayarınızda açın.",
+        "reply": "Kendi sözlerinizle yanıtlayın",
+        "replyTo": "Yanıtla: {{name}}…",
+        "showLess": "Daha az göster"
       },
       "view": {
         "title": "Öğe",
         "placeOf": "{{index}} / {{total}}",
         "previous": "Önceki öğe",
         "next": "Sonraki öğe",
-        "subWhere": "Öğe {{number}} · {{chat}}"
+        "subWhere": "Öğe {{number}} · {{chat}}",
+        "canceledNote": "İptal edildi:",
+        "doneNote": "Bitti:",
+        "links": "Bağlantılar",
+        "activity": "Etkinlik",
+        "showEarlier": "Öncekileri göster",
+        "showLess": "Daha az göster",
+        "showMore": "Daha fazla göster"
       },
       "ask": {
-        "notNow": "Şimdi değil"
+        "notNow": "Şimdi değil",
+        "recommended": "Önerilen"
       },
       "write": {
-        "offline": "{{host}} çevrimdışı."
+        "offline": "{{host}} çevrimdışı.",
+        "unknown": "Gönderirken bağlantı koptu, bu yüzden ulaşmış olabilir. Yeniden göndermeden önce bağlantı gelince Etkinlik'i kontrol edin."
       },
       "thisComputer": "Bilgisayar",
-      "readFailedClosedPage": "Daha fazla kapalı öğe okunamadı."
+      "readFailedClosedPage": "Daha fazla kapalı öğe okunamadı.",
+      "chat": {
+        "opensInItems": "Öğeler'de açılır",
+        "moreItems": "+{{count}} tane daha",
+        "commentOn": "Açık",
+        "marked": "{{items}} bitti olarak işaretlendi",
+        "canceled": "{{items}} iptal edildi",
+        "added": "{{items}} eklendi",
+        "askedYou": "{{items}} hakkında size soruldu",
+        "moved": "{{items}}, {{status}} durumuna taşındı",
+        "commented": "{{items}} hakkında yorum yapıldı",
+        "updated": "{{items}} güncellendi",
+        "linkedMany": "{{count}} bağlantı {{items}} öğesine bağlandı",
+        "linked": "{{link}}, {{items}} öğesine bağlandı",
+        "aWorker": "bir çalışan",
+        "youMarkedManyDone": "{{count}} öğeyi bitti olarak işaretlediniz: {{items}}",
+        "youCanceledMany": "{{count}} öğeyi iptal ettiniz: {{items}}",
+        "youMovedMany": "{{count}} öğeyi {{status}} durumuna taşıdınız: {{items}}",
+        "youMarked": "{{items}} öğesini bitti olarak işaretlediniz",
+        "youCanceled": "{{items}} öğesini iptal ettiniz",
+        "youMoved": "{{items}} öğesini {{status}} durumuna taşıdınız",
+        "youChanged": "{{items}} öğesini değiştirdiniz",
+        "changes": "{{from}} → {{to}} · {{count}} değişiklik",
+        "chipLabel": "{{title}}, {{status}}",
+        "addedAndMoved": "{{items}} eklendi ve {{status}} durumuna taşındı",
+        "addedAndAsked": "{{items}} eklendi ve size soruldu",
+        "addedAndDone": "{{items}} eklendi ve bitti olarak işaretlendi",
+        "addedAndCanceled": "{{items}} eklendi ve iptal edildi",
+        "openChat": "{{chat}} aç",
+        "byChat": {
+          "moved": "{{chat}}, {{items}} öğesini {{status}} durumuna taşıdı",
+          "askedYou": "{{chat}}, {{items}} hakkında size sordu",
+          "marked": "{{chat}}, {{items}} öğesini bitti olarak işaretledi",
+          "canceled": "{{chat}}, {{items}} öğesini iptal etti",
+          "added": "{{chat}}, {{items}} ekledi",
+          "commented": "{{chat}}, {{items}} hakkında yorum yaptı",
+          "updated": "{{chat}}, {{items}} öğesini güncelledi",
+          "linkedMany": "{{chat}}, {{count}} bağlantıyı {{items}} öğesine bağladı",
+          "linked": "{{chat}}, {{link}} bağlantısını {{items}} öğesine bağladı"
+        },
+        "anotherChat": "Başka bir sohbet"
+      },
+      "status": {
+        "planned": "Planlandı",
+        "working": "Devam ediyor",
+        "needsYou": "Sizi bekliyor",
+        "done": "Tamamlandı",
+        "canceled": "İptal Edildi"
+      },
+      "needYouCount_one": "{{count}} öğe sizi bekliyor",
+      "needYouCount_other": "{{count}} öğe sizi bekliyor",
+      "homeChat": "Ana sohbet",
+      "chatFallback": "Sohbet",
+      "field": {
+        "doneMeansLower": "bitti demek",
+        "description": "açıklama",
+        "title": "başlık",
+        "status": "Durum",
+        "chat": "Sohbet",
+        "doneMeans": "Bitti demek",
+        "snoozed": "Ertelendi"
+      },
+      "link": {
+        "notRead": "Henüz okunmadı",
+        "merged": "Merge edildi",
+        "draft": "Taslak",
+        "closed": "Kapalı",
+        "open": "Açık",
+        "checksPassing": "Kontroller başarılı",
+        "checksFailing": "Kontroller başarısız",
+        "checksPending": "Kontroller beklemede",
+        "pr": "PR #{{number}}",
+        "issue": "Sorun #{{number}}",
+        "serverPr": "Sunucu çalışması için PR henüz gösterilmiyor",
+        "openInBrowser": "Tarayıcıda aç",
+        "copyLink": "Bağlantıyı kopyala",
+        "copyPath": "Yolu kopyala",
+        "fileOutside": "{{path}} bu botun klasöründe değil"
+      },
+      "open": {
+        "failed": "Bu öğe açılamadı.",
+        "notFound": "{{host}} bunu bulamadı. Başka bir bilgisayardaki bir bota ait olabilir.",
+        "noAnswer": "{{host}} yanıt vermedi."
+      },
+      "retry": "Yeniden dene",
+      "loading": "Öğeler yükleniyor…",
+      "readFailedShort": "Öğeler yüklenemedi.",
+      "lastRead": "Son okunan öğeler gösteriliyor.",
+      "row": {
+        "select": "{{title}} seç"
+      },
+      "selected": "{{count}} seçili",
+      "pill": {
+        "moveTo": "Şuraya taşı",
+        "clear": "Seçimi temizle",
+        "moveCount_one": "{{count}} öğeyi şuraya taşı:",
+        "moveCount_other": "{{count}} öğeyi şuraya taşı:"
+      },
+      "menu": {
+        "select": "Seç",
+        "done": "Tamamlandı",
+        "changeStatus": "Durumu değiştir",
+        "openChat": "{{chat}} aç",
+        "cancelShort": "İptal"
+      },
+      "stale": {
+        "confirm_one": "{{count}} eskimiş öğe iptal edilsin mi?",
+        "confirm_other": "{{count}} eskimiş öğe iptal edilsin mi?",
+        "confirmWhy": "Bota gönderilen neden: “{{reason}}” Hiçbir şey silinmez.",
+        "reason": "{{count}} gündür etkinlik yok.",
+        "cancelAll": "Tümünü iptal et"
+      },
+      "cancel": {
+        "keep": "Tut",
+        "confirmMany": "{{count}} öğeyi iptal et",
+        "titleMany": "{{count}} öğe iptal edilsin mi?",
+        "titleOne": "{{title}} iptal edilsin mi?",
+        "why": "Bot nedeni görür. Hiçbir şey silinmez.",
+        "placeholder": "Neden",
+        "confirmOne": "Öğeyi iptal et",
+        "offline": "{{host}} çevrimdışı. Nedeniniz saklanır; geri geldiğinde {{action}} yeniden çalışır."
+      },
+      "strip": {
+        "view": "Görünüm"
+      },
+      "group": {
+        "stale": "Güncel Değil",
+        "closed": "Kapalı",
+        "new": "{{count}} yeni",
+        "showMore": "{{count}} tane daha göster",
+        "snoozed": "Ertelendi"
+      },
+      "empty": {
+        "title": "Henüz öğe yok",
+        "body": "{{bot}} sizin için bir iş üstlendiğinde, ne yaptığı ve sizden ne beklediğiyle birlikte burada görünür.",
+        "needsYou": "Sizi bekleyen bir şey yok.",
+        "filtered": "Eşleşen öğe yok."
+      },
+      "toast": {
+        "markedDone": "{{title}} bitti olarak işaretlendi",
+        "canceledOne": "{{title}} iptal edildi",
+        "movedOne": "{{title}}, {{status}} durumuna taşındı",
+        "movedMany": "{{count}} öğe {{status}} durumuna taşındı",
+        "doneFailed": "Bitti olarak işaretlenemedi: {{why}}",
+        "moveFailed_one": "Taşınamadı: {{why}}",
+        "moveFailed_other": "{{count}} öğe taşınamadı: {{why}}",
+        "snoozeFailed": "Ertelenemedi: {{why}}",
+        "unsnoozedOne": "{{title}} ertelemesi kaldırıldı",
+        "snoozedOne": "{{title}}, {{when}} zamanına kadar ertelendi",
+        "unsnoozedMany": "{{count}} öğenin ertelemesi kaldırıldı",
+        "snoozedMany": "{{count}} öğe {{when}} zamanına kadar ertelendi"
+      },
+      "snooze": {
+        "rowUntil": "{{when}} zamanına kadar",
+        "sheet": "Ertele…",
+        "pick": "Bir zaman seçin…",
+        "unsnooze": "Ertelemeyi kaldır",
+        "today": "Bugün",
+        "tomorrow": "Yarın",
+        "until": "{{when}} zamanına kadar ertelendi",
+        "pickTitle": "Şu zamana kadar ertele",
+        "pickDay": "Hangi güne kadar ertelensin?",
+        "pickHour": "Saat kaçta?"
+      },
+      "readFailedTitle": "Öğeler yüklenemedi"
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",
-      "access": "{{person}} erişim istedi"
+      "access": "{{person}} erişim istedi",
+      "permissionTool": "İzin · {{tool}}",
+      "permission": "İzin gerekli",
+      "waiting": "Sizi bekliyor",
+      "whereItRuns": "{{need}} · çalıştığı yerde açın",
+      "worker": "Çalışan: {{name}}",
+      "actionFor": "{{action}}: {{title}}",
+      "open": "Aç"
     },
     "waits": {
       "cancel": "İptal",
@@ -4983,10 +5391,200 @@
     },
     "saveFailed": "Kaydedilemedi",
     "chats": {
-      "readFailedTitle": "Sohbetler yüklenemedi"
+      "readFailedTitle": "Sohbetler yüklenemedi",
+      "replying": "Yanıtlıyor…",
+      "waiting": "Sizi bekliyor",
+      "sayHi": "{{name}} botuna merhaba deyin",
+      "closedShort": "kapatıldı",
+      "needsYou": "Sizi bekliyor",
+      "askingBot": "{{name}} botuna soruyor",
+      "handedOver": "Devredildi",
+      "fromClosedChat": "Kapatılmış sohbetten",
+      "automationTerminal": "Otomasyon çalıştırması · terminal",
+      "untitledWorker": "Çalışan",
+      "home": "Ana sohbet",
+      "untitled": "Yeni sohbet",
+      "fold": "{{name}} öğesini daralt",
+      "unfold": "{{name}} öğesini genişlet",
+      "unread": "Okunmadı",
+      "moreRunningStep": "8 tane daha göster · {{count}} çalışan daha",
+      "moreRunning": "{{count}} çalışan öğe daha göster",
+      "earlierStep": "8 tane daha göster · {{count}} önceki",
+      "earlier": "{{count}} önceki öğeyi göster",
+      "showFewer": "Daha az göster",
+      "title": "Sohbetler",
+      "search": "Sohbetlerde ve çalışanlarda ara",
+      "noMatch": "Eşleşen sohbet veya çalışan yok.",
+      "empty": "Yan sohbetler, Slack ve Linear ileti dizileri ve otomasyon çalıştırmaları, başlattıkları çalışanlarla birlikte burada görünür.",
+      "newTag": "Yeni",
+      "olderStep": "8 tane daha göster · {{count}} eski",
+      "older": "{{count}} eski öğeyi göster",
+      "terminalRunDesktopOnly": "Terminal çalıştırması · bilgisayardaki Otomasyonlar'da açın",
+      "searchFailed": "Bu botun sohbetlerinde arama yapılamadı.",
+      "searchRetry": "Tekrar dene",
+      "loadingChats": "Sohbetler yükleniyor",
+      "handedOverInline": "devredildi",
+      "fromClosedChatInline": "kapatılmış sohbetten",
+      "statusUnknown": "Durum bilinmiyor",
+      "kindSlack": "Slack ileti dizisi",
+      "kindLinear": "Linear sorunu",
+      "kindGithub": "GitHub ileti dizisi",
+      "kindAutomation": "Otomasyon çalıştırması",
+      "kindSide": "Yan sohbet",
+      "replyingState": "Yanıtlıyor",
+      "showEightMoreWorkers": "8 çalışan daha göster",
+      "showMoreWorkers_one": "{{count}} çalışan daha göster",
+      "showMoreWorkers_other": "{{count}} çalışan daha göster",
+      "moreMatches_one": "{{count}} eşleşme daha var. Daraltmak için adın daha fazlasını yazın.",
+      "moreMatches_other": "{{count}} eşleşme daha var. Daraltmak için adın daha fazlasını yazın.",
+      "runningCount": "{{count}} çalışıyor",
+      "waitingCount": "{{count}} bekliyor"
     },
     "panel": {
-      "backTo": "{{name}} ekranına dön"
+      "backTo": "{{name}} ekranına dön",
+      "needYou_one": "{{count}} sizi bekliyor",
+      "needYou_other": "{{count}} sizi bekliyor",
+      "working": "{{count}} çalışıyor",
+      "itemsNeedYou": "Öğeler, {{count}} sizi bekliyor",
+      "chats": "Sohbetler",
+      "files": "Dosyalar"
+    },
+    "activity": {
+      "readFailed": "Etkinlik yüklenemedi.",
+      "loading": "Etkinlik yükleniyor…",
+      "unavailable": "Bu ana makinede etkinlik kullanılamıyor.",
+      "retry": "Yeniden dene",
+      "lastRead": "Son okunan etkinlik gösteriliyor.",
+      "readFailedTitle": "Etkinlik yüklenemedi",
+      "unavailableTitle": "Etkinlik kullanılamıyor"
+    },
+    "automations": {
+      "couldNotFinish": "Tamamlanamadı",
+      "runNow": "Şimdi çalıştır",
+      "pause": "{{name}} botunu duraklat",
+      "resume": "{{name}} botunu devam ettir",
+      "empty": "Bir otomasyon kurmak için sohbette isteyin.",
+      "newAutomation": "Yeni otomasyon",
+      "runQueued": "Otomasyon çalıştırması kuyruğa alındı.",
+      "runFailed": "Çalıştırma başlatılamadı",
+      "emptyTitle": "Henüz otomasyon yok"
+    },
+    "sheet": {
+      "activity": "Etkinlik",
+      "automations": "Otomasyonlar",
+      "settings": "Ayarlar",
+      "hint": "Etkinlik, otomasyonlar ve ayarlar"
+    },
+    "events": {
+      "slack": {
+        "mentioned": "Slack'te sizden bahsedildiğinde",
+        "message": "Bir Slack mesajında",
+        "reaction": "Bir Slack tepkisinde"
+      },
+      "github": {
+        "issueOpened": "Bir sorun açıldığında",
+        "prOpened": "Bir pull request açıldığında",
+        "prPushed": "Bir pull request'e push yapıldığında",
+        "prMerged": "Bir pull request birleştirildiğinde",
+        "comment": "Bir GitHub yorumunda",
+        "reviewComment": "Bir inceleme yorumunda",
+        "review": "Bir pull request incelemesinde",
+        "mentioned": "GitHub'da bahsedildiğinde",
+        "reviewRequested": "Bir inceleme istendiğinde",
+        "assigned": "GitHub'da atandığında",
+        "ciFailed": "CI başarısız olduğunda",
+        "ciPassed": "CI başarılı olduğunda",
+        "prConflicted": "Bir pull request'te çakışma olduğunda",
+        "prClosed": "Bir pull request kapatıldığında",
+        "prReady": "Bir pull request incelemeye hazır olduğunda",
+        "labeled": "Bir etiket eklendiğinde",
+        "issueClosed": "Bir sorun kapatıldığında",
+        "deployFinished": "Bir dağıtım bittiğinde",
+        "securityAlert": "Bir güvenlik uyarısında",
+        "workflowFinished": "Bir iş akışı çalıştırması bittiğinde"
+      },
+      "linear": {
+        "assigned": "Linear'da atandığında",
+        "mentioned": "Linear'da bahsedildiğinde",
+        "issueCreated": "Bir Linear sorunu oluşturulduğunda",
+        "issueMoved": "Bir Linear sorunu taşındığında"
+      },
+      "slackFallback": "Bir Slack olayında",
+      "githubFallback": "Bir GitHub olayında",
+      "linearFallback": "Bir Linear olayında",
+      "webhookFallback": "Webhook'u çağrıldığında",
+      "anyFallback": "Bir olayda"
+    },
+    "chatStartFailed": "Sohbet başlatılamadı",
+    "upNext": {
+      "title": "Öneriler",
+      "looked": "{{time}} göz attı",
+      "yesterdayAt": "dün {{time}}",
+      "looking": "Göz atıyor…",
+      "start": "Başlangıç",
+      "dismiss": "Kapat",
+      "dismissTitle": "{{title}} kapat",
+      "showMore_one": "{{count}} tane daha göster",
+      "showMore_other": "{{count}} tane daha göster",
+      "empty": "Son göz atmadan öneri yok.",
+      "notYet": "{{name}} henüz göz atmadı. Ayarlar'dan şimdi başlatın veya günde birkaç kez kendisi bakar.",
+      "startFailed": "Bu öneri artık listede yok.",
+      "lookNowRunning": "Zaten göz atıyor.",
+      "lookNowPaused": "Göz atması için botu açın.",
+      "lookNowFailed": "Göz atma başlatılamadı. Tekrar deneyin.",
+      "showMore": "{{count}} tane daha göster",
+      "newInUpNext": "Öneriler'de {{count}} yeni"
+    },
+    "new": {
+      "failed": "Bot oluşturulamadı",
+      "title": "Yeni bot",
+      "runsOnHost": "{{host}} üzerinde çalışır.",
+      "shuffle": "Başka bir resim",
+      "namePlaceholder": "Botunuza ad verin",
+      "create": "Oluştur",
+      "fromTemplate": "Şablon kullan",
+      "takesOverList": "{{names}} öğesini devralır. Ajanları çalışmaya devam eder.",
+      "runsOn": "Çalıştığı yer",
+      "cantReach": "{{host}} ana makinesine ulaşılamıyor. Başka bir bilgisayar seçin.",
+      "otherAccount": "{{host}} kendi Orca hesabını ({{email}}) kullanıyor. Botları bu hesap olarak paylaşır ve bağlanır.",
+      "agent": "Ajan",
+      "computer": "Bilgisayar",
+      "computerMessage": "Botun çalıştığı yer.",
+      "agentOn": "{{host}} üzerinde.",
+      "botsOffOn": "{{host}} üzerinde botlar kapalı",
+      "updateDesktopFirst": "Önce {{host}} üzerindeki Orca'yı güncelleyin",
+      "checking": "Kontrol ediliyor…"
+    },
+    "workspaces": {
+      "show": "{{name}} çalışma alanlarını göster",
+      "hide": "{{name}} çalışma alanlarını gizle"
+    },
+    "section": {
+      "title": "Botlar",
+      "summary": "{{title}}, {{total}} bot, {{attention}} sizi bekliyor, {{unread}} okunmamış, {{working}} çalışıyor",
+      "newBot": "Yeni bot"
+    },
+    "list": {
+      "updateOrcaOn": "{{host}} üzerindeki Orca'yı güncelle",
+      "cantReach": "{{host}} ana makinesine ulaşılamıyor. Geri geldiğinde botları görünür.",
+      "noBotsYet": "Henüz bot yok.",
+      "offline": "Çevrimdışı",
+      "updateToSee": "Botlarını görmek için {{host}} üzerindeki Orca'yı güncelleyin.",
+      "offEnd": "{{host}} üzerinde botlar kapalı.",
+      "updateToCreate": "Telefonunuzdan bot oluşturmak için {{host}} üzerindeki Orca'yı güncelleyin."
+    },
+    "row": {
+      "replyingIn": "{{place}} içinde yanıtlıyor",
+      "replyingOn": "{{place}} üzerinde yanıtlıyor",
+      "paused": "Duraklatıldı",
+      "reading": "Mesajınızı okuyor",
+      "replying": "Yanıtlıyor",
+      "waitingCount": "{{count}} olay bekleniyor",
+      "waitingFor": "{{label}} bekleniyor",
+      "waitingForUntil": "{{label}} bekleniyor · {{time}} zamanına kadar"
+    },
+    "chat": {
+      "nothingToReport": "Bildirilecek bir şey yok"
     }
   }
 }
