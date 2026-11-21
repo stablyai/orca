@@ -59,8 +59,9 @@ it.skipIf(process.platform === 'win32')(
       child.stderr.on('data', (chunk) => received.push(chunk))
       const closed = new Promise<void>((resolve) => child.once('close', resolve))
       try {
-        // One turn for the queued launch, one for its output to fill the pause threshold.
-        await nextTurn()
+        // macOS launches spawn only after their async PATH lookup settles.
+        await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(cycle + 1))
+        // One turn for its output to fill the pause threshold.
         await nextTurn()
         expect(stdout.isPaused()).toBe(true)
         expect(stderr.isPaused()).toBe(true)
