@@ -256,8 +256,12 @@ export function DeleteWorktreeChangesSummary({
       {note ? (
         // A zero flex basis gives the note only leftover room, so the main sentence stays whole.
         // Its gap is inner padding the outer box can clip, so a zero-width note leaves no gap.
-        <span className="-ml-1.5 min-w-0 flex-1 overflow-hidden">
-          <span ref={noteRef} className="block truncate pl-1.5 text-muted-foreground">
+        // Too narrow for "· …" to read as anything, the note hides; the panel still has it.
+        <span className="@container -ml-1.5 min-w-0 flex-1 overflow-hidden">
+          <span
+            ref={noteRef}
+            className="block truncate pl-1.5 text-muted-foreground @max-[2rem]:invisible"
+          >
             · {note}
           </span>
         </span>
