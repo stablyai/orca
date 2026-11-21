@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
+import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-support'
 import SyncDatabase from '../../sqlite/sync-database'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { AgentIdentityWorkerClient } from './agent-identity-worker-client'
@@ -39,13 +40,12 @@ beforeAll(async () => {
   })
 })
 afterAll(() => rmSync(buildDir, { recursive: true, force: true }))
-afterEach(() => {
+afterEach(async () => {
   for (const service of opened.splice(0)) {
     service.close()
   }
-  for (const directory of directories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true })
-  }
+  // A closed worker releases its database as it exits, so Windows needs retried passes.
+  await removeTempDirs(directories.splice(0))
 })
 
 function databasePath(): string {

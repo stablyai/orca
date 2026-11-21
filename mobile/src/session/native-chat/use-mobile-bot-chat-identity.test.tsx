@@ -31,7 +31,8 @@ const routeBot: RouteBot = {
   applyBot: () => {},
   refresh: () => {},
   reads: 1,
-  itemReads: 1
+  itemReads: 1,
+  hostKey: 'host'
 }
 function metadata(botId: string | null, sessionId = 'thread') {
   return {

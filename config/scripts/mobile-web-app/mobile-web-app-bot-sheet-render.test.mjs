@@ -286,10 +286,14 @@ describeRender('a bot’s home chat in a real browser', () => {
     await waitForText(page, 'Hourly at :05')
     let text = await bodyText(page)
     expect(text).toContain('Morning digest')
-    expect(text).toContain('Run now')
     expect(text).toContain('Won’t run: needs the Slack connector')
     await page.waitForSelector('[aria-label="Pause Morning digest"]')
     await captureBotView(page, 'mobile-automations-light')
+    // Run now sits in the row's menu, beside the pause switch.
+    await page.getByText('Morning digest', { exact: true }).first().click()
+    await waitForText(page, 'Run now')
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => !document.body.innerText.includes('Run now'))
 
     await page.click('[data-testid="bot-sheet-tab-settings"]')
     await waitForText(page, 'Needs permission')

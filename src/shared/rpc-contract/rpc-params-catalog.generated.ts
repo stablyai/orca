@@ -109,6 +109,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault/ai-vault-params'
@@ -143,6 +144,7 @@ import {
 } from './bots-composio-params'
 import {
   BotGitHubDefaultBot,
+  BotGitHubUnlink,
   BotGitHubUsers,
   BotLinearDefaultBot,
   BotLinearMembers,
@@ -1166,6 +1168,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
+  'aiVault.prepareSessionHandoffPrompt': AiVaultPrepareSessionHandoffPromptParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,
@@ -1231,7 +1234,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.delete': BotDelete,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
-  'bots.github.unlink': null,
+  'bots.github.unlink': BotGitHubUnlink,
   'bots.github.users': BotGitHubUsers,
   'bots.googleSetup.answer': GoogleSetupAnswer,
   'bots.googleSetup.importHostKey': GoogleSetupImportHostKey,

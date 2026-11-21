@@ -15,7 +15,10 @@ const listDevices = vi.fn(async () => ({ devices: [] }))
 beforeEach(() => {
   _resetPairedMobileDevicesCacheForTests()
   listDevices.mockClear()
-  vi.stubGlobal('api', { ...window.api, mobile: { ...window.api?.mobile, listDevices } })
+  vi.stubGlobal('api', {
+    ...window.api,
+    mobile: { ...window.api?.mobile, listDevices, onDevicesChanged: () => () => {} }
+  })
 })
 
 afterEach(() => {
