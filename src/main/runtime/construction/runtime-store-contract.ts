@@ -208,6 +208,7 @@ export type RuntimeStore = {
     machineName?: GlobalSettings['machineName']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
+    claudeFlaggedRequestAction?: GlobalSettings['claudeFlaggedRequestAction']
     claudeAccountSwitchRunningSessions?: GlobalSettings['claudeAccountSwitchRunningSessions']
     // Read query-responder kill switches per ingested chunk to capture reply ownership.
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']

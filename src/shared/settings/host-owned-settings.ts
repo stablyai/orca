@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
+import { CLAUDE_FLAGGED_REQUEST_ACTIONS } from '../agent-launch/startup/claude-flagged-request-launch'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
@@ -17,7 +18,9 @@ const HostOwnedSettingsSchema = z.object({
   // Names are filtered when a chat starts (normalizeNativeChatShellEnvironmentVariables).
   nativeChatShellEnvironmentVariables: z.array(z.string()),
   // Launches the host starts itself (CLI, orchestration workers); desktop launches send their own.
-  agentDefaultSurface: z.enum(['chat', 'terminal'])
+  agentDefaultSurface: z.enum(['chat', 'terminal']),
+  // Claude launches on this host read it, chats and terminals alike.
+  claudeFlaggedRequestAction: z.enum(CLAUDE_FLAGGED_REQUEST_ACTIONS)
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 
 export type HostOwnedSettings = z.output<typeof HostOwnedSettingsSchema>
@@ -36,7 +39,8 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
   nativeChatInheritShellEnvironment: true,
   nativeChatShellEnvironmentVariables: [],
-  agentDefaultSurface: 'terminal'
+  agentDefaultSurface: 'terminal',
+  claudeFlaggedRequestAction: 'switch-model'
 }
 
 export const HOST_OWNED_SETTING_KEYS = HostOwnedSettingsSchema.keyof().options

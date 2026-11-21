@@ -3,10 +3,11 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { claudeFlaggedRequestEnv } from '../../../../shared/agent-launch/startup/claude-flagged-request-launch'
 
 export type StructuredAgentLaunchEnvSettings = Pick<
   GlobalSettings,
-  'agentDefaultEnv' | 'httpProxyUrl' | 'httpProxyBypassRules'
+  'agentDefaultEnv' | 'httpProxyUrl' | 'httpProxyBypassRules' | 'claudeFlaggedRequestAction'
 >
 
 /** The configured proxy minus every spelling of a variable an override sets; proxy readers prefer
@@ -26,14 +27,18 @@ function configuredProxyEnvUnder(
 }
 
 /** The settings overlay with the host's account overlay for `agent` on top: the configured proxy, as
- * terminals get it, under the agent's own env and account. */
+ * terminals get it, under the agent's own env, this host's Claude choices and account. */
 export function structuredAgentLaunchEnv(
   agent: string,
   settings: Partial<StructuredAgentLaunchEnvSettings>,
   accountEnv: Readonly<Record<string, string>>,
   platform: NodeJS.Platform = process.platform
 ): Record<string, string> {
-  const agentEnv = isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {}
+  const agentEnv = overlayEnvironmentVariables(
+    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {},
+    agent === 'claude' ? claudeFlaggedRequestEnv(settings) : {},
+    platform
+  )
   return overlayEnvironmentVariables(
     overlayEnvironmentVariables(
       configuredProxyEnvUnder(settings, [agentEnv, accountEnv]),

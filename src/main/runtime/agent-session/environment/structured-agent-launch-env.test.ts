@@ -24,6 +24,14 @@ describe('structuredAgentLaunchEnv', () => {
     expect(structuredAgentLaunchEnv('claude', { httpProxyUrl: '' }, {}, 'darwin')).toEqual({})
   })
 
+  it('starts Claude chats without the fallback switch when Stop is chosen', () => {
+    const settings = { claudeFlaggedRequestAction: 'stop' as const }
+    expect(structuredAgentLaunchEnv('claude', settings, {}, 'darwin')).toEqual({
+      CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1'
+    })
+    expect(structuredAgentLaunchEnv('codex', settings, {}, 'darwin')).toEqual({})
+  })
+
   it("lets the agent's own proxy replace every spelling of the configured one", () => {
     const env = structuredAgentLaunchEnv(
       'codex',

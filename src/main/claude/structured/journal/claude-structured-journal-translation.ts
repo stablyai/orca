@@ -135,7 +135,7 @@ export function createClaudeJournalTranslator(
     providerFallback,
     corrections,
     turn,
-    assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
+    assistantFailures: new ClaudeAssistantFailures(deps),
     usageLimits: new ClaudeUsageLimits(),
     threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
   }
@@ -222,16 +222,15 @@ export function createClaudeJournalTranslator(
       backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
       messageContext.usageLimits.observe(event.message, turn.command?.rejections)
       const kind = claudeProviderFrameKind(event.message)
-      if (
-        !journalClaudeMessage(
-          messageContext,
-          event.message,
-          event.startsTurn === true,
-          event.observedAt ?? Date.now(),
-          event.requestedAt,
-          event.clientMessageId
-        )
-      ) {
+      const journaled = journalClaudeMessage(
+        messageContext,
+        event.message,
+        event.startsTurn === true,
+        event.observedAt ?? Date.now(),
+        event.requestedAt,
+        event.clientMessageId
+      )
+      if (!journaled && !messageContext.assistantFailures.foldsNoFallbackNotice(event.message)) {
         providerFallback.append(
           kind,
           event.message,
