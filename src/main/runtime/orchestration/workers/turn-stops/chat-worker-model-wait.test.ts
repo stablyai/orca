@@ -12,6 +12,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { ChatWorkerModelWait, type ChatModelWaitJournal } from './chat-worker-model-wait'
+import { claudeApiRetryRowBody } from '../../../../claude/structured/journal/claude-api-retry-row'
 
 const SESSION = testOrcaSessionId('5d2f8a71-3c9e-4b60-8e14-7a6c2b9d0f35')
 const MINUTE = 60_000
@@ -54,12 +55,14 @@ function rig() {
   return { db, watch, write, mail }
 }
 
-const retry = (attempt: number): AgentJournalItemBody => ({
-  kind: 'status',
-  tone: 'warning',
-  text: `Claude hit a temporary problem and is retrying. Retry ${attempt} of 8.`,
-  failure: { kind: 'providerRetrying' }
-})
+const retry = (attempt: number): AgentJournalItemBody =>
+  claudeApiRetryRowBody({
+    type: 'system',
+    subtype: 'api_retry',
+    attempt,
+    max_retries: 8,
+    error: 'overloaded'
+  })
 const tool = (state: 'running' | 'completed'): AgentJournalItemBody => ({
   kind: 'tool-call',
   name: 'Bash',
@@ -69,7 +72,7 @@ const tool = (state: 'running' | 'completed'): AgentJournalItemBody => ({
 const reply = (text: string): AgentJournalItemBody => ({
   kind: 'message',
   role: 'assistant',
-  text
+  blocks: [{ type: 'text', text }]
 })
 
 describe('a chat worker waiting on its model', () => {
@@ -138,16 +141,12 @@ describe('a chat worker waiting on its model', () => {
       {
         type: 'status',
         subject: 'Worker is retrying the model API',
-        body: expect.stringContaining(
-          'Last seen: Claude hit a temporary problem and is retrying. Retry 1 of 8.'
-        )
+        body: expect.stringContaining('1 of 8')
       },
       {
         type: 'escalation',
         subject: 'Worker is waiting on the model',
-        body: expect.stringContaining(
-          'Last seen: Claude hit a temporary problem and is retrying. Retry 5 of 8.'
-        )
+        body: expect.stringContaining('5 of 8')
       }
     ])
     watch.dispose()

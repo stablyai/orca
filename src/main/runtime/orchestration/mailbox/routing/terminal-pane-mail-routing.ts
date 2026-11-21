@@ -178,8 +178,15 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
-  /** Chat workers whose model is not answering: one watch per working chat worker. */
-  private readonly chatWorkerModelWait = new ChatWorkerModelWait(this.workerTurnStopReportDeps)
+  /** Chat workers whose model is not answering: one watch per working chat worker. A chat that
+   *  never orchestrated must not create the database. */
+  private chatWorkerModelWaitWatch?: ChatWorkerModelWait
+  private get chatWorkerModelWait(): ChatWorkerModelWait {
+    return (this.chatWorkerModelWaitWatch ??= new ChatWorkerModelWait({
+      ...this.workerTurnStopReportDeps,
+      getDb: () => this.getExistingOrchestrationDb()
+    }))
+  }
 
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
