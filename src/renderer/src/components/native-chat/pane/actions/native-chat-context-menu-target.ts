@@ -43,6 +43,11 @@ export function readNativeChatContextMenuTarget(
   { root, composer, messageList, linkContext }: NativeChatContextMenuTargetSources
 ): NativeChatContextMenuTarget {
   const element = target instanceof Element ? target : null
+  const child = element?.closest('[data-native-chat-child-transcript]')
+  const scopedLinkContext =
+    !child || child.getAttribute('data-native-chat-inherit-link-context') === 'true'
+      ? linkContext
+      : null
   const quotable = root && composer?.acceptsText() ? readNativeChatQuotableSelection(root) : null
   // The attribute, not the resolved `href` property, which rewrites chat file links into page URLs.
   const link = element?.closest('a[href], [data-native-chat-link-href]')
@@ -56,7 +61,9 @@ export function readNativeChatContextMenuTarget(
       href && link
         ? nativeChatLinkActions(
             href,
-            typeof linkContext === 'function' ? linkContext(href, link) : linkContext
+            typeof scopedLinkContext === 'function'
+              ? scopedLinkContext(href, link)
+              : scopedLinkContext
           )
         : null,
     codeText:
@@ -64,10 +71,11 @@ export function readNativeChatContextMenuTarget(
         ?.closest('[data-native-chat-code-block]')
         ?.querySelector('[data-native-chat-code-content]')?.textContent || null,
     messageText: (messageId && messageList?.messageCopyText?.(messageId)) || null,
-    rewindItemId:
-      element
-        ?.closest('[data-native-chat-rewind-item]')
-        ?.getAttribute('data-native-chat-rewind-item') ?? null,
+    rewindItemId: child
+      ? null
+      : (element
+          ?.closest('[data-native-chat-rewind-item]')
+          ?.getAttribute('data-native-chat-rewind-item') ?? null),
     slackPostedItemId:
       element
         ?.closest('[data-native-chat-slack-posted]')

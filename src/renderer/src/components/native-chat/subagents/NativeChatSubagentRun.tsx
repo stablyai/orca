@@ -1,3 +1,4 @@
+import { useNativeChatChildNavigation } from '../native-chat-child-navigation'
 import { Bot } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
@@ -65,37 +66,49 @@ function subagentDetails(
 function NativeChatSubagentRow({
   agent,
   disclosureKey,
-  onOpen
+  onOpen,
+  stateLabel,
+  entryDetail
 }: {
   agent: NativeChatSubagentEntry
   disclosureKey?: string
   onOpen?: (agentId: string) => void
+  /** The caller's word for its state, e.g. a worker still starting. */
+  stateLabel?: string
+  entryDetail?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  const navigation = useNativeChatChildNavigation()
   const state = normalizeSubagentState(agent.state)
   const details = subagentDetails(agent)
+  const open = onOpen
+    ? () => onOpen(agent.id)
+    : navigation
+      ? () => navigation.open({ agentId: agent.id, label: agent.label })
+      : null
   return (
     <NativeChatEventRow
       icon={<Bot aria-hidden className="size-3.5" />}
       badge={state === 'working' ? 'running' : state === 'failed' ? 'failed' : null}
-      label={agent.label}
+      label={stateLabel ? `${agent.label}, ${stateLabel}` : agent.label}
       action={
-        onOpen ? (
+        open ? (
           <NativeChatEventOpenButton
             name={t('components.native-chat.backgroundTasks.openAgent', 'Open {{value0}}', {
               value0: agent.label
             })}
-            onOpen={() => onOpen(agent.id)}
+            onOpen={open}
           />
         ) : null
       }
       timestamp={agent.startedAt ?? null}
       disclosureKey={disclosureKey}
       details={
-        details ? (
+        details || entryDetail ? (
           <>
-            {details.text ? <p>{details.text}</p> : null}
-            {details.result ? (
+            {entryDetail}
+            {details?.text ? <p>{details.text}</p> : null}
+            {details?.result ? (
               <NativeChatMarkdown
                 content={details.result}
                 variant="document"
@@ -103,7 +116,7 @@ function NativeChatSubagentRow({
                 className="text-sm"
               />
             ) : null}
-            {details.facts ? (
+            {details?.facts ? (
               <p className="text-xs text-chat-foreground-faint">{details.facts}</p>
             ) : null}
           </>
@@ -111,6 +124,7 @@ function NativeChatSubagentRow({
       }
     >
       <span className="text-chat-foreground">{agent.label}</span>
+      {stateLabel ? <span> · {stateLabel}</span> : null}
     </NativeChatEventRow>
   )
 }
@@ -121,12 +135,16 @@ function NativeChatSubagentRow({
 export function NativeChatSubagentRun({
   block,
   disclosureId,
-  onOpenSubagent
+  onOpenSubagent,
+  stateLabels,
+  entryDetails
 }: {
   block: NativeChatSubagentGroupBlock
   /** Remembers the reader's open/closed choice past this row's lifetime. */
   disclosureId?: string
   onOpenSubagent?: (agentId: string) => void
+  stateLabels?: ReadonlyMap<string, string>
+  entryDetails?: ReadonlyMap<string, React.ReactNode>
 }): React.JSX.Element | null {
   // `t` changes with the UI language and its catalogs, so the derived words follow them.
   const t = useTranslate()
@@ -137,7 +155,10 @@ export function NativeChatSubagentRun({
   if (header.total === 1) {
     // One row either way, and its name says more than "1 subagent".
     return (
-      <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
+      <NativeChatSubagentRows
+        {...{ block, disclosureId, stateLabels, entryDetails }}
+        onOpen={onOpenSubagent}
+      />
     )
   }
   const { working, headline, verdict, alertState, alert, clockStartedAt } = header
@@ -155,7 +176,10 @@ export function NativeChatSubagentRun({
       }
       detailsAreRows
       details={
-        <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
+        <NativeChatSubagentRows
+          {...{ block, disclosureId, stateLabels, entryDetails }}
+          onOpen={onOpenSubagent}
+        />
       }
     >
       <span className="text-chat-foreground">{headline}</span>
@@ -180,11 +204,15 @@ export function NativeChatSubagentRun({
 function NativeChatSubagentRows({
   block,
   disclosureId,
-  onOpen
+  onOpen,
+  stateLabels,
+  entryDetails
 }: {
   block: NativeChatSubagentGroupBlock
   disclosureId?: string
   onOpen?: (agentId: string) => void
+  stateLabels?: ReadonlyMap<string, string>
+  entryDetails?: ReadonlyMap<string, React.ReactNode>
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-1">
@@ -198,6 +226,8 @@ function NativeChatSubagentRows({
               : `subagent:${disclosureId}:${block.groupId}:${agent.id}`
           }
           onOpen={onOpen}
+          stateLabel={stateLabels?.get(agent.id)}
+          entryDetail={entryDetails?.get(agent.id)}
         />
       ))}
     </div>

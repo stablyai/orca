@@ -9,7 +9,7 @@ import type {
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
-import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
+import { structuredInspectableChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from '../history/structured-agent-session-history-result'
 import { captureJournalFrame, captureRequestFrame } from './agent-session-subscriber-frame-capture'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
@@ -141,7 +141,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   /** Child records define the roster even after the provider releases the session. */
   read(sessionId: string): AgentSessionBackgroundTaskState | null {
     const session = this.sessions.get(sessionId)
-    const views = structuredRunningChildWork((session && this.readChildWork(sessionId)) ?? [])
+    const views = structuredInspectableChildWork((session && this.readChildWork(sessionId)) ?? [])
     // Untracked work still needs a visible Stop.
     const incomplete = this.childWorkIncomplete(sessionId)
     if (!session || (views.length === 0 && !incomplete)) {
