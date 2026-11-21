@@ -25,7 +25,8 @@ export function useNativeChatQuoteJump({
   beginNavigation,
   readerLeavesEnd,
   startHistoryJump,
-  sessionKey
+  sessionKey,
+  unfoldTurnOf
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   scrollRef: RefObject<HTMLDivElement | null>
@@ -35,6 +36,8 @@ export function useNativeChatQuoteJump({
   startHistoryJump: ReturnType<typeof useNativeChatHistoryJump>['start']
   /** This chat; a source from another chat that is not loaded here pages nothing. */
   sessionKey: string
+  /** Expands the collapsed turn that hides a loaded message; false when no turn hides it. */
+  unfoldTurnOf: (messageId: string) => boolean
 }): NativeChatQuoteJump {
   const { issue, nextRequestId } = request
   // "Add to chat" reads the chat of a quote from its transcript's scroller.
@@ -43,9 +46,11 @@ export function useNativeChatQuoteJump({
   })
   return useCallback(
     ({ messageId, place, chat }, text, notifyMissing, isCurrent) => {
-      const loaded = nativeChatSlotIndexOf(slots, messageId) !== -1
+      // A collapsed turn draws no text for its message: the history jump lands after the turn expands.
+      const folded = unfoldTurnOf(messageId)
+      const loaded = !folded && nativeChatSlotIndexOf(slots, messageId) !== -1
       // A loaded message is here whatever its chat; the chat only rules out paging this chat.
-      if (!loaded && chat !== undefined && chat !== sessionKey) {
+      if (!folded && !loaded && chat !== undefined && chat !== sessionKey) {
         return false
       }
       beginNavigation()
@@ -96,7 +101,8 @@ export function useNativeChatQuoteJump({
       scrollRef,
       sessionKey,
       slots,
-      startHistoryJump
+      startHistoryJump,
+      unfoldTurnOf
     ]
   )
 }

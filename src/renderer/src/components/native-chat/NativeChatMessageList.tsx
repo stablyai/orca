@@ -30,7 +30,10 @@ import {
 import { useNativeChatTranscriptRowContext } from './conversation/slots/use-native-chat-transcript-row-context'
 import type { StructuredAgentSessionHostWork } from './session/structured/use-structured-agent-session-transport-state'
 import type { NativeChatDeliveryNotice } from './messages/rows/NativeChatMessageRow'
-import { splitNativeChatSlotsWaitingBehindLiveTurn } from './conversation/slots/native-chat-transcript-slot-selection'
+import {
+  nativeChatFoldedTurnOf,
+  splitNativeChatSlotsWaitingBehindLiveTurn
+} from './conversation/slots/native-chat-transcript-slot-selection'
 import { useNativeChatTranscriptSlots } from './conversation/slots/use-native-chat-transcript-slots'
 import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-rows'
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
@@ -250,6 +253,16 @@ export function NativeChatMessageList({
     [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
   const navigationRequest = useNativeChatNavigationRequest(slots)
+  const unfoldTurnOf = useCallback(
+    (messageId: string) => {
+      const turnKey = nativeChatFoldedTurnOf(slots, rows, turnKeys, expandedTurnIds, messageId)
+      if (turnKey !== undefined) {
+        setExpandedTurnIds((current) => new Set(current).add(turnKey))
+      }
+      return turnKey !== undefined
+    },
+    [expandedTurnIds, rows, slots, turnKeys]
+  )
   const newRows = useNativeChatNewRowsMarker(
     slots,
     waitingSlots,
@@ -320,7 +333,8 @@ export function NativeChatMessageList({
     scrollRef,
     scrollMessageToTop,
     readerLeavesEnd,
-    scrollToBottom
+    scrollToBottom,
+    unfoldTurnOf
   })
   const { beginNavigation, jumpToLatest, jumpToQuote } = navigation
   const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()

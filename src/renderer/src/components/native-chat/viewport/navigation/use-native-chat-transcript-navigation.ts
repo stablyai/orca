@@ -80,7 +80,8 @@ export function useNativeChatNavigation({
   scrollRef,
   scrollMessageToTop,
   readerLeavesEnd,
-  scrollToBottom
+  scrollToBottom,
+  unfoldTurnOf
 }: {
   request: NativeChatNavigationRequest
   rail: { items: readonly NativeChatRailItem[]; onActivate: (id: string) => void }
@@ -103,6 +104,8 @@ export function useNativeChatNavigation({
   scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   readerLeavesEnd: () => void
   scrollToBottom: () => void
+  /** Expands the collapsed turn that hides a loaded message; false when no turn hides it. */
+  unfoldTurnOf: (messageId: string) => boolean
 }) {
   const { issue, nextRequestId } = request
   const requestRailJump = useCallback(
@@ -120,6 +123,9 @@ export function useNativeChatNavigation({
           pending.resolution.state === 'pending'
         ) {
           return 'landed'
+        }
+        if (unfoldTurnOf(target.id)) {
+          return 'wait'
         }
         const index = nativeChatSlotIndexOf(slots, target.id)
         if (index < 0) {
@@ -219,7 +225,8 @@ export function useNativeChatNavigation({
     beginNavigation,
     readerLeavesEnd,
     startHistoryJump,
-    sessionKey
+    sessionKey,
+    unfoldTurnOf
   })
   useNativeChatRailJumpLanding({
     railJump: request.railJump,

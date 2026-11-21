@@ -38,7 +38,8 @@ function jump(scroller: HTMLDivElement) {
       beginNavigation: vi.fn(),
       readerLeavesEnd: vi.fn(),
       startHistoryJump,
-      sessionKey: 'claude:s1'
+      sessionKey: 'claude:s1',
+      unfoldTurnOf: () => false
     })
   )
   return { issue, startHistoryJump, jumpTo: result.current }

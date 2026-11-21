@@ -82,7 +82,8 @@ function Transcript({
     scrollRef,
     scrollMessageToTop: none,
     readerLeavesEnd: spies.readerLeavesEnd,
-    scrollToBottom: none
+    scrollToBottom: none,
+    unfoldTurnOf: () => false
   })
   onJump(jumpToQuote)
   return (
