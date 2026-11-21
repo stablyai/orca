@@ -52,10 +52,9 @@ function isChatOnly(worktree: WorktreeMemory): boolean {
 
 /**
  * The snapshot as sent over RPC: every row with its totals, and at most 20 history points each.
- * Near the size limit it sheds, in order, history, chat lists, chat-only rows, then pane keys
- * with the agent total, so
- * what this view adds never pushes a host past the payload it sent before; terminal rows,
- * sessions and totals always stay.
+ * Near the size limit it sheds, in order, history, chat lists, chat-only rows, then pane keys with
+ * the agent total, so what this view adds never pushes a host past the payload it sent before;
+ * terminal rows, sessions and totals always stay.
  */
 export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
   let core = 0
