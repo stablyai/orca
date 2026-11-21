@@ -411,7 +411,12 @@ export const skillsAllLeftOut = defineFixture({
   render: flow(builder, null)
 })
 /** A skill a linked project links in from outside itself: listed with the project, unticked. */
-const linkedIn = { name: 'electron', description: '', homePath: null, optInFrom: 'team-skills' }
+const linkedIn = {
+  name: 'electron',
+  description: 'Drive the desktop app: open windows, click through flows and capture screenshots',
+  homePath: null,
+  optInFrom: 'team-skills'
+}
 export const skillsLinkedIn = defineFixture({
   ...base,
   setup: () =>

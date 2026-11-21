@@ -228,7 +228,7 @@ it('lists a skill linked into a project from outside it unticked, with the proje
   const row = await screen.findByRole('button', { name: /Skills/ })
   expect(row.textContent).toContain('1 of 2')
   fireEvent.click(row)
-  expect(await screen.findByText('Linked into team-skills from outside it')).toBeDefined()
+  expect(await screen.findByText('From outside team-skills · Drive the app')).toBeDefined()
   expect(screen.getByRole('checkbox', { name: 'electron' }).getAttribute('aria-checked')).toBe(
     'false'
   )
