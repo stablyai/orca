@@ -223,7 +223,7 @@ function localBaseBranchGit(
     // HEAD files answer the common cases; listing every worktree costs seconds at thousands of them.
     readBranchUse: async (repoPath, fullRef) => {
       const commonDir = await commonDirOf(repoPath)
-      const state = await readGitDirState(commonDir.path)
+      const state = await readGitDirState(commonDir.path, fullRef)
       if (state.reserved.has(fullRef)) {
         return { reserved: true }
       }
@@ -259,7 +259,7 @@ function localBaseBranchGit(
           ...execOptions(repoPath),
           // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
-            const state = await readGitDirState(commonDir.path)
+            const state = await readGitDirState(commonDir.path, fullRef)
             inUse =
               state.reserved.has(fullRef) ||
               (await resolveBranchCheckouts(state, commonDir.path, fullRef, bareDir)).kind !==

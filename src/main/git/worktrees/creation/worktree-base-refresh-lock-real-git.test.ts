@@ -353,6 +353,19 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
   })
 
+  it('still moves main past a per-worktree alias of another branch', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'other-worktree-alias')
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'refs/worktree/alias', 'refs/heads/develop'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/worktree/alias'])
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
+
   // Windows needs symlink privileges.
   it.skipIf(process.platform === 'win32')(
     'still moves main past a symlinked alias of another branch',

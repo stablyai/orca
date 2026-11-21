@@ -35,8 +35,6 @@ export type LocalBaseBranchInspection =
       remoteOid: string
       /** Set when a worktree has the branch checked out; only that checkout may move it. */
       ownerWorktreePath?: string
-      /** Several checkouts have it: moving one would leave the others' files behind. */
-      shared?: true
     }
   | {
       status: Exclude<LocalBaseRefRefreshStatus, 'updated'>
@@ -73,11 +71,14 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
-/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` stops before walking its history. */
+/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` (or `skipShared`, for a branch several checkouts share) stops before walking its history. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs,
-  { skipCheckedOut = false }: { skipCheckedOut?: boolean } = {}
+  {
+    skipCheckedOut = false,
+    skipShared = false
+  }: { skipCheckedOut?: boolean; skipShared?: boolean } = {}
 ): Promise<LocalBaseBranchInspection> {
   const { repoPath, fullRef, remoteTrackingRef } = refs
   let localOid: string
@@ -103,12 +104,10 @@ export async function inspectLocalBaseBranch(
     return { status: 'skipped_error' }
   }
   const owner = use.ownerPath
-  if (use.reserved || (owner && skipCheckedOut)) {
+  if (use.reserved || (owner && (skipCheckedOut || (skipShared && use.sharedCheckout)))) {
     return { status: 'nothing_to_do' }
   }
-  const ownerPath = owner
-    ? { ownerWorktreePath: owner, ...(use.sharedCheckout ? { shared: true as const } : {}) }
-    : {}
+  const ownerPath = owner ? { ownerWorktreePath: owner } : {}
 
   let counts: ReturnType<typeof parseGitRevListAheadBehindCounts>
   try {
@@ -177,8 +176,9 @@ export async function fastForwardCheckedOutLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
 ): Promise<void> {
-  const inspection = await inspectLocalBaseBranch(git, refs)
-  if (inspection.status !== 'behind' || !inspection.ownerWorktreePath || inspection.shared) {
+  // A shared checkout can't move, so skip walking its history.
+  const inspection = await inspectLocalBaseBranch(git, refs, { skipShared: true })
+  if (inspection.status !== 'behind' || !inspection.ownerWorktreePath) {
     return
   }
   const { ownerWorktreePath, remoteOid } = inspection

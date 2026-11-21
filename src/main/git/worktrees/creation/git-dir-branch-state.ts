@@ -13,7 +13,8 @@ export type GitDirState = {
 }
 
 // Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
-export async function readGitDirState(commonDir: string): Promise<GitDirState> {
+/** `fullRef` reserved skips the symlink probes: nothing else can change the answer. */
+export async function readGitDirState(commonDir: string, fullRef: string): Promise<GitDirState> {
   // Fail closed: an unreadable common dir must not look like "nothing in use".
   if (!(await stat(commonDir)).isDirectory()) {
     throw new Error(`${commonDir} is not a Git directory`)
@@ -55,6 +56,9 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
       }
     })
   )
+  if (reserved.has(fullRef)) {
+    return { heads, reserved }
+  }
   // Only once the sweep succeeded: a HEAD without a `ref:` line may be a symlink naming a ref.
   const unnamed = [...heads]
     .filter(([, head]) => !head.startsWith('ref: '))
@@ -164,6 +168,7 @@ export type BranchCheckouts =
   | { kind: 'unknown' }
 
 const MAX_SYMREF_HOPS = 5
+const PER_WORKTREE_REF = /^refs\/(?:worktree|bisect|rewritten)\//
 
 /** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
 export async function resolveBranchCheckouts(
@@ -178,13 +183,15 @@ export async function resolveBranchCheckouts(
     : (ref: string) => ref
   const target = foldRef(fullRef)
   const looseRefs = new Map<string, Promise<string>>()
-  const readLooseRef = (ref: string) => {
-    const known = looseRefs.get(ref) ?? readLooseRefFile(join(commonDir, ref))
-    looseRefs.set(ref, known)
+  // Per-worktree refs (refs/worktree/, refs/bisect/, refs/rewritten/) live in their own git dir.
+  const readLooseRef = (ref: string, gitDir: string) => {
+    const path = join(PER_WORKTREE_REF.test(ref) ? gitDir : commonDir, ref)
+    const known = looseRefs.get(path) ?? readLooseRefFile(path)
+    looseRefs.set(path, known)
     return known
   }
   // update-ref follows a symref, which would move some other branch.
-  if ((await readLooseRef(fullRef)).startsWith('ref: ')) {
+  if ((await readLooseRef(fullRef, commonDir)).startsWith('ref: ')) {
     return { kind: 'unknown' }
   }
   const owners: string[] = []
@@ -194,8 +201,7 @@ export async function resolveBranchCheckouts(
       continue
     }
     const ref = head.slice('ref: '.length)
-    // Per-worktree refs (refs/worktree/, refs/bisect/) live outside the common dir: leave them to Git.
-    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/heads/')) {
+    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/')) {
       return { kind: 'unknown' }
     }
     if (foldRef(ref) === target) {
@@ -213,12 +219,12 @@ export async function resolveBranchCheckouts(
     let ref = start
     for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown; hop += 1) {
       // Packed and missing refs are never symrefs.
-      const loose = await readLooseRef(ref)
+      const loose = await readLooseRef(ref, gitDir)
       if (!loose.startsWith('ref: ')) {
         return
       }
       ref = loose.slice('ref: '.length)
-      if (!ref.startsWith('refs/heads/') || loose === UNRESOLVED_HEAD) {
+      if (!ref.startsWith('refs/') || loose === UNRESOLVED_HEAD) {
         break
       }
       if (foldRef(ref) === target) {
