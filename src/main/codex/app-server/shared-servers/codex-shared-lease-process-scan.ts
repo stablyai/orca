@@ -7,6 +7,7 @@ import { spawnTokenFromEnvironBlock } from '../../../runtime/agent-session/owner
 
 const PS_TIMEOUT_MS = 5_000
 const PS_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
+const UNREADABLE_TAG = Symbol('unreadable')
 
 /** This user's processes by their lease tag. `unreadable`: own processes whose environment
  *  couldn't be read, so a scan with any is no proof that a lease's commands are gone. */
@@ -23,8 +24,7 @@ export async function scanCodexLeaseProcesses(
   platform: NodeJS.Platform = process.platform
 ): Promise<CodexLeaseProcessScan | null> {
   if (platform === 'linux') {
-    // Linux reads every own-user process, so a command reparented anywhere is still found.
-    return scanLinux(envName)
+    return scanLinux(envName, serverPid)
   }
   if (platform === 'darwin') {
     return scanDarwin(serverPid)
@@ -37,16 +37,31 @@ function byTag(entries: readonly (readonly [number, string | null])[]) {
     entries.flatMap(([pid, tag]) => (tag === leaseId ? [pid] : []))
 }
 
-async function scanLinux(envName: string): Promise<CodexLeaseProcessScan | null> {
+/** Parent pid from /proc/<pid>/stat; the name field may hold spaces or parens, so read after it. */
+function parentFromStat(stat: string): number | null {
+  const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+  const parent = Number(fields[1])
+  return Number.isSafeInteger(parent) ? parent : null
+}
+
+/** The launcher is a subreaper on Linux, so every command a chat orphaned is still under it and
+ *  only that tree is judged (another app's unreadable process proves nothing here). Without the
+ *  launcher, an orphan goes to init, so every own-user process is judged. */
+async function scanLinux(
+  envName: string,
+  serverPid: number
+): Promise<CodexLeaseProcessScan | null> {
   let names: string[]
   try {
     names = await readdir('/proc')
   } catch {
     return null
   }
+  const launcher = await readFile(`/proc/${serverPid}/comm`, 'utf-8').catch(() => '')
+  const scoped = launcher.startsWith('orca-provider-ex')
   const uid = process.getuid?.()
-  const entries: (readonly [number, string | null])[] = []
-  const unreadable: number[] = []
+  const parents = new Map<number, number | null>()
+  const tags = new Map<number, string | null | typeof UNREADABLE_TAG>()
   await Promise.all(
     names.map(async (name) => {
       const pid = Number(name)
@@ -63,19 +78,69 @@ async function scanLinux(envName: string): Promise<CodexLeaseProcessScan | null>
       if (uid !== undefined && owner !== uid) {
         return
       }
+      if (scoped) {
+        const procStat = await readFile(`/proc/${pid}/stat`, 'utf-8').catch(() => null)
+        parents.set(pid, procStat === null ? null : parentFromStat(procStat))
+      }
       try {
-        entries.push([
+        tags.set(
           pid,
           spawnTokenFromEnvironBlock(await readFile(`/proc/${pid}/environ`, 'utf-8'), envName)
-        ])
+        )
       } catch (error) {
         if (errnoCodeOrUnknown(error) !== 'ENOENT') {
-          unreadable.push(pid)
+          tags.set(pid, UNREADABLE_TAG)
         }
       }
     })
   )
+  const inScope = scoped ? linuxSubtree(parents, serverPid) : null
+  const entries: (readonly [number, string | null])[] = []
+  const unreadable: number[] = []
+  for (const [pid, tag] of tags) {
+    if (inScope && !inScope(pid)) {
+      continue
+    }
+    if (tag === UNREADABLE_TAG) {
+      unreadable.push(pid)
+    } else {
+      entries.push([pid, tag])
+    }
+  }
   return { tagged: byTag(entries), unreadable }
+}
+
+/** Whether a pid sits under the server; one whose parent couldn't be read counts as under it. */
+function linuxSubtree(
+  parents: ReadonlyMap<number, number | null>,
+  serverPid: number
+): (pid: number) => boolean {
+  const verdicts = new Map<number, boolean>()
+  return (pid) => {
+    const path: number[] = []
+    let at: number | null | undefined = pid
+    let result = false
+    for (;;) {
+      if (at === serverPid || at === null) {
+        result = true
+        break
+      }
+      const known = at === undefined ? undefined : verdicts.get(at)
+      if (known !== undefined) {
+        result = known
+        break
+      }
+      if (at === undefined || !parents.has(at) || path.length > parents.size) {
+        break
+      }
+      path.push(at)
+      at = parents.get(at)
+    }
+    for (const visited of path) {
+      verdicts.set(visited, result)
+    }
+    return result
+  }
 }
 
 /** Every process's group, for the boundary a dedicated server's watcher owned on macOS. */

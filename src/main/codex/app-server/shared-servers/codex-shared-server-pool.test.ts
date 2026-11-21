@@ -284,18 +284,22 @@ describe('shared Codex app-servers', () => {
     expect(connA.processTreeUnproven).toBe(false)
   })
 
-  it('reports Stop unproven when the turn ignores the interrupt, stopping a server no other chat is using', async () => {
+  it('keeps a chat whose turn ignores Stop on the server until a retry finds it alone, then stops that server', async () => {
     vi.useFakeTimers()
     const { servers, pool } = fakeCodex('ignored')
     const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
     const idle = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
     const threadA = await startThread(connA)
     servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
-    const closing = connA.close()
+    const firstClose = connA.close()
     await vi.advanceTimersByTimeAsync(20_000)
-    await closing
+    await expect(firstClose).resolves.toBe(false)
+    expect(idle.closed).toBe(false)
+    await idle.close()
+    const retry = connA.close()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await expect(retry).resolves.toBe(true)
     expect(connA.processTreeUnproven).toBe(false)
-    expect(idle.closed).toBe(true)
     const busy = fakeCodex('ignored')
     const x = await busy.pool.open(launch(), chat().handlers, { sessionId: 'x', skillRoots: [] })
     const y = await busy.pool.open(launch(), chat().handlers, { sessionId: 'y', skillRoots: [] })
@@ -309,8 +313,7 @@ describe('shared Codex app-servers', () => {
     }
     const closingX = x.close()
     await vi.advanceTimersByTimeAsync(20_000)
-    await closingX
-    expect(x.processTreeUnproven).toBe(true)
+    await expect(closingX).resolves.toBe(false)
     expect(y.closed).toBe(false)
   })
 
@@ -413,8 +416,7 @@ describe('shared Codex app-servers', () => {
     void connB.request('turn/start', { threadId: threadB, hang: true })
     const closing = connA.close()
     await vi.advanceTimersByTimeAsync(20_000)
-    await closing
-    expect(connA.processTreeUnproven).toBe(true)
+    await expect(closing).resolves.toBe(false)
     expect(connB.closed).toBe(false)
   })
 

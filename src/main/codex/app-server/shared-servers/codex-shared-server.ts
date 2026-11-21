@@ -10,7 +10,11 @@ import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
 import type { CodexSharedServerToolUsage } from './codex-shared-server-memory-ceiling'
-import type { CodexSharedLeaseHost, CodexSharedServerLease } from './codex-shared-server-lease'
+import type {
+  CodexLeaseRelease,
+  CodexSharedLeaseHost,
+  CodexSharedServerLease
+} from './codex-shared-server-lease'
 import { CodexSharedServerTurns, withDeadline } from './codex-shared-server-turns'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
 
@@ -34,7 +38,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private reaping: Promise<void> | null = null
   /** Threads a leaving chat is still cleaning up; a chat resuming one waits for that. */
   private readonly releasingThreads = new Map<string, Promise<void>>()
-  private readonly releases = new WeakMap<CodexSharedServerLease, Promise<boolean>>()
+  private readonly releases = new WeakMap<CodexSharedServerLease, Promise<CodexLeaseRelease>>()
   private readonly turns = new CodexSharedServerTurns()
   private readonly router = new CodexSharedServerRouter(
     () => this.leases,
@@ -116,20 +120,26 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.turns.noteStarted(threadId, turnId)
   }
 
-  /** Interrupts the chat's turns and waits for each to end, then unsubscribes the threads no
-   *  later chat claimed. Resolves whether every turn is proven over; the server keeps running
-   *  for other chats unless a stuck turn leaves no other chat working, when it stops. */
-  release(lease: CodexSharedServerLease): Promise<boolean> {
+  /** Interrupts the chat's turns and waits for each to end, then stops its commands and
+   *  unsubscribes the threads no later chat claimed. A turn that won't end keeps the chat on the
+   *  server (its threads still routed to it) so a later close can try again; the server is
+   *  stopped for proof only when no other chat is on it. */
+  release(lease: CodexSharedServerLease): Promise<CodexLeaseRelease> {
     // Every caller (a close racing a failure's cleanup) waits on the one cleanup and its proof.
     let releasing = this.releases.get(lease)
     if (!releasing) {
-      releasing = this.leases.has(lease) ? this.releaseLease(lease) : Promise.resolve(true)
+      releasing = this.leases.has(lease)
+        ? this.releaseLease(lease)
+        : Promise.resolve({
+            writerStopped: true,
+            workloadGone: this.workloadVerdict() === 'exited'
+          })
       this.releases.set(lease, releasing)
     }
     return releasing
   }
 
-  private async releaseLease(lease: CodexSharedServerLease): Promise<boolean> {
+  private async releaseLease(lease: CodexSharedServerLease): Promise<CodexLeaseRelease> {
     this.leases.delete(lease)
     const owned = this.router.release(lease)
     let done = (): void => {}
@@ -139,9 +149,23 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     for (const threadId of owned) {
       this.releasingThreads.set(threadId, released)
     }
+    let result: CodexLeaseRelease = { writerStopped: false, workloadGone: false }
     try {
-      return await this.stopLeaseWork(lease, owned)
+      result = await this.stopLeaseWork(lease, owned)
+      return result
     } finally {
+      if (!result.writerStopped && !this.hasExited) {
+        // Still running here: the chat keeps its threads and its place until a retry proves it.
+        this.leases.add(lease)
+        for (const threadId of owned) {
+          if (!this.router.isClaimed(threadId)) {
+            this.router.claim(threadId, lease)
+          }
+        }
+        this.releases.delete(lease)
+      } else {
+        this.onEnded(this)
+      }
       for (const threadId of owned) {
         if (this.releasingThreads.get(threadId) === released) {
           this.releasingThreads.delete(threadId)
@@ -151,73 +175,78 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
   }
 
-  private async stopLeaseWork(lease: CodexSharedServerLease, owned: string[]): Promise<boolean> {
-    let threads = owned
-    let proven = true
+  private async stopLeaseWork(
+    lease: CodexSharedServerLease,
+    owned: string[]
+  ): Promise<CodexLeaseRelease> {
     const physical = this.physical
-    if (physical && this.closed && !this.hasExited) {
+    if (!physical) {
+      return { writerStopped: true, workloadGone: true }
+    }
+    if (this.closed && !this.hasExited) {
       // A broken transport proves nothing about the process or its turns; only its exit does.
       await this.stop()
-      await this.afterReap()
-      proven = this.workloadVerdict() === 'exited'
-    } else if (physical && !this.closed) {
-      const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
-      // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
-      await withDeadline(
-        Promise.allSettled([...lease.pendingOpens, ...this.turns.startsPending(threads)]),
-        RELEASE_REQUEST_TIMEOUT_MS
-      )
-      proven = lease.pendingOpens.size === 0 && !this.turns.anyStartPending(threads)
-      // Threads that opened after the chat left are let go here, and their commands stopped below.
-      proven &&= (await Promise.all(lease.abandoning)).every(Boolean)
-      threads = [...threads, ...lease.abandonedThreads]
-      const turns = threads.flatMap((threadId) => {
-        const turnId = this.turns.runningOn(threadId)
-        return turnId ? [{ threadId, turnId }] : []
-      })
-      const stopped = await Promise.all(
-        turns.map(async ({ threadId, turnId }) => {
-          const ended = this.turns.ended(turnId)
-          await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
-          return withDeadline(ended, TURN_STOP_PROOF_MS)
-        })
-      )
-      proven &&= stopped.every(Boolean)
-      if (!proven && !this.hasExited) {
-        proven = await this.handleStuckTurn()
-      }
-      if (this.hasExited) {
-        // An exit mid-wait ends every turn waiter without a turn/completed; only the reaped tree
-        // can prove this chat's commands are gone.
-        await this.afterReap()
-        proven = this.workloadVerdict() === 'exited'
-      }
-      if (!this.closed) {
-        // Turns ending doesn't end the commands they started; the chat's own are stopped alone.
-        const workloadStopped = await stopCodexSharedChatWorkload({
-          rpc: physical,
-          threads,
-          leaseId: lease.id,
-          ...(this.sweep ? { sweep: this.sweep } : {}),
-          serverPid: this.pid,
-          timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
-        })
-        // A chat that already resumed one of these threads here owns its subscription now.
-        // Abandoned threads were already let go by abandon().
-        const unclaimed = owned.filter((threadId) => !this.router.isClaimed(threadId))
-        const unsubscribed = await Promise.allSettled(
-          unclaimed.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
-        )
-        proven &&=
-          workloadStopped &&
-          unsubscribed.every(
-            (result) =>
-              result.status === 'fulfilled' || isCodexAppServerUnsupportedError(result.reason)
-          )
-      }
     }
-    this.onEnded(this)
-    return proven
+    if (this.hasExited) {
+      return this.reapedVerdict()
+    }
+    const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
+    // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
+    await withDeadline(
+      Promise.allSettled([...lease.pendingOpens, ...this.turns.startsPending(owned)]),
+      RELEASE_REQUEST_TIMEOUT_MS
+    )
+    let writerStopped = lease.pendingOpens.size === 0 && !this.turns.anyStartPending(owned)
+    // Threads that opened after the chat left are let go here, and their commands stopped below.
+    let workloadGone = (await Promise.all(lease.abandoning)).every(Boolean)
+    const threads = [...owned, ...lease.abandonedThreads]
+    const turns = threads.flatMap((threadId) => {
+      const turnId = this.turns.runningOn(threadId)
+      return turnId ? [{ threadId, turnId }] : []
+    })
+    const stopped = await Promise.all(
+      turns.map(async ({ threadId, turnId }) => {
+        const ended = this.turns.ended(turnId)
+        await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
+        return withDeadline(ended, TURN_STOP_PROOF_MS)
+      })
+    )
+    writerStopped &&= stopped.every(Boolean)
+    if (!writerStopped && !this.hasExited) {
+      await this.stopIfAlone()
+    }
+    if (this.hasExited) {
+      // An exit mid-wait ends every turn waiter without a turn/completed; only the reaped tree
+      // can prove this chat's commands are gone.
+      return this.reapedVerdict()
+    }
+    if (!writerStopped) {
+      return { writerStopped: false, workloadGone: false }
+    }
+    // Turns ending doesn't end the commands they started; the chat's own are stopped alone.
+    workloadGone &&= await stopCodexSharedChatWorkload({
+      rpc: physical,
+      threads,
+      leaseId: lease.id,
+      ...(this.sweep ? { sweep: this.sweep } : {}),
+      serverPid: this.pid,
+      timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
+    })
+    // A chat that already resumed one of these threads here owns its subscription now.
+    // Abandoned threads were already let go by abandon().
+    const unclaimed = owned.filter((threadId) => !this.router.isClaimed(threadId))
+    const unsubscribed = await Promise.allSettled(
+      unclaimed.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
+    )
+    workloadGone &&= unsubscribed.every(
+      (result) => result.status === 'fulfilled' || isCodexAppServerUnsupportedError(result.reason)
+    )
+    return { writerStopped: true, workloadGone }
+  }
+
+  private async reapedVerdict(): Promise<CodexLeaseRelease> {
+    await this.afterReap()
+    return { writerStopped: true, workloadGone: this.workloadVerdict() === 'exited' }
   }
 
   abandon(threadId: string, lease: CodexSharedServerLease): Promise<boolean> {
@@ -246,23 +275,15 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return this.releasingThreads.get(threadId) ?? Promise.resolve()
   }
 
-  /** A turn that ignores Stop: stop the server if no other chat is working, else drain it. */
-  private async handleStuckTurn(): Promise<boolean> {
+  /** A turn that ignores Stop: with no other chat on the server, stop the server (its exit is the
+   *  proof); with any other chat on it, whatever that chat is doing, only drain it. */
+  private async stopIfAlone(): Promise<void> {
     this.draining = true
-    const othersWorking = [...this.leases].some((other) => {
-      const threads = [...other.threads]
-      return (
-        this.turns.anyStartPending(threads) ||
-        threads.some((threadId) => this.turns.runningOn(threadId) !== undefined)
-      )
-    })
-    if (othersWorking || !this.physical) {
+    if (this.leases.size > 0 || !this.physical) {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: a stopped turn kept running`)
-      return false
+      return
     }
     await this.physical.close()
-    const result = this.physical.closeResult
-    return result?.root === 'exited' && result.tree === 'exited'
   }
 
   /** Whether the process's descendants (the chats' commands) were proven gone when it closed. */

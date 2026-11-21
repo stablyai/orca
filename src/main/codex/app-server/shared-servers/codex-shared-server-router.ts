@@ -39,6 +39,10 @@ export class CodexSharedServerRouter {
     lease.threads.add(threadId)
     this.retired.delete(threadId)
     for (const frame of this.unrouted.take(threadId)) {
+      // A held frame can name helpers of its own; claim them (and replay theirs) before delivery.
+      if (frame.kind === 'notification') {
+        this.discover(frame.method, frame.params)
+      }
       lease.deliver(frame)
     }
   }
@@ -75,16 +79,21 @@ export class CodexSharedServerRouter {
   }
 
   onNotification(method: string, params: unknown): void {
+    this.discover(method, params)
+    this.route({ kind: 'notification', method, params })
+  }
+
+  /** Helper threads this frame hands to its parent's chat. */
+  private discover(method: string, params: unknown): void {
     this.claimAnnouncedChildren(method, params)
     if (method === 'thread/started') {
       const parent = codexSubagentParentThreadId(params)
       const threadId = codexFrameThreadId(params)
       const owner = parent ? this.owners.get(parent) : undefined
-      if (threadId && owner?.open) {
+      if (threadId && owner?.routable && this.owners.get(threadId) !== owner) {
         this.claim(threadId, owner)
       }
     }
-    this.route({ kind: 'notification', method, params })
   }
 
   onServerRequest(request: CodexAppServerServerRequest): void {
@@ -103,7 +112,7 @@ export class CodexSharedServerRouter {
     }
     const parent = codexFrameThreadId(params)
     const owner = parent ? this.owners.get(parent) : undefined
-    if (!owner?.open) {
+    if (!owner?.routable) {
       return
     }
     for (const child of codexChildThreadIdsInItem(field(params, 'item'))) {

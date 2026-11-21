@@ -12,6 +12,12 @@ import { sendCodexLeaseRequest } from './codex-shared-server-lease-requests'
 export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
 export const CODEX_SHARED_LEASE_MAX_QUEUED_BYTES = 64 * 1024 * 1024
 
+/** A release's outcome: whether the chat's turns are proven over (else it stays on the server for
+ *  a retry), and whether its commands are proven gone. */
+export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean }
+
+const RELEASE_RETRY_MS = 10_000
+
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
   readonly pid: number | undefined
@@ -26,8 +32,7 @@ export type CodexSharedLeaseHost = {
   /** Records a turn/start in flight, so a release that races it still interrupts its turn. */
   trackTurnStart: (threadId: string, request: Promise<unknown>) => void
   noteTurnStarted: (threadId: string, turnId: string) => void
-  /** True only once every turn this chat ran is proven over. */
-  release: (lease: CodexSharedServerLease) => Promise<boolean>
+  release: (lease: CodexSharedServerLease) => Promise<CodexLeaseRelease>
   /** After the server exited: whether its commands were proven gone, once reaped. */
   workloadVerdict: () => DescendantTreeVerdict
   afterReap: () => Promise<void>
@@ -71,6 +76,11 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   get open(): boolean {
     return this.state === 'open'
+  }
+
+  /** Still owns its threads' frames, including while a close waits for its turns to stop. */
+  get routable(): boolean {
+    return this.state !== 'ended'
   }
 
   /** The lease's end, judged like a process: the chat's commands are its workload tree. */
@@ -204,14 +214,29 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.state = 'closing'
     const error = new Error('codex app-server connection closed')
     this.announceClose(error)
-    this.closing = this.host
+    const closing = this.releaseOnHost(error, true).then((ended) => {
+      if (!ended && this.closing === closing) {
+        // A turn still runs: report the close unproven so the caller tries again.
+        this.closing = null
+      }
+      return ended
+    })
+    this.closing = closing
+    return closing
+  }
+
+  /** Ends the lease once the server proves its turns stopped; false while one still runs. */
+  private releaseOnHost(error: Error, expected: boolean): Promise<boolean> {
+    return this.host
       .release(this)
-      .catch(() => false)
-      .then((proven) => {
-        this.finish(error, true, proven ? 'exited' : 'live')
+      .catch((): CodexLeaseRelease => ({ writerStopped: true, workloadGone: false }))
+      .then(({ writerStopped, workloadGone }) => {
+        if (!writerStopped && this.state !== 'ended') {
+          return false
+        }
+        this.finish(error, expected, workloadGone ? 'exited' : 'live')
         return true
       })
-    return this.closing
   }
 
   /** The server can take no more requests; its exit, reported to every chat, follows. */
@@ -247,13 +272,21 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     }
     // The chat hears its exit only after its turns are stopped, so a recovery can't race them; a
     // close meanwhile waits on this same cleanup.
-    this.closing = this.host
-      .release(this)
-      .catch(() => false)
-      .then((proven) => {
-        this.finish(error, false, proven ? 'exited' : 'live')
-        return true
+    const attempt = (): Promise<boolean> => {
+      const closing = this.releaseOnHost(error, false).then((ended) => {
+        if (!ended && this.closing === closing) {
+          this.closing = null
+          setTimeout(() => {
+            if (this.state === 'closing' && !this.closing) {
+              this.closing = attempt()
+            }
+          }, RELEASE_RETRY_MS).unref?.()
+        }
+        return ended
       })
+      return closing
+    }
+    this.closing = attempt()
   }
 
   private finish(
