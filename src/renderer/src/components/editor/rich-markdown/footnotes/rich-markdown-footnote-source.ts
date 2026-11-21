@@ -1,5 +1,5 @@
 import { createMarkdownFenceTracker } from '../../../../../../shared/markdown/markdown-fence-scanner'
-import { advanceHtmlCommentStateOnLine } from '../../markdown/source-scanning/markdown-code-and-comment-scan'
+import { advanceHtmlCommentStateOnLine } from '../../markdown/source-scanning/markdown-html-comment-scan'
 
 export const FOOTNOTE_IDENTIFIER_MAX_LENGTH = 256
 

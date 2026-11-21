@@ -214,6 +214,15 @@ describe('rich Markdown GFM footnotes', () => {
 
     const withIndentedFootnoteRefDef = `${padding}Final sentence[^big].\n\n[^big]: First line.\n\n    [ref]: https://example.com\n`
     expect(getMarkdownRichModeUnsupportedReason(withIndentedFootnoteRefDef)).toBe('reference-links')
+
+    const withQuotedFootnoteThenRefDef = `${padding}> [^big]: Quoted note.\n>\n> [ref]: https://example.com\n`
+    expect(getMarkdownRichModeUnsupportedReason(withQuotedFootnoteThenRefDef)).toBe(
+      'reference-links'
+    )
+
+    const deeplyNestedCrafted = `${'[^n]: '.repeat(24_000)}tail\n`
+    expect(deeplyNestedCrafted.length).toBeGreaterThan(50_000)
+    expect(getMarkdownRichModeUnsupportedReason(deeplyNestedCrafted)).toBe('reference-links')
   })
 
   it('falls back to code mode for unroundtrippable footnote syntax and preserves reference-link blocking', () => {
@@ -225,6 +234,18 @@ describe('rich Markdown GFM footnotes', () => {
         '> ````md\n> ```\n> ````\n\nText[^1].\n\n[^1]:no-space-after-colon\n'
       )
     ).toBe('footnotes')
+    expect(
+      getMarkdownRichModeUnsupportedReason('```\n> ```\n```\n\n[^1]:no-space-after-colon\n')
+    ).toBe('footnotes')
+    expect(
+      getMarkdownRichModeUnsupportedReason('    ```\n\nText[^1].\n\n[^1]:no-space-after-colon\n')
+    ).toBe('footnotes')
+    expect(
+      getMarkdownRichModeUnsupportedReason('<!--\n```-->\n\n[^1]:no-space-after-colon\n')
+    ).toBe('footnotes')
+    expect(
+      getMarkdownRichModeUnsupportedReason('- item\n\n    ```md\n    [^1]:no-space\n    ```\n')
+    ).toBeNull()
     expect(
       getMarkdownRichModeUnsupportedReason(`Text.\n\n[^${'a'.repeat(257)}]: Overlong identifier\n`)
     ).toBe('footnotes')
