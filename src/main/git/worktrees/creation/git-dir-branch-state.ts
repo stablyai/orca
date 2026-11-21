@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { lstat, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
+import { lstat, open, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { dirname, isAbsolute, join } from 'node:path'
 
@@ -81,7 +81,34 @@ export async function readRefLink(path: string): Promise<string | undefined> {
     rethrowUnlessMissing(error)
     return undefined
   }
-  return target.startsWith('refs/') ? `ref: ${target}` : normalizeHead(await readOptional(path))
+  return target.startsWith('refs/') ? `ref: ${target}` : readLinkedRefTarget(path)
+}
+
+// Refs are a short line; anything larger, or not a regular file, is left to Git's listing.
+const MAX_REF_BYTES = 4096
+
+/** The content a non-ref symlink leads to, without blocking on a FIFO or buffering a large file. */
+async function readLinkedRefTarget(path: string): Promise<string> {
+  let handle: Awaited<ReturnType<typeof open>>
+  try {
+    handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+  try {
+    const info = await handle.stat()
+    if (!info.isFile() || info.size > MAX_REF_BYTES) {
+      return UNRESOLVED_HEAD
+    }
+    const buffer = Buffer.alloc(MAX_REF_BYTES + 1)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    return bytesRead > MAX_REF_BYTES
+      ? UNRESOLVED_HEAD
+      : normalizeHead(buffer.toString('utf8', 0, bytesRead))
+  } finally {
+    await handle.close()
+  }
 }
 
 const READ_CONCURRENCY = 16
