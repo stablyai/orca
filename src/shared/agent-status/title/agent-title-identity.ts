@@ -114,6 +114,9 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'jcode') || isJcodeIdentityTerminalTitle(title)) {
     return 'Jcode'
   }
+  if (titleHasAgentName(title, 'kiro')) {
+    return 'Kiro'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
