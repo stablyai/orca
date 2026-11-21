@@ -307,7 +307,7 @@ describe('how a bot request ends', () => {
         message_id: id,
         session_id: '22222222-2222-4222-8222-222222222222',
         operation_id: 'op-1',
-        minted_at_ms: Date.now()
+        minted_at_ms: 1_700_000_000_000
       })
       await dropUnreadBotRequests(runtime, 'docs', 'deleted')
       await decided(reconciler)

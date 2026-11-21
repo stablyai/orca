@@ -117,7 +117,7 @@ describe('telling an agent question asker its taker stopped', () => {
       message_id: status.id,
       session_id: BOT,
       operation_id: 'op-1',
-      minted_at_ms: Date.now()
+      minted_at_ms: 1_700_000_000_000
     })
     await settle()
     expect(told).toEqual([])

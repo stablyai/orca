@@ -233,7 +233,7 @@ class World {
       message_id: id,
       session_id: message.to_handle.replace(/^orca_session_id:|^dispatch:/, ''),
       operation_id: `op-${this.seq++}`,
-      minted_at_ms: Date.now()
+      minted_at_ms: 1_700_000_000_000
     }
     this.db.reserveStructuredMailSend(row)
     return row
@@ -625,6 +625,7 @@ async function runSequence(ops: Op[], record = false): Promise<Violation[]> {
 }
 
 describe('agent questions: random-ordering invariants', () => {
+  // Runs AQ_SEQS random orderings (150 by default, thousands when hunting); each is a fresh database.
   it('tells every question its taker stopped on exactly once, never while a wake is pending', async () => {
     const sequences = Number(process.env.AQ_SEQS ?? 150)
     const found = new Map<string, { count: number; minimal: Op[]; detail: string }>()
