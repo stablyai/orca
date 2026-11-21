@@ -36,6 +36,10 @@ type NativeChatModelComboboxProps = {
   cliUpdate?: SessionOptionsCliUpdate
 }
 
+function baseModelId(id: string): string {
+  return id.replace(/\[\d+[km]\]$/i, '').replace(/-\d{8}$/, '')
+}
+
 // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
 function modelChoiceFilter(value: string, search: string, keywords?: string[]): number {
   const haystack = [value, ...(keywords ?? [])].join(' ').toLowerCase()
@@ -69,7 +73,10 @@ export function NativeChatModelCombobox({
   const legacyChoices = listed.filter(folded)
   // A model the CLI already lists is pickable, whatever the list says it needs.
   const needsUpdate = cliUpdate
-    ? cliUpdate.models.filter((model) => !choices.some((choice) => choice.value === model.id))
+    ? cliUpdate.models.filter((model) => {
+        const id = baseModelId(model.id)
+        return !choices.some((choice) => baseModelId(choice.value) === id)
+      })
     : []
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)

@@ -16,6 +16,8 @@ export type AgentCliUpdateView = {
   /** Set while the user's own CLI on this host is behind its latest release. */
   update: AgentCliUpdate | null
   run: AgentCliUpdateRun | null
+  /** Asks this host whether the user's own CLIs are behind; the host caches its answer. */
+  check: () => void
   /** The one update action every entry point shares; resolves true once the CLI is current. */
   start: () => Promise<boolean>
   /** Opens the failed run's dialog; its Try again calls `tryAgain`, else `start`. */
@@ -30,6 +32,11 @@ export function useAgentCliUpdate(
   const key = target ? agentCliUpdateHostKey(target) : null
   const supported = agent !== undefined && isAgentCliUpdateAgent(agent) ? agent : null
   const host = useAppStore((s) => (key === null ? undefined : s.agentCliUpdates.get(key)))
+  const check = useCallback(() => {
+    if (key !== null && supported !== null) {
+      void useAppStore.getState().checkAgentCliUpdates(agentCliUpdateHostTarget(key))
+    }
+  }, [key, supported])
   const start = useCallback(
     () =>
       key === null || supported === null
@@ -48,6 +55,7 @@ export function useAgentCliUpdate(
   return {
     update: (supported && host?.updates.find((entry) => entry.agent === supported)) || null,
     run: (supported && host?.runs[supported]) || null,
+    check,
     start,
     openFailure
   }

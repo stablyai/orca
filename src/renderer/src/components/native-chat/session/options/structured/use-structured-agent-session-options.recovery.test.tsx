@@ -188,3 +188,54 @@ it.each(['options-first', 'catalog-first', 'cached'] as const)(
     view.unmount()
   }
 )
+
+it('checks CLI updates on the chat host when the model picker demands the catalog', async () => {
+  forgetStructuredSessionSelection('session-1')
+  resetHostModelCatalogSnapshotsForTests()
+  mocks.call.mockReset()
+  mocks.runtimeCall.mockReset()
+  const model = {
+    id: 'claude-opus-5[1m]',
+    label: 'Opus 5 (1M context)',
+    isDefault: true,
+    efforts: []
+  }
+  answer({
+    options: () =>
+      Promise.resolve({
+        models: [model],
+        current: { model: model.id, confirmed: ['model'] }
+      }),
+    modelCatalog: () => Promise.resolve({ origin: 'probe', fetchedAt: 1, models: [model] })
+  })
+  mocks.runtimeCall.mockResolvedValue({
+    updates: [
+      {
+        agent: 'claude',
+        installedVersion: '2.1.220',
+        latestVersion: '2.1.330',
+        command: 'claude update',
+        runnable: true,
+        models: [{ id: 'claude-opus-5-5', name: 'Opus 5.5', minVersion: '2.1.280' }]
+      }
+    ]
+  })
+  const { useAppStore } = await import('@/store/index')
+  useAppStore.setState({ agentCliUpdates: new Map() })
+  const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000)
+  try {
+    const view = renderOptions({ ...REOPENED, agent: 'claude' }, vi.fn())
+    expect(view.result.current.optionSurface.cliUpdate).toBeUndefined()
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    await waitFor(() =>
+      expect(view.result.current.optionSurface.cliUpdate?.models).toEqual([
+        { id: 'claude-opus-5-5', name: 'Opus 5.5', minVersion: '2.1.280' }
+      ])
+    )
+    view.unmount()
+  } finally {
+    now.mockRestore()
+    mocks.runtimeCall.mockImplementation(async () => ({ updates: [] }))
+    useAppStore.setState({ agentCliUpdates: new Map() })
+  }
+})

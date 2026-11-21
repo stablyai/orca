@@ -160,9 +160,14 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
-  const { demandModelCatalog } = hostCatalog
+  const { demandModelCatalog: demandHostModelCatalog } = hostCatalog
   // The updated CLI lists the models it was too old for.
-  const cliUpdate = useNativeChatCliUpdate(target, agent, demandModelCatalog)
+  const cliUpdate = useNativeChatCliUpdate(target, agent, demandHostModelCatalog)
+  const checkCliUpdate = cliUpdate?.check
+  const demandModelCatalog = useCallback(() => {
+    demandHostModelCatalog()
+    checkCliUpdate?.()
+  }, [demandHostModelCatalog, checkCliUpdate])
   const cliUpdateModels = cliUpdate?.update?.models
   const cliUpdateAgent = cliUpdateModels?.length ? cliUpdate?.update?.agent : undefined
   const cliUpdateRunnable = cliUpdate?.update?.runnable === true
