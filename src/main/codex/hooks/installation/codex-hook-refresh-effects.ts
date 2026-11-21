@@ -10,10 +10,7 @@ import {
 } from '../definitions/codex-hook-definition'
 import { getCodexManagedScriptFileName } from '../definitions/codex-hook-identity'
 import { removeStaleRuntimeHookTrustEntries } from '../../trust/hooks/codex-hook-trust-cleanup'
-import {
-  applyMirroredRuntimeUserHookTrustStates,
-  getRuntimeHooksWithSystemUserHooks
-} from '../../trust/hooks/codex-hook-user-mirroring'
+import { getRuntimeHooksWithSystemUserHooks } from '../../trust/hooks/codex-hook-user-mirroring'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import {
   promoteCodexRuntimeHookApprovalsToSystem,
@@ -62,7 +59,8 @@ export function writeCodexRuntimeUserHookRefreshEffects(
 
   try {
     const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
-    const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
+    // The enabled state goes in the first write so an interrupted pass never leaves a disable enabled.
+    const trustEntries = hookPlan.trustEntries.map(({ entry, enabled }) => ({ ...entry, enabled }))
     const mirrored = syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
@@ -71,7 +69,6 @@ export function writeCodexRuntimeUserHookRefreshEffects(
     // Write current user hashes before stale cleanup removes managed trust with status hooks unavailable.
     upsertHookTrustEntries(tomlPath, trustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
   } catch (error) {
     return {
       kind: 'status',
