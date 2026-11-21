@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { saveBotLook, useBotLookSave, type BotLookUpdate } from './use-bot-look-save'
 
 describe('saveBotLook', () => {
@@ -121,5 +121,52 @@ describe('looks that change nothing', () => {
     saveBotLook('local:b7', { avatarOutfit: 'tie' }, update)
     window.dispatchEvent(new Event('pagehide'))
     expect(sent).toEqual([{ avatarColor: '#f4c4cf' }])
+  })
+
+  it('sends a pick again when the save it repeated, or its own, fails', async () => {
+    const sent: BotLookUpdate[] = []
+    let fail = (): void => {}
+    const update = (look: BotLookUpdate): Promise<unknown> => {
+      sent.push(look)
+      return sent.length === 1
+        ? new Promise((resolve) => (fail = () => resolve(null)))
+        : Promise.resolve(null)
+    }
+    const saved = { avatarOutfit: 'tie' }
+    const drained = new Promise<void>((resolve) => {
+      saveBotLook('local:b8', { avatarOutfit: 'party' }, update, resolve, undefined, saved)
+    })
+    saveBotLook('local:b8', { avatarOutfit: 'party' }, update)
+    fail()
+    await drained
+    // The bot still shows party, but the host never took it.
+    saveBotLook('local:b8', { avatarOutfit: 'party' }, update, undefined, undefined, {
+      avatarOutfit: 'party'
+    })
+    expect(sent).toEqual([
+      { avatarOutfit: 'party' },
+      { avatarOutfit: 'party' },
+      { avatarOutfit: 'party' }
+    ])
+  })
+
+  it('shows nothing new for a pick of the selected outfit, and never delays an earlier pick', () => {
+    vi.useFakeTimers()
+    const { sent, update } = recorder()
+    const { result } = renderHook(() =>
+      useBotLookSave('local:b9', update, 500, undefined, {
+        avatarColor: '#f4c4cf',
+        avatarOutfit: 'tie'
+      })
+    )
+    act(() => result.current.pick({ avatarOutfit: 'tie' }))
+    expect(result.current.picked).toBeNull()
+
+    act(() => result.current.pick({ avatarOutfit: 'party' }))
+    act(() => vi.advanceTimersByTime(200))
+    act(() => result.current.pick({ avatarColor: '#f4c4cf' }))
+    act(() => vi.advanceTimersByTime(300))
+    expect(sent).toEqual([{ avatarOutfit: 'party' }])
+    vi.useRealTimers()
   })
 })
