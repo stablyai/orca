@@ -5,7 +5,6 @@
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { buttonVariants } from '@/components/ui/button'
 import {
   botItemQuestionLine,
   type BotItemQuestionShape,
@@ -13,7 +12,6 @@ import {
 } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
-import { BOT_ITEM_CHIPS_ATTRIBUTE, useBotItemChipStacked } from './use-bot-item-chip-stacked'
 
 export const BOT_ITEM_CHIP =
   'min-h-8 w-fit max-w-full rounded-2xl border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px]'
@@ -21,14 +19,10 @@ export const BOT_ITEM_CHIP =
 const CHIP_ACTION =
   'outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
 
-/** The recommended reply of an open line: filled, the one the owner most likely means. */
-export const BOT_ITEM_CHIP_RECOMMENDED = buttonVariants({
-  variant: 'default',
-  className: cn(
-    BOT_ITEM_CHIP,
-    'h-auto justify-start gap-0 whitespace-normal border-foreground bg-foreground font-normal text-background hover:bg-foreground/90 focus-visible:ring-2 focus-visible:ring-ring/50'
-  )
-})
+/** The recommended reply of an open line: the same pill as its siblings, filled; the one the owner
+ *  most likely means. */
+export const BOT_ITEM_CHIP_RECOMMENDED =
+  'border-foreground bg-foreground text-background hover:bg-foreground/90'
 
 /** An open question's words: a title, 14 px semibold, over the Markdown's own 13 px. */
 export const BOT_ITEM_OPEN_QUESTION =
@@ -42,31 +36,18 @@ export function BotItemChipWords({
   filled = false
 }: {
   reply: BotItemQuickReply
-  /** The filled recommended chip: Recommended reads on the fill, under the label when both don't fit. */
+  /** The filled recommended chip: Recommended trails the label on the fill, one line like its siblings. */
   filled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const recommended = t('bots.items.ask.recommended', 'Recommended')
-  const { root, label, tag, stacked } = useBotItemChipStacked(filled, recommended)
   if (filled) {
+    // The no-break space keeps "· Recommended" on the label's last line instead of alone below it.
     return (
-      <span
-        ref={root}
-        className={cn(
-          'max-w-full items-baseline',
-          stacked ? 'flex flex-col items-start' : 'inline-flex'
-        )}
-      >
-        <span ref={label} className="min-w-0 [overflow-wrap:anywhere]">
-          {reply.label}
-        </span>
-        <span
-          ref={tag}
-          className={cn(
-            'shrink-0 whitespace-nowrap text-2xs text-background/70',
-            !stacked && 'ml-1.5'
-          )}
-        >
+      <span className="[overflow-wrap:anywhere]">
+        {reply.label}
+        <span className="whitespace-nowrap text-xs text-background/65">
+          {'\u00a0· '}
           {recommended}
         </span>
       </span>
@@ -198,7 +179,7 @@ export function BotItemQuestionStep({
           </div>
           <StepNav steps={steps} />
         </div>
-        <div {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }} className="mt-2.5 flex flex-wrap gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-2">
           {decision.replies.map((reply) => {
             const picked = held === reply.label
             // Filled until the owner picks one on this line; then the pick stands out instead.
