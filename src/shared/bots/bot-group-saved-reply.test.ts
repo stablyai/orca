@@ -31,7 +31,7 @@ describe("a finished turn's saved reply in the room", () => {
   it('reopens a code block the cut began inside', () => {
     const tail = 'const b = 2\n```\n\nDone, with **bold** prose.'
     const cut = `${'x'.repeat(BOT_GROUP_SAVED_REPLY_MAX - tail.length - 1)}\n${tail}`
-    expect(textOf(cut)).toEqual([`…\n\n\`\`\`\n${tail}`])
+    expect(textOf(cut)).toEqual([`…\n\n\`\`\`text\n${tail}`])
   })
 
   it('keeps whole code blocks after the cut as they are', () => {

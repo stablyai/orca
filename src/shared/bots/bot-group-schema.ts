@@ -238,7 +238,7 @@ export const BOT_GROUP_SAVED_REPLY_MAX = 16_000
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
 
-/** A reply cut to its saved end, from its next whole line: a code block the cut opened mid-way is
+/** A reply cut to its saved end, from its next whole line: a code block the cut began inside is
  *  reopened, so the rest still reads as code and the Markdown after it as prose. */
 function savedReplyTail(reply: string): string {
   if (reply.length < BOT_GROUP_SAVED_REPLY_MAX) {
@@ -246,7 +246,8 @@ function savedReplyTail(reply: string): string {
   }
   const rest = reply.slice(reply.indexOf('\n') + 1)
   const fences = rest.split('\n').flatMap((line) => FENCE.exec(line)?.[1] ?? [])
-  const reopen = fences.length % 2 === 1 ? `${fences[0]}\n` : ''
+  // Its language was on the cut line; as plain text it still draws as a block that copies.
+  const reopen = fences.length % 2 === 1 ? `${fences[0]}text\n` : ''
   return `…\n\n${reopen}${rest}`
 }
 
