@@ -208,7 +208,9 @@ export async function dropUnreadBotRequests(
     await ensureSenderRecords(runtime, dropped)
     for (const message of dropped) {
       // Read in the same write as its outcome and notice, so the drop is never half done.
-      tellSender(runtime, db, message, 'dropped', why, undefined, () => db.markAsRead([message.id]))
+      tellSender(runtime, db, message, 'dropped', why, undefined, () =>
+        db.markAsRead([message.id], { kind: 'dropped', why })
+      )
     }
   } catch (error) {
     // The change itself stands; only the senders go untold.

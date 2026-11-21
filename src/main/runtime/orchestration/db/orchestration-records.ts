@@ -1,5 +1,7 @@
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import type { WorkerDispatchState } from './worker-dispatch/worker-dispatch-state'
+
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -139,16 +141,7 @@ export type MutationReceiptRow = {
   updated_at: string
 }
 
-export type WorkerDispatchState =
-  | 'starting'
-  | 'ready'
-  | 'start_unknown'
-  | 'failed'
-  | 'succeeded'
-  | 'stopping'
-  | 'stop_unknown'
-  | 'stopped'
-  | 'abandoned'
+export type { WorkerDispatchState } from './worker-dispatch/worker-dispatch-state'
 
 export type WorkerDispatchRow = {
   dispatch_id: string
@@ -326,8 +319,10 @@ export type DispatchContextRow = {
   follow_up_mail_at: string | null
   /** 'connector' when started in a turn its creator chat's connector conversation woke. */
   creator_turn_source: 'connector' | null
-  /** What its creator started it for, opaque here (bot items: `bot-item:<uid>`); retries inherit it. */
+  /** What its creator started it for, opaque here (bot items: `bot-item:<uid>`), and the question it
+   *  answers (`worker-start --for`); retries inherit both. */
   origin_ref: string | null
+  for_message_id: string | null
 }
 
 export type DecisionGateRow = {

@@ -28,7 +28,7 @@ describe('mailbox delivery consumption', () => {
     const a = insert('a')
     const b = insert('b')
     const first = db.getOrCreateRunDelivery(params)!
-    db.markAsReadAndDelivered([a.id])
+    db.markAsReadAndDelivered([a.id], { kind: 'orca' })
     insert('later')
     const replay = db.getOrCreateRunDelivery(params)!
     expect(replay.delivery.id).toBe(first.delivery.id)
@@ -42,7 +42,7 @@ describe('mailbox delivery consumption', () => {
     const first = db.getOrCreateRunDelivery(params)!
     const before = db.getDeliveryRaw(first.delivery.id)
     db.db.exec('BEGIN')
-    db.markAsReadAndDelivered([message.id])
+    db.markAsReadAndDelivered([message.id], { kind: 'orca' })
     expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
     expect(db.hasOutstandingRunDelivery(params.runId)).toBe(false)
     db.db.exec('ROLLBACK')
@@ -73,7 +73,7 @@ describe('mailbox delivery consumption', () => {
         consumerGeneration: dispatch.consumer_generation
       }
       db.getOrCreateMailboxDelivery(workerParams)!
-      db[method]([message.id])
+      db[method]([message.id], { kind: 'orca' })
       expect(db.hasOutstandingMailboxDelivery(mailboxHandle)).toBe(false)
       expect(db.getOrCreateMailboxDelivery(workerParams)).toBeUndefined()
       expect(db.hasOutstandingRunDelivery(run.id)).toBe(true)

@@ -75,9 +75,9 @@ describe('derived delivery migration', () => {
       acknowledged_at: null,
       status: 'fenced'
     })
-    expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: 'history_fence' })).toThrow(
-      expect.objectContaining({ code: 'consumer_fenced' })
-    )
+    expect(() =>
+      db.acknowledgeRunDelivery({ ...params, deliveryId: 'history_fence', taker: { kind: 'orca' } })
+    ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
     expect(db.getOrCreateRunDelivery(params)?.messages.map((message) => message.id)).toEqual([
       next.id
     ])
@@ -109,7 +109,7 @@ describe('derived delivery migration', () => {
     const second = open(path)
     const batch = first.getOrCreateRunDelivery(params)!
     expect(second.getOrCreateRunDelivery(params)?.delivery.id).toBe(batch.delivery.id)
-    second.markAsRead([message.id])
+    second.markAsRead([message.id], { kind: 'orca' })
     const replacement = second.bindRun({
       runId: run.id,
       coordinatorHandle: 'replacement',
@@ -124,7 +124,11 @@ describe('derived delivery migration', () => {
       expect.objectContaining({ code: 'consumer_fenced' })
     )
     expect(() =>
-      first.acknowledgeRunDelivery({ ...params, deliveryId: batch.delivery.id })
+      first.acknowledgeRunDelivery({
+        ...params,
+        deliveryId: batch.delivery.id,
+        taker: { kind: 'orca' }
+      })
     ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
     expect(
       second.getOrCreateRunDelivery({
@@ -174,7 +178,7 @@ describe('derived delivery migration', () => {
       const params = { runId: run.id, mailboxHandle, consumerGeneration: 0, consumerSource }
       const batch = db.getOrCreateMailboxDelivery(params)!
       const peer = open(path)
-      peer.markAsRead([message.id])
+      peer.markAsRead([message.id], { kind: 'orca' })
       const authority = {
         dispatchId,
         paneKey: 'other:22222222-2222-4222-9222-222222222222',
@@ -200,7 +204,11 @@ describe('derived delivery migration', () => {
         expect.objectContaining({ code: 'consumer_fenced' })
       )
       expect(() =>
-        db.acknowledgeMailboxDelivery({ ...params, deliveryId: batch.delivery.id })
+        db.acknowledgeMailboxDelivery({
+          ...params,
+          deliveryId: batch.delivery.id,
+          taker: { kind: 'orca' }
+        })
       ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
       expect(
         peer.getOrCreateMailboxDelivery({ ...params, consumerGeneration: 1 })?.messages[0].subject

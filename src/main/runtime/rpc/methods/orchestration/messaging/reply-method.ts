@@ -186,7 +186,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
         // Refuses a second answer to a bot request, before the original is marked read.
         payload: botAnswerPayload(db, original, answerTurn !== null)
       })
-      db.markAsRead([original.id])
+      db.markAsRead([original.id], { kind: 'reply' })
       return stored
     })
     // Written only now, so a reply refused above (a second answer) never shows in the room.

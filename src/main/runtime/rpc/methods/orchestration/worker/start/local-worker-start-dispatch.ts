@@ -95,6 +95,7 @@ export function createLocalWorkerStartDispatch(
     followUpOf: followUp?.of,
     acceptedBy: followUp?.acceptedBy,
     takesMailOf: followUp?.takesMailOf,
-    ...(params.origin ? { originRef: params.origin } : {})
+    ...(params.origin ? { originRef: params.origin } : {}),
+    ...(params.forQuestion ? { forMessageId: params.forQuestion } : {})
   })
 }

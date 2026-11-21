@@ -100,7 +100,7 @@ describe('bot request outcomes', () => {
     db = new OrchestrationDb(':memory:')
     const unread = admitTo('docs')
     const read = admitTo('docs-2')
-    db.markAsRead([read])
+    db.markAsRead([read], { kind: 'orca' })
     const settled = db.admitBotRequest({
       rootKey: 'other',
       fromBotId: null,
@@ -151,7 +151,9 @@ describe('a bot_requests table made before status', () => {
           depth: 1,
           record: '{"old":true}',
           created_at: '2026-11-01 10:00:00',
-          send_key: null
+          send_key: null,
+          taken_by: null,
+          awaiting: null
         })
         const status = after.admitBotRequest({
           rootKey: 'root',

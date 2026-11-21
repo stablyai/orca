@@ -67,7 +67,7 @@ export async function replyOverPeerMail(args: {
         // Refuses a second answer to a bot request, before the original is marked read.
         ...botAnswerOf(db, original)
       })
-      db.markAsRead([original.id])
+      db.markAsRead([original.id], { kind: 'reply' })
     })
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
@@ -102,7 +102,7 @@ export async function replyOverPeerMail(args: {
     threadId,
     sender: peerMailSender(runtime, replier)
   })
-  db.markAsRead([original.id])
+  db.markAsRead([original.id], { kind: 'reply' })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
     { message: { id, subject }, to: original.from_handle, server: server.name },

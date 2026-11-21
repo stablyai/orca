@@ -1,6 +1,7 @@
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
+import { stampQuestionTakes, type MailTaker } from './mail-taker'
 
 export const MAILBOX_POINTER_RESERVED = 1
 export const MAILBOX_POINTER_WRITE_ATTEMPTED = 2
@@ -143,10 +144,15 @@ export function settleMailboxPointerEnter(
   this: OrchestrationDb,
   ids: string[],
   target: MailboxPointerReservationTarget,
-  expectedPhases: readonly number[]
+  expectedPhases: readonly number[],
+  /** The terminal the pointer was submitted to, which takes its questions; null when unknown. */
+  taker: MailTaker | null = null
 ): void {
   if (expectedPhases.length === 0) {
     return
+  }
+  if (taker) {
+    stampQuestionTakes(this, pointersHeldBy(this, ids, target, expectedPhases), taker)
   }
   mutatePointerMessages(this, ids, (placeholders) => ({
     sql: `UPDATE messages
@@ -196,6 +202,31 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
        WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
+}
+
+function pointersHeldBy(
+  db: OrchestrationDb,
+  ids: string[],
+  target: MailboxPointerReservationTarget,
+  expectedPhases: readonly number[]
+): string[] {
+  const held: string[] = []
+  for (let offset = 0; offset < ids.length; offset += ORCHESTRATION_DELIVERY_BATCH_LIMIT) {
+    const batch = ids.slice(offset, offset + ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+    for (const row of db.db
+      .prepare(
+        `SELECT id FROM messages
+         WHERE pointer_pty_id = ? AND pointer_process_incarnation = ?
+           AND pointer_enter_pending IN (${expectedPhases.map(() => '?').join(',')})
+           AND id IN (${batch.map(() => '?').join(',')})`
+      )
+      .all(target.ptyId, target.processIncarnation, ...expectedPhases, ...batch)) {
+      if (typeof row.id === 'string') {
+        held.push(row.id)
+      }
+    }
+  }
+  return held
 }
 
 function mutatePointerMessages(

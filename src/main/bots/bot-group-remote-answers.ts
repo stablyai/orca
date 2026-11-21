@@ -126,7 +126,7 @@ export function collectRemoteAnswers(
     }
   })
   if (read.length > 0) {
-    db.markAsRead(read)
+    db.markAsRead(read, { kind: 'orca' })
   }
   return messages.map((message) => updated.get(message.id) ?? message)
 }

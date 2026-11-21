@@ -120,7 +120,8 @@ const FULL_DISPATCH = {
   follow_up_of_dispatch_id: null,
   follow_up_mail_at: null,
   creator_turn_source: 'connector',
-  origin_ref: null
+  origin_ref: null,
+  for_message_id: null
 }
 
 const FULL_WORKER = {

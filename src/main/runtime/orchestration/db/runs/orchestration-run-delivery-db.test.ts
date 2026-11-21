@@ -68,7 +68,8 @@ describe('OrchestrationDb Run state', () => {
       const ack = {
         runId: run.id,
         consumerGeneration: run.consumer_generation,
-        deliveryId: first.delivery.id
+        deliveryId: first.delivery.id,
+        taker: { kind: 'orca' as const }
       }
       expect(d.acknowledgeRunDelivery(ack).duplicate).toBe(false)
       expect(d.acknowledgeRunDelivery(ack).duplicate).toBe(true)
@@ -131,7 +132,8 @@ describe('OrchestrationDb Run state', () => {
         d.acknowledgeRunDelivery({
           runId: run.id,
           consumerGeneration: run.consumer_generation,
-          deliveryId: oldDelivery.delivery.id
+          deliveryId: oldDelivery.delivery.id,
+          taker: { kind: 'orca' }
         })
       } catch (error) {
         fencedError = error

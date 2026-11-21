@@ -48,6 +48,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
     const item = getOptionalStringFlag(flags, 'item')
+    const forQuestion = getOptionalStringFlag(flags, 'for')
     const result = await callOrchestrationMutation<{
       runId: string
       taskId: string
@@ -69,6 +70,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       ...(parent ? { parent } : {}),
       // The host checks the item is the calling bot chat's own, open one, then records it.
       ...(item ? { origin: `bot-item:${item}` } : {}),
+      ...(forQuestion ? { forQuestion } : {}),
       on: getOptionalStringFlag(flags, 'on'),
       worktree: getOptionalStringFlag(flags, 'worktree'),
       name: getOptionalStringFlag(flags, 'name'),

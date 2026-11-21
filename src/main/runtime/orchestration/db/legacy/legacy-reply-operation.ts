@@ -87,12 +87,12 @@ export function commitLegacyReplyOperation(
         runId: principal.run_id,
         deliveryContract: 'legacy_direct'
       })
-      this.markAsRead([question.message_id])
+      this.markAsRead([question.message_id], { kind: 'reply' })
       this.db
         .prepare(
           `UPDATE question_threads
            SET status = 'answered', answer_message_id = ?, answer_body = ?,
-               answered_at = datetime('now')
+               answered_at = datetime('now'), awaiting = NULL
            WHERE message_id = ? AND status = 'pending'`
         )
         .run(message.id, params.body, question.message_id)

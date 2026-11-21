@@ -65,7 +65,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       to: 'term_legacy_coord',
       subject: 'second recovered coordinator outcome'
     })
-    db.markAsRead([unacknowledged.id])
+    db.markAsRead([unacknowledged.id], { kind: 'orca' })
     const coordinator = db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       role: 'coordinator',
@@ -140,7 +140,8 @@ describe('OrchestrationDb legacy coordinator authority', () => {
     db.acknowledgeRunDelivery({
       runId: adoptedRunId,
       consumerGeneration: run.consumer_generation,
-      deliveryId: first.delivery.id
+      deliveryId: first.delivery.id,
+      taker: { kind: 'orca' }
     })
     expect(
       db
