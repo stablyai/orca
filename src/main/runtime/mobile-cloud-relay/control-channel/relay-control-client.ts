@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the renewal held while connecting belongs to the same connect state machine (state, socket, hello-ack); splitting it out would spread one state guard across files. */
 import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
@@ -35,6 +36,7 @@ export class RelayControlClient {
   private readonly requests: RelayControlRequests
   private socket: WebSocket | null = null
   private state: RelayControlState = 'idle'
+  private renewedWhileConnecting: string | null = null
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
   private connectTimer: ReturnType<typeof setTimeout> | null = null
@@ -107,7 +109,14 @@ export class RelayControlClient {
     )
   }
 
+  // A renewal that lands while this control is still connecting cannot be sent yet. Its hello
+  // carried the older token, so it is sent on activation; otherwise the relay closes the control
+  // with 4401 when that older token expires.
   refreshAuthorization(relayJwt: string): void {
+    if (this.state === 'idle' || this.state === 'opening' || this.state === 'proving') {
+      this.renewedWhileConnecting = relayJwt
+      return
+    }
     this.sendActive({ type: 'auth-refresh', relayJwt })
   }
 
@@ -271,6 +280,10 @@ export class RelayControlClient {
       return
     }
     this.state = 'active'
+    if (this.renewedWhileConnecting) {
+      this.sendActive({ type: 'auth-refresh', relayJwt: this.renewedWhileConnecting })
+      this.renewedWhileConnecting = null
+    }
     this.liveness.start()
     this.connectResolve?.(ack.data)
     this.clearConnectPromise()
