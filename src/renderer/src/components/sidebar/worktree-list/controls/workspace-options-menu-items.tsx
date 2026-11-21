@@ -1,3 +1,4 @@
+import { usePersonalProjectOrderSupported } from '@/hooks/use-personal-project-order'
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -164,13 +165,24 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
 }
 
 function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
+  const supportsPersonalOrder = usePersonalProjectOrderSupported()
   const t = useTranslate()
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
   return (
     <OptionChoiceSubmenu
       label={t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875', 'Project order')}
-      choices={PROJECT_ORDER_OPTIONS}
+      choices={PROJECT_ORDER_OPTIONS.map((option) => ({
+        ...option,
+        disabled: !supportsPersonalOrder && (option.id === 'name' || option.id === 'frequent'),
+        description:
+          !supportsPersonalOrder && option.id === 'recent'
+            ? t(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
+                'Most recent workspace activity'
+              )
+            : option.description
+      }))}
       value={projectOrderBy}
       onChange={setProjectOrderBy}
       preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}

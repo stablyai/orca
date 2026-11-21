@@ -1,20 +1,18 @@
+import type { SidebarFeedView } from '../sidebar-feed-view'
+export type { SidebarFeedView } from '../sidebar-feed-view'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   normalizeExecutionHostOrder,
-  parseExecutionHostId,
-  type ExecutionHostId,
-  type ExecutionHostScope
+  parseExecutionHostId
 } from '../../execution-host/execution-host'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
 import type { ProjectSectionModel } from '../sections/project-section-grouping'
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import {
   filterFolderWorkspacesFromOtherDevices,
   isWorkspaceOwnedBySomeoneElse
 } from '../../workspace-view/workspace-creator-visibility'
-import type { WorkspaceRowFilters } from '../../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { hiddenProjectRowFacts, indexHiddenProjects } from '../../project/catalog/hidden-projects'
 import { collectActiveRowKeys } from '../selection/active-workspace'
@@ -26,7 +24,7 @@ import {
   rankSidebarFeedWorktrees,
   type SidebarFeedIndex
 } from './sidebar-feed-index'
-import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
+import type { Worktree } from '../../worktree/types'
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from '../catalog/empty-project-placeholder-repos'
@@ -43,12 +41,11 @@ import {
   type HostSectionOption,
   type HostSectionRow
 } from '../hosts/host-section-rows'
-import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../row-types'
+import type { Row } from '../row-types'
 import type { SidebarFeedWindowExtras } from '../sidebar-feed-extras'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from '../sidebar-row-plan'
 import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
-import type { WorkspaceSortBy as SortBy } from '../../workspace-view/workspace-row-sort'
 import {
   selectVisibleSidebarWorktrees,
   withoutBotListedFolderWorkspaces,
@@ -56,26 +53,6 @@ import {
 } from '../selection/visible-worktrees'
 import { isIdleWorkspaceActivity } from '../feed-facts/workspace-activity-facts'
 import { prGroupOfReviewFact } from '../feed-facts/workspace-review-facts'
-
-/** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
-export type SidebarFeedView = {
-  groupBy: WorktreeGroupBy
-  sortBy: SortBy
-  projectOrderBy: ProjectOrderBy
-  collapsedGroups: ReadonlySet<string>
-  filters: WorkspaceRowFilters
-  workspaceHostScope: ExecutionHostScope
-  visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-  /** The host the desktop has focused (its settings' active runtime), where unowned rows land. */
-  defaultHostId: ExecutionHostId
-  hostLabelOverrides: ReadonlyMap<ExecutionHostId, string>
-  /** The listed host's name for itself when the user has not renamed it. */
-  localHostLabel: string
-  /** The desktop window's own saved host order, which it writes; a phone reads the host's. */
-  workspaceHostOrder?: readonly ExecutionHostId[]
-}
 
 /** The catalog the feed does not carry: every host's repos (repo.list), groups and projects. */
 export type SidebarFeedCatalog = {
@@ -233,7 +210,9 @@ export function planSidebarFeedRows(
     importedWorktreesByRepo: extras.importedWorktreesByRepo ?? new Map(),
     newExternalWorktreesInboxByRepo: extras.newExternalWorktreesInboxByRepo ?? new Map(),
     pendingCreations,
-    projectGrouping: catalog.projectGrouping,
+    projectGrouping: view.personalProjectOrder
+      ? { ...catalog.projectGrouping, personalProjectOrder: view.personalProjectOrder }
+      : catalog.projectGrouping,
     folderWorkspaces: visibleFolderWorkspaces,
     hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
     defaultHostId,

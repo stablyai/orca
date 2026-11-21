@@ -34,7 +34,11 @@ import {
 } from './sections/project-group-sections'
 import { getSidebarLineageChildren } from './lineage/pinned-section-worktrees'
 import { emitPinnedGroup } from './sections/pinned-group-rows'
-import { appendWorktreeRows, buildPendingCreationRow } from './sections/row-builders'
+import {
+  appendWorktreeRows,
+  buildPendingCreationRow,
+  pendingCreationsByRepo
+} from './sections/row-builders'
 import { getRenderableFolderWorkspaces } from './folders/folder-workspace-lanes'
 import {
   getFolderLaneSections,
@@ -124,12 +128,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
-  const pendingByRepo = new Map<string, PendingCreationRef[]>()
-  for (const creation of pendingCreations) {
-    const list = pendingByRepo.get(creation.repoId) ?? []
-    list.push(creation)
-    pendingByRepo.set(creation.repoId, list)
-  }
+  const pendingByRepo = pendingCreationsByRepo(pendingCreations)
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
@@ -151,7 +150,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
     owningSectionOf: (worktree) =>
-      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
+      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex, repoOf(worktree)),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
       const folderBound =
@@ -166,6 +165,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           : buildOrderedGroups({
               groupBy,
               naturalWorktrees,
+              repoOfWorktree: repoOf,
               repoMap,
               prGroupOf,
               workspaceStatuses,

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { PersonalProjectOrderSchema } from '../../../src/shared/personal-project-order'
 import type { PersistedUIState } from '../../../src/shared/orca-profiles/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repository/appearance/repo-icon'
 import {
@@ -24,7 +25,9 @@ export const WORKSPACE_SORT_BY_ARMS = hostUnionArms<PersistedUIState['sortBy']>(
 
 const WORKSPACE_PROJECT_ORDER_ARMS = hostUnionArms<PersistedUIState['projectOrderBy']>({
   manual: true,
-  recent: true
+  recent: true,
+  frequent: true,
+  name: true
 })
 const WORKSPACE_AGENT_ACTIVITY_LAYOUT_ARMS = hostUnionArms<
   NonNullable<PersistedUIState['agentActivityDisplayMode']>
@@ -129,6 +132,7 @@ export const hostViewSettingsSchema = z
         'hideWorkspacesFromOtherDevices',
         z.boolean()
       ),
+      personalProjectOrder: salvagedOptional('personalProjectOrder', PersonalProjectOrderSchema),
       projectOrderBy: salvagedOptional('projectOrderBy', z.enum(WORKSPACE_PROJECT_ORDER_ARMS)),
       // Kept as strings: a property a newer desktop adds is carried back unchanged on write.
       worktreeCardProperties: salvagedOptional('worktreeCardProperties', z.array(z.string())),

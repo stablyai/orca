@@ -23,6 +23,16 @@ import type {
   Row
 } from '../row-types'
 
+export function pendingCreationsByRepo(creations: readonly PendingCreationRef[]) {
+  const pending = new Map<string, PendingCreationRef[]>()
+  for (const creation of creations) {
+    const list = pending.get(creation.repoId) ?? []
+    list.push(creation)
+    pending.set(creation.repoId, list)
+  }
+  return pending
+}
+
 export function buildPendingCreationRow(
   creation: PendingCreationRef,
   repoMap: Map<string, Repo>

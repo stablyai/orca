@@ -1,3 +1,4 @@
+import type { PersonalProjectOrder } from '../../personal-project-order'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import type { ProjectHostSetupProjection } from '../../project/host-setup/project-host-setup-projection'
 import type {
@@ -31,6 +32,7 @@ export type MobileProjectSectionCatalog = {
   projects: ProjectSectionProject[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
+  personalProjectOrder?: PersonalProjectOrder
   /** Every host's project groups, which the phone nests projects and folder workspaces under; older desktops omit it. */
   projectGroups?: ProjectGroup[]
 }
@@ -66,7 +68,8 @@ export function buildMobileProjectSectionCatalog(
   repos: readonly Repo[],
   projection: ProjectHostSetupProjection,
   projectOrderBy: ProjectOrderBy,
-  projectGroups?: readonly ProjectGroup[]
+  projectGroups?: readonly ProjectGroup[],
+  personalProjectOrder?: PersonalProjectOrder
 ): MobileProjectSectionCatalog {
   return {
     repos: repos.map(sectionRepo),
@@ -84,6 +87,7 @@ export function buildMobileProjectSectionCatalog(
       ...(setup.executionHostId ? { executionHostId: setup.executionHostId } : {})
     })),
     projectOrderBy,
+    ...(personalProjectOrder ? { personalProjectOrder } : {}),
     // Why: like repos, groups reach phones without their hook commands.
     ...(projectGroups
       ? { projectGroups: projectGroups.map(({ hookSettings: _hooks, ...group }) => group) }

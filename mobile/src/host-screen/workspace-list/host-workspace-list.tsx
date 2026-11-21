@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { resolveProjectPreferenceKey } from '../../../../src/shared/project-preference-identity'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
 import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
@@ -49,6 +52,7 @@ export function HostWorkspaceList({
   /** The host name at the top of the list, folding into the bar as it scrolls. */
   pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
 }) {
+  const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
   const {
     actions,
@@ -124,6 +128,17 @@ export function HostWorkspaceList({
   const renderSectionHeader = useCallback(
     ({ section }: { section: Section }) => {
       const collapseKey = section.collapseKey ?? section.key
+      const projectKey =
+        section.repo && controller.projectCatalog
+          ? resolveProjectPreferenceKey(
+              section.repo.id,
+              controller.projectCatalog.setups,
+              getRepoExecutionHostId(section.repo)
+            )
+          : null
+      const pinned = projectKey
+        ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
+        : false
       return (
         bots.header(section, collapsedGroups, pendingCollapseKeys, toggleCollapsed) ?? (
           <HostSectionHeader
@@ -139,6 +154,14 @@ export function HostWorkspaceList({
             groupByRepo={groupBy === 'repo'}
             repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
             onToggle={toggleCollapsed}
+            pinRepo={projectKey && settings.supportsPersonalProjectOrder ? section.repo : undefined}
+            pinLabel={
+              pinned
+                ? t('hostScreen.project.unpin', 'Unpin project')
+                : t('hostScreen.project.pin', 'Pin project')
+            }
+            projectPinned={pinned}
+            onToggleProjectPin={settings.toggleProjectPin}
           />
         )
       )
@@ -150,6 +173,11 @@ export function HostWorkspaceList({
       groupBy,
       repoLookById,
       toggleCollapsed,
+      controller.projectCatalog,
+      state.view.personalProjectOrder,
+      settings.supportsPersonalProjectOrder,
+      settings.toggleProjectPin,
+      t,
       bots
     ]
   )

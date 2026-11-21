@@ -86,7 +86,12 @@ export const PROJECT_ORDER_OPTIONS = localizeChoices<
   ChoiceId<typeof WORKSPACE_PROJECT_ORDER_CHOICES>
 >(
   WORKSPACE_PROJECT_ORDER_CHOICES,
-  { manual: manualLabel, recent: recentLabel },
+  {
+    manual: manualLabel,
+    recent: recentLabel,
+    name: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name'),
+    frequent: () => translate('sidebar.projectOrder.frequent', 'Frequent')
+  },
   {
     manual: () =>
       translate(
@@ -94,10 +99,10 @@ export const PROJECT_ORDER_OPTIONS = localizeChoices<
         'Drag projects to arrange them'
       ),
     recent: () =>
-      translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
-        'Most recent workspace activity'
-      )
+      translate('sidebar.projectOrder.recentDescription', 'Most recently opened by you'),
+    frequent: () =>
+      translate('sidebar.projectOrder.frequentDescription', 'Most project openings by you'),
+    name: () => translate('sidebar.projectOrder.nameDescription', 'Project name, A to Z')
   }
 )
 

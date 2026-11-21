@@ -197,6 +197,15 @@
         "installLockWaitHolderGone": "The other Orca install in this distro stopped. Orca takes over in a few seconds."
       }
     },
+    "projectOrder": {
+      "pin": "Pin project",
+      "unpin": "Unpin project",
+      "frequent": "Frequent",
+      "recentDescription": "Most recently opened by you",
+      "frequentDescription": "Most project openings by you",
+      "nameDescription": "Project name, A to Z",
+      "saveFailed": "Could not save project order"
+    },
     "agentSummary": {
       "state": {
         "waiting": "waiting",

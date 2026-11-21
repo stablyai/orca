@@ -6,11 +6,12 @@ import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { Section } from '../../worktree/workspace-list/workspace-list-types'
-import { hostScreenStyles as styles } from '../host-screen-styles'
-import type { RepoLook } from '../catalog/host-repo-looks'
-import { HostPendingCreationRow } from './host-pending-creation-row'
 import { projectGroupHeaderIndent } from '../../worktree/project-sections/project-group-indent'
+import type { Section } from '../../worktree/workspace-list/workspace-list-types'
+import type { RepoLook } from '../catalog/host-repo-looks'
+import { hostScreenStyles as styles } from '../host-screen-styles'
+import { HostPendingCreationRow } from './host-pending-creation-row'
+import type { HostScreenController } from '../use-host-screen-controller'
 
 // Takes the header's own fields, not the section, so a poll that rebuilds sections skips unchanged headers.
 export const HostSectionHeader = memo(function HostSectionHeader(props: {
@@ -26,6 +27,10 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
   groupByRepo: boolean
   repoLook: RepoLook | null | undefined
   onToggle: (collapseKey: string) => void
+  pinRepo?: Section['repo']
+  pinLabel: string
+  projectPinned: boolean
+  onToggleProjectPin: HostScreenController['settings']['toggleProjectPin']
 }) {
   useMobileColorScheme()
   const pendingCreations = props.pendingCreations?.map((creation) => (
@@ -71,6 +76,21 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
         ) : null}
         <Text style={styles.sectionTitle}>{props.title}</Text>
         <Text style={styles.sectionCount}>{props.count}</Text>
+        {props.pinRepo ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={props.pinLabel}
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation()
+              if (props.pinRepo) {
+                void props.onToggleProjectPin(props.pinRepo)
+              }
+            }}
+          >
+            <Pin size={14} color={props.projectPinned ? colors.textPrimary : colors.textMuted} />
+          </Pressable>
+        ) : null}
         {props.pending && (
           <ActivityIndicator
             size="small"

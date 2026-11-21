@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { PersonalProjectOrderSchema } from '../../personal-project-order'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectHostSetupMethod } from '../../project/project-types'
 import type {
@@ -18,7 +19,12 @@ const SETUP_METHOD_ARMS = hostUnionArms<ProjectHostSetupMethod>({
   provisioned: true
 })
 const REPO_KIND_ARMS = hostUnionArms<RepoKind>({ git: true, folder: true })
-const PROJECT_ORDER_BY_ARMS = hostUnionArms<ProjectOrderBy>({ manual: true, recent: true })
+const PROJECT_ORDER_BY_ARMS = hostUnionArms<ProjectOrderBy>({
+  manual: true,
+  recent: true,
+  name: true,
+  frequent: true
+})
 
 // A host id the desktop spells; normalized, so a spelling this build cannot read drops.
 const hostIdSchema = z.string().transform((value, ctx) => {
@@ -84,6 +90,7 @@ export const ProjectGroupSchema = z.object({
 }) satisfies z.ZodType<ProjectGroup, unknown>
 
 export const ProjectSectionCatalogSchema = z.object({
+  personalProjectOrder: salvagedOptional('personalProjectOrder', PersonalProjectOrderSchema),
   repos: salvagingArray(repoSchema),
   projects: salvagingArray(z.object({ id: z.string(), displayName: z.string() })),
   setups: salvagingArray(setupSchema),
