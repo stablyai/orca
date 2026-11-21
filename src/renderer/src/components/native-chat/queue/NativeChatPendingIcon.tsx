@@ -27,9 +27,9 @@ export function NativeChatPendingIcon({
     const timer = setTimeout(() => setShowSpinner(true), PENDING_SPINNER_DELAY_MS)
     return () => clearTimeout(timer)
   }, [pending])
-  if (!showSpinner) {
-    return <>{children}</>
-  }
-  const spinner = <LoadingSpinner className={className} />
-  return showWhileHidden ? <span className="visible inline-flex">{spinner}</span> : spinner
+  return showSpinner ? (
+    <LoadingSpinner className={className} showWhileHidden={showWhileHidden} />
+  ) : (
+    <>{children}</>
+  )
 }

@@ -281,7 +281,6 @@ export function NativeChatQueuedMessageCard({
                       type="button"
                       variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                       size="xs"
-                      className="px-1.5"
                       onClick={onSteer}
                       disabled={steerHeld || busy}
                     >
