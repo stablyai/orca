@@ -1,5 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
-import { JournalWalWaiters, journalWalFrameCounts, journalWalGated } from './journal-wal-admission'
+import { JournalWalWaiters, journalWalGated } from './journal-wal-admission'
 import type { JournalCheckpointOutage } from './journal-checkpoint-outages'
 import type { CheckpointResponse } from './journal-checkpoint-worker-source'
 import {
@@ -46,7 +46,12 @@ export class JournalCheckpointOwner {
       options
     )
     try {
-      this.frames = journalWalFrameCounts(writer)
+      const version = String(writer.prepare('SELECT sqlite_version() AS version').get()?.version)
+      const [major = 0, minor = 0] = version.split('.').map(Number)
+      if (major < 3 || (major === 3 && minor < 51)) {
+        throw new Error(`SQLite ${version} lacks NOOP checkpoints`)
+      }
+      this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
     } catch (error) {
       this.worker.disable()
       this.lose(error, 'spawn')

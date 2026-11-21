@@ -310,12 +310,12 @@ class LivenessCheckpoint extends ControlledCheckpoint {
   }
 }
 
-it('keeps a busy checkpoint worker until it is stuck, and replaces one that stays silent', async () => {
+it('keeps a late busy checkpoint worker, reports it once stuck, and replaces one that stays silent', async () => {
   const { filename, writer } = fixture()
   writer.pragma('wal_autocheckpoint = 1000')
   const workers: LivenessCheckpoint[] = []
   const outages: JournalCheckpointOutage[] = []
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const owner = new JournalCheckpointOwner(writer, filename, {
     timeoutMs: 20,
     stuckMs: 100,
@@ -334,11 +334,13 @@ it('keeps a busy checkpoint worker until it is stuck, and replaces one that stay
   workers[0]!.busy(false)
   workers[0]!.ready()
 
-  // Busy inside a checkpoint: it keeps checkpoints until stuck, then the writer takes them; never replaced.
+  // Busy inside a checkpoint past the deadline: the writer takes checkpoints back, and the worker is
+  // kept and reported once stuck.
   workers[0]!.busy(true)
   writer.prepare('INSERT INTO writes VALUES(1, zeroblob(1048576))').run()
   owner.afterCommit()
   await vi.waitFor(() => expect(autocheckpoint()).toBe(1000))
+  await vi.waitFor(() => expect(warning).toHaveBeenCalled())
   expect(workers.at(-1)).toBe(workers[0])
   expect(workers[0]!.terminated).toBe(false)
   workers[0]!.busy(false)

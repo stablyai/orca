@@ -1,5 +1,3 @@
-import type Database from '../../../sqlite/sync-database'
-
 export const JOURNAL_WAL_BACKPRESSURE_FRAMES = 32_768
 /** Send-critical writes pass WAL pressure up to this hard ceiling, so their WAL growth stays bounded. */
 export const JOURNAL_WAL_URGENT_FRAMES = 2 * JOURNAL_WAL_BACKPRESSURE_FRAMES
@@ -41,16 +39,4 @@ export class JournalWalWaiters {
       }
     }
   }
-}
-
-/** The writer's frame-count probe; it needs NOOP checkpoints (SQLite 3.51). */
-export function journalWalFrameCounts(
-  writer: Database.Database
-): ReturnType<Database.Database['prepare']> {
-  const version = String(writer.prepare('SELECT sqlite_version() AS version').get()?.version)
-  const [major = 0, minor = 0] = version.split('.').map(Number)
-  if (major < 3 || (major === 3 && minor < 51)) {
-    throw new Error(`SQLite ${version} lacks NOOP checkpoints`)
-  }
-  return writer.prepare('PRAGMA wal_checkpoint(NOOP)')
 }
