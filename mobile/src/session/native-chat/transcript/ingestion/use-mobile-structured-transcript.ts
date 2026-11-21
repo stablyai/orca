@@ -13,9 +13,18 @@ import { omitNativeChatThreadGoalRows } from '../../../../../../src/shared/nativ
 import { createStructuredQuestionProjection } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  projectAutomationRunNotStartedItem,
+  projectAutomationSavedItem,
+  projectBotItemNoteItem
+} from '../../../../../../src/shared/structured-automation-saved-projection'
 
 const mobileStructuredTranscript = createStructuredQuestionProjection(
-  projectStructuredAgentStartItem
+  (item) =>
+    projectAutomationRunNotStartedItem(item) ??
+    projectAutomationSavedItem(item) ??
+    projectBotItemNoteItem(item) ??
+    projectStructuredAgentStartItem(item)
 )
 
 /** The chat's transcript rows, its messages with this phone's sends in flight, and the prompts they resolved.

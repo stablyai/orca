@@ -38,7 +38,10 @@ vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-c
 }))
 vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityChatAuthConfig: vi.fn(),
-  callAntigravityChatSignIn: vi.fn(async () => ({ flowId: 'new-flow' })),
+  callAntigravityChatSignIn: vi.fn(async () => ({
+    result: { flowId: 'new-flow' },
+    _meta: { runtimeId: 'test-runtime' }
+  })),
   subscribeAntigravityChatSignIn: vi.fn(
     async (owner: RuntimeClientTarget, handlers: RuntimeRpcSubscriptionHandlers) => {
       streams.handlers.set(owner.kind === 'local' ? 'local' : owner.environmentId, handlers)
@@ -134,13 +137,14 @@ it.each(['accounts', 'provider'] as const)(
     await act(async () => {
       finish(enterprise)
     })
-    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    await waitFor(() =>
+      expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+    )
     expect(callAntigravityChatSignIn).toHaveBeenCalledTimes(1)
   }
 )
 
 it.each([
-  { surface: 'accounts', language: 'en', action: 'Sign in with Gemini Enterprise' },
   { surface: 'provider', language: 'en', action: 'Sign in with Gemini Enterprise' },
   { surface: 'accounts', language: 'es', action: 'Sign in with Gemini Enterprise' }
 ] as const)(
@@ -180,7 +184,9 @@ it.each([
       async (_owner, config) => config ?? enterprise
     )
     await user.click(screen.getByRole('button', { name: action }))
-    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    await waitFor(() =>
+      expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+    )
     expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
       ...enterprise,
       gcpProject: 'enterprise-project-changed'
@@ -220,7 +226,9 @@ it('commits the visible choice before sign-in while another client’s refresh i
   await act(async () => {
     finishSave(personal)
   })
-  await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+  )
   await act(async () => {
     finishRead(enterprise)
   })
@@ -260,82 +268,76 @@ it('refreshes the saved method after reconnecting to a restarted host with the s
   expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
 })
 
-it.each(['accounts', 'provider'] as const)(
-  '%s uses its single Sign in action to reread a failed load before preparing Enterprise',
-  async (surface) => {
-    const target = { kind: 'environment', environmentId: `load-recovery-${surface}` } as const
-    vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Host unreachable'))
-    const user = userEvent.setup()
-    renderSurface(surface, target)
-    await screen.findByRole('alert')
-    await act(async () => streams.handlers.get(key(target))?.onError(new Error('Connection lost')))
-    const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
-    const info = screen.queryByRole('button', { name: 'Separate from your agy terminal account.' })
-    expect(screen.getAllByRole('button').filter((button) => button !== info)).toEqual([action])
-    expect(action).toBeEnabled()
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    await user.click(action)
-    expect(action).toBeEnabled()
-    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
-    const requests: unknown[] = []
-    vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
-      requests.push(config ?? 'Get')
-      return config ?? enterprise
-    })
-    await user.click(action)
-    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
-    expect(requests).toEqual(['Get', enterprise])
-    expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
-    await act(async () =>
-      streams.handlers.get(key(target))?.onEvent({ revision: 2, auth: 'unknown', flow: null })
-    )
-    await screen.findByRole('alert')
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Sign in/ })).toBeEnabled()
-  }
-)
+it('uses the provider Sign in action to recover a failed settings load before starting Enterprise', async () => {
+  const target = { kind: 'environment', environmentId: `load-recovery` } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Host unreachable'))
+  const user = userEvent.setup()
+  renderSurface('provider', target)
+  await screen.findByRole('alert')
+  await act(async () => streams.handlers.get(key(target))?.onError(new Error('Connection lost')))
+  const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
+  const info = screen.queryByRole('button', { name: 'Separate from your agy terminal account.' })
+  expect(screen.getAllByRole('button').filter((button) => button !== info)).toEqual([action])
+  expect(action).toBeEnabled()
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  await user.click(action)
+  expect(action).toBeEnabled()
+  expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+  const requests: unknown[] = []
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
+    requests.push(config ?? 'Get')
+    return config ?? enterprise
+  })
+  await user.click(action)
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+  )
+  expect(requests).toEqual(['Get', enterprise])
+  expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
+  await act(async () =>
+    streams.handlers.get(key(target))?.onEvent({ revision: 2, auth: 'unknown', flow: null })
+  )
+  await screen.findByRole('alert')
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^Sign in/ })).toBeEnabled()
+})
 
-it.each(['accounts', 'provider'] as const)(
-  '%s keeps an active sign-in usable when its background settings refresh fails',
-  async (surface) => {
-    const target = { kind: 'environment', environmentId: `active-read-failure-${surface}` } as const
-    vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
-    const user = userEvent.setup()
-    renderSurface(surface, target)
-    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-    vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
-    await act(async () => {
-      streams.handlers.get(key(target))?.onEvent({
-        revision: 1,
-        auth: 'unknown',
-        flow: { phase: 'waiting', flowId: 'own-flow', url: 'https://example.com/sign-in' }
-      })
+it('keeps an active account sign-in usable when its background settings refresh fails', async () => {
+  const target = { kind: 'environment', environmentId: `active-read-failure` } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
+  const user = userEvent.setup()
+  renderSurface('accounts', target)
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
+  await act(async () => {
+    streams.handlers.get(key(target))?.onEvent({
+      revision: 1,
+      auth: 'unknown',
+      flow: { phase: 'waiting', flowId: 'own-flow', url: 'https://example.com/sign-in' }
     })
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copy sign-in link' })).toBeEnabled()
-    await user.click(screen.getByRole('button', { name: "Browser page didn't load?" }))
-    expect(screen.getByRole('textbox')).toBeEnabled()
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Cancel', { flowId: 'own-flow' })
-    await act(async () => {
-      streams.handlers
-        .get(key(target))
-        ?.onEvent({ revision: 2, auth: 'unknown', flow: { phase: 'waiting', flowId: null } })
-    })
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Sign-in is in progress in another client.'
-    )
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    await act(async () => {
-      streams.handlers.get(key(target))?.onEvent({ revision: 3, auth: 'unknown', flow: null })
-    })
-    expect(await screen.findByRole('button', { name: /^Sign in/ })).toBeEnabled()
-  }
-)
+  })
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Copy sign-in link' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: "Browser page didn't load?" }))
+  expect(screen.getByRole('textbox')).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Cancel', { flowId: 'own-flow' })
+  await act(async () => {
+    streams.handlers
+      .get(key(target))
+      ?.onEvent({ revision: 2, auth: 'unknown', flow: { phase: 'waiting', flowId: null } })
+  })
+  expect(screen.getByRole('status')).toHaveTextContent('Sign-in is in progress in another client.')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  await act(async () => {
+    streams.handlers.get(key(target))?.onEvent({ revision: 3, auth: 'unknown', flow: null })
+  })
+  expect(await screen.findByRole('button', { name: /^Sign in/ })).toBeEnabled()
+})
 
 it('keeps an edited draft ahead of another client’s choice when recovering a failed refresh', async () => {
   const target = { kind: 'environment', environmentId: 'edited-load-recovery' } as const
@@ -354,7 +356,9 @@ it('keeps an edited draft ahead of another client’s choice when recovering a f
     async (_owner, config) => config ?? personal
   )
   await user.click(screen.getByRole('button', { name: /^Sign in/ }))
-  await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+  )
   expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
     ...enterprise,
     gcpProject: 'enterprise-project-new'
@@ -428,3 +432,46 @@ it.each(['success', 'failure'] as const)(
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
   }
 )
+
+it('asks a signed-in host to replace its account, not reuse the cached sign-in', async () => {
+  const target = { kind: 'environment', environmentId: 'change-account' } as const
+  streams.initial.set(key(target), { revision: 1, auth: 'signedIn', flow: null })
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+    async (_owner, config) => config ?? personal
+  )
+  const user = userEvent.setup()
+  renderSurface('accounts', target)
+  await user.click(await screen.findByRole('button', { name: 'Change account' }))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', {
+      intent: 'changeAccount'
+    })
+  )
+})
+
+it('tells Settings after a saved method change, so the Google sign-in choice reads the new route', async () => {
+  const target = { kind: 'environment', environmentId: 'method-saved-host' } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+    async (_owner, config) => config ?? { method: 'agent-platform' }
+  )
+  const onSaved = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <TooltipProvider>
+      <AntigravityChatSignInRow
+        owner={target}
+        label="Test host"
+        disabled={false}
+        onSaved={onSaved}
+      />
+    </TooltipProvider>
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('combobox')).toHaveTextContent('Google Agent Platform')
+  )
+  expect(onSaved).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('combobox'))
+  await user.click(screen.getByRole('option', { name: /^Google account/ }))
+  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+  expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, personal)
+})

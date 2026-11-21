@@ -1,17 +1,16 @@
+import { claudeBotSessionOptions } from './claude-bot-session-options'
+import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
-import { prepareClaudeLaunchAccount } from './claude-launch-account'
+import { prepareClaudeLaunchAccount, withClaudeLaunchAccountPin } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type {
-  Options as ClaudeAgentSdkOptions,
-  PermissionMode
-} from '@anthropic-ai/claude-agent-sdk'
-import type {
-  AgentChatPermissionChoice,
-  AgentChatPermissionMode
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
+import {
+  claudeStructuredPermissionOptions,
+  type ClaudePermissionOptions
+} from './claude-structured-permission-options'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
@@ -25,7 +24,8 @@ import {
   type ClaudeChildEnvSources,
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
-import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import { withClaudeArtifactDefault } from './claude-artifact-env'
+import { CLAUDE_DEFAULT_SETTING_SOURCES, claudeDiscoveryOptions } from './claude-discovery-options'
 import { claudeInChromeDefaultArgs } from '../../configuration/claude-in-chrome-default'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import type {
@@ -42,25 +42,7 @@ import {
   type AgentSessionRewindFork
 } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
-export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
-const CLAUDE_ARTIFACT_ENV = 'CLAUDE_CODE_ARTIFACT'
-
-// SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins,
-// matched case-insensitively on Windows, where claude_code_artifact=0 is the same opt-out.
-export function withClaudeArtifactDefault(
-  env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform
-): Record<string, string> {
-  const chosen = Object.keys(env).some(
-    (key) =>
-      key === CLAUDE_ARTIFACT_ENV ||
-      (platform === 'win32' && key.toUpperCase() === CLAUDE_ARTIFACT_ENV)
-  )
-  return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
-}
-
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -79,7 +61,9 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'resumeSessionAt'
   | 'forkSession'
 > &
-  ClaudePermissionOptions & { promptSuggestions?: boolean }
+  ClaudePermissionOptions & { promptSuggestions?: boolean } & Awaited<
+    ReturnType<typeof claudeBotSessionOptions>
+  >
 
 /** Replay acknowledgements require an explicit flag; the SDK supplies the other transport flags. */
 export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
@@ -89,26 +73,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   settingSources: [...CLAUDE_DEFAULT_SETTING_SOURCES],
   supportedDialogKinds: [],
   extraArgs: { 'replay-user-messages': null }
-}
-
-const CLAUDE_PERMISSION_MODES = {
-  // Override settings defaultMode so the chat runs with its selected permission mode.
-  ask: 'default',
-  'accept-edits': 'acceptEdits',
-  auto: 'auto'
-} as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
-
-/** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
-export function claudeStructuredPermissionOptions(
-  mode: AgentChatPermissionChoice
-): ClaudePermissionOptions {
-  if (mode === 'own') {
-    // An omitted mode lets the CLI apply the user's settings defaultMode.
-    return {}
-  }
-  return mode === 'full-access'
-    ? { extraArgs: { 'dangerously-skip-permissions': null } }
-    : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
 }
 
 export type ClaudeStructuredLaunch = {
@@ -131,6 +95,8 @@ export type ClaudeStructuredLaunch = {
   cliFlag: ClaudeCliFlagCheck
   /** Chain identity is independent of whether a transcript exists to resume. */
   continuesChain: boolean
+  /** The name of the program the user's Command runs, never its arguments; absent for the stock CLI. */
+  configuredProgram?: string
   /** Chain head replaced by this rewind fork. */
   forkedFromKey?: string
 }
@@ -225,7 +191,7 @@ export function claudeStructuredLaunchPart(
       command: sources.command,
       prefixArgs: sources.prefixArgs,
       cwd,
-      env: claudeProbeEnv(sources)
+      env: await withClaudeLaunchAccountPin(router, claudeProbeEnv(sources), accountHome.path)
     }
     const launchFlags = resolveClaudeLaunchFlags(
       { ...deps, prepareVisuals: basis.visuals },
@@ -233,13 +199,17 @@ export function claudeStructuredLaunchPart(
       probeLaunch
     )
     const launchArgs = await deps.resolveLaunchArgs()
-    const configured = claudeStructuredLaunchArgs(launchArgs)
-    const { thinkingDisplayArgs, visuals, promptSuggestions } = await launchFlags
-    const additionalDirectories = [
-      ...configured.additionalDirectories,
-      ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
-      ...(visuals ? [visuals.visuals.folder] : [])
-    ]
+    const { thinkingDisplayArgs, visuals, promptSuggestions, refused } = await launchFlags
+    const linked = await basis.linkedSkills()
+    const discovery = claudeDiscoveryOptions({
+      configuredArgs: launchArgs,
+      ...(deps.attachmentDirectory ? { attachmentDirectory: deps.attachmentDirectory } : {}),
+      visuals: visuals && {
+        pluginDir: visuals.pluginDir,
+        scratchDirectory: visuals.visuals.folder
+      },
+      linkedRoot: linked.root
+    })
     const permission = claudeStructuredPermissionOptions(basis.permissionMode ?? 'ask')
     // --resume fails without a transcript; --session-id collides with an existing one.
     const leafUuid = head && continuesChain ? claudeProviderHandleLeafUuid(head) : null
@@ -257,15 +227,19 @@ export function claudeStructuredLaunchPart(
     // Fixed homes can be checked before the final account-routing recheck.
     const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
     // Resolve auth after awaited launch preparation; account routing is rechecked below.
+    const tools = await basis.toolServers()
     const { command, prefixArgs, env } = await resolveClaudeStructuredInvocation(
       envDeps,
       (base) =>
         withNativeChatVisualsEnv(
-          {
-            ...withClaudeArtifactDefault(base),
-            // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
-          },
+          withBotLaunchToolsEnv(
+            {
+              ...withClaudeArtifactDefault(base),
+              // The turn translator relies on Claude's authoritative idle frame when no result arrives.
+              [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
+            },
+            tools
+          ),
           visuals?.visuals ?? null
         ),
       sources,
@@ -300,11 +274,11 @@ export function claudeStructuredLaunchPart(
         options: {
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
           ...permission,
-          ...(additionalDirectories.length ? { additionalDirectories } : {}),
-          ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
+          ...discovery,
+          ...(await claudeBotSessionOptions(basis, linked.projects, tools, refused)),
           ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
-            ...configured.extraArgs,
+            ...discovery.extraArgs,
             ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
             ...permission.extraArgs,
             ...thinkingDisplayArgs,
@@ -322,12 +296,13 @@ export function claudeStructuredLaunchPart(
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
         continuesChain,
+        ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }
           : {})
       },
       env,
-      inheritedEnvToDelete: [],
+      inheritedEnvToDelete: refused.envToDelete,
       // The agent runtime follows Orca's CLI directory on PATH so another orca cannot shadow it.
       cliRuntimeCommand: command
     }

@@ -188,6 +188,8 @@ export type IPtyProvider = {
   resetInputModes(id: string): Promise<void>
   /** Sends ESC [ O to a ?1004 program once no viewer is left to blur; hosts that own no viewers omit it. */
   reportFocusLost?(id: string): Promise<void>
+  /** Redraws the program without input; hosts that cannot leave it alone. */
+  requestRepaint?(id: string): Promise<void>
   /** Ends the startup Kitty-query window; OSC 10/11 authority stays with the owner for life. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   /** Host-wide viewer colours the PTY owner answers OSC 10/11 from. */
@@ -211,7 +213,8 @@ export type IPtyProvider = {
     worktreeId?: string
     /** Scope route validation to these PTYs; absence still requires a complete inventory. */
     ptyIds?: readonly string[]
-    /** Foreground proof only: read `ptyIds` from their established owner. Never exit proof or a census. */
+    /** Foreground proof and root-PID lookups only: read `ptyIds` from their established owner.
+     *  Never a census or an exit proof that reads a PTY's absence as its end. */
     targetOwnerOnly?: boolean
     /** Diagnostic display only: include generations whose routing owner is unverifiable. */
     includeUnrouted?: boolean

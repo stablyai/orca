@@ -135,9 +135,10 @@ import {
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
-import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/web-session-tabs-sync/hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { recordWebAgentSessionHandoff } from '@/runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
@@ -3140,6 +3141,11 @@ export function createRemoteRuntimePtyTransport(
             storedCallbacks.onPausedOutputDropped?.()
           }
         },
+        onOutputGapRecovered: () => {
+          if (isCurrentSubscription()) {
+            storedCallbacks.onOutputGapRecovered?.()
+          }
+        },
         onSubscribeAcknowledged: (result) => {
           if (isCurrentSubscription()) {
             if (
@@ -3701,9 +3707,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
       const promptStatus = freshLaunch
-        ? lastVerifiedRuntimeStatus(
-            useAppStore.getState().runtimeStatusByEnvironmentId.get(createEnvironmentId)
-          )
+        ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(createEnvironmentId))
         : null
       const promptPlatform = authoritativeHostPlatform ?? promptStatus?.hostPlatform
       let promptPlan =

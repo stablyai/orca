@@ -7,6 +7,8 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  // Inside a sheet's tab, the tree sits on the sheet.
+  onSheet: { backgroundColor: 'transparent' },
   header: {
     backgroundColor: colors.bgBase
   },
@@ -40,6 +42,16 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
   },
   rowTitleDisabled: {
     color: colors.textMuted
+  },
+  // Desktop sets ignored names in italics as well as dimming them.
+  rowTitleIgnored: {
+    fontStyle: 'italic'
+  },
+  // Same letter badge as the Source Control rows.
+  statusLetter: {
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
   },
   rowMeta: {
     marginTop: 1,

@@ -120,6 +120,45 @@ describe('ConfirmationDialogProvider', () => {
     expect(onCancelClicked).toHaveBeenCalledOnce()
   })
 
+  it('lets a press outside dismiss a prompt that guards only its buttons, but not a fully guarded one', async () => {
+    const onCancelClicked = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Give Pat access?',
+      confirmLabel: 'Give access',
+      cancelLabel: 'Reject',
+      ignoresOpeningGesture: 'buttons',
+      onCancelClicked
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const reject = await screen.findByRole('button', { name: 'Reject' })
+    await waitFor(() => expect(reject).toHaveFocus())
+    expect(fireEvent.keyDown(reject, { key: 'Enter', repeat: true })).toBe(false)
+    fireEvent.click(reject, { detail: 2 })
+    expect(onSettled).not.toHaveBeenCalled()
+
+    // A press outside: Radix answers it on the click that follows.
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onCancelClicked).not.toHaveBeenCalled()
+    cleanup()
+
+    const fully = renderDialog({
+      title: 'Use it?',
+      confirmLabel: 'Allow',
+      ignoresOpeningGesture: true
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByRole('dialog')
+    // A press outside: Radix answers it on the click that follows.
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    await act(async () => {})
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(fully.onSettled).not.toHaveBeenCalled()
+  })
+
   it('runs the skip callback when confirmed with the box checked', async () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({

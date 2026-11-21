@@ -1,3 +1,7 @@
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../../memory/pty-registry'
@@ -88,7 +92,14 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     !result.isReattach &&
     result.agentSessionEnsure?.disposition !== 'adopted'
   ) {
-    agentHookServer.retireSleepingPaneOnSpawn(rememberedPaneKey)
+    const providerSession =
+      !input.resumeArgvDropped && normalizeAgentProviderSession(args.resumeProviderSession)
+    agentHookServer.retireSleepingPaneOnSpawn(
+      rememberedPaneKey,
+      providerSession && isResumableTuiAgent(args.launchAgent)
+        ? { agentType: args.launchAgent, providerSession }
+        : undefined
+    )
   }
   if (input.paneKeyAliases) {
     registerSpawnPaneKeyAliases(result, input.paneKey, input.paneKeyAliases)

@@ -17,17 +17,18 @@ import {
   subscriberCommandsChanged
 } from './agent-session-subscriber-frame-fields'
 import {
-  deliverToSubscriber,
   publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { republishSubscriberBackgroundTasks } from './agent-session-live-publications'
-import { publishSubscriberLiveText } from './agent-session-subscriber-live-text'
+import { publishSubscriberLiveText, subscriberAtHead } from './agent-session-subscriber-live-text'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
+import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
+import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
+import { trackSubscriberRetention } from './agent-session-subscriber-retention'
 import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
@@ -35,7 +36,12 @@ import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-sug
 export type { AgentSessionSubscribersHooks } from './agent-session-subscribe-input'
 
 export class AgentSessionSubscribers {
-  private readonly deliveries = new WeakMap<Subscriber, Promise<void>>()
+  private readonly lanes = new SubscriberLanes({
+    deliveryPort: () => this.deliveryPort(),
+    now: () => this.now(),
+    isActive: (subscriber) => this.isActive(subscriber),
+    fail: (subscriber, error) => this.fail(subscriber, error)
+  })
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
   private readonly forkMarkers = new ForkMarkerSubscriptions(
     () => this.deliveryPort(),
@@ -53,9 +59,16 @@ export class AgentSessionSubscribers {
     onInterestChanged: (id, wanted) => this.hooks.onPromptSuggestionInterest?.(id, wanted)
   })
 
-  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
+  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {
+    trackSubscriberRetention(this)
+  }
 
-  subscriberCountForTests(sessionId: string): number {
+  /** What waits behind each subscriber's active delivery, for memory diagnostics. */
+  retention(counted: Set<object>): SubscriberDeliveryRetention[] {
+    return this.lanes.retention(this.bySession, this.now(), counted)
+  }
+
+  subscriberCount(sessionId: string): number {
     return this.bySession.get(sessionId)?.size ?? 0
   }
 
@@ -73,6 +86,11 @@ export class AgentSessionSubscribers {
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
+    subscriber.stopped = this.lanes.of(subscriber).stopped
+    const replaced = session.get(input.id)
+    if (replaced) {
+      this.lanes.clear(replaced)
+    }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
 
@@ -92,7 +110,7 @@ export class AgentSessionSubscribers {
         sessionId: input.sessionId,
         journal,
         fence: input.fence,
-        items: this.hooks.readLiveText?.(input.sessionId) ?? [],
+        items: this.sentLiveText(subscriber, input.sessionId, journal),
         subscribers: [subscriber],
         hostNow
       })
@@ -136,18 +154,14 @@ export class AgentSessionSubscribers {
     targets = this.subscribers(sessionId)
   ): void => {
     const hostNow = this.now()
+    // Read once per fan-out, so every subscriber shares one snapshot.
+    let items: readonly AgentJournalRenderItem[] | undefined
     for (const subscriber of targets) {
-      // Read at emission, so text never trails a durable frame queued ahead of it.
-      this.enqueue(subscriber, () =>
-        publishSubscriberLiveText(this.deliveryPort(), {
-          sessionId,
-          journal,
-          fence,
-          items: typeof read === 'function' ? read() : read,
-          subscribers: [subscriber],
-          hostNow
-        })
-      )
+      // Checked per subscriber, in case ending one ends another mid fan-out.
+      if (this.isActive(subscriber)) {
+        items ??= typeof read === 'function' ? read() : read
+        this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
+      }
     }
   }
 
@@ -167,10 +181,19 @@ export class AgentSessionSubscribers {
   ): void {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal, queueChanged)
+    let owedQueue: SubscriberDeliveryPort | undefined
+    // Subscribers whose waiting catch-up still owes a queue read share one port for it.
+    const queuePort = () =>
+      queueChanged ? port : (owedQueue ??= this.deliveryPort(sessionId, journal, true))
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, () =>
-        deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
-      )
+      this.lanes.of(subscriber).catchUp({
+        journal,
+        port,
+        queuePort,
+        queueChanged,
+        hostNow,
+        ...(activity !== undefined ? { activity } : {})
+      })
     }
   }
 
@@ -184,7 +207,7 @@ export class AgentSessionSubscribers {
           sessionId,
           journal,
           fence,
-          items: this.hooks.readLiveText?.(sessionId) ?? [],
+          items: this.sentLiveText(subscriber, sessionId, journal),
           subscribers: [subscriber],
           hostNow
         })
@@ -195,15 +218,7 @@ export class AgentSessionSubscribers {
 
   republishBackgroundTasks(sessionId: string, fence: number): void {
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, () =>
-        republishSubscriberBackgroundTasks(
-          this.deliveryPort(),
-          [subscriber],
-          sessionId,
-          fence,
-          this.now()
-        )
-      )
+      this.lanes.of(subscriber).backgroundTasks(fence)
     }
   }
 
@@ -236,6 +251,16 @@ export class AgentSessionSubscribers {
   }
 
   hasSubscribers = (sessionId: string): boolean => (this.bySession.get(sessionId)?.size ?? 0) > 0
+
+  /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
+  private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
+    const items = this.hooks.readLiveText?.(sessionId) ?? []
+    // Sending nothing leaves any waiting live text for after the subscriber catches up.
+    if (items.length === 0 || !subscriberAtHead(subscriber, journal)) {
+      return []
+    }
+    return this.lanes.of(subscriber).sendsLiveText(items) ? items : []
+  }
 
   private subscribers = (sessionId: string): Subscriber[] => [
     ...(this.bySession.get(sessionId)?.values() ?? [])
@@ -292,24 +317,7 @@ export class AgentSessionSubscribers {
   }
 
   private enqueue(subscriber: Subscriber, deliver: () => Promise<unknown>): void {
-    const previous = this.deliveries.get(subscriber) ?? Promise.resolve()
-    const next = previous
-      .then(async () => {
-        if (this.isActive(subscriber)) {
-          await deliver()
-        }
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof SubscriberFrameSuperseded)) {
-          this.fail(subscriber, error)
-        }
-      })
-    this.deliveries.set(subscriber, next)
-    void next.finally(() => {
-      if (this.deliveries.get(subscriber) === next) {
-        this.deliveries.delete(subscriber)
-      }
-    })
+    this.lanes.of(subscriber).ordered(deliver)
   }
 
   /**
@@ -325,6 +333,7 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
+    this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
     if (session?.size === 0) {

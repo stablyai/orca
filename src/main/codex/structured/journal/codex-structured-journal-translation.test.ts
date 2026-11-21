@@ -13,7 +13,10 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import { CODEX_USER_INPUT_METHOD } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import { journalTarget } from './codex-deferred-sink-target-test-support'
-import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
@@ -144,8 +147,8 @@ describe('codex journal translation', () => {
     })
   })
 
-  it('admits user-input prompt questions and their publish while the sink pauses reading', async () => {
-    const publishes: string[] = []
+  it('publishes distinct and repeated question IDs while the sink pauses reading', async () => {
+    const published: ReturnType<typeof readTestJournalSnapshot>[] = []
     const bound: [string, string, string][] = []
     const deferred = pausedDeferred()
     const translator = createCodexJournalTranslator({
@@ -162,7 +165,8 @@ describe('codex journal translation', () => {
       params: {
         questions: [
           { id: 'q1', question: 'Which branch?', options: [{ label: 'main' }] },
-          { id: 'q2', question: 'Proceed?', options: [{ label: 'yes' }] }
+          { id: 'q2', question: 'Proceed?', options: [{ label: 'yes' }] },
+          { id: 'q1', question: 'Use the release branch?', options: [{ label: 'release' }] }
         ]
       },
       codexItemId: 'exec-1',
@@ -172,19 +176,36 @@ describe('codex journal translation', () => {
     expect(admission).toEqual({ accepted: true })
     expect(bound.map(([journalItemId]) => journalItemId)).toEqual([
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1',
-      'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2'
+      'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2',
+      'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1'
     ])
     expect(deferred.state()).toMatchObject({ backpressured: true })
 
-    const target = await journalTarget(journals, root, publishes)
-    deferred.bind(target)
+    const target = await journalTarget(journals, root)
+    deferred.bind({
+      ...target,
+      publish: () => {
+        published.push(readTestJournalSnapshot(target.journal))
+      }
+    })
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
-    expect(await savedBodies(target)).toEqual([
-      expect.objectContaining({ kind: 'question', question: 'Which branch?' }),
-      expect.objectContaining({ kind: 'question', question: 'Proceed?' })
-    ])
-    expect(publishes).toHaveLength(1)
+    const saved = await readTestJournalItems(target.journal)
+    expect(saved).toHaveLength(2)
+    expect(saved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          revision: 2,
+          body: expect.objectContaining({ kind: 'question', question: 'Use the release branch?' })
+        }),
+        expect.objectContaining({
+          revision: 1,
+          body: expect.objectContaining({ kind: 'question', question: 'Proceed?' })
+        })
+      ])
+    )
+    expect(deferred.state().failed).toBe(false)
+    expect(await Promise.all(published)).toEqual([await readTestJournalSnapshot(target.journal)])
   })
 
   it('refuses an untranslated user-input prompt without binding live state', () => {

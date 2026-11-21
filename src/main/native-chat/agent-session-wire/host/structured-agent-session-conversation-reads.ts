@@ -192,7 +192,15 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       return revealStructuredAgentSession(deps, id, conversation)
     },
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
-    childAccountHome: (id: string) => context().sessions.get(id)?.child?.accountHome,
+    /** The home a running child launched under. ACP adapters report none, so `orPinned` falls
+     *  back to the record's pinned home while a child runs. */
+    childAccountHome: (id: string, orPinned = false) => {
+      const { sessions, deps } = context()
+      const child = sessions.get(id)?.child
+      return child && orPinned
+        ? (child.accountHome ?? deps.store.getConversation(id)?.accountHome)
+        : child?.accountHome
+    },
     holdsSessions: () => context().deps.store.holdsRecords(),
     onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {

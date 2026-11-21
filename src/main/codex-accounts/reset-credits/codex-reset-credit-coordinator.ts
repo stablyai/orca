@@ -45,7 +45,7 @@ type CodexResetCreditCoordinatorDependencies = {
   runtimeHome: CodexRuntimeHomeService
   managedHomePaths: CodexManagedHomePath
   serializeMutation: <T>(operation: () => Promise<T>) => Promise<T>
-  getSnapshot: () => CodexRateLimitAccountsState
+  getSnapshot: () => Promise<CodexRateLimitAccountsState>
   toSummary: (account: CodexManagedAccount) => CodexManagedAccountSummary
 }
 
@@ -83,13 +83,13 @@ export class CodexResetCreditCoordinator {
     if (existing.state === 'settled' && existing.settledOutcome) {
       const outcome = existing.settledOutcome
       return this.dependencies.serializeMutation(async () => {
-        const { rateLimits } = this.validateScope(existing.expectedScope, {
+        const { rateLimits } = await this.validateScope(existing.expectedScope, {
           kind: 'settledReplay'
         })
         return {
           outcome,
           scope: existing.expectedScope,
-          codex: this.dependencies.getSnapshot(),
+          codex: await this.dependencies.getSnapshot(),
           rateLimits
         }
       })
@@ -105,7 +105,7 @@ export class CodexResetCreditCoordinator {
     if (this.ledger.error) {
       throw this.ledger.error
     }
-    const initialRateLimits = this.dependencies.rateLimits.getState()
+    const initialRateLimits = await this.dependencies.rateLimits.getState()
     const initialTarget = { ...initialRateLimits.codexTarget }
     const initialSettings = this.dependencies.store.getSettings()
     const selectedAccountId = getSelectedCodexAccountIdForTarget(initialSettings, initialTarget)
@@ -143,7 +143,7 @@ export class CodexResetCreditCoordinator {
       if (this.ledger.error) {
         throw this.ledger.error
       }
-      const target = this.dependencies.rateLimits.getState().codexTarget
+      const target = (await this.dependencies.rateLimits.getState()).codexTarget
       if (!sameTarget(target, initialTarget)) {
         throw new Error('The active Codex rate-limit target changed before reset.')
       }
@@ -183,7 +183,7 @@ export class CodexResetCreditCoordinator {
         const isFresh = attempt.state === 'fresh'
         let validation: { managedHomePath: string; rateLimits: RateLimitState }
         try {
-          validation = this.validateScope(expectedScope, {
+          validation = await this.validateScope(expectedScope, {
             kind: 'providerMutation',
             requireCurrentOffer: isFresh
           })
@@ -195,7 +195,7 @@ export class CodexResetCreditCoordinator {
               retryDisposition: 'discardAttempt',
               reason: error.reason,
               scope: expectedScope,
-              codex: this.dependencies.getSnapshot(),
+              codex: await this.dependencies.getSnapshot(),
               rateLimits: error.rateLimits
             }
           }
@@ -214,7 +214,7 @@ export class CodexResetCreditCoordinator {
         const result: CodexResetCreditConsumedResult = {
           outcome,
           scope: expectedScope,
-          codex: this.dependencies.getSnapshot(),
+          codex: await this.dependencies.getSnapshot(),
           rateLimits: state
         }
         await this.ledger.markSettled(idempotencyKey, attempt, outcome)
@@ -236,10 +236,10 @@ export class CodexResetCreditCoordinator {
     return promise
   }
 
-  private validateScope(
+  private async validateScope(
     expectedScope: CodexResetCreditExpectedScope,
     validation: CodexResetCreditScopeValidation
-  ): { managedHomePath: string; rateLimits: RateLimitState } {
+  ): Promise<{ managedHomePath: string; rateLimits: RateLimitState }> {
     return validateCodexResetCreditScope(expectedScope, validation, this.dependencies)
   }
 }

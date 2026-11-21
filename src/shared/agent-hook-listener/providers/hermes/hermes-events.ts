@@ -2,7 +2,8 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../../agent-status/contracts/agent-status-types'
-import type { HermesPaneTurn, HookListenerState } from '../../listener-state'
+import type { HookListenerState } from '../../listener-state'
+import type { HermesPaneTurn } from './hermes-pane-turn'
 import { resolvePrompt, resolveToolState } from '../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 

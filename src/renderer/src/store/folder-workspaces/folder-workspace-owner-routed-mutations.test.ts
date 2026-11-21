@@ -182,3 +182,81 @@ it('rechecks unsaved editor text before the Archive failure toast waives removal
   await retry?.()
   expect(store.getState().folderWorkspaces).toEqual([])
 })
+
+it('blocks deletion of a host twin with an unpublished editor draft', async () => {
+  const store = createTestStore()
+  const folder = makeFolderWorkspace({ executionHostId: 'local' })
+  const twin = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
+  store.setState({
+    projectGroups: [projectGroup],
+    folderWorkspaces: [folder, twin],
+    openFiles: [
+      {
+        id: 'dirty-file',
+        filePath: '/workspace/platform/file.txt',
+        relativePath: 'file.txt',
+        worktreeId: folderWorkspaceKey(folder.id),
+        language: 'plaintext',
+        isDirty: true,
+        mode: 'edit',
+        runtimeEnvironmentId: null
+      }
+    ],
+    editorDrafts: { 'dirty-file': 'not yet published to the session' }
+  })
+  folderWorkspacesDelete.mockResolvedValue(true)
+
+  const deletion = deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local')
+  await deletion
+  expect(deletion).toBeNull()
+  expect(folderWorkspacesDelete).not.toHaveBeenCalled()
+  expect(store.getState().folderWorkspaces).toEqual([folder, twin])
+  expect(store.getState().editorDrafts['dirty-file']).toBe('not yet published to the session')
+
+  store.setState((state) => ({
+    activeWorktreeId: 'folder:folder-workspace-1',
+    activeWorkspaceExecutionHostId: 'local',
+    openFiles: state.openFiles.map((file) => ({ ...file, runtimeEnvironmentId: 'env-owner' }))
+  }))
+  expect(await deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id)).toBe(true)
+  expect(store.getState().folderWorkspaces).toEqual([twin])
+  expect(store.getState().editorDrafts['dirty-file']).toBe('not yet published to the session')
+})
+
+it('lets a bot owner remove its folder without the Archive prompt or failure retry', async () => {
+  const store = createTestStore()
+  const folder = makeFolderWorkspace({ executionHostId: 'local' })
+  const purgeWorktreeTerminalState = vi.fn()
+  store.setState({
+    projectGroups: [projectGroup],
+    folderWorkspaces: [folder],
+    shutdownWorktreeBrowsers: vi.fn(async () => {}),
+    deleteManagedBrowserSessionProfile: vi.fn(),
+    purgeWorktreeTerminalState
+  })
+  vi.mocked(showDeleteWorktreeFailureToast).mockClear()
+  const checkHooks = vi.mocked(window.api.projectGroups.checkHooks)
+  checkHooks.mockClear()
+  const failingRemove = vi
+    .fn<() => Promise<boolean>>()
+    .mockRejectedValue(
+      new Error('WorktreeArchiveHookFailedError: Archive hook failed for worktree: /x')
+    )
+  await expect(
+    deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local', {
+      remove: failingRemove
+    })
+  ).resolves.toBe(false)
+  expect(showDeleteWorktreeFailureToast).not.toHaveBeenCalled()
+  expect(store.getState().folderWorkspaces).toEqual([folder])
+
+  const remove = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
+  await expect(
+    deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local', { remove })
+  ).resolves.toBe(true)
+  expect(remove).toHaveBeenCalledTimes(1)
+  expect(folderWorkspacesDelete).not.toHaveBeenCalled()
+  expect(checkHooks).not.toHaveBeenCalled()
+  expect(store.getState().folderWorkspaces).toEqual([])
+  expect(purgeWorktreeTerminalState).toHaveBeenCalledWith([folderWorkspaceKey(folder.id)])
+})

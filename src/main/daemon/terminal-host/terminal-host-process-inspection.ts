@@ -18,7 +18,11 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
+import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
+import {
+  steadyPollJudgesByJobMembership,
+  type PtyProcessInspectionOptions
+} from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -41,6 +45,8 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
+  jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
@@ -94,6 +100,23 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
+  // Idle shell panes poll forever; a recent full capture plus the PTY's foreground group answers them in O(1).
+  if (
+    args.steadyState === true &&
+    args.jobMembershipOnly === true &&
+    incarnationMatches &&
+    process.platform === 'darwin' &&
+    !session.processNameIsSpawnFile
+  ) {
+    const shell = await readProvenIdleShell(
+      session,
+      () => !args.currentSession || args.currentSession() === session
+    )
+    if (shell !== null) {
+      args.onTier?.('cheap')
+      return { foregroundProcess: shell, hasChildProcesses: false }
+    }
+  }
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
@@ -121,13 +144,18 @@ export async function inspectTerminalHostProcess(args: {
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
-      args.ignoreDetached === true
+      args.ignoreDetached === true,
+      steadyPollJudgesByJobMembership(args, foregroundProcess)
     )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
+      const outputChunks = session.outputChunks
       const snapshot = await getStrictProcessTableSnapshotWithAge()
+      if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
+      }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess

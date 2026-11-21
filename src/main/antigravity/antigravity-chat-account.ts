@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   resolveAntigravityChatAuthConfig,
@@ -17,9 +18,13 @@ import { AcpLaunchGate } from '../acp/launch/acp-launch-gate'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { antigravityUserHome, linkAntigravityUserSkills } from './antigravity-chat-user-skills'
+import { resolveAgentPlatformProject } from './antigravity-agent-platform-project'
+import { assertAntigravityChatCredential } from './antigravity-chat-credential'
 
-type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
-const retained = new ProviderAcquisitionStarts<SignInOwner>()
+type SignInOwner = Pick<AcpAgentConnection, 'close' | 'exited'> & {
+  onExit(listener: () => void): void
+}
+const retained = new ProviderAcquisitionStarts<Pick<SignInOwner, 'close' | 'onExit'>>()
 const folder = hostFolderAccountBinding('GEMINI_HOME', ANTIGRAVITY_CHAT_HOME_FOLDER, [
   ANTIGRAVITY_ACP_HOME
 ])
@@ -57,11 +62,39 @@ export async function closeAntigravitySignInOwner(
   home: string,
   connection: SignInOwner
 ): Promise<void> {
-  if (!(await connection.close().catch(() => false)) && !connection.exited) {
-    retained.retainFailed(home, connection)
-    ANTIGRAVITY_LAUNCH_GATE.retain(connection)
+  await connection.close().catch(() => false)
+  if (!connection.exited) {
+    // A delivered kill is not an observed exit; retries must keep the same owner.
+    const owner = {
+      close: async () => {
+        await connection.close().catch(() => false)
+        return connection.exited
+      },
+      onExit: (listener: () => void) => connection.onExit(listener)
+    }
+    retained.retainFailed(home, owner)
+    ANTIGRAVITY_LAUNCH_GATE.retain(owner)
     throw new AntigravitySignInCloseUnprovenError()
   }
+}
+
+async function gcpProjection(
+  auth: AntigravityChatAuthConfig,
+  env: Readonly<Record<string, string>>
+): Promise<{ gcp?: { project: string; location: string } }> {
+  if (auth.method === 'oauth-business') {
+    return { gcp: { project: auth.gcpProject, location: auth.gcpLocation } }
+  }
+  if (auth.method !== 'agent-platform') {
+    return {}
+  }
+  const { project, location } = await resolveAgentPlatformProject(auth, env)
+  if (!project) {
+    throw new AntigravitySignInSentence(
+      'Google Agent Platform needs a Google Cloud project. Run `gcloud config set project <id>` or enter one in Settings.'
+    )
+  }
+  return { gcp: { project, location } }
 }
 
 // Every credential writer retries the exact retained child before preparing its account.
@@ -70,17 +103,23 @@ export const antigravityChatAccount = {
   prepare: async (
     env: Readonly<Record<string, string>>,
     config?: AntigravityChatAuthConfig,
-    assertCurrent?: () => void
+    assertCurrent?: () => void,
+    purpose: 'chat' | 'listing' = 'chat'
   ): Promise<void> => {
     const auth = resolveAntigravityChatAuthConfig(config)
     const home = env.GEMINI_HOME
     if (!home) {
       throw new Error('GEMINI_HOME is not set')
     }
+    const listing = purpose === 'listing'
+    // A listing never signs in, so it needs neither a credential check nor the link capture.
+    if (!listing) {
+      await assertAntigravityChatCredential(auth, env, home)
+    }
     if (!(await retained.stopFailed(home))) {
       throw new AntigravitySignInCloseUnprovenError()
     }
-    if (!(await antigravityBrowserHelperWorks())) {
+    if (!listing && !(await antigravityBrowserHelperWorks())) {
       throw new AntigravitySignInSentence(
         "Antigravity's sign-in link can't be captured on this host. Restart Orca and try again."
       )
@@ -88,17 +127,19 @@ export const antigravityChatAccount = {
     await folder.prepare?.(env)
     await linkAntigravityUserSkills(home, antigravityUserHome(env))
     const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
-    const projection = {
+    const projection = JSON.stringify({
       auth: { type: auth.method },
-      ...(auth.method === 'oauth-business'
-        ? { gcp: { project: auth.gcpProject, location: auth.gcpLocation } }
-        : {})
+      ...(await gcpProjection(auth, env))
+    })
+    // Unchanged settings cost no durable write, so a listing or a start mostly writes nothing.
+    if ((await readFile(path, 'utf8').catch(() => null)) === projection) {
+      return
     }
     try {
       await writeFileDurableIfCurrent(
         durableWriteTempPath(path),
         path,
-        JSON.stringify(projection),
+        projection,
         () => {
           assertCurrent?.()
           return true

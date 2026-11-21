@@ -1,8 +1,6 @@
+import type { AgentSessionGoalDisplay } from '../../../../../../shared/agent-session/thread-goals/agent-session-goal-check-display'
 import { useCallback, useMemo, useState } from 'react'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalThreadGoal
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentOwnedThreadGoalCommand,
   agentSessionThreadGoalReport
@@ -17,7 +15,7 @@ import type { StructuredAgentSessionMutate } from '../structured/writes/use-stru
 import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 export type StructuredAgentSessionThreadGoal = {
-  goal: AgentJournalThreadGoal | null
+  goal: AgentSessionGoalDisplay | null
   pending: boolean
   /** False for agent-owned /goal: clear uses a command and pause is unavailable. */
   hostChanges: boolean

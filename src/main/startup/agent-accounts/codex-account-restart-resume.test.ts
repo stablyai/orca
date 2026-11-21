@@ -1,17 +1,36 @@
-import { dirname, join } from 'node:path'
-import { linkSync, readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import {
+  linkSync,
+  readFileSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const homes = vi.hoisted(() => ({ original: '', selected: '', system: '' }))
+vi.mock('../../codex/trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../codex/trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({ app: { getPath: () => homes.system } }))
 vi.mock('../main-process-state', () => ({
   mainProcessState: {
-    codexRuntimeHome: {
-      isHostSystemDefaultRealHomeSelected: () => false,
-      prepareAccountHistoryForPinnedHome: async () => {},
-      getHostCodexHomePathsForSessionDiscovery: () => [homes.original, homes.selected],
-      resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
+    core: {
+      codexRuntimeHome: {
+        isHostSystemDefaultRealHomeSelected: () => false,
+        prepareAccountHistoryForPinnedHome: async () => {},
+        getHostCodexHomePathsForSessionDiscovery: () => [
+          homes.original,
+          homes.selected,
+          join(homes.system, 'legacy')
+        ],
+        resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
+      }
     },
     store: { getSettings: () => ({}) }
   }
@@ -28,7 +47,8 @@ vi.mock('../../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
 vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,
-  getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
+  getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy'),
+  resolveOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
 vi.mock('../../codex/configuration/settings/codex-config-mirror', () => ({
   ensureCodexDaemonSocketGuard: vi.fn()
@@ -106,4 +126,54 @@ it('uses the system home when an explicit restart follows deselection', async ()
     useSelectedAccount: true
   })
   expect(result).toMatchObject({ codexHomePath: homes.system })
+})
+
+it('resumes a legacy copy that a stopped swap left moved aside', async () => {
+  const relativePath = join('2026', '10', '05', `rollout-2026-10-05T10-00-00-${sessionId}.jsonl`)
+  const legacyHome = join(homes.system, 'legacy')
+  const source = join(homes.system, 'sessions', relativePath)
+  const copy = join(legacyHome, 'sessions', relativePath)
+  mkdirSync(dirname(source), { recursive: true })
+  mkdirSync(dirname(copy), { recursive: true })
+  writeFileSync(source, '{"turn":1}\n{"turn":2}\n')
+  writeFileSync(copy, '{"turn":1}\n')
+  const marker = join(legacyHome, '.orca-session-copies', `${relativePath}.json`)
+  mkdirSync(dirname(marker), { recursive: true })
+  writeFileSync(
+    marker,
+    JSON.stringify({
+      sourcePath: source,
+      sourceSize: 22,
+      sourceMtimeMs: 0,
+      targetSize: 11,
+      targetMtimeMs: 0,
+      aside: `${basename(copy)}.orca-legacy-copy.1`
+    })
+  )
+  renameSync(copy, `${copy}.orca-legacy-copy.1`)
+
+  const result = await prepareCodexSessionResumeForLaunch({
+    providerSession: { key: 'session_id', id: sessionId, transcriptPath: copy },
+    target: { runtime: 'host' }
+  })
+
+  expect(result).toMatchObject({ outcome: 'resume', codexHomePath: legacyHome })
+  expect(readFileSync(copy, 'utf-8')).toContain('{"turn":1}')
+})
+
+it('refuses to resume as a fresh chat while a copy moved aside has an unreadable marker', async () => {
+  const relativePath = join('2026', '10', '05', `rollout-2026-10-05T10-00-00-${sessionId}.jsonl`)
+  const legacyHome = join(homes.system, 'legacy')
+  const copy = join(legacyHome, 'sessions', relativePath)
+  mkdirSync(dirname(copy), { recursive: true })
+  writeFileSync(`${copy}.orca-legacy-copy.1`, '{"turn":1}\n')
+  // A marker that exists but can't be read as a file.
+  mkdirSync(join(legacyHome, '.orca-session-copies', `${relativePath}.json`), { recursive: true })
+
+  await expect(
+    prepareCodexSessionResumeForLaunch({
+      providerSession: { key: 'session_id', id: sessionId, transcriptPath: copy },
+      target: { runtime: 'host' }
+    })
+  ).rejects.toThrow(/Retry resume/)
 })

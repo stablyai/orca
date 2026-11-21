@@ -60,6 +60,8 @@ export type Subscriber = {
   liveSent?: Map<string, SubscriberLiveRow>
   /** Host facts the client holds, which a live row-carrying frame must restate. */
   hostWork?: SubscriberHostWork
+  /** Aborts when the subscriber is dropped, withdrawing its reads still waiting for a reader. */
+  stopped?: AbortSignal
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
 

@@ -15,6 +15,8 @@ import { HideSidebarMenu } from './sidebar-nav-controls'
 import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { useBotsEnabled } from '@/lib/bot-catalog'
+import { selectAppRailVisible } from '../../app-rail/app-rail-layout'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
@@ -52,6 +54,7 @@ const AgentDashboardSidebarEntry = lazyWithRetry(
 
 const SidebarNav = React.memo(function SidebarNav() {
   const t = useTranslate()
+  const botsEnabled = useBotsEnabled()
   // Subscribe across this memo boundary; translate still handles pseudo-localization.
   useTranslation()
   const worktreePaletteShortcutCombos = useShortcutKeyComboDetails('worktree.palette')
@@ -68,10 +71,13 @@ const SidebarNav = React.memo(function SidebarNav() {
   const showArtifactsButton = useAppStore((s) => shouldShowArtifactsButton(s.settings))
   const showSkillsButton = useAppStore((s) => shouldShowSkillsButton(s.settings))
   const automationsActive = activeView === 'automations'
+  // With the experimental rail on, Tasks, Automations, Artifacts, Skills and Orca Mobile live on the rail instead.
+  const appRailVisible = useAppStore(selectAppRailVisible)
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
   const skillsActive = activeView === 'skills'
-  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
+  // The badge's paired-device lookup runs only while the list shows the Mobile row.
+  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton && !appRailVisible)
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })
   }, [updateSettings])
@@ -93,10 +99,14 @@ const SidebarNav = React.memo(function SidebarNav() {
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
-        aria-label={t(
-          'auto.components.sidebar.SidebarNav.0c3395fd32',
-          'Search worktrees and browser tabs'
-        )}
+        aria-label={
+          botsEnabled
+            ? t('bots.palette.sidebarSearchLabel', 'Search bots, workspaces, and browser tabs')
+            : t(
+                'auto.components.sidebar.SidebarNav.0c3395fd32',
+                'Search worktrees and browser tabs'
+              )
+        }
         className="group flex w-full items-center gap-2 rounded-md bg-worktree-sidebar-foreground/5 px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-worktree-sidebar-foreground/60 transition-colors hover:bg-worktree-sidebar-foreground/8"
       >
         <Search
@@ -120,8 +130,8 @@ const SidebarNav = React.memo(function SidebarNav() {
         </span>
       </button>
       <SetupGuideSidebarEntry />
-      <SidebarTaskNavButton />
-      {showArtifactsButton ? (
+      {appRailVisible ? null : <SidebarTaskNavButton />}
+      {showArtifactsButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <button
@@ -150,7 +160,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideArtifactsButton} />
         </ContextMenu>
       ) : null}
-      {showSkillsButton ? (
+      {showSkillsButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <button
@@ -179,7 +189,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
       ) : null}
-      {showAutomationsButton ? (
+      {showAutomationsButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <button
@@ -213,7 +223,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <AgentDashboardSidebarEntry />
         </React.Suspense>
       ) : null}
-      {showMobileButton ? (
+      {showMobileButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div

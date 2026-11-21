@@ -1,3 +1,4 @@
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { AccountsPane } from '../accounts/AccountsPane'
 import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
@@ -31,13 +32,19 @@ export function renderAgentsSettingsSection(
     >
       {view.isSectionMounted('agents') ? (
         <div className="space-y-8">
-          {model.settingsHostScope.target.kind === 'local' ? (
-            <AgentDefaultSurfaceSection settings={model.settings} />
+          {/* A web page's server is set from a desktop; its caption names "this computer". */}
+          {model.showDesktopOnlySettings || model.settingsHostScope.target.kind === 'local' ? (
+            <AgentDefaultSurfaceSection
+              key={runtimeTargetEnvironmentId(model.settingsHostScope.target) ?? 'local'}
+              settings={model.settings}
+              hostScope={model.settingsHostScope}
+            />
           ) : null}
           <AgentsPane
             settings={model.settings}
             updateSettings={model.updateSettings}
             hostScope={model.settingsHostScope}
+            showDeleteAgentHistory
             wslSupportedPlatform={terminal.localWslSupportedPlatform}
             wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
             wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}

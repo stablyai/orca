@@ -8,10 +8,18 @@ export const SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY =
 // Host will follow placeholder session-tabs answers with a published one (#25736); never wait for that on older hosts.
 export const SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY =
   'session-tabs.empty-worktree-answer.v1' as const
+// Host follows a placeholder with a real answer even once its window has closed (#44840); older hosts may never.
+export const SESSION_TABS_PLACEHOLDER_SETTLES_RUNTIME_CAPABILITY =
+  'session-tabs.placeholder-settles.v1' as const
 
 // Gate shell picks because older hosts strip shell and spawn their default.
 export const SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY =
   'session-tabs.create-terminal-shell.v1' as const
+
+// Why: a host with this answers session.tabs.terminalShellChoices with the Windows shells it would
+// start for a workspace; older hosts lack the method, so clients keep their single Terminal action.
+export const SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY =
+  'session-tabs.terminal-shell-choices.v1' as const
 
 // Why: a host with this commits a client's pane-to-new-tab move (session.tabs.movePaneToNewTab).
 // An older host keeps the pane where it was, so a client moves it only in its own window there.
@@ -53,7 +61,9 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,
   SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY,
+  SESSION_TABS_PLACEHOLDER_SETTLES_RUNTIME_CAPABILITY,
   SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY,
+  SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY,
   SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY,
   TERMINAL_AGENT_ID_RUNTIME_CAPABILITY
 ] as const

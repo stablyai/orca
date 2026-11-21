@@ -9,6 +9,11 @@ import {
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
+import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
+import {
+  ANTIGRAVITY_EFFORT_LEVELS,
+  ANTIGRAVITY_LEVEL_SUFFIX
+} from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 
 // The server's question forms open with only a count; each field's title is the real question.
 const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
@@ -146,18 +151,20 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
 // agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
 const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
 
-const EFFORT_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+// One-line notices that end a turn as failed: agy's when a request outlived its OAuth token, and
+// its executor-error line when it couldn't run the turn at all (a rejected Gemini API key, quota,
+// a server error); Orca's server answers a rejected key or missing gcloud credentials the same way.
+const TURN_FAILURE_NOTICE =
+  /^\s*(?:\u26a0 (?:UNAUTHENTICATED \(code 401\)|agent executor error): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*)\s*$/
 
 // Model options list families; availableModels lists each level as "<family>-<level>".
 function familyEfforts(family: string, models: readonly ModelInfo[]) {
-  const efforts = EFFORT_LEVELS.flatMap((value) => {
+  const efforts = ANTIGRAVITY_EFFORT_LEVELS.flatMap((value) => {
     const variant = models.find((model) => model.modelId === `${family}-${value}`)
     return variant ? [{ value, label: /\(([^()]+)\)$/.exec(variant.name)?.[1] ?? value }] : []
   })
   return efforts.length > 0 ? { efforts } : undefined
 }
-
-const LEVEL_SUFFIX = new RegExp(`^(.+)-(${EFFORT_LEVELS.join('|')})$`)
 
 /** The model choices a chat offers: a family for levels listed as "<family>-<level>" (two or
  *  more, and the family isn't a model itself), every other model on its own. */
@@ -167,14 +174,14 @@ export function antigravityModelChoices(
   const ids = new Set(models.map((model) => model.modelId))
   const levels = new Map<string, number>()
   for (const model of models) {
-    const family = LEVEL_SUFFIX.exec(model.modelId)?.[1]
+    const family = ANTIGRAVITY_LEVEL_SUFFIX.exec(model.modelId)?.[1]
     if (family && !ids.has(family)) {
       levels.set(family, (levels.get(family) ?? 0) + 1)
     }
   }
   const choices = new Map<string, string>()
   for (const model of models) {
-    const family = LEVEL_SUFFIX.exec(model.modelId)?.[1]
+    const family = ANTIGRAVITY_LEVEL_SUFFIX.exec(model.modelId)?.[1]
     if (family && (levels.get(family) ?? 0) > 1) {
       if (!choices.has(family)) {
         choices.set(family, model.name.replace(/\s*\([^()]+\)$/, ''))
@@ -193,8 +200,12 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
     questionForm(method, params) ??
     questionRequest(method, params) ??
     warnedApproval(method, params),
+  // Calls past WaitMsBeforeAsync, subagents and schedules finish after end_turn (#40447).
+  reactiveWakeups: true,
   normalizeToolUpdate,
   promptErrorDetail,
+  // Not marked signed out: agy may already hold a refreshed token for the next prompt.
+  notification: (method, params) => acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE),
   providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),

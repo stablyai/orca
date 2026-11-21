@@ -60,6 +60,8 @@ export function replaceBacklogWithWarning(
   }
   clearForegroundHoldSafety(entry)
   fireQueuedAckCredits(entry)
+  const discarded = entry.chunks
+  const startIndex = entry.chunkIndex
   entry.chunks = [
     {
       data: warning,
@@ -82,10 +84,7 @@ export function replaceBacklogWithWarning(
   }
   clearForegroundRelease(entry)
   recordTerminalOutputQueueDebugPressure()
-  entry.onBacklogReplaced?.()
-  if (shouldNotify) {
-    entry.onBackgroundBacklogDropped?.()
-  }
+  entry.onBacklogReplaced?.(discarded, startIndex, shouldNotify)
 }
 
 export function hasQueuedChunks(entry: QueueEntry): boolean {

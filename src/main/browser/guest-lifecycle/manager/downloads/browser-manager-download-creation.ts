@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { webContents } from 'electron'
 import path from 'node:path'
 import { BrowserError } from '../../../browser-error'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
@@ -14,6 +15,19 @@ export type BrowserDownloadClaim = {
   release: () => void
 }
 
+/** Where a tab's download goes when nothing claimed it, and who hears it finish. */
+export type StandingDownloadClaim = {
+  savePath: string
+  finish: (event: BrowserDownloadFinishedEvent) => void
+}
+
+export type StandingDownloadClaimResolver = (download: {
+  browserTabId: string
+  filename: string
+  /** The page (or popup) that started the download, so a claim can trust only its own document. */
+  documentUrl: string
+}) => StandingDownloadClaim | null
+
 type PendingDownloadClaim = {
   clickedGuestWebContentsId: number
   savePath: string
@@ -27,6 +41,12 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
   private readonly requestedSavePaths = new WeakMap<Electron.DownloadItem, string>()
   private readonly extensionDownloads = new WeakSet<Electron.DownloadItem>()
   private readonly downloadClaimsByGuestId = new Map<number, PendingDownloadClaim>()
+  private standingDownloadClaim: StandingDownloadClaimResolver | null = null
+
+  /** Takes a tab's unclaimed downloads, however the page was clicked; an agent's own claim wins. */
+  setStandingDownloadClaim(resolver: StandingDownloadClaimResolver | null): void {
+    this.standingDownloadClaim = resolver
+  }
 
   /**
    * Extension pages and workers are never registered as tabs, so their downloads would wait
@@ -135,7 +155,11 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       ownerContext?.rootGuestWebContentsId ??
       (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
       guestWebContentsId
-    const decision = routeBrowserClientDownload({ guestWebContentsId: ownerGuestWebContentsId })
+    const decision = routeBrowserClientDownload({
+      guestWebContentsId: ownerGuestWebContentsId,
+      filename: requestedFilename,
+      documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? ''
+    })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
     // Extension pages and chrome.downloads start their own downloads, never the agent's click.
     const isExtensionDownload = adoptedTabId !== null || this.extensionDownloads.has(item)
@@ -146,6 +170,14 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     if (claim) {
       this.downloadClaimsByGuestId.delete(ownerGuestWebContentsId)
     }
+    const standing =
+      !claim && decision.kind === 'local' && !isExtensionDownload && ownerContext
+        ? (this.standingDownloadClaim?.({
+            browserTabId: ownerContext.browserTabId,
+            filename: requestedFilename,
+            documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? ''
+          }) ?? null)
+        : null
     const destination = (() => {
       if (clientRoute) {
         return {
@@ -158,7 +190,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       if (decision.kind === 'blocked') {
         return null
       }
-      const chosenPath = claim?.savePath ?? this.requestedSavePaths.get(item)
+      const chosenPath = claim?.savePath ?? standing?.savePath ?? this.requestedSavePaths.get(item)
       if (chosenPath) {
         return { filename: path.basename(chosenPath), savePath: chosenPath, reservationKey: null }
       }
@@ -191,7 +223,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       terminalEvent: null,
       startedSent: false,
       cleanup: null,
-      onFinished: claim?.finish ?? null
+      onFinished: claim?.finish ?? standing?.finish ?? null
     }
     this.downloadsById.set(downloadId, download)
     claim?.start(true)

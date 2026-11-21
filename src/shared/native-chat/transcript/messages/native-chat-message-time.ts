@@ -16,9 +16,17 @@ function createNativeChatMessageTimeFormatter(locale: string | undefined, timeZo
   const full = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long', timeZone })
 
   return {
-    format(date: Date, now = new Date()): string {
+    /** `yesterday` wraps the time in the UI language's "Yesterday {{time}}"; without it, yesterday shows its date. */
+    format(date: Date, now = new Date(), yesterday?: (time: string) => string): string {
       if (date.toDateString() === now.toDateString()) {
         return time.format(date)
+      }
+      if (yesterday) {
+        const dayBefore = new Date(now)
+        dayBefore.setDate(now.getDate() - 1)
+        if (date.toDateString() === dayBefore.toDateString()) {
+          return yesterday(time.format(date))
+        }
       }
       return date.getFullYear() === now.getFullYear()
         ? dateTime.format(date)

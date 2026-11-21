@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { CopyX, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -90,6 +90,12 @@ type SortableTabContextMenuProps = {
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   isPinned: boolean
+  /** See `SortableTabProps.closable`. */
+  closable?: boolean
+  /** See `SortableTabProps.canPin`. */
+  canPin?: boolean
+  /** See `SortableTabProps.canContinueInTerminal`. */
+  canContinueInTerminal?: boolean
   onSessionSwitchComplete?: () => void
   sessionSwitchOpening?: number | null
   onActivate: (tabId: string) => void
@@ -118,6 +124,9 @@ export function SortableTabContextMenu({
   open,
   tabCount,
   isPinned,
+  closable = true,
+  canPin = true,
+  canContinueInTerminal = true,
   onSessionSwitchComplete,
   sessionSwitchOpening,
   onActivate,
@@ -135,6 +144,7 @@ export function SortableTabContextMenu({
 }: SortableTabContextMenuProps): React.JSX.Element {
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
+  const canClose = closable && !isPinned
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
@@ -173,29 +183,34 @@ export function SortableTabContextMenu({
             <SquareTerminal className="size-3.5 shrink-0" />
             {t(
               'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-              'Continue with Terminal Agent'
+              'Continue in terminal'
             )}
           </ContextMenuItem>
         </>
       ) : null}
-      <TabSessionSurfaceSwitchMenuItems
-        key={sessionSwitchOpening}
-        tab={tab}
-        nativeChat={nativeChat}
-        leadingSeparator={!showTerminalViewSwitch}
-        onComplete={onSessionSwitchComplete}
-      />
+      {/* Moving a chat to the terminal retires its tab, so a tab that stays open cannot move. */}
+      {closable && canContinueInTerminal ? (
+        <TabSessionSurfaceSwitchMenuItems
+          key={sessionSwitchOpening}
+          tab={tab}
+          nativeChat={nativeChat}
+          leadingSeparator={!showTerminalViewSwitch}
+          onComplete={onSessionSwitchComplete}
+        />
+      ) : null}
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={onTogglePin}>
-        {isPinned ? (
-          <PinOff className="size-3.5 shrink-0" />
-        ) : (
-          <Pin className="size-3.5 shrink-0" />
-        )}
-        {isPinned
-          ? t('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
-          : t('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
-      </ContextMenuItem>
+      {closable && (canPin || isPinned) ? (
+        <ContextMenuItem onSelect={onTogglePin}>
+          {isPinned ? (
+            <PinOff className="size-3.5 shrink-0" />
+          ) : (
+            <Pin className="size-3.5 shrink-0" />
+          )}
+          {isPinned
+            ? t('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
+            : t('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
+        </ContextMenuItem>
+      ) : null}
       {onAllowAutoClose ? (
         <ContextMenuItem onSelect={onAllowAutoClose}>
           <Timer className="size-3.5 shrink-0" />
@@ -204,22 +219,25 @@ export function SortableTabContextMenu({
       ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
+      <ContextMenuItem onSelect={() => canClose && onClose(tab.id)} disabled={!canClose}>
         <X className="size-3.5" />
         {t('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
         {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
-      <ContextMenuItem inset onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
+      <ContextMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
+        <CopyX className="size-3.5" />
         {t('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
       </ContextMenuItem>
       <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={onRenameOpen}>
-        <Pencil className="size-3.5" />
-        {t('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
-        {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
-      </ContextMenuItem>
-      <div className="pt-1.5 pr-2.5 pb-1.5 pl-8">
+      {closable ? (
+        <ContextMenuItem onSelect={onRenameOpen}>
+          <Pencil className="size-3.5" />
+          {t('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+          {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
+        </ContextMenuItem>
+      ) : null}
+      <div className="px-2.5 py-1.5">
         <div className="text-2xs font-semibold text-muted-foreground mb-1.5">
           {t('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
         </div>

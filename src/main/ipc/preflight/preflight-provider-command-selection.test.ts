@@ -11,6 +11,17 @@ import {
   findRunnableLocalCommand
 } from './preflight-command-exec'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import type * as WorkerChildProcessModule from '../../worker-thread-child-process/worker-thread-child-process'
+
+// These tests drive the in-thread native runner; source runs have no built worker entry.
+vi.mock(
+  '../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false
+  })
+)
 
 vi.mock('../../../shared/shell/command-resolution/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: (_platform: NodeJS.Platform, home: string) => [
@@ -187,7 +198,7 @@ describe.runIf(process.platform === 'win32')('native provider batch selection', 
 
     await expect(findRunnableLocalCommand(cli)).resolves.toEqual({
       status: 'available',
-      binary: path.posix.join(good, `${cli}.CMD`)
+      binary: path.join(good, `${cli}.CMD`)
     })
     await expect(providerCommand(cli, undefined, root)).resolves.toMatchObject({
       stdout: expect.stringContaining('good-api')

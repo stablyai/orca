@@ -88,6 +88,10 @@ function liveRow(
 ): SubscriberLiveRow {
   const before = prior && prior.source.revision === source.revision ? bodyText(prior.source) : null
   const after = bodyText(source)
+  // A snapshot taken before a durable frame that already carried newer text must not undo it.
+  if (prior && before !== null && after !== null && before.length > after.length && before.startsWith(after)) {
+    return prior
+  }
   if (prior && before !== null && after !== null && after.startsWith(before)) {
     // A shortened row shows its head, which more text cannot move.
     if (prior.sent.shortened) {
@@ -174,6 +178,12 @@ export function followPageWithLiveText(
     : Promise.resolve()
 }
 
+/** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
+export function subscriberAtHead(subscriber: Subscriber, journal: AgentSessionJournal): boolean {
+  const cursor = journal.cursor()
+  return subscriber.cursor.epoch === cursor.epoch && subscriber.cursor.sequence === cursor.sequence
+}
+
 /** Ordinary equal-cursor items preserve the existing desktop and phone merge contract. */
 export async function publishSubscriberLiveText(
   port: SubscriberDeliveryPort,
@@ -192,10 +202,7 @@ export async function publishSubscriberLiveText(
   }
   const cursor = journal.cursor()
   for (const subscriber of subscribers) {
-    if (
-      subscriber.cursor.epoch !== cursor.epoch ||
-      subscriber.cursor.sequence !== cursor.sequence
-    ) {
+    if (!subscriberAtHead(subscriber, journal)) {
       continue
     }
     const sent = subscriber.liveSent

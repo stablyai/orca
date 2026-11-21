@@ -1,4 +1,4 @@
-import { markdownMathSelectionText } from '../../../../../shared/markdown/markdown-math-selection'
+import { nativeChatSelectionText } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 const TRANSCRIPT_SELECTOR = '[data-native-chat-scroll]'
 
@@ -13,5 +13,5 @@ export function readNativeChatTranscriptSelection(root: HTMLElement): string {
   ) {
     return ''
   }
-  return markdownMathSelectionText(selection, transcript) ?? selection.toString()
+  return nativeChatSelectionText(selection, transcript)
 }

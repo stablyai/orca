@@ -202,16 +202,22 @@ export const WorktreeSet = WorktreeSelector.extend({
     })
     .nullable()
     .optional(),
-  // Older clients may send unsupported review shapes alongside unrelated metadata edits.
-  diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  // Why strict: a dropped note list would still answer ok, so the writer would think its notes saved.
+  diffComments: z.array(DiffCommentSchema).optional(),
   // The list the writer started from; the host applies only its changes so other devices' notes survive.
-  diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
+  diffCommentsBase: z.array(DiffCommentSchema).optional(),
+  // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
   matchFolderWorkspaces: MatchFolderWorkspaces,
   /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
   crossStoreParent: CrossStoreParentRefSchema.optional(),
-  noParent: OptionalBoolean
+  /** The cross-store parent is a bot's home, so cleanup on the child's host never groups it; older hosts strip it. */
+  crossStoreParentIsBotHome: z.literal(true).optional(),
+  noParent: OptionalBoolean,
+  /** With a parent change: apply it only while the current parent is this workspace key (`folder:<id>`,
+   *  `worktree:<id>`); refuses with lineage_parent_changed otherwise, so a newer move stands. */
+  ifParentWorkspace: OptionalString
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
   if ((params.parentWorktree || params.crossStoreParent) && params.noParent === true) {
