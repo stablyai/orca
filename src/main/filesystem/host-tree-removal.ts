@@ -227,9 +227,6 @@ export async function removeUnregisteredHostCheckout(
 
   const markerPath = join(root, '.git')
   const initial = await inspectHostCheckoutMarker(markerPath, targetPath)
-  if (!initial && requireMarker && (await readdir(root)).length > 0) {
-    throw differentCheckoutAtPathError(targetPath)
-  }
   if (
     initial &&
     (forbidAnyMarker || (expectedMarker !== undefined && initial.identity !== expectedMarker))
@@ -255,7 +252,7 @@ export async function removeUnregisteredHostCheckout(
     return
   }
 
-  let swept = false
+  let swept = Boolean(requireMarker)
   const assertMarkerlessRoot = async (): Promise<boolean> => {
     if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
       return false
@@ -288,7 +285,7 @@ export async function removeUnregisteredHostCheckout(
     })
   } catch (error) {
     if (swept && getErrorCode(error) === 'ENOTEMPTY') {
-      throw (await hasAnyCheckoutMarkerEntry(markerPath))
+      throw requireMarker || (await hasAnyCheckoutMarkerEntry(markerPath))
         ? differentCheckoutAtPathError(targetPath)
         : unregisteredFolderRefusal(targetPath)
     }

@@ -53,9 +53,17 @@ export function buildWslMarkerLastScript(
     expectedRoot !== undefined
       ? `if [ "\${orca_root_meta#*#}" != ${quotePosixShell(expectedRoot)} ]; then exit 4; fi;`
       : ''
-  const requireMarkerClause = requireMarker
-    ? 'if [ -n "$(LC_ALL=C ls -A -- . 2>/dev/null)" ]; then exit 4; fi &&'
-    : ''
+  const markerlessBranch = requireMarker
+    ? "if LC_ALL=C stat -c '%F' -- ./.git >/dev/null 2>&1; then exit 4; fi;"
+    : [
+        "if LC_ALL=C stat -c '%F' -- ./.git >/dev/null 2>&1; then exit 4; fi &&",
+        `orca_find_status=0; LC_ALL=C find -P . -mindepth 1 -maxdepth 1 ! -name .git -exec sh -c ${VERIFY_MARKERLESS_BATCH_AND_RM} sh "$orca_target" "$orca_root_meta" {} + || orca_find_status=$?;`,
+        'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? &&',
+        'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac &&',
+        'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi &&',
+        "if orca_after=$(LC_ALL=C stat -c '%F' -- ./.git 2>&1); then exit 4;",
+        'else case "$orca_after" in *\': No such file or directory\'|*\': Not a directory\') if [ "$orca_find_status" -ne 0 ]; then exit "$orca_find_status"; fi ;; *) printf \'%s\\n\' "$orca_after" >&2; exit 1 ;; esac; fi;'
+      ].join(' ')
   return [
     `orca_target=${target};`,
     'orca_root_meta=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $?;',
@@ -85,21 +93,14 @@ export function buildWslMarkerLastScript(
     'LC_ALL=C rm -f -- ./.git;',
     'else case "$orca_after" in *\': No such file or directory\'|*\': Not a directory\') if [ "$orca_find_status" -ne 0 ]; then exit "$orca_find_status"; fi ;; *) printf \'%s\\n\' "$orca_after" >&2; exit 1 ;; esac; fi;',
     'else',
-    requireMarkerClause,
-    "if LC_ALL=C stat -c '%F' -- ./.git >/dev/null 2>&1; then exit 4; fi &&",
-    `orca_find_status=0; LC_ALL=C find -P . -mindepth 1 -maxdepth 1 ! -name .git -exec sh -c ${VERIFY_MARKERLESS_BATCH_AND_RM} sh "$orca_target" "$orca_root_meta" {} + || orca_find_status=$?;`,
-    'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? &&',
-    'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac &&',
-    'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi &&',
-    "if orca_after=$(LC_ALL=C stat -c '%F' -- ./.git 2>&1); then exit 4;",
-    'else case "$orca_after" in *\': No such file or directory\'|*\': Not a directory\') if [ "$orca_find_status" -ne 0 ]; then exit "$orca_find_status"; fi ;; *) printf \'%s\\n\' "$orca_after" >&2; exit 1 ;; esac; fi;',
+    markerlessBranch,
     'fi ) || exit $?;',
     'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $?;',
     'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac;',
     'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi;',
     'if ! LC_ALL=C rmdir -- "$orca_target"; then',
     'if LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" >/dev/null 2>&1; then exit 4; fi;',
-    'if [ -n "$(LC_ALL=C ls -A -- "$orca_target" 2>/dev/null)" ]; then exit 5; fi;',
+    `if [ -n "$(LC_ALL=C ls -A -- "$orca_target" 2>/dev/null)" ]; then exit ${requireMarker ? '4' : '5'}; fi;`,
     'exit 1;',
     'fi'
   ]
