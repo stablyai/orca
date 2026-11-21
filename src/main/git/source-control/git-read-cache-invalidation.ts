@@ -29,6 +29,71 @@ export const settledDiffCache = new SettledDiffCache(FILE_DIFF_CACHE_LIMITS)
 /** Settled status numstat passes, keyed per worktree and area. */
 export const settledNumstatCache = new SettledDiffCache(NUMSTAT_CACHE_LIMITS)
 
+export const INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS = 5_000
+type IncompleteNumstatFallback = {
+  expiresAt: number
+  failedPaths: Set<string>
+}
+const incompleteNumstatFallbackCache = new Map<string, IncompleteNumstatFallback>()
+let incompleteNumstatFallbackGeneration = 0
+
+function incompleteNumstatFallbackKey(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean
+): string {
+  return JSON.stringify([worktreePath, cached, detectRenames])
+}
+
+/** Capture before an async fallback read; invalidation during the read blocks the write. */
+export function beginIncompleteNumstatFallbackRead(): number {
+  return incompleteNumstatFallbackGeneration
+}
+
+export function getIncompleteNumstatFallback(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean,
+  now: number = Date.now()
+): IncompleteNumstatFallback | null {
+  const key = incompleteNumstatFallbackKey(worktreePath, cached, detectRenames)
+  const cachedFallback = incompleteNumstatFallbackCache.get(key)
+  if (cachedFallback === undefined || cachedFallback.expiresAt <= now) {
+    if (cachedFallback !== undefined) {
+      incompleteNumstatFallbackCache.delete(key)
+    }
+    return null
+  }
+  return cachedFallback
+}
+
+export function setIncompleteNumstatFallback(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean,
+  failedPaths: Set<string>,
+  readGeneration: number,
+  now: number = Date.now()
+): void {
+  if (readGeneration !== incompleteNumstatFallbackGeneration) {
+    return
+  }
+  incompleteNumstatFallbackCache.set(
+    incompleteNumstatFallbackKey(worktreePath, cached, detectRenames),
+    { expiresAt: now + INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS, failedPaths }
+  )
+}
+
+export function clearIncompleteNumstatFallback(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean
+): void {
+  incompleteNumstatFallbackCache.delete(
+    incompleteNumstatFallbackKey(worktreePath, cached, detectRenames)
+  )
+}
+
 export const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
 // Clear every read cache so post-mutation calls cannot join stale pre-mutation reads.
@@ -36,6 +101,8 @@ export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   settledDiffCache.clear()
   settledNumstatCache.clear()
+  incompleteNumstatFallbackCache.clear()
+  incompleteNumstatFallbackGeneration += 1
   statusReadLeaseOwner.invalidate()
   invalidateGitBranchLineTotalInFlight()
   invalidateGitUpstreamStatusReads()
