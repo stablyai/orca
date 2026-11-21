@@ -84,6 +84,8 @@ export type RuntimePtyController = {
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
+    /** The caller's own account variables; this host's account selection does not replace them. */
+    accountEnv?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
     resumeOrigin?: 'saved'

@@ -37,10 +37,15 @@ export function getClaudeWslProfileRouter(): ClaudeWslProfileRouter | undefined 
   return installedWsl
 }
 
+/** A caller's own CLAUDE_CONFIG_DIR wins; this host's pointer would re-route the pane's `claude`. */
 export function withClaudeProfileTerminalEnv<Env extends Record<string, string> | undefined>(
   env: Env,
-  target: ClaudeAccountSelectionTarget
+  target: ClaudeAccountSelectionTarget,
+  callerAccountEnv?: Readonly<Record<string, string>>
 ): Env | Record<string, string> {
+  if (callerAccountEnv?.CLAUDE_CONFIG_DIR) {
+    return { ...env, ...callerAccountEnv }
+  }
   const profileEnv = installed?.terminalEnv(target)
   return profileEnv ? { ...env, ...profileEnv } : env
 }

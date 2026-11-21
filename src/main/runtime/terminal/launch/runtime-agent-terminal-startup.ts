@@ -1,5 +1,6 @@
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
+import { callerAgentLaunchAccountEnv } from '../../../../shared/agent-launch/startup/agent-launch-account-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
@@ -141,17 +142,20 @@ export async function resolveAgentTerminalCreateOptions(
   return runtime ? { ...qoderLaunch, launchRuntime: runtime } : qoderLaunch
 }
 
-/** Desktop-selected account env overrides the launch plan; explicit caller env/accountEnv still wins. */
+/** Desktop-selected account env overrides the launch plan; explicit caller env/accountEnv still
+ *  wins, and rides to spawn as `accountEnv` so this host's own account selection keeps it too. */
 export function withHostAccountLaunchEnv(
   requested: Pick<TerminalCreateOptions, 'env' | 'accountEnv'>,
   launch: TerminalCreateOptions,
   accountEnv: Readonly<Record<string, string>>
 ): TerminalCreateOptions {
+  const callerAccountEnv = callerAgentLaunchAccountEnv(requested)
+  const callerLaunch = callerAccountEnv ? { ...launch, accountEnv: callerAccountEnv } : launch
   if (Object.keys(accountEnv).length === 0) {
-    return launch
+    return callerLaunch
   }
   return {
-    ...launch,
+    ...callerLaunch,
     env: {
       ...launch.env,
       ...accountEnv,

@@ -126,6 +126,8 @@ export type RuntimePtySpawnArgs = {
     request_kind?: unknown
   }
   env?: Record<string, string>
+  /** The caller's own account variables; this host's account selection does not replace them. */
+  accountEnv?: Record<string, string>
   envToDelete?: string[]
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
