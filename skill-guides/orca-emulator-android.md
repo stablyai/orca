@@ -67,8 +67,8 @@ device.
 | Accessibility tree   | `ORCA emulator ax --json`                                                       | `uiautomator dump` parsed to a node tree.                                                                                 |
 | Logcat (one-shot)    | `ORCA emulator logcat --lines 200 --json`                                       | Dumps recent lines, parsed to entries.                                                                                    |
 | Raw adb shell        | `ORCA emulator exec --command "getprop ro.build.version.sdk" --json`            | Runs `adb -s <serial> shell <command>`.                                                                                   |
-| Stop the helper      | `ORCA emulator kill --json`                                                     | Leaves the device booted.                                                                                                 |
-| Stop and power off   | `ORCA emulator shutdown --json`                                                 | Stops the helper and shuts the device down.                                                                               |
+| Stop the helper      | `ORCA emulator kill --json`                                                     | Leaves the device booted and drops Orca's session, so closing the pane or quitting Orca no longer shuts it down.          |
+| Stop and power off   | `ORCA emulator shutdown --json`                                                 | Stops the helper and shuts the emulator down (`adb emu kill`). Emulators only: a physical device rejects it.              |
 
 ## Targeting
 
@@ -99,7 +99,14 @@ commands target it. Pass a selector only to override that or reach a second devi
   `adb shell input text`, which takes US-ASCII on one line only.
 - `gesture` is a straight swipe between the first and last point, so it fits scrolling and
   swiping but not a true multi-touch path.
-- Run `kill` when you are done. A helper left running holds the device until Orca quits.
+- Leave each device as you found it. Check `ORCA emulator devices --json` before you attach.
+  When you are done, run `shutdown` on an AVD that was `shutdown` then (`attach` boots it),
+  and `kill` on an emulator that was already running or on a physical device. A running
+  emulator holds a few gigabytes of memory whether or not anything streams it.
+- Never end with `kill` on an emulator you started. `kill` stops the helper and drops Orca's
+  session, and Orca never shuts down a device it has no session for.
+- Keep an emulator running only while the user is looking at it in the pane. Orca shuts down
+  an emulator it attached when the worktree's last emulator pane closes, and when Orca quits.
 
 ## Examples
 
