@@ -76,13 +76,22 @@ export function pushHostAccounts(
   })
 }
 
+// A hung call must not hold that host's push queue.
+const CHAT_AUTO_NAME_PUSH_TIMEOUT_MS = 15_000
+
 export function pushHostChatAutoName(
   getUserDataPath: () => string,
   environmentId: string,
   store: Pick<Store, 'getSettings'>
 ): void {
   const call = (method: string, params: unknown) =>
-    callRuntimeEnvironment(getUserDataPath(), environmentId, method, params)
+    callRuntimeEnvironment(
+      getUserDataPath(),
+      environmentId,
+      method,
+      params,
+      CHAT_AUTO_NAME_PUSH_TIMEOUT_MS
+    )
   void pushWslOrcadHostChatAutoName(
     {
       environmentId,
@@ -91,7 +100,5 @@ export function pushHostChatAutoName(
         wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
     },
     () => store.getSettings().nativeChatAutoName !== false
-  ).catch((error) => {
-    console.warn(`[wsl-hosts] Could not copy chat naming to ${environmentId}:`, error)
-  })
+  )
 }
