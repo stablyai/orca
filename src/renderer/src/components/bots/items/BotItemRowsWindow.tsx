@@ -18,7 +18,7 @@ import {
   uniformGeometry
 } from './bot-item-rows-geometry'
 import { focusFellToNothing } from '../use-needs-you-focus'
-import { rowTabStops } from './bot-item-row-tab-stops'
+import { rowFocusControl, rowTabTarget, type BotItemRowEdge } from './bot-item-row-tab-stops'
 
 /** Drawn past each edge of the panel, so a scroll shows rows already there. */
 const OVERSCAN_PX = 300
@@ -267,7 +267,9 @@ export function BotItemRowsWindow({
     }
   }, [all, seedFocus])
   // The row an arrow moved to: drawn, then focused as it mounts (scrolled to, unless `quiet`).
-  const [target, setTarget] = useState<(RowPick & { quiet?: boolean }) | null>(null)
+  const [target, setTarget] = useState<
+    (RowPick & { quiet?: boolean; edge?: BotItemRowEdge }) | null
+  >(null)
   const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])
   const stopIndex = useMemo(() => indexOf(stop), [indexOf, stop])
   const focusedIndex = useMemo(() => indexOf(focused), [indexOf, focused])
@@ -325,15 +327,15 @@ export function BotItemRowsWindow({
   }, [pinned, carried, range, count])
 
   const quiet = target?.quiet === true
+  const edge = target?.edge
   const focusTarget = useCallback(
     (node: HTMLElement | null) => {
       if (node) {
-        const control = disabled ? node : node.querySelector<HTMLElement>('[data-bot-item-open]')
-        control?.focus({ preventScroll: quiet })
+        rowFocusControl(node, edge, disabled)?.focus({ preventScroll: quiet })
         setTarget(null)
       }
     },
-    [quiet, disabled]
+    [quiet, edge, disabled]
   )
   const focusBack = useCallback(
     (node: HTMLElement | null) => {
@@ -345,27 +347,6 @@ export function BotItemRowsWindow({
     [onBackFocused]
   )
 
-  // Tab from a row's last control goes on to the next row, and Shift+Tab from its first back to the one
-  // before (drawing it first), so moving by Tab reaches every row as in a plain list.
-  const onTab = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const row =
-      event.target instanceof HTMLElement
-        ? event.target.closest<HTMLElement>('[data-bot-item-index]')
-        : null
-    if (!row || !event.currentTarget.contains(row)) {
-      return
-    }
-    const at = Number(row.dataset.botItemIndex)
-    const controls = disabled ? [row] : rowTabStops(row)
-    const edge = event.shiftKey ? controls[0] : controls.at(-1)
-    const item = items[at + (event.shiftKey ? -1 : 1)]
-    if (edge !== event.target || !item) {
-      return
-    }
-    event.preventDefault()
-    setTarget({ uid: item.uid, at: at + (event.shiftKey ? -1 : 1) })
-  }
-
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (
       event.key === 'Tab' &&
@@ -375,7 +356,11 @@ export function BotItemRowsWindow({
       !event.ctrlKey &&
       !event.metaKey
     ) {
-      onTab(event)
+      const next = rowTabTarget(event, items, disabled)
+      if (next) {
+        event.preventDefault()
+        setTarget(next)
+      }
       return
     }
     // A short group leaves the keys to the panel. Keys from a row's open menu reach here through its
@@ -479,6 +464,13 @@ export function BotItemRowsWindow({
       <BotItemRowsGap
         height={geometry.total - (drawn.length ? geometry.offset(drawn.at(-1)! + 1) : 0)}
       />
+      {/* Shift+Tab from below the group lands here while no row holds focus: on to the last row. */}
+      {all || count === 0 ? null : (
+        <div
+          tabIndex={focused === null ? 0 : -1}
+          onFocus={() => setTarget({ uid: items[count - 1]!.uid, at: count - 1, edge: 'last' })}
+        />
+      )}
     </div>
   )
 }

@@ -2,8 +2,8 @@
 // so the panel, not each row, asks for a member's uploaded picture: once per version, the first time a
 // face of that member is drawn, kept while the panel is open (through the shared picture cache, so a
 // picture already read costs nothing). Nothing is asked while the window is hidden or the member's host
-// is offline; a failed read is tried again once a host comes or goes (its own coming back included), as
-// a face of it is drawn, or when the panel reopens.
+// is offline; a failed read is tried again when its host goes offline and comes back while a face of it
+// is drawn, on Back from an item, or when the panel reopens.
 import { createContext, useEffect, useState } from 'react'
 import {
   readBotHostState,
@@ -23,8 +23,9 @@ type Picture = {
   /** The read's result: a data URL, or null for none. */
   src?: string | null
   reading: boolean
-  /** The read failed while these hosts were live: it is tried again once a host comes or goes. */
-  failedWith: ReturnType<typeof readLiveBotHostIds> | null
+  failed: boolean
+  /** Its host was seen offline since the read failed, so its coming back reads again. */
+  hostLeft: boolean
   faces: Set<() => void>
 }
 
@@ -40,6 +41,8 @@ export type BotGroupFacePictures = {
   open: () => void
   /** The panel closed: stop watching. */
   close: () => void
+  /** The list shows again (Back from an item): failed pictures are read again as their faces draw. */
+  retryFailed: () => void
   /** The group's members now (botRefKey to upload version, null for none): pictures of others, or of
    *  a version since replaced, with no face drawn are let go. */
   retain: (members: ReadonlyMap<string, string | null>) => void
@@ -54,7 +57,7 @@ function createFacePictures(): BotGroupFacePictures {
   // One per member asked for, its latest version, and each face's handle on it.
   const pictures = new Map<string, Picture>()
   const handles = new Map<string, { version: string; handle: BotGroupFacePicture }>()
-  // Pictures with a face drawn that wait on the window showing, their host, or (failed) a host coming or going.
+  // Pictures with a face drawn that wait on the window showing, their host, or (failed) their host's return.
   const waiting = new Set<Picture>()
   let stopWatching: (() => void) | null = null
   let liveHosts = readLiveBotHostIds()
@@ -86,21 +89,20 @@ function createFacePictures(): BotGroupFacePictures {
     if (cached !== undefined) {
       waiting.delete(picture)
       picture.src = cached
-      picture.failedWith = null
+      picture.failed = false
       picture.faces.forEach((notify) => notify())
       return
     }
-    if (
-      picture.failedWith === readLiveBotHostIds() ||
-      hostOffline(picture) ||
-      !getWindowParkVisible()
-    ) {
+    const offline = hostOffline(picture)
+    picture.hostLeft ||= picture.failed && offline
+    if ((picture.failed && !picture.hostLeft) || offline || !getWindowParkVisible()) {
       waiting.add(picture)
       return
     }
     waiting.delete(picture)
     picture.reading = true
-    picture.failedWith = null
+    picture.failed = false
+    picture.hostLeft = false
     void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, src))
   }
 
@@ -111,7 +113,8 @@ function createFacePictures(): BotGroupFacePictures {
       return
     }
     if (src === undefined) {
-      picture.failedWith = readLiveBotHostIds()
+      picture.failed = true
+      picture.hostLeft = false
       admit(picture)
     } else {
       picture.src = src
@@ -156,7 +159,8 @@ function createFacePictures(): BotGroupFacePictures {
       bot: { hostId: bot.hostId, id: bot.id },
       version,
       reading: false,
-      failedWith: null,
+      failed: false,
+      hostLeft: false,
       faces: new Set()
     }
     pictures.set(key, picture)
@@ -171,6 +175,11 @@ function createFacePictures(): BotGroupFacePictures {
     close: () => {
       closed = true
       syncWatching()
+    },
+    retryFailed: () => {
+      for (const picture of pictures.values()) {
+        picture.hostLeft ||= picture.failed
+      }
     },
     retain: (members) => {
       for (const [key, picture] of pictures) {

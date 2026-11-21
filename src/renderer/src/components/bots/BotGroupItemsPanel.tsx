@@ -122,6 +122,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     walk.open(uid)
   }
   const back = (): void => {
+    facePictures.retryFailed()
     const left = walk.close()
     const listed = BOT_ITEM_GROUP_IDS.flatMap((id) =>
       merged.list.groups[id].map((item) => item.uid)
