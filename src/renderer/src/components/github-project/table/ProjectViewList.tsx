@@ -8,6 +8,7 @@ import ProjectRow from './ProjectRow'
 import { ProjectItemsEmptyState } from '../view/ProjectViewStates'
 import { groupRows, sortRows } from '../../../../../shared/github/projects/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
+import { useCollapsedGroups } from '../collapsed-groups'
 import {
   ACTION_COLUMN_WIDTH,
   loadColumnWidths,
@@ -72,7 +73,6 @@ export default function ProjectViewList({
   onOpenInBrowser,
   sourceTarget
 }: Props): React.JSX.Element {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   // Keep header sorting local; null restores the view’s saved GitHub sort order.
   const [sortOverride, setSortOverride] = useState<SortOverride | null>(null)
 
@@ -98,6 +98,8 @@ export default function ProjectViewList({
     Readonly<Record<string, Readonly<Record<string, number>> | undefined>>
   >({})
   const widths = widthsByScope[scopeKey] ?? persistedWidths
+
+  const { collapsed, toggleGroup } = useCollapsedGroups(scopeKey)
 
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
@@ -212,17 +214,7 @@ export default function ProjectViewList({
                 group={g}
                 groupFieldName={table.selectedView.groupByFields[0].name}
                 expanded={expanded}
-                onToggle={() => {
-                  setCollapsed((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(g.key)) {
-                      next.delete(g.key)
-                    } else {
-                      next.add(g.key)
-                    }
-                    return next
-                  })
-                }}
+                onToggle={() => toggleGroup(g.key)}
               />
             ) : null}
             {expanded
