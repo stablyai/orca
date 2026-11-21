@@ -117,7 +117,9 @@ const NETWORK_LIKE_ERROR_FRAGMENTS = [
   'connection lost before handshake',
   'remote end closed',
   // Bare connection closed by includes permanent MaxStartups/DenyUsers refusal; require remote wording here.
-  'connection closed by remote'
+  'connection closed by remote',
+  // OpenSSH prints UNKNOWN port 65535 when a ProxyCommand closes before the handshake. A real sshd names its port.
+  'connection closed by unknown port 65535'
 ]
 
 const DEFINITE_HOST_FAILURE_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN'])
