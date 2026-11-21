@@ -50,7 +50,7 @@ describe('BotSlackPostAs', () => {
   it("opens a paired bot's approval in this computer's browser, never the server's", async () => {
     mocks.setPostAs.mockResolvedValue({ ok: true, value: { authorizeUrl: AUTHORIZE } })
     mocks.open.mockReturnValue('system-browser')
-    render(<BotSlackPostAs bot={{ id: 'bot-1', hostId: SERVER } as Bot} slack={slack} />)
+    render(<BotSlackPostAs bot={{ id: 'bot-1', hostId: SERVER } as unknown as Bot} slack={slack} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
     await waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(1))
