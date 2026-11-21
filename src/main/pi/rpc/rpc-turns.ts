@@ -1,3 +1,4 @@
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
@@ -46,8 +47,7 @@ export class PiRpcTurns {
   readonly compaction = new PiRpcCompaction(this.context)
   private stopped = false
   private ended = false
-  private failure?: string
-  private lastStopReason?: string
+  private failure?: AgentSessionFailureFact
 
   constructor(private readonly deps: PiRpcTurnDeps) {
     this.messages = new PiRpcMessages(deps.generation, this.context)
@@ -75,8 +75,8 @@ export class PiRpcTurns {
         this.awaitingRunTrigger = false
         this.commandCompleted()
       },
-      rejectedAfterAcceptance: (error) => {
-        this.failure = error
+      rejectedAfterAcceptance: (fact) => {
+        this.failure = fact
       },
       beforeWrite: () => this.touch(),
       refused: () => {
@@ -144,10 +144,12 @@ export class PiRpcTurns {
             this.awaitingRunTrigger = false
           }
           if (role === 'assistant') {
-            this.lastStopReason = message.data.stopReason
             this.failure =
               message.data.stopReason === 'error'
-                ? (message.data.errorMessage ?? 'Pi request failed')
+                ? piRpcFailureFact(
+                    message.data.errorMessage || 'Pi request failed',
+                    'providerResponseFailed'
+                  )
                 : undefined
           }
         }
@@ -179,7 +181,6 @@ export class PiRpcTurns {
         this.deps.lane.apply(this.compaction.end(frame.result))
         if (frame.willRetry === true) {
           this.failure = undefined
-          this.lastStopReason = undefined
         }
         this.refreshUsage()
         if (this.settling) {
@@ -192,13 +193,14 @@ export class PiRpcTurns {
         return
       case 'auto_retry_end':
         this.deps.lane.apply([piRpcRetryActivity(frame)])
-        if (frame.success === true) {
-          this.failure = undefined
-          this.lastStopReason = undefined
-        } else {
-          this.failure =
-            typeof frame.finalError === 'string' ? frame.finalError : 'Pi auto-retry failed'
-        }
+        this.failure =
+          frame.success === true
+            ? undefined
+            : piRpcFailureFact(
+                (typeof frame.finalError === 'string' && frame.finalError) ||
+                  'Pi auto-retry failed',
+                'providerResponseFailed'
+              )
         break
     }
   }
@@ -225,7 +227,6 @@ export class PiRpcTurns {
     this.deps.lane.beginCommand(command)
     this.active = command.turnId
     this.failure = undefined
-    this.lastStopReason = undefined
     this.stopped = false
     this.revision++
   }
@@ -259,7 +260,6 @@ export class PiRpcTurns {
     }
     this.active = `run:${this.deps.generation}:${++this.turn}`
     this.failure = undefined
-    this.lastStopReason = undefined
     this.stopped = false
     this.deps.lane.apply([{ type: 'turn.open', turn: this.active, at }])
   }
@@ -273,21 +273,16 @@ export class PiRpcTurns {
       this.settling = false
       return
     }
-    const outcome = this.stopped
-      ? 'cancellation'
-      : this.failure || this.lastStopReason === 'error'
-        ? 'failure'
-        : 'success'
+    const outcome = this.stopped ? 'cancellation' : this.failure ? 'failure' : 'success'
     const events: ProviderTimelineEvent[] = []
     if (outcome === 'failure' && this.failure) {
-      const fact = piRpcFailureFact(this.failure)
       events.push({
         type: 'item.close',
         item: `error:${this.active}`,
         body: {
           kind: 'status',
           tone: 'error',
-          ...agentSessionFailureWords(fact, { agentName: 'Pi', surface: 'row' })
+          ...agentSessionFailureWords(this.failure, { agentName: 'Pi', surface: 'row' })
         }
       })
     }

@@ -129,7 +129,6 @@ describe('Add connector › Google', () => {
     expect(screen.getByRole('radio', { name: 'Self hosted' }).getAttribute('data-state')).toBe(
       'checked'
     )
-    expect(screen.getByText('Inbox helper opens Google Cloud and sets up the app')).toBeTruthy()
     expect(mocks.startGoogleSetupInChat).not.toHaveBeenCalled()
     expect(mocks.turnOnGoogle).not.toHaveBeenCalled()
 

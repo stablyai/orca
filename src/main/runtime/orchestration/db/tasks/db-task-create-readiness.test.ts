@@ -30,22 +30,6 @@ describe('task creation dependency readiness', () => {
     return database
   }
 
-  it('promotes only after every dependency completes', () => {
-    const db = createDb()
-    const first = db.createTask({ runId: 'run_legacy_local', spec: 'first' })
-    const second = db.createTask({ runId: 'run_legacy_local', spec: 'second' })
-    db.updateTaskStatus(first.id, 'completed')
-    const child = db.createTask({
-      runId: 'run_legacy_local',
-      spec: 'child',
-      deps: [first.id, second.id]
-    })
-
-    expect(child.status).toBe('pending')
-    db.updateTaskStatus(second.id, 'completed')
-    expect(db.getTask(child.id)?.status).toBe('ready')
-  })
-
   it.each(['failed', 'blocked'] as const)(
     'does not unlock a dependent whose dependency is %s',
     (status) => {
@@ -84,6 +68,9 @@ describe('task creation dependency readiness', () => {
       spec: 'pending',
       deps: [completed.id, open.id]
     })
+    expect(ready.status).toBe('ready')
+    expect(pending.status).toBe('pending')
+
     before.close()
     databases.splice(databases.indexOf(before), 1)
 

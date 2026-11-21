@@ -61,6 +61,13 @@ export async function routeDesktopBrowserBridgeRpc(options: {
       'tab create --profile is not available from an SSH host; the desktop picks the profile for new tabs. Drop --profile, or open the tab on the desktop.'
     )
   }
+  // Every later command goes to the desktop, so a tab in this host's own browser would be unreachable.
+  if (forwardedMethod === 'browser.tabCreate' && params.placement !== undefined) {
+    throw new BrowserError(
+      'invalid_argument',
+      'tab create --headless is not available while an Orca desktop shares its browser with this host; browser commands go to that desktop. Drop --headless.'
+    )
+  }
   if (method === 'browser.openUrl') {
     assertClientOpenableUrl(String(params.url))
   }

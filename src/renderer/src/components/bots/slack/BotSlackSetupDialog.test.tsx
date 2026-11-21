@@ -166,7 +166,7 @@ describe('BotSlackSetupDialog', () => {
     expect(openBotHostPageOrSay).toHaveBeenCalledTimes(1)
 
     // A read already out (the owner came back to Orca) when Slack saves may predate the save.
-    let answerEarlierRead: () => void = () => {}
+    let answerEarlierRead: (() => void) | undefined
     api.state.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -174,9 +174,10 @@ describe('BotSlackSetupDialog', () => {
             resolve({ ok: true, value: { state: 'created', teamId: 'T1', appId: 'A1' } })
         })
     )
-    act(() => {
+    await act(async () => {
       window.dispatchEvent(new Event('focus'))
     })
+    await waitFor(() => expect(answerEarlierRead).toBeTypeOf('function'))
 
     // Slack has saved by the time Orca's browser returns.
     slackState({
@@ -207,7 +208,7 @@ describe('BotSlackSetupDialog', () => {
         }
       })
     )
-    await act(async () => answerEarlierRead())
+    await act(async () => answerEarlierRead?.())
     expect(await screen.findByText('Scout is in Slack')).toBeDefined()
   })
 
@@ -269,6 +270,22 @@ describe('BotSlackSetupDialog', () => {
       botUserId: 'UB',
       installerUserId: 'U1',
       updateNeeded: true
+    })
+    openDialog()
+
+    await screen.findByText('Waiting for Slack…')
+    expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(api.openUrl).toHaveBeenCalledOnce()
+  })
+
+  it('updates an app that only predates optional permissions, and waits for them', async () => {
+    slackState({
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'UB',
+      installerUserId: 'U1',
+      updateAvailable: true
     })
     openDialog()
 

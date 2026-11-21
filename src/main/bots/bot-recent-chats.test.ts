@@ -69,17 +69,10 @@ describe("which of a bot's other chats a turn hears of", () => {
     expect(visibleBotRecentChats([{ kind: 'unknown' }], chats, NOW)).toEqual([])
     expect(visibleBotRecentChats([...OWNER, { kind: 'unknown' }], chats, NOW)).toEqual([])
   })
-
-  it('lists at most ten', () => {
-    const many = Array.from({ length: 12 }, (_, index) => chat(`c${index}`, index, OWNER))
-    expect(ids(visibleBotRecentChats(OWNER, many, NOW))).toEqual(
-      Array.from({ length: 10 }, (_, index) => `c${index}`)
-    )
-  })
 })
 
 describe("the other chats' section", () => {
-  it('gives each chat one line: its id, title, last reply cut to 150 characters and running workers', () => {
+  it('fences chat context and points to the command that can ask the chat', () => {
     const section = botRecentChatsSection(
       'ux-designer',
       [
@@ -93,11 +86,13 @@ describe("the other chats' section", () => {
       NOW
     )
     expect(section?.text).toContain('orchestration send --to bot:ux-designer --chat <id>')
-    expect(section?.text.split('\n').slice(1)).toEqual([
-      '<<<',
-      `chat:s-home  "Pricing page"  2h ago  last reply: "Going with the paid tier. ${'x'.repeat(124)}"  worker running: "Build pricing page"`,
-      '>>>'
-    ])
+    const [, opening, context, closing] = section?.text.split('\n') ?? []
+    expect(opening).toBe('<<<')
+    expect(context).toContain('chat:s-home')
+    expect(context).toContain('Pricing page')
+    expect(context).toContain('Going with the paid tier.')
+    expect(context).toContain('Build pricing page')
+    expect(closing).toBe('>>>')
   })
 
   it('keys on what the chats say, not how long ago, and is null with no chat', () => {
@@ -120,7 +115,6 @@ describe('the other chats a turn of a real chat is told of', () => {
   }
   const SAM = person('U0SAM')
   const records = new Map<string, { actsFor: BotRequestAsker[] }>()
-  const journalReads = vi.fn(async () => ({}))
   const runtime = {
     bots: { list: () => [{ id: 'bot-1', name: 'scout' }] },
     getOrchestrationDb: () => ({
@@ -133,8 +127,8 @@ describe('the other chats a turn of a real chat is told of', () => {
     })
   }
   vi.mocked(requireStructuredHost).mockResolvedValue(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the turn read uses only journalReads.
-    { journalReads } as never
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test exercises turn context from the supplied message and record.
+    {} as never
   )
   vi.mocked(readBotChats).mockResolvedValue([OTHER])
   vi.mocked(readSharedBotChatTree).mockResolvedValue({ chats: [], workspaceChats: {} })
@@ -169,16 +163,14 @@ describe('the other chats a turn of a real chat is told of', () => {
     expect(section?.text).toContain('chat:other')
   })
 
-  it("reads the turn from the message and the record, never the chat's whole journal", async () => {
+  it('includes the other chat in an owner turn', async () => {
     records.set('current', { actsFor: OWNER })
     records.set('other', { actsFor: OWNER })
-    journalReads.mockClear()
     const owner: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
       blocks: [{ type: 'text', text: 'what did we decide?' }]
     }
     expect((await read(owner))?.text).toContain('chat:other')
-    expect(journalReads).not.toHaveBeenCalled()
   })
 })

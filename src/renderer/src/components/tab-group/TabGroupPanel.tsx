@@ -284,7 +284,7 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
+          className="h-(--workspace-tab-row-height) shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
@@ -307,15 +307,19 @@ export default function TabGroupPanel({
               <div className="min-w-10 flex-1 h-full">{tabBar}</div>
               {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
               {reserveRightTitlebarSpace ? (
-                <div className="w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
+                <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
               ) : null}
               <div
                 className={actionChromeClassName}
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
                 {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
-                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2. */}
-                <div ref={quickCommandsSlotRef} className="contents @max-[163px]/tab-strip:hidden">
+                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2.
+                    Narrow strips park it invisible at the pane's top-right edge instead of display:none, so the shortcut menu still has an anchor rect. */}
+                <div
+                  ref={quickCommandsSlotRef}
+                  className="contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block"
+                >
                   <TabBarQuickCommandsButton
                     worktreeId={worktreeId}
                     groupId={groupId}

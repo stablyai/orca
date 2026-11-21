@@ -248,19 +248,20 @@ describe('remote terminal frame-drop resync', () => {
     return { data, metas, snapshots, stream }
   }
 
-  it('reconciles painted output when a delayed recovery snapshot arrives', async () => {
+  it('reconciles multibyte output when a delayed recovery snapshot arrives', async () => {
     const { data, snapshots, stream } = await subscribeClient()
     try {
       server.holdNextRecoverySnapshot = true
 
-      server.output('aaa')
+      server.output('é')
+      server.output('界')
       server.dropNextOutput = true
-      server.output('bbb')
+      server.output('🙂')
       server.output('ccc')
       server.output('ddd')
       server.output('eee')
 
-      expect(data).toEqual(['aaa', 'ddd', 'eee'])
+      expect(data).toEqual(['é', '界', 'ddd', 'eee'])
       expect(snapshots).toEqual(['INITIAL'])
 
       server.flushHeldRecoverySnapshot()
@@ -269,7 +270,7 @@ describe('remote terminal frame-drop resync', () => {
       // A replay covered by the authoritative snapshot must not duplicate.
       server.replaySnapshotCoveredOutput('eee')
       server.output('fff')
-      expect(data).toEqual(['aaa', 'ddd', 'eee', 'fff'])
+      expect(data).toEqual(['é', '界', 'ddd', 'eee', 'fff'])
     } finally {
       stream.close()
     }
@@ -347,19 +348,5 @@ describe('remote terminal frame-drop resync', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('uses UTF-16 sequence units when detecting gaps in multibyte output', async () => {
-    const { data, snapshots } = await subscribeClient()
-
-    server.output('é')
-    server.dropNextOutput = true
-    server.output('🙂')
-    server.output('界')
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(data).toEqual(['é'])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
   })
 })

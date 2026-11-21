@@ -1,4 +1,6 @@
 // A bot's picture, edited where it shows: a click opens the picture picker in a popover.
+import { useBotHostHas } from '@/lib/bot-host-status'
+import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,6 +26,7 @@ export function BotPictureButton({
   children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -49,14 +52,17 @@ export function BotPictureButton({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-80">
-        {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
-        <div className={BOT_PICTURE_DROP_OUTLINE}>
+        {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged; the top
+            padding matches the gap beside the preview. */}
+        <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'pt-3')}>
           <BotPicturePicker
             value={picture.value}
             custom={picture.custom}
             onChange={picture.pick}
             onUpload={picture.upload}
             onUndo={picture.undo}
+            color={picture.color}
+            onColorChange={colors ? picture.pickColor : undefined}
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">

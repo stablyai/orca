@@ -100,6 +100,8 @@
     "../src/main/persistence/applying-settings/ui-state-read.ts",
     "../src/main/persistence/tracking-repos/worktree-identity-migration.ts",
     "../src/main/persistence/tracking-repos/worktree-identity-row-repoint.ts",
+    "../src/main/persistence/tracking-repos/worktree-identity-session-migration.ts",
+    "../src/main/persistence/restoring-sessions/workspace-session-partition-replacement.ts",
     "../src/main/persistence/restoring-sessions/tab-terminal-pane-binding-repair.ts",
     "../src/main/persistence/window-save-view.ts",
     "../src/main/persistence/runtime-authored-workspace-session-fields.ts",

@@ -23,7 +23,8 @@ const DOT_CLASS: Record<Exclude<AgentSessionMcpServer['status'], 'pending'>, str
   connected: 'bg-status-success',
   'needs-auth': 'bg-status-warning',
   failed: 'bg-destructive',
-  disabled: 'bg-muted-foreground/40'
+  disabled: 'bg-muted-foreground/40',
+  'not-started': 'bg-muted-foreground/40'
 }
 
 /** The label keeps its width while a spinner stands in for it. */

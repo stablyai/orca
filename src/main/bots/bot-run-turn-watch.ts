@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { structuredAgentSessionTurnFailureLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { structuredAgentSessionSendTurn } from '../../shared/structured-agent-session-send-turn'
 import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
@@ -22,7 +23,7 @@ export type BotRunUnavailable =
   | 'unread'
 
 export type BotTurnEnd =
-  | { outcome: AgentJournalTurnOutcome; message: string }
+  | { outcome: AgentJournalTurnOutcome; message: string; error?: string }
   | { unavailable: BotRunUnavailable }
 
 /** The message a run sent, which names the turn it started, and its body's fingerprint, which a
@@ -94,7 +95,10 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
   return outcome
     ? {
         outcome,
-        message: structuredAgentSessionTurnAssistantMessage(items, sent.itemId)
+        message: structuredAgentSessionTurnAssistantMessage(items, sent.itemId),
+        ...(outcome === 'failure'
+          ? { error: structuredAgentSessionTurnFailureLine(items, sent.itemId) }
+          : {})
       }
     : unavailable('unread')
 }

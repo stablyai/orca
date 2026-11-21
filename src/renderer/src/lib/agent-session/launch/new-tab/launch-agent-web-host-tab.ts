@@ -14,7 +14,7 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisio
 import { pairedAgentLaunchInputs } from '../routing/paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { completeWebHostAgentLaunch } from '@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion'
 import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
 import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
@@ -77,9 +77,7 @@ export async function launchAgentInWebHostTab(args: {
   const hasPrompt = prompt.length > 0
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const runtimeId = environmentId
-    ? lastVerifiedRuntimeStatus(
-        useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-      )?.runtimeId
+    ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))?.runtimeId
     : undefined
   let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
@@ -105,9 +103,7 @@ export async function launchAgentInWebHostTab(args: {
     }
     // Why: prompt delivery is client-owned; the host supplies launch settings.
     const hostStatus = environmentId
-      ? lastVerifiedRuntimeStatus(
-          useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-        )
+      ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))
       : undefined
     const platform = args.launchPlatform ?? hostStatus?.hostPlatform
     startup = planHostedAgentPrompt(agent, prompt, promptDelivery, {
@@ -153,9 +149,7 @@ export async function launchAgentInWebHostTab(args: {
               })
             : null
           const status = environmentId
-            ? lastVerifiedRuntimeStatus(
-                useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-              )
+            ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))
             : undefined
           if (args.isCancelled?.()) {
             throw new DOMException('Agent launch cancelled', 'AbortError')

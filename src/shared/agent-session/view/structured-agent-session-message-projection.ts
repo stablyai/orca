@@ -17,6 +17,8 @@ import {
 import { compareNativeChatTranscriptMessages } from '../../native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
+import { isStructuredAgentSessionStartFailureRow } from '../failures/structured-agent-session-start-failure-row-key'
+import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 import {
   automationResultMarks,
@@ -54,12 +56,12 @@ export function structuredAgentSessionCommandItemIds(
 }
 
 /** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
- * and commands carry rejection in their own reply. */
+ * and commands carry rejection in their own reply. `resent`: rejected sends a later copy stands in for. */
 export function structuredAgentSessionRejectedShownInPlace(
   submissions: readonly AgentJournalSubmission[],
   commandItemIds: ReadonlySet<string>,
   clearSequences: readonly number[] = []
-): Set<string> {
+): { shown: Set<string>; resent: Set<string> } {
   const latest = new Map<string, number>()
   const later = Array.from<number | undefined>({ length: submissions.length })
   const scopeKey = (submission: AgentJournalSubmission) =>
@@ -76,6 +78,7 @@ export function structuredAgentSessionRejectedShownInPlace(
     }
   }
   const shown = new Set<string>()
+  const resent = new Set<string>()
   for (const [index, submission] of submissions.entries()) {
     const { resolvedAt } = submission
     if (
@@ -84,17 +87,39 @@ export function structuredAgentSessionRejectedShownInPlace(
       submission.queuedMessageId !== undefined ||
       // Persist card ownership on the send so editing/deleting the card cannot resurrect its row.
       submission.keptAsQueuedMessageId !== undefined ||
-      commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId)) ||
-      // Collapses resends of a rejected message: past Retries resent it under a new id, and the
-      // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
-      // was known counts, so a repeat sent before it is kept.
-      (resolvedAt !== null && later[index] !== undefined && later[index] >= resolvedAt)
+      commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
     ) {
       continue
     }
-    shown.add(agentJournalSubmissionKey(submission.clientMessageId))
+    // Collapses resends of a rejected message: past Retries resent it under a new id, and the
+    // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
+    // was known counts, so a repeat sent before it is kept.
+    const key = agentJournalSubmissionKey(submission.clientMessageId)
+    if (resolvedAt !== null && later[index] !== undefined && later[index] >= resolvedAt) {
+      resent.add(key)
+    } else {
+      shown.add(key)
+    }
   }
-  return shown
+  return { shown, resent }
+}
+
+/** Start-failure rows answering these sends: after one, before the next send. The resend's own
+ *  outcome replaces them, as its copy replaces the send. */
+function startFailureRowsAfter(
+  items: readonly AgentJournalRenderItem[],
+  sends: ReadonlySet<string>
+): Set<string> {
+  const rows = new Set<string>()
+  let after = false
+  for (const item of items) {
+    if (item.body.kind === 'message' && item.body.role === 'user' && isRootAgentJournalItem(item)) {
+      after = sends.has(item.itemId)
+    } else if (after && isStructuredAgentSessionStartFailureRow(item.itemId)) {
+      rows.add(item.itemId)
+    }
+  }
+  return rows
 }
 
 export function projectStructuredAgentSessionMessages(
@@ -142,17 +167,18 @@ export function projectStructuredAgentSessionMessageRows(
   // Avoid placement work on every stream commit when no stopped sends exist.
   const placement =
     stoppedBeforeStart.size > 0 ? placeStoppedSends(items, submissions, stoppedBeforeStart) : null
-  const inPlace = structuredAgentSessionRejectedShownInPlace(
+  const { shown: inPlace, resent } = structuredAgentSessionRejectedShownInPlace(
     submissions,
     structuredAgentSessionCommandItemIds(items),
     items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
   )
+  const replacedFailures = resent.size > 0 ? startFailureRowsAfter(items, resent) : resent
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
   for (const item of items) {
     if (inPlace.has(item.itemId)) {
       unsentItems.push(item)
-    } else if (!rejected.has(item.itemId)) {
+    } else if (!rejected.has(item.itemId) && !replacedFailures.has(item.itemId)) {
       visibleItems.push(item)
     }
   }

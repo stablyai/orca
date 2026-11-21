@@ -8,17 +8,25 @@ import {
   type NativeChatWorkerApproval
 } from './native-chat-worker-approval-feed'
 
-const stream = vi.hoisted(() => ({ emit: (_frame: unknown): void => {} }))
+const stream = vi.hoisted(() => ({
+  emit: (_frame: unknown): void => {},
+  targets: new Array<unknown>(),
+  supported: true
+}))
 vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: (
-    _target: unknown,
+    target: unknown,
     _method: string,
     _params: unknown,
     handlers: { onEvent: (value: unknown) => void }
   ) => {
+    stream.targets.push(target)
     stream.emit = handlers.onEvent
     return Promise.resolve({ unsubscribe: () => {} })
   }
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: async () => stream.supported
 }))
 
 const entry = (state: 'open' | 'answered'): NativeChatWorkerApproval => ({
@@ -60,8 +68,8 @@ describe('worker approval feed', () => {
   it('moves an answered prompt into the transcript at once, not after a pause above the composer', () => {
     const party = 'orca_session_id:coordinator'
     const view = renderHook(() => ({
-      pinned: useNativeChatPinnedWorkerApprovals(party),
-      receipts: useNativeChatWorkerApprovalReceipts(party)
+      pinned: useNativeChatPinnedWorkerApprovals({ kind: 'local' }, party),
+      receipts: useNativeChatWorkerApprovalReceipts({ kind: 'local' }, party)
     }))
     sendList([entry('open')])
     expect(view.result.current.pinned.map((e) => e.approval.state)).toEqual(['open'])
@@ -71,5 +79,27 @@ describe('worker approval feed', () => {
     expect(view.result.current.pinned).toEqual([])
     expect(view.result.current.receipts.map((e) => e.approval.approvalId)).toEqual(['apr_bash'])
     view.unmount()
+  })
+
+  it("subscribes on a paired server's coordinator chat only when that server answers paired windows", async () => {
+    const server = { kind: 'environment' as const, environmentId: 'env-server' }
+    stream.targets = []
+    stream.supported = false
+    const older = renderHook(() =>
+      useNativeChatPinnedWorkerApprovals(server, 'orca_session_id:older')
+    )
+    await act(async () => {})
+    expect(stream.targets).toEqual([])
+    older.unmount()
+
+    stream.supported = true
+    const current = renderHook(() =>
+      useNativeChatPinnedWorkerApprovals(server, 'orca_session_id:current')
+    )
+    await act(async () => {})
+    expect(stream.targets).toEqual([server])
+    sendList([entry('open')])
+    expect(current.result.current.map((e) => e.approval.approvalId)).toEqual(['apr_bash'])
+    current.unmount()
   })
 })

@@ -1,3 +1,4 @@
+import type { OrchestrationAgentReference } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
@@ -111,7 +112,13 @@ export function nativeChatPromptPillsFor(imageChips: boolean) {
 
 /** Replaces text offsets `from`..`to` with a picked mention's token and a space; a bot's token
  *  becomes its pill. Its own undo step, as a picked skill is: undo gives back the typed `@query`. */
-export function insertPromptMention(editor: Editor, from: number, to: number, token: string): void {
+export function insertPromptMention(
+  editor: Editor,
+  from: number,
+  to: number,
+  token: string,
+  agent?: OrchestrationAgentReference
+): void {
   // Mid-IME the composition owns the field: editing under it garbles the composed text. The
   // composer drops a pick made then, as it always has (its own write also defers to the IME).
   if (editor.view.composing) {
@@ -120,11 +127,22 @@ export function insertPromptMention(editor: Editor, from: number, to: number, to
   const { doc } = editor.state
   const range = { from: promptTextPosition(doc, from), to: promptTextPosition(doc, to) }
   const [line] = promptTextContent(`${token} `).content ?? []
+  const content = agent
+    ? [
+        {
+          type: 'nativeChatAgentReference',
+          attrs: {
+            label: agent.label,
+            address: agent.address,
+            hostKey: agent.hostKey,
+            agentType: agent.agentType ?? ''
+          }
+        },
+        { type: 'text', text: ' ' }
+      ]
+    : (line?.content ?? [])
   editor.view.dispatch(closeHistory(editor.state.tr))
-  editor
-    .chain()
-    .insertContentAt(range, line?.content ?? [])
-    .run()
+  editor.chain().insertContentAt(range, content).run()
   editor.view.dispatch(closeHistory(editor.state.tr))
 }
 

@@ -25,11 +25,12 @@ export function useHomeBots(args: {
   /** Paired computers in Home's order. */
   hosts: readonly { id: string; name: string }[]
   hostStates: Readonly<Record<string, ConnectionState>>
+  unreachableHosts: ReadonlySet<string>
   worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>
   now: number
   subscribed: boolean
 }) {
-  const { homeHosts, hosts, hostStates, worktreeInfo, now } = args
+  const { homeHosts, hosts, hostStates, unreachableHosts, worktreeInfo, now } = args
   const queries = useMemo(
     () =>
       homeHosts.map((host) =>
@@ -85,6 +86,7 @@ export function useHomeBots(args: {
       homeBotRows({
         hosts,
         hostStates,
+        unreachableHosts,
         botsByHost: reads,
         freshHosts: fresh,
         kept,
@@ -92,7 +94,7 @@ export function useHomeBots(args: {
         worktreeInfo,
         now
       }),
-    [hosts, hostStates, reads, fresh, kept, hydrated, worktreeInfo, now]
+    [hosts, hostStates, unreachableHosts, reads, fresh, kept, hydrated, worktreeInfo, now]
   )
   // Folds each live read into its computer's record; the record skips a read it already holds.
   useEffect(() => {

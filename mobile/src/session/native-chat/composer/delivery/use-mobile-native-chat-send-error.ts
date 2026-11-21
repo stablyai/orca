@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
+import { triggerError } from '../../../../platform/haptics/haptics'
 
 // Keep command-refusal causes only while the chat still shows the work that caused them.
 export type MobileNativeChatSendErrorDetails = {
@@ -59,6 +60,8 @@ export function useMobileNativeChatSendError(args: {
   }, [clearTimer, scopeKey])
   const show = useCallback(
     (next: string, details?: MobileNativeChatSendErrorDetails) => {
+      // A refused or failed send buzzes (MobilePendingButton's rule), felt even when the banner is covered.
+      triggerError()
       // Fall back to toast after leaving chat or changing tabs so late failures remain visible without misattribution.
       if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
         showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS)

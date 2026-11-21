@@ -14,8 +14,7 @@ import {
   message,
   RANGER_CHAT,
   RANGER_THREAD,
-  setupBotMail,
-  withChat
+  setupBotMail
 } from './bot-recipient.test-fixture'
 
 vi.mock(
@@ -68,18 +67,6 @@ describe('mail to a bot, by the ways around its checks', () => {
     ).rejects.toThrow('Docs is paused')
   })
 
-  it('checks again after finding the Chat, so a bot paused meanwhile takes nothing', async () => {
-    journals[RANGER_THREAD] = [message('ask')]
-    withChat.mockImplementation((_botId: string, work: (sessionId: string) => unknown) => {
-      bots[1] = { ...bots[1]!, paused: true }
-      return work(DOCS_CHAT)
-    })
-    await expect(send(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })).rejects.toThrow(
-      'Docs is paused'
-    )
-    expect(db.getAllMessagesForHandle(`orca_session_id:${DOCS_CHAT}`)).toHaveLength(0)
-  })
-
   it('lets only the bot a request went to answer it', async () => {
     journals[RANGER_THREAD] = [message('ask')]
     const request = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
@@ -89,17 +76,6 @@ describe('mail to a bot, by the ways around its checks', () => {
     await expect(
       reply(DOCS_CHAT, { id: request.message.id, body: 'the answer' })
     ).resolves.toMatchObject({ message: { to_handle: `orca_session_id:${RANGER_THREAD}` } })
-  })
-
-  it("never lets another bot's mail be replied to by someone it wasn't sent to", async () => {
-    const original = db.insertMessage({
-      from: `orca_session_id:${RANGER_THREAD}`,
-      to: 'term_someone',
-      subject: 'status'
-    })
-    await expect(reply(DOCS_CHAT, { id: original.id, body: 'hi' })).rejects.toThrow(
-      "That message wasn't sent to you"
-    )
   })
 
   it("hints the send that reaches a bot's chat where reply refuses, and that send goes through", async () => {

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
@@ -18,10 +18,12 @@ import {
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
+import { triggerSelection } from '../../../../platform/haptics/haptics'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobileNativeChatQuestionText } from '../../transcript/message-content/MobileNativeChatQuestionText'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
@@ -37,11 +39,17 @@ type Props = {
   // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[], onCreated?: (id: string) => void) => Promise<boolean>
   onCancel?: () => Promise<boolean>
+  /** The footer's Cancel, named for what `onCancel` does there. */
+  cancelLabel?: string
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
   /** Per question; structured prompts hide "Other…" where the provider takes no free text. */
   allowOther?: readonly boolean[]
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
+  /** Tapping a choice is the whole answer: no Cancel or Skip, only the fold chevron. */
+  choiceOnly?: true
+  /** Under the question: what the card's owner adds, e.g. a worker prompt's countdown. */
+  note?: ReactNode
 }
 
 function confirmLabels(t: Translate) {
@@ -61,15 +69,20 @@ export function MobileNativeChatAsk({
   answerSendSource,
   onAnswer,
   onCancel,
+  cancelLabel,
   onCollapse,
   allowOther,
-  freeTextInputs
+  freeTextInputs,
+  choiceOnly,
+  note
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [viewedOption, setViewedOption] = useState<number | null>(null)
+  // Which footer control started the in-flight operation, so its busy state lands there.
+  const [busyControl, setBusyControl] = useState<'confirm' | 'cancel'>('confirm')
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
@@ -91,6 +104,8 @@ export function MobileNativeChatAsk({
     ((current.clientMessageId === operationId ? evidence : undefined) ?? current.inFlight)
   const sending = operation?.inFlight === true && isLocalPending(operation)
   const submitting = isLocalPending(operation) || answerPending
+  const cancelBusy = busyControl === 'cancel' && isLocalPending(operation)
+  const confirmBusy = submitting && !cancelBusy
   const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
@@ -159,6 +174,8 @@ export function MobileNativeChatAsk({
     const current: NativeChatAnswerOperation = { inFlight: true }
     operationRef.current = current
     setOperation(current)
+    setBusyControl('confirm')
+    triggerSelection()
     try {
       await onAnswer(
         prompt.questions.map((_, i) => selectionFor(i, sel)),
@@ -186,12 +203,14 @@ export function MobileNativeChatAsk({
     }
   }
 
-  const cancel = async (): Promise<void> => {
+  const cancel = async (control: 'confirm' | 'cancel'): Promise<void> => {
     autoAdvance.cancel()
     if (!(operationRef.current?.inFlight && isLocalPending(operationRef.current)) && onCancel) {
       const current: NativeChatAnswerOperation = { inFlight: true }
       operationRef.current = current
       setOperation(current)
+      setBusyControl(control)
+      triggerSelection()
       try {
         await onCancel()
       } finally {
@@ -206,7 +225,7 @@ export function MobileNativeChatAsk({
   const confirm = (): void => {
     const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
     if (action === 'cancel') {
-      void cancel()
+      void cancel('confirm')
     } else if (action === 'proceed') {
       void advance()
     }
@@ -279,11 +298,13 @@ export function MobileNativeChatAsk({
             disabled={sending}
           />
         </View>
+        {note}
         {q.options.map((opt, optIndex) => (
           <MobileNativeChatAskOptionRow
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
+            recommended={opt.recommended}
             preview={opt.preview}
             onPreview={() => {
               autoAdvance.cancel()
@@ -294,6 +315,8 @@ export function MobileNativeChatAsk({
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={submitting}
+            // A choice-only card has no Submit: the chosen choice is the control that sends.
+            pending={choiceOnly && confirmBusy && (selections[index] ?? []).includes(optIndex)}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -323,34 +346,36 @@ export function MobileNativeChatAsk({
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
-          onPress={() => void cancel()}
-          disabled={sending}
-          hitSlop={8}
-        >
-          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
-        </Pressable>
-        {total > 1 ? (
-          <Text style={styles.progress}>
-            {index + 1}/{total}
-          </Text>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.next,
-            confirmSkips && styles.nextSkip,
-            pressed && pressedStyle
-          ]}
-          onPress={confirm}
-          disabled={submitting}
-        >
-          <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
-            {confirmLabels(t)[confirmLabel]}
-          </Text>
-        </Pressable>
-      </View>
+      {choiceOnly ? (
+        <View style={styles.choiceOnlyEnd} />
+      ) : (
+        <View style={styles.footer}>
+          <MobilePendingButton
+            label={cancelLabel ?? t('common.cancel', 'Cancel')}
+            pending={cancelBusy}
+            disabled={sending}
+            onPress={() => void cancel('cancel')}
+            hitSlop={8}
+            style={styles.cancel}
+            labelStyle={styles.cancelText}
+            spinnerColor={colors.textPrimary}
+          />
+          {total > 1 ? (
+            <Text style={styles.progress}>
+              {index + 1}/{total}
+            </Text>
+          ) : null}
+          <MobilePendingButton
+            label={confirmLabels(t)[confirmLabel]}
+            pending={confirmBusy}
+            disabled={submitting}
+            onPress={confirm}
+            style={[styles.next, confirmSkips && styles.nextSkip]}
+            labelStyle={[styles.nextText, confirmSkips && styles.nextSkipText]}
+            spinnerColor={confirmSkips ? colors.textPrimary : colors.bgBase}
+          />
+        </View>
+      )}
       <MobileNativeChatOptionPreviewSheet
         options={q.options}
         viewedIndex={viewedOption}

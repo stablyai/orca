@@ -160,7 +160,7 @@ export function MobileNativeChatSessionOptionPickers({
       descriptor.valueSource !== 'unknown' &&
       descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&
-      descriptor.kind.currentValue === value
+      (descriptor.fallbackModel ?? descriptor.kind.currentValue) === value
     ) {
       return
     }

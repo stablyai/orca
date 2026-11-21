@@ -21,3 +21,7 @@ export function shouldRenderDesktopWindowChrome({
 }: DesktopWindowChromeInput): boolean {
   return !isWebClient && (platform === 'win32' || platform === 'linux')
 }
+
+export function canUseLinuxTilingWindowMode(chrome: DesktopWindowChromeInput): boolean {
+  return chrome.platform === 'linux' && shouldRenderDesktopWindowChrome(chrome)
+}

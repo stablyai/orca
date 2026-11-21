@@ -19,6 +19,7 @@ import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { fetchForkRemoteWithStaleRefspecRepair } from '../refs/fork-remotes/fork-remote-stale-branch-refspec'
 import { runWithGitReadCacheInvalidation } from '../source-control/git-read-cache-invalidation'
 import { runWithGitWorktreeOperationLock } from '../../../shared/git/worktrees/git-worktree-operation-lock'
+import { trackGitOperationWriters } from '../command-runner/git-writer-lifetime'
 
 function explicitPushTarget(target: GitPushTarget): { remote: string; refspec: string } {
   return { remote: target.remoteName, refspec: `HEAD:${target.branchName}` }
@@ -96,10 +97,20 @@ export async function gitPull(
 ): Promise<void> {
   // Respect the configured pull strategy and surface conflicts through the existing resolution flow.
   postponeRepoRefMaintenance()
-  await withRepoRefMaintenancePaused('git-pull', () =>
-    runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
-      runWithGitReadCacheInvalidation(() => gitPullWithArgs(worktreePath, [], pushTarget, options))
-    )
+  const lifetime = trackGitOperationWriters(options)
+  await withRepoRefMaintenancePaused(
+    'git-pull',
+    () =>
+      runWithGitWorktreeOperationLock(
+        worktreePath,
+        options.signal,
+        () =>
+          runWithGitReadCacheInvalidation(() =>
+            gitPullWithArgs(worktreePath, [], pushTarget, lifetime.options)
+          ),
+        lifetime.waitForWriters
+      ),
+    lifetime.waitForWriters
   )
 }
 
@@ -109,12 +120,20 @@ export async function gitFastForward(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   postponeRepoRefMaintenance()
-  await withRepoRefMaintenancePaused('git-fast-forward', () =>
-    runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
-      runWithGitReadCacheInvalidation(() =>
-        gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
-      )
-    )
+  const lifetime = trackGitOperationWriters(options)
+  await withRepoRefMaintenancePaused(
+    'git-fast-forward',
+    () =>
+      runWithGitWorktreeOperationLock(
+        worktreePath,
+        options.signal,
+        () =>
+          runWithGitReadCacheInvalidation(() =>
+            gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, lifetime.options)
+          ),
+        lifetime.waitForWriters
+      ),
+    lifetime.waitForWriters
   )
 }
 
@@ -125,24 +144,32 @@ export async function gitFetch(
 ): Promise<void> {
   // Pruning needs packed-refs.lock; wait for an idle pack's rewrite window rather than failing Fetch.
   postponeRepoRefMaintenance()
+  const lifetime = trackGitOperationWriters(options)
   try {
-    await withRepoRefMaintenancePaused('git-fetch', async () => {
-      if (pushTarget) {
-        const target = await validateGitPushTarget(worktreePath, pushTarget, options)
-        const runtimeOptions = gitOptionsForWorktree(worktreePath, options)
-        await fetchForkRemoteWithStaleRefspecRepair(
-          (args, cwd) => gitExecFileAsync(args, { ...runtimeOptions, cwd }),
-          worktreePath,
-          target.remoteName,
-          () =>
-            gitExecFileAsync(['fetch', '--prune', target.remoteName], runtimeOptions).then(
-              () => undefined
-            )
+    await withRepoRefMaintenancePaused(
+      'git-fetch',
+      async () => {
+        if (pushTarget) {
+          const target = await validateGitPushTarget(worktreePath, pushTarget, options)
+          const runtimeOptions = gitOptionsForWorktree(worktreePath, lifetime.options)
+          await fetchForkRemoteWithStaleRefspecRepair(
+            (args, cwd) => gitExecFileAsync(args, { ...runtimeOptions, cwd }),
+            worktreePath,
+            target.remoteName,
+            () =>
+              gitExecFileAsync(['fetch', '--prune', target.remoteName], runtimeOptions).then(
+                () => undefined
+              )
+          )
+          return
+        }
+        await gitExecFileAsync(
+          ['fetch', '--prune'],
+          gitOptionsForWorktree(worktreePath, lifetime.options)
         )
-        return
-      }
-      await gitExecFileAsync(['fetch', '--prune'], gitOptionsForWorktree(worktreePath, options))
-    })
+      },
+      lifetime.waitForWriters
+    )
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'fetch'))
   }
