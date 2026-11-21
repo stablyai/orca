@@ -1,11 +1,11 @@
 import { readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
 export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
 
-type GitDirState = {
+export type GitDirState = {
   /** Each git dir's HEAD file, keyed by git dir. */
   heads: ReadonlyMap<string, string>
   /** Branches a rebase (head-name, --update-refs) or bisect reserves: Git's own in-use rule. */
@@ -56,20 +56,25 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   return { heads, reserved }
 }
 
-// Git still accepts a symlinked HEAD; reading through it would hide the branch it names.
+// Git accepts a symlinked HEAD: read its content, else name the ref it links to.
 async function readHead(gitDir: string): Promise<string> {
   const path = join(gitDir, 'HEAD')
+  const content = (await readOptional(path)).trim()
+  let target: string
   try {
-    const target = await readlink(path)
-    return target.startsWith('refs/') ? `ref: ${target}` : UNRESOLVED_HEAD
+    target = await readlink(path)
   } catch (error) {
     const code = errorCode(error)
-    if (code !== 'EINVAL' && code !== 'UNKNOWN') {
-      rethrowUnlessMissing(error)
-      return ''
+    if (code === 'EINVAL' || code === 'UNKNOWN') {
+      return content
     }
+    rethrowUnlessMissing(error)
+    return ''
   }
-  return (await readOptional(path)).trim()
+  if (content.startsWith('ref: ')) {
+    return content
+  }
+  return target.startsWith('refs/') ? `ref: ${target}` : UNRESOLVED_HEAD
 }
 
 async function readOptional(path: string): Promise<string> {
@@ -100,4 +105,43 @@ export async function isSamePath(left: string, right: string): Promise<boolean> 
   } catch {
     return false
   }
+}
+
+/** Git reports a bare repo's own HEAD as the repo, minus any `/.git`; it checks nothing out. */
+export async function locateRepoOwnHead(
+  ownerPath: string,
+  commonDir: string
+): Promise<{ isCommonDir: boolean; isRepoItself: boolean }> {
+  if (!ownerPath) {
+    return { isCommonDir: false, isRepoItself: false }
+  }
+  const realCommonDir = await realpath(commonDir).catch(() => commonDir)
+  const isCommonDir = await isSamePath(ownerPath, realCommonDir)
+  const isRepoItself =
+    isCommonDir ||
+    (basename(realCommonDir) === '.git' && (await isSamePath(ownerPath, dirname(realCommonDir))))
+  return { isCommonDir, isRepoItself }
+}
+
+/** Git dirs whose HEAD names the branch, skipping a bare common dir's own HEAD. */
+export function countBranchCheckouts(
+  heads: GitDirState['heads'],
+  fullRef: string,
+  bareCommonDir: string | undefined
+): number {
+  return [...heads].filter(
+    ([gitDir, head]) => head === `ref: ${fullRef}` && gitDir !== bareCommonDir
+  ).length
+}
+
+/** Reads `for-each-ref --format=%(refname)%00%(worktreepath)%00` output; the pattern also matches refs under `<fullRef>/`. */
+export function parseWorktreePathOfRef(stdout: string, fullRef: string): string {
+  // Ref names hold no newline or NUL; paths hold no NUL.
+  const text = `\n${stdout}`
+  const at = text.indexOf(`\n${fullRef}\0`)
+  if (at === -1) {
+    return ''
+  }
+  const from = at + fullRef.length + 2
+  return text.slice(from, text.indexOf('\0', from))
 }

@@ -1,4 +1,4 @@
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -15,7 +15,14 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { isSamePath, readGitDirState, UNRESOLVED_HEAD } from './git-dir-branch-state'
+import {
+  countBranchCheckouts,
+  locateRepoOwnHead,
+  parseWorktreePathOfRef,
+  readGitDirState,
+  UNRESOLVED_HEAD,
+  type GitDirState
+} from './git-dir-branch-state'
 import {
   translateWslOutputPath,
   translateWslOutputPaths
@@ -182,68 +189,66 @@ function localBaseBranchGit(
       ? translateWslOutputPath(commonDir, repoPath, routed(repoPath))
       : join(repoPath, commonDir)
   }
-  // Explicit core.bare only, read where the main's config.worktree applies; unset fails closed.
-  const isBareRepo = async (commonDir: string) => {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['config', '--bool', '--get', 'core.bare'],
-        execOptions(commonDir)
-      )
-      return stdout.trim() === 'true'
-    } catch {
-      return false
-    }
+  const readCoreBare = (cwd: string) =>
+    gitExecFileAsync(['config', '--bool', '--get', 'core.bare'], execOptions(cwd)).then(
+      ({ stdout }) => stdout.trim() === 'true',
+      () => false
+    )
+  const listedOwner = async (repoPath: string, fullRef: string): Promise<BranchOwner> => {
+    const worktrees = await listWorktrees(repoPath)
+    const owner = worktrees.find((wt) => wt.branch === fullRef)
+    return { ...(owner ? { ownerPath: owner.path } : {}), bare: worktrees[0]?.isBare === true }
   }
-  // Git's own answer for one branch; `git worktree list` costs seconds at thousands of worktrees.
+  // Git names one checkout per branch: trust it only when HEAD files agree, else the (slow) full listing decides.
   const readBranchOwner = async (
     repoPath: string,
     fullRef: string,
-    commonDir: string
+    commonDir: string,
+    heads: GitDirState['heads']
   ): Promise<BranchOwner> => {
-    const [listed, bare] = await Promise.all([
+    const [listed, ...bareConfig] = await Promise.all([
       gitExecFileAsync(
         ['for-each-ref', '--format=%(refname)%00%(worktreepath)%00', fullRef],
         execOptions(repoPath)
       ).catch(() => undefined),
-      isBareRepo(commonDir)
+      // The main's config.worktree applies only in the common dir; safe.bareRepository may refuse that.
+      readCoreBare(commonDir),
+      readCoreBare(repoPath)
     ])
-    if (!listed) {
-      // Git before 2.23 has no worktreepath.
-      const worktrees = await listWorktrees(repoPath)
-      const owner = worktrees.find((wt) => wt.branch === fullRef)
-      return { ...(owner ? { ownerPath: owner.path } : {}), bare: worktrees[0]?.isBare === true }
+    // Git before 2.23 has no worktreepath.
+    if (!listed || [...heads.values()].includes(UNRESOLVED_HEAD)) {
+      return listedOwner(repoPath, fullRef)
     }
-    // The pattern also matches refs under `<fullRef>/`; ref names hold no newline or NUL.
-    const text = `\n${listed.stdout}`
-    const at = text.indexOf(`\n${fullRef}\0`)
-    const from = at + fullRef.length + 2
-    const path = at === -1 ? '' : text.slice(from, text.indexOf('\0', from))
-    if (!path) {
-      return { bare }
-    }
-    const ownerPath = isAbsolute(path)
+    const bare = bareConfig.includes(true)
+    const path = parseWorktreePathOfRef(listed.stdout, fullRef)
+    let ownerPath = isAbsolute(path)
       ? translateWslOutputPath(path, repoPath, routed(repoPath))
       : path
-    // A bare repo's HEAD names a branch nothing has checked out; Git reports the repo, minus any `/.git`.
-    const isBareHead =
-      bare &&
-      ((await isSamePath(ownerPath, commonDir)) ||
-        (basename(commonDir) === '.git' && (await isSamePath(ownerPath, dirname(commonDir)))))
-    return isBareHead ? { bare } : { ownerPath, bare }
+    const { isCommonDir, isRepoItself } = await locateRepoOwnHead(ownerPath, commonDir)
+    if (bare && isRepoItself) {
+      ownerPath = ''
+    }
+    const checkouts = countBranchCheckouts(heads, fullRef, bare ? commonDir : undefined)
+    if ((isCommonDir && !bare) || checkouts !== (ownerPath ? 1 : 0)) {
+      return listedOwner(repoPath, fullRef)
+    }
+    return { ...(ownerPath ? { ownerPath } : {}), bare }
   }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     readBranchUse: async (repoPath, fullRef) => {
       const commonDir = await commonDirOf(repoPath)
-      if ((await readGitDirState(commonDir)).reserved.has(fullRef)) {
+      const { heads, reserved } = await readGitDirState(commonDir)
+      if (reserved.has(fullRef)) {
         return { reserved: true }
       }
-      const { ownerPath } = await readBranchOwner(repoPath, fullRef, commonDir)
+      const { ownerPath } = await readBranchOwner(repoPath, fullRef, commonDir, heads)
       return { reserved: false, ...(ownerPath === undefined ? {} : { ownerPath }) }
     },
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
-      const { ownerPath, bare } = await readBranchOwner(repoPath, fullRef, commonDir)
+      const { heads } = await readGitDirState(commonDir)
+      const { ownerPath, bare } = await readBranchOwner(repoPath, fullRef, commonDir, heads)
       if (ownerPath !== undefined) {
         return false
       }

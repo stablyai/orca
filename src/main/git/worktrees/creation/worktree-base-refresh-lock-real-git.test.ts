@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -292,6 +293,40 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     await vi.waitFor(() => expect(git(linkedPath, ['rev-parse', 'HEAD'])).toBe(remoteOid))
     expect(await readFile(join(linkedPath, 'version.txt'), 'utf8')).toBe('two\n')
     expect(lists()).toBe(0)
+  })
+
+  it('checks the primary checkout first when main is also force-checked-out elsewhere', async () => {
+    const { repoPath, lockPath } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    await writeFile(join(repoPath, 'version.txt'), 'my edit\n')
+    git(repoPath, [
+      'worktree',
+      'add',
+      '--quiet',
+      '--force',
+      join(repoPath, '..', 'also-main'),
+      'main'
+    ])
+    const original = gitRunner.gitExecFileAsync
+    const statusDirs: string[] = []
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args.includes('status')) {
+        statusDirs.push(options.cwd)
+      }
+      return original(args, options)
+    })
+
+    fastForwardCheckedOutLocalBaseAfterCreate(
+      repoPath,
+      'origin/main',
+      'refs/remotes/origin/main',
+      {}
+    )
+
+    await vi.waitFor(() =>
+      expect(statusDirs.map((dir) => realpathSync(dir))).toEqual([realpathSync(repoPath)])
+    )
   })
 
   // Windows needs symlink privileges.
