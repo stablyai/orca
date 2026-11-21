@@ -41,9 +41,11 @@ export function useMobileStructuredAgentTurnTiming(
     () => selectStructuredAgentTurnBars(rows, submissions, turnId, latestTurn),
     [rows, submissions, turnId, latestTurn]
   )
+  // Turn membership, fork points and the first screen read rows and turns, never reply text, so
+  // they keep their memos while a reply streams too.
   const turnJournal = useMemo(
-    () => ({ items, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
-    [items, submissions, latestTurn, working]
+    () => ({ items: rows, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
+    [rows, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Derive during render so a new turn’s first paint counts from its correct start.
