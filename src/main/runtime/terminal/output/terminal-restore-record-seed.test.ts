@@ -35,9 +35,10 @@ function makeStore() {
   }
 }
 
-async function makeRuntimeWithLeaf(): Promise<OrcaRuntimeService> {
+async function makeRuntimeWithLeaf(store = makeStore()): Promise<OrcaRuntimeService> {
   // SAFETY: Restore reads only this fixture's workspace, metadata, and settings capabilities.
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the store methods exercised by the restore path.
+  const runtime = new OrcaRuntimeService(store as never)
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
     write: () => true,
@@ -70,6 +71,39 @@ async function makeRuntimeWithLeaf(): Promise<OrcaRuntimeService> {
   })
   return runtime
 }
+
+it('reads the terminal identified by its copied workspace tab ID', async () => {
+  const store = makeStore()
+  const session = store.getWorkspaceSession()
+  const runtime = await makeRuntimeWithLeaf(store)
+  session.unifiedTabs = {
+    [WORKTREE_ID]: [
+      {
+        id: 'workspace-tab',
+        entityId: 'tab-1',
+        worktreeId: WORKTREE_ID,
+        groupId: 'group',
+        contentType: 'terminal',
+        label: 'Terminal',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }
+    ]
+  }
+  runtime.setWorkspaceSessionForWorktree(WORKTREE_ID, session)
+  runtime.onPtyData(PTY_ID, 'target pane output\r\n', 42)
+  const copied = 'orcaTabId: workspace-tab'
+  const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`, 100, {
+    includeVisualLayouts: false
+  })
+  const terminal = terminals.find((row) => `orcaTabId: ${row.unifiedTabId}` === copied)
+  expect(terminal?.tabId).toBe('tab-1')
+  await expect(runtime.readTerminal(terminal!.handle)).resolves.toMatchObject({
+    tail: ['target pane output']
+  })
+})
 
 describe('seedTerminalRestoreTail', () => {
   it('lets live bytes land on top of the seed and refuses to re-apply history', async () => {

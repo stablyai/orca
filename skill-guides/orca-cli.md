@@ -6,7 +6,7 @@ description: >-
   "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent",
   "ask/tell/message another agent" (including an agent on a paired Orca server), or
-  "Orca browser". Also use for opening, testing, screenshotting, or checking how a local or
+  "Orca browser". Use it when a message includes "Orca Tab ID" or `orcaTabId`. Also use for opening, testing, screenshotting, or checking how a local or
   external web page renders while working in Orca, unless the user or project names another
   browser tool; plain HTTP or API calls (curl, fetch) do not need it. Prefer it over raw git
   worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
@@ -261,6 +261,18 @@ source/remote identity prevents URL validation and may leave provider links unav
 Old runtimes that predate these existing fields may ignore them; verify with `worktree show --json`.
 
 ## Terminals
+
+When `orcaTabId: <id>` came from a terminal tab, run `ORCA terminal list --json` in the relevant
+worktree. If the result has `truncated: true`, rerun it with `--limit <totalCount>` before
+choosing a pane or deciding there is no match. Then match the full ID exactly against
+`terminals[].unifiedTabId`. Locally created terminal tabs normally use UUID v4 IDs. Copy Tab ID
+preserves the tab's ID exactly, so keep every character. Other tab types and mirrored or
+caller-supplied terminal tabs can use different ID formats. The terminal `handle` is a different
+ID. If `unifiedTabId` is missing, this runtime cannot reliably map the copied workspace tab ID;
+`tabId` identifies the backing terminal tab and is not a dependable fallback. Read the matching
+pane with
+`ORCA terminal read --terminal <handle> --json` using its `handle`. If multiple panes share
+the tab ID, use `--include-visual-layouts` on the complete list to identify the intended pane.
 
 Common commands:
 
