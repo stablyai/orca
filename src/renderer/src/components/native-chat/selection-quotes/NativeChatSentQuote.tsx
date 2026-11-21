@@ -100,7 +100,7 @@ export function NativeChatSentQuote({ node }: { node?: HastNode }): React.JSX.El
           <span className="truncate">{text.replace(/\s+/g, ' ')}</span>
         </Button>
       </TooltipTrigger>
-      <TooltipContent className="max-w-md whitespace-pre-wrap">{text}</TooltipContent>
+      <TooltipContent className="max-w-md whitespace-pre-wrap">{sourceText}</TooltipContent>
     </Tooltip>
   )
 }

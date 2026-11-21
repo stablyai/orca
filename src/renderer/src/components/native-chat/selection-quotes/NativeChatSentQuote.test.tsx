@@ -82,3 +82,10 @@ it('shows a notice when the quote has no known source', () => {
   expect(opened.toast).toHaveBeenCalledOnce()
   expect(opened.open).not.toHaveBeenCalled()
 })
+
+// Markdown reads "- removed" as a list: the chip's tooltip shows the quoted text as it was taken.
+it('shows the quoted text with its Markdown marks in the tooltip', async () => {
+  sent(`${formatNativeChatQuote('- removed')}reply`)
+  fireEvent.focus(screen.getByRole('button', { name: /^Quote: / }))
+  expect(await screen.findByRole('tooltip')).toHaveTextContent(/^- removed$/)
+})
