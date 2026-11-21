@@ -126,9 +126,9 @@ export const ASK_SCENARIOS: OrchestrationScenario[] = [
             },
             {
               pattern:
-                /(?:fix(?:ing)?|address(?:ing)?|repair(?:ing)?).*(?:both|two|problems|issues).*(?:adds?|takes?|costs?|delays?).*(?:a|one|1|another|extra) (?:more )?day/i,
+                /(?:fix(?:ing)?|address(?:ing)?|repair(?:ing)?).*(?:both|two|problems|issues).*(?:add|tak|took|cost|delay)\w*.*(?:a|one|1|another|extra) (?:more )?day/i,
               what: 'fixing both costs a day',
-              predicate: '(?:adds?|takes?|costs?|delays?)'
+              predicate: '(?:add|tak|took|cost|delay)\\w*'
             },
             {
               pattern:

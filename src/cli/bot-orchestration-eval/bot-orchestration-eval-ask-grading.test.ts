@@ -63,10 +63,23 @@ describe('each independently delivered worker ask', () => {
     ])
   })
 
-  it('requires an affirmative delay for the spacing decision', () => {
-    const ask = (cost: string) => card(turn({ reply: CARD_ASK.replace('adds about a day', cost) }))
-    expect(ask('delays this by a day')).toEqual([])
-    expect(ask('does not delay this by a day')).toContain(
+  it.each([
+    'delays this by a day',
+    'is taking an extra day',
+    'delays this by a day without changing the scope'
+  ])('accepts the stated cost of fixing both: %s', (cost) => {
+    expect(card(turn({ reply: CARD_ASK.replace('adds about a day', cost) }))).toEqual([])
+  })
+
+  it.each([
+    'does not delay this by a day',
+    'without adding a day',
+    'not adding a day',
+    'not costing a day',
+    'without taking a day',
+    'without delaying this by a day'
+  ])('rejects a denied cost of fixing both: %s', (cost) => {
+    expect(card(turn({ reply: CARD_ASK.replace('adds about a day', cost) }))).toContain(
       'turn 1: reply: ask leaves out fixing both costs a day'
     )
   })
