@@ -22,10 +22,10 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
   ): { cleared: number; untouched: string[] } {
     const keys = [...paneKeys]
     const result = super.reconcileEndedProcess(keys, options, clearPane)
-    // Only an explicit end is proof (a probe that read it, or the agent's own end hook); a mark
-    // left standing where no host can prove it (SSH, WSL, Windows) may be a Ctrl-Z.
+    // Proof is a probe that found the process gone, the agent's own end hook, or the host finding
+    // the shell alone. A mark standing where no host can prove it (SSH, WSL) may be a Ctrl-Z.
     const ended = options?.endedPresence
-    for (const paneKey of ended ? keys : []) {
+    for (const paneKey of ended || options?.confirmedExit === 'proven' ? keys : []) {
       const resolved = this.resolvePaneKeyAlias(paneKey)
       const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence
       // A newer live agent owns the pane: the old one's end is not its news.

@@ -119,3 +119,36 @@ describe("a command mark in a local agent's pane", () => {
     expect(exits).toEqual([])
   })
 })
+
+describe("a command mark in a local agent's pane that reported no process", () => {
+  it.each([
+    [true, [PANE]],
+    [null, []]
+  ])('reports the exit only when the shell is proven alone (%s)', async (alone, expected) => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-marked-exit-'))
+    const server = new AgentHookServer()
+    try {
+      await server.start({ env: 'production', userDataPath })
+      const exits: string[] = []
+      server.setTerminalPaneLifecycle({
+        ownsProcess: () => true,
+        isStopping: () => false,
+        isReversibleStop: () => false,
+        isPlaced: () => true,
+        confirmShellAlone: async () => alone,
+        agentExited: (paneKey) => exits.push(paneKey)
+      })
+      const response = await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', session_id: 'session-b', prompt: 'task' })
+      )
+      expect(response.status).toBe(204)
+      server.retireProcessAuthority(PANE, { confirmedExit: true, launchRetired: true })
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(exits).toEqual(expected)
+    } finally {
+      server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+})
