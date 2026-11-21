@@ -39,5 +39,6 @@ export const BOT_AGENTS_LISTING_LINKED_SKILLS: readonly string[] = [
   'grok',
   'antigravity',
   'cursor',
-  'hermes'
+  'hermes',
+  'kimi'
 ]
