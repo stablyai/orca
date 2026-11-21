@@ -194,6 +194,7 @@ export function EditorEditFileSurface({
               mimeType={fileContent.mimeType}
               preferenceKey={pdfPreferenceKey}
               scrollCacheKey={pdfViewStateKey}
+              focusPane={{ file: activeFile, viewStateId: viewStateScopeId }}
               editFileId={isEditorWritableView(activeFile) ? activeFile.id : null}
             />
           </div>
