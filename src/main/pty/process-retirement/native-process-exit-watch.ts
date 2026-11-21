@@ -13,6 +13,17 @@ const requireFromHere = createRequire(__filename)
 let cachedNative: ProcessExitWatchNative | null | undefined
 let nativeOverride: ProcessExitWatchNative | null | undefined
 
+function isProcessExitWatchNative(native: unknown): native is ProcessExitWatchNative {
+  return (
+    typeof native === 'object' &&
+    native !== null &&
+    'watchProcessExit' in native &&
+    typeof native.watchProcessExit === 'function' &&
+    'unwatchProcessExit' in native &&
+    typeof native.unwatchProcessExit === 'function'
+  )
+}
+
 function loadProcessExitWatchNative(): ProcessExitWatchNative | null {
   if (nativeOverride !== undefined) {
     return nativeOverride
@@ -25,17 +36,16 @@ function loadProcessExitWatchNative(): ProcessExitWatchNative | null {
     return null
   }
   try {
-    const { loadNativeModule } = requireFromHere('node-pty/lib/utils') as {
-      loadNativeModule: (name: string) => { module: unknown }
-    }
-    const native = loadNativeModule(process.platform === 'win32' ? 'conpty' : 'pty')
-      .module as Partial<ProcessExitWatchNative> | null
-    // An addon built before the patch lacks the watch; callers then keep their event-only behavior.
-    cachedNative =
-      typeof native?.watchProcessExit === 'function' &&
-      typeof native.unwatchProcessExit === 'function'
-        ? (native as ProcessExitWatchNative)
+    const utils: unknown = requireFromHere('node-pty/lib/utils')
+    const native: unknown =
+      typeof utils === 'object' &&
+      utils !== null &&
+      'loadNativeModule' in utils &&
+      typeof utils.loadNativeModule === 'function'
+        ? utils.loadNativeModule(process.platform === 'win32' ? 'conpty' : 'pty')?.module
         : null
+    // An addon built before the patch lacks the watch; callers then keep their event-only behavior.
+    cachedNative = isProcessExitWatchNative(native) ? native : null
   } catch {
     cachedNative = null
   }
