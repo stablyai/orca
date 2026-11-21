@@ -18,11 +18,13 @@ export class ForegroundAgentExitWatches {
 
   constructor(private readonly onAgentExit?: (ptyId: string) => void) {}
 
-  /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it. */
+  /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it.
+   * identifiedPid is the agent process a full read proved; a group leader alone may be a wrapper that outlives it. */
   noteInspection(
     ptyId: string,
     source: ForegroundAgentPidSource | undefined,
-    foreground: string | null
+    foreground: string | null,
+    identifiedPid?: number
   ): boolean {
     if (!source?.isAlive) {
       this.forget(ptyId)
@@ -33,11 +35,19 @@ export class ForegroundAgentExitWatches {
       return this.isWatching(ptyId)
     }
     if (!recognizeAgentProcess(foreground)) {
+      const wasWatching = this.isWatching(ptyId)
       this.forget(ptyId)
+      // The pane may still count on a notice; tell it to read again and learn it has none.
+      if (wasWatching) {
+        this.onAgentExit?.(ptyId)
+      }
       return false
     }
-    const pid = source.foregroundAgentPid()
-    if (pid === null || this.reportedPids.get(ptyId) === pid) {
+    const pid = identifiedPid ?? source.foregroundAgentPid()
+    if (pid === null) {
+      return this.isWatching(ptyId)
+    }
+    if (this.reportedPids.get(ptyId) === pid) {
       return false
     }
     const watches = this.watches.get(ptyId) ?? new Map<number, ProcessExitWatch>()

@@ -156,6 +156,8 @@ describe('TerminalHost foreground agent exit watch', () => {
     foreground = 'vim'
     await host.inspectProcess('pane-1', { foregroundOnly: true })
     expect(fake.live.size).toBe(0)
+    // The pane may still count on a notice, so it is told to read again.
+    expect(agentExits).toEqual(['pane-1'])
 
     foreground = 'codex'
     agentPid = 5151
@@ -170,6 +172,6 @@ describe('TerminalHost foreground agent exit watch', () => {
     expect(fake.live.size).toBe(1)
     await host.dispose()
     expect(fake.live.size).toBe(0)
-    expect(agentExits).toEqual([])
+    expect(agentExits).toEqual(['pane-1'])
   })
 })

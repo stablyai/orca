@@ -6,7 +6,6 @@ import type { IPtyProvider } from '../pty/provider-contract'
 import type { PtyDataEvent } from '../pty/events'
 import { getSpawnedShellName, normalizeLocalCallerSessionId } from './local-pty-launch-context'
 import { mintPtySessionId } from '../../daemon/sessions/pty-session-id'
-import { forgetLocalPtyAgentExitWatch } from './local-pty-agent-exit-watch'
 
 export type PtyShutdownOperation = {
   promise: Promise<void>
@@ -110,7 +109,6 @@ export function clearPtyState(id: string): void {
   runPtyCleanup(id)
   disposePtyListeners(id)
   disposePtyExitListener(id)
-  forgetLocalPtyAgentExitWatch(id)
   ptyProcesses.delete(id)
   ptyIncarnations.delete(id)
   ptyAgentSessionIds.delete(id)

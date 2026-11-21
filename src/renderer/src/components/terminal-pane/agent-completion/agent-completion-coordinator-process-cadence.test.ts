@@ -97,6 +97,29 @@ describe('agent completion coordinator', () => {
     coordinator.dispose()
   })
 
+  it('keeps a slow re-check when the pane cannot receive the host exit notice', async () => {
+    let result: RuntimeTerminalProcessInspection = {
+      ...processResult('codex'),
+      foregroundExitWatched: true
+    }
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true,
+      receivesForegroundExitNotices: () => false
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    result = processResult('zsh', false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    coordinator.dispose()
+  })
+
   it('confirms an exit once a background child outlives the redraw and then ends silently', async () => {
     let result = processResult('codex')
     const dispatchCompletion = vi.fn()

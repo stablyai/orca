@@ -65,6 +65,8 @@ export type AgentCompletionCoordinatorOptions = {
   shouldPollNoEvidenceProcessCadence?: () => boolean
   // Relax costly no-evidence scans (Windows or remote host reads); output/title/hooks re-arm hot cadence.
   isProcessInspectionCostly?: () => boolean
+  /** False when this pane does not consume host facts, so a host-watched exit could never reach it. */
+  receivesForegroundExitNotices?: () => boolean
 }
 
 export type AgentCompletionCoordinator = {

@@ -275,8 +275,19 @@ export function inspectTerminalHostSession(
     authorityGeneration,
     nextObservationEpoch
   }).then((result) =>
-    agentExitWatches?.noteInspection(sessionId, sessions.get(sessionId), result.foregroundProcess)
+    agentExitWatches?.noteInspection(
+      sessionId,
+      sessions.get(sessionId),
+      result.foregroundProcess,
+      provenAgentPid(result.foregroundProcessEvidence)
+    )
       ? { ...result, foregroundExitWatched: true as const }
       : result
   )
+}
+
+function provenAgentPid(evidence: RemoteForegroundEvidence | undefined): number | undefined {
+  return evidence?.verdict === 'live' && evidence.fence.platform === 'posix'
+    ? evidence.fence.process?.pid
+    : undefined
 }

@@ -151,7 +151,8 @@ export function handleAgentCompletionInspectionResult(args: {
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
     if (
       (wasTracked && result.childProcessEvidence === 'no-children') ||
-      result.foregroundExitWatched !== true
+      result.foregroundExitWatched !== true ||
+      options.receivesForegroundExitNotices?.() === false
     ) {
       requestFollowUp('unresolved')
     }

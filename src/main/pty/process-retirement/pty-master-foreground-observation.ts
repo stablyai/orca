@@ -46,16 +46,6 @@ export function readPtyForegroundGroup(proc: unknown): number | null | undefined
   }
 }
 
-/** The foreground job's leader, never the shell itself (job control off keeps an agent in the shell's group). */
-export function foregroundJobLeaderPid(proc: unknown): number | null {
-  const group = readPtyForegroundGroup(proc)
-  const shellPid =
-    proc && typeof proc === 'object' && 'pid' in proc && typeof proc.pid === 'number'
-      ? proc.pid
-      : null
-  return typeof group === 'number' && group !== shellPid ? group : null
-}
-
 /** ConPTY has no foreground process group, so Windows PTYs get no reader. */
 export function ptyForegroundGroupReader(proc: unknown): PtyForegroundGroupReader | undefined {
   return process.platform === 'win32' ? undefined : () => readPtyForegroundGroup(proc)

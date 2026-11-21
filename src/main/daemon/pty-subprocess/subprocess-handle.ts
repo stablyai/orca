@@ -5,7 +5,6 @@ import type { RecognizedAgentProcess } from '../../../shared/agent-status/proces
 import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
 import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
 import {
-  foregroundJobLeaderPid,
   observePtyForeground,
   readPtyForegroundGroup,
   ptyForegroundGroupReader
@@ -166,9 +165,8 @@ export function createDaemonPtySubprocessHandle(args: {
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
-    // POSIX: the foreground job's group leader is the program the shell started; ConPTY has no group.
-    foregroundAgentPid: () =>
-      process.platform === 'win32' ? foreground.cachedAgentPid() : foregroundJobLeaderPid(proc),
+    // Windows proves the agent pid on a full read; POSIX reads carry it in their evidence instead.
+    foregroundAgentPid: () => (process.platform === 'win32' ? foreground.cachedAgentPid() : null),
     write: (data) => {
       if (dead || ioFailed || masterRetired) {
         return

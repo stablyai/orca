@@ -21,10 +21,7 @@ import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
 } from '../pty/process-inspection'
-import {
-  isClientOnlyUnverifiableInspection,
-  type TerminalProcessInspection as PtyProcessInspection
-} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   _resetPtyOwnerHostColorsForTest,
@@ -58,8 +55,6 @@ import {
   writeLocalPty
 } from './local-pty-session-operations'
 import { spawnLocalPty } from './local-pty-spawn'
-import { noteLocalPtyInspection, onLocalPtyAgentExit } from './local-pty-agent-exit-watch'
-import type { PtyBackgroundStreamEvent } from '../pty/events'
 import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
 import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
 
@@ -150,24 +145,6 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async inspectProcess(
-    id: string,
-    options?: PtyProcessInspectionOptions
-  ): Promise<PtyProcessInspection> {
-    const proc = ptyProcesses.get(id)
-    const result = await this.readProcessInspection(id, options)
-    const watched =
-      proc !== undefined &&
-      noteLocalPtyInspection(id, ptyProcesses.get(id) === proc, proc, result.foregroundProcess)
-    return watched && !isClientOnlyUnverifiableInspection(result)
-      ? { ...result, foregroundExitWatched: true }
-      : result
-  }
-
-  onBackgroundStreamEvent(callback: (event: PtyBackgroundStreamEvent) => void): () => void {
-    return onLocalPtyAgentExit(callback)
-  }
-
-  private async readProcessInspection(
     id: string,
     options?: PtyProcessInspectionOptions
   ): Promise<PtyProcessInspection> {
