@@ -155,7 +155,7 @@ it('retains unpaired results and keeps ambiguous launches held independently of 
   hook('PreToolUse', 3)
   applyAntigravityLaunchResults(
     pane,
-    new Map([
+    new Map<number, AntigravityLaunchResult>([
       [1, resultWithChild],
       [2, failedInvoke]
     ]),
