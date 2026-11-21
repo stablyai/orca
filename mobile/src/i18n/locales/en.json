@@ -3204,7 +3204,8 @@
       "attachedImage": "Attached image",
       "removeImage": "Remove image",
       "uploadingFile": "Uploading {{name}}",
-      "removeFile": "Remove {{name}}"
+      "removeFile": "Remove {{name}}",
+      "uploadingImage": "Uploading image"
     },
     "useImageUpload": {
       "disconnected": "Attach failed (disconnected)",
@@ -5660,7 +5661,11 @@
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
-        "snoozeEnded": "Back from snooze early"
+        "snoozeEnded": "Back from snooze early",
+        "notSent": "Not sent.",
+        "retry": "Retry",
+        "discard": "Discard",
+        "mayHaveArrived": "May have arrived."
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -5706,7 +5711,10 @@
         "activity": "Activity",
         "showEarlier": "Show earlier",
         "showLess": "Show less",
-        "showMore": "Show more"
+        "showMore": "Show more",
+        "placeOf": "{{index}} of {{total}}",
+        "previous": "Previous item",
+        "next": "Next item"
       },
       "readFailedShort": "Couldn’t load items.",
       "lastRead": "Showing the last items read.",
@@ -5795,7 +5803,8 @@
       "ask": {
         "recommended": "Recommended",
         "notNow": "Not now"
-      }
+      },
+      "readFailedClosedPage": "Couldn’t read more closed items."
     },
     "needs": {
       "permissionTool": "Permission · {{tool}}",
