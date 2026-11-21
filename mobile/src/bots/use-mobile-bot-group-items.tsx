@@ -1,6 +1,6 @@
 // A group's Items, read: each member's items from its own read, scoped to the group's rooms by the
 // filter, merged into one set of groups as the desktop's group panel merges them.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import {
   botItemStaleDays,
   botItemsClosedInTimeOrder,
@@ -15,6 +15,7 @@ import { botGroupMemberBots } from '../../../src/shared/bots/bot-sidebar-entries
 import type { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupList } from './bot-group-operations'
+import type { BotGroupItemReads } from './use-mobile-bot-group-transcript'
 import type { PhoneBot } from './host-bots-operations'
 import { usePhoneBotItems, type PhoneBotItems } from './items/use-phone-bot-items'
 
@@ -63,6 +64,11 @@ function groupScopes(group: BotGroup, t: Translate): BotGroupItemsScope[] {
   ]
 }
 
+/** A member's item read count: its own notices', and those naming every member. */
+export function memberItemReads(reads: BotGroupItemReads, botId: string): number {
+  return reads.all + (reads.bots[botId] ?? 0)
+}
+
 function roomsOf(group: BotGroup): string {
   const { name, members, formerSessionIds, threads } = group
   return JSON.stringify({ name, members, formerSessionIds, threads })
@@ -97,6 +103,7 @@ export function useMobileBotGroupItems({
   bots,
   needsYou,
   reads,
+  memberIds,
   now,
   t
 }: {
@@ -105,7 +112,9 @@ export function useMobileBotGroupItems({
   groupId: string
   bots: readonly PhoneBot[]
   needsYou: Readonly<Record<string, number>>
-  reads: number
+  reads: BotGroupItemReads
+  /** Set to the members read here, so a notice re-reads only theirs. */
+  memberIds: RefObject<readonly string[]>
   now: number
   t: Translate
 }) {
@@ -139,7 +148,7 @@ export function useMobileBotGroupItems({
     return () => {
       current = false
     }
-  }, [visible, client, groupId, reads, groupAttempt])
+  }, [visible, client, groupId, reads.rooms, groupAttempt])
 
   const [scopeKey, setScopeKey] = useState(GROUP_SCOPE)
   const [pickedIds, setBotIds] = useState<readonly string[] | null>(null)
@@ -147,6 +156,9 @@ export function useMobileBotGroupItems({
   const scopes = useMemo(() => (group ? groupScopes(group, t) : []), [group, t])
   const scope = scopes.find((entry) => entry.key === scopeKey) ?? scopes[0]
   const members = useMemo(() => (group ? botGroupMemberBots(group, bots) : []), [group, bots])
+  useEffect(() => {
+    memberIds.current = members.map((bot) => bot.id)
+  }, [memberIds, members])
   const picked = members.filter((bot) => pickedIds?.includes(bot.id))
   // Picked bots that left the group drop out; none left is every member, as the desktop's filter.
   const botIds =
@@ -255,7 +267,7 @@ export function useMobileBotGroupItems({
       botId={bot.id}
       chatIds={filterChats}
       showing={visible}
-      reads={reads}
+      reads={memberItemReads(reads, bot.id)}
       report={report}
     />
   ))

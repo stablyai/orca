@@ -71,12 +71,13 @@ const SidebarNav = React.memo(function SidebarNav() {
   const showArtifactsButton = useAppStore((s) => shouldShowArtifactsButton(s.settings))
   const showSkillsButton = useAppStore((s) => shouldShowSkillsButton(s.settings))
   const automationsActive = activeView === 'automations'
-  // With the experimental rail on, Tasks and Automations live on the rail instead.
+  // With the experimental rail on, Tasks, Automations, Artifacts, Skills and Orca Mobile live on the rail instead.
   const appRailVisible = useAppStore(selectAppRailVisible)
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
   const skillsActive = activeView === 'skills'
-  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
+  // The badge's paired-device lookup runs only while the list shows the Mobile row.
+  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton && !appRailVisible)
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })
   }, [updateSettings])
@@ -130,7 +131,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       </button>
       <SetupGuideSidebarEntry />
       {appRailVisible ? null : <SidebarTaskNavButton />}
-      {showArtifactsButton ? (
+      {showArtifactsButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <button
@@ -159,7 +160,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideArtifactsButton} />
         </ContextMenu>
       ) : null}
-      {showSkillsButton ? (
+      {showSkillsButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <button
@@ -222,7 +223,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <AgentDashboardSidebarEntry />
         </React.Suspense>
       ) : null}
-      {showMobileButton ? (
+      {showMobileButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div

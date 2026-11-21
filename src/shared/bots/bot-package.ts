@@ -16,6 +16,8 @@ export const BOT_PACKAGE_SOUL_PATH = 'SOUL.md'
 export const BOT_PACKAGE_AVATAR_PATH = BOT_AVATAR_FILE
 export const BOT_PACKAGE_MAX_MANIFEST_BYTES = 256 * 1024
 export const BOT_PACKAGE_PURPOSE_MAX = 200
+/** The most skills one package carries. */
+export const BOT_PACKAGE_SKILLS_MAX = 64
 export const BOT_PACKAGE_SETUP_NOTE_MAX = 2000
 
 /** Skill and memory names: they become folder and file names, so the skill name rules apply. */
@@ -64,7 +66,7 @@ export const BotPackageV1Schema = z.object({
   purpose: z.string().max(BOT_PACKAGE_PURPOSE_MAX),
   /** The sharer's agent; the recipient picks their own. */
   agentHint: z.enum(BOT_AGENTS),
-  skills: z.array(z.object({ name: PartName })).max(64),
+  skills: z.array(z.object({ name: PartName })).max(BOT_PACKAGE_SKILLS_MAX),
   tools: z
     .array(
       z.object({
@@ -272,7 +274,15 @@ export type BotShareFlag = {
 /** Everything the bot could share, ticked or not, for the Share dialog's pages. */
 export type BotShareAvailable = {
   soulLines: number
-  skills: { name: string; description: string; homePath: string }[]
+  /** homePath: null for a linked project's skill, outside the bot home. optInFrom: the project's name
+   *  for a skill it links in from outside itself, listed unticked; optInKey: its folder's key. */
+  skills: {
+    name: string
+    description: string
+    homePath: string | null
+    optInFrom?: string
+    optInKey?: string
+  }[]
   schedules: { automationId: string; name: string; rrule: string; timezone?: string }[]
   eventSuggestions: { automationId: string; name: string; source: string; event: string }[]
   tools: { name: string; url: string }[]

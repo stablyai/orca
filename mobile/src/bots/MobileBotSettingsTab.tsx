@@ -5,6 +5,7 @@ import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-ru
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
@@ -37,8 +38,10 @@ import { MobileBotAgentPage } from './MobileBotAgentPage'
 import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
 import { ensureBotHomeChat } from './host-bots-read'
-import { useMobileBotWebhookSettings } from './webhooks/MobileBotWebhooks'
-import { MobileBotToolsPage, MobileBotToolsRow } from './tools/MobileBotToolsPage'
+import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
+import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
+import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
+import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
 
 /** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
 export type BotSettingsHome = { folderPath: string | null; onDeleted: () => void }
@@ -60,6 +63,7 @@ export function MobileBotSettingsTab(props: {
   home: BotSettingsHome
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
+  onOpenFile?: (path: string) => void
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -86,22 +90,13 @@ export function MobileBotSettingsTab(props: {
   const tidyUp = useMobileBotTidyUp(props.client, bot.id, props.routeBot.reads, props.showToast)
   const access = props.accessRequests
   const lookAround = lookAroundSupported(bot.agent) ? props.upNext : null
-  const webhooks = useMobileBotWebhookSettings(props, offlineBanner)
+  const sharing = useMobileBotSharingSettings(props, offlineBanner)
   const backToSettings = {
     label: t('bots.lookAround.back', 'Back to Settings'),
     onPress: closePage
   }
 
-  const errorMessage = (error: unknown): string =>
-    isHostNotConnectedError(error)
-      ? t('bots.items.write.offline', '{{host}} is offline.', { host: props.hostName })
-      : error instanceof Error && error.message === 'bot_name_taken'
-        ? t('bots.settings.nameTaken', 'Another bot already has that name.')
-        : error instanceof Error && error.message === 'bot_avatar_invalid'
-          ? t('bots.picture.invalid', 'That picture could not be used. Pick a PNG or JPG image.')
-          : error instanceof Error
-            ? error.message
-            : t('bots.saveFailed', 'Couldn’t save')
+  const errorMessage = (error: unknown) => botSaveErrorMessage(error, props.hostName)
 
   const save = async (updates: BotUpdateParams['updates']): Promise<boolean> => {
     if (!props.client) {
@@ -125,6 +120,8 @@ export function MobileBotSettingsTab(props: {
       setSaving(false)
     }
   }
+  const connectors = useMobileBotConnectorSettings(props, offlineBanner, { accessBot, save })
+  const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
 
   const upload = async (png: string): Promise<boolean> => {
     if (!props.client) {
@@ -157,7 +154,13 @@ export function MobileBotSettingsTab(props: {
       props.showToast(
         isHostNotConnectedError(error)
           ? errorMessage(error)
-          : t('bots.settings.deleteFailed', 'Something went wrong. Try again.'),
+          : error instanceof Error && error.message === UNSAVED_DRAFTS_REMOVAL_REFUSAL
+            ? t(
+                'bots.settings.deleteUnsavedDrafts',
+                'Its folder has unsaved editor changes. Save or close them on {{host}}, then delete again.',
+                { host: props.hostName }
+              )
+            : t('bots.settings.deleteFailed', 'Something went wrong. Try again.'),
         1800
       )
     } finally {
@@ -165,8 +168,9 @@ export function MobileBotSettingsTab(props: {
     }
   }
 
-  if (webhooks.page) {
-    return webhooks.page
+  const hookPage = connectors.page ?? sharing.page ?? knows.page
+  if (hookPage) {
+    return hookPage
   }
 
   if (deleting) {
@@ -316,9 +320,6 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
-  if (page === 'tools') {
-    return <MobileBotToolsPage {...props} bot={bot} onBack={closePage} />
-  }
   if (page === 'who-can-ask') {
     return (
       <MobileBotWhoCanAskPage
@@ -392,14 +393,16 @@ export function MobileBotSettingsTab(props: {
           : null
       }
       accessRequests={access?.requests.length ?? 0}
+      memoryTopics={knows.memoryTopics}
       open={setPage}
       setActive={(active) => void save({ paused: !active })}
       setNotification={(key, on) =>
         void save({ notifications: { ...bot.notifications, [key]: on } })
       }
       onDelete={() => setDeleting(true)}
-      accessRows={<MobileBotToolsRow {...props} bot={bot} onOpen={() => setPage('tools')} />}
-      afterAccess={webhooks.row}
+      connectorsRow={connectors.row}
+      accessRows={knows.accessRows}
+      sharing={sharing.row}
       header={
         <>
           {props.onBack ? (

@@ -31,6 +31,7 @@ import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/Age
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useRecheckOnce } from './use-recheck-once'
+import { useOnLaterChange } from './use-on-later-change'
 import { AntigravityGoogleSignInChoice } from '../../../provider-accounts/AntigravityGoogleSignInChoice'
 import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
@@ -295,6 +296,12 @@ export function AntigravityAccountsSection({
   const chatDescription = antigravityChatDescription(state, chatRuntime)
   // A pick moves new chats between agy and Orca's server, which the rows' answer follows.
   const reread = () => void run('List', undefined, true)
+  // Removing, installing or switching the runtime moves the route; the rows read it again then.
+  const installKey =
+    chatRuntime.kind === 'active' && chatRuntime.snapshot.kind === 'known'
+      ? `${chatRuntime.snapshot.state.program}:${chatRuntime.snapshot.state.source}`
+      : null
+  useOnLaterChange(installKey, reread)
   // Present only for the Google account method once the route has answered (see the host's
   // chatGoogleSignInInUse); the choice stays hidden otherwise.
   const inUse = state?.chatGoogleSignInInUse
@@ -308,6 +315,7 @@ export function AntigravityAccountsSection({
           disabled={antigravityChatSignInBlocked(chatRuntime)}
           runtime={runtimeRow}
           googleSignIn={googleSignIn}
+          onSaved={reread}
         />
       ) : (
         // No sign-in form: new chats run on agy, or Orca's server isn't installed or is changing.

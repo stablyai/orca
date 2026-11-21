@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto'
 import {
   CONNECTOR_CLIENT_LIMITS,
   cloudConversation,
-  type ConnectorEvent
+  type ConnectorEvent,
+  type ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
   JournalConnectorReplyCut,
@@ -27,7 +28,11 @@ export type ConnectorReplyJournal = {
 /** The rows' cut and claim writes (Phase 1): what restart and usage-limit recovery change. */
 export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
   cut(rows: JournalConnectorReplyCutRows): Promise<boolean>
-  recut(claimMessageId: string, cut: JournalConnectorReplyCut): Promise<boolean>
+  recut(
+    claimMessageId: string,
+    cut: JournalConnectorReplyCut,
+    failure?: ConnectorFailure
+  ): Promise<boolean>
   releaseClaim(claimMessageId: string): Promise<boolean>
 }
 

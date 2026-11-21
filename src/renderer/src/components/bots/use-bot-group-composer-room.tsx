@@ -31,12 +31,21 @@ export function useBotGroupComposerRoom(
   const recipientId = useSyncExternalStore(subscribeDraft, () =>
     group ? botGroupSingleRecipient(readNativeChatDraftCache(draftScope), group, bots) : null
   )
+  // This computer's members, then bots on paired computers as the room saved them.
   const memberBots = useMemo(
-    () =>
-      bots.filter(
+    () => [
+      ...bots.filter(
         (bot) =>
           bot.hostId === group?.hostId && group.members.some((member) => member.botId === bot.id)
       ),
+      ...(group?.remoteMembers ?? []).map((member) => ({
+        id: member.botId,
+        hostId: `runtime:${member.environmentId}` as const,
+        name: member.name,
+        avatar: member.avatar,
+        avatarColor: member.avatarColor
+      }))
+    ],
     [bots, group]
   )
   // Keyed by the names so transcript markdown keeps its extension across transcript polls.

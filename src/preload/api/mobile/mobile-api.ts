@@ -84,6 +84,8 @@ export type MobileApi = {
   revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
   getRelayStatus: () => Promise<MobileRelayStatusDetail>
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void) => () => void
+  /** Fires when a phone pairs or is revoked, so open device lists can refetch. */
+  onDevicesChanged: (callback: () => void) => () => void
   consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
   /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
   onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void
