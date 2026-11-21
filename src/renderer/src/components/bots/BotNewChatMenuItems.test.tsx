@@ -205,6 +205,14 @@ describe('botNewChatAgents', () => {
     ])
   })
 
+  it('reports an agent’s unavailable chat even when its CLI row comes first', () => {
+    const model = settled([
+      { kind: 'cli', agent: 'claude' },
+      { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' }
+    ])
+    expect(botNewChatAgents(bot, model)).toEqual([{ agent: 'claude', unavailable: 'ssh' }])
+  })
+
   it('keeps the bot’s own agent before and after discovering other installed agents', () => {
     const current = { agent: 'opencode' } as const
     expect(botNewChatAgents(current, { state: 'loading' })).toEqual([{ agent: 'opencode' }])
