@@ -7,6 +7,7 @@ import type {
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { setRendererUiLanguage } from '@/i18n/i18n'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
+import { NativeChatPermissionModePicker } from '../../session/options/controls/NativeChatPermissionModePicker'
 
 const noop = (): void => {}
 const paint = (): Promise<void> =>
@@ -161,8 +162,12 @@ function permissionFixture({
       }
       const model = host.querySelector<HTMLElement>('[data-composer-control="model"] button')
       const pillBox = pill.getBoundingClientRect()
-      if (model && Math.abs(model.getBoundingClientRect().height - pillBox.height) > 0.5) {
+      if (!model || Math.abs(model.getBoundingClientRect().height - pillBox.height) > 0.5) {
         throw new Error('The permission pill must match the model picker height')
+      }
+      // The narrower pill leaves room for the model name even in the narrowest composer.
+      if (!model.innerText.includes('Opus 5.5')) {
+        throw new Error('The model name must stay visible beside the permission pill')
       }
       const [icon, chevron] = glyphs.map((glyph) => glyph.getBoundingClientRect())
       if (Math.abs(icon.left - pillBox.left - (pillBox.right - chevron.right)) > 1) {
@@ -329,4 +334,24 @@ export const zhFallbackKeyboardNarrow = permissionFixture({
   language: 'zh',
   width: 300,
   focus: 'keyboard'
+})
+
+// Outside the composer (Settings > Chat when per-agent permissions are unsupported) the picker keeps
+// its name; only the composer asks for the icon-only pill.
+export const settingsPicker = defineFixture({
+  width: 320,
+  render: () => (
+    <NativeChatPermissionModePicker
+      current="full-access"
+      modes={['ask', 'accept-edits', 'auto', 'full-access']}
+      onSelect={noop}
+    />
+  ),
+  interact: async (frame) => {
+    await paint()
+    const trigger = frame.querySelector<HTMLButtonElement>('button')!
+    if (!trigger.innerText.includes('Full access')) {
+      throw new Error('The settings permission picker must keep its mode name')
+    }
+  }
 })

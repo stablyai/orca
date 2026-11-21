@@ -97,7 +97,8 @@ export type NativeChatPermissionModePickerProps = {
   agent?: string | null
   disabled?: boolean
   currentLabel?: string
-  appearance?: 'compact' | 'form'
+  /** `icon` is the composer pill: the mode's icon and a chevron, named by its tooltip. */
+  appearance?: 'icon' | 'compact' | 'form'
   activeValue?: string
   onSelect: (mode: AgentChatPermissionMode) => void
   /** A first choice that sets no mode; shown as current while `current` is absent. */
@@ -181,8 +182,8 @@ function NativeChatPermissionModePickerInner({
             { agent: settingsAgent }
           )
         : null
-  // The composer pill is icon-only, so its tooltip always names the mode before any hint.
-  const compact = appearance === 'compact'
+  // The icon-only pill shows no name, so its tooltip always names the mode before any hint.
+  const iconOnly = appearance === 'icon'
   const TriggerIcon = isAgentChatPermissionMode(shown)
     ? NATIVE_CHAT_PERMISSION_MODE_ICONS[shown]
     : Icon
@@ -208,9 +209,15 @@ function NativeChatPermissionModePickerInner({
                       }
                     )
               }
-              className={compact ? undefined : 'h-8 w-64 max-w-full justify-between'}
+              className={
+                appearance === 'form'
+                  ? 'h-8 w-64 max-w-full justify-between'
+                  : iconOnly
+                    ? undefined
+                    : 'min-w-0 shrink'
+              }
             >
-              {compact ? (
+              {iconOnly ? (
                 <TriggerIcon
                   className={`size-3.5 shrink-0 ${shown === 'full-access' ? 'text-status-warning' : ''}`}
                   aria-hidden
@@ -234,9 +241,9 @@ function NativeChatPermissionModePickerInner({
           className="max-w-(--radix-tooltip-content-available-width)"
         >
           <span className="block max-w-72 break-words">
-            {compact ? described : (hintLabel ?? described)}
+            {iconOnly ? described : (hintLabel ?? described)}
           </span>
-          {compact && hintLabel ? (
+          {iconOnly && hintLabel ? (
             <span className="block max-w-72 break-words opacity-70">{hintLabel}</span>
           ) : null}
         </TooltipContent>
@@ -304,6 +311,7 @@ export function NativeChatComposerPermissionPicker({
     <NativeChatPermissionModePicker
       current={current}
       reported={descriptor.kind.reportedValue}
+      appearance="icon"
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
       agent={agent ?? descriptor.kind.settingsAgent ?? null}
