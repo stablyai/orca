@@ -3,7 +3,7 @@ import type { DispatchContextRow, MessageType } from '../orchestration-records'
 import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL, paneKeyMatchSuffix } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
-import { workerSeatGrabSql } from '../runs/run-coordinator-mail-routing'
+import { coordinatorAliasOwnsMessageSql } from '../runs/run-coordinator-mail-routing'
 import {
   ORCHESTRATION_DELIVERY_BATCH_LIMIT,
   type ForeignDirectMailboxRoutingPage
@@ -59,7 +59,7 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
          ON candidate.run_id = coordinator.run_id
         AND candidate.to_handle = coordinator.terminal_handle
        WHERE coordinator.terminal_handle = ?${runExclusion}
-         AND NOT ${workerSeatGrabSql('coordinator')}
+         AND ${coordinatorAliasOwnsMessageSql('coordinator', 'candidate')}
          AND candidate.read = 0 AND candidate.delivered_at IS NULL
          AND candidate.delivery_contract = 'current_delivery'`,
       `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence

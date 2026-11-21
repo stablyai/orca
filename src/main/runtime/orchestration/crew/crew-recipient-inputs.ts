@@ -227,6 +227,7 @@ export function createCrewRecipientInputs(
         if (reachable === undefined) {
           throw new Error('Crew recipient source is unavailable')
         }
+        // Same contract as send: the row keeps the sender's Run and stays addressed to the chat.
         return reachable
           ? { ok: true, to: key.address, runId: senderRunId }
           : {

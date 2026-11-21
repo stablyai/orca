@@ -52,9 +52,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
 CREATE INDEX IF NOT EXISTS idx_inbox ON messages(to_handle, read);
 CREATE INDEX IF NOT EXISTS idx_thread ON messages(thread_id);
 CREATE TABLE IF NOT EXISTS run_coordinator_handles (
-  run_id          TEXT NOT NULL,
-  terminal_handle TEXT NOT NULL,
-  first_bound_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  run_id               TEXT NOT NULL,
+  terminal_handle      TEXT NOT NULL,
+  first_bound_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  first_bound_sequence INTEGER NOT NULL DEFAULT 0,
+  is_structured_worker INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (run_id, terminal_handle)
 );
 

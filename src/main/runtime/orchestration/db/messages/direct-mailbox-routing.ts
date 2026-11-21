@@ -1,7 +1,7 @@
 import type { MessageType } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type MailboxRoutingPage } from './mailbox-routing-page'
-import { activeDispatchOwnsAddressSql } from '../runs/run-coordinator-mail-routing'
+import { directMessageAllowedForRunMailboxSql } from '../runs/run-coordinator-mail-routing'
 
 export function hasUndeliveredDirectMessageForRun(
   this: OrchestrationDb,
@@ -51,7 +51,7 @@ export function routeDirectMessagePage(
   try {
     const throughClause = throughSequence === undefined ? '' : ' AND sequence <= ?'
     const dispatchOwnershipClause = preserveActiveDispatchOwnership
-      ? ` AND NOT ${activeDispatchOwnsAddressSql('messages.run_id', 'messages.to_handle')}`
+      ? ` AND ${directMessageAllowedForRunMailboxSql('messages')}`
       : ''
     const params: (string | number)[] = [runId, directHandle]
     if (throughSequence !== undefined) {

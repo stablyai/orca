@@ -92,6 +92,13 @@ export function mailboxAddressOf(
   return party.orcaSessionId === null ? null : formatOrcaSessionAddress(party.orcaSessionId)
 }
 
+/** A handle-less chat's own mailbox. Terminals and workers keep a handle, so they are not one. */
+export function chatCoordinatorAddress(
+  party: Pick<OrchestrationCoordinatorKey, 'terminalHandle' | 'orcaSessionId'>
+): string | null {
+  return party.terminalHandle === null ? mailboxAddressOf(party) : null
+}
+
 /** Who a Run's binding names now; an Orca session id an older binding left behind is not part of it. */
 export function runCoordinatorKey(run: RunRow): OrchestrationCoordinatorKey {
   return {

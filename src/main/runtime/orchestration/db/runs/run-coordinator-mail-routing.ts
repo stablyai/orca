@@ -1,7 +1,14 @@
 import type Database from '../../../../sqlite/sync-database'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import type { OrchestrationDb } from '../orchestration-db'
 import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
 import { orcaSessionAddressSql, orcaSessionIdOfAddressSql } from '../orca-session-address-sql'
+import {
+  STRUCTURED_WORKER_HANDLE_GLOB_SQL,
+  chatSessionAliasRowSql,
+  staleChatCoordinatorAliasSql,
+  structuredWorkerSessionAddressSql
+} from './run-coordinator-session-alias'
 
 /** Mail to an active Dispatch assignee's address in the same Run is that worker's, not coordinator mail. */
 export function activeDispatchOwnsAddressSql(runIdSql: string, addressSql: string): string {
@@ -38,12 +45,31 @@ export function workerSeatGrabSql(aliasRow: string): string {
     )})`
 }
 
-/** Whether `addressSql` is a coordinator address of the Run `runIdSql`, seat grabs excluded. */
+/**
+ * A remembered row routes as this Run's coordinator. A worker who grabbed the seat does not, and
+ * neither does a chat session address that no longer matches the Run's current coordinator.
+ */
+export function coordinatorAliasRowSql(aliasRow: string): string {
+  return `NOT ${workerSeatGrabSql(aliasRow)} AND NOT ${staleChatCoordinatorAliasSql(aliasRow)}`
+}
+
+/**
+ * Whether remembered coordinator row `aliasRow` owns direct row `messageSql`.
+ * Terminal handles and structured-worker addresses own every unread direct row in their Run;
+ * a handle-less chat's session address only owns mail written after this binding started.
+ */
+export function coordinatorAliasOwnsMessageSql(aliasRow: string, messageSql: string): string {
+  return `(${coordinatorAliasRowSql(aliasRow)}
+    AND (${messageSql}.sequence > ${aliasRow}.first_bound_sequence
+      OR NOT ${chatSessionAliasRowSql(aliasRow)}))`
+}
+
+/** Whether `addressSql` is a coordinator address of the Run `runIdSql`, seat grabs and stale chats excluded. */
 function coordinatorAliasSql(runIdSql: string, addressSql: string): string {
   return `EXISTS (
     SELECT 1 FROM run_coordinator_handles AS alias
     WHERE alias.run_id = ${runIdSql} AND alias.terminal_handle = ${addressSql}
-      AND NOT ${workerSeatGrabSql('alias')}
+      AND ${coordinatorAliasRowSql('alias')}
   )`
 }
 
@@ -52,9 +78,15 @@ export function runOwnsDirectMessageSql(messageSql: string): string {
   const runIdSql = `${messageSql}.run_id`
   const addressSql = `${messageSql}.to_handle`
   return `(EXISTS (SELECT 1 FROM runs WHERE runs.id = ${runIdSql} AND runs.legacy = 0)
-    AND (${coordinatorAliasSql(runIdSql, addressSql)}
+    AND (EXISTS (
+        SELECT 1 FROM run_coordinator_handles AS alias
+        WHERE alias.run_id = ${runIdSql} AND alias.terminal_handle = ${addressSql}
+          AND ${coordinatorAliasOwnsMessageSql('alias', messageSql)}
+      )
       OR ${activeDispatchOwnsAddressSql(runIdSql, addressSql)}))`
 }
+
+const LATEST_MESSAGE_SEQUENCE_SQL = 'COALESCE((SELECT MAX(sequence) FROM messages), 0)'
 
 /** True when the alias is new; the calling mutation announces it with its own changes. */
 export function rememberRunCoordinatorHandle(
@@ -64,14 +96,28 @@ export function rememberRunCoordinatorHandle(
 ): boolean {
   const changed = this.db
     .prepare(
-      `INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle) VALUES (?, ?)`
+      `INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle, first_bound_sequence)
+       VALUES (?, ?, ${LATEST_MESSAGE_SEQUENCE_SQL})`
     )
+    .run(runId, terminalHandle)
+  return Number(changed.changes) > 0
+}
+
+/** Drop one remembered address. A chat's session address aliases a Run only while that chat coordinates it. */
+export function forgetRunCoordinatorHandle(
+  this: OrchestrationDb,
+  runId: string,
+  terminalHandle: string
+): boolean {
+  const changed = this.db
+    .prepare(`DELETE FROM run_coordinator_handles WHERE run_id = ? AND terminal_handle = ?`)
     .run(runId, terminalHandle)
   return Number(changed.changes) > 0
 }
 
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')
 const NEW_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('NEW')
+const OLD_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('OLD')
 
 /** Cache both coordinator addresses; rebuild triggers on open for prefix skew, after migration supplies session-id columns. */
 export function createRunCoordinatorAddressTriggers(db: Database.Database): void {
@@ -84,22 +130,43 @@ export function createRunCoordinatorAddressTriggers(db: Database.Database): void
       AFTER INSERT ON runs
       WHEN NEW.legacy = 0
       BEGIN
-        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
-        SELECT NEW.id, NEW.coordinator_handle WHERE NEW.coordinator_handle IS NOT NULL;
-        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
-        SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}
+        INSERT OR IGNORE INTO run_coordinator_handles (
+          run_id, terminal_handle, first_bound_at, first_bound_sequence
+        )
+        SELECT NEW.id, NEW.coordinator_handle, NEW.updated_at, ${LATEST_MESSAGE_SEQUENCE_SQL}
+        WHERE NEW.coordinator_handle IS NOT NULL;
+        INSERT OR IGNORE INTO run_coordinator_handles (
+          run_id, terminal_handle, first_bound_at, first_bound_sequence, is_structured_worker
+        )
+        SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}, NEW.updated_at,
+          ${LATEST_MESSAGE_SEQUENCE_SQL},
+          CASE WHEN NEW.coordinator_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL} THEN 1 ELSE 0 END
         WHERE ${NEW_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
       END;
       CREATE TRIGGER trg_runs_remember_coordinator_update
       AFTER UPDATE OF coordinator_handle, coordinator_orca_session_id,
-        coordinator_orca_session_id_generation ON runs
+        coordinator_orca_session_id_generation, consumer_generation ON runs
       WHEN NEW.legacy = 0
       BEGIN
-        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
-        SELECT NEW.id, NEW.coordinator_handle WHERE NEW.coordinator_handle IS NOT NULL;
-        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
-        SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}
+        INSERT OR IGNORE INTO run_coordinator_handles (
+          run_id, terminal_handle, first_bound_at, first_bound_sequence
+        )
+        SELECT NEW.id, NEW.coordinator_handle, NEW.updated_at, ${LATEST_MESSAGE_SEQUENCE_SQL}
+        WHERE NEW.coordinator_handle IS NOT NULL;
+        INSERT OR IGNORE INTO run_coordinator_handles (
+          run_id, terminal_handle, first_bound_at, first_bound_sequence, is_structured_worker
+        )
+        SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}, NEW.updated_at,
+          ${LATEST_MESSAGE_SEQUENCE_SQL},
+          CASE WHEN NEW.coordinator_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL} THEN 1 ELSE 0 END
         WHERE ${NEW_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
+        -- An older binary rebinds by handle and consumer_generation and never clears the session id.
+        -- A handle-less chat's address aliases the Run only while that chat coordinates it.
+        DELETE FROM run_coordinator_handles
+        WHERE run_id = OLD.id
+          AND OLD.coordinator_handle IS NULL
+          AND terminal_handle = ${OLD_COORDINATOR_SESSION_ADDRESS_SQL}
+          AND ${OLD_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT ${NEW_COORDINATOR_SESSION_ADDRESS_SQL};
       END;
     `)
     db.exec('COMMIT')
@@ -115,8 +182,10 @@ export function rememberCurrentRunCoordinatorHandles(this: OrchestrationDb): voi
     INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
     SELECT id, coordinator_handle FROM runs
     WHERE legacy = 0 AND coordinator_handle IS NOT NULL;
-    INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
-    SELECT id, ${CURRENT_COORDINATOR_SESSION_ADDRESS_SQL} FROM runs
+    INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle, is_structured_worker)
+    SELECT id, ${CURRENT_COORDINATOR_SESSION_ADDRESS_SQL},
+      CASE WHEN coordinator_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL} THEN 1 ELSE 0 END
+    FROM runs
     WHERE legacy = 0 AND ${CURRENT_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
   `)
 }
@@ -146,6 +215,40 @@ export function createCoordinatorMailRoutingTrigger(this: OrchestrationDb): void
   }
 }
 
+/**
+ * Mail to a chat from before this binding stays on that chat (`messages.sequence > first_bound_sequence`).
+ * Terminal handles and structured-worker addresses keep every unread direct row.
+ */
+function chatBindingDirectMailSql(messageSql = 'messages'): string {
+  const addressSql = `${messageSql}.to_handle`
+  const runIdSql = `${messageSql}.run_id`
+  const currentAddress = `(SELECT ${currentRunCoordinatorSessionAddressSql('runs')} FROM runs WHERE runs.id = ${runIdSql})`
+  return `(NOT (${addressSql} GLOB '${ORCA_SESSION_ADDRESS_PREFIX}*'
+      AND NOT ${structuredWorkerSessionAddressSql(addressSql, runIdSql)})
+    OR (${addressSql} = ${currentAddress}
+      AND EXISTS (
+        SELECT 1 FROM run_coordinator_handles AS bound
+        WHERE bound.run_id = ${runIdSql} AND bound.terminal_handle = ${addressSql}
+          AND ${messageSql}.sequence > bound.first_bound_sequence
+      )))`
+}
+
+/**
+ * Guard for moving direct row `messageSql` into `run:<id>`: never steal an active Dispatch's mail,
+ * a worker seat grab's mail, or mail sent to a chat before its current binding to this Run started.
+ */
+export function directMessageAllowedForRunMailboxSql(messageSql = 'messages'): string {
+  const runIdSql = `${messageSql}.run_id`
+  const addressSql = `${messageSql}.to_handle`
+  return `(NOT ${activeDispatchOwnsAddressSql(runIdSql, addressSql)}
+    AND NOT EXISTS (
+      SELECT 1 FROM run_coordinator_handles AS alias
+      WHERE alias.run_id = ${runIdSql} AND alias.terminal_handle = ${addressSql}
+        AND ${workerSeatGrabSql('alias')}
+    )
+    AND ${chatBindingDirectMailSql(messageSql)})`
+}
+
 export function routeAllUnreadDirectMessagesToRunMailbox(
   this: OrchestrationDb,
   runId: string,
@@ -156,12 +259,7 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
       `UPDATE messages SET to_handle = ?
        WHERE run_id = ? AND to_handle = ? AND read = 0
          AND delivery_contract = 'current_delivery'
-         AND NOT ${activeDispatchOwnsAddressSql('messages.run_id', 'messages.to_handle')}
-         AND NOT EXISTS (
-           SELECT 1 FROM run_coordinator_handles AS alias
-           WHERE alias.run_id = messages.run_id AND alias.terminal_handle = messages.to_handle
-             AND ${workerSeatGrabSql('alias')}
-         )`
+         AND ${directMessageAllowedForRunMailboxSql('messages')}`
     )
     .run(`run:${runId}`, runId, directHandle)
   return Number(moved.changes)
@@ -169,6 +267,7 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
 
 export type RunCoordinatorMailRoutingMethods = {
   rememberRunCoordinatorHandle: typeof rememberRunCoordinatorHandle
+  forgetRunCoordinatorHandle: typeof forgetRunCoordinatorHandle
   rememberCurrentRunCoordinatorHandles: typeof rememberCurrentRunCoordinatorHandles
   createCoordinatorMailRoutingTrigger: typeof createCoordinatorMailRoutingTrigger
   routeAllUnreadDirectMessagesToRunMailbox: typeof routeAllUnreadDirectMessagesToRunMailbox
@@ -177,6 +276,7 @@ export type RunCoordinatorMailRoutingMethods = {
 export function attachRunCoordinatorMailRouting(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     rememberRunCoordinatorHandle,
+    forgetRunCoordinatorHandle,
     rememberCurrentRunCoordinatorHandles,
     createCoordinatorMailRoutingTrigger,
     routeAllUnreadDirectMessagesToRunMailbox
