@@ -165,7 +165,8 @@ export function MobileNativeChatQueuedMessages({
   const open =
     openChoice?.abovePrompt === abovePrompt ? openChoice.open : !abovePrompt || attentionHidden
   // An inline editor on a folded-away card keeps the list open so the edit stays in view.
-  const editingHidden = editor !== undefined && editor.messageId !== cards[0]!.messageId
+  const editingHidden =
+    editor !== undefined && cards.length > 0 && editor.messageId !== cards[0]!.messageId
   const showAll = open || cards.length === 1 || editingHidden
   const shownCards = showAll ? cards : cards.slice(0, 1)
   const queueBusy = busyIds.has(QUEUE_KEY)
