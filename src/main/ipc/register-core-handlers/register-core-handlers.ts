@@ -20,6 +20,7 @@ import { registerLinearHandlers } from '../linear/register-handlers'
 import { registerJiraHandlers } from '../jira/register-handlers'
 import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../source-control/bitbucket'
+import { registerBitbucketServerHandlers } from '../source-control/bitbucket-server'
 import { registerFeedbackHandlers } from '../feedback/feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
 import { registerExportHandlers } from '../export'
@@ -162,6 +163,7 @@ export async function registerCoreHandlers(
     registerJiraHandlers()
     registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
     registerBitbucketHandlers()
+    registerBitbucketServerHandlers()
     registerFeedbackHandlers()
     if (crashReports) {
       registerCrashReportingHandlers(crashReports)

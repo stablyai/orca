@@ -3,6 +3,8 @@ import type { HostedReviewProvider } from '../../shared/source-control/hosted-re
 import type { HostedReviewCreationProvider } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
 import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
+import { isBitbucketServerReviewCreationAuthenticated } from '../bitbucket/server-pull-request-creation'
+import { getBitbucketServerRepoRef } from '../bitbucket/server-repository-ref'
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/repositories/github-enterprise-repository'
 import { acquire, release } from '../github/execution/github-operation-slots'
@@ -129,9 +131,18 @@ export async function isProviderAuthenticated(
   }
   if (provider === 'bitbucket') {
     // Bitbucket authentication must not fall through to GitHub login requirements.
-    return isBitbucketReviewCreationAuthenticated()
+    const serverRepo = await getBitbucketServerRepoRef(
+      repoPath,
+      hostedReviewSshConnectionId(executionHostId),
+      getHostedReviewLocalGitOptions(options)
+    )
+    return serverRepo
+      ? isBitbucketServerReviewCreationAuthenticated()
+      : isBitbucketReviewCreationAuthenticated()
   }
-  // Only CLI-backed providers need host-routed Git reads; their CLIs run here. Token-backed providers do not touch the repo.
+  // Only the CLI-backed probes read a host: `gh` and `glab` run here, and the SSH target only
+  // routes the git reads under them. Of the token-backed forges only Bitbucket reads the remote,
+  // to tell a Server repo from a Cloud one.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
   if (provider === 'gitlab') {
     return isGitLabAuthenticated(repoPath, connectionId, options)
