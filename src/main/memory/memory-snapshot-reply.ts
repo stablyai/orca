@@ -23,7 +23,7 @@ const HISTORY_POINT_BYTES = 25
 
 /** A JSON string's serialized size. */
 function jsonStringBytes(value: string | null | undefined): number {
-  return value ? 2 + jsonStringContentBytes(value) : 4
+  return value === null || value === undefined ? 4 : 2 + jsonStringContentBytes(value)
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {

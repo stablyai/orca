@@ -17,7 +17,8 @@ import type { PtyListedSession as DaemonSession } from '../../../../../../shared
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost
+  resolveResourceWorkspaceHost,
+  stampedRuntimeHostId
 } from './resource-workspace-host'
 import {
   daemonSessionLiveTitleTabId,
@@ -32,15 +33,6 @@ export const UNATTRIBUTED_REPO_ID = '__unattributed__'
 const NO_RUNTIME_PANE_TITLES = { runtimePaneTitlesByTabId: {} }
 function getUnattributedRepoName(t: Translate = translate): string {
   return t('auto.components.status.bar.mergeSnapshotAndSessions.unattributed', 'Unattributed')
-}
-
-/** The paired host a worktree's own record names, which outranks where its repo is tracked. */
-function stampedRuntimeHostId(ctx: MergeContext, worktreeId: string): string | null {
-  if (ctx.ambiguousWorktreeIds?.has(worktreeId)) {
-    return null
-  }
-  const hostId = canonicalExecutionHostId(ctx.worktreeById?.get(worktreeId)?.hostId)
-  return hostId?.startsWith('runtime:') ? hostId : null
 }
 
 export function mergeSnapshotAndSessions(
