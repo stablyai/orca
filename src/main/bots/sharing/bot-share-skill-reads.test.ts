@@ -70,6 +70,35 @@ describe('BotShareSkillReads', () => {
     ).resolves.toEqual(listing('triage'))
   })
 
+  // A build's lookups before its read take any time, so the newer build may reach its read first.
+  it('lets the newer build win when the older one reaches its read last', async () => {
+    const reads = new BotShareSkillReads()
+    const older = reads.forBuild('bot', { session: 'dialog' }).build
+    const newer = reads.forBuild('bot', { session: 'dialog' }).build
+    const opening = walk()
+
+    const rebuilt = reads.read('bot/dialog', 'sources', false, opening.run, newer)
+    const replaced = reads.read('bot/dialog', 'sources', false, async () => listing('old'), older)
+
+    await expect(replaced).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
+    opening.finish(listing('deploy'))
+    await expect(rebuilt).resolves.toEqual(listing('deploy'))
+    expect(opening.stopped).toEqual([])
+  })
+
+  it('fails an older build whose read finished after a newer build was asked for', async () => {
+    const reads = new BotShareSkillReads()
+    const older = reads.forBuild('bot', { session: 'dialog' }).build
+    const opening = walk()
+    const replaced = reads.read('bot/dialog', 'sources', false, opening.run, older)
+    reads.forBuild('bot', { session: 'dialog' })
+    // A pick doesn't replace the build whose listing it reuses.
+    reads.forBuild('bot', { session: 'dialog', reuseSkills: true })
+
+    opening.finish(listing('deploy'))
+    await expect(replaced).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
+  })
+
   it('keeps only the dialogs opened most recently', async () => {
     const reads = new BotShareSkillReads()
     for (let index = 1; index <= 9; index += 1) {

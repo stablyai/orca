@@ -71,11 +71,13 @@ export class BotShareService {
     selection: BotShareSelection,
     options: { setupNote?: string; last?: boolean; localOnly?: boolean } & BotShareSkillsRead = {}
   ): Promise<BotSharePrepared> {
+    // Before any await, so the dialog's builds replace each other in the order they were asked for.
+    const skills = this.skillReads.forBuild(bot.id, options)
     const saved = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
     const found = options.localOnly
       ? null
       : await this.deps.client.findPackageId(botPackageName(bot.id))
-    const shareable = await this.deps.readShareable(bot, this.skillReads.forBuild(options))
+    const shareable = await this.deps.readShareable(bot, skills)
     const last = saved && restoredPicks(saved, shareable)
     const candidate = await this.deps.candidates.prepare({
       bot,

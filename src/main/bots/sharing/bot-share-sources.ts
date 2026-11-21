@@ -26,7 +26,11 @@ import { botHomeFolder } from '../bot-home'
 import { localSkillProjects } from '../bot-skill-projects'
 import { ownPath, validPartName, type Home } from './bot-share-own-path'
 import { readShareSkills, type BotShareSkill } from './bot-share-skills'
-import type { BotShareSkillListing, BotShareSkillsRead } from './bot-share-skill-reads'
+import {
+  skillsSessionKey,
+  type BotShareSkillListing,
+  type BotShareSkillsRead
+} from './bot-share-skill-reads'
 import { botToolCredentialHeaderNames } from '../bot-tool-credentials'
 import { botToolsPath, readBotToolServers } from '../bot-tools-file'
 import { landingLine } from './bot-package-transport'
@@ -270,10 +274,11 @@ export async function readBotShareable(
   const readSkills = async (): Promise<BotShareSkill[]> => {
     const listing = await (input.skillReads && input.session
       ? input.skillReads.read(
-          `${input.bot.id}/${input.session}`,
+          skillsSessionKey(input.bot.id, input.session),
           sources,
           input.reuseSkills === true,
-          listSkills
+          listSkills,
+          input.build
         )
       : listSkills())
     for (const entry of listing.leftOut) {
