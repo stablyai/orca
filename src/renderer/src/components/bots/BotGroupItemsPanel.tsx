@@ -1,6 +1,6 @@
 // A group's Items tab: its header, then its members' items as one list, scoped to the group's rooms by
 // default. Rows open their own bot's item here; the list only reads, so the members' seen marks stay.
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -110,12 +110,6 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
-  // State as well as a ref: long item groups window against it once it's attached.
-  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
-  const scrollRef = useCallback((node: HTMLDivElement | null) => {
-    scroll.current = node
-    setScroller(node)
-  }, [])
   const filteredBots = members.filter((bot) => filter.botIds?.includes(bot.id))
   const named = [
     ...(filteredBots.length > 0 ? [filteredBots.map((bot) => bot.name).join(', ')] : []),
@@ -222,7 +216,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
         />
       ) : (
         <div
-          ref={scrollRef}
+          ref={scroll}
           tabIndex={-1}
           className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
         >
@@ -283,7 +277,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               }}
               offline={merged.offline}
               focusFallback={scroll}
-              scroller={scroller}
+              scroller={scroll}
             />
             {note()}
           </fieldset>

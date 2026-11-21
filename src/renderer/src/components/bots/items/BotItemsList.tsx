@@ -60,9 +60,10 @@ export type BotItemsListProps = {
   /** Takes focus when a focused Needs you row leaves and no other row has a control. */
   focusFallback?: React.RefObject<HTMLElement | null>
   /** The panel's scroller, which a long group windows its rows against. */
-  scroller?: HTMLDivElement | null
+  scroller?: React.RefObject<HTMLDivElement | null>
 }
 
+const NO_BOXES = { scroller: null, list: null }
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
@@ -89,9 +90,19 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     [ordered, selected]
   )
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
-  // State, not a ref: a group's window subscribes before a ref here would be set.
-  const [list, setList] = useState<HTMLDivElement | null>(null)
-  const viewport = useBotItemsViewport(props.scroller ?? null, list)
+  // The scroller and this list, read once both are attached (after every ref of the mount), so the
+  // panel around them doesn't render again for it, as it would holding them as state.
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const scrollerRef = props.scroller
+  const [boxes, setBoxes] = useState<{ scroller: HTMLElement | null; list: HTMLElement | null }>(
+    NO_BOXES
+  )
+  useEffect(() => {
+    const scroller = scrollerRef?.current ?? null
+    const list = listRef.current
+    setBoxes((was) => (was.scroller === scroller && was.list === list ? was : { scroller, list }))
+  }, [scrollerRef])
+  const viewport = useBotItemsViewport(boxes.scroller, boxes.list)
   // A group whose size changes moves the groups below it, even with the list's height unchanged (rows
   // aging from one group into another): their windows measure again before the change is painted.
   const shape = BOT_ITEM_GROUP_IDS.map((id) => groups[id].length).join()
@@ -146,7 +157,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: props.staleDays })
   return (
     <div
-      ref={setList}
+      ref={listRef}
       className="flex flex-col gap-2"
       style={numberColumn}
       onKeyDown={(event) => event.key === 'Escape' && setSelected(new Set())}

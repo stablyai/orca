@@ -3,7 +3,7 @@
 // at 600 open items), and every item update re-rendered every mounted row. Rows mounted stay near what
 // the panel shows, and one changed item re-renders one row.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -56,10 +56,10 @@ const ROW_PX = 30
 const PANEL_PX = 400
 
 function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
-  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
+  const scroller = useRef<HTMLDivElement | null>(null)
   const groups = useMemo(() => groupBotItems(items, null, NOW, 'e10'), [items])
   return (
-    <div ref={setScroller} data-testid="scroller" style={{ height: PANEL_PX, overflowY: 'auto' }}>
+    <div ref={scroller} data-testid="scroller" style={{ height: PANEL_PX, overflowY: 'auto' }}>
       <BotItemsList
         bot={BOT}
         groups={groups}

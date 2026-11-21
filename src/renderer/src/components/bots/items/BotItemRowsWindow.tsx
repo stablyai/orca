@@ -64,12 +64,17 @@ function mixedGeometry(tall: readonly boolean[]): Geometry {
 }
 
 type Range = { start: number; end: number }
-/** A window's range, and the rows it was measured against. */
-type WindowRange = Range & { of: readonly BotItem[] }
+/** A window's range, and the rows it drew there (uid and place), which an update finds again. */
+type WindowRange = Range & { band: readonly RowPick[] }
+
+function bandOf(items: readonly BotItem[], start: number, end: number): RowPick[] {
+  return items.slice(start, end).map((item, offset) => ({ uid: item.uid, at: start + offset }))
+}
+
+const sameBand = (a: readonly RowPick[], b: readonly RowPick[]): boolean =>
+  a.length === b.length && a.every((pick, index) => samePick(pick, b[index]!))
 
 const NO_INDEXES: readonly number[] = []
-// A short group's range is every row, with none to carry once it grows long.
-const NO_ROWS: readonly BotItem[] = []
 
 /** A row by its uid and where it was: found there at once unless the rows have moved since. */
 type RowPick = { uid: string; at: number }
@@ -159,25 +164,27 @@ export function BotItemRowsWindow({
   const [windowRange, setRange] = useState<WindowRange>(() => ({
     start: 0,
     end: Math.min(count, FIRST_ROWS),
-    of: items
+    band: bandOf(items, 0, Math.min(count, FIRST_ROWS))
   }))
   const range = useMemo(
     (): Range => (all ? { start: 0, end: count } : windowRange),
     [all, count, windowRange]
   )
-  // Rows change before the range follows them: the rows drawn until now stay drawn wherever they moved,
-  // so however many rows an update adds or removes above the view, the browser keeps a row it can hold
-  // the reading position by. The range measured next lets them go.
-  const carried = useMemo(() => {
-    if (all || windowRange.of === items) {
-      return NO_INDEXES
+  // Rows change before the range follows them: the rows drawn until now that moved out of it stay drawn
+  // wherever they went, so however many rows an update adds or removes above the view, the browser keeps
+  // a row it can hold the reading position by. The range measured right after lets them go.
+  const { carried, drifted } = useMemo(() => {
+    if (all) {
+      return { carried: NO_INDEXES, drifted: false }
     }
-    const { of, start, end } = windowRange
-    return of
-      .slice(start, end)
-      .map((item, offset) => indexOf({ uid: item.uid, at: start + offset }))
-      .filter((index) => index >= 0)
-  }, [all, windowRange, items, indexOf])
+    const { band, start, end } = windowRange
+    const now = band.map((pick) => indexOf(pick))
+    const moved = now.filter((index) => index >= 0 && (index < start || index >= end))
+    return {
+      carried: moved.length > 0 ? moved : NO_INDEXES,
+      drifted: now.some((index, offset) => index !== band[offset]!.at)
+    }
+  }, [all, windowRange, indexOf])
   const measure = useLatestHandler((): void => {
     const box = viewport.read()
     const element = container.current
@@ -191,10 +198,11 @@ export function BotItemRowsWindow({
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
+    const band = bandOf(items, next.start, next.end)
     setRange((prev) =>
-      prev.start === next.start && prev.end === next.end && prev.of === items
+      prev.start === next.start && prev.end === next.end && sameBand(prev.band, band)
         ? prev
-        : { ...next, of: items }
+        : { ...next, band }
     )
   })
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
@@ -203,23 +211,42 @@ export function BotItemRowsWindow({
   // without the panel scrolling or the list changing height, which no notice would report. A content
   // change leaves the positions, so it reads nothing. A hidden window measures as it shows again. A short
   // group's range is every row, kept current so it starts from there if it grows long.
+  const drawAll = useLatestHandler((): void =>
+    setRange((was) =>
+      was.start === 0 && was.end === count
+        ? was
+        : { start: 0, end: count, band: bandOf(items, 0, count) }
+    )
+  )
   useLayoutEffect(() => {
     if (all) {
-      setRange((was) =>
-        was.start === 0 && was.end === count ? was : { start: 0, end: count, of: NO_ROWS }
-      )
+      drawAll()
     } else if (!document.hidden) {
       measure()
     }
-  }, [all, count, geometry, measure])
+  }, [all, count, geometry, measure, drawAll])
+  // Once the browser has laid out the carried rows (and kept its place by them), measure to let them go.
+  // Rows that moved within the range need no measure: the range is re-based onto them, so later updates
+  // find them where they are.
+  const rebase = useLatestHandler((): void =>
+    setRange((was) => {
+      const band = bandOf(items, was.start, was.end)
+      return sameBand(was.band, band) ? was : { ...was, band }
+    })
+  )
+  useLayoutEffect(() => {
+    if (carried.length > 0 && !document.hidden) {
+      measure()
+    } else if (drifted) {
+      rebase()
+    }
+  }, [carried, drifted, measure, rebase])
 
   // Focus inside a row keeps it drawn; the last row focused stays the group's Tab stop. A window losing
   // focus (Orca in the background) keeps both, so the row is there when Orca comes back.
   const [focused, setFocused] = useState<RowPick | null>(null)
-  // Until a row is focused, the Tab stop is the row first shown, wherever updates move it.
-  const [stop, setStop] = useState<RowPick | null>(() =>
-    items[0] ? { uid: items[0].uid, at: 0 } : null
-  )
+  // Until a row is focused, the Tab stop is the group's first row, whichever that is now.
+  const [stop, setStop] = useState<RowPick | null>(null)
   // The row an arrow moved to: drawn, then focused as it mounts.
   const [target, setTarget] = useState<RowPick | null>(null)
   const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])
@@ -234,7 +261,7 @@ export function BotItemRowsWindow({
     setFocused((prev) => (prev === focused ? relocated(prev, focusedIndex) : prev))
     setTarget((prev) => (prev === target ? relocated(prev, targetIndex) : prev))
   }, [stop, stopIndex, focused, focusedIndex, target, targetIndex])
-  const tabStop = Math.max(0, stopIndex)
+  const tabStop = stopIndex >= 0 ? stopIndex : 0
   const pinned = useMemo(
     () =>
       [tabStop, focusedIndex, targetIndex, backIndex].filter(
