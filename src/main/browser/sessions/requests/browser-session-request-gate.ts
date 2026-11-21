@@ -15,8 +15,8 @@ const gatedSessions = new Map<
   { session: Session; release: (() => void) | null; stop: () => void }
 >()
 
-// Holders that need every request seen: a tab's pending form POST (each hop's method), or a
-// profile whose extensions are still loading (their rules must hold requests).
+// Holders that need every request seen: a profile whose extensions are still loading (their rules
+// must hold requests).
 const gateHoldsBySession = new Map<Session, number>()
 
 onProxySessionReadinessChanged((proxySession) => {
