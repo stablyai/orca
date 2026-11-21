@@ -93,6 +93,13 @@ export async function addDataAccount(
           XDG_CONFIG_HOME: join(directory, 'config'),
           XDG_CACHE_HOME: join(directory, 'cache'),
           XDG_STATE_HOME: join(directory, 'state'),
+          ...(provider === 'devin' && process.platform === 'win32'
+            ? {
+                // Devin's Windows build resolves its data dir from APPDATA/LOCALAPPDATA and ignores XDG vars.
+                APPDATA: dataHome,
+                LOCALAPPDATA: dataHome
+              }
+            : {}),
           ...(provider === 'opencode'
             ? {
                 OPENCODE_CONFIG_DIR: join(directory, 'config', 'opencode'),
