@@ -28,7 +28,9 @@ import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
 import Database from '../sqlite/sync-database'
 import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-reply-outbox'
-import { conversationReplyFill } from './external-conversation-reply-fill'
+import { conversationReplyFill, journalAskedByOwner } from './external-conversation-reply-fill'
+import { readJournalDomainSubmissionBody } from '../native-chat/agent-session-journal/journal-domain-submission-records'
+import { applyJournalDomainQueueCommand } from '../native-chat/agent-session-journal/journal-domain-queue-command'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 
@@ -82,7 +84,13 @@ function openJournal() {
 }
 
 /** The journal writer's admission of one message, in its own transaction. */
-function admit(db: Database.Database, messageId: string, body: AgentJournalMessageItem): void {
+function admit(
+  db: Database.Database,
+  messageId: string,
+  body: AgentJournalMessageItem,
+  /** The queued card this send hands over, as a busy chat's delivery is sent. */
+  card?: string
+): void {
   db.exec('BEGIN IMMEDIATE')
   try {
     applyJournalDomainSubmission(
@@ -99,7 +107,8 @@ function admit(db: Database.Database, messageId: string, body: AgentJournalMessa
           handoverRecorded: true,
           origin: 'client',
           source: { kind: 'user' }
-        }
+        },
+        ...(card ? { consume: { messageId: card, expect: 'waiting' as const } } : {})
       },
       facts,
       NOW
@@ -122,6 +131,24 @@ const asked = (deliveryId: string, carried?: string[]): AgentJournalMessageItem 
     ...(carried ? { carried } : {})
   }
 })
+
+/** A delivery to a busy chat: queued as a card (its outbox row keeps the card's id). */
+function queue(db: Database.Database, cardId: string, body: AgentJournalMessageItem): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    applyJournalDomainQueueCommand(
+      db,
+      dir,
+      target,
+      { kind: 'queue-insert', input: { messageId: cardId, body } },
+      NOW
+    )
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
 
 /** One process: the journal reopened, its recovery over the items the test says the chat holds. */
 function start(
@@ -156,12 +183,11 @@ function start(
     () => journal,
     () => {},
     usageLimitReplyPause(() => journal, options.usageLimitDisposition ?? (async () => 'ended')),
-    // As the host reads it: the admitting message's stored asker (journalReads.submissionBody).
-    async (_sessionId, messageId) => {
-      const body = readJournalDomainDispatchItem(db, target, agentJournalSubmissionKey(messageId))
-        ?.item.body
-      return body?.kind === 'message' && body.asker?.role === 'owner'
-    }
+    // The production adapter over the journal's own submission-body read.
+    journalAskedByOwner(async () => ({
+      submissionBody: async (messageId, read) =>
+        readJournalDomainSubmissionBody(db, target, messageId, read?.family)
+    }))
   )
   const recovery = new ConnectorReplyRecovery({
     journal: () => journal,
@@ -594,6 +620,39 @@ describe('a bot’s answer to its owner’s DM across a pause or a restart', () 
     expect(await pausedThenContinued('member', 'Owner-only note.\n\nNO_REPLY')).toEqual({
       d1: { outcome: 'quiet', head: 'd1' }
     })
+  })
+
+  // The DM arrives while the bot is busy: a card, handed over later as its own send.
+  const queuedThenPaused = async (role: 'owner' | 'member') => {
+    const p = start({
+      bot: true,
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'pending'
+    })
+    queue(p.db, 'q1', dmAsked('d1', role))
+    admit(p.db, 's1', dmAsked('d1', role), 'q1')
+    p.show([p.message('s1'), ...p.turn('item:t1', 's1', 'failed')])
+    const stamp = { account: 'account-a', conversation: DM, deliveryId: 'd1' }
+    expect((await p.limited('item:t1', 's1', [stamp])).paused).toBe(true)
+    const claim = await p.recovery.claimFor('chat-1', { turnId: 'item:t1', kind: 'usage_limit' })
+    admit(p.db, 'c1', continued(claim!))
+    p.show([
+      ...p.items(),
+      p.message('c1'),
+      ...p.turn('item:t2', 'c1', 'completed', 'Both fixes landed.\n\nNO_REPLY')
+    ])
+    await p.recovery.boot()
+    return p.outcomes()
+  }
+
+  it('posts the words for a DM the owner sent while the bot was busy (a queued card)', async () => {
+    expect(await queuedThenPaused('owner')).toEqual({
+      d1: { outcome: 'answered', prose: 'Both fixes landed.', head: 'd1' }
+    })
+  })
+
+  it('keeps a member’s queued DM quiet', async () => {
+    expect(await queuedThenPaused('member')).toEqual({ d1: { outcome: 'quiet', head: 'd1' } })
   })
 
   it('posts the owner’s answer from a restart continuation after the journal reopened', async () => {

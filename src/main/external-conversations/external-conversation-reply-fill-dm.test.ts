@@ -3,7 +3,12 @@ import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
-import { conversationReplyFill, type EndedTurnReplies } from './external-conversation-reply-fill'
+import {
+  conversationReplyFill,
+  journalAskedByOwner,
+  type AskedByOwner,
+  type EndedTurnReplies
+} from './external-conversation-reply-fill'
 
 // The real ids of the 2026-11-20 case: the owner's DM with the bot, and a channel thread.
 const DM = { source: 'slack', externalId: 'T05BHT77GUF:D0CH5QFFC2C:D0CH5QFFC2C:U0CGB82KBC2' }
@@ -42,7 +47,7 @@ function row(deliveryId: string, conversation = DM): JournalConnectorReplyRow {
   }
 }
 
-function fill(rows: JournalConnectorReplyRow[]) {
+function fill(rows: JournalConnectorReplyRow[], askedByOwner?: AskedByOwner) {
   const filled: JournalConnectorReplyFill[] = []
   const store = {
     read: vi.fn(async () => rows),
@@ -56,7 +61,9 @@ function fill(rows: JournalConnectorReplyRow[]) {
     filled,
     run: conversationReplyFill(
       () => store,
-      () => {}
+      () => {},
+      undefined,
+      askedByOwner
     )
   }
 }
@@ -124,5 +131,58 @@ describe('a bot turn’s answer to its owner’s DM', () => {
       expect.objectContaining({ deliveryId: 'd1', outcome: 'answered', prose: 'Nothing new here.' })
     ])
     expect(filled[0]).not.toHaveProperty('prose')
+  })
+})
+
+describe('the owner proof of a row its stamps don’t mark', () => {
+  const asker = (role: 'owner' | 'member') => ({
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [],
+    asker: {
+      source: 'slack' as const,
+      userId: 'U1',
+      role,
+      place: { kind: 'direct_message' as const, id: 'D1' }
+    }
+  })
+
+  it('reads the admitting send, or the send a queued card was handed over as', async () => {
+    const bodies: Record<string, ReturnType<typeof asker> | undefined> = {
+      's-owner': asker('owner'),
+      's-member': asker('member')
+    }
+    // The card's own id names no send; the family read finds the send it became.
+    const family: Record<string, string> = { 'card-owner': 's-owner', 'card-member': 's-member' }
+    const submissionBody = vi.fn(
+      async (id: string, read?: { family?: true }) =>
+        bodies[id] ?? (read?.family ? bodies[family[id] ?? ''] : undefined) ?? null
+    )
+    const owned = journalAskedByOwner(async () => ({ submissionBody }))
+    expect(await owned('chat', 's-owner')).toBe(true)
+    expect(await owned('chat', 'card-owner')).toBe(true)
+    expect(await owned('chat', 's-member')).toBe(false)
+    expect(await owned('chat', 'card-member')).toBe(false)
+    expect(await owned('chat', 'unknown')).toBe(false)
+    expect(submissionBody).toHaveBeenCalledWith('card-owner', { family: true })
+  })
+
+  it('reads only when the marker could silence the answer, and a quiet answer counts as none', async () => {
+    const askedByOwner = vi.fn<AskedByOwner>(async () => true)
+    const unmarked = { account: 'acct', conversation: DM, deliveryId: 'r1' }
+    const plain = fill([row('r1')], askedByOwner)
+    await plain.run(turn('All done.', [unmarked]))
+    await plain.run({ ...turn('Done.\n\nNO_REPLY', [unmarked]), outcome: 'failure' })
+    await plain.run({ ...turn('Done.\n\nNO_REPLY', [unmarked]), bot: false })
+    expect(askedByOwner).not.toHaveBeenCalled()
+    const marked = fill([row('r1')], askedByOwner)
+    const words = await marked.run(turn('Done.\n\nNO_REPLY', [unmarked]))
+    expect(askedByOwner).toHaveBeenCalledWith('bot-chat', 'msg-r1')
+    expect(marked.filled[0]).toMatchObject({ outcome: 'answered', prose: 'Done.' })
+    expect(words.answered).toEqual(new Set([DM.externalId]))
+    const quiet = await fill([row('r2')], askedByOwner).run(
+      turn('NO_REPLY', [{ ...unmarked, deliveryId: 'r2' }])
+    )
+    expect(quiet.answered).toEqual(new Set())
   })
 })

@@ -20,6 +20,7 @@ import { markThreadSeen } from './external-conversation-link-writes'
 import { ExternalConversationSeam } from './external-conversation-seam'
 import {
   conversationReplyFill,
+  journalAskedByOwner,
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
@@ -192,10 +193,9 @@ function connectorReplyOutbox(
       const shown = await getStructuredAgentSessionHost()?.readUsageLimitContinue(sessionId)
       return shown?.state === 'scheduled' ? (shown.continueAt ?? shown.resetsAt) : undefined
     }),
-    async (sessionId, messageId) => {
-      const reads = await getStructuredAgentSessionHost()?.journalReads(sessionId)
-      return (await reads?.submissionBody(messageId))?.asker?.role === 'owner'
-    }
+    journalAskedByOwner(async (sessionId) =>
+      getStructuredAgentSessionHost()?.journalReads(sessionId)
+    )
   )
   const recovery = new ConnectorReplyRecovery({
     journal,

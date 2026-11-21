@@ -138,4 +138,19 @@ describe('the deliveries a turn answered', () => {
     expect(stamps).toEqual([expect.objectContaining({ deliveryId: 'owner-1', ownerAsked: true })])
     expect(delivery).not.toHaveProperty('ownerAsked')
   })
+
+  it('never marks a delivery the owner’s when only a member’s message carried it', () => {
+    const asked = dm('member-1', 'member')
+    const delivery = asked.body.kind === 'message' ? asked.body.connectorDelivery! : null
+    const continued = message('continue', {
+      connectorClaim: { cutTurnId: 'turn-0', cutKind: 'usage_limit', origin: [delivery!] }
+    })
+    const stamps = connectorReplyTurnStamps(
+      { items: [asked, continued], submissions: [steered('member-1')] },
+      continued,
+      'turn-1'
+    )
+    expect(stamps).toHaveLength(1)
+    expect(stamps[0]).not.toHaveProperty('ownerAsked')
+  })
 })
