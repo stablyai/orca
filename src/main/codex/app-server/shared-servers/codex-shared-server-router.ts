@@ -170,6 +170,16 @@ export class CodexSharedServerRouter {
     this.unrouted.hold(threadId, frame)
   }
 
+  /** A frame Codex sent that no handler could read goes to its thread's chat, or to every chat
+   *  when it names none, so each still journals what its own server would have sent it. */
+  onUnhandledFrame(kind: string, payload: unknown): void {
+    const threadId = codexFrameThreadId(field(payload, 'params'))
+    const owner = threadId === null ? undefined : this.owners.get(threadId)
+    for (const lease of owner ? [owner] : this.leases()) {
+      lease.unhandled(kind, payload)
+    }
+  }
+
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
   private routeServerWide(frame: CodexSharedServerFrame): void {
     if (frame.kind === 'request') {

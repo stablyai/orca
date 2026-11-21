@@ -1,5 +1,8 @@
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
-import { scanCodexLeaseProcesses } from './codex-shared-lease-process-scan'
+import {
+  codexLeaseProcessesStillTagged,
+  scanCodexLeaseProcesses
+} from './codex-shared-lease-process-scan'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
 import {
@@ -33,7 +36,7 @@ export async function stopCodexSharedChatWorkload(input: {
     return false
   }
   // Codex's own list misses a command that detached from it, and older Codex can't list at all.
-  const leftovers = await (input.sweep ?? stopTaggedProcesses)(
+  const leftovers = await (input.sweep ?? stopCodexLeaseTaggedProcesses)(
     input.serverPid,
     input.leaseId,
     input.watcherPid
@@ -108,7 +111,7 @@ async function stopListedTerminals(input: {
 /** Stops every process carrying this lease's tag, wherever it was reparented, then proves none
  *  is left. Any own process whose environment couldn't be read, or a target seen alive and later
  *  unreadable, leaves it unproven. */
-async function stopTaggedProcesses(
+export async function stopCodexLeaseTaggedProcesses(
   serverPid: number,
   leaseId: string,
   watcherPid?: number,
@@ -127,13 +130,9 @@ async function stopTaggedProcesses(
     const targets = first.tagged(leaseId)
     if (targets.length > 0) {
       // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
-      const confirm = await scanCodexLeaseProcesses(
-        CODEX_SHARED_LEASE_ENV,
-        serverPid,
-        platform,
-        watcherPid
+      const still = new Set(
+        await codexLeaseProcessesStillTagged(CODEX_SHARED_LEASE_ENV, targets, leaseId)
       )
-      const still = new Set(confirm?.tagged(leaseId) ?? [])
       for (const pid of targets) {
         if (still.has(pid)) {
           try {
@@ -144,6 +143,10 @@ async function stopTaggedProcesses(
         }
       }
       await new Promise((resolve) => setTimeout(resolve, SWEEP_SETTLE_MS))
+    }
+    if (!first.bounded) {
+      // Nothing proves an unbounded scan, so another whole reading would change nothing.
+      return false
     }
     // Always a reading taken after the first finished: a process forked while the first was
     // being read, or reparented when its parent exited mid-read, shows up in this one.

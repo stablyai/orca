@@ -38,6 +38,34 @@ describe('shared Codex app-servers', () => {
     expect(servers[0]!.requests.filter((r) => r.method === 'initialize')).toHaveLength(1)
   })
 
+  it("gives a frame no handler could read to its thread's chat, or to every chat when it names none", async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const b = chat()
+    const unreadA: string[] = []
+    const unreadB: string[] = []
+    const connA = await pool.open(
+      launch(),
+      { ...a.handlers, onUnhandledFrame: (kind) => unreadA.push(kind) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(
+      launch(),
+      { ...b.handlers, onUnhandledFrame: (kind) => unreadB.push(kind) },
+      { sessionId: 'b', skillRoots: [] }
+    )
+    const threadA = await startThread(connA)
+    const { handlers } = servers[0]!
+    handlers.onUnhandledFrame?.('frame:unclassified', {
+      method: 'x',
+      params: { threadId: threadA }
+    })
+    handlers.onUnhandledFrame?.('frame:invalid-json', '{not json')
+
+    expect(unreadA).toEqual(['frame:unclassified', 'frame:invalid-json'])
+    expect(unreadB).toEqual(['frame:invalid-json'])
+  })
+
   it('starts a second server at 20 chats and never shares across account homes', async () => {
     const { servers, pool } = fakeCodex()
     for (let i = 0; i < 21; i += 1) {

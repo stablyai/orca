@@ -39,6 +39,17 @@ export async function scanCodexLeaseProcesses(
   return null
 }
 
+/** Which of these pids still carry the lease's tag: one environment read each (Linux, the only
+ *  scan that finds tagged processes). */
+export async function codexLeaseProcessesStillTagged(
+  envName: string,
+  pids: readonly number[],
+  leaseId: string
+): Promise<number[]> {
+  const tags = await readLinuxTags(pids, envName)
+  return pids.filter((pid) => tags.get(pid) === leaseId)
+}
+
 function byTag(entries: readonly (readonly [number, string | null])[]) {
   return (leaseId: string): number[] =>
     entries.flatMap(([pid, tag]) => (tag === leaseId ? [pid] : []))
