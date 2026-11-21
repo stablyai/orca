@@ -83,9 +83,9 @@ function linkedDispatches(message: NativeChatMessage): string[] | null {
 }
 
 /** Matched by Dispatch id, never by name. A link line joins each worker's Started row ("Started X for
- *  item") when that row is in its own turn (the live turn may link just before it starts) or is the
- *  last row drawn before it; a link far from its start, another chat's or the owner's, or one naming
- *  a worker this chat never started keeps its own line. */
+ *  item") when that row is in its own turn or next to it, nothing drawn between, on either side; a
+ *  link far from its start, another chat's or the owner's, or one naming a worker this chat never
+ *  started keeps its own line. */
 function joinWorkerLinksToStarts(
   out: NativeChatMessage[],
   turnKeys: readonly (string | undefined)[]
@@ -109,12 +109,13 @@ function joinWorkerLinksToStarts(
       if (turn !== undefined && turnKeys[start] === turn) {
         return true
       }
-      for (let between = start + 1; between < index; between++) {
+      // The link may land just before its start, whose card the host appends a moment later.
+      for (let between = Math.min(start, index) + 1; between < Math.max(start, index); between++) {
         if (!rowDrawsNothing(out[between]!)) {
           return false
         }
       }
-      return start < index
+      return true
     }
     const joined = ids.map((id) => ({
       id,

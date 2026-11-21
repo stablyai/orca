@@ -29,6 +29,7 @@ for (const fixture of ['activityRows', 'activityRowsNarrow']) {
       'Created',
       'Added',
       'Started',
+      'Started',
       'Linked'
     ])
     for (const row of rows) {

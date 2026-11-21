@@ -191,6 +191,19 @@ describe('the Linked row of a worker the chat started', () => {
     ).toEqual(['t1', 's', 't2', 'l'])
   })
 
+  it('joins a link that lands just before its Started row, whatever turn each is in', () => {
+    expect(
+      drawn([prompt('t1'), link('l', 'bot', 'dispatch:d1'), started('s', 'd1', 5)], {
+        turnKeys: ['t1', 't1', 't2']
+      })
+    ).toEqual(['t1', 's for P0'])
+    expect(
+      drawn([prompt('t1'), link('l', 'bot', 'dispatch:d1'), said('a'), started('s', 'd1', 5)], {
+        turnKeys: ['t1', 't1', 't1', 't2']
+      })
+    ).toEqual(['t1', 'l', 'a', 's'])
+  })
+
   it('joins each worker a link names to its own Started row', () => {
     expect(
       drawn(

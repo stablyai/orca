@@ -170,7 +170,8 @@ export function NativeChatAgentMessageSenderNames({
   )
 }
 
-function SenderChip({
+/** A sender's name as the chip that opens it (or plain when nothing can), whole on hover. */
+export function SenderChip({
   from,
   sender,
   chatWorktreeId,

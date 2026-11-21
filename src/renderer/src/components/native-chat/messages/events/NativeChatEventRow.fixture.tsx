@@ -10,6 +10,8 @@ import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
 } from '../rows/NativeChatTranscriptRow'
+import { NativeChatWorkersContext } from '../../native-chat-workers-context'
+import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
 import { NATIVE_CHAT_ROW_GAP_PX } from '../../viewport/virtualization/native-chat-row-height-estimate'
 
 const at = Date.parse('2026-11-20T15:14:00Z')
@@ -35,6 +37,7 @@ const row = (
 function started(turn: string, dispatchId: string): [NativeChatMessage, string] {
   rowAt += 60_000
   rowCount += 1
+  const address = dispatchId === 'ctx_1' ? 'term_worker' : 'term_worker_2'
   const message = projectStructuredAgentStartItem({
     itemId: `activity-${rowCount}`,
     revision: 1,
@@ -45,7 +48,7 @@ function started(turn: string, dispatchId: string): [NativeChatMessage, string] 
       dispatchId,
       task: `${worker}\n\nCheck whether the finding reproduces on the release build.`,
       worker: {
-        party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+        party: { address, terminalHandle: address, orcaSessionId: null },
         name: worker
       }
     }
@@ -73,6 +76,7 @@ const linked = (turn: string, dispatchId: string) =>
 
 const addedAndMoved: BotItemNoteEntry[] = [
   { ...readiness, status: 'planned', event: 'made' },
+  { ...readiness, status: 'planned', event: 'linked', refs: ['dispatch:ctx_1'] },
   { ...readiness, event: 'status', from: 'planned', to: 'working' }
 ]
 
@@ -101,9 +105,11 @@ const transcript = [
     botItemNote: { noteId: 'note-added', by: 'bot', entries: addedAndMoved }
   }),
   started('t1', 'ctx_1'),
-  linked('t1', 'ctx_1'),
-  row('t2', { role: 'user', blocks: [{ type: 'text', text: 'Link the first worker again.' }] }),
-  linked('t2', 'ctx_1')
+  // As in a real chat: the next link lands just before its start card, which comes a moment later.
+  linked('t1', 'ctx_2'),
+  started('t2', 'ctx_2'),
+  row('t3', { role: 'user', blocks: [{ type: 'text', text: 'Link the first worker again.' }] }),
+  linked('t3', 'ctx_1')
 ]
 
 const workspace = 'activity-rows-fixture'
@@ -111,7 +117,9 @@ const paneKey = 'worker:11111111-1111-4111-8111-111111111111'
 const store = {
   activeWorktreeId: workspace,
   activeWorkspaceExecutionHostId: 'local' as const,
-  tabsByWorktree: { [workspace]: [makeTab({ id: 'worker', worktreeId: workspace })] },
+  tabsByWorktree: {
+    [workspace]: ['worker', 'worker_2'].map((id) => makeTab({ id, worktreeId: workspace }))
+  },
   agentStatusByPaneKey: acceptedAgentStatuses([]).replace([
     [
       paneKey,
@@ -143,6 +151,24 @@ const context: NativeChatTranscriptRowContext = {
 }
 
 /** An agent chat's activity rows as the transcript draws them: a start and its link as one row. */
+const workerOf = (dispatchId: string, address: string): OrchestrationSessionWorker => ({
+  dispatchId,
+  taskId: `task_${dispatchId}`,
+  runId: 'run_1',
+  title: worker,
+  agent: 'claude',
+  state: 'working',
+  liveness: 'live',
+  host: 'local',
+  worktreeId: workspace,
+  address,
+  paneKey: address === 'term_worker' ? paneKey : null,
+  chatSessionId: null,
+  startedAt: at,
+  settledAt: null
+})
+const workers = [workerOf('ctx_1', 'term_worker'), workerOf('ctx_2', 'term_worker_2')]
+
 function ActivityRows(): React.JSX.Element {
   const slots = buildNativeChatTranscriptSlots({
     messages: transcript.map(([message]) => message),
@@ -156,11 +182,13 @@ function ActivityRows(): React.JSX.Element {
     lifecycleWorking: false
   })
   return (
-    <div className="flex flex-col bg-chat-pane p-4" style={{ gap: NATIVE_CHAT_ROW_GAP_PX }}>
-      {slots.map((slot) => (
-        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
-      ))}
-    </div>
+    <NativeChatWorkersContext.Provider value={workers}>
+      <div className="flex flex-col bg-chat-pane p-4" style={{ gap: NATIVE_CHAT_ROW_GAP_PX }}>
+        {slots.map((slot) => (
+          <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
+        ))}
+      </div>
+    </NativeChatWorkersContext.Provider>
   )
 }
 

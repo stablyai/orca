@@ -17,8 +17,8 @@ type Translate = (key: string, fallback: string, values?: Record<string, unknown
  *  the words between it and the items. */
 export type BotItemNoteLineChat = { chatId: string; name: string; after: string; home?: true }
 
-/** The one link a line names (a worker's title), cut short like a chip; `after`: the words before the items. */
-export type BotItemNoteLineLink = { name: string; after: string }
+/** The one link a line names, a worker's by `dispatchId`; `after`: the words before the items. */
+export type BotItemNoteLineLink = { name: string; after: string; dispatchId?: string }
 
 export type BotItemNoteLine =
   | {
@@ -59,12 +59,7 @@ const CHAT = '\uE001'
 /** Where the one link's name goes, just before the items. */
 const LINK = '\uE002'
 
-type Around = {
-  lead: string
-  chat?: BotItemNoteLineChat
-  link?: BotItemNoteLineLink
-  tail?: string
-}
+type Around = Pick<BotItemNoteLine & { kind: 'line' }, 'lead' | 'chat' | 'link' | 'tail'>
 
 /** A translated whole sentence ("Added and moved {{items}} to {{status}}", `items: ITEMS`) as the
  *  words around its chips; either side may be empty, so a translation puts the chips where its
@@ -72,8 +67,9 @@ type Around = {
 function around(
   sentence: string,
   chat?: Omit<BotItemNoteLineChat, 'after'>,
-  linkName?: string
+  named?: { name: string | null; dispatchId?: string }
 ): Around {
+  const linkName = named?.name ?? undefined
   const [head = '', rest = ''] = sentence.split(ITEMS)
   // A translation that names the link after the items, or before the chat, reads it as words.
   const tail = (chat ? rest.replace(CHAT, chat.name) : rest).replace(LINK, linkName ?? '')
@@ -84,7 +80,13 @@ function around(
     lead: (byChat ? lead.replace(LINK, linkName ?? '') : before).trim(),
     ...(byChat ? { chat: { ...chat, after: before.trim() } } : {}),
     ...(linkName !== undefined && afterLink !== undefined
-      ? { link: { name: linkName, after: afterLink.trim() } }
+      ? {
+          link: {
+            name: linkName,
+            after: afterLink.trim(),
+            ...(named?.dispatchId ? { dispatchId: named.dispatchId } : {})
+          }
+        }
       : {}),
     ...(tail.trim() ? { tail: tail.trim() } : {})
   }
@@ -142,7 +144,7 @@ function botSentence({ added, ...act }: { added: boolean } & BotAct, t: Translat
               link: act.link.name === null ? t('bots.items.chat.aWorker', 'a worker') : LINK
             }),
         undefined,
-        act.link.name ?? undefined
+        act.link
       )
   }
 }
@@ -207,14 +209,14 @@ function botLines(
       return botSentence(act, t)
     }
     const name = chatName(by, t)
-    const linkName = act.act === 'link' ? (act.link.name ?? undefined) : undefined
+    const link = act.act === 'link' ? act.link : undefined
     return by
       ? around(
           chatSentence(act, CHAT, t),
           { chatId: by.chatId, name, ...(by.home ? { home: true as const } : {}) },
-          linkName
+          link
         )
-      : around(chatSentence(act, name, t), undefined, linkName)
+      : around(chatSentence(act, name, t), undefined, link)
   }
   const lines = new Map<string, BotItemNoteLine & { kind: 'line' }>()
   for (const itemEntries of byItem(entries)) {

@@ -26,8 +26,13 @@ import {
   botItemNoteLines,
   botItemNoteRunLine,
   type BotItemNoteLine,
-  type BotItemNoteLineChat
+  type BotItemNoteLineChat,
+  type BotItemNoteLineLink
 } from '../../../../../shared/bots/bot-item-note-lines'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { SenderChip } from '../messages/agent-senders/NativeChatAgentMessageSenders'
+import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-owner'
+import { useNativeChatWorkers } from '../native-chat-workers-context'
 
 /** The chat's bot is the one whose home it is in. */
 function openChipItem(uid: string): void {
@@ -102,15 +107,38 @@ function ChatChip({ chat }: { chat: BotItemNoteLineChat }): React.JSX.Element {
 /** Chips a bulk line shows before "+N more". */
 const CHIPS_SHOWN = 3
 
-/** A linked worker's title, cut short as early as an item chip; the whole title on hover. */
-function LinkName({ name }: { name: string }): React.JSX.Element {
+/** A linked worker this chat started as the Started row draws it: its chip, opening the worker.
+ *  Any other link's name cuts short as early as an item chip, whole on hover. */
+function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
+  const owner = useNativeChatVisualOwner()
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const worker = useNativeChatWorkers().find((each) => each.dispatchId === link.dispatchId)
+  if (worker?.address) {
+    const sender: AgentMessageSender = {
+      party: {
+        address: worker.address,
+        terminalHandle: worker.address.startsWith('term_') ? worker.address : null,
+        orcaSessionId: null
+      },
+      name: link.name
+    }
+    return (
+      <SenderChip
+        from={{ kind: 'agent', senders: [sender], orchestration: null }}
+        sender={sender}
+        chatWorktreeId={owner?.worktreeId ?? activeWorktreeId}
+        target={owner?.target}
+        dispatchId={worker.dispatchId}
+      />
+    )
+  }
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="min-w-0 max-w-[min(16rem,100%)] truncate">{name}</span>
+        <span className="min-w-0 max-w-[min(16rem,100%)] truncate">{link.name}</span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {name}
+        {link.name}
       </TooltipContent>
     </Tooltip>
   )
@@ -139,7 +167,7 @@ function LineWords({
       {line.chat && line.link && line.chat.after ? (
         <span className="shrink-0">{line.chat.after}</span>
       ) : null}
-      {line.link ? <LinkName name={line.link.name} /> : null}
+      {line.link ? <LinkName link={line.link} /> : null}
       {after ? <span className="shrink-0">{after}</span> : null}
       {chips.map((item) => (
         <ItemChip key={item.uid} item={item} />
