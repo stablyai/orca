@@ -48,7 +48,8 @@ export function createServerSession({
   let nextId = 0
   let replayId = null
   let shutdownId = null
-  let withdrawId = null
+  // A server that registered capabilities with the client keeps them for the session, so it is never restarted.
+  let registered = false
   let idleTimer
   let killTimer
   let idleExpired = false
@@ -63,10 +64,6 @@ export function createServerSession({
   const relayedByServerId = new Map()
   // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
-  // Registrations the client may hold for the current server, withdrawn when it stops; keyed by id and method,
-  // since a server may reuse an id for another capability.
-  const clientRegistrations = new Map()
-  const registrationKey = (id, method) => JSON.stringify([id, method])
   // Current workspace folders by uri; a restart sends one change from the initialize set to this.
   let folders = null
 
@@ -157,7 +154,7 @@ export function createServerSession({
 
   // With requests still out, the stop waits for the last answer, or one more idle period at most.
   function onIdle() {
-    if (state !== 'ready') {
+    if (state !== 'ready' || registered) {
       return
     }
     if (pending.size === 0 || idleExpired) {
@@ -274,13 +271,10 @@ export function createServerSession({
     const { method } = message
     if (!method) {
       // Answers go to the server that asked, even mid-start: it may wait on them before finishing initialize.
-      if (withdrawId !== null && message.id === withdrawId) {
-        finishWithdraw()
-      } else if (server && relayed.has(message.id)) {
-        const { serverId, onAnswer } = relayed.get(message.id)
+      if (server && relayed.has(message.id)) {
+        const serverId = relayed.get(message.id)
         relayed.delete(message.id)
         relayedByServerId.delete(serverId)
-        onAnswer?.(message)
         server.write({ ...message, id: serverId })
       }
       return
@@ -343,8 +337,12 @@ export function createServerSession({
     }
     if (message.id !== undefined && pending.size >= MAX_OPEN_REQUESTS) {
       console.error('agent-typescript-lsp: server stopped answering; restarting it')
+      // The client's registrations belong to this server, so with any it ends like a crash and the client restarts it.
+      closed = registered
       retire()
-      dispatch(message)
+      if (!registered) {
+        dispatch(message)
+      }
       return
     }
     if (!NOT_ACTIVITY.has(method) && !background) {
@@ -353,61 +351,19 @@ export function createServerSession({
     write(message)
   }
 
-  const answerServer = (id) => server.write({ jsonrpc: '2.0', id, result: null })
-
-  const relayToClient = (message, onAnswer) => {
+  const relayToClient = (message) => {
     if (relayed.size >= MAX_OPEN_REQUESTS) {
       server.write({
         jsonrpc: '2.0',
         id: message.id,
         error: { code: REQUEST_FAILED, message: 'client not answering' }
       })
-      return false
+      return
     }
     const id = `${SESSION_ID_PREFIX}${++nextId}`
-    relayed.set(id, { serverId: message.id, onAnswer })
+    relayed.set(id, message.id)
     relayedByServerId.set(message.id, id)
     toClient({ ...message, id })
-    return true
-  }
-
-  // Everything sent stays recorded until the client confirms an unregister, so a stop withdraws all the client
-  // may hold; withdrawing one it refused is harmless, missing one it holds would leak it.
-  const onRegister = (message) => {
-    if (relayToClient(message)) {
-      for (const { id, method } of message.params?.registrations ?? []) {
-        clientRegistrations.set(registrationKey(id, method), { id, method })
-      }
-    }
-  }
-
-  const onUnregister = (message) => {
-    // The protocol spells this field "unregisterations".
-    const forwarded = []
-    const withdrawn = []
-    for (const unregistration of message.params?.unregisterations ?? []) {
-      const key = registrationKey(unregistration.id, unregistration.method)
-      if (clientRegistrations.has(key)) {
-        forwarded.push(unregistration)
-        withdrawn.push([key, clientRegistrations.get(key)])
-      }
-    }
-    if (forwarded.length > 0) {
-      // Still the client's until it answers, so a stop in between withdraws them too.
-      relayToClient({ ...message, params: { unregisterations: forwarded } }, (answer) => {
-        if (answer.error) {
-          return
-        }
-        // A registration re-added under the same id since then is a new entry and stays.
-        for (const [key, entry] of withdrawn) {
-          if (clientRegistrations.get(key) === entry) {
-            clientRegistrations.delete(key)
-          }
-        }
-      })
-    } else {
-      answerServer(message.id)
-    }
   }
 
   function fromServer(message) {
@@ -426,11 +382,11 @@ export function createServerSession({
       if (idleExpired && pending.size === 0 && state === 'ready') {
         stop()
       }
-    } else if (message.method === 'client/registerCapability') {
-      onRegister(message)
-    } else if (message.method === 'client/unregisterCapability') {
-      onUnregister(message)
     } else if (message.method && message.id !== undefined) {
+      if (message.method === 'client/registerCapability') {
+        registered = true
+        clearTimer(idleTimer)
+      }
       relayToClient(message)
     } else if (message.method === '$/cancelRequest') {
       const relayedId = relayedByServerId.get(message.params?.id)
@@ -440,14 +396,6 @@ export function createServerSession({
     } else {
       toClient(message)
     }
-  }
-
-  // The next server registers again, so the client must have dropped the old registrations first.
-  function finishWithdraw() {
-    clearTimer(killTimer)
-    withdrawId = null
-    state = 'stopped'
-    drain()
   }
 
   function onExit(code, signal) {
@@ -475,22 +423,7 @@ export function createServerSession({
       failWake(`server exited during restart (${code ?? signal})`)
       return
     }
-    if (clientRegistrations.size === 0) {
-      drain()
-      return
-    }
-    state = 'withdrawing'
-    withdrawId = `${SESSION_ID_PREFIX}${++nextId}`
-    toClient({
-      jsonrpc: '2.0',
-      id: withdrawId,
-      method: 'client/unregisterCapability',
-      params: {
-        unregisterations: [...clientRegistrations.values()]
-      }
-    })
-    clientRegistrations.clear()
-    killTimer = setTimer(finishWithdraw, SHUTDOWN_GRACE_MS)
+    drain()
   }
 
   return {
