@@ -19,6 +19,7 @@ export type WorkerTurnStopReason =
   | 'exited'
   | 'lost'
   | 'start-unconfirmed'
+  | 'mail-held'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -73,6 +74,11 @@ export type WorkerTurnStopReportDeps = {
   isChatMailbox?: (mailbox: string) => boolean
   /** Whether the user lets coordinator agents allow this machine's workers' prompts; unknown reads as no. */
   coordinatorApprovals?: () => boolean
+}
+
+/** An observed rest proves its turn ran, unless it is a start or mail nobody saw the worker take. */
+export function restProvesTurnRan(reason: WorkerTurnStopReason): boolean {
+  return reason !== 'start-unconfirmed' && reason !== 'mail-held'
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {

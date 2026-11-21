@@ -12,8 +12,11 @@ import {
   reattachedPaintLedger,
   retainedFrameIsProven
 } from '../wait/reattached-paint-ledger'
+import type { TerminalCommandPaint } from '../input/terminal-command-paint'
+import type { RuntimeRepaintResult } from '../lifecycle/runtime-pty-controller-contract'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
+  protected abstract deliverPendingMessagesForPty(ptyId: string): void
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
   private readonly publishedOutputRings = new TerminalPublishedOutputRings()
 
@@ -154,13 +157,62 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   }
 
   /** Whether the quit ledger proves the reattached frame is this agent's own last paint. */
-  protected async isRetainedFrameProven(ptyId: string, agent: string): Promise<boolean> {
+  protected async isRetainedFrameProven(
+    ptyId: string,
+    agent: string,
+    options?: { anyRecordedAgent?: boolean }
+  ): Promise<boolean> {
     const entry = await reattachedPaintLedger().read(ptyId)
-    return retainedFrameIsProven(entry, {
-      incarnationId: this.ptysById.get(ptyId)?.incarnationId ?? null,
-      reattachedSequence: this.reattachedProviderSequenceByPtyId.get(ptyId),
-      agent
-    })
+    return retainedFrameIsProven(
+      entry,
+      {
+        incarnationId: this.ptysById.get(ptyId)?.incarnationId ?? null,
+        reattachedSequence: this.reattachedProviderSequenceByPtyId.get(ptyId),
+        agent
+      },
+      options
+    )
+  }
+
+  /** One repaint per reattach, whether restored status, a queued wait or held mail asks first. */
+  protected requestReattachedRepaint(ptyId: string): void {
+    const paint = this.ptysById.get(ptyId)?.commandPaint
+    if (!paint?.beginReattachedRepaintRequest()) {
+      return
+    }
+    const settle = (result: RuntimeRepaintResult): void => {
+      paint.settleReattachedRepaintRequest(result)
+      if (result === 'unavailable') {
+        void this.proveRetainedFrameWithoutRepaint(ptyId, paint)
+      }
+    }
+    const request = this.ptyController?.requestRepaint?.(ptyId)
+    if (!request) {
+      settle('unavailable')
+      return
+    }
+    request.then(settle, () => settle('unavailable'))
+  }
+
+  /** A host that cannot ask for the paint (ConPTY, an older daemon) leaves the quit ledger's exact
+   *  proof: the same process, and not one byte since main saw it paint. Either way delivery decides
+   *  again, so proven mail goes out and unproven mail is reported as held. */
+  private async proveRetainedFrameWithoutRepaint(
+    ptyId: string,
+    paint: TerminalCommandPaint
+  ): Promise<void> {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    const proven =
+      agent !== null && (await this.isRetainedFrameProven(ptyId, agent, { anyRecordedAgent: true }))
+    if (this.ptysById.get(ptyId)?.commandPaint !== paint || !paint.awaitsPaintNoHostCanRequest()) {
+      return
+    }
+    if (proven) {
+      paint.vouchRetainedPaint()
+    } else {
+      paint.markRetainedFrameUnproven()
+    }
+    this.deliverPendingMessagesForPty(ptyId)
   }
 
   synchronizePtyOutputSequenceFromProvider(

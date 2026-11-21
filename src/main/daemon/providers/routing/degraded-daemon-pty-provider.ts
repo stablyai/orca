@@ -10,6 +10,7 @@ import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspec
 import type {
   IPtyProvider,
   PtyProviderBufferSnapshot,
+  PtyRepaintResult,
   PtySpawnOptions
 } from '../../../providers/pty/provider-contract'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from '../../../providers/pty/events'
@@ -178,8 +179,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.providerFor(id).reportFocusLost?.(id)
   }
 
-  async requestRepaint(id: string): Promise<void> {
-    await this.providerFor(id).requestRepaint?.(id)
+  async requestRepaint(id: string): Promise<PtyRepaintResult> {
+    return (await this.providerFor(id).requestRepaint?.(id)) ?? 'unavailable'
   }
 
   async closeStartupQueryAuthority(id: string): Promise<number> {

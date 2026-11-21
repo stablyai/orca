@@ -34,6 +34,8 @@ import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
+/** `not-sent`: a phone or remote desktop drives the grid, so it was not asked; ask again later. */
+export type RuntimeRepaintResult = 'nudged' | 'unavailable' | 'not-sent'
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
   refreshForegroundAgents?: boolean
@@ -182,7 +184,7 @@ export type RuntimePtyController = {
   reportFocusLost?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
   /** Asks the foreground program to redraw itself, sending it no input. */
-  requestRepaint?(ptyId: string): void
+  requestRepaint?(ptyId: string): Promise<RuntimeRepaintResult>
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   getPtyAvailability?(ptyId: string): boolean | null

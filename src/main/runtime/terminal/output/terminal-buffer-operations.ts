@@ -19,8 +19,7 @@ import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-scree
 import {
   admitRestoredTerminalReport,
   hasCommandBoundarySinceReattach,
-  hasTerminalCommandPainted,
-  takeReattachedRepaintRequest
+  hasTerminalCommandPainted
 } from '../input/terminal-command-paint'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
@@ -296,13 +295,6 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
         })
       }
     })
-  }
-
-  /** One repaint per reattach, whether restored status or a queued wait asks first. */
-  protected requestReattachedRepaint(ptyId: string): void {
-    if (takeReattachedRepaintRequest(this.ptysById.get(ptyId))) {
-      this.ptyController?.requestRepaint?.(ptyId)
-    }
   }
 
   /** The restored report speaks for the process now running, so it counts as current. */

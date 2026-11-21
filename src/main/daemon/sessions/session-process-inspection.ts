@@ -23,14 +23,15 @@ export abstract class SessionProcessInspection {
   }
 
   /** Redraws the program without input by moving only the PTY, never the grid attaches read. */
-  requestRepaint(): void {
-    if (this.isAlive) {
+  requestRepaint(): boolean {
+    return (
+      this.isAlive &&
       this.repaintNudge.request(
         () => this.getAppliedSize(),
         (cols, rows) => this.subprocess.resize(cols, rows),
         () => this.isAlive
       )
-    }
+    )
   }
 
   inspectChildProcesses(

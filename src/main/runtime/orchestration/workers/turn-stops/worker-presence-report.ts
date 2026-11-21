@@ -13,6 +13,7 @@ import {
 } from '../../db/worker-presence/worker-presence-store'
 import {
   isDeliberateRest,
+  restProvesTurnRan,
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
@@ -36,7 +37,7 @@ export type WorkerRest = Pick<
   | 'mailTaken'
   | 'requestError'
   | 'startSurface'
-> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' }
+> & { reason: Exclude<WorkerTurnStop['reason'], 'exited' | 'lost'> }
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
@@ -121,7 +122,7 @@ export function observeWorker(
   }
   const { rest } = observation
   // A rest proves its turn ran, though a missed hook may have hidden the turn's start.
-  if (target.kind === 'local' && rest.reason !== 'start-unconfirmed') {
+  if (target.kind === 'local' && restProvesTurnRan(rest.reason)) {
     confirmUnknownWorkerStart(db, dispatchId)
   }
   // Seen again, an undecided rest is decided again: what held it back may have cleared.

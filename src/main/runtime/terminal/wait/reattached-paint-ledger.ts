@@ -9,6 +9,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TerminalCommandPaintRecord } from '../input/terminal-command-paint'
+import { agentPaintSignal } from '../input/terminal-agent-paint-signal'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
@@ -119,13 +120,19 @@ export class ReattachedPaintLedger {
 }
 
 /** The proof the retained frame is the reattached agent's own paint: the same process, the same
- *  agent when one was recorded, and not one byte since main saw that command paint. */
+ *  agent when one was recorded, and not one byte since main saw that command paint. Without
+ *  `anyRecordedAgent`, only an entry naming no agent or a screen-ruled one counts: the frame a
+ *  restore reads before any repaint is asked for. */
 export function retainedFrameIsProven(
   entry: ReattachedPaintEntry | null,
-  current: { incarnationId: string | null; reattachedSequence: number | undefined; agent: string }
+  current: { incarnationId: string | null; reattachedSequence: number | undefined; agent: string },
+  options: { anyRecordedAgent?: boolean } = {}
 ): boolean {
   return (
     entry !== null &&
+    (options.anyRecordedAgent === true ||
+      entry.agent === undefined ||
+      (isTuiAgent(entry.agent) && readsTrustedScreen(entry.agent))) &&
     current.incarnationId !== null &&
     entry.incarnationId === current.incarnationId &&
     current.reattachedSequence !== undefined &&
@@ -145,7 +152,8 @@ export type PaintLedgerPty = TerminalCommandPaintRecord & {
 
 /** This terminal's ledger entry at quit; `sequence` is the daemon's output count, or undefined
  *  when the host gives none. A typed agent has no recorded identity; the restart identifies it,
- *  and the unchanged count proves nothing ran since. A recorded agent must be screen-ruled. */
+ *  and the unchanged count proves nothing ran since. A recorded agent must be a TUI agent, and one
+ *  with its own composer marker (Claude) must have drawn it, as its paint fence requires. */
 export function reattachedPaintEntry(
   pty: PaintLedgerPty,
   sequence: number | undefined
@@ -156,8 +164,12 @@ export function reattachedPaintEntry(
     !pty.incarnationId ||
     sequence === undefined ||
     !pty.commandPaint?.hasAttributedPaint() ||
-    (agent !== null && !(isTuiAgent(agent) && readsTrustedScreen(agent)))
+    (agent !== null && !isTuiAgent(agent))
   ) {
+    return null
+  }
+  const signal = agent === null ? null : agentPaintSignal(agent)
+  if (signal !== null && !pty.commandPaint.hasAgentComposer(signal)) {
     return null
   }
   return { incarnationId: pty.incarnationId, sequence, ...(agent ? { agent } : {}) }
