@@ -36,7 +36,9 @@ export function createLiveTextPublication(
   // to deliver (a shortened reply, one past the live limit) is not admitted; the read it takes is
   // the one the publication would take, kept by the sources until the text grows.
   const nobodyTakes = (readers: LiveTextReaders | null | undefined): boolean =>
-    readers === null || (readers !== undefined && read(readers).length === 0)
+    readers === null ||
+    (readers !== undefined &&
+      (readers.groups ?? [readers]).every((group) => read(group).length === 0))
   return () =>
     nobodyTakes(target()?.liveTextReaders?.())
       ? { accepted: true }

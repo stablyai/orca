@@ -21,8 +21,11 @@ it('still reads a row an older reader takes, beside a shown phone that no longer
       ['desktop', olderDesktop]
     ])
   )
-  expect(readers?.shown).toBe(true)
-  expect(readers?.takes?.('reply')).not.toBe(false)
+  // The phone's group skips the row; the older desktop's group, which takes whole rows, does not.
+  expect(readers?.groups?.map((group) => [group.shown, group.takes?.('reply')])).toEqual([
+    [true, false],
+    [false, undefined]
+  ])
   const phoneOnly = sessionLiveTextReaders(new Map([['phone', phone]]))
   expect(phoneOnly?.takes?.('reply')).toBe(false)
 })

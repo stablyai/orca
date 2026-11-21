@@ -43,9 +43,13 @@ export const shownViewer = (subscriber: Subscriber): boolean => subscriber.liveT
 export function sessionLiveTextReaders(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): LiveTextReaders | null {
-  // Every reader counts, as in the fan-out: an older one beside a shown viewer still takes its rows.
+  // Read as the fan-out reads: shown viewers apart from the rest, each with its own interest.
   const all = [...(subscribers?.values() ?? [])]
-  return all.length > 0 ? liveTextReadersOf(all, all.some(shownViewer)) : null
+  const groups = [true, false].flatMap((shown) => {
+    const group = all.filter((subscriber) => shownViewer(subscriber) === shown)
+    return group.length > 0 ? [liveTextReadersOf(group, shown)] : []
+  })
+  return groups.length > 0 ? { ...liveTextReadersOf(all, all.some(shownViewer)), groups } : null
 }
 
 /** What one subscriber reads of the session's live text. */

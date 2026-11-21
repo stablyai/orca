@@ -69,6 +69,8 @@ export type LiveTextReaders = {
   appends: boolean
   /** False when no reader is a shown viewer, so a reply's newest text (Claude, Codex) is not read. */
   shown?: boolean
+  /** The readers as their fan-out reads them; admission needs a row for one of them. */
+  groups?: readonly LiveTextReaders[]
   /** Whether any reader still takes this row's live text; absent, every one does. */
   takes?: (itemId: string) => boolean
 }
