@@ -1,6 +1,7 @@
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../../shared/worktree/removal/removal'
 
 /** Bots name their agent as the product does ("Claude Code"); the shared catalog's "Claude" stays app-wide. */
 export function botAgentLabel(agent: TerminalAgent): string {
@@ -25,6 +26,12 @@ export function botErrorMessage(error: unknown): string {
     return translate(
       'bots.errors.avatarInvalid',
       'That picture could not be used. Pick a PNG or JPG image.'
+    )
+  }
+  if (error instanceof Error && error.message === UNSAVED_DRAFTS_REMOVAL_REFUSAL) {
+    return translate(
+      'bots.errors.unsavedDrafts',
+      'Its folder has unsaved editor changes. Save or close them, then delete again.'
     )
   }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')

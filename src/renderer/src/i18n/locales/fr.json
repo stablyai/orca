@@ -20176,7 +20176,6 @@
         "copyFailed": "Échec de la copie",
         "copyIdentity": "Copier {{value0}}",
         "detachedCommit": "Commit {{head}} (pas une branche)",
-        "folder": "Dossier",
         "mainCheckout": "Copie principale",
         "turnWorking": "L’agent de ce chat est en cours d’exécution. Changez de branche une fois son tour terminé.",
         "worktree": "Worktree"
@@ -20555,7 +20554,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Toutes les modifications non validées ou non suivies dans les espaces de travail Git seront définitivement supprimées.",
           "unavailable": "Impossible de vérifier les modifications",
           "checking": "Recherche de modifications…",
           "checkingDetails": "Vérification…",
@@ -20579,7 +20577,6 @@
           "line_other": "Les modifications non enregistrées dans {{count}} fichiers seront abandonnées : {{files}}",
           "line_many": "Les modifications non enregistrées dans {{count}} fichiers seront abandonnées : {{files}}"
         },
-        "ignoredFilesLost": "Les fichiers ignorés seront perdus : {{names}}",
         "ignoredFilesUnchecked": "Les fichiers ignorés n’ont pas pu être entièrement vérifiés"
       }
     },
@@ -22589,7 +22586,6 @@
         "withIgnored": "{{what}} et les fichiers ignorés seront perdus",
         "ignoredOnly": "Les fichiers ignorés seront perdus"
       },
-      "showChanges": "Afficher les modifications",
       "unsavedSuffix": "(non enregistré)",
       "onHost": "Sur {{host}}",
       "forceDeletingEllipsis": "Suppression forcée…",

@@ -20493,7 +20493,6 @@
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
         "detachedCommit": "コミット {{head}}（ブランチではありません）",
-        "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
@@ -20911,7 +20910,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
           "unavailable": "変更を確認できませんでした",
           "checking": "変更を確認中…",
           "checkingDetails": "確認中…",
@@ -23342,7 +23340,6 @@
         "withIgnored": "{{what}}と無視されたファイルが失われます",
         "ignoredOnly": "無視されたファイルが失われます"
       },
-      "showChanges": "変更を表示",
       "unsavedSuffix": "（未保存）",
       "onHost": "{{host}} 上",
       "forceDeletingEllipsis": "強制削除中…",

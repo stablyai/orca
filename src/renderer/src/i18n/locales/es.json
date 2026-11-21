@@ -19905,7 +19905,6 @@
         "copyFailed": "No se pudo copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (no es una rama)",
-        "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
@@ -20284,7 +20283,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
           "unavailable": "No se pudieron comprobar los cambios",
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",
@@ -20308,7 +20306,6 @@
           "line_other": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}",
           "line_many": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}"
         },
-        "ignoredFilesLost": "Se perderán los archivos ignorados: {{names}}",
         "ignoredFilesUnchecked": "No se pudieron comprobar todos los archivos ignorados"
       }
     },
@@ -22568,7 +22565,6 @@
         "withIgnored": "Se perderán {{what}} y los archivos ignorados",
         "ignoredOnly": "Se perderán los archivos ignorados"
       },
-      "showChanges": "Mostrar cambios",
       "unsavedSuffix": "(sin guardar)",
       "onHost": "En {{host}}",
       "forceDeletingEllipsis": "Forzando la eliminación…",

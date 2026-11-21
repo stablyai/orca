@@ -20284,7 +20284,6 @@
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
         "detachedCommit": "Commit {{head}} (dal değil)",
-        "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
@@ -20656,7 +20655,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git çalışma alanlarındaki commit edilmemiş veya izlenmeyen tüm değişiklikler kalıcı olarak silinecek.",
           "unavailable": "Değişiklikler kontrol edilemedi",
           "checking": "Değişiklikler kontrol ediliyor…",
           "checkingDetails": "Kontrol ediliyor…",
@@ -20676,7 +20674,6 @@
           "line_one": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}",
           "line_other": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}"
         },
-        "ignoredFilesLost": "Yok sayılan dosyalar kaybolacak: {{names}}",
         "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi"
       }
     },
@@ -22242,7 +22239,6 @@
         "withIgnored": "{{what}} ve yok sayılan dosyalar kaybolacak",
         "ignoredOnly": "Yok sayılan dosyalar kaybolacak"
       },
-      "showChanges": "Değişiklikleri göster",
       "unsavedSuffix": "(kaydedilmedi)",
       "onHost": "{{host}} üzerinde",
       "forceDeletingEllipsis": "Zorla siliniyor…",
