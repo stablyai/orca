@@ -235,28 +235,34 @@ export class StructuredAgentSessionTurnCompletionFeed {
         baseline.settled?.id !== request.id &&
         baseline.heldRequest?.id !== request.id
       ) {
-        baseline.heldCompletedTurns += 1
+        // A held quiet answer said nothing, so it is no reply the merged end could have dropped.
+        baseline.heldCompletedTurns += state.quietAnswer ? 0 : 1
         baseline.heldRequest = { kind: request.kind, id: request.id }
       }
       return null
     }
     if (
       !request ||
-      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
-      this.heldByLiveWork(sessionId, state, request)
+      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id)
     ) {
+      // No end to announce: what was held stays unannounced, so it can't inflate a later end.
+      this.clearHeld(baseline)
+      return null
+    }
+    // Live work defers this end; its held turns still merge into whichever end is announced.
+    if (this.heldByLiveWork(sessionId, state, request)) {
       return null
     }
     baseline.settled = settledMark(request)
     // No outcome means unknown; inferring success would alert on failures.
     if (!request.outcome) {
+      this.clearHeld(baseline)
       return null
     }
     const mergedTurnCount =
       baseline.heldCompletedTurns +
       (request.kind === 'turn' && baseline.heldRequest?.id !== request.id ? 1 : 0)
-    baseline.heldCompletedTurns = 0
-    baseline.heldRequest = null
+    this.clearHeld(baseline)
     return {
       scope: session.params.location,
       sessionId,
@@ -269,6 +275,11 @@ export class StructuredAgentSessionTurnCompletionFeed {
       ...(state.turnFailure ? { failure: state.turnFailure } : {}),
       ...(state.quiet ? { quiet: true as const } : {})
     }
+  }
+
+  private clearHeld(baseline: SessionBaseline): void {
+    baseline.heldCompletedTurns = 0
+    baseline.heldRequest = null
   }
 
   /** A successful turn is finished only when the combined row would be done; a held request stays unaccounted so a later observe can announce it. */

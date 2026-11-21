@@ -278,15 +278,56 @@ it('posts one constant fallback for the 16:25:51 / 16:25:54 coalesced quiet comp
   ])
 })
 
-it('keeps a single-turn NO_REPLY silent', async () => {
+const quietLogs = () =>
+  vi
+    .mocked(console.info)
+    .mock.calls.filter(([message]) => message === '[connector] merged quiet completion')
+
+it('keeps a single-turn NO_REPLY silent and logs only the merged decision, without ids or text', async () => {
   const { linked, events } = await coalescedReply()
   expect(events[0]?.lastAssistantMessage).toBe(
     'I replied but the message may not have reached you. Please ask again.'
   )
+  expect(quietLogs()).toEqual([
+    [
+      '[connector] merged quiet completion',
+      { providerTurnCount: 2, fallback: true, reason: 'coalesced-quiet' }
+    ]
+  ])
   const asked = await askFromThread(linked)
   await providerTurn('single', asked, ['NO_REPLY'])
   await eventually(() => expect(ended(linked.events)).toHaveLength(2))
   expect(ended(linked.events)[1]).not.toHaveProperty('lastAssistantMessage')
+  expect(quietLogs()).toHaveLength(1)
+})
+
+it('stays silent when the thread message itself got the quiet answer after merged mail', async () => {
+  const { chats, completions } = await botChat()
+  const linked = linkedBot(chats)
+  const asked = await askFromThread(linked)
+  let mail = ''
+  await providerTurn('turn-a', asked, ['NO_REPLY'], {
+    running: async () => {
+      mail = await sendMail()
+    }
+  })
+  let again = ''
+  await providerTurn('turn-b', mail, ['Private note for the worker'], {
+    running: async () => {
+      again = await askFromThread(linked, { taken: { owed: true } })
+    }
+  })
+  await providerTurn('turn-c', again, ['NO_REPLY'])
+  await eventually(() => expect(completions).toHaveLength(1))
+  await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+  expect(ended(linked.events)[0]).not.toHaveProperty('lastAssistantMessage')
+  expect(completions).toMatchObject([{ turnId: 'turn-c', mergedTurnCount: 2 }])
+  expect(quietLogs()).toEqual([
+    [
+      '[connector] merged quiet completion',
+      { providerTurnCount: 2, fallback: false, reason: 'thread-answered-quietly' }
+    ]
+  ])
 })
 
 it('keeps the same fallback and outbox idempotency key when delivery is retried', async () => {

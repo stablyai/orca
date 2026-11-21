@@ -298,6 +298,13 @@ export class ConnectorTurnEvents {
       return
     }
     const wire = toConnectorEvent(event, this.cloudFeatures)
+    if (event.kind === 'turn-ended' && event.turnId === null) {
+      // Its start predates the watch, so the cloud can't place it and nothing posts.
+      console.info('[connector] turn end without its start left out', {
+        hadReply: Boolean(event.lastAssistantMessage),
+        stopReason: event.stopReason
+      })
+    }
     if (wire) {
       this.publications.bind(event, wire)
       this.outbox.push(wire)

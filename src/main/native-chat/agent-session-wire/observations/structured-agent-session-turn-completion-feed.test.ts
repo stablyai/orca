@@ -157,3 +157,48 @@ it('does not count the same held turn twice when owed input is withdrawn', () =>
     expect(f.events[0].completion).not.toHaveProperty('mergedTurnCount')
   }
 })
+
+it('drops held counts when the owed work ends without an announced completion', () => {
+  const unknown = fixture()
+  unknown.observe(state('baseline'))
+  unknown.observe(state('a', true))
+  unknown.observe({
+    ...state('unknown'),
+    latestRequest: { ...state('unknown').latestRequest!, outcome: null }
+  })
+  unknown.observe(state('single'))
+  const back = fixture()
+  back.observe(state('baseline'))
+  back.observe(state('a', true))
+  back.observe(state('baseline'))
+  back.observe(state('single'))
+  for (const f of [unknown, back]) {
+    expect(f.events).toMatchObject([{ completion: { turnId: 'single' } }])
+    if (f.events[0]?.type === 'completion') {
+      expect(f.events[0].completion).not.toHaveProperty('mergedTurnCount')
+    }
+  }
+  // Positive control: the same held turn still merges into the end that follows it.
+  const merged = fixture()
+  merged.observe(state('baseline'))
+  merged.observe(state('a', true))
+  merged.observe(state('single'))
+  expect(merged.events).toMatchObject([{ completion: { turnId: 'single', mergedTurnCount: 2 } }])
+})
+
+it('does not count a held quiet answer as a merged reply', () => {
+  const f = fixture()
+  f.observe(state('baseline'))
+  f.observe({ ...state('quiet', true), quietAnswer: true })
+  f.observe({ ...state('quiet', true), quietAnswer: true })
+  f.observe(state('b'))
+  expect(f.events).toMatchObject([{ completion: { turnId: 'b' } }])
+  if (f.events[0]?.type === 'completion') {
+    expect(f.events[0].completion).not.toHaveProperty('mergedTurnCount')
+  }
+  f.events.length = 0
+  f.observe({ ...state('quiet-2', true), quietAnswer: true })
+  f.observe(state('answer', true))
+  f.observe(state('c'))
+  expect(f.events).toMatchObject([{ completion: { turnId: 'c', mergedTurnCount: 2 } }])
+})

@@ -167,15 +167,23 @@ export function botTurnReply(
     return message
   }
   const providerTurnCount = end.news.mergedTurnCount ?? 1
-  const fallback = requested && providerTurnCount > 1
-  console.info('[connector] bot quiet completion suppressed', {
-    threadId: link.externalId,
-    source: link.source,
-    sessionId: end.news.sessionId,
-    turnId: end.ended.turnId,
-    providerTurnId: end.news.providerTurnId,
-    providerTurnCount,
-    fallback
-  })
+  if (providerTurnCount <= 1) {
+    return undefined
+  }
+  // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.
+  const reason = !requested
+    ? 'not-thread-request'
+    : answersThread(link, turn)
+      ? 'thread-answered-quietly'
+      : 'coalesced-quiet'
+  const fallback = reason === 'coalesced-quiet'
+  // Text-free and id-free: only how many turns merged and what was decided.
+  console.info('[connector] merged quiet completion', { providerTurnCount, fallback, reason })
   return fallback ? COALESCED_QUIET_REPLY : undefined
+}
+
+function answersThread(link: ExternalConversationLink, turn: EndedChatTurn): boolean {
+  const body = (turn.opener ?? turn.latestOpener)?.body
+  const from = body?.kind === 'message' ? body.connectorConversation : undefined
+  return from?.source === link.source && from.externalId === link.externalId
 }

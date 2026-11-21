@@ -53,6 +53,24 @@ describe('ConnectorTurnEvents', () => {
     expect(head?.batch[0]).toEqual({ kind: 'snapshot', conversations: [] })
   })
 
+  it('logs a turn end left out for its unknown start, without ids or text', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const events = new ConnectorTurnEvents(userDataPath, 'ada')
+    events.observe({
+      ...turnEnded(1),
+      turnId: null,
+      stopReason: 'success',
+      lastAssistantMessage: 'Private words'
+    })
+    expect(events.next(1)).toBeNull()
+    expect(info.mock.calls).toEqual([
+      ['[connector] turn end without its start left out', { hadReply: true, stopReason: 'success' }]
+    ])
+    info.mockClear()
+    events.observe(turnEnded(2))
+    expect(info).not.toHaveBeenCalled()
+  })
+
   it('keeps 200 turn ends in all, never trimming the head in flight', async () => {
     const events = new ConnectorTurnEvents(userDataPath, 'ada')
     for (let turn = 1; turn <= 50; turn++) {
