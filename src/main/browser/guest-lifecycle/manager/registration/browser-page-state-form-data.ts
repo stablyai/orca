@@ -64,10 +64,17 @@ export function readBrowserPageStateFormData(
   return holdsContentTypeField(bytes) ? 'form-data' : 'none'
 }
 
-/** The current history entry's form data; empty until the page commits. */
+/** The current history entry's form data; unknown until the page commits or once it is gone. */
 export function readBrowserGuestCurrentFormData(
   guest: Electron.WebContents
 ): BrowserPageStateFormData {
-  const history = guest.navigationHistory
-  return readBrowserPageStateFormData(history.getEntryAtIndex(history.getActiveIndex())?.pageState)
+  try {
+    const history = guest.navigationHistory
+    return readBrowserPageStateFormData(
+      history.getEntryAtIndex(history.getActiveIndex())?.pageState
+    )
+  } catch {
+    // A destroyed guest throws; unknown keeps the page, and never breaks a navigation handler.
+    return 'unknown'
+  }
 }
