@@ -53,6 +53,27 @@ describe('mobile endpoint supervisor relay race after a mid-session LAN loss', (
     supervisor.stop()
   })
 
+  it('retries a failed relay dial on its backoff while the LAN dial stays connecting', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const failed = () => new FakeRelaySession('disconnected', new Error('relay connect failed'))
+    // The director fallback redials once per failed attempt, so the first race spends two sessions.
+    const openRelay = vi
+      .fn()
+      .mockImplementationOnce(failed)
+      .mockImplementationOnce(failed)
+      .mockImplementation(() => new FakeRelaySession('connected'))
+    const deps = dependencies({ openRelay, randomBytes: () => new Uint8Array([255, 255]) })
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+
+    // The LAN dial never leaves connecting (a black-holed address waits out its 12 s connect deadline).
+    await vi.advanceTimersByTimeAsync(3_500)
+
+    expect(logical.getActivePath()).toBe('relay')
+    expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
+
   it('drops a race deferred by cooldown once the LAN comes back', async () => {
     const { logical, openRelay, supervisor } = await startOnLan(
       vi.fn(() => new FakeRelaySession('connecting'))

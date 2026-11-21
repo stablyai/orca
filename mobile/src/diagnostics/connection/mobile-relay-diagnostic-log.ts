@@ -1,6 +1,24 @@
 import { RelayOuterError } from '../../transport/encryption/mobile-relay-e2ee-link'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
 import { RelayDirectorHttpError } from '../../transport/relay/mobile-relay-resume-director'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
+import type { StableLogicalRpcClient } from '../../transport/connection/stable-logical-rpc-client'
+
+// One line per client open so a host that never dials relay still says why: no relay routing, or credentials missing.
+export function logRelaySupervisorStarted(
+  log: RelayRecoveryLog,
+  logical: Pick<StableLogicalRpcClient, 'getState'>,
+  bundle: MobileRelayCredentialBundle | null
+): void {
+  log(
+    'relay fallback ready',
+    `direct=${logical.getState()} credentials=${bundle ? 'saved' : 'missing; recovery will re-read'}`
+  )
+}
+
+export function logRelayRoutingMissing(log: RelayRecoveryLog): void {
+  log('no relay routing saved for this host; relay is offered only after a direct connection')
+}
 
 export function logRelayConnected(log: RelayRecoveryLog): void {
   log('runtime channel migrated to relay', undefined, {

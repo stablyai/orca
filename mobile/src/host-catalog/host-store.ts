@@ -5,6 +5,7 @@ import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './host-pr
 import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'
+import { pairingPublicationsSettled, trackPairingPublication } from './pairing-publication-fence'
 import { joinHostCatalogCredentials } from './host-catalog-credential-join'
 import { resetPairingKeychainForTests } from '../host-credentials/pairing-keychain'
 import {
@@ -59,10 +60,21 @@ export const peekHosts = (): HostProfile[] | null =>
 export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 
+// A write that completes mid-read (a pairing save lands metadata, token and relay routing in turn) makes the snapshot stale.
+const MAX_STALE_HOST_LOAD_RETRIES = 4
+
 async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
-  // Wait for full serialized mutations so loads cannot read half-written state.
-  await hostListMutationsSettled()
-  return hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
+  for (let retries = 0; ; retries++) {
+    // Wait for full serialized mutations so loads cannot read half-written state.
+    await pairingPublicationsSettled()
+    await hostListMutationsSettled()
+    const startedRevision = hostListLoads.getHostListLoadRevision()
+    const snapshot = await hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
+    const stale = startedRevision !== hostListLoads.getHostListLoadRevision()
+    if (!stale || retries >= MAX_STALE_HOST_LOAD_RETRIES) {
+      return snapshot
+    }
+  }
 }
 
 async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
@@ -171,7 +183,10 @@ export async function setRelayRouting(hostId: string, relay: MobileRelayEndpoint
 }
 
 /** Pairing only (a census fences the importers): it creates or re-pairs the whole host. */
-export async function savePairedHost(host: HostProfile): Promise<void> {
+export const savePairedHost = (host: HostProfile): Promise<void> =>
+  trackPairingPublication(() => publishPairedHost(host))
+
+async function publishPairedHost(host: HostProfile): Promise<void> {
   const validated = HostProfileSchema.parse(host)
   const stored = toStoredHostProfile(validated)
   const duplicateHostIds = new Set<string>()
