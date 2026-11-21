@@ -1,6 +1,7 @@
-import type {
-  AgentProcessIdentity,
-  AgentProcessPresence
+import {
+  isSameAgentProcess,
+  type AgentProcessIdentity,
+  type AgentProcessPresence
 } from '../../../shared/agent-status/process/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence-probe'
 import type { EndedProcessReconciliationOptions } from './server-cleanup'
@@ -29,7 +30,11 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
       const resolved = this.resolvePaneKeyAlias(paneKey)
       const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence
       // A newer live agent owns the pane: the old one's end is not its news.
-      if (!now?.process || now.ended || now.process.pid === ended?.process?.pid) {
+      if (
+        !now?.process ||
+        now.ended ||
+        (ended?.process && isSameAgentProcess(now.process, ended.process))
+      ) {
         this.terminalPaneLifecycle?.agentExited?.(resolved)
       }
     }
@@ -65,7 +70,7 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
     const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence?.process
     this.aliveAfterMark.delete(resolved)
     // A newer agent in the pane owns it now; this one's end is no longer its news.
-    if (now && now.pid !== marked.process.pid) {
+    if (now && !isSameAgentProcess(now, marked.process)) {
       return
     }
     if (verdict === 'exited') {
