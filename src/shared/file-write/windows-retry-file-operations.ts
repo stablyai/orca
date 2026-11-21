@@ -1,4 +1,4 @@
-import { copyFileSync, renameSync } from 'node:fs'
+import { copyFileSync, renameSync, rmSync } from 'node:fs'
 import { rename } from 'node:fs/promises'
 import { setTimeout } from 'node:timers/promises'
 
@@ -50,6 +50,11 @@ export async function renameFileWithWindowsRetryAsync(
 
 export function copyFileWithWindowsRetry(source: string, target: string): void {
   runFileOperationWithWindowsRetry(() => copyFileSync(source, target))
+}
+
+/** Missing files are fine; Windows AV locks on a just-written file are retried with backoff. */
+export function removeFileWithWindowsRetry(path: string): void {
+  runFileOperationWithWindowsRetry(() => rmSync(path, { force: true }))
 }
 
 function runFileOperationWithWindowsRetry(operation: () => void): void {

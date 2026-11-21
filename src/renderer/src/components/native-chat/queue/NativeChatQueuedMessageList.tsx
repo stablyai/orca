@@ -234,7 +234,7 @@ function NativeChatQueueHeader({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="default"
             size="xs"
             disabled={queuePending !== null}
             onClick={onResume}

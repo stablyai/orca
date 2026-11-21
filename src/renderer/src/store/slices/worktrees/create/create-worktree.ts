@@ -24,10 +24,8 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
-import { requestWorktreeBaseFallbackNotice } from '@/components/sidebar/workspace-creation/base-ref-update/worktree-base-fallback-notice'
 import { announcePerforceCopy } from '@/components/perforce-copies/perforce-copy-announcement'
-import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
+import { showCreatedWorktreeBaseRefNotices } from './created-worktree-base-ref-notices'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
 import type { WorktreeCreateRequest } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
@@ -214,20 +212,8 @@ export function createCreateWorktree(
             target,
             options?.hookTrustContext
           )
-          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
-            updateSettings: get().updateSettings,
-            executionHostId: creationHostId
-          })
-          if (result.baseFallback) {
-            requestWorktreeBaseFallbackNotice(result.baseFallback)
-          }
+          showCreatedWorktreeBaseRefNotices(result, target, creationHostId, get)
           announcePerforceCopy(result.perforceCopy)
-          showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
-            updateSettings: get().updateSettings,
-            getSettings: () => get().settings,
-            openSettingsPage: get().openSettingsPage,
-            openSettingsTarget: get().openSettingsTarget
-          })
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

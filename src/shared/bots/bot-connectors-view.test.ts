@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GoogleAccountView } from '../google/google-connect-types'
-import { botConnectorServices, formatBotConnectors } from './bot-connectors-view'
+import { botConnectorServices, formatBotConnectors, type CloudSource } from './bot-connectors-view'
 
 const bot = { slack: null, slackApps: [], linear: null, linearWorkspaces: [], github: null }
 
@@ -16,7 +16,7 @@ describe('orca bot connectors', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: botConnectorServices reads only whether each link is there.
       connected as never,
       { gh: 'missing', linear: true },
-      'https://orca.example/approve'
+      [{ source: 'slack', approveUrl: 'https://orca.example/approve' }]
     )
     expect(services.map((service) => [service.source, service.signedIn, service.wakes])).toEqual([
       ['github', false, true],
@@ -43,6 +43,23 @@ describe('orca bot connectors', () => {
     expect(printed).toContain(
       'linear:o1:workspace  linear: Acme\n  linear:o1:team:t1  ENG Engineering'
     )
+  })
+
+  it('reads Slack as connected only once Orca Cloud says its app is installed', () => {
+    const created = { ...bot, slackApps: [{ teamId: 'T1', appId: 'A1' }] }
+    const slack = (cloud?: CloudSource[]) =>
+      botConnectorServices(created, { gh: 'signed-in', linear: true }, cloud).find(
+        (service) => service.source === 'slack'
+      )
+    // Slack refused the install: the app exists, but the cloud lists no Slack to act through.
+    const refused = slack([])
+    expect(refused).toMatchObject({ signedIn: false, wakes: false })
+    expect(
+      formatBotConnectors({ bot: 'Scout', services: refused ? [refused] : [], workspaces: [] })
+    ).toContain("Slack: `orca slack`, as Scout. Not connected. Your Slack app isn't installed.")
+    expect(slack([{ source: 'slack' }])).toMatchObject({ signedIn: true, wakes: true })
+    // Without the cloud's answer, the app this computer set up stands.
+    expect(slack()).toMatchObject({ signedIn: true, wakes: true })
   })
 
   it('adds a Google row with each account’s services, or the one step that is missing', () => {

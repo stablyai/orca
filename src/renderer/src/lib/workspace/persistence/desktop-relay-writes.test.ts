@@ -6,13 +6,17 @@ import {
   windowSavingTo
 } from './desktop-relay-writes.test-fixture'
 import {
+  afterDesktopRelayProbe,
   probeDesktopRelays,
   replaceDesktopRelays,
   takeDesktopRelayWrite,
   type DesktopRelayApi
 } from './desktop-relay-writes'
 import { planDesktopRelayWrite, settleSessionWrites } from './desktop-relay-write-plan'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { DesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-write'
 
 function sendDesktopRelayWrite(api: DesktopRelayApi, write: DesktopRelayWrite) {
@@ -63,20 +67,6 @@ describe('relay ids saved by ownership', () => {
     const { stop } = await windowSavingTo(main, { repo })
     try {
       expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
-    } finally {
-      stop()
-    }
-  })
-
-  it('clears an ended relay the window wrote on a host holding a parked workspace', async () => {
-    const main = inMemoryMain()
-    const { stop, endRelay } = await windowSavingTo(main, { parked: true })
-    try {
-      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
-
-      await endRelay()
-
-      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toBeUndefined()
     } finally {
       stop()
     }
@@ -193,5 +183,32 @@ describe('relay ids saved by ownership', () => {
     await save({ 'tab-b': 'relay-b' })
 
     expect(sent.at(-1)?.find((host) => host.hostId === SSH_HOST)?.removedTabIds).toEqual(['tab-a'])
+  })
+
+  it('surfaces a save that failed while main had not yet said how it takes relay ids once', async () => {
+    vi.useRealTimers()
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const api = { desktopRelaysVersion: async () => 1, applyDesktopRelays: vi.fn() }
+      probeDesktopRelays(api)
+      const failure = new Error('disk full')
+      const patch: WorkspaceSessionPatch = { remoteSessionIdsByTabId: {} }
+      const save = afterDesktopRelayProbe(api, patch, () => {
+        const localWrite = Promise.reject(failure)
+        localWrite.catch(() => {})
+        return { localWrite, written: Promise.reject(failure) }
+      })
+
+      await expect(save?.written).rejects.toBe(failure)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
   })
 })

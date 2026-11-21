@@ -157,7 +157,6 @@ export function useMobileNativeChatImageAttachments({
       // a card tap can't interleave into a mid-flight paste sequence either.
       const operationTerminal = activeHandleRef.current
       if (operationTerminal && !acquireMobileNativeChatTerminalWrite(operationTerminal)) {
-        onError?.()
         onSendError('Message not sent')
         return false
       }
@@ -194,7 +193,6 @@ export function useMobileNativeChatImageAttachments({
           : intent
         if (structuredNativeChat && hasAttachments) {
           if (!client || !enabled || connState !== 'connected') {
-            onError?.()
             onSendError('Message not sent (disconnected)')
             return false
           }
@@ -223,7 +221,6 @@ export function useMobileNativeChatImageAttachments({
           if (staleTerminal && isMobileNativeChatInputStale(staleTerminal)) {
             // Healing writes also need the input lease; retry once ready instead of latching every subsequent send as failed.
             if (!client || !enabled || connState !== 'connected') {
-              onError?.()
               onSendError('Message not sent (disconnected)')
               return false
             }
@@ -235,7 +232,6 @@ export function useMobileNativeChatImageAttachments({
             })
             // Abort after a tab switch during clear rather than sending text to a different terminal.
             if (!healed || activeHandleRef.current !== staleTerminal) {
-              onError?.()
               onSendError('Message not sent')
               return false
             }
@@ -247,7 +243,6 @@ export function useMobileNativeChatImageAttachments({
         }
         const handle = activeHandleRef.current
         if (!client || !handle || !enabled || connState !== 'connected') {
-          onError?.()
           onSendError('Message not sent (disconnected)')
           return false
         }
@@ -271,7 +266,6 @@ export function useMobileNativeChatImageAttachments({
             if (inputWriteStarted) {
               markMobileNativeChatInputStale(handle)
             }
-            onError?.()
             onSendError('Message not sent')
             return false
           }
@@ -283,7 +277,6 @@ export function useMobileNativeChatImageAttachments({
           // Abort if the target changed during settle; retain scoped chips and let retry clear the stale paste.
           if (activeHandleRef.current !== handle) {
             markMobileNativeChatInputStale(handle)
-            onError?.()
             onSendError('Message not sent')
             return false
           }
@@ -309,7 +302,6 @@ export function useMobileNativeChatImageAttachments({
           if (inputWriteStarted) {
             markMobileNativeChatInputStale(handle)
           }
-          onError?.()
           onSendError('Message not sent')
           return false
         }
@@ -329,7 +321,6 @@ export function useMobileNativeChatImageAttachments({
       deviceTokenRef,
       enabled,
       files,
-      onError,
       onFilesSent,
       onSendError,
       readSeededLaunchDraft,

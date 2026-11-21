@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Bot as BotIcon, Users } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import type { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -42,14 +43,25 @@ export function botCreateMenuActions(input: {
   ]
 }
 
-/** A group row's long-press menu, as the desktop's row menu. */
+/** A group row's long-press menu, as the desktop's row menu; in the room, New thread leads it as on
+ *  the desktop's + menu. */
 export function botGroupMenuActions(input: {
   t: Translate
+  newThread?: { renderIcon: () => ReactNode; disabled: boolean; onPress: () => void }
   onManageMembers: () => void
   onDelete: (() => void) | null
 }): ActionSheetAction[] {
-  const { t, onDelete } = input
+  const { t, newThread, onDelete } = input
   return [
+    ...(newThread
+      ? [
+          {
+            label: t('bots.groups.newThreadTab', 'New thread'),
+            status: t('bots.groups.newThreadHint', 'starts fresh'),
+            ...newThread
+          }
+        ]
+      : []),
     {
       label: t('bots.groups.manageMembersMenu', 'Manage members…'),
       closeBeforePress: true,

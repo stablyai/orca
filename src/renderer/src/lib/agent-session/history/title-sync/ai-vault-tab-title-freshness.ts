@@ -6,6 +6,8 @@ import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-su
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { getTerminalTabOwnerWorktreeIds } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
@@ -98,28 +100,35 @@ function titleKey(title: string): string {
   return getDecorativeAgentTitleSignature(folded) ?? folded
 }
 
+function changedPaneTitleTabIds(state: AppState, previous: AppState): Iterable<string> {
+  const current = state.runtimePaneTitlesByTabId ?? {}
+  const prior = previous.runtimePaneTitlesByTabId ?? {}
+  const changes = readRecordChanges(current, prior)
+  if (!changes) {
+    return []
+  }
+  if (changes.kind === 'addressed') {
+    return changes.keys
+  }
+  return new Set(
+    [...Object.keys(current), ...Object.keys(prior)].filter(
+      (tabId) => current[tabId] !== prior[tabId]
+    )
+  )
+}
+
+/** Request keys whose owning pane title changed; a set, so neither order nor duplicate owners matter. */
 export function changedOwningPaneTitleRequests(
   state: AppState,
   previous: AppState,
   statuses: RuntimeStatuses
-): string[] {
-  const changedTabs = new Set(
-    [
-      ...Object.keys(state.runtimePaneTitlesByTabId ?? {}),
-      ...Object.keys(previous.runtimePaneTitlesByTabId ?? {})
-    ].filter(
-      (tabId) =>
-        state.runtimePaneTitlesByTabId?.[tabId] !== previous.runtimePaneTitlesByTabId?.[tabId]
-    )
-  )
-  const changed: string[] = []
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (!changedTabs.has(tab.id)) {
-        continue
-      }
+): Set<string> {
+  const changed = new Set<string>()
+  // Only the retitled tabs' owners are read, so a title costs O(changed tabs), not O(all tabs).
+  for (const tabId of changedPaneTitleTabIds(state, previous)) {
+    for (const worktreeId of getTerminalTabOwnerWorktreeIds(state.tabsByWorktree, tabId)) {
       const request = collectAgentPaneConversations(state, isAiVaultTitleAgent, {
-        tab: { worktreeId, tabId: tab.id },
+        tab: { worktreeId, tabId },
         skipHostNamedTabs: true
       })[0]
       if (!request?.refresh || !supportsSessionTitleRefresh(statuses, request)) {
@@ -127,17 +136,17 @@ export function changedOwningPaneTitleRequests(
       }
       const leafId = parsePaneKey(request.paneKey)?.leafId
       const paneId = leafId
-        ? findRegisteredTerminalTab(tab.id, worktreeId)
+        ? findRegisteredTerminalTab(tabId, worktreeId)
             ?.tab.getManager()
             ?.getNumericIdForLeaf(leafId)
         : null
       if (paneId === null || paneId === undefined) {
         continue
       }
-      const current = state.runtimePaneTitlesByTabId?.[tab.id]?.[paneId] ?? ''
-      const old = previous.runtimePaneTitlesByTabId?.[tab.id]?.[paneId] ?? ''
+      const current = state.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
+      const old = previous.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
       if (titleKey(current) !== titleKey(old)) {
-        changed.push(aiVaultTitleRequestKey(request))
+        changed.add(aiVaultTitleRequestKey(request))
       }
     }
   }

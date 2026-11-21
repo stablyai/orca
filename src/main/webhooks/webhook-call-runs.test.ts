@@ -120,7 +120,11 @@ function setup(options: {
   route?: ConstructorParameters<typeof WebhookCallRuns>[0]['route']
   automations?: Automation[]
 }) {
-  const ledger = new WebhookHostLedger(userDataPath, () => 'acct-1')
+  const ledger = new WebhookHostLedger(
+    userDataPath,
+    () => 'acct-1',
+    () => new Set()
+  )
   const timers: { run: () => void; delayMs: number }[] = []
   const events: AutomationRunEvent[] = []
   const ranFor: string[] = []
@@ -398,7 +402,11 @@ describe('webhook calls on their host', () => {
     crash().runs.receive(delivery(), eventOf())
     await settle()
     await settle()
-    const runId = new WebhookHostLedger(userDataPath, () => 'acct-1').call(CALL)?.reservedRunId
+    const runId = new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => new Set()
+    ).call(CALL)?.reservedRunId
     // No run was made: asked again for the same run, which the cloud grants only once.
     const again = setup({
       run: async (_event, gate) => {
@@ -456,7 +464,11 @@ describe('webhook calls on their host', () => {
   it("drops another account's ledger", () => {
     const first = setup({})
     first.runs.receive(delivery(), eventOf())
-    const other = new WebhookHostLedger(userDataPath, () => 'acct-2')
+    const other = new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-2',
+      () => new Set()
+    )
     expect(other.calls()).toEqual([])
   })
 })

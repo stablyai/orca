@@ -69,43 +69,23 @@ function run(
 }
 
 describe('awaitServerSignInApproval', () => {
-  it('asks at the interval Orca Cloud set until the person approves', async () => {
+  it('keeps the requested poll interval and widens it on slow-down replies', async () => {
     const { result, poll, sleeps } = run([
       { status: 'pending' },
+      { status: 'slow_down' },
+      { status: 'slow_down', intervalSeconds: 20 },
+      { status: 'slow_down', intervalSeconds: 10 },
       { status: 'pending' },
       { status: 'approved', code: 'one-time', redirectUri: REDIRECT }
     ])
 
     await expect(result).resolves.toEqual({ code: 'one-time', redirectUri: REDIRECT })
-    expect(sleeps).toEqual([5_000, 5_000, 5_000])
+    expect(sleeps).toEqual([5_000, 5_000, 10_000, 20_000, 25_000, 25_000])
     expect(poll).toHaveBeenCalledWith(
       CONFIG,
       expect.objectContaining({ claimToken: 'claim-secret' }),
       expect.anything()
     )
-  })
-
-  it('adds 5 seconds to the interval each time it is told to slow down, and keeps it', async () => {
-    const { result, sleeps } = run([
-      { status: 'slow_down' },
-      { status: 'slow_down' },
-      { status: 'pending' },
-      { status: 'approved', code: 'one-time', redirectUri: REDIRECT }
-    ])
-
-    await expect(result).resolves.toEqual({ code: 'one-time', redirectUri: REDIRECT })
-    expect(sleeps).toEqual([5_000, 10_000, 15_000, 15_000])
-  })
-
-  it('takes the slower interval Orca Cloud names in slow_down when it is longer than 5 more seconds', async () => {
-    const { result, sleeps } = run([
-      { status: 'slow_down', intervalSeconds: 20 },
-      { status: 'slow_down', intervalSeconds: 10 },
-      { status: 'approved', code: 'one-time', redirectUri: REDIRECT }
-    ])
-
-    await expect(result).resolves.toMatchObject({ code: 'one-time' })
-    expect(sleeps).toEqual([5_000, 20_000, 25_000])
   })
 
   it('backs off on network trouble and 5xx answers, capped, then returns to the interval', async () => {

@@ -47,9 +47,20 @@ export function reduceShellFailed(
         : step(session, { remountedOnce: true }, [remount])
     }
     case 'document-load-failed':
-      return session.pageRemountedOnce
-        ? step(session, { state: failedState(session, reason) })
-        : step(session, { pageRemountedOnce: true }, [REMOUNT])
+    case 'page-fault': {
+      if (!session.pageRemountedOnce) {
+        return step(session, { pageRemountedOnce: true }, [REMOUNT])
+      }
+      // Only a painted page proves its bytes render, and only once: an earlier or repeat fault may be a damaged chunk.
+      const buildId = session.state.buildId
+      if (reason === 'page-fault' && session.pagePainted && session.pageFaultBuildId !== buildId) {
+        return step(session, {
+          state: failedState(session, reason),
+          pageFaultBuildId: buildId
+        })
+      }
+      return step(session, { state: failedState(session, 'document-load-failed') })
+    }
     case 'generation-unreadable':
       return session.retriedOnce || session.gates === null
         ? step(session, { state: failedState(session, reason) })
@@ -73,7 +84,8 @@ export function reduceRetryPressed(
     retriedOnce: false,
     remountedOnce: false,
     reclaimedOnce: false,
-    pageRemountedOnce: false
+    pageRemountedOnce: false,
+    manifestFirst: session.state.kind === 'failed' && session.state.reason === 'page-fault'
   }
   const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
     ? [{ kind: 'delete-cache' }]

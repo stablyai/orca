@@ -53,6 +53,7 @@ export function renderGitSettingsSection(
             updateSettings={model.updateSettings}
             writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
             displayedGitUsername={navigation.displayedGitUsername}
+            hostScope={model.settingsHostScope}
             hasUnsavedBranchPromptChanges={model.hasUnsavedBranchPromptChanges}
             onBranchPromptDirtyChange={model.setHasUnsavedBranchPromptChanges}
             branchPromptDiscardSignal={model.sourceControlAiPromptDiscardSignal}

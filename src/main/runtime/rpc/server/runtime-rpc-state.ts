@@ -103,6 +103,7 @@ export class RuntimeRpcState {
   } | null = null
   protected mobilePairingOfferGeneration = 0
   protected onUnpairedDeviceAuthFailure: (() => void) | null = null
+  protected onPairedDevicesChanged: (() => void) | null = null
   protected unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
   protected readonly binaryMessageRouter = new RuntimeBinaryMessageRouter()
   protected readonly wsDispatchAbortStates = new Map<

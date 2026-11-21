@@ -1,6 +1,7 @@
 // This host's link to the Orca Cloud connector, as whichever Orca account it is signed in to.
 import { connectorAccountName } from './connector-token-mint'
 import type { z } from 'zod'
+import type { ConnectorCloudStatus } from '../../shared/bots/connector-cloud-status'
 import {
   connectorStopNeedsSignIn,
   SIGNED_OUT,
@@ -41,12 +42,6 @@ export type ConnectorCloudOptions = {
   /** The journal's reply outbox (design item 125); null while no journal is open. */
   replyJournal?: () => ConnectorReplyJournal | null
 }
-
-/**
- * What a host's bot list says of its link to Orca Cloud; `refused` comes with the cloud's words, and
- * `needs-sign-in` is a connector that keeps refusing this sign-in while the app stays signed in.
- */
-export type ConnectorCloudStatus = 'signed-out' | 'needs-sign-in' | 'unreachable' | 'refused' | 'ok'
 
 export class ConnectorCloud {
   private connected = false

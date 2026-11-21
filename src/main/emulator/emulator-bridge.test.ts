@@ -278,7 +278,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
       resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getAuthoritativeWindowId: () => 1,
       getSettings: () => ({
         mobileEmulatorEnabled: true,
         mobileEmulatorDefaultDeviceUdid: null
@@ -310,7 +310,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
       resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getAuthoritativeWindowId: () => 1,
       getSettings: () => ({
         mobileEmulatorEnabled: true,
         mobileEmulatorDefaultDeviceUdid: 'iphone-1'

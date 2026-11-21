@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { AppRail } from './AppRail'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { setWorkspaceListRegionPresent } from './workspace-list-region-presence'
+import type { AppRailDestinationId } from './app-rail-destinations'
 import {
   registerTitlebarSidebarToggle,
   unregisterTitlebarSidebarToggle
@@ -97,6 +100,19 @@ function railItems(): string[] {
   )
 }
 
+function showDestinations(shown: readonly AppRailDestinationId[]): void {
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings('/home/test'),
+      showTasksButton: shown.includes('tasks'),
+      showAutomationsButton: shown.includes('automations'),
+      showArtifactsButton: shown.includes('artifacts'),
+      showSkillsButton: shown.includes('skills'),
+      showMobileButton: shown.includes('mobile')
+    }
+  })
+}
+
 async function resizeTo(height: number): Promise<void> {
   toolbarHeight = height
   act(() => resizeCallbacks.forEach((callback) => callback()))
@@ -168,6 +184,7 @@ it('describes expansion only for workspaces content, pointing at the list only w
 })
 
 it('folds Help and Settings into More when the rail is too short for three buttons', async () => {
+  showDestinations([])
   toolbarHeight = 108
   renderRail()
   expect(railItems()).toEqual(['workspaces', 'help', 'settings'])
@@ -271,4 +288,140 @@ it('names the landmark and its toolbar differently', () => {
   renderRail()
   expect(screen.getByRole('navigation', { name: 'App navigation' })).toBeInTheDocument()
   expect(screen.getByRole('toolbar', { name: 'App tools' })).toBeInTheDocument()
+})
+
+it('shows Tasks and Automations below Workspaces per their visibility settings', () => {
+  showDestinations(['tasks', 'automations'])
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'tasks', 'automations', 'help', 'settings'])
+  cleanup()
+  showDestinations(['automations'])
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'automations', 'help', 'settings'])
+})
+
+it('selects rail destinations by click and keyboard and updates the current page', async () => {
+  showDestinations(['tasks', 'automations'])
+  renderRail()
+  const user = userEvent.setup()
+  const tasks = screen.getByRole('button', { name: 'Tasks' })
+  const automations = screen.getByRole('button', { name: 'Automations' })
+
+  await user.click(tasks)
+  expect(useAppStore.getState().activeView).toBe('tasks')
+  expect(tasks).toHaveAttribute('aria-current', 'page')
+
+  await user.keyboard('{ArrowDown}')
+  expect(automations).toHaveFocus()
+  await user.keyboard(' ')
+  expect(useAppStore.getState().activeView).toBe('automations')
+  expect(automations).toHaveAttribute('aria-current', 'page')
+  expect(tasks).not.toHaveAttribute('aria-current')
+})
+
+it('folds Tasks and Automations into More and opens them from there, with More current for a folded page', async () => {
+  showDestinations(['tasks', 'automations'])
+  toolbarHeight = 144
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'more', 'help', 'settings'])
+  const more = screen.getByRole('button', { name: 'More' })
+  act(() => more.focus())
+  fireEvent.keyDown(more, { key: 'Enter' })
+  const menu = await screen.findByRole('menu')
+  expect(
+    within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent)
+  ).toEqual(['Tasks', 'Automations'])
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Automations' }))
+  expect(useAppStore.getState().activeView).toBe('automations')
+  expect(screen.getByRole('button', { name: 'More, Automations' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  )
+})
+
+it('leaves an already-open destination as it is', () => {
+  showDestinations(['tasks', 'automations'])
+  useAppStore.getState().openTaskPage({ taskSource: 'linear' })
+  renderRail()
+  fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
+  expect(useAppStore.getState().taskPageData).toEqual({ taskSource: 'linear' })
+})
+
+it('shows Artifacts, Skills and Orca Mobile after Automations per their settings, with only Mobile on by default', () => {
+  useAppStore.setState({ settings: getDefaultSettings('/home/test') })
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'tasks', 'automations', 'mobile', 'help', 'settings'])
+  cleanup()
+  showDestinations(['tasks', 'automations', 'artifacts', 'skills', 'mobile'])
+  renderRail()
+  expect(railItems()).toEqual([
+    'workspaces',
+    'tasks',
+    'automations',
+    'artifacts',
+    'skills',
+    'mobile',
+    'help',
+    'settings'
+  ])
+})
+
+it('opens Artifacts, Skills and Orca Mobile by click and keyboard and marks the current page', async () => {
+  showDestinations(['artifacts', 'skills', 'mobile'])
+  renderRail()
+  const user = userEvent.setup()
+  const artifacts = screen.getByRole('button', { name: 'Artifacts' })
+  const skills = screen.getByRole('button', { name: 'Skills' })
+  const mobile = screen.getByRole('button', { name: 'Orca Mobile' })
+
+  await user.click(artifacts)
+  expect(useAppStore.getState().activeView).toBe('artifacts')
+  expect(artifacts).toHaveAttribute('aria-current', 'page')
+
+  await user.keyboard('{ArrowDown}')
+  expect(skills).toHaveFocus()
+  await user.keyboard('{Enter}')
+  expect(useAppStore.getState().activeView).toBe('skills')
+  expect(skills).toHaveAttribute('aria-current', 'page')
+
+  await user.keyboard('{ArrowDown}')
+  expect(mobile).toHaveFocus()
+  await user.keyboard(' ')
+  expect(useAppStore.getState().activeView).toBe('mobile')
+  expect(mobile).toHaveAttribute('aria-current', 'page')
+  expect(artifacts).not.toHaveAttribute('aria-current')
+})
+
+it('folds the newest items first, so Mobile goes into More before Skills and Artifacts', async () => {
+  showDestinations(['tasks', 'automations', 'artifacts', 'skills', 'mobile'])
+  toolbarHeight = 252
+  renderRail()
+  expect(railItems()).toEqual([
+    'workspaces',
+    'tasks',
+    'automations',
+    'artifacts',
+    'more',
+    'help',
+    'settings'
+  ])
+  await resizeTo(216)
+  expect(railItems()).toEqual(['workspaces', 'tasks', 'automations', 'more', 'help', 'settings'])
+  const more = screen.getByRole('button', { name: 'More' })
+  act(() => more.focus())
+  fireEvent.keyDown(more, { key: 'Enter' })
+  const menu = await screen.findByRole('menu')
+  expect(
+    within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent)
+  ).toEqual(['Artifacts', 'Skills', 'Orca Mobile'])
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Orca Mobile' }))
+  expect(useAppStore.getState().activeView).toBe('mobile')
+  expect(screen.getByRole('button', { name: 'More, Orca Mobile' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  )
 })

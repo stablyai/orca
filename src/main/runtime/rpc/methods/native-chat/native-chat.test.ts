@@ -301,6 +301,29 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     })
   })
 
+  it('clips an emoji straddling the 4000-char mobile budget without leaving a lone surrogate', async () => {
+    const straddling = `${'x'.repeat(3999)}\u{1F7E2} HQ`
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            { type: 'tool-result', output: straddling, isError: false },
+            { type: 'tool-call', name: 'Bash', input: straddling }
+          ]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const [output, call] = (result as { messages: NativeChatMessage[] }).messages[0].blocks
+
+    expect(output).toMatchObject({ output: `${'x'.repeat(3999)}\n… (truncated)` })
+    expect(call).toMatchObject({ input: `${'x'.repeat(3999)}… (truncated)` })
+  })
+
   it('keeps sibling tool-call keys that share a 128-char prefix distinct', async () => {
     const prefix = 'p'.repeat(128)
     cachedResult.value = {
