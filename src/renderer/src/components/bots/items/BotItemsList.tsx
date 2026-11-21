@@ -261,6 +261,9 @@ function BotItemGroup({
     focusUid ? items.findIndex((item) => item.uid === focusUid) : -1
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
+  const shownItems = useMemo(() => items.slice(0, shown), [items, shown])
+  // The row holding keyboard focus stays mounted when scrolled out of a windowed group's view.
+  const [focusedUid, setFocusedUid] = useState<string | null>(null)
   const section = useRef<HTMLElement | null>(null)
   // Kept mounted in a windowed group until it has focus.
   const [focusing, setFocusing] = useState(focusIndex >= 0)
@@ -268,6 +271,11 @@ function BotItemGroup({
   // Needs you's rows are all mounted; other groups' rows focus themselves as they mount (`focusRow`).
   useEffect(() => {
     if (!focusing) {
+      return
+    }
+    // The row left the group before it showed: nothing to return to.
+    if (!items[focusIndex]) {
+      setFocusing(false)
       return
     }
     if (!open) {
@@ -402,7 +410,7 @@ function BotItemGroup({
           <div className="-mb-0.5 flex flex-col">
             {/* Windowed past a few dozen rows: Show more reveals the group, mounting what's in view. */}
             <VirtualizedList
-              rows={items.slice(0, shown)}
+              rows={shownItems}
               getRowKey={rowKey}
               renderRow={(item) => (
                 <div
@@ -410,6 +418,12 @@ function BotItemGroup({
                   key={item.uid}
                   className="pb-0.5"
                   ref={focusing && item.uid === items[focusIndex]?.uid ? focusRow : undefined}
+                  onFocus={() => setFocusedUid(item.uid)}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                      setFocusedUid(null)
+                    }
+                  }}
                 >
                   {row(item)}
                 </div>
@@ -417,6 +431,7 @@ function BotItemGroup({
               scrollElement={scroller}
               estimateRowHeightPx={BOT_ITEM_ROW_HEIGHT_PX}
               activeRowKey={focusing ? items[focusIndex]?.uid : undefined}
+              keptRowKey={focusedUid ?? undefined}
             />
           </div>
           {more > 0 ? (

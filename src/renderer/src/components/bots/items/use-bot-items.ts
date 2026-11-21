@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
-import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
@@ -115,11 +114,7 @@ export function useBotChatItems(
       callBotRpc<BotItemsRead>({ hostId }, 'bots.items.owner.list', { botId: id, ...scope })
         .then((value) => {
           if (live) {
-            // Unchanged items keep their identity, so only changed rows re-render.
-            setRead((prev) => ({
-              chats,
-              value: prev?.chats === chats ? reuseEqualJson(prev.value, value) : value
-            }))
+            setRead({ chats, value })
             setFailed(false)
           }
         })

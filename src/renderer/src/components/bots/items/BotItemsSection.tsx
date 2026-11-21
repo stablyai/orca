@@ -63,7 +63,7 @@ export function BotItemsSection({
   offline: boolean
   focusFallback: React.RefObject<HTMLElement | null>
   /** The panel's scroller, for windowing long groups. */
-  scroller: HTMLDivElement | null
+  scroller?: HTMLDivElement | null
 }): React.JSX.Element {
   const t = useTranslate()
   const { chatRead, items, shown, staleDays } = list

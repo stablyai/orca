@@ -13,11 +13,8 @@ function uidOf(value: unknown): string | null {
   return isPlainObject(value) && typeof value.uid === 'string' ? value.uid : null
 }
 
-/** A list of records that each carry a `uid` (items) pairs by it, so a reordered record keeps its identity. */
-function previousByUid(previous: readonly unknown[], next: readonly unknown[]): Map<string, unknown> | null {
-  if (previous.length === 0 || !next.every((item) => uidOf(item) !== null)) {
-    return null
-  }
+/** Previous records by `uid`, built only once a record has moved; null when some previous one has none. */
+function indexByUid(previous: readonly unknown[]): Map<string, unknown> | null {
   const byUid = new Map<string, unknown>()
   for (const item of previous) {
     const uid = uidOf(item)
@@ -30,21 +27,24 @@ function previousByUid(previous: readonly unknown[], next: readonly unknown[]): 
 }
 
 /** `next`, with every part equal to `previous`'s part at the same place replaced by that part; `previous`
- *  itself when the two are equal. Arrays match by index, or by `uid` when every element has one; objects
- *  by key. */
+ *  itself when the two are equal. Arrays match by index, except that a record whose `uid` moved pairs
+ *  with the previous record carrying it; objects match by key. */
 export function reuseEqualJson<T>(previous: unknown, next: T): T {
   if (Object.is(previous, next)) {
     return next
   }
   if (Array.isArray(previous) && Array.isArray(next)) {
     let same = previous.length === next.length
-    const byUid = previousByUid(previous, next)
+    // A record with a `uid` pairs with the previous one carrying it, so one that moved keeps its identity.
+    let byUid: Map<string, unknown> | null | undefined
     const merged = next.map((item: unknown, index) => {
-      const match = byUid
-        ? byUid.get(uidOf(item)!)
-        : index < previous.length
-          ? previous[index]
-          : undefined
+      const atIndex = index < previous.length ? previous[index] : undefined
+      const uid = uidOf(item)
+      let match = atIndex
+      if (uid !== null && uidOf(atIndex) !== uid) {
+        byUid = byUid === undefined ? indexByUid(previous) : byUid
+        match = byUid ? byUid.get(uid) : atIndex
+      }
       const kept = match === undefined ? item : reuseEqualJson(match, item)
       same &&= kept === previous[index]
       return kept
