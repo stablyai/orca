@@ -1,9 +1,12 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { CodexHookRolloutPrefetcher } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
 import { retainTmuxHookWriterTopology } from './cli-writer-observation'
 import {
+  codexTranscriptPollOwner,
+  codexTranscriptPollResources,
   pollCodexTranscriptStatus,
-  readCodexTranscriptPoll,
-  type CodexTranscriptPollReads
+  type CodexTranscriptPollReads,
+  withCodexTranscriptPoll
 } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
@@ -21,7 +24,11 @@ import {
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
-import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
+import type {
+  EnrichedAgentHookEventPayload,
+  IncomingAgentHookEvent,
+  TranscriptPoll
+} from './server-types'
 import { codexReplayLeftTranscriptWork } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -30,14 +37,10 @@ import {
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
-type TranscriptPoll = {
-  source: AgentHookSource
-  body: unknown
-  original: EnrichedAgentHookEventPayload
-  delayMs?: number
-}
+type ReplayTranscriptPoll = Pick<TranscriptPoll, 'body' | 'original'>
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
+  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
   private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
     current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
@@ -50,13 +53,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
-    (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
+    (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal),
+    (paneKey) => codexTranscriptPollResources(this.state, paneKey)
   )
 
-  protected readonly replayTranscriptPolls = new Map<
-    string,
-    { body: unknown; original: EnrichedAgentHookEventPayload }
-  >()
+  protected readonly replayTranscriptPolls = new Map<string, ReplayTranscriptPoll>()
 
   protected applyObservedLocalHook(
     incoming: IncomingAgentHookEvent,
@@ -101,6 +102,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearAllTranscriptPolls(): void {
     this.replayTranscriptPolls.clear()
+    this.codexRolloutPrefetcher.clearAll()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
   }
@@ -111,6 +113,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected clearTranscriptPoll(paneKey: string): void {
+    this.codexRolloutPrefetcher.clear(paneKey)
     this.transcriptPollScheduler.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
   }
@@ -158,11 +161,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     original: EnrichedAgentHookEventPayload,
     delayMs?: number
   ): void {
-    if (source === 'claude') {
-      return
-    }
-    // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
     if (source !== 'codex' && source !== 'muse') {
+      // Nested CLIs inherit pane keys. Only a different accepted provider displaces the poll.
+      const prior = this.transcriptPollScheduler.peek(original.paneKey)
+      const provider = original.payload.agentType
+      if (prior && provider && prior.source !== provider) {
+        this.transcriptPollScheduler.clear(original.paneKey)
+      }
       return
     }
     if (!shouldPollHookTranscript(this.state, source, original)) {
@@ -175,7 +180,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       original.paneKey,
       { source, body, original, delayMs: museDelayMs },
       hookTranscriptWatchPath(this.state, source, original.paneKey),
-      museDelayMs
+      museDelayMs,
+      source === 'codex' ? codexTranscriptPollOwner(this.state, original.paneKey) : source
     )
   }
 
@@ -190,7 +196,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll, signal: AbortSignal) {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
@@ -199,29 +205,24 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
-    return readCodexTranscriptPoll(this.state, paneKey).then((reads) => {
-      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
-      const current = this.transcriptPollScheduler.peek(paneKey)
-      const owner = this.ownsTranscriptPoll(paneKey, poll)
-        ? poll
-        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
-          ? current
-          : undefined
-      try {
-        if (owner) {
-          this.applyTranscriptPoll(paneKey, owner, reads)
-        }
-      } finally {
-        reads.batch.release()
-      }
-    })
+    return withCodexTranscriptPoll(
+      this.state,
+      paneKey,
+      signal,
+      () => {
+        const current = this.transcriptPollScheduler.peek(paneKey)
+        return current && this.ownsTranscriptPoll(paneKey, current) ? current : undefined
+      },
+      (owner, reads) => this.applyTranscriptPoll(paneKey, owner, reads)
+    )
   }
 
   // Recheck ownership at callback time; newer events supersede this payload even if children remain.
   private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
     return (
       paneKey === original.paneKey &&
-      Boolean(this.server) &&
+      this.server?.listening === true &&
+      this.statusHooksEnabled &&
       this.state.lastStatusByPaneKey.get(original.paneKey) === original
     )
   }

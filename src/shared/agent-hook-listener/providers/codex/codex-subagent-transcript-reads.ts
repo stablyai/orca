@@ -22,9 +22,12 @@ import {
 /** New rollout bytes read off the main thread; nothing in the transcript state moves until they are applied. */
 export type CodexSubagentTranscriptReads = {
   parent: JsonlCursor
-  /** 'deferred' when the read budget was full; the whole batch then waits for the next poll. */
+  /** 'deferred' leaves the parent cursor unchanged until the next poll. */
   parentBytes: JsonlCursorBytes | undefined | 'deferred'
-  childBytes: Map<TrackedTranscriptSubagent, JsonlCursorBytes | undefined>
+  childBytes: Map<
+    TrackedTranscriptSubagent,
+    { filePath: string | undefined; bytes: JsonlCursorBytes | undefined }
+  >
 }
 
 /** Visits the parent cursor, then each child's after resolving its rollout path asynchronously, one at a time. */
@@ -41,29 +44,43 @@ async function visitCodexTranscriptCursors(
   if (!(await visit(parent)) || !parentPath) {
     return
   }
-  const entriesByDirectory = new Map<string, string[]>()
+  const entriesByDirectory = new Map<string, string[] | undefined>()
   // oxlint-disable-next-line unicorn/no-useless-spread -- the loop awaits; hooks may add or remove children meanwhile.
   for (const [id, tracked] of [...state.subagents]) {
     // A replaced session or pane makes the rest of this batch unappliable; stop opening its rollouts.
-    if (!wanted() || state.subagents.get(id) !== tracked) {
+    if (!wanted()) {
       return
+    }
+    if (state.subagents.get(id) !== tracked) {
+      continue
     }
     if (!tracked.filePath) {
       // Hook prefetches leave path discovery to the poll, so a timed-out hook queues no directory reads.
       if (!resolvePaths) {
         continue
       }
-      for (const directory of childTranscriptDirectories(parentPath, tracked.startedAt)) {
+      const directories = childTranscriptDirectories(parentPath, tracked.startedAt)
+      for (const directory of directories) {
         if (!entriesByDirectory.has(directory)) {
-          entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory, batch))
+          const entries = await readTranscriptDirectoryAsync(directory, batch)
+          entriesByDirectory.set(directory, batch.deferrals.has(directory) ? undefined : entries)
         }
       }
       if (!wanted()) {
         return
       }
+      if (state.subagents.get(id) !== tracked) {
+        continue
+      }
       tracked.filePath ??= resolveChildTranscript(parentPath, id, tracked.startedAt, (directory) =>
         entriesByDirectory.get(directory)
       )
+      if (
+        !tracked.filePath &&
+        directories.some((directory) => !entriesByDirectory.get(directory))
+      ) {
+        continue
+      }
     }
     if (!(await visit(tracked, tracked))) {
       return
@@ -83,13 +100,17 @@ export async function readCodexSubagentTranscript(
   await visitCodexTranscriptCursors(
     state,
     async (cursor, child) => {
+      const filePath = cursor.filePath
       const bytes = await readJsonlCursorBytes(cursor, batch)
       if (!child) {
         reads.parentBytes = bytes
-      } else if (bytes !== 'deferred') {
-        reads.childBytes.set(child, bytes)
+      } else if (bytes !== 'deferred' && child.filePath === filePath) {
+        reads.childBytes.set(child, { filePath, bytes })
       }
-      return bytes !== 'deferred'
+      return (
+        bytes !== 'deferred' ||
+        (filePath !== undefined && batch.deferrals.get(filePath) === 'resource')
+      )
     },
     batch,
     true
@@ -118,28 +139,31 @@ export function applyCodexSubagentTranscriptReads(
   roster: CodexSubagentRoster,
   reads: CodexSubagentTranscriptReads
 ): boolean {
-  if (state.parent !== reads.parent || reads.parentBytes === 'deferred') {
+  if (
+    state.parent !== reads.parent ||
+    (reads.parentBytes === 'deferred' && reads.childBytes.size === 0)
+  ) {
     return false
   }
-  const parentRecords = applyJsonlCursorBytes(
-    reads.parent,
-    reads.parentBytes,
-    isCodexStatusTranscriptLine
-  )
-  if (parentRecords === 'stale') {
-    return false
+  let changed = false
+  if (reads.parentBytes !== 'deferred') {
+    const parentRecords = applyJsonlCursorBytes(
+      reads.parent,
+      reads.parentBytes,
+      isCodexStatusTranscriptLine
+    )
+    if (parentRecords === 'stale') {
+      return false
+    }
+    changed = applyCodexParentTranscript(state, roster, parentRecords)
   }
-  const changed = applyCodexParentTranscript(state, roster, parentRecords)
   return (
     applyCodexChildTranscripts(state, roster, (_id, tracked) => {
-      if (!reads.childBytes.has(tracked)) {
+      const read = reads.childBytes.get(tracked)
+      if (!read || read.filePath !== tracked.filePath) {
         return 'deferred'
       }
-      const records = applyJsonlCursorBytes(
-        tracked,
-        reads.childBytes.get(tracked),
-        isCodexStatusTranscriptLine
-      )
+      const records = applyJsonlCursorBytes(tracked, read.bytes, isCodexStatusTranscriptLine)
       return records === 'stale' ? 'deferred' : records
     }) || changed
   )

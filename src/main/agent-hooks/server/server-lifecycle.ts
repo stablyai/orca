@@ -139,12 +139,17 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
         await this.checkHookOwner(source, aliasedBody)
         // Why: rollout reads stay off the main thread; a slow open on Windows froze the window (#43539).
         const prefetch =
-          source === 'codex'
+          source === 'codex' && isStatusCurrent()
             ? await this.codexRolloutPrefetcher.prefetch(this.state, aliasedBody)
             : undefined
         let toolCallOwner: NormalizedLocalHook['event'] = null
         try {
           if (!isStatusCurrent()) {
+            res.writeHead(204)
+            res.end()
+            return
+          }
+          if (prefetch?.signal.aborted) {
             res.writeHead(204)
             res.end()
             return
