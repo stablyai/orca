@@ -5,14 +5,30 @@ import {
 } from '@/store/terminals/codex-account-restart-continuation'
 import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import type { RuntimeStatusStoreSetState, RuntimeStatusStoreState } from './runtime-status-types'
+import { openStatusTransactionFor } from '../../status-transaction/status-transaction'
+import type { HostStatusReplacement } from './host-status-transaction-draft'
+
+/** The status this write gives `environmentId`, whether patched directly or staged in its status transaction. */
+function writtenRuntimeStatus(
+  patch: Partial<RuntimeStatusStoreState>,
+  staged: readonly HostStatusReplacement[] | undefined,
+  environmentId: string
+): HostStatusReplacement[1] | undefined {
+  if (patch.runtimeStatusByEnvironmentId) {
+    return patch.runtimeStatusByEnvironmentId.get(environmentId)
+  }
+  return staged?.findLast(([id]) => id === environmentId)?.[1]
+}
 
 function retireChangedRuntimeRequests(
   state: RuntimeStatusStoreState,
   patch: Partial<RuntimeStatusStoreState>
 ): Partial<RuntimeStatusStoreState> {
+  // Why: the app store stages host statuses in a status transaction rather than in this patch.
+  const staged = openStatusTransactionFor(state)?.hostStatuses
   if (
     !state.pendingPaneAccountRestarts ||
-    (!patch.runtimeEnvironments && !patch.runtimeStatusByEnvironmentId)
+    (!patch.runtimeEnvironments && !patch.runtimeStatusByEnvironmentId && !staged)
   ) {
     return patch
   }
@@ -33,10 +49,9 @@ function retireChangedRuntimeRequests(
     const revisionChanged =
       catalog &&
       (!environment || (environment.pairingRevision ?? environment.createdAt) !== expectedRevision)
-    const runtimeId =
-      patch.runtimeStatusByEnvironmentId &&
-      lastVerifiedRuntimeStatus(patch.runtimeStatusByEnvironmentId.get(request.environmentId))
-        ?.runtimeId
+    const runtimeId = lastVerifiedRuntimeStatus(
+      writtenRuntimeStatus(patch, staged, request.environmentId)
+    )?.runtimeId
     if (!revisionChanged && !(request.runtimeId && runtimeId && runtimeId !== request.runtimeId)) {
       continue
     }
