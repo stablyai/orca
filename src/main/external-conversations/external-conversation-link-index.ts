@@ -12,7 +12,19 @@ import {
   WORKTREE_METADATA_DOMAINS
 } from '../persistence/profile-save-domains'
 import type { WorkspaceRecordStore } from '../runtime/workspaces/metadata/workspace-activity-records'
+import {
+  conversationIndexKey,
+  EMPTY_LINKED,
+  groupEntriesByKey,
+  pushBucketEntry,
+  sameEntrySlice,
+  updateKeyBucket,
+  workspaceIndexKey,
+  type LinkedConversation
+} from './external-conversation-link-buckets'
 import type { ConversationKey } from './external-conversation-types'
+
+export type { LinkedConversation }
 
 type LinkRecord = { externalConversations?: unknown }
 
@@ -44,74 +56,42 @@ export type ExternalConversationLinkStore = WorkspaceRecordStore<
   ) => unknown
 }
 
-export type LinkedConversation<L extends ExternalConversationLink = ExternalConversationLink> = {
-  workspace: AgentPaneWorkspace
-  link: L
-}
-
-const EMPTY_LINKED: readonly LinkedConversation[] = []
 const LINK_DOMAINS: readonly string[] = WORKTREE_METADATA_DOMAINS
 
 type LinkIndex = {
   byWorkspace: Map<string, LinkedConversation[]>
+  workspaceRank: Map<string, number>
   allOrderExact: boolean
   allCache: LinkedConversation[] | null
-  byPane: Map<string, LinkedConversation>
-  byConversation: Map<string, LinkedConversation>
+  byPane: Map<string, LinkedConversation[]>
+  byConversation: Map<string, LinkedConversation[]>
   bySession: Map<string, LinkedConversation[]>
 }
 
 type LinkIndexSlot = { current: LinkIndex | null }
 
-function conversationIndexKey(key: ConversationKey): string {
-  return `${key.source}\0${key.externalId}`
-}
-
-function workspaceIndexKey({ worktreeId, sshHostId }: AgentPaneWorkspace): string {
-  return `${sshHostId ?? ''}\0${worktreeId}`
-}
-
-function sameIndexedKeys(
-  left: readonly LinkedConversation[],
-  right: readonly LinkedConversation[]
+function syncDimension(
+  indexMap: Map<string, LinkedConversation[]>,
+  wsKey: string,
+  prev: readonly LinkedConversation[],
+  next: readonly LinkedConversation[],
+  keyOf: (entry: LinkedConversation) => string,
+  ranks: ReadonlyMap<string, number>
 ): boolean {
-  return (
-    left.length === right.length &&
-    left.every(
-      (entry, index) =>
-        entry.link.paneKey === right[index]?.link.paneKey &&
-        entry.link.source === right[index]?.link.source &&
-        entry.link.externalId === right[index]?.link.externalId &&
-        entry.link.sessionId === right[index]?.link.sessionId
-    )
-  )
-}
-
-function insertLinkedEntries(index: LinkIndex, entries: readonly LinkedConversation[]): void {
-  for (const linked of entries) {
-    if (!index.byPane.has(linked.link.paneKey)) {
-      index.byPane.set(linked.link.paneKey, linked)
+  const prevGroups = groupEntriesByKey(prev, keyOf)
+  const nextGroups = groupEntriesByKey(next, keyOf)
+  const keys = new Set<string>([...prevGroups.keys(), ...nextGroups.keys()])
+  for (const key of keys) {
+    const before = prevGroups.get(key)
+    const after = nextGroups.get(key)
+    if (sameEntrySlice(before, after)) {
+      continue
     }
-    const conversation = conversationIndexKey(linked.link)
-    if (!index.byConversation.has(conversation)) {
-      index.byConversation.set(conversation, linked)
-    }
-    const forSession = index.bySession.get(linked.link.sessionId)
-    if (forSession) {
-      forSession.push(linked)
-    } else {
-      index.bySession.set(linked.link.sessionId, [linked])
+    if (!updateKeyBucket(indexMap, key, wsKey, after ?? [], ranks)) {
+      return false
     }
   }
-}
-
-function rebuildMapsFromWorkspaces(index: LinkIndex): void {
-  index.byPane.clear()
-  index.byConversation.clear()
-  index.bySession.clear()
-  for (const entries of index.byWorkspace.values()) {
-    insertLinkedEntries(index, entries)
-  }
+  return true
 }
 
 function hasStateWrites(
@@ -119,6 +99,27 @@ function hasStateWrites(
 ): store is ExternalConversationLinkStore &
   Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>> {
   return typeof store.onStateWritten === 'function'
+}
+
+function* scanWorkspaces(
+  store: ExternalConversationLinkStore
+): Generator<{ workspace: AgentPaneWorkspace; rawLinks: unknown }> {
+  const hosts = new Set<ExecutionHostId>([
+    LOCAL_EXECUTION_HOST_ID,
+    ...store.getRepos().map(getRepoExecutionHostId)
+  ])
+  for (const hostId of hosts) {
+    const sshHostId = hostId === LOCAL_EXECUTION_HOST_ID ? null : hostId
+    for (const [worktreeId, meta] of Object.entries(readAllWorktreeMetaForHost(store, hostId))) {
+      yield { workspace: { worktreeId, sshHostId }, rawLinks: meta.externalConversations }
+    }
+  }
+  for (const folder of store.getFolderWorkspaces?.() ?? []) {
+    yield {
+      workspace: { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null },
+      rawLinks: folder.externalConversations
+    }
+  }
 }
 
 export function createExternalConversationLinkIndex(
@@ -143,60 +144,57 @@ export function createExternalConversationLinkIndex(
     }
     const wsKey = workspaceIndexKey(workspace)
     const prev = current.byWorkspace.get(wsKey) ?? EMPTY_LINKED
+    const prevByLink = new Map<ExternalConversationLink, LinkedConversation>()
+    for (const entry of prev) {
+      prevByLink.set(entry.link, entry)
+    }
     const next =
       Array.isArray(externalConversations) && externalConversations.length > 0
-        ? parseLinks(externalConversations).map((link) => ({ workspace, link }))
+        ? parseLinks(externalConversations).map(
+            (link) => prevByLink.get(link) ?? { workspace, link }
+          )
         : []
-    if (prev.length === 0 && next.length === 0) {
+    if ((prev.length === 0 && next.length === 0) || sameEntrySlice(prev, next)) {
       return
     }
-    current.allCache = null
-    if (sameIndexedKeys(prev, next)) {
-      current.byWorkspace.set(wsKey, next)
-      for (let i = 0; i < next.length; i += 1) {
-        const before = prev[i]!
-        const after = next[i]!
-        if (current.byPane.get(after.link.paneKey) === before) {
-          current.byPane.set(after.link.paneKey, after)
-        }
-        const conv = conversationIndexKey(after.link)
-        if (current.byConversation.get(conv) === before) {
-          current.byConversation.set(conv, after)
-        }
-        const forSession = current.bySession.get(after.link.sessionId)
-        const at = forSession ? forSession.indexOf(before) : -1
-        if (forSession && at !== -1) {
-          forSession[at] = after
-        }
-      }
-      return
-    }
-    if (prev.length === 0) {
-      const collides = next.some(
-        (item) =>
-          current.byPane.has(item.link.paneKey) ||
-          current.byConversation.has(conversationIndexKey(item.link)) ||
-          current.bySession.has(item.link.sessionId)
+    if (
+      !syncDimension(
+        current.byPane,
+        wsKey,
+        prev,
+        next,
+        (entry) => entry.link.paneKey,
+        current.workspaceRank
+      ) ||
+      !syncDimension(
+        current.byConversation,
+        wsKey,
+        prev,
+        next,
+        (entry) => conversationIndexKey(entry.link),
+        current.workspaceRank
+      ) ||
+      !syncDimension(
+        current.bySession,
+        wsKey,
+        prev,
+        next,
+        (entry) => entry.link.sessionId,
+        current.workspaceRank
       )
-      if (collides) {
-        slot.current = null
-        return
-      }
-      current.byWorkspace.set(wsKey, next)
-      current.allOrderExact = false
-      insertLinkedEntries(current, next)
-      return
-    }
-    if (!current.allOrderExact) {
+    ) {
       slot.current = null
       return
     }
+    current.allCache = null
     if (next.length > 0) {
       current.byWorkspace.set(wsKey, next)
+      if (!current.workspaceRank.has(wsKey)) {
+        current.allOrderExact = false
+      }
     } else {
       current.byWorkspace.delete(wsKey)
     }
-    rebuildMapsFromWorkspaces(current)
   }
 
   function watchLinkWrites(
@@ -222,33 +220,11 @@ export function createExternalConversationLinkIndex(
     return slot
   }
 
-  function* scanAllLinks(store: ExternalConversationLinkStore): Generator<LinkedConversation> {
-    const hosts = new Set<ExecutionHostId>([
-      LOCAL_EXECUTION_HOST_ID,
-      ...store.getRepos().map(getRepoExecutionHostId)
-    ])
-    for (const hostId of hosts) {
-      for (const [worktreeId, meta] of Object.entries(readAllWorktreeMetaForHost(store, hostId))) {
-        if (!Array.isArray(meta.externalConversations) || meta.externalConversations.length === 0) {
-          continue
-        }
-        const sshHostId = hostId === LOCAL_EXECUTION_HOST_ID ? null : hostId
-        for (const link of parseLinks(meta.externalConversations)) {
-          yield { workspace: { worktreeId, sshHostId }, link }
-        }
-      }
-    }
-    for (const folder of store.getFolderWorkspaces?.() ?? []) {
-      for (const link of parseLinks(folder.externalConversations)) {
-        yield { workspace: { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }, link }
-      }
-    }
-  }
-
   function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
     const all: LinkedConversation[] = []
     const index: LinkIndex = {
       byWorkspace: new Map(),
+      workspaceRank: new Map(),
       allOrderExact: true,
       allCache: all,
       byPane: new Map(),
@@ -256,17 +232,27 @@ export function createExternalConversationLinkIndex(
       bySession: new Map()
     }
     // First in scan order wins, as the scans this replaces returned.
-    for (const linked of scanAllLinks(store)) {
-      all.push(linked)
-      const wsKey = workspaceIndexKey(linked.workspace)
-      const inWorkspace = index.byWorkspace.get(wsKey)
-      if (inWorkspace) {
-        inWorkspace.push(linked)
-      } else {
-        index.byWorkspace.set(wsKey, [linked])
+    for (const { workspace, rawLinks } of scanWorkspaces(store)) {
+      const wsKey = workspaceIndexKey(workspace)
+      if (!index.workspaceRank.has(wsKey)) {
+        index.workspaceRank.set(wsKey, index.workspaceRank.size)
+      }
+      if (!Array.isArray(rawLinks) || rawLinks.length === 0) {
+        continue
+      }
+      const entries = parseLinks(rawLinks).map((link) => ({ workspace, link }))
+      if (entries.length === 0) {
+        continue
+      }
+      const existing = index.byWorkspace.get(wsKey)
+      index.byWorkspace.set(wsKey, existing ? [...existing, ...entries] : entries)
+      all.push(...entries)
+      for (const linked of entries) {
+        pushBucketEntry(index.byPane, linked.link.paneKey, linked)
+        pushBucketEntry(index.byConversation, conversationIndexKey(linked.link), linked)
+        pushBucketEntry(index.bySession, linked.link.sessionId, linked)
       }
     }
-    rebuildMapsFromWorkspaces(index)
     return index
   }
 
@@ -289,21 +275,33 @@ export function createExternalConversationLinkIndex(
     *allLinks(store: ExternalConversationLinkStore): Generator<LinkedConversation> {
       if (hasStateWrites(store)) {
         const current = linkIndex(store, true)
-        current.allCache ??= [...current.byWorkspace.values()].flat()
+        current.allCache ??= [...current.byWorkspace.entries()]
+          .sort(
+            ([left], [right]) =>
+              current.workspaceRank.get(left)! - current.workspaceRank.get(right)!
+          )
+          .flatMap(([, entries]) => entries)
         yield* current.allCache
         return
       }
-      yield* scanAllLinks(store)
+      for (const { workspace, rawLinks } of scanWorkspaces(store)) {
+        if (!Array.isArray(rawLinks) || rawLinks.length === 0) {
+          continue
+        }
+        for (const link of parseLinks(rawLinks)) {
+          yield { workspace, link }
+        }
+      }
     },
     findLink: (store: ExternalConversationLinkStore, key: ConversationKey) =>
-      linkIndex(store).byConversation.get(conversationIndexKey(key)) ?? null,
+      linkIndex(store).byConversation.get(conversationIndexKey(key))?.[0] ?? null,
     findLinkForPane: (store: ExternalConversationLinkStore, paneKey: string) =>
-      linkIndex(store).byPane.get(paneKey) ?? null,
+      linkIndex(store).byPane.get(paneKey)?.[0] ?? null,
     findLinksForSession: (
       store: ExternalConversationLinkStore,
       sessionId: string
     ): readonly LinkedConversation[] => linkIndex(store).bySession.get(sessionId) ?? EMPTY_LINKED,
     findLinkForSession: (store: ExternalConversationLinkStore, sessionId: string) =>
-      (linkIndex(store).bySession.get(sessionId) ?? EMPTY_LINKED)[0] ?? null
+      linkIndex(store).bySession.get(sessionId)?.[0] ?? null
   }
 }

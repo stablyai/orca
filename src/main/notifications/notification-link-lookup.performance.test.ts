@@ -1,5 +1,5 @@
 // Perf contract (#45503, STA-16839): structured chat notifications and Slack mirror link writes
-// must not rebuild fleet worktree projections or reparse unrelated saved conversation links.
+// must not rebuild fleet worktree projections, reparse unrelated links, or rebuild unrelated index buckets.
 
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,8 +13,10 @@ import type { NotificationDispatchRequest } from '../../shared/notifications/not
 import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type * as LinkBuckets from '../external-conversations/external-conversation-link-buckets'
 import type * as LinkParser from '../external-conversations/external-conversation-link-parser'
 import {
+  allLinks,
   chatMailPlace,
   findLink,
   removeLink,
@@ -34,6 +36,7 @@ import { createNotificationDeliveryService } from './notification-delivery-servi
 
 const windowFocus = vi.hoisted(() => ({ focused: false }))
 const linkReads = vi.hoisted(() => ({ calls: 0, rows: 0 }))
+const bucketWrites = vi.hoisted(() => ({ calls: 0 }))
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false },
@@ -54,8 +57,19 @@ vi.mock('../external-conversations/external-conversation-link-parser', async (lo
     }
   }
 })
+vi.mock('../external-conversations/external-conversation-link-buckets', async (load) => {
+  const actual = await load<typeof LinkBuckets>()
+  return {
+    ...actual,
+    updateKeyBucket: (...args: Parameters<typeof actual.updateKeyBucket>) => {
+      bucketWrites.calls += 1
+      return actual.updateKeyBucket(...args)
+    }
+  }
+})
 
 const SLACK_SESSION = 'session-slack'
+const SECOND_SLACK_SESSION = 'session-thread-0'
 const LOCAL_SESSION = 'session-local'
 const SLACK_KEY = { source: 'slack', externalId: 'T1:C1:100.1' } as const
 const SLACK_REPLY = 'Pinged <!here> and <@U12345ABC|sam>.'
@@ -160,6 +174,8 @@ function buildFleet(worktreesPerHost: number) {
       agent: 'claude',
       paneKey: `chat:session-thread-${index}`,
       bot: { kind: 'bot', botId: 'bot-1' },
+      mirror: true,
+      mirrorChosen: true,
       mirrorPosts: savedMirrorPosts,
       createdAt: index + 2
     })
@@ -285,14 +301,36 @@ describe('structured chat notification and mirror link lookups', () => {
   it.each([
     [
       50,
-      { coldSkipped: 0, warmHosts: 2, warmFolders: 1, mirrorParseCalls: 35, mirrorParseRows: 735 }
+      {
+        coldSkipped: 0,
+        warmHosts: 2,
+        warmFolders: 1,
+        alternatingParseCalls: 42,
+        alternatingParseRows: 882,
+        alternatingBucketWrites: 36,
+        freshLinkParseCalls: 17,
+        freshLinkParseRows: 296,
+        freshLinkBucketWrites: 15,
+        totalEnumeratedLinks: 122
+      }
     ],
     [
       500,
-      { coldSkipped: 0, warmHosts: 2, warmFolders: 1, mirrorParseCalls: 35, mirrorParseRows: 735 }
+      {
+        coldSkipped: 0,
+        warmHosts: 2,
+        warmFolders: 1,
+        alternatingParseCalls: 42,
+        alternatingParseRows: 882,
+        alternatingBucketWrites: 36,
+        freshLinkParseCalls: 17,
+        freshLinkParseRows: 296,
+        freshLinkBucketWrites: 15,
+        totalEnumeratedLinks: 1022
+      }
     ]
   ])(
-    'gate notification lookups and update single-workspace links without fleet rebuilds (N=%i)',
+    'gate notification lookups and update single-workspace buckets without fleet rebuilds (N=%i)',
     async (worktreesPerHost, expected) => {
       const fleet = buildFleet(worktreesPerHost)
       vi.useFakeTimers()
@@ -335,31 +373,28 @@ describe('structured chat notification and mirror link lookups', () => {
       expect(folderReads.mock.calls.length).toBe(expected.coldSkipped)
 
       // Ten Slack-markup turns interleaved with activity and unread writes build the index once.
-      for (let turn = 1; turn <= 10; turn += 1) {
+      const mailSource = { kind: 'agent', senders: [], orchestration: null } as const
+      for (let pair = 0; pair < 5; pair += 1) {
+        const slackTurn = pair * 2 + 1
+        const localTurn = pair * 2 + 2
         fleet.store.setWorktreeMeta(
           hostWorktreeTarget({
-            id: `repo-local::/fleet/local/wt-${turn % worktreesPerHost}`,
+            id: `repo-local::/fleet/local/wt-${slackTurn % worktreesPerHost}`,
             hostId: 'local'
           }),
-          { lastActivityAt: 100_000 + turn, isUnread: true }
+          { lastActivityAt: 100_000 + slackTurn, isUnread: true }
         )
         fleet.store.updateFolderWorkspace(fleet.folderId, {
-          lastActivityAt: 100_000 + turn,
+          lastActivityAt: 100_000 + slackTurn,
           isUnread: true
         })
-        const sessionId = turn % 2 === 1 ? SLACK_SESSION : LOCAL_SESSION
-        expect(fleet.notifyTurn(sessionId, SLACK_REPLY, turn)).toEqual({ delivered: true })
-        expect(
-          chatMailPlace(fleet.store, sessionId, {
-            kind: 'agent',
-            senders: [],
-            orchestration: null
-          })
-        ).toEqual(
-          sessionId === SLACK_SESSION
-            ? { place: 'the Slack thread in #releases', answersThere: false }
-            : null
-        )
+        expect(fleet.notifyTurn(SLACK_SESSION, SLACK_REPLY, slackTurn)).toEqual({ delivered: true })
+        expect(chatMailPlace(fleet.store, SLACK_SESSION, mailSource)).toEqual({
+          place: 'the Slack thread in #releases',
+          answersThere: false
+        })
+        expect(fleet.notifyTurn(LOCAL_SESSION, SLACK_REPLY, localTurn)).toEqual({ delivered: true })
+        expect(chatMailPlace(fleet.store, LOCAL_SESSION, mailSource)).toBeNull()
       }
 
       expect(hostProjections.mock.calls.length).toBe(expected.warmHosts)
@@ -375,31 +410,78 @@ describe('structured chat notification and mirror link lookups', () => {
         SLACK_REPLY
       ])
 
-      // Five Slack mirror post cycles update only the active workspace with zero fleet projections or unrelated parses.
+      // Six alternating Slack mirror posts across two chats in one bot workspace update only the active chat's buckets.
       const mirror = fleet.createMirror()
       hostProjections.mockClear()
       folderReads.mockClear()
       linkReads.calls = 0
       linkReads.rows = 0
-      for (let post = 1; post <= 5; post += 1) {
+      bucketWrites.calls = 0
+      for (let round = 0; round < 3; round += 1) {
+        for (const [offset, sessionId] of [
+          [1, SLACK_SESSION],
+          [2, SECOND_SLACK_SESSION]
+        ] as const) {
+          const post = round * 2 + offset
+          mirror.admitted({
+            sessionId,
+            workspaceId: fleet.botWorkspace.worktreeId,
+            clientMessageId: `send-${post}`,
+            body: {
+              kind: 'message',
+              role: 'user',
+              blocks: [{ type: 'text', text: `Update ${post}` }]
+            },
+            joinsRunningTurn: false
+          })
+          await vi.advanceTimersByTimeAsync(0)
+        }
+      }
+      expect(fleet.mirrorPostsSent).toHaveLength(6)
+      expect(hostProjections.mock.calls.length).toBe(0)
+      expect(folderReads.mock.calls.length).toBe(0)
+      expect(linkReads.calls).toBe(expected.alternatingParseCalls)
+      expect(linkReads.rows).toBe(expected.alternatingParseRows)
+      expect(bucketWrites.calls).toBe(expected.alternatingBucketWrites)
+
+      // Linking a previously unseen worktree followed by reordered mirror posts still touches zero fleet projections or unrelated links.
+      hostProjections.mockClear()
+      folderReads.mockClear()
+      linkReads.calls = 0
+      linkReads.rows = 0
+      bucketWrites.calls = 0
+      const freshWorktree = { worktreeId: 'repo-local::/fleet/local/wt-fresh', sshHostId: null }
+      writeLink(fleet.store, freshWorktree, {
+        source: 'slack',
+        externalId: 'T1:FRESH:1',
+        sessionId: 'session-fresh',
+        agent: 'claude',
+        paneKey: 'chat:session-fresh',
+        createdAt: 50
+      })
+      for (const [post, sessionId] of [
+        [7, SLACK_SESSION],
+        [8, SECOND_SLACK_SESSION]
+      ] as const) {
         mirror.admitted({
-          sessionId: SLACK_SESSION,
+          sessionId,
           workspaceId: fleet.botWorkspace.worktreeId,
           clientMessageId: `send-${post}`,
           body: {
             kind: 'message',
             role: 'user',
-            blocks: [{ type: 'text', text: `Update ${post}` }]
+            blocks: [{ type: 'text', text: `After fresh ${post}` }]
           },
           joinsRunningTurn: false
         })
         await vi.advanceTimersByTimeAsync(0)
       }
-      expect(fleet.mirrorPostsSent).toHaveLength(5)
+      expect(fleet.mirrorPostsSent).toHaveLength(8)
       expect(hostProjections.mock.calls.length).toBe(0)
       expect(folderReads.mock.calls.length).toBe(0)
-      expect(linkReads.calls).toBe(expected.mirrorParseCalls)
-      expect(linkReads.rows).toBe(expected.mirrorParseRows)
+      expect(linkReads.calls).toBe(expected.freshLinkParseCalls)
+      expect(linkReads.rows).toBe(expected.freshLinkParseRows)
+      expect(bucketWrites.calls).toBe(expected.freshLinkBucketWrites)
 
       // Host ownership, scan-order precedence (worktrees before folders), relink, and removal stay exact without fleet rebuilds.
       expect(findLink(fleet.store, { source: 'slack', externalId: 'T1:SSH:0' })?.workspace).toEqual(
@@ -422,6 +504,7 @@ describe('structured chat notification and mirror link lookups', () => {
       expect(removeLink(fleet.store, SLACK_KEY)?.workspace).toEqual(localWorktree)
       expect(findLink(fleet.store, SLACK_KEY)?.workspace).toEqual(fleet.botWorkspace)
       expect(hostProjections.mock.calls.length).toBe(0)
+      expect([...allLinks(fleet.store)]).toHaveLength(expected.totalEnumeratedLinks)
     }
   )
 })
