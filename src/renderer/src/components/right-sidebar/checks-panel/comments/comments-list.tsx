@@ -25,6 +25,7 @@ import {
 } from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import { useTranslate } from '@/i18n/use-translate'
 import { ResolvedCommentGroupsSection } from './comment-group'
+import { buildCopyAllCommentsText, CopyAllButton } from './comment-controls'
 import {
   getPRCommentsListDisplayModeLabel,
   PR_COMMENT_LIST_DISPLAY_MODES,
@@ -78,6 +79,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     renderAddCommentComposer,
     now
   } = useCommentsListState(props)
+  const copyAllText = buildCopyAllCommentsText(visibleComments)
   return (
     <div className="border-t border-border">
       <div
@@ -205,6 +207,12 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                   </>
                 )}
               </>
+            )}
+            {comments.length > 0 && (
+              <CopyAllButton
+                text={copyAllText}
+                disabled={commentsLoading || visibleComments.length === 0}
+              />
             )}
             {comments.length > 0 && (
               <DropdownMenu>
