@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '../../workspace/activation/worktree-activation'
 import { activateWslMovedWorkspace } from '../../workspace/activation/wsl-moved-chat-activation'
 import { useAppStore } from '@/store/index'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { readBotGroups } from '../../bot-group-catalog-snapshot'
 import { openBotGroupRoom } from '../../bot-group-catalog'
 import { botGroupRoomOfRow } from '../../bot-group-room-history'
@@ -104,7 +106,8 @@ export function openDesktopStructuredSession(
       presentDesktopStructuredSession(
         result,
         source,
-        feedback ?? deps ?? structuredSessionOpenFeedback
+        feedback ?? deps ?? structuredSessionOpenFeedback,
+        host
       )
   })
 }
@@ -112,17 +115,28 @@ export function openDesktopStructuredSession(
 function presentDesktopStructuredSession(
   result: StructuredSessionOpenResult,
   source: StructuredSessionOpenSource,
-  deps: StructuredSessionOpenFeedback
+  deps: StructuredSessionOpenFeedback,
+  host?: RuntimeClientTarget
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
-    const { activeWorktreeId, activeView } = useAppStore.getState()
+    const state = useAppStore.getState()
+    const { activeWorktreeId, activeView } = state
     // Settings or another page may cover the chat's own workspace; its tab is selected but not shown.
     if (
       (activeWorktreeId !== workspace || activeView !== 'terminal') &&
       !activateWslMovedWorkspace(workspace)
     ) {
-      activateAndRevealWorktree(workspace)
+      // A paired host that opened the chat picks its workspace, so a same-id checkout here is never selected.
+      const environmentId = host
+        ? host.kind === 'environment'
+          ? host.environmentId
+          : null
+        : runtimeEnvironmentIdOrLocalUnlessTwin(state, workspace)
+      activateAndRevealWorktree(
+        workspace,
+        environmentId ? { executionHostId: toRuntimeExecutionHostId(environmentId) } : undefined
+      )
     }
   } else if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')

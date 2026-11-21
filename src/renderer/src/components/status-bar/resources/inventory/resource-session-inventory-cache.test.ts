@@ -33,4 +33,28 @@ describe('a session listing a terminal change outdated', () => {
     await vi.waitFor(() => expect(cache.getSnapshot().sessionsError).toBe(true))
     expect(list).toHaveBeenCalledTimes(4)
   })
+
+  it('starts the outdated count over when the panel reopens', async () => {
+    const outdated = new Error('Terminal session owner could not be verified: stale inventory')
+    const list = vi
+      .fn()
+      .mockRejectedValueOnce(outdated)
+      .mockRejectedValueOnce(outdated)
+      .mockRejectedValueOnce(outdated)
+      .mockImplementationOnce(() => new Promise(() => {}))
+    const cache = new ResourceSessionInventoryCache(list, false)
+    cache.setActive(true)
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(4))
+    cache.setActive(false)
+    list.mockReset()
+    list
+      .mockRejectedValueOnce(outdated)
+      .mockRejectedValueOnce(outdated)
+      .mockResolvedValueOnce([{ id: 'shell-a', cwd: '/a', title: 'zsh' }])
+
+    cache.setActive(true)
+    await vi.waitFor(() => expect(cache.getSnapshot().observedAt).not.toBeNull())
+
+    expect(cache.getSnapshot().sessionsError).toBe(false)
+  })
 })
