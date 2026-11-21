@@ -142,14 +142,17 @@ export function buildNewTabAgentMenuRows(args: {
       ...chatAgents.filter((agent) => needsSetup(agent) && args.hostChatAnswer(agent) === 'yes')
     )
   }
+  const chats = orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
+    kind: 'chat' as const,
+    agent,
+    ...(!args.detectedOnHost?.includes(agent) && !chatProgramInstalled(args.chatProgram(agent))
+      ? { setup: true as const }
+      : {})
+  }))
   return [
-    ...orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
-      kind: 'chat' as const,
-      agent,
-      ...(!args.detectedOnHost?.includes(agent) && !chatProgramInstalled(args.chatProgram(agent))
-        ? { setup: true as const }
-        : {})
-    })),
+    // Chats the host runs now lead the ones that install their agent first.
+    ...chats.filter(agentMenuRowReady),
+    ...chats.filter((row) => !agentMenuRowReady(row)),
     ...orderAgentLaunchPickerAgents(defaultAgent, [...unavailable.keys()]).map((agent) => ({
       kind: 'chat-unavailable' as const,
       agent,
