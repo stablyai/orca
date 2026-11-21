@@ -22,7 +22,7 @@ const SAMPLE_EVERY_MS = 5_000
 // Memory falling this much as 190 chats start means a reading was wrong, not that chats are free.
 const MIN_MAIN_MB_PER_CHAT = -0.25
 
-/** Of these chats, how many the host reports idle (first turn finished) with their provider running. */
+/** Of these chats, how many the host reports done with their turn (idle, or unread attention) with their provider running. */
 async function idleLiveChatCount(page, sessionIds) {
   return page.evaluate(
     (ids) =>
@@ -31,26 +31,32 @@ async function idleLiveChatCount(page, sessionIds) {
         const timer = setTimeout(() => reject(new Error('no status snapshot in 30 s')), 30_000)
         let subscription = null
         let settled = false
-        const finish = (count) => {
+        const finish = (rows) => {
           settled = true
           clearTimeout(timer)
           subscription?.unsubscribe()
-          resolve(count)
+          const seen = {}
+          let done = 0
+          for (const row of rows.filter((entry) => wanted.has(entry.sessionId))) {
+            const key = `${String(row.status)}/${row.hostExecutionPhase ?? 'no-child'}`
+            seen[key] = (seen[key] ?? 0) + 1
+            // A finished turn nobody has looked at yet reads as attention, not idle.
+            if (
+              (row.status === 'idle' || row.status === 'attention') &&
+              row.hostExecutionOwned === true &&
+              row.hostExecutionPhase !== 'starting'
+            ) {
+              done += 1
+            }
+          }
+          resolve({ done, seen })
         }
         window.api.runtime
           .subscribe({ method: 'agentSession.subscribeStatus', params: {} }, (response) => {
             if (settled || !response.ok || response.result?.type !== 'snapshot') {
               return
             }
-            finish(
-              response.result.sessions.filter(
-                (row) =>
-                  wanted.has(row.sessionId) &&
-                  row.status === 'idle' &&
-                  row.hostExecutionOwned === true &&
-                  row.hostExecutionPhase !== 'starting'
-              ).length
-            )
+            finish(response.result.sessions)
           })
           .then((handle) => {
             subscription = handle
@@ -165,9 +171,9 @@ export async function chatMemoryOnce({
       const footprint = await sampleMainFootprintMb(copy.app, copy.page)
       const live = liveChatCount(stub.launchLog)
       const idle = await idleLiveChatCount(copy.page, sessionIds)
-      if (live < offset + count || idle < offset + count) {
+      if (live < offset + count || idle.done < offset + count) {
         result.incomplete.push(
-          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle)} idle at the reading`
+          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle.done)} done with their turn at the reading (${JSON.stringify(idle.seen)})`
         )
         return null
       }
