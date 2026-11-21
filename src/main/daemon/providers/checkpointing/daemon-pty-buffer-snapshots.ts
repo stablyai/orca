@@ -16,6 +16,16 @@ import type {
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
+type RepaintReply = { nudged?: boolean } | undefined
+
+/** Daemons before v62 omit the answer; they skipped Windows and nudged everywhere else. */
+export function repaintResultOf(
+  reply: RepaintReply,
+  platform: NodeJS.Platform = process.platform
+): PtyRepaintResult {
+  return (reply?.nudged ?? platform !== 'win32') ? 'nudged' : 'unavailable'
+}
+
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async getBufferSnapshot(
     id: string,
@@ -209,12 +219,9 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     if (this.protocolVersion < REPAINT_REQUEST_PROTOCOL_VERSION) {
       return 'unavailable'
     }
-    const reply = await this.client.request<{ nudged?: boolean }>('requestRepaint', {
-      sessionId: id
-    })
-    // Daemons before v62 omit the answer; they skipped Windows and nudged everywhere else.
-    const nudged = reply?.nudged ?? process.platform !== 'win32'
-    return nudged ? 'nudged' : 'unavailable'
+    return repaintResultOf(
+      await this.client.request<RepaintReply>('requestRepaint', { sessionId: id })
+    )
   }
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {}
