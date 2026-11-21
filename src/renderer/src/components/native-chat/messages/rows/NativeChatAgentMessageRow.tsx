@@ -162,11 +162,14 @@ export function NativeChatAgentMessageRow({
           </span>
         ) : null}
         {!toggles && time ? <span className="sr-only">{`, ${time}`}</span> : null}
-        {toggles ? (
+        {expandable ? (
+          // Kept in place, unseen, on a line that shows whole, so whether the line fits never
+          // depends on whether the chevron was drawn when it was measured.
           <ChevronRight
             aria-hidden
             className={cn(
               'relative pointer-events-none size-3.5 shrink-0 transition-transform dark:opacity-70',
+              !toggles && 'invisible',
               shown && 'rotate-90'
             )}
           />
