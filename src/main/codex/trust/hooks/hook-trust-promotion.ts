@@ -229,55 +229,66 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
     if (!runtimeEntry) {
       continue
     }
-    collectSystemPromotionTargets(
-      promotions,
+    const signature = getCodexHookTrustSignature(runtimeEntry)
+    const targets = listUserHookEntriesWithSignature(
       systemHooksPath,
-      systemConfig.hooks,
+      systemConfig.hooks[eventName],
       eventName,
-      getCodexHookTrustSignature(runtimeEntry),
-      isManagedCommand,
-      state.trustedHash,
-      state.enabled ?? true
+      signature,
+      isManagedCommand
     )
+    const runtimeCopies = listUserHookEntriesWithSignature(
+      canonicalRuntimeHooksPath,
+      runtimeDefinitions,
+      eventName,
+      signature,
+      isManagedCommand
+    )
+    const occurrence = runtimeCopies.findIndex(
+      (copy) => copy.groupIndex === parsed.groupIndex && copy.handlerIndex === parsed.handlerIndex
+    )
+    // Copies pair up in order, so approving one never re-enables a copy disabled in ~/.codex.
+    const paired =
+      runtimeCopies.length === targets.length && occurrence !== -1 ? [targets[occurrence]] : targets
+    for (const target of paired) {
+      promotions.push({ ...target, trustedHash: state.trustedHash, enabled: state.enabled ?? true })
+    }
   }
   if (promotions.length > 0) {
     upsertHookTrustEntries(join(systemHomePath, 'config.toml'), promotions)
   }
 }
 
-// Match by content because runtime positions differ; promote to every identical system hook.
-function collectSystemPromotionTargets(
-  promotions: CodexTrustEntry[],
-  systemHooksPath: string,
-  systemHooks: Record<string, HookDefinition[]>,
+// Match by content because runtime positions differ; identical copies come back in order.
+function listUserHookEntriesWithSignature(
+  hooksPath: string,
+  definitions: HookDefinition[] | undefined,
   eventName: string,
   signature: string,
-  isManagedCommand: (command: string | undefined) => boolean,
-  trustedHash: string,
-  enabled: boolean
-): void {
-  const systemDefinitions = systemHooks[eventName]
-  if (!Array.isArray(systemDefinitions)) {
-    return
+  isManagedCommand: (command: string | undefined) => boolean
+): CodexTrustEntry[] {
+  if (!Array.isArray(definitions)) {
+    return []
   }
-  systemDefinitions.forEach((systemDefinition, groupIndex) => {
-    const hooks = Array.isArray(systemDefinition.hooks) ? systemDefinition.hooks : []
-    hooks.forEach((systemHook, handlerIndex) => {
-      if (isManagedCommand(systemHook.command)) {
+  const entries: CodexTrustEntry[] = []
+  definitions.forEach((definition, groupIndex) => {
+    const hooks = Array.isArray(definition.hooks) ? definition.hooks : []
+    hooks.forEach((hook, handlerIndex) => {
+      if (isManagedCommand(hook.command)) {
         return
       }
-      const systemEntry = createCodexHookTrustEntry(
-        systemHooksPath,
+      const entry = createCodexHookTrustEntry(
+        hooksPath,
         eventName,
         groupIndex,
         handlerIndex,
-        systemDefinition,
-        systemHook
+        definition,
+        hook
       )
-      if (!systemEntry || getCodexHookTrustSignature(systemEntry) !== signature) {
-        return
+      if (entry && getCodexHookTrustSignature(entry) === signature) {
+        entries.push(entry)
       }
-      promotions.push({ ...systemEntry, trustedHash, enabled })
     })
   })
+  return entries
 }
