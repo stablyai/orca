@@ -6,10 +6,12 @@ export function isTerminalActivationSpawnSettled(
   tabId: string
 ): boolean {
   const livePtyIds = state.ptyIdsByTabId[tabId] ?? []
-  if (livePtyIds.length === 0) {
+  const layout = state.terminalLayoutsByTabId[tabId]
+  // A terminal shown as chat keeps its reader position only while mounted, so restored ones stay unparked as before.
+  if (livePtyIds.length === 0 || layout?.chatLeafId) {
     return false
   }
-  return Object.values(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}).every(
+  return Object.values(layout?.ptyIdsByLeafId ?? {}).every(
     (ptyId) => Boolean(ptyId) && livePtyIds.includes(ptyId as string)
   )
 }

@@ -36,6 +36,23 @@ describe('restored terminal tabs and hidden-workspace parking', () => {
     ).toBe(true)
   })
 
+  it('keeps a restored terminal shown as chat mounted so its reader position survives', () => {
+    expect(
+      canPark({
+        ptyIdsByTabId: { 'tab-1': [`${worktreeId}@@a1`] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            chatLeafId: 'leaf-a',
+            ptyIdsByLeafId: { 'leaf-a': `${worktreeId}@@a1` }
+          }
+        }
+      })
+    ).toBe(false)
+  })
+
   it('keeps it mounted while one pane still waits for its first spawn', () => {
     expect(
       canPark({

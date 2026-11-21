@@ -267,8 +267,12 @@ export function markTerminalProviderSessionLive(ptyId: string): void {
   unknownCapabilityRetryAtByPtyId.set(ptyId, 0)
   refreshEarliestUnknownCapabilityRetry()
   const reask = async (): Promise<void> => {
+    // A newer inventory owns synchronization; replaying this one would evict its answers.
+    if (live !== lastSynchronizedLivePtyIds) {
+      return
+    }
     const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(live)
-    if (retryDelayMs !== null && live === lastSynchronizedLivePtyIds) {
+    if (retryDelayMs !== null) {
       setTimeout(() => void reask(), Math.max(1, retryDelayMs))
     }
   }
