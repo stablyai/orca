@@ -8,17 +8,26 @@ export function structuredConversationTabNamer(
   workspaceId: string,
   savedTabs: () => readonly Tab[] | undefined
 ): (sessionId: string) => string | null {
-  // Indexed on first use so one projection reads the saved tabs once, not once per chat.
+  // One lookup scans like a find; a second indexes, so a projection reads the saved tabs once, not once per chat.
+  let saved: readonly Tab[] | undefined | null = null
   let customLabels: ReadonlyMap<string, string | null> | undefined
+  const customLabelFor = (sessionId: string): string | null | undefined => {
+    if (saved === null) {
+      saved = savedTabs()
+      return saved?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)
+        ?.customLabel
+    }
+    customLabels ??= agentSessionTabCustomLabels(saved)
+    return customLabels.get(sessionId)
+  }
   return (sessionId) => {
-    customLabels ??= agentSessionTabCustomLabels(savedTabs())
     const store = getStructuredAgentSessionHost()?.deps?.store
     const record = store?.getConversation(sessionId)
     const conversationName =
       store && record?.location.workspaceId === workspaceId
         ? agentSessionRecordShownName(store, record)
         : null
-    return structuredChatDisplayName(customLabels.get(sessionId), conversationName, '') || null
+    return structuredChatDisplayName(customLabelFor(sessionId), conversationName, '') || null
   }
 }
 

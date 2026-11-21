@@ -76,6 +76,7 @@ describe('chat tab titles on a workspace with many chats', () => {
     expect(served.tabs.find((tab) => tab.id === `agent-session:s${CHATS - 1}`)?.title).toBe(
       'Renamed'
     )
-    expect(savedTabReads).toBe(1000)
+    // The first chat's lookup stops at its own tab; the rest share one index.
+    expect(savedTabReads).toBe(1001)
   })
 })
