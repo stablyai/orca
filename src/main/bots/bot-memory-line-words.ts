@@ -2,7 +2,7 @@
 // alike two lines are, so a model's merge can't add a claim and a moved line can't come back renamed.
 
 const STOPWORDS = new Set(
-  'a an the and or but of to in on at for by with from as is are was were be been being it its this that these those then than so if into over under via per their they them our we you your i he she his her has have had will would can could may might also just there here which who what when where how all any each every one'.split(
+  'a an the and or but of to in on at for by with from as is are was were be been being it its this that these those then than so if into over under via per their they them our we you your i he she his her has have had also just there here which who what when where how all any each every one'.split(
     ' '
   )
 )
@@ -23,7 +23,16 @@ const MEANING_WORDS = new Set([
   'should',
   'instead',
   "won't",
-  'without'
+  'without',
+  'will',
+  'would',
+  'can',
+  'could',
+  'may',
+  'might',
+  "shouldn't",
+  "doesn't",
+  "isn't"
 ])
 
 const MAX_NEW_WORDS = 3
@@ -54,9 +63,15 @@ function names(text: string): string[] {
 
 /**
  * Whether `text` says only what `sources` say: every number, link, path, @name, code span and name
- * in it is in them, every negation or modal is too, and at most a few other words are new.
+ * in it is in them, every negation or modal is too, and at most a few other words are new. Every
+ * negation or modal of `keep` (the words the text restates) stays, so "Do not deploy" can't become
+ * "deploy" nor "may" become "will".
  */
-export function isDerivable(text: string, sources: readonly string[]): boolean {
+export function isDerivable(
+  text: string,
+  sources: readonly string[],
+  keep: readonly string[] = sources
+): boolean {
   const source = sources.join('\n')
   const lower = source.toLowerCase()
   if ((text.match(SPECIAL) ?? []).some((piece) => !lower.includes(piece.toLowerCase()))) {
@@ -71,13 +86,17 @@ export function isDerivable(text: string, sources: readonly string[]): boolean {
   if (words.some((word) => MEANING_WORDS.has(word) && !known.has(word))) {
     return false
   }
+  const said = new Set(words)
+  if (keep.some((line) => lineWords(line).some((w) => MEANING_WORDS.has(w) && !said.has(w)))) {
+    return false
+  }
   const fresh = words.filter(
     (word) => !STOPWORDS.has(word) && !known.has(word) && !stems.has(stem(word))
   )
   return fresh.length <= Math.min(MAX_NEW_WORDS, Math.floor(words.length * MAX_NEW_SHARE))
 }
 
-const keyWords = (text: string): Set<string> =>
+export const keyWords = (text: string): Set<string> =>
   new Set(
     lineWords(text)
       .filter((word) => !STOPWORDS.has(word))
@@ -86,7 +105,11 @@ const keyWords = (text: string): Set<string> =>
 
 /** Jaccard similarity of two lines' key words. */
 export function lineSimilarity(a: string, b: string): number {
-  const [x, y] = [keyWords(a), keyWords(b)]
+  return wordSimilarity(keyWords(a), keyWords(b))
+}
+
+/** Jaccard similarity of two key-word sets, for callers that compare one line with many. */
+export function wordSimilarity(x: ReadonlySet<string>, y: ReadonlySet<string>): number {
   if (x.size === 0 || y.size === 0) {
     return 0
   }

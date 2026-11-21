@@ -7,8 +7,8 @@ import { botMemoryDate, parseBotMemoryFacts } from '../../shared/bot-memory-line
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import type { BotHomeFilesystem } from './bot-home'
 import type { BotMemoryRecord } from './bot-memory-record'
-import { lineCoverage, lineSimilarity, lineWords } from './bot-memory-line-words'
-import { ownerTypedWords, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops'
+import { keyWords, lineCoverage, lineWords, wordSimilarity } from './bot-memory-line-words'
+import { ownerTypedWords, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
 import { ownerChatLines, TIDY_UP_ARCHIVE } from './bot-memory-tidy-up'
 import { tidyUpFileText } from './bot-memory-tidy-up-draft'
 
@@ -35,11 +35,15 @@ export function linesToKeepOut(
     return []
   }
   const words = new Set(moved.map(plain))
-  return added.filter(
-    (line) =>
-      (words.has(plain(line)) || moved.some((old) => lineSimilarity(old, line) >= SAME_LINE)) &&
+  const movedWords = moved.map(keyWords)
+  return added.filter((line) => {
+    const mine = keyWords(line)
+    return (
+      (words.has(plain(line)) ||
+        movedWords.some((old) => wordSimilarity(old, mine) >= SAME_LINE)) &&
       lineCoverage(line, ownerWords) < OWNER_ASKED
-  )
+    )
+  })
 }
 
 type GuardFilesystem = Pick<BotHomeFilesystem, 'readText' | 'replaceText' | 'writeText'> &

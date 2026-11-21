@@ -50,7 +50,7 @@ import {
   tidyNowRefusal,
   tidyUpState
 } from './bot-memory-tidy-up'
-import { TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops'
+import { TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
 import { tidyUpFormat } from './bot-memory-tidy-up-format'
 import type { BotTurnWatch } from './bot-run-turn-watch'
 

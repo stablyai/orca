@@ -55,6 +55,13 @@ export async function applyTidyUpOps(
   const checked = ops
     ? checkTidyUpOps(run.memory, ops, run)
     : { plan: null, skipped: [TIDY_UP_FAILURES.noOps] }
+  const { plan: asked } = checked
+  const nothing =
+    asked !== null && asked.change.added.length === 0 && asked.change.removed.length === 0
+  // Every op skipped: a failure with its first reason, so its chats are read again next time.
+  if (!run.migration && nothing && checked.skipped.length > 0) {
+    return { error: `${TIDY_UP_FAILURES.allSkipped} (${checked.skipped[0]})`, alerted: false }
+  }
   const plan = joinedPlans(run.migration, checked.plan)
   const applied = await applyTidyUpPlan(deps, run, plan)
   return 'error' in applied ? applied : { ...applied, skipped: checked.skipped }

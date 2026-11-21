@@ -51,6 +51,7 @@ export const TIDY_UP_FAILURES = {
   unreadChats: "The last tidy-up couldn't read its chats, so it didn't run.",
   noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
   noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
+  allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
   badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
   tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
   tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',

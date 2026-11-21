@@ -225,9 +225,11 @@ export function tidyUpFileLines(
   today: string
 ): Map<string, string[]> {
   const files = new Map(plan.topics)
+  // A filed line's other copies (another date, another mark) aren't in its topic: archive them.
+  const inTopics = new Set([...plan.topics.values()].flat().map((line) => line.trimEnd()))
   const archived = removed.flatMap(({ line }) => {
     const key = keyOf(line)
-    if (key === null || plan.filed.has(key)) {
+    if (key === null || (plan.filed.has(key) && inTopics.has(line.trimEnd()))) {
       return []
     }
     if (plan.merged?.has(key)) {

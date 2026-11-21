@@ -13,19 +13,23 @@ import {
   BOT_MEMORY_KIND_WORDS,
   BOT_MEMORY_KINDS,
   type BotMemoryKind,
+  botMemoryLineKind,
   hasStandingWords,
   isOwnerKind,
   isProtectedBotMemoryLine
 } from '../../shared/bot-memory-line-kinds'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
-import { isDerivable } from './bot-memory-line-words'
-import { TIDY_UP_ARCHIVE, TIDY_UP_MAX_NEW_FACTS, type TidyUpChat } from './bot-memory-tidy-up'
+import { isDerivable, lineCoverage } from './bot-memory-line-words'
+import { TIDY_UP_ARCHIVE, TIDY_UP_MAX_NEW_FACTS } from './bot-memory-tidy-up'
 import { TIDY_UP_TOPIC_NAME, type TidyUpPlan } from './bot-memory-tidy-up-draft'
 
 /** Share of the snapshot's lines that may leave MEMORY.md by retire, replace or merge in one run. */
 export const TIDY_UP_OPS_MAX_LOSS = 0.25
 const MAX_LINE_CHARS = 240
-const MIN_EVIDENCE_CHARS = 8
+const MIN_EVIDENCE_CHARS = 12
+/** Share of a line's key words its evidence must hold to be about that line. */
+const EVIDENCE_ABOUT = 0.3
+const SCOPE = /^[\w .-]{1,40}$/
 
 export type MemorySnapshotLine = {
   /** `L<n>#<hash>`: its number among the facts and a hash of its text, as the run names it. */
@@ -86,13 +90,15 @@ type Op = z.infer<typeof OpSchema>
 
 /** The reply's one JSON array of ops; null when it has none or it doesn't parse (nothing applies). */
 export function parseTidyUpOps(reply: string): unknown[] | null {
-  const start = reply.indexOf('[')
-  const end = reply.lastIndexOf(']')
+  // A fenced block when there is one, so brackets in prose around it don't count.
+  const body = /```(?:json)?\s*\n([\s\S]*?)```/.exec(reply)?.[1] ?? reply
+  const start = body.indexOf('[')
+  const end = body.lastIndexOf(']')
   if (start === -1 || end < start) {
     return null
   }
   try {
-    const parsed: unknown = JSON.parse(reply.slice(start, end + 1))
+    const parsed: unknown = JSON.parse(body.slice(start, end + 1))
     return Array.isArray(parsed) ? parsed : null
   } catch {
     return null
@@ -129,11 +135,19 @@ export function checkTidyUpOps(
 ): { plan: TidyUpPlan; skipped: string[] } {
   const snapshot = memorySnapshot(memory)
   const byRef = new Map(snapshot.map((line) => [line.ref, line]))
-  const owner = squash(input.ownerWords.join('\n')).toLowerCase()
+  const owner = input.ownerWords.map((words) => squash(words).toLowerCase())
+  // Words from one of the owner's own lines, not a span across two.
   const ownerSaid = (evidence: string | undefined): evidence is string =>
     evidence !== undefined &&
     squash(evidence).length >= MIN_EVIDENCE_CHARS &&
-    owner.includes(squash(evidence).toLowerCase())
+    owner.some((line) => line.includes(squash(evidence).toLowerCase()))
+  // ... and about the lines they change.
+  const ownerSaidOf = (evidence: string | undefined, lines: readonly MemorySnapshotLine[]) =>
+    ownerSaid(evidence) &&
+    lines.some(({ fact }) => lineCoverage(fact.text, evidence) >= EVIDENCE_ABOUT)
+  // Owner rules, and undated lines, which every tidy-up keeps unless the owner says otherwise.
+  const guarded = (line: MemorySnapshotLine): boolean =>
+    line.fact.date === null || isProtectedBotMemoryLine(line.fact.text)
   const used = new Set<string>()
   const removed: MemorySnapshotLine[] = []
   const added: { line: string; at: MemorySnapshotLine | null }[] = []
@@ -149,7 +163,7 @@ export function checkTidyUpOps(
     merges: 0
   }
   const skipped: string[] = []
-  const lossCap = Math.max(2, Math.ceil(snapshot.length * TIDY_UP_OPS_MAX_LOSS))
+  const lossCap = Math.max(1, Math.floor(snapshot.length * TIDY_UP_OPS_MAX_LOSS))
   let lost = 0
   const take = (lines: MemorySnapshotLine[]): void => {
     for (const line of lines) {
@@ -176,8 +190,12 @@ export function checkTidyUpOps(
       if (text.length > MAX_LINE_CHARS || !isDerivable(text, [op.evidence])) {
         return 'says more than its evidence'
       }
+      const scope = op.scope?.trim() || null
+      if (scope !== null && !SCOPE.test(scope)) {
+        return 'names a scope Orca can’t write'
+      }
       const kind = checkedKind(op.kind, op.evidence)
-      const line = kindLine(input.today, kind, op.scope?.trim() || null, text)
+      const line = kindLine(input.today, kind, scope, text)
       if (redactSecretLike(line) !== line) {
         return 'looks like a secret'
       }
@@ -197,16 +215,14 @@ export function checkTidyUpOps(
           return 'names a range MEMORY.md no longer has'
         }
         // Lines an earlier op took or the owner's own lines are left where they are.
-        lines = snapshot
-          .slice(from, to + 1)
-          .filter((line) => !used.has(line.ref) && !isProtectedBotMemoryLine(line.fact.text))
+        lines = snapshot.slice(from, to + 1).filter((line) => !used.has(line.ref) && !guarded(line))
       } else {
         const found = named(op.lines ?? [])
         if (typeof found === 'string') {
           return found
         }
-        if (found.some((line) => isProtectedBotMemoryLine(line.fact.text))) {
-          return "moves your owner's rule out of MEMORY.md"
+        if (found.some(guarded)) {
+          return "moves your owner's rule or an undated line out of MEMORY.md"
         }
         lines = found
       }
@@ -223,8 +239,9 @@ export function checkTidyUpOps(
     if (typeof found === 'string') {
       return found
     }
-    const owners = found.some((line) => isProtectedBotMemoryLine(line.fact.text))
-    if (owners && !ownerSaid(op.evidence)) {
+    // Only the owner's own words about these lines may join what a rewrite draws on.
+    const evidence = ownerSaidOf(op.evidence, found) ? op.evidence : undefined
+    if (found.some(guarded) && evidence === undefined) {
       return "changes your owner's rule without their words"
     }
     // A merge keeps one line of the ones it takes.
@@ -239,12 +256,27 @@ export function checkTidyUpOps(
       return null
     }
     const text = squash(op.text)
-    const sources = [...found.map(({ fact }) => fact.text), ...(op.evidence ? [op.evidence] : [])]
-    if (text === '' || text.length > MAX_LINE_CHARS || !isDerivable(text, sources)) {
+    const lines = found.map(({ fact }) => fact.text)
+    const sources = evidence ? [...lines, evidence] : lines
+    // The owner's words lead a rewrite they asked for; otherwise it restates its lines.
+    const keep = evidence ? [evidence] : lines
+    if (text === '' || text.length > MAX_LINE_CHARS || !isDerivable(text, sources, keep)) {
       return 'says more than the lines it rewrites'
+    }
+    const kind = botMemoryLineKind(text).kind
+    if (kind !== null && !found.some(({ fact }) => botMemoryLineKind(fact.text).kind === kind)) {
+      return 'gives the line a kind its lines don’t have'
     }
     const dates = found.flatMap(({ fact }) => fact.date ?? []).toSorted()
     const line = `- ${(op.op === 'merge' ? dates[0] : input.today) ?? input.today} ${text}`
+    if (redactSecretLike(line) !== line) {
+      return 'looks like a secret'
+    }
+    // A rewrite into a line MEMORY.md already has would take out more than it counts.
+    const taken = new Set(found.map(({ ref }) => ref))
+    if (snapshot.some(({ ref, raw }) => !taken.has(ref) && keyOf(raw) === keyOf(line))) {
+      return 'says what another line already says; merge that line in too'
+    }
     take(found)
     lost += loss
     added.push({ line, at: found[0] })
@@ -284,38 +316,4 @@ function placed(
   const anchor = (at: number): string | null =>
     lines.slice(0, at).findLast((line, index) => line.trim() !== '' && !gone.has(index)) ?? null
   return added.map(({ line, at }) => ({ line, after: anchor(at ? at.fact.line : first) }))
-}
-
-/** A bot's Tidy-up runs on ops only while this file is in its home (the pilot). */
-export const TIDY_UP_OPS_PILOT_FILE = '.orca-memory-pilot'
-/** Lines past this many that aren't facts (headings aside) keep a bot on whole-file Tidy-up: the
- *  snapshot would leave them out of every op and every limit. */
-export const TIDY_UP_OPS_MAX_PROSE_LINES = 5
-
-export function memoryFitsOps(memory: string): boolean {
-  const facts = new Set(parseBotMemoryFacts(memory).map(({ line }) => line))
-  const prose = memory
-    .split(/\r?\n/)
-    .filter((line, index) => line.trim() !== '' && !line.startsWith('#') && !facts.has(index))
-  return prose.length <= TIDY_UP_OPS_MAX_PROSE_LINES
-}
-
-const PASTED = /<pasted_content\b[^>]*>[\s\S]*?<\/pasted_content\b[^>]*>/g
-
-/** The owner's own typed words in the chats: their lines without pasted blocks or quoted lines. */
-export function ownerTypedWords(chats: readonly TidyUpChat[]): string[] {
-  return chats.flatMap(({ lines }) =>
-    lines.flatMap(({ by, text }) => {
-      if (by !== 'owner') {
-        return []
-      }
-      const typed = text
-        .replace(PASTED, '\n')
-        .split('\n')
-        .filter((line) => !line.trimStart().startsWith('>'))
-        .join('\n')
-        .trim()
-      return typed ? [typed] : []
-    })
-  )
 }

@@ -11,7 +11,8 @@ import { BotTidyUpRunner } from './bot-memory-tidy-up-runner'
 import { testRunPower } from './bot-background-run.test-fixture'
 import type { BotTurnEnd } from './bot-run-turn-watch'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { memorySnapshot, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops'
+import { memorySnapshot } from './bot-memory-ops'
+import { TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
 import { readdGuard } from './bot-memory-readd-guard'
 
 const HOME = '/home/me/.orca/bots/scout'
@@ -751,5 +752,39 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
 
     const asked = await rewrite([owner('Put the #4417 merged at a1b2c3d4 follow-up line back')])
     expect(asked?.text).toContain(STATUS)
+  })
+
+  it('keeps nothing out before the record knows the file, or when the archive cannot take it', async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    const record = { history: async () => run.rows() }
+    const keepOut = await readdGuard(run.fs, { botId: 'b1', folder: HOME }, record, [], run.now())
+    run.files.set(MEMORY, OLD)
+    const unknown = await tagBotMemoryFile(run.fs, HOME, '', async () => null, keepOut)
+    expect(unknown?.text).toContain(STATUS)
+
+    run.files.set(MEMORY, OLD)
+    const archive = run.files.get(ARCHIVE) ?? ''
+    const replace = run.fs.replaceText
+    run.fs.replaceText = async (path, expected, text) =>
+      path !== ARCHIVE && replace(path, expected, text)
+    const refused = await tagBotMemoryFile(run.fs, HOME, TIDIED, async () => null, keepOut)
+    expect(refused?.text).toContain(STATUS)
+    expect(run.files.get(ARCHIVE)).toBe(archive)
+  })
+
+  it('fails a run whose every op was skipped, so its chats are read again', async () => {
+    const run = harness({
+      memory: SHOWN,
+      reply: '[{"op":"retire","line":"L9#0000","reason":"stale"}]'
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(SHOWN)
+    expect(run.runs()[0].error).toBe(
+      `${TIDY_UP_FAILURES.allSkipped} (retire 1: names a line MEMORY.md no longer has)`
+    )
+    expect(run.through()).toBeUndefined()
   })
 })

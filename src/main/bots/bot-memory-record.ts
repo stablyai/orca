@@ -238,7 +238,11 @@ export async function tagBotMemoryFile(
     const lost = botMemoryChange(before, current).removed
     const restored = applyBotMemoryChange(current, { added: lost, removed: [] })
     const fresh = botMemoryChange(before, restored).added
-    const out = keepOut && fresh.length > 0 ? await keepOut(fresh.map(({ line }) => line)) : []
+    // Before the record knew the file, every line reads as new: nothing to keep out then.
+    const out =
+      keepOut && before !== '' && fresh.length > 0
+        ? await keepOut(fresh.map(({ line }) => line))
+        : []
     const kept = applyBotMemoryChange(restored, {
       added: [],
       removed: out.map((line) => ({ line, after: null }))
