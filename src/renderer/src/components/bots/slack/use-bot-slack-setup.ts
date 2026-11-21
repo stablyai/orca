@@ -206,8 +206,12 @@ export function useBotSlackSetup(
   )
 
   const start = useCallback(async () => {
+    const mount = mounted.current
     setStep({ kind: 'checking' })
     const view = await refreshBotSlack(bot)
+    if (mount === null || mounted.current !== mount) {
+      return
+    }
     if (view.status !== 'ready') {
       setStep({ kind: 'failed', code: view.status === 'failed' ? view.error : '' })
       return

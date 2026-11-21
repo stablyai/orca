@@ -12,6 +12,9 @@ export function shownSlackSetupStep(
   if (step.kind === 'prepare' && installed) {
     return { kind: 'installed', teamId: step.teamId }
   }
+  if (step.kind === 'prepare' && current?.state === 'uncertain') {
+    return { kind: 'uncertain', teamId: step.teamId }
+  }
   if (step.kind !== 'waiting' && step.kind !== 'ready') {
     return step
   }
