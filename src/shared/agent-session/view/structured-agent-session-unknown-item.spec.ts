@@ -23,11 +23,8 @@ const ITEMS = [
   renderItem(3, { kind: 'plan-card', state: 'running', resolution: { state: 'pending' } })
 ]
 
-it('draws nothing for an item of a kind this build does not know', () => {
+it('ignores an unknown item kind in the transcript, active turn, and session status', () => {
   expect(projectStructuredItemsToNativeChat(ITEMS).map((message) => message.id)).toEqual(['item-1'])
-})
-
-it('takes no turn, prompt or work from it', () => {
   expect(activeStructuredAgentSessionTurnId(ITEMS)).toBeNull()
   expect(projectStructuredAgentSessionStatusSummary(ITEMS)).toMatchObject({
     status: 'idle',

@@ -22,6 +22,8 @@ import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-
 import { NativeChatAutomationRunInstructions } from './NativeChatAutomationRunInstructions'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
 import { ROW_HEADING, ROW_NOTE } from './NativeChatAutomationRowFrame'
+import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
+import type { MergedRunFailure } from '../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 
 const HEADING = ROW_HEADING
 const NOTE = ROW_NOTE
@@ -184,6 +186,14 @@ function RunEvent({
   )
 }
 
+function StartError({ error }: { error: string }): React.JSX.Element {
+  return (
+    <div className="rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-2 py-1 font-mono text-xs text-chat-foreground [overflow-wrap:anywhere] select-text">
+      {error}
+    </div>
+  )
+}
+
 /** The opened run: the recorded error, the saved instructions, the event, and what to do next. */
 export function NativeChatAutomationRunBody({
   messageId,
@@ -192,6 +202,7 @@ export function NativeChatAutomationRunBody({
   instructions,
   facts,
   error,
+  earlierFailures,
   wording,
   findQuery
 }: {
@@ -201,6 +212,8 @@ export function NativeChatAutomationRunBody({
   instructions: string
   facts: string
   error?: string
+  /** Earlier tries of this run that couldn't start, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   wording: AutomationRunWording
   /** The Find bar's query: instructions holding it show whole. */
   findQuery: string
@@ -212,9 +225,7 @@ export function NativeChatAutomationRunBody({
       {error ? (
         <>
           <h4 className={HEADING}>{say('startError')}</h4>
-          <div className="rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-2 py-1 font-mono text-xs text-chat-foreground [overflow-wrap:anywhere] select-text">
-            {error}
-          </div>
+          <StartError error={error} />
         </>
       ) : null}
       {instructions ? (
@@ -230,6 +241,15 @@ export function NativeChatAutomationRunBody({
         </>
       ) : null}
       <RunEvent run={run} facts={facts} wording={wording} />
+      {earlierFailures?.map((failure) => (
+        <div key={failure.id}>
+          <h4 className={cn(HEADING, 'flex items-center gap-1')}>
+            {say('couldNotStart')}
+            <NativeChatMessageTimestamp timestamp={failure.timestamp} />
+          </h4>
+          <StartError error={failure.error} />
+        </div>
+      ))}
       <RunActions
         run={run}
         state={state}

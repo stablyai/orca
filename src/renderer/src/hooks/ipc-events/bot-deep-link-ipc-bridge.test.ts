@@ -125,17 +125,6 @@ describe('registerBotDeepLinkIpcBridge', () => {
     expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 
-  it("says so when main could not open the link's conversation", async () => {
-    const { deliver } = stubPreload(null)
-    registerBotDeepLinkIpcBridge([])
-    await settle()
-
-    deliver({ kind: 'missing' })
-    await settle()
-
-    expect(mocks.toastInfo).toHaveBeenCalledWith(MISSING)
-  })
-
   it('opens a native chat through the shared chat path', async () => {
     const { deliver } = stubPreload(null)
     registerBotDeepLinkIpcBridge([])

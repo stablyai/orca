@@ -23,13 +23,13 @@ vi.mock('lucide-react-native', () => ({
   ArrowUpRight: 'ArrowUpRight',
   CalendarClock: 'CalendarClock',
   Check: 'Check',
-  ChevronDown: 'ChevronDown',
-  ChevronUp: 'ChevronUp',
+  ChevronRight: 'ChevronRight',
   Hourglass: 'Hourglass',
   Play: 'Play',
   Webhook: 'Webhook',
   Zap: 'Zap',
-  Clock: 'Clock'
+  Clock: 'Clock',
+  X: 'X'
 }))
 vi.mock('../../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../../../components/code-presentation/MobileSourceCopyButton', () => ({

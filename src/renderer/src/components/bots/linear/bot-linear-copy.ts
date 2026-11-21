@@ -46,7 +46,7 @@ export function botLinearErrorMessage(code: string, hostName: string | null): st
     case 'linear_unavailable':
       return translate('bots.linear.errors.unavailable', 'Linear did not answer. Try again.')
     case 'signed_out':
-      return translate('bots.linear.errors.signedOut', 'Sign in to Orca to connect Linear.')
+      return translate('bots.linear.errors.signedOut', 'Sign in to Orca Cloud to connect Linear.')
     case 'cloud_unreachable':
       return translate(
         'bots.linear.errors.unreachable',

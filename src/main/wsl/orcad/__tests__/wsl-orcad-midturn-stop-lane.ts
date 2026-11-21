@@ -130,6 +130,8 @@ async function stopMidTurnThenContinue(
   opened: Watch[]
 ) {
   const { distro, environmentId, host } = lane
+  // This lane proves the person's Continue; the restarted host must not continue the cut first.
+  await lane.rpc('settings.update', { nativeChatResumeWorkOnRestart: false })
   const sessionId = randomUUID()
   const providerId = claudeSessionIdForOrcaSession(sessionId)
   const ackPath = `${fixture.root}/midturn-partial-observed`

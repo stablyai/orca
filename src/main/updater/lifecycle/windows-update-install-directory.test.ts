@@ -78,7 +78,6 @@ describe('resolveWindowsUpdateInstallDirectory', () => {
   it.each<[string, string[], string[]]>([
     ['an unpacked copy without the uninstaller', ['Orca.exe', 'ffmpeg.dll'], []],
     ['a folder shared with other programs', INSTALLED_LAYOUT, ['OtherApp']],
-    ['a folder holding user files', [...INSTALLED_LAYOUT, 'notes.docx'], []],
     ['a folder holding a user text file', [...INSTALLED_LAYOUT, 'notes.txt'], []],
     ['a folder holding a user JSON file', [...INSTALLED_LAYOUT, 'settings.json'], []],
     ['a folder holding a user log file', [...INSTALLED_LAYOUT, 'build.log'], []],

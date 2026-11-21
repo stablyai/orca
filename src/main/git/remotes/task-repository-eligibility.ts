@@ -7,7 +7,7 @@ import {
   getGlabPartialHosts
 } from '../../gitlab/projects/gitlab-known-host-probe'
 import { parseGitLabProjectRef } from '../../gitlab/projects/project-ref-parser'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import type { RemoteRefLocalGitOptions } from './remote-ref-probe-cache'
 

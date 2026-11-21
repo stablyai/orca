@@ -1,5 +1,7 @@
+import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { PassThrough } from 'node:stream'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/orca-profiles/constants'
@@ -10,6 +12,16 @@ import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude
 
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import { ClaudeAccountService } from './service'
+
+const spawnProcess = vi.hoisted(() => vi.fn())
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  spawnProcess
+}))
+vi.mock('../codex-cli/command', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveClaudeCommand: () => 'claude'
+}))
 
 // Selection checks must never reach the real Keychain.
 vi.mock('../macos-keychain/generic-password', async (importOriginal) => ({
@@ -35,7 +47,10 @@ function account(id: string, extra: Partial<ClaudeManagedAccount> = {}): ClaudeM
   }
 }
 
-function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]) {
+function fixture(
+  accounts: ClaudeManagedAccount[] = [account('a'), account('b')],
+  options: { spawnClaude?: boolean; settings?: Partial<GlobalSettings> } = {}
+) {
   const root = mkdtempSync(join(tmpdir(), 'claude-accounts-'))
   roots.push(root)
   const home = (id: string) => join(root, id, 'home')
@@ -56,7 +71,8 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     ...getDefaultSettings('/tmp'),
     claudeManagedAccounts: accounts,
     activeClaudeManagedAccountId: 'a',
-    activeClaudeManagedAccountIdsByRuntime: { host: 'a', wsl: {} }
+    activeClaudeManagedAccountIdsByRuntime: { host: 'a', wsl: {} },
+    ...options.settings
   }
   const runtimeAuth = {
     router: {
@@ -95,7 +111,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
       refreshForClaudeAccountChange: vi.fn().mockResolvedValue(undefined)
     },
     runtimeAuth,
-    runLogin
+    options.spawnClaude ? undefined : runLogin
   )
   return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
 }
@@ -263,5 +279,32 @@ describe('ClaudeAccountService', () => {
       JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
     )
     await expect(f.service.selectAccount('b')).resolves.toMatchObject({ activeAccountId: 'b' })
+  })
+
+  it('signs Claude in through the proxy configured in settings', async () => {
+    const f = fixture([], {
+      spawnClaude: true,
+      settings: { httpProxyUrl: 'http://127.0.0.1:7890', httpProxyBypassRules: 'corp.test' }
+    })
+    // Claude's token exchange after the browser callback only reaches Anthropic through the proxy.
+    spawnProcess.mockImplementationOnce(({ env }: { env: NodeJS.ProcessEnv }) => {
+      const child = Object.assign(new EventEmitter(), {
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        stdin: null,
+        kill: vi.fn()
+      })
+      setImmediate(() => {
+        if (env.HTTPS_PROXY === 'http://127.0.0.1:7890' && env.NO_PROXY === 'corp.test') {
+          f.signIn(newId(f), 'proxied@example.test')
+        }
+        child.emit('exit', 0)
+        child.emit('close', 0)
+      })
+      return child
+    })
+    await expect(f.service.addAccount({ runtime: 'host' })).resolves.toMatchObject({
+      accounts: [expect.objectContaining({ email: 'proxied@example.test' })]
+    })
   })
 })

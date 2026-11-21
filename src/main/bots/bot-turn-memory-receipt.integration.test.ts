@@ -100,15 +100,23 @@ it('reports a committed Forget even though Forget already updated the shared rec
   expect(b.notes.map((x) => x.text)).toEqual(['Memory updated · 1 removed'])
 })
 
-it('reports a durable topic-only write, never an unchanged edit attempt', async () => {
+it('reports topic additions and deletions by name while unchanged edits stay quiet', async () => {
   const b = setup()
   await b.start()
   await b.end()
   expect(b.notes).toEqual([])
   await b.start()
-  b.files.set(join(FOLDER, 'memory', 'client.md'), '# Client\nprivate text')
+  const topic = join(FOLDER, 'memory', 'client.md')
+  b.files.set(topic, '# Client\nprivate text')
   await b.end()
-  expect(b.notes.map((x) => x.text)).toEqual(['Memory updated · 1 note changed'])
+  await b.start()
+  b.files.delete(topic)
+  await b.end()
+  expect(b.notes).toMatchObject([
+    { text: 'Memory updated · 1 note changed', botMemoryUpdated: { topics: ['memory/client.md'] } },
+    { text: 'Memory updated · 1 note changed', botMemoryUpdated: { topics: ['memory/client.md'] } }
+  ])
+  expect(JSON.stringify(b.notes)).not.toContain('private text')
 })
 
 it('does not attribute an owner save to this turn', async () => {

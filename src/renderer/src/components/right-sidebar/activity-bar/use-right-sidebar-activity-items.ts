@@ -4,8 +4,8 @@ import {
   Plug,
   Files,
   GitBranch,
+  House,
   ListChecks,
-  ListTodo,
   MessagesSquare,
   Workflow
 } from 'lucide-react'
@@ -83,12 +83,12 @@ export function useRightSidebarActivityItems({
   const groupMembers = useGroupMembers(group)
   const now = useBotNow(bot)
   const { needs } = now
-  // A bot's first tab is Items: its badge counts Orca's asks and items in Needs you. A group's counts
+  // A bot's first tab is Home: its badge counts Orca's asks and items in Needs you. A group's counts
   // its members' as their own tabs do, published by its open panel.
   const botNeedsYou = useBotNeedsYouCount(bot, now)
   const groupNeedsYou = usePublishedBotsNeedsYou(groupMembers)
   const needsYou = isGroupHome ? groupNeedsYou : botNeedsYou
-  const itemsPage = isBot || isGroupHome
+  const showsHomeTab = isBot || isGroupHome
   // The same read as Activity's count, so connector reads aren't repeated for the tab.
   const connectorsNeedingOwner = needs.filter((need) => need.kind === 'connector').length
   const hasChatWorkers = useFocusedChatWorkers(rightSidebarOpen && !isBot).workers.length > 0
@@ -113,7 +113,7 @@ export function useRightSidebarActivityItems({
     [installedPlugins]
   )
 
-  // A bot's page labels every tab (labeledTab): Items, Connectors, Chats, Files.
+  // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
       {
@@ -128,11 +128,11 @@ export function useRightSidebarActivityItems({
       },
       {
         id: 'bot-activity',
-        icon: itemsPage ? ListTodo : Activity,
-        title: itemsPage ? t('bots.items.tab', 'Items') : t('bots.activity.title', 'Activity'),
+        icon: showsHomeTab ? House : Activity,
+        title: showsHomeTab ? t('bots.items.tab', 'Home') : t('bots.activity.title', 'Activity'),
         shortcut: '',
         botOnly: true,
-        labeledTab: itemsPage,
+        labeledTab: showsHomeTab,
         ...(needsYou > 0
           ? {
               count: needsYou,
@@ -224,7 +224,7 @@ export function useRightSidebarActivityItems({
       portsShortcut,
       sourceControlShortcut,
       isBot,
-      itemsPage,
+      showsHomeTab,
       needsYou,
       connectorsNeedingOwner,
       languageRevision,

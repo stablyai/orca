@@ -8,10 +8,15 @@ import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-sess
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 
-const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/
+// Windows entries carry a drive colon, split PATH on ';', and launch the dev CLI through orca-dev.cmd.
+const DEV_CLI_BIN_FIRST =
+  process.platform === 'win32' ? /^[^;]*[\\/]cli[\\/]bin;/ : /^[^:;]*[\\/]cli[\\/]bin:/
 const DEV_CLI_BIN_DIR = /^[^:;]*[\\/]cli[\\/]bin$/
 // Absolute launchers survive login-shell PATH reordering.
-const DEV_CLI_LAUNCHER = /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
+const DEV_CLI_LAUNCHER =
+  process.platform === 'win32'
+    ? /^[^;]*[\\/]cli[\\/]bin[\\/]orca-dev\.cmd$/
+    : /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
 
 async function codexChildEnv(
   env: Record<string, string>,

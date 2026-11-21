@@ -8,7 +8,7 @@ export const AGENT_PROMPT_TEST_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 
 export async function createAgentPromptSubmissionRuntime(
   onWrite: (runtime: OrcaRuntimeService, data: string, writeIndex: number) => void,
-  launchAgent: TuiAgent = 'aider',
+  launch: TuiAgent | { command: string } = 'aider',
   write?: (runtime: OrcaRuntimeService, ptyId: string, data: string) => boolean,
   runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2],
   controller?: Partial<NonNullable<Parameters<OrcaRuntimeService['setPtyController']>[0]>>
@@ -24,12 +24,13 @@ export async function createAgentPromptSubmissionRuntime(
       return write?.(runtime, _ptyId, data) ?? true
     },
     kill: () => true,
-    getForegroundProcess: async () => (write ? launchAgent : null),
+    getForegroundProcess: async () => (write && typeof launch === 'string' ? launch : null),
     ...controller
   })
-  const terminal = await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
-    launchAgent
-  })
+  const terminal = await runtime.createTerminal(
+    `path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`,
+    typeof launch === 'string' ? { launchAgent: launch } : launch
+  )
   // Model a live foreground agent confirmed by its host.
   vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
   return { runtime, handle: terminal.handle, writes }

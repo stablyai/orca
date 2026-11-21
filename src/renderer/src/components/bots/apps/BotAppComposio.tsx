@@ -128,7 +128,7 @@ export function ComposioSection({
       </ul>
       <div className="flex gap-1 px-1 pt-1">
         <Button variant="ghost" size="sm" onClick={onBrowseAll}>
-          {t('bots.apps.composio.browseAll', 'Browse all Composio apps')}
+          {t('bots.apps.composio.browseAll', 'Browse Composio apps')}
           <ArrowRight />
         </Button>
       </div>

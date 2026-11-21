@@ -4,8 +4,13 @@ import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey
 } from './database/journal-legacy-source'
-import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
-import { isUnsettledQueuedMessage } from './queued-messages/queued-message-table'
+import {
+  assertLegacyQueueBounded,
+  hasTable,
+  originalVersion,
+  personEditsDiffer,
+  queueHeld
+} from './journal-legacy-original-version'
 import type Database from '../../sqlite/sync-database'
 
 /** What the store must still do or decide for one original chat before the original can go. */
@@ -58,7 +63,12 @@ export function legacySessionHold(
   const converted = here?.epoch !== null && here?.epoch !== undefined
   // Converting never replaces a chat already converted here, so text an older Orca queued in it
   // since is kept with the original's version.
-  const queueDiffers = converted && hasQueue && !queueHeld(source, store, sessionId)
+  // A converted chat's queue is compared card by card; it is measured in SQL first, so an
+  // outsized one keeps the original before any of its rows is read.
+  const queueDiffers =
+    converted &&
+    hasQueue &&
+    (assertLegacyQueueBounded(source, sessionId), !queueHeld(source, store, sessionId))
   if (!recorded) {
     // The reconcile tracks chats by record (and a journal from before records has none), so history
     // an older Orca added to a converted chat without one is read by no pass: it keeps the original.
@@ -153,124 +163,6 @@ export function readLegacyClaimsPage(
     claims,
     last: tail ? [String(tail.upload_id), String(tail.session_id)] : null
   }
-}
-
-/** Every message still waiting to send in the original is held here by id with the same text. */
-function queueHeld(
-  source: Database.Database,
-  store: Database.Database,
-  sessionId: string
-): boolean {
-  // Each card by its key: one seek per epoch the chat's cards have, then one per (epoch, message),
-  // so the cost follows the waiting messages, not the chat's whole queue history.
-  const firstEpoch = store.prepare(
-    'SELECT epoch FROM journal_queue_cards WHERE session_id=? ORDER BY epoch LIMIT 1'
-  )
-  const nextEpoch = store.prepare(
-    'SELECT epoch FROM journal_queue_cards WHERE session_id=? AND epoch>? ORDER BY epoch LIMIT 1'
-  )
-  const epochs: string[] = []
-  for (
-    let row = firstEpoch.get(sessionId);
-    row;
-    row = nextEpoch.get(sessionId, String(row.epoch))
-  ) {
-    epochs.push(String(row.epoch))
-  }
-  const card = store.prepare(`SELECT payload_json FROM journal_queue_cards
-    WHERE session_id=? AND epoch=? AND message_id=?`)
-  for (const row of source
-    .prepare('SELECT * FROM queued_messages WHERE session_id=?')
-    .iterate(sessionId)) {
-    const queued = readStoredQueuedMessageRow(row)
-    if (!queued) {
-      return false
-    }
-    if (!isUnsettledQueuedMessage(queued)) {
-      continue
-    }
-    // The same text, waiting here or already acted on here; anything else is kept from the original.
-    if (
-      !epochs.some((epoch) => {
-        const held = card.get(sessionId, epoch, queued.messageId)
-        return held !== undefined && sameQueued(held.payload_json, queued)
-      })
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
-/** The same text and send options as the original's waiting message. */
-function sameQueued(payload: unknown, queued: { body: unknown; options?: unknown }): boolean {
-  try {
-    const card: unknown = typeof payload === 'string' ? JSON.parse(payload) : null
-    return (
-      typeof card === 'object' &&
-      card !== null &&
-      'body' in card &&
-      JSON.stringify(card.body) === JSON.stringify(queued.body) &&
-      JSON.stringify('options' in card ? card.options : undefined) ===
-        JSON.stringify(queued.options)
-    )
-  } catch {
-    return false
-  }
-}
-
-const PERSON_EDITS_SQL = `CASE WHEN json_valid(record_json) THEN json_array(
-  CASE WHEN json_extract(record_json,'$.conversationNameSource')='user'
-    THEN json_extract(record_json,'$.conversationName') END,
-  json_extract(record_json,'$.options'),
-  json_extract(record_json,'$.permissionMode')) END`
-
-/** A name the person set, options or permission mode that differ here from the original. */
-function personEditsDiffer(
-  source: Database.Database,
-  store: Database.Database,
-  sessionId: string
-): boolean {
-  const read = (db: Database.Database) =>
-    db
-      .prepare(`SELECT ${PERSON_EDITS_SQL} AS edits FROM agent_session_records WHERE session_id=?`)
-      .get(sessionId)?.edits
-  const original = hasTable(source, 'agent_session_records') ? read(source) : undefined
-  return original !== undefined && original !== null && read(store) !== original
-}
-
-/** The original's record, and the text it still has waiting to send when that differs, verbatim. */
-function originalVersion(
-  source: Database.Database,
-  sessionId: string,
-  withQueue: boolean
-): LegacyOriginal {
-  const row = source
-    .prepare(
-      `SELECT record_json, ${PERSON_EDITS_SQL} AS edits FROM agent_session_records WHERE session_id=?`
-    )
-    .get(sessionId)
-  const queued =
-    withQueue && hasTable(source, 'queued_messages')
-      ? source
-          .prepare(
-            `SELECT * FROM queued_messages WHERE session_id=? AND state IN ('waiting','returned')
-            ORDER BY position, message_id`
-          )
-          .all(sessionId)
-      : []
-  return {
-    value: JSON.stringify({ version: 1, record: row?.record_json ?? null, queued }),
-    identity: JSON.stringify([
-      // A record that isn't valid JSON has no fields to read; its bytes are what a person has.
-      row?.edits ?? row?.record_json ?? null,
-      queued.map((message) => [message.message_id, message.body_json, message.options_json])
-    ])
-  }
-}
-
-function hasTable(db: Database.Database, name: string): boolean {
-  return !!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(name)
 }
 
 function meta(db: Database.Database, key: string): string | undefined {

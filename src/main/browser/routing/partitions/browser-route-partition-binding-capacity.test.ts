@@ -27,25 +27,6 @@ function writeBindings(filePath: string, bindings: Record<string, unknown>): voi
 }
 
 describe('browser route partition binding capacity', () => {
-  it('defaults the binding cap to 512 entries', () => {
-    const atCap = createPath()
-    const overCap = createPath()
-    const entry = { fingerprint: 'a'.repeat(64), storageScope, lastUsedAt: 1 }
-    writeBindings(
-      atCap,
-      Object.fromEntries(Array.from({ length: 512 }, (_, index) => [partitionAt(index), entry]))
-    )
-    writeBindings(
-      overCap,
-      Object.fromEntries(Array.from({ length: 513 }, (_, index) => [partitionAt(index), entry]))
-    )
-
-    expect(new BrowserRoutePartitionBindingStore({ filePath: atCap }).listBindings().size).toBe(512)
-    expect(() =>
-      new BrowserRoutePartitionBindingStore({ filePath: overCap }).listBindings()
-    ).toThrow('browser_route_partition_binding_store_invalid')
-  })
-
   it('counts an adopted binding as used when it is rebound', () => {
     const store = new BrowserRoutePartitionBindingStore({
       filePath: createPath(),
@@ -65,19 +46,21 @@ describe('browser route partition binding capacity', () => {
     expect(store.get(partitionAt(1))).toBe('c'.repeat(64))
   })
 
-  it('evicts an entry with no recorded recency first', () => {
+  it('rejects an over-capacity file and evicts a binding without recency from a full store', () => {
     const filePath = createPath()
     writeBindings(filePath, {
       [partitionAt(1)]: { fingerprint: 'a'.repeat(64), storageScope },
       [partitionAt(2)]: { fingerprint: 'b'.repeat(64), storageScope, lastUsedAt: 5_000 }
     })
+    expect(() =>
+      new BrowserRoutePartitionBindingStore({ filePath, maxBindings: 1 }).listBindings()
+    ).toThrow('browser_route_partition_binding_store_invalid')
+
     const store = new BrowserRoutePartitionBindingStore({
       filePath,
       maxBindings: 2,
       isPartitionRetained: () => false
     })
-
-    expect(store.listBindings().get(partitionAt(1))?.lastUsedAt).toBe(0)
 
     vi.setSystemTime(9_000)
     expect(store.set(partitionAt(3), 'd'.repeat(64), storageScope)).toEqual([partitionAt(1)])

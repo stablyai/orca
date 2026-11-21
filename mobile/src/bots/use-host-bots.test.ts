@@ -52,19 +52,6 @@ describe('readHostBotListing', () => {
     expect(methods).not.toContain('worktree.lineageList')
   })
 
-  it('reads lineage from a host that lists bots', async () => {
-    const { client, methods } = host([BOTS_MOBILE_RUNTIME_CAPABILITY])
-    const target = {
-      hostId: 'local',
-      hostLabel: 'Mac',
-      client,
-      key: 'new\nlocal',
-      relaysCreate: true
-    } as const
-    expect(await readHostBotListing(target, new Map(), false)).toMatchObject({ kind: 'listed' })
-    expect(methods).toContain('worktree.lineageList')
-  })
-
   it('offers a new bot only while bots are on and the route takes bots.create', async () => {
     const capabilities = [BOTS_MOBILE_RUNTIME_CAPABILITY, BOTS_CREATE_RUNTIME_CAPABILITY]
     const on = host(capabilities).client
@@ -107,8 +94,18 @@ describe('useHostBots', () => {
     vi.useFakeTimers()
     const { client } = host([BOTS_MOBILE_RUNTIME_CAPABILITY])
     const send = client.sendRequest
+    const workspaceLineage = {
+      'folder:worker': {
+        childWorkspaceKey: 'folder:worker',
+        parentWorkspaceKey: 'folder:room-home',
+        origin: 'orchestration'
+      }
+    }
     let groupReads = 0
     client.sendRequest = async (method, params) => {
+      if (method === 'worktree.lineageList') {
+        return { id: method, ok: true, result: { lineage: {}, workspaceLineage } }
+      }
       if (method === 'bots.groups.list') {
         groupReads += 1
         if (groupReads === 1) {
@@ -142,7 +139,7 @@ describe('useHostBots', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(seen.current[0]).toMatchObject({ kind: 'listed' })
+    expect(seen.current[0]).toMatchObject({ kind: 'listed', workspaceLineage })
     expect(seen.current[0]).not.toHaveProperty('groups')
     // No reconnect, foreground or workspace change: the retry alone reads the groups.
     await act(async () => {

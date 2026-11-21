@@ -75,6 +75,8 @@ export type ConversationEvent =
       turnFor?: ConnectorTurnFor
       /** The thread's turn state only: its answer goes through the reply outbox. */
       stateOnly?: true
+      /** Paused at a usage limit with a known reset: an automatic continue picks it up then. */
+      resumes?: true
     })
   // Whether orchestration workers the chat started still run, told on each change.
   | (ConversationPane & { kind: 'workers'; running: boolean })
@@ -111,16 +113,13 @@ export type ConversationEventsDeps = {
     promptId: string,
     cursor?: AgentJournalCursor
   ) => StructuredAgentSessionPromptStanding
-  promptCursor?: (
-    link: ExternalConversationLink,
-    promptId: string
-  ) => AgentJournalCursor | undefined
+  promptCursor?: (link: ExternalConversationLink, id: string) => AgentJournalCursor | undefined
   /** Native chats' prompts and turn ends; returns the release. */
   onChatNews: (listener: (news: ChatNews) => void) => () => void
   onWatchDisposed?: () => void
   /** Read once per ended chat turn. */
   chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-  /** Whether a delivery was sent to the chat and its turn hasn't ended. */
+  /** Whether a delivery was sent to the chat (or its running turn claims some) and it hasn't ended. */
   chatTurnDelivered: (sessionId: string) => boolean
   /** The delivery a chat turn that began at `turnAt` answers; taken once. */
   chatTurnDelivery: (sessionId: string, turnAt: number) => string | undefined
@@ -130,7 +129,7 @@ export type ConversationEventsDeps = {
   runningTurnReported: (sessionId: string) => boolean
   /** The pull requests a bot conversation's work opened, read once per ended turn. */
   workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
-  workerActivity: ConversationWorkersDeps['workerActivity']
+  workerActivities: ConversationWorkersDeps['workerActivities']
   /** Whether the cloud routes a bot's prompts by who raised them (prompts.audience). */
   promptsAudience: () => boolean
   /** The ended turn's owner posts to its Slack thread, taken once; null when none posted. */

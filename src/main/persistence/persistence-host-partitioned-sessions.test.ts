@@ -14,6 +14,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
 
 import { worktreeWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -205,6 +206,53 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(tabsOn(toSshExecutionHostId('ssh-a'))).toBeUndefined()
     expect(tabsOn(toSshExecutionHostId('ssh-b'))?.[0]?.id).toBe('twin-tab')
   })
+
+  it.each(['local', 'runtime:env-a'])(
+    'retires one saved resume in the %s partition and keeps it retired after reload',
+    async (hostId) => {
+      const record = (paneKey: string, updatedAt: number): SleepingAgentSessionRecord => ({
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'repo-1::/workspace/repo-1',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: `${paneKey}-session` },
+        prompt: '',
+        state: 'done',
+        capturedAt: 1,
+        updatedAt,
+        origin: 'worktree-sleep',
+        connectionId: null
+      })
+      const store = createStore()
+      store.addRepo(makeRepo({ id: 'repo-1', path: '/workspace/repo-1' }))
+      store.setWorkspaceSession(
+        {
+          ...makeHostSession('repo-1'),
+          sleepingAgentSessionsByPaneKey: {
+            quit: record('quit', 100),
+            newer: record('newer', 300),
+            other: record('other', 100)
+          }
+        },
+        hostId
+      )
+
+      expect(
+        store.retireSleepingAgentSession('quit', (saved) => saved.updatedAt <= 200, hostId)
+      ).toBe(true)
+      expect(
+        store.retireSleepingAgentSession('newer', (saved) => saved.updatedAt <= 200, hostId)
+      ).toBe(false)
+      store.flush()
+      store.freezeWrites()
+      await store.waitForPendingWrite()
+      const reloaded = createStore().getWorkspaceSession(hostId)
+      expect(Object.keys(reloaded.sleepingAgentSessionsByPaneKey ?? {}).sort()).toEqual([
+        'newer',
+        'other'
+      ])
+    }
+  )
 
   // Fencing an unwritten host partition would rebase sibling worktrees onto empty state.
   it('does not fence a delayed session write when its host partition was never persisted', async () => {

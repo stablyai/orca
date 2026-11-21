@@ -54,7 +54,7 @@ function stageLocalStructuredHost(): void {
 }
 
 describe('a cwd that names the workspace root', () => {
-  // "Hand Off to Another Agent" always names a cwd; at the root it must not force a terminal.
+  // "Hand off to agent" always names a cwd; at the root it must not force a terminal.
   beforeEach(stageLocalStructuredHost)
 
   const withRoot = (): AgentLaunchRouteStore =>

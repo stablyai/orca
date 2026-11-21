@@ -89,11 +89,11 @@ function requireMainWindow(entry: BrowserExtensionDiscardedTabEntry): Electron.B
 export async function activateBrowserExtensionDiscardedTab(
   entry: BrowserExtensionDiscardedTabEntry
 ): Promise<void> {
-  await activateBrowserTabInRenderer(requireMainWindow(entry), entry.tab.browserPageId)
+  await activateBrowserTabInRenderer(requireMainWindow(entry).id, entry.tab.browserPageId)
 }
 
 export async function closeBrowserExtensionDiscardedTab(
   entry: BrowserExtensionDiscardedTabEntry
 ): Promise<void> {
-  await closeBrowserTabInRenderer(requireMainWindow(entry), entry.tab.browserPageId, undefined)
+  await closeBrowserTabInRenderer(requireMainWindow(entry).id, entry.tab.browserPageId, undefined)
 }

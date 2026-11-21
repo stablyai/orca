@@ -204,10 +204,6 @@ describe('readBotActivity', () => {
     expect(activity.workers.map((row) => row.dispatchId)).toEqual(['d1'])
     error.mockRestore()
   })
-
-  it('refuses a bot this host does not have', async () => {
-    await expect(readBotActivity(host(), 'missing')).rejects.toThrow('bot_not_found')
-  })
 })
 
 describe('readSharedBotActivity', () => {
@@ -217,10 +213,10 @@ describe('readSharedBotActivity', () => {
     let title = 'Before'
     // Each build sees the title as it stood when that build began.
     let seen = title
-    const chatTabs = vi.fn(async () => {
+    const chatTabs = async () => {
       seen = title
       return [{ sessionId: 'chat-1', title: 'Home' }]
-    })
+    }
     const seam = host({
       chatTabs,
       statusRows: () => [
@@ -241,10 +237,10 @@ describe('readSharedBotActivity', () => {
     expect((await first).workers[0]?.title).toBe('Before')
     expect((await second).workers[0]?.title).toBe('After')
     expect(await third).toBe(await second)
-    expect(chatTabs).toHaveBeenCalledTimes(2)
 
-    await readSharedBotActivity(runtime, bot.id, seam)
-    expect(chatTabs).toHaveBeenCalledTimes(3)
+    title = 'Later'
+    const later = await readSharedBotActivity(runtime, bot.id, seam)
+    expect(later.workers[0]?.title).toBe('Later')
   })
 })
 

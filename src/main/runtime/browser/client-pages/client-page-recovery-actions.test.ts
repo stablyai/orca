@@ -277,72 +277,64 @@ it.each(['reconnect', 'rehydrate'] as const)(
   }
 )
 
-it.each(['pending', 'stopped'] as const)(
-  'passes an ordinary valid long address through the %s action and actual native commit',
-  async (phase) => {
-    const h = createRecoveryLoop(['slow'])
-    const started = h.hold('slow')
-    const url = `https://example.internal/${'x'.repeat(8300)}`
-    const native = h.hold('x'.repeat(8300))
+it('commits and restores a long address requested while initialization is pending', async () => {
+  const h = createRecoveryLoop(['slow'])
+  const started = h.hold('slow')
+  const url = `https://example.internal/${'x'.repeat(8300)}`
+  const native = h.hold('x'.repeat(8300))
+  try {
+    h.attach()
+    await started
+    expect(await action(h, 'navigate', url)).toMatchObject({ ok: true })
+    await native
+    const inventory = h.executor.snapshotPageInventory()
+    expect(inventory[0]).not.toHaveProperty('currentUrl')
+    expect(prepareBrowserClientPageInventoryForAttach(inventory)).toHaveLength(1)
+    const creation = h.commands.findLast((event) => event.command.type === 'createPage')!
+    const navigation = h.commands.findLast((event) => event.command.type === 'navigate')!
+    expect(BrowserClientHostCommandEvent.parse(creation).command).toMatchObject({
+      initialUrl: url
+    })
+    expect(BrowserClientHostCommandEvent.parse(navigation).command).toEqual({
+      type: 'navigate',
+      url
+    })
+    h.release('x'.repeat(8300), url)
+    await vi.waitFor(() =>
+      expect(
+        h.authority.clientPageInitializations.status('slow', h.pages.getPage('slow')!.placement)
+      ).toBeUndefined()
+    )
+    expect(h.pages.getPage('slow')?.url).toBe(url)
+    expect(buildPersistedClientHostedBrowserPages(h.pages.listPages(), 100)[0].url).toBe(url)
+    const loaded = workspaceSessionStateSchema.parse(JSON.parse(JSON.stringify(h.profile.session)))
+    const restored = createRecoveryLoop([])
     try {
-      h.attach()
-      await started
-      if (phase === 'stopped') {
-        expect(await action(h, 'stop')).toMatchObject({ ok: true })
-      }
-      expect(await action(h, 'navigate', url)).toMatchObject({ ok: true })
-      await native
-      const inventory = h.executor.snapshotPageInventory()
-      expect(inventory[0]).not.toHaveProperty('currentUrl')
-      expect(prepareBrowserClientPageInventoryForAttach(inventory)).toHaveLength(1)
-      const creation = h.commands.findLast((event) => event.command.type === 'createPage')!
-      const navigation = h.commands.findLast((event) => event.command.type === 'navigate')!
-      expect(BrowserClientHostCommandEvent.parse(creation).command).toMatchObject({
-        initialUrl: url
+      rehydrateClientHostedBrowserPages(restored.pages, {
+        listWorkspaceSessions: () => [loaded],
+        isKnownWorktree: () => true
       })
-      expect(BrowserClientHostCommandEvent.parse(navigation).command).toEqual({
-        type: 'navigate',
-        url
-      })
-      h.release('x'.repeat(8300), url)
+      expect(restored.pages.getPage('slow')?.url).toBe(url)
+      expect(restored.executor.snapshotPageInventory()).toEqual([])
+      restored.attach()
+      await restored.published('slow')
       await vi.waitFor(() =>
         expect(
-          h.authority.clientPageInitializations.status('slow', h.pages.getPage('slow')!.placement)
+          restored.authority.clientPageInitializations.status(
+            'slow',
+            restored.pages.getPage('slow')!.placement
+          )
         ).toBeUndefined()
       )
-      expect(h.pages.getPage('slow')?.url).toBe(url)
-      expect(buildPersistedClientHostedBrowserPages(h.pages.listPages(), 100)[0].url).toBe(url)
-      const loaded = workspaceSessionStateSchema.parse(
-        JSON.parse(JSON.stringify(h.profile.session))
-      )
-      const restored = createRecoveryLoop([])
-      try {
-        rehydrateClientHostedBrowserPages(restored.pages, {
-          listWorkspaceSessions: () => [loaded],
-          isKnownWorktree: () => true
-        })
-        expect(restored.pages.getPage('slow')?.url).toBe(url)
-        expect(restored.executor.snapshotPageInventory()).toEqual([])
-        restored.attach()
-        await restored.published('slow')
-        await vi.waitFor(() =>
-          expect(
-            restored.authority.clientPageInitializations.status(
-              'slow',
-              restored.pages.getPage('slow')!.placement
-            )
-          ).toBeUndefined()
-        )
-        expect(restored.pages.getPage('slow')?.url).toBe(url)
-        expect(restored.nativeLoop.initializedUrls).toEqual([url])
-      } finally {
-        await restored.close()
-      }
+      expect(restored.pages.getPage('slow')?.url).toBe(url)
+      expect(restored.nativeLoop.initializedUrls).toEqual([url])
     } finally {
-      await h.close()
+      await restored.close()
     }
+  } finally {
+    await h.close()
   }
-)
+})
 
 it('keeps the UI successor through a truthful empty reconnect while the prior native close result is in transit', async () => {
   const h = createRecoveryLoop(['slow'])

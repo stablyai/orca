@@ -41,6 +41,7 @@ vi.mock(
   async (importOriginal) => {
     const original = await importOriginal<{ JournalSqlActivity: new () => JournalSqlActivity }>()
     return {
+      ...original,
       JournalSqlActivity: vi.fn(function () {
         const activity = new original.JournalSqlActivity()
         const wait = activity.waitForIdle

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
+import { agentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import { botSetupSteps } from './bot-setup-steps'
 
 const retry: NativeChatMessage = {
@@ -57,10 +58,51 @@ describe('botSetupSteps', () => {
         turn: [],
         ended: true,
         agentReady: false,
-        refused: 'Claude Code is not signed in.'
+        refused: { reason: 'Claude Code is not signed in.' }
       })
     ).toEqual({
       start: { state: 'failed', detail: 'Claude Code is not signed in.' },
+      reply: { state: 'pending' }
+    })
+    // A host that gave no sentence still shows the agent's own words.
+    expect(
+      botSetupSteps({
+        turn: [],
+        ended: true,
+        agentReady: false,
+        refused: { reason: '', providerDetail: 'Error: CLAUDE_CODE_PLUGIN_DIRS is disabled' }
+      }).start
+    ).toEqual({ state: 'failed', providerDetail: 'Error: CLAUDE_CODE_PLUGIN_DIRS is disabled' })
+  })
+
+  it('keeps the agent’s own words on why it stopped starting, beside the sentence', () => {
+    const stopped: NativeChatMessage = {
+      id: 'stopped',
+      role: 'system',
+      blocks: [
+        {
+          type: 'text',
+          text: 'Claude stopped before it finished starting. Send your message to try again.',
+          tone: 'error',
+          failure: agentSessionFailureFact('providerStartFailed', {
+            detail: {
+              text: '(code 1)\nError: CLAUDE_CODE_PLUGIN_DIRS is disabled',
+              audience: 'log'
+            }
+          })
+        }
+      ],
+      timestamp: 4,
+      source: 'transcript'
+    }
+    expect(
+      botSetupSteps({ turn: [stopped], ended: true, agentReady: false, refused: null })
+    ).toEqual({
+      start: {
+        state: 'failed',
+        detail: 'Claude stopped before it finished starting. Send your message to try again.',
+        providerDetail: '(code 1)\nError: CLAUDE_CODE_PLUGIN_DIRS is disabled'
+      },
       reply: { state: 'pending' }
     })
   })

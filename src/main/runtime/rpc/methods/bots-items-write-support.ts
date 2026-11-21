@@ -8,6 +8,7 @@ import {
   parseBotItemPrRef,
   type BotItem
 } from '../../../../shared/bots/bot-items'
+import type { BotItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
 import { botNotFound } from '../../../bots/bot-request-policy'
 import { BotItemError } from '../../../bots/bot-item-error'
 import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-items-input'
@@ -24,6 +25,8 @@ export type BotItemWriteResult = {
   eventId: string | null
   created?: boolean
   unchanged?: boolean
+  /** A Needs you ask that may be hard to read: why, and one tip for the bot. */
+  advice?: BotItemAskAdvice
 }
 
 /** Stops a write when the caller is not a bot chat, before any store work. The writer is the session

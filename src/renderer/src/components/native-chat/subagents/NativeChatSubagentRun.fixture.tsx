@@ -39,14 +39,22 @@ const block: NativeChatSubagentGroupBlock = {
       model: 'claude-haiku-4-5-20251001',
       lastMessage:
         'Refresh happens in **two** places:\n- `middleware.ts` retries once on 401\n- the client refreshes on a timer 60 s before expiry'
+    },
+    {
+      id: 'a4',
+      label: 'Bump the session cookie lifetime',
+      state: 'failed',
+      startedAt: now - 70_000,
+      settledAt: now - 50_000,
+      lastMessage: 'Could not write `config/session.ts`: the file is read-only in this workspace.'
     }
   ]
 }
 
-function Roster() {
+function Roster({ roster = block }: { roster?: NativeChatSubagentGroupBlock }) {
   return (
-    <div className="native-chat-appearance p-4 pt-36">
-      <NativeChatSubagentRun block={block} onOpenSubagent={() => {}} />
+    <div className="native-chat-appearance p-4">
+      <NativeChatSubagentRun block={roster} onOpenSubagent={() => {}} />
     </div>
   )
 }
@@ -56,13 +64,36 @@ export const enriched = defineFixture({
   render: () => <Roster />
 })
 
-export const hovered = defineFixture({
+async function openToggles(frame: HTMLElement, rounds: number): Promise<void> {
+  // Each round opens what the previous one revealed: the summary first, then each row.
+  for (let round = 0; round < rounds; round++) {
+    for (const toggle of frame.querySelectorAll<HTMLButtonElement>(
+      'button[aria-expanded="false"]'
+    )) {
+      toggle.click()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+}
+
+export const listed = defineFixture({
   width: 560,
   render: () => <Roster />,
-  interact: async (frame) => {
-    frame
-      .querySelector('[data-native-chat-subagent-entry="a1"] > button')
-      ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
+  interact: (frame) => openToggles(frame, 1)
+})
+
+export const opened = defineFixture({
+  width: 560,
+  render: () => <Roster />,
+  interact: (frame) => openToggles(frame, 2)
+})
+
+export const narrow = defineFixture({
+  width: 320,
+  render: () => <Roster />
+})
+
+export const single = defineFixture({
+  width: 560,
+  render: () => <Roster roster={{ ...block, agents: block.agents.slice(0, 1) }} />
 })

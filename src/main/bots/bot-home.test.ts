@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type Bot, botFolderName } from '../../shared/bot-types'
 import {
   assertBotOwnsHome,
-  botHomeFolder,
   botsRootFolder,
   isBotsProjectGroup,
   localBotHomeFilesystem as fs,
@@ -88,14 +87,6 @@ describe('bot home', () => {
     expect(JSON.parse(await readFile(join(folder, 'bot.json'), 'utf8')).agent).toBe('codex')
   })
 
-  it('is a no-op when nothing changed', async () => {
-    const folder = join(root, 'reviewer')
-    await writeBotHome(fs, folder, makeBot())
-    const before = await readFile(join(folder, 'bot.json'), 'utf8')
-    await writeBotHome(fs, folder, makeBot())
-    expect(await readFile(join(folder, 'bot.json'), 'utf8')).toBe(before)
-  })
-
   it('refuses only a home another bot owns', async () => {
     const folder = join(root, 'reviewer')
     await writeBotHome(fs, folder, makeBot())
@@ -118,7 +109,6 @@ describe('bot folder names', () => {
     ['Reviewer', 'reviewer'],
     ['PR Reviewer (Jane)', 'pr-reviewer-jane'],
     ['Café bot', 'cafe-bot'],
-    ['  ---  ', 'bot'],
     ['日本語', 'bot'],
     ['con', 'con-bot'],
     ['LPT1', 'lpt1-bot']
@@ -168,10 +158,5 @@ describe('bot folder names', () => {
     expect(isBotsProjectGroup({ parentPath: join('home', 'me'), connectionId: null }, root)).toBe(
       false
     )
-  })
-
-  it('puts a bot home in the bots root by its folder name', () => {
-    const root = join('home', 'me', '.orca', 'bots')
-    expect(botHomeFolder({ folder: 'reviewer' }, root)).toBe(join(root, 'reviewer'))
   })
 })

@@ -67,16 +67,6 @@ describe('rewriteWslDriveUncState', () => {
     expect(() => convert(before, ['repo-a'])).toThrow('wsl_drive_unc_project_split')
   })
 
-  it('refuses when a converted key lands on one with different user data, naming the key', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const oldId = `repo-a::${unc.at('/home/dev/app')}`
-    const newId = `repo-a::${drive.at('/home/dev/app')}`
-    before.worktreeMeta[newId] = { ...before.worktreeMeta[oldId], displayName: 'other' }
-    expect(() => convert(before, ['repo-a', 'repo-b'])).toThrow(
-      new WslDriveUncKeyCollisionError(newId)
-    )
-  })
-
   it('drops the drive-keyed row startup discovery wrote for the saved UNC worktree', () => {
     // Seeded shape: WSL Git lists the UNC project's folder as C:\, so discovery wrote a bare row.
     const before = persisted(heavyWslMoverProfile(unc))

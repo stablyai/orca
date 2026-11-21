@@ -296,13 +296,18 @@ describe('readBotActingTurn', () => {
   it("carries the waking request's event origin into the turn it woke", () => {
     const origin = { source: 'webhook', event: 'call' }
     const read = readBotActingTurn(
-      [item('woken', mail('msg_request'))],
+      [item('typed', {}), item('woken', mail('msg_other', 'msg_request'))],
       lookups({
         isBotRequest: (id) => id === 'msg_request',
         botRequestActsFor: () => ({ askers: [{ kind: 'owner' }], origin })
       })
     )
-    expect(read).toMatchObject({ askers: [{ kind: 'owner' }], origin })
+    expect(read).toMatchObject({
+      rootItemId: 'woken',
+      actingOnRequestId: 'msg_request',
+      askers: [{ kind: 'owner' }],
+      origin
+    })
   })
 
   it("never lets a message in a teammate's conversation make it the owner's", () => {
@@ -320,14 +325,6 @@ describe('readBotActingTurn', () => {
     )
     expect(turn.rootItemId).toBe('asked')
     expect(turn.askers[0]).toMatchObject({ userId: 'U_NORA' })
-  })
-
-  it('names the bot request a turn was woken by', () => {
-    const turn = readBotActingTurn(
-      [item('typed', {}), item('woken', mail('msg_other', 'msg_request'))],
-      lookups({ isBotRequest: (id) => id === 'msg_request' })
-    )
-    expect(turn).toMatchObject({ rootItemId: 'woken', actingOnRequestId: 'msg_request' })
   })
 
   it("acts for the people Orca recorded on the waking request, beside the conversation's", () => {

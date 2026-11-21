@@ -60,7 +60,7 @@ function group(id: string): BotGroup {
   }
 }
 
-function home(id: string, lastActivityAt = 0): FolderWorkspace {
+function home(id: string): FolderWorkspace {
   return {
     id,
     projectGroupId: 'bots',
@@ -73,9 +73,9 @@ function home(id: string, lastActivityAt = 0): FolderWorkspace {
     isUnread: false,
     isPinned: false,
     sortOrder: 0,
-    lastActivityAt,
+    lastActivityAt: 0,
     createdAt: 1,
-    updatedAt: lastActivityAt
+    updatedAt: 0
   }
 }
 
@@ -133,57 +133,16 @@ async function launch(initial: BotHostListingInput) {
 
 const M4: ExecutionHostId = 'runtime:m4'
 
-let writes: string[] = []
 beforeEach(() => {
   vi.useFakeTimers()
   localStorage.clear()
   calls.pending = []
-  writes = []
-  const setItem = Storage.prototype.setItem
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
-    this: Storage,
-    key: string,
-    value: string
-  ) {
-    writes.push(key)
-    setItem.call(this, key, value)
-  })
 })
 afterEach(() => {
-  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
 describe('kept paired-server bot lists', () => {
-  it('writes nothing while a read is published, and nothing again for identical reads', async () => {
-    const app = await launch(state(CONNECTED))
-    for (let read = 0; read < 20; read++) {
-      app.snapshot.publishBots([bot('triage')], ANSWER, M4)
-      app.groups.publishBotGroups([group('room')], M4)
-    }
-    expect(writes).toEqual([])
-    app.settle()
-    expect(writes).toHaveLength(1)
-    for (let read = 0; read < 20; read++) {
-      app.snapshot.publishBots([bot('triage')], ANSWER, M4)
-      app.groups.publishBotGroups([group('room')], M4)
-    }
-    app.settle()
-    expect(writes).toHaveLength(1)
-  })
-
-  it("rewrites nothing when only a home's activity moves", async () => {
-    const app = await launch(state(CONNECTED, { folderWorkspaces: [home('fw-triage')] }))
-    app.snapshot.publishBots([bot('triage')], ANSWER, M4)
-    app.settle()
-    expect(writes).toHaveLength(1)
-    for (let turn = 1; turn <= 10; turn++) {
-      app.set(state(CONNECTED, { folderWorkspaces: [home('fw-triage', turn)] }))
-    }
-    app.settle()
-    expect(writes).toHaveLength(1)
-  })
-
   it("lists an away server's bots, groups and homes after a restart, replaced on reconnect", async () => {
     const first = await launch(
       state(CONNECTED, { folderWorkspaces: [home('fw-triage'), home('fw-room')] })

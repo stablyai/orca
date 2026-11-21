@@ -25,6 +25,7 @@ vi.mock('@/lib/bot-catalog', () => ({
         })
 }))
 
+import { refreshBotGitHub } from '@/lib/bot-github-state'
 import { BotWhoCanAskList } from '../BotWhoCanAskList'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
 
@@ -74,13 +75,14 @@ function bot(members: BotMember[]): Bot {
   }
 }
 
-const api = { botGitHub: { users: vi.fn() }, botLinear: { members: vi.fn() } }
+const api = { botGitHub: { users: vi.fn(), state: vi.fn() }, botLinear: { members: vi.fn() } }
 
 beforeEach(() => {
   confirm.mockReset().mockResolvedValue(true)
   mocks.members = [slackSam, linearBea, octocat]
   mocks.updateBot.mockReset().mockResolvedValue(bot(mocks.members))
   api.botLinear.members.mockReset()
+  api.botGitHub.state.mockReset().mockResolvedValue({ ok: false, error: 'github_off' })
   api.botGitHub.users.mockReset().mockResolvedValue({
     ok: true,
     value: { members: [{ id: '9919', name: 'hubot' }], complete: true }
@@ -94,18 +96,6 @@ afterEach(() => {
 })
 
 describe('useGitHubWhoCanAsk', () => {
-  it('lists only GitHub people, and says outsiders get a public reply', () => {
-    renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
-
-    expect(screen.getByText('octocat')).toBeDefined()
-    expect(screen.queryByText('Sam on Slack')).toBeNull()
-    expect(screen.queryByText('Bea')).toBeNull()
-    expect(
-      screen.getByText('Everyone else on GitHub gets a public reply to ask you.')
-    ).toBeDefined()
-    expect(screen.getByText('You and octocat can ask Ranger.')).toBeDefined()
-  })
-
   it('finds people by GitHub username and saves them by numeric id', async () => {
     renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
@@ -147,8 +137,38 @@ describe('useGitHubWhoCanAsk', () => {
     renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked={false} />)
 
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
-    expect(
-      screen.getByText('Finish setup to link your GitHub account, then pick people here.')
-    ).toBeDefined()
+  })
+
+  it('finds another linked login as the owner, not as someone to add', async () => {
+    const login = (userId: string, name: string) => ({
+      userId,
+      login: name,
+      installations: [],
+      defaultBotId: null
+    })
+    api.botGitHub.state.mockResolvedValue({
+      ok: true,
+      value: {
+        installUrl: 'https://github.com/apps/orca/installations/new',
+        account: { userId: '42', login: 'dana-acme' },
+        accounts: [login('42', 'dana-acme'), login('77', 'dana')],
+        installations: [],
+        defaultBotId: null
+      }
+    })
+    api.botGitHub.users.mockResolvedValue({
+      ok: true,
+      value: { members: [{ id: '77', name: 'dana' }], complete: true }
+    })
+    await refreshBotGitHub('local')
+    renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.change(await screen.findByPlaceholderText('Search by GitHub username'), {
+      target: { value: 'dana' }
+    })
+    await waitFor(() => expect(api.botGitHub.users).toHaveBeenLastCalledWith({ query: 'dana' }))
+
+    expect(await screen.findByText('Owner')).toBeDefined()
+    expect(screen.queryByRole('checkbox')).toBeNull()
   })
 })

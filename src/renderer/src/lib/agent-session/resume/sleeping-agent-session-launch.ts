@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -48,8 +49,11 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
       runtimeEnvironmentIdUnlessTwin(state, worktreeId),
       connectionId
     ),
-    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, executionHostId),
-    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(state, executionHostId)
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(readRuntimeStatuses(), executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
+      readRuntimeStatuses(),
+      executionHostId
+    )
   })
 }
 

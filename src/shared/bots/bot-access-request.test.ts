@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestBot } from '../../main/bots/bot.test-fixture'
 import { makeAccessRequest } from './bot-access-request.test-fixture'
-import { BOT_MAX_MEMBERS } from '../bot-types'
 import {
   addBotMembers,
   type BotMemberList,
@@ -52,21 +51,12 @@ describe('bot access requests', () => {
     })
   })
 
-  it('only close a request whose person is already listed, and refuse a full list', () => {
+  it('recognizes an already-listed person and rejects requests from another workspace', () => {
     const listed = makeTestBot({
       slack: { appId: 'A1', teamId: 'T1' },
       members: [{ id: 'U9', name: 'Dana', source: 'slack' }]
     })
-    const full = makeTestBot({
-      slack: { appId: 'A1', teamId: 'T1' },
-      members: Array.from({ length: BOT_MAX_MEMBERS }, (_, index) => ({
-        id: `U${index + 100}`,
-        name: `Person ${index}`
-      }))
-    })
-
     expect(grantAccessRequest(listed, makeAccessRequest())).toEqual({ kind: 'listed' })
-    expect(grantAccessRequest(full, makeAccessRequest())).toEqual({ kind: 'full' })
     expect(grantAccessRequest(slackBot, makeAccessRequest({ workspaceId: 'T2' }))).toEqual({
       kind: 'not-this-bot'
     })

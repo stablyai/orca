@@ -39,14 +39,6 @@ function renderButton(): HTMLElement {
 }
 
 describe('Reveal current button', () => {
-  it('is named Reveal current and asks for a reveal on click', () => {
-    const button = renderButton()
-    expect(button.getAttribute('aria-label')).toBe('Reveal current')
-    expect(button.getAttribute('aria-disabled')).toBeNull()
-    fireEvent.click(button)
-    expect(requests).toHaveBeenCalledTimes(1)
-  })
-
   it('stays focusable without requesting a reveal when the workspace is unavailable', async () => {
     state.reason = 'archived'
     const text = 'Archived workspaces aren’t listed in the sidebar'

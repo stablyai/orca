@@ -83,7 +83,7 @@ it('sends on Enter, adds a line on Shift+Enter, and leaves an IME composing Ente
   expect(sent).not.toHaveBeenCalled()
 
   fireEvent.keyDown(box, { key: 'Enter' })
-  expect(sent).toHaveBeenCalledWith('Go with the proposed flow.', [])
+  expect(sent).toHaveBeenCalledWith('Go with the proposed flow.', [], null)
 })
 
 it('types a redirected key into the box at its caret and focuses it', () => {
@@ -142,8 +142,9 @@ it("numbers an image's pill by its thumbnail and posts it as [Image #N], as chat
   )
   fireEvent.keyDown(box, { key: 'Enter' })
 
-  expect(sent).toHaveBeenCalledWith('Before [Image #2] after [Image #1]', [
-    '/store/a.png',
-    '/store/b.png'
-  ])
+  expect(sent).toHaveBeenCalledWith(
+    'Before [Image #2] after [Image #1]',
+    ['/store/a.png', '/store/b.png'],
+    null
+  )
 })

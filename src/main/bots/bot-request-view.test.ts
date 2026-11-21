@@ -89,13 +89,6 @@ describe('botRequestView', () => {
 })
 
 describe('what the sender reads', () => {
-  it('says where the answer comes from', () => {
-    expect(botRequestSentNext(record())).toMatch(/answers in this thread itself/)
-    expect(botRequestSentNext(record({ askers: [nora('direct_message')] }))).toMatch(
-      /comes back to you by mail, and you pass it on/
-    )
-  })
-
   it('never passes on an answer already posted', () => {
     expect(botAnswerView(record(), true).next).toMatch(
       /don't post it again; end your turn with NO_REPLY/
@@ -126,12 +119,36 @@ describe('what the sender reads', () => {
     expect(botAnswerView(mixed, false).next).toMatch(/^Pass this answer on/)
   })
 
-  it('says why a request came back unanswered and what to do', () => {
-    expect(botRequestUnansweredText(record(), 'paused')).toBe(
-      "Docs was paused before it read your handoff, so do it yourself or tell Nora on Slack that Docs couldn't take it."
+  it('never has a group room member repeat an answer the room shows, or redo a handoff', () => {
+    const grouped = record({
+      askers: [{ kind: 'owner' }],
+      conversation: null,
+      group: {
+        id: 'group-1',
+        rootRequestId: 'post-1',
+        rootSequence: 1,
+        sourceSessionId: 'bot-group-member-a',
+        targetSessionId: 'bot-group-member-b'
+      }
+    })
+    const question = { ...grouped, purpose: 'question' as const }
+    for (const next of [botRequestSentNext(grouped), botRequestSentNext(question)]) {
+      expect(next).toMatch(/the room shows its answer on Docs's turn/)
+      expect(next).not.toMatch(/card|pass it on/)
+    }
+    expect(botAnswerView(grouped, false, true).next).toMatch(
+      /^The room already shows this answer on Docs's turn, so don't repeat, quote or summarize it\. Write only what the room doesn't say/
     )
-    expect(botRequestUnansweredText(record(), 'ended')).toMatch(
-      /^Docs ended its turn without answering/
+    expect(botAnswerView(question, false, true).next).toMatch(
+      /^The room already shows this answer on Docs's turn, so don't repeat, quote or summarize it\. Finish the job with it\./
+    )
+    // A room that could not show it leaves the answer to the sender, never to a card.
+    expect(botAnswerView(grouped, false).next).toBe(
+      'Pass this answer on to your owner as your final message.'
+    )
+    expect(botAnswerView(question, false).next).toBe('Finish the job with this answer.')
+    expect(botRequestUnansweredText(grouped, 'ended')).toBe(
+      "Docs read your handoff and ended its turn without a reply; the job is still Docs's, so don't redo it or call it dropped. The room shows Docs's turn."
     )
   })
 })

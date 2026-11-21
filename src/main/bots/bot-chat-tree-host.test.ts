@@ -262,6 +262,7 @@ const matrix: Record<string, Case> = {
         treeChat('chat-alpha', {
           title: 'Chat chat-beta',
           preview: 'Reply from chat-beta',
+          liveSessionId: 'chat-beta',
           turnDone: { paneKey: structuredAgentSessionStatusPaneKey('chat-beta'), at: 42 }
         })
       ]

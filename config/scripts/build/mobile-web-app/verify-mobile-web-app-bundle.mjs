@@ -34,8 +34,10 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
-// 10.25 MiB plus 216 KiB for the bot and group screens (mascots are 131 KB of it; 211 KiB measured
-// 2026-11-18), then 11 MiB so the phone parity round that reuses desktop code fits.
+// 10.75 MiB: dropping duplicate package builds took the page to 10,815,616 bytes (2026-11-19). The fence
+// drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
+// 11 MiB (2026-11-21): the phone parity round's last pages (connectors, automations, memory, sharing) need
+// about 200 KiB more; a size pass follows the round.
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 11 * 1024 * 1024
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
@@ -77,18 +79,18 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
   ['./h/[hostId]/automations.tsx', 13],
   ['./h/[hostId]/edit.tsx', 14],
-  ['./h/[hostId]/files/[worktreeId].tsx', 19],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 24],
-  ['./h/[hostId]/group/[groupId].tsx', 30],
-  ['./h/[hostId]/history/[worktreeId].tsx', 31],
-  ['./h/[hostId]/index.tsx', 39],
-  ['./h/[hostId]/new-workspace.tsx', 42],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 43],
-  ['./h/[hostId]/review/[worktreeId].tsx', 52],
-  ['./h/[hostId]/session/[worktreeId].tsx', 73],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 75],
-  ['./h/[hostId]/tasks.tsx', 80],
-  ['./h/_layout.tsx', 85]
+  ['./h/[hostId]/files/[worktreeId].tsx', 18],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
+  ['./h/[hostId]/group/[groupId].tsx', 29],
+  ['./h/[hostId]/history/[worktreeId].tsx', 30],
+  ['./h/[hostId]/index.tsx', 38],
+  ['./h/[hostId]/new-workspace.tsx', 43],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 44],
+  ['./h/[hostId]/review/[worktreeId].tsx', 54],
+  ['./h/[hostId]/session/[worktreeId].tsx', 77],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 79],
+  ['./h/[hostId]/tasks.tsx', 86],
+  ['./h/_layout.tsx', 90]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

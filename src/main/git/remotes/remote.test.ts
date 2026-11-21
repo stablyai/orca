@@ -8,8 +8,14 @@ vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  realpath: async (path: string) => path
+}))
+import type { GitExecOptions } from '../command-runner/git-exec-options'
 import { clearGitCapabilityStateForTests } from '../command-runner/host-routing/git-capability-state'
-import { gitPush } from './remote'
+import { resolveConflict } from '../source-control/mutations/staging'
+import { gitFastForward, gitPull, gitPush } from './remote'
 
 describe('git remote operations', () => {
   beforeEach(() => {
@@ -45,4 +51,54 @@ describe('git remote operations', () => {
     expect(caught?.message).not.toContain('ghp_secret')
     expect(caught?.message).not.toContain('ghp_tailSecret')
   })
+
+  it.each([
+    ['pull', gitPull],
+    ['fast-forward', gitFastForward]
+  ] as const)(
+    'retains the Windows %s lane after cancellation until its writer ends',
+    async (_name, pull) => {
+      const platform = process.platform
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const started = Promise.withResolvers<void>()
+      const writer = Promise.withResolvers<void>()
+      const captured = Promise.withResolvers<{ stdout: string; stderr: string }>()
+      const controller = new AbortController()
+      gitExecFileAsyncMock.mockImplementation((args: string[], options: GitExecOptions) => {
+        if (args[0] === 'pull') {
+          options.observeChildTermination?.(writer.promise, true)
+          options.signal?.addEventListener('abort', () => captured.reject(new Error('cancelled')), {
+            once: true
+          })
+          started.resolve()
+          return captured.promise
+        }
+        return Promise.resolve({ stdout: '', stderr: '' })
+      })
+      const first = pull('/repo', undefined, { signal: controller.signal })
+      const rejected = expect(first).rejects.toThrow('cancelled')
+      let successor: Promise<unknown> | undefined
+      try {
+        await started.promise
+        controller.abort()
+        await rejected
+        successor = resolveConflict('/repo', 'file.txt', 'keep_file').catch(
+          (error: unknown) => error
+        )
+        await expect(resolveConflict('/other', 'file.txt', 'keep_file')).rejects.toBeInstanceOf(
+          Error
+        )
+        expect(await Promise.race([successor, Promise.resolve('writer still running')])).toBe(
+          'writer still running'
+        )
+        writer.resolve()
+        await expect(successor).resolves.toBeInstanceOf(Error)
+      } finally {
+        writer.resolve()
+        captured.resolve({ stdout: '', stderr: '' })
+        await Promise.allSettled([first, ...(successor ? [successor] : [])])
+        Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+      }
+    }
+  )
 })

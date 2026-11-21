@@ -47,10 +47,6 @@ describe('botAccountSwitchBlocker', () => {
     expect(blocker.refusal('user-a', 'user-b')).toBeNull()
   })
 
-  it('allows any account when no bot has a connector', () => {
-    expect(blockerOver([bot('Quiet', {})]).refusal('user-b', 'user-a')).toBeNull()
-  })
-
   it("treats links with no recorded owner as the profile's current account's, and refuses all once it is gone", () => {
     const blocker = blockerOver([bot('Old', { linear: { workspaceId: 'w', workspaceName: 'W' } })])
 

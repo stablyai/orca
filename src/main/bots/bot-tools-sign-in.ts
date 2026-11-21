@@ -10,7 +10,14 @@ import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty/local
 import { codexToolProblems } from './bot-tools-codex'
 import { redactBotToolText } from './bot-tool-redaction'
 import { readBotToolServers } from './bot-tools-file'
-import { claudeSignInFolder, codexSession, codexThread, type BotToolsCli } from './bot-tools-host'
+import {
+  claudeSignInFolder,
+  codexSession,
+  codexThread,
+  hasBotToolsCli,
+  type BotToolsCli,
+  type BotToolsHome
+} from './bot-tools-host'
 import { cliWithLaunchTools } from './bot-launch-tools'
 import { advanceBotToolsEpoch } from './bot-tools-revision'
 
@@ -62,7 +69,7 @@ export function forgetBotToolSignIns(botId: string, name?: string): void {
 export async function connectBotTool(
   botId: string,
   name: string,
-  resolveCli: () => Promise<BotToolsCli>
+  resolveCli: () => Promise<BotToolsHome>
 ): Promise<{ authorizationUrl: string | null }> {
   // Pending from the start, replacing any earlier try: the CLI can take seconds to name its page,
   // and a client waiting on this must not read an earlier try's outcome, or none, meanwhile.
@@ -97,7 +104,7 @@ export async function connectBotTool(
  * host's callback, which only this host can reach.
  */
 export async function finishBotToolSignIn(
-  cli: BotToolsCli,
+  cli: Pick<BotToolsHome, 'botId'>,
   name: string,
   address: string
 ): Promise<void> {
@@ -127,7 +134,7 @@ export async function finishBotToolSignIn(
 }
 
 async function startLogin(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   name: string
 ): Promise<{ authorizationUrl: string | null; finished: Promise<boolean> }> {
   const servers = await readBotToolServers(cli.folder)
@@ -137,6 +144,11 @@ async function startLogin(
   }
   if ('url' in server && server.credential) {
     throw new Error(`${name} uses its saved values and needs no sign-in.`)
+  }
+  if (!hasBotToolsCli(cli)) {
+    throw new Error(
+      `Orca signs ${name} in only for Claude Code and Codex. Add it with its sign-in values instead.`
+    )
   }
   return cli.agent === 'codex' ? codexLogin(cli, servers, name) : claudeLogin(cli, servers, name)
 }

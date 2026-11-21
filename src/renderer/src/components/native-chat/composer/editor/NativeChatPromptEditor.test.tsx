@@ -93,13 +93,15 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe(edited)
   })
 
-  it('deletes a skill atomically and restores it with undo', async () => {
+  it('steps over a skill pill, deletes it in one press and restores it with undo', async () => {
     const { input, editor, container } = setup('$rev')
     act(() => input.insertSkill!(0, 4, '$review'))
     act(() => {
-      input.setSelectionRange(0, 7)
-      editor.commands.deleteSelection()
+      editor.commands.setTextSelection(2)
     })
+    fireEvent.keyDown(editor.view.dom, { key: 'ArrowLeft' })
+    expect(editor.state.selection.from).toBe(1)
+    fireEvent.keyDown(editor.view.dom, { key: 'Delete' })
     expect(input.value).toBe(' ')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
     await act(async () => {

@@ -106,15 +106,11 @@ afterEach(() => {
 })
 
 describe('HandToBotFlow new bot', () => {
-  it('does not show the picker again once the bot is created', () => {
-    act(() => mocks.newBotDialog!.onOpenChange(false, madeBot))
-    expect(pickerShown()).toBe(false)
-    expect(document.body.querySelector('[data-new-bot-dialog]')).toBeNull()
-  })
-
-  it('brings the picker back with the reason when the new bot cannot take the workspace', async () => {
+  it('keeps the picker closed after creation and reopens it when the handover fails', async () => {
     const { onOpenChange, onCreated } = mocks.newBotDialog!
     act(() => onOpenChange(false, madeBot))
+    expect(pickerShown()).toBe(false)
+    expect(document.body.querySelector('[data-new-bot-dialog]')).toBeNull()
     await act(async () => onCreated!(madeBot))
     expect(pickerShown()).toBe(true)
     expect(document.body.querySelector('[role="alert"]')?.textContent).toContain('Feature bot')

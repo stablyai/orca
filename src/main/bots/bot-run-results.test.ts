@@ -4,7 +4,7 @@ import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
 import { postConnectorBotMessage } from '../connector-cloud/connector-replies'
 import { makeTestBot } from './bot.test-fixture'
-import { BOT_QUIET_MARKER, isQuietBotResult } from '../../shared/bot-quiet-result'
+import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   deliverBotRunResult,
   type BotRunDeliveryDependencies,
@@ -47,8 +47,14 @@ function result(overrides: Partial<BotRunResult> = {}): BotRunResult {
 }
 
 describe('deliverBotRunResult', () => {
-  it("posts the result of a run that left its event's thread alone in that thread, linking nothing", async () => {
-    const delivery = deps()
+  it("posts the result to the event's thread and leaves its delivery notice on the run", async () => {
+    const notice = "Scout won't take this as a request."
+    const delivery = deps({
+      replyInThread: vi.fn<BotRunDeliveryDependencies['replyInThread']>(async () => ({
+        ok: true as const,
+        value: { notices: [notice] }
+      }))
+    })
     const thread = { source: 'slack' as const, externalId: 'trigger:abc' }
 
     const completion = await deliverBotRunResult(
@@ -63,6 +69,7 @@ describe('deliverBotRunResult', () => {
       'Two PRs merged overnight.',
       'owner'
     )
+    expect(delivery.noteToRun).toHaveBeenCalledWith(SESSION, 'result-notices:run-1', notice)
   })
 
   it("leaves a new conversation's result in the bot's Chat as a note, starting no turn", async () => {
@@ -86,17 +93,21 @@ describe('deliverBotRunResult', () => {
     expect(delivery.sendToChat).not.toHaveBeenCalled()
   })
 
-  it("notes a run that couldn't finish, besides telling the owner", async () => {
+  it("leaves a failure note and saves the provider's error on the run", async () => {
     const delivery = deps()
 
-    await deliverBotRunResult(
+    const completion = await deliverBotRunResult(
       delivery,
       result({
         automation: { id: 'auto-2', name: 'Hook echo', dtstart: Number.MAX_SAFE_INTEGER },
-        ended: { outcome: 'failure', message: '' }
+        ended: { outcome: 'failure', message: '', error: 'API Error: 503 Service unavailable' }
       })
     )
 
+    expect(completion).toEqual({
+      status: 'dispatch_failed',
+      error: 'API Error: 503 Service unavailable'
+    })
     expect(delivery.noteToChat).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -200,7 +211,7 @@ describe('deliverBotRunResult', () => {
     expect(delivery.noteToChat).not.toHaveBeenCalled()
   })
 
-  it('says in the run why its channel result can’t wake an Orca bot it mentions', async () => {
+  it('posts the channel result and leaves its delivery notice on the run', async () => {
     const notice = "Scout won't take this as a request."
     const delivery = deps({
       postAsBot: vi.fn<BotRunDeliveryDependencies['postAsBot']>(async () => ({
@@ -208,45 +219,18 @@ describe('deliverBotRunResult', () => {
         value: { notices: [notice] }
       }))
     })
-    await deliverBotRunResult(
-      delivery,
-      result({ target: { runsIn: 'new', resultsTo: { channel: 'C123' } } })
-    )
-    expect(delivery.noteToRun).toHaveBeenCalledWith(SESSION, 'result-notices:run-1', notice)
-  })
-
-  it('says in the run why its thread result can’t wake an Orca bot it mentions', async () => {
-    const notice = "Scout won't take this as a request."
-    const delivery = deps({
-      replyInThread: vi.fn<BotRunDeliveryDependencies['replyInThread']>(async () => ({
-        ok: true as const,
-        value: { notices: [notice] }
-      }))
-    })
-    const thread = { source: 'slack' as const, externalId: 'trigger:abc' }
-    await deliverBotRunResult(
-      delivery,
-      result({ target: { runsIn: 'chat', resultsTo: 'thread', threadPost: thread } })
-    )
-    expect(delivery.noteToRun).toHaveBeenCalledWith(SESSION, 'result-notices:run-1', notice)
-  })
-
-  it('posts to the channel once per run', async () => {
-    const delivery = deps()
-
     const completion = await deliverBotRunResult(
       delivery,
       result({ target: { runsIn: 'new', resultsTo: { channel: 'C123' } } })
     )
-
     expect(completion.error).toBeUndefined()
     expect(delivery.postAsBot).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-1' }), {
       postId: 'run-1',
       channelId: 'C123',
       text: 'Two PRs merged overnight.',
-      // Whom the run acts for, so another Orca bot hears its post as them.
       turnFor: 'owner'
     })
+    expect(delivery.noteToRun).toHaveBeenCalledWith(SESSION, 'result-notices:run-1', notice)
   })
 
   it('says in the run, signed out, that its result was not posted to Slack', async () => {
@@ -258,11 +242,26 @@ describe('deliverBotRunResult', () => {
     )
 
     expect(delivery.postAsBot).not.toHaveBeenCalled()
-    expect(completion.error).toBe('Not posted to Slack: this computer is signed out of Orca.')
+    expect(completion.error).toBe(
+      "Not posted to Slack: this computer isn't signed in to Orca Cloud."
+    )
     expect(delivery.noteToRun).toHaveBeenCalledWith(
       SESSION,
       'result-not-posted:run-1',
-      'Not posted to Slack: this computer is signed out of Orca.'
+      "Not posted to Slack: this computer isn't signed in to Orca Cloud."
+    )
+  })
+
+  it('says on a headless server how its owner signs it in, so the result can post next time', async () => {
+    const delivery = deps({ cloudSignedOut: () => true, signInServer: () => 'box1' })
+
+    const completion = await deliverBotRunResult(
+      delivery,
+      result({ target: { runsIn: 'new', resultsTo: { channel: 'C123' } } })
+    )
+
+    expect(completion.error).toMatch(
+      /^Not posted to Slack\. This Orca server \(box1\) isn't signed in to Orca Cloud\. Run `orca auth login` in a terminal on box1 .+Connectors tab in Orca on your computer\.$/
     )
   })
 
@@ -381,13 +380,6 @@ describe('deliverBotRunResult', () => {
       })
     )
     expect(quiet.notify).not.toHaveBeenCalled()
-  })
-})
-
-describe('isQuietBotResult', () => {
-  it('reads the marker only at the end', () => {
-    expect(isQuietBotResult(`Nothing to report. ${BOT_QUIET_MARKER}`)).toBe(true)
-    expect(isQuietBotResult(`${BOT_QUIET_MARKER} but here is news`)).toBe(false)
   })
 })
 
