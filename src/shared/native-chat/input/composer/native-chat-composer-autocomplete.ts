@@ -84,34 +84,37 @@ export function deriveComposerAutocomplete(
     )
   }
   // Mid-prompt slash tokens use the command menu without dispatch; dollar tokens open the agent’s skills-only menu.
-  const midPrompt = (): ComposerAutocomplete => {
-    const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
-    const query =
-      sigilQuery ??
-      (profile || (sessionSkills?.length ?? 0) > 0
-        ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1]
-        : undefined)
-    if (query === undefined) {
-      return { mode: 'none' }
-    }
-    const isSigil = sigilQuery !== null
-    return deriveSlashAutocomplete(
-      isSigil ? '$' : '/',
-      query,
-      before.length - query.length - 1,
-      isSigil ? [] : agentCommands,
-      profile,
-      discovery,
-      dismissedTriggerKey,
-      sessionSkills,
-      commandAvailable
-    )
-  }
+  const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
+  const midQuery =
+    sigilQuery ??
+    (profile || (sessionSkills?.length ?? 0) > 0
+      ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1]
+      : undefined)
+  const midPrefix = sigilQuery !== null ? '$' : '/'
+  const midPosition = before.length - (midQuery?.length ?? 0) - 1
+  const midPrompt = (): ComposerAutocomplete =>
+    midQuery === undefined
+      ? { mode: 'none' }
+      : deriveSlashAutocomplete(
+          midPrefix,
+          midQuery,
+          midPosition,
+          midPrefix === '$' ? [] : agentCommands,
+          profile,
+          discovery,
+          dismissedTriggerKey,
+          sessionSkills,
+          commandAvailable
+        )
   const mention = matchMentionTrigger(before, mentionNameMatches)
   if (mention) {
     // A new `/` or `$` token after a spaced name opens its own menu when this agent has one;
     // otherwise it stays part of the name (`@costs $` still finds "Costs $ team").
-    if (/\s[/$]\S*$/.test(mention.query)) {
+    if (/\s[/$]\S*$/.test(mention.query) && midQuery !== undefined) {
+      // Escape on that menu closes autocomplete; it doesn't bring the mention list back.
+      if (dismissedTriggerKey === `${midPrefix}:${String(midPosition)}`) {
+        return { mode: 'none' }
+      }
       const menu = midPrompt()
       if (menu.mode !== 'none') {
         return menu

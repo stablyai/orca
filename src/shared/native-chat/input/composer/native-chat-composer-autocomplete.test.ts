@@ -236,6 +236,39 @@ describe('room @ queries with spaces', () => {
     expect(withProfile('ask @eng $', 'codex')).toMatchObject({ mode: 'slash', prefix: '$' })
   })
 
+  it('closes autocomplete when that command menu is dismissed, without reopening the mention', () => {
+    // The spaced name still matches, so without the dismissal the mention list would return.
+    const draft = 'ask @eng /'
+    const open = deriveComposerAutocomplete(
+      draft,
+      draft.length,
+      COMMANDS,
+      [],
+      getNativeChatAgentProfile('claude'),
+      undefined,
+      null,
+      undefined,
+      undefined,
+      names
+    )
+    expect(open).toMatchObject({ mode: 'slash', prefix: '/' })
+    const dismissed = open.mode === 'slash' ? open.triggerKey : ''
+    expect(
+      deriveComposerAutocomplete(
+        draft,
+        draft.length,
+        COMMANDS,
+        [],
+        getNativeChatAgentProfile('claude'),
+        undefined,
+        dismissed,
+        undefined,
+        undefined,
+        names
+      )
+    ).toEqual({ mode: 'none' })
+  })
+
   it('keeps a `/` or `$` word in a name when no menu takes it', () => {
     const costs = [{ name: 'Costs $ team' }]
     const draft = 'ask @costs $'
