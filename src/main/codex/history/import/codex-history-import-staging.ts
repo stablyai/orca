@@ -76,10 +76,11 @@ const OWNER_READ_WRITE = 0o600n
 
 /**
  * Codex appends to the conversation it resumes, but a copy keeps a read-only source's mode: the
- * copy gets owner read/write. A macOS Finder lock the clone kept refuses the chmod until cleared
- * (the link clears it anyway).
+ * copy gets owner read/write. Read from the copy, since the source's mode can change while copying.
+ * A macOS Finder lock the clone kept refuses the chmod until cleared (the link clears it anyway).
  */
-async function makeStagedCopyWritable(staged: string, mode: bigint): Promise<void> {
+async function makeStagedCopyWritable(staged: string): Promise<void> {
+  const { mode } = await stat(staged, { bigint: true })
   if ((mode & OWNER_READ_WRITE) === OWNER_READ_WRITE) {
     return
   }
@@ -99,9 +100,7 @@ function sameSource(before: BigIntStats, after: BigIntStats): boolean {
     before.dev === after.dev &&
     before.ino === after.ino &&
     before.size === after.size &&
-    before.mtimeNs === after.mtimeNs &&
-    // The copy took whatever mode the source had when copied; a changed one may have skipped the chmod.
-    before.mode === after.mode
+    before.mtimeNs === after.mtimeNs
   )
 }
 
@@ -132,7 +131,7 @@ export async function stageImportRollout(
   let kept = false
   try {
     await stageRolloutCopy(source, from, staged)
-    await makeStagedCopyWritable(staged, source.mode)
+    await makeStagedCopyWritable(staged)
     if (!sameSource(source, await readSource())) {
       return 'source-changed'
     }
