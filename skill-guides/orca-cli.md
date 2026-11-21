@@ -35,18 +35,26 @@ Do not use `orca orchestration task-create`, `orca orchestration dispatch --inje
 
 For local work in the caller’s project, omit `--repo` and `--project`. Pass one to target another project or when Orca asks you to disambiguate; do not pick a repo from a list for unambiguous same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
 
-Independent new-worktree handoff:
+For a handoff that continues work from the current workspace, create a child worktree:
+
+```text
+ORCA worktree create --name <task-name> --parent-worktree active --agent codex --prompt "<task brief>" --json
+```
+
+From outside the parent workspace, pass its `address.worktree` from `worktree show` or `worktree ps` to `--parent-worktree`. If the parent is in another environment, also pass its `address.environment` to `--parent-environment`. If the child belongs to another project, pass its `--repo` or `--project`. Verify the saved parent with `worktree show --worktree <child-selector> --json`.
+
+For an independent handoff that should appear at the top level, use `--no-parent`:
 
 ```text
 ORCA worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --json
 ```
 
-Use `--no-parent` and omit `--base-branch` for independent top-level handoffs unless the user explicitly asks for stacked work, "branch from current", or a specific base. Put any current-branch context in the prompt.
+For either handoff, omit `--base-branch` to use the target project's default Git base. Pass a specific base when the user asks for stacked work, "branch from current", or a specific base.
 
 For a requested model or effort, such as `gpt-6-astra high`, add `--model` and `--effort` to the same command:
 
 ```text
-ORCA worktree create --name <task-name> --no-parent --agent codex --model gpt-6-astra --effort high --prompt "<task brief>" --json
+ORCA worktree create --name <task-name> --parent-worktree active --agent codex --model gpt-6-astra --effort high --prompt "<task brief>" --json
 ```
 
 Read what started from `result.launch`: `outcome.kind` is `structured` (a chat) or `terminal`, `outcome.handle` is the agent handle, `receipt.detail` says why, and `prompt.outcome` says whether the brief arrived. An Orca host older than this returns the terminal handle in `result.agentTerminalHandle` and refuses `--model`/`--effort`.
