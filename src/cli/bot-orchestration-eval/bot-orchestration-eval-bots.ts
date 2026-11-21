@@ -103,7 +103,8 @@ export function sendToBot(
     throw new RuntimeClientError(refusal.code, refusal.message)
   }
   if (!target) {
-    return refuse(botNotFound(name ?? '', bots))
+    // As the runtime refuses a send with no paired computer read yet.
+    return refuse(botNotFound(name ?? '', bots, []))
   }
   if (!params.subject) {
     throw new RuntimeClientError('invalid_argument', 'Missing --subject')
