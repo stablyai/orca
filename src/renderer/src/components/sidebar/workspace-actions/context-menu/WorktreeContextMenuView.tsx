@@ -185,8 +185,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
           )}
           {/* From an agent row, Delete would read as deleting that agent; it removes the whole workspace. */}
-          {!openedFromAgentRow && <WorktreeContextMenuDeleteItems model={model} />}
-          <DropdownMenuSeparator />
+          {!openedFromAgentRow && (
+            <>
+              <WorktreeContextMenuDeleteItems model={model} />
+              <DropdownMenuSeparator />
+            </>
+          )}
           {!isMultiContext && (
             <>
               <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>

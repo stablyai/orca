@@ -27,7 +27,9 @@ const DELETE_GROUP_LABELS = [
   'Delete Worktree',
   'Delete with Descendants…',
   'Remove Workspace',
-  'Remove Project from Orca'
+  'Remove Project from Orca',
+  // Shown in place of Delete while one is pending.
+  'Deleting…'
 ]
 
 function seed(mode: 'compact' | 'full', overrides: Partial<Worktree> = {}): Worktree {
@@ -118,6 +120,10 @@ function openMenuOn(target: Element): string[] {
   )
 }
 
+function separatorCount(): number {
+  return screen.getByRole('menu').querySelectorAll('[role="separator"]').length
+}
+
 function closeMenu(): void {
   act(() => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
@@ -161,12 +167,15 @@ describe.each(['compact', 'full'] as const)('a %s agent row in a workspace card'
     expect(deleteItems(openMenuOn(surfaceOf(container)))).toEqual([
       expect.stringMatching(/^Delete/)
     ])
+    const headerSeparators = separatorCount()
     closeMenu()
     const { root, child } = agentRows(container)
     for (const row of [root, child]) {
       const labels = openMenuOn(row)
       expect(labels).toContain('Mute Notifications')
       expect(deleteItems(labels)).toEqual([])
+      // Delete's group goes with its separator.
+      expect(separatorCount()).toBe(headerSeparators - 1)
       closeMenu()
     }
   })
