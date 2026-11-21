@@ -148,7 +148,7 @@ export function createStructuredAgentSessionRestartResume(
     audience: StructuredAgentSessionRestartAudience | undefined,
     continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
     progress: ReturnType<typeof createRestartResumeProgress>,
-    options: RestartContinuationOptions = {}
+    { automatic = false, ...admitted }: RestartContinuationOptions = {}
   ) => {
     // Supersede captured witnesses; the mutation lane drains any publication already in flight.
     witnesses.clear(audience)
@@ -157,7 +157,7 @@ export function createStructuredAgentSessionRestartResume(
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
     const derived = await derive(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
-    const eligible = restartRowsAdmitted(derived.candidates, audience, requested, options)
+    const eligible = restartRowsAdmitted(derived.candidates, audience, requested, admitted)
     progress.skipExcluded(sessionIds ?? [], eligible)
     if (eligible.length === 0) {
       return null
@@ -171,12 +171,8 @@ export function createStructuredAgentSessionRestartResume(
     const reserved =
       (await enqueueRecoveryOperation(
         () =>
-          deps.recoveryCapsule?.beginResume(
-            eligibleIds,
-            operationId,
-            actionAt,
-            options.automatic === true
-          ) ?? Promise.resolve([])
+          deps.recoveryCapsule?.beginResume(eligibleIds, operationId, actionAt, automatic) ??
+          Promise.resolve([])
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
     const candidates = (await derive(reserved, 'may-be-held')).candidates

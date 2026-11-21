@@ -7,6 +7,11 @@ import {
 } from './structured-agent-session-launch-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeCandidate } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
+import type { StructuredAgentSessionRestartResume } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
+
+type ContinueAfterRestartArgs = Parameters<
+  StructuredAgentSessionRestartResume['continueAfterRestart']
+>
 
 const offer = (sessionId: string, recordedAt: number): StructuredAgentSessionResumeCandidate => ({
   sessionId,
@@ -40,7 +45,7 @@ function launch(resumeWorkOnRestart: boolean) {
       calls.push('adopt')
       return 2
     }),
-    continueAfterRestart: vi.fn(async () => {
+    continueAfterRestart: vi.fn(async (..._args: ContinueAfterRestartArgs) => {
       calls.push('continue')
       const continued: StructuredAgentSessionContinuationOutcome[] = [
         { sessionId: 'continued', outcome: 'continued' },
@@ -114,9 +119,8 @@ describe('continuing interrupted chats at launch', () => {
   it('leaves to the person only a finished chat whose cut work nothing awaited and no task waits on', async () => {
     const { result, restartResume } = launch(true)
     await result
-    const options = restartResume.continueAfterRestart.mock.calls[0]?.[3] as {
-      leaveToPerson: (candidate: StructuredAgentSessionResumeCandidate) => boolean
-    }
+    const leaveToPerson = (candidate: StructuredAgentSessionResumeCandidate) =>
+      restartResume.continueAfterRestart.mock.calls[0]?.[3]?.leaveToPerson?.(candidate)
     const finished = (sessionId: string, kinds: ('command' | 'monitor' | 'agent')[]) => ({
       ...offer(sessionId, 4),
       activity: {
@@ -125,14 +129,14 @@ describe('continuing interrupted chats at launch', () => {
         tasks: kinds.map((kind) => ({ kind, label: kind }))
       }
     })
-    expect(options.leaveToPerson(finished('chat', ['command', 'monitor']))).toBe(true)
+    expect(leaveToPerson(finished('chat', ['command', 'monitor']))).toBe(true)
     // A worker's task waits on it, and a cut helper agent's result was awaited.
-    expect(options.leaveToPerson(finished('worker', ['command']))).toBe(false)
-    expect(options.leaveToPerson(finished('chat', ['command', 'agent']))).toBe(false)
+    expect(leaveToPerson(finished('worker', ['command']))).toBe(false)
+    expect(leaveToPerson(finished('chat', ['command', 'agent']))).toBe(false)
     const midTurn = finished('chat', ['command'])
-    expect(
-      options.leaveToPerson({ ...midTurn, activity: { ...midTurn.activity, state: 'working' } })
-    ).toBe(false)
+    expect(leaveToPerson({ ...midTurn, activity: { ...midTurn.activity, state: 'working' } })).toBe(
+      false
+    )
   })
 
   it('does not count as cut a chat whose continuation its provider has not confirmed yet', async () => {
