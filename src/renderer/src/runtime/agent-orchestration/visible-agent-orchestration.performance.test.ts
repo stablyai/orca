@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import {
   representedOrchestrationWorktrees,
   selectVisibleAgentOrchestration,
@@ -14,20 +15,16 @@ import {
 // and hash no session ID that already had a row, at N and at 10N chats.
 
 function chatTab(worktreeId: string, sessionId: string, title = 'chat'): Tab {
-  return {
+  return makeStructuredChatTab({
     id: `slot-${sessionId}`,
     entityId: sessionId,
     groupId: `group-${worktreeId}`,
     worktreeId,
-    contentType: 'agent-session',
     agentSessionAgent: 'claude',
     executionHostId: 'local',
     label: title,
-    customLabel: null,
-    color: null,
-    sortOrder: 0,
     createdAt: 0
-  } as Tab
+  })
 }
 
 function stateWith(unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']): AppState {
@@ -78,7 +75,7 @@ it('keeps rows equal to a full rebuild across adds, moves and closes', () => {
       ['wt-b', [chatTab('wt-b', 'b1'), chatTab('wt-b', 'a1')]]
     ],
     [['wt-b', null]],
-    [['wt-a', [{ ...chatTab('wt-a', 'a2'), executionHostId: 'runtime:env-1' } as Tab]]]
+    [['wt-a', [{ ...chatTab('wt-a', 'a2'), executionHostId: 'runtime:env-1' }]]]
   ]
   for (const step of steps) {
     source = replaceTabBuckets(source, step)
