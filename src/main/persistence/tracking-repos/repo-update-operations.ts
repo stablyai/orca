@@ -12,6 +12,7 @@ import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-c
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/accounts/gh-account-token'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
@@ -127,6 +128,7 @@ export class RepoUpdatePersistenceOperations {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      agentAccounts?: RepoAgentAccounts | null
       browserProfileId?: string | null
     }
   ): Repo | null {
@@ -206,6 +208,10 @@ export class RepoUpdatePersistenceOperations {
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
+    }
+    if ('agentAccounts' in sanitizedUpdates && sanitizedUpdates.agentAccounts == null) {
+      delete repo.agentAccounts
+      delete sanitizedUpdates.agentAccounts
     }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath

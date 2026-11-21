@@ -4,6 +4,7 @@ import { useTerminalPaneChatProjection } from '../chat/use-terminal-pane-chat-pr
 
 import { agentLaunchPaneOutcomeForLeaf } from '../launch-outcome/agent-launch-pane-notice-text'
 import { terminalErrorForPane } from '../errors/terminal-error-accumulation'
+import { readClaudePinnedLaunchErrorCode } from '../../../../../shared/claude/claude-pinned-launch-error'
 
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 
@@ -72,7 +73,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalErrorsByPaneId,
     activePane?.id ?? null
   )
-  const visibleLaunchRefusal = agentLaunchPaneOutcomeForLeaf(terminalTab, activePane?.leafId)
+  // Why: an account refusal's own popup offers the fix; the launch notice would cover it.
+  const visibleLaunchRefusal =
+    visibleTerminalError && readClaudePinnedLaunchErrorCode(visibleTerminalError.error)
+      ? null
+      : agentLaunchPaneOutcomeForLeaf(terminalTab, activePane?.leafId)
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
 

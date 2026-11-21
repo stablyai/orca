@@ -132,6 +132,7 @@ export const SettingsUpdate = z
     /** The host-side switch for bots, so a headless server can turn them on. */
     botsEnabled: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
+    askClaudeAccountPerProject: z.boolean().optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

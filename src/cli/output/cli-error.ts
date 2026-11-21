@@ -14,6 +14,7 @@ import type { RuntimeRpcFailure } from '../../shared/remote-runtime/rpc/runtime-
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
 import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
+import { stripClaudePinnedLaunchMarker } from '../../shared/claude/claude-pinned-launch-error'
 import { linearNotConnectedRecovery } from '../linear/linear-not-connected-recovery'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
@@ -69,7 +70,7 @@ export function cliErrorCode(error: unknown): string | undefined {
 
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = readableWslDistroCliRefusal(
-    error instanceof Error ? error.message : String(error)
+    stripClaudePinnedLaunchMarker(error instanceof Error ? error.message : String(error))
   )
   const selector = contextRecovery(error, context)
   const workspaceChoices =
@@ -124,11 +125,9 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
 }
 
 function hasOrchestrationRequestId(data: unknown): boolean {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    typeof (data as { orchestrationRequestId?: unknown }).orchestrationRequestId === 'string'
-  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: optional chaining reads only an optional field, so any data shape is safe.
+  const requestId = (data as { orchestrationRequestId?: unknown } | null)?.orchestrationRequestId
+  return typeof requestId === 'string'
 }
 
 function formatRuntimeUnavailableError(message: string, error: RuntimeClientError): string {
@@ -150,7 +149,7 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
   const selector = contextRecovery(error, context)
   const concise = context.conciseOrchestration
   if (json) {
-    const response = cliErrorJsonResponse(error, context, selector)
+    const response = stripClaudePinnedLaunchMarker(cliErrorJsonResponse(error, context, selector))
     console.log(
       concise
         ? JSON.stringify({ ok: false, error: response.error })

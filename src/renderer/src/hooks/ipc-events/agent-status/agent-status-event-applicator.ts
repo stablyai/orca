@@ -28,7 +28,8 @@ import {
 } from './agent-status-pane-routing-index'
 import {
   normalizeAgentStatusEvent,
-  normalizeAgentStatusMetadata
+  normalizeAgentStatusMetadata,
+  normalizeMainClaudeAccountId
 } from './normalize-agent-status-event'
 import {
   applyProgramStatusOnlyUpdate,
@@ -202,19 +203,13 @@ export function createAgentStatusEventApplicator(
     const statusPayload = data.orchestration
       ? { ...resolvedPayload, orchestration: data.orchestration }
       : resolvedPayload
-    const statusPayloadWithTurnBoundary = data.promptInteractionKey
-      ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
-      : statusPayload
-    const statusPayloadWithProvenance =
-      data.restoredUnconfirmed === true
-        ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
-        : statusPayloadWithTurnBoundary
-    const statusPayloadWithObservation = data.observation
-      ? { ...statusPayloadWithProvenance, observation: data.observation }
-      : statusPayloadWithProvenance
-    // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
     const statusPayloadWithProgramStatus = {
-      ...statusPayloadWithObservation,
+      ...statusPayload,
+      ...(data.promptInteractionKey ? { promptInteractionKey: data.promptInteractionKey } : {}),
+      ...(data.restoredUnconfirmed === true ? { restoredUnconfirmed: true } : {}),
+      ...(data.observation ? { observation: data.observation } : {}),
+      claudeAccountId: normalizeMainClaudeAccountId(data),
+      // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
       programStatus,
       ...(data.paneSleep ? { paneSleep: data.paneSleep } : {})
     }

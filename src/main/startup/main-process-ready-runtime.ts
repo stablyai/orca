@@ -1,4 +1,5 @@
 import { app, nativeTheme, shell } from 'electron'
+import { seedClaudePinnedPtyRegistry } from '../claude-accounts/claude-pty-account-registries-startup'
 import { performance } from 'node:perf_hooks'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
@@ -116,6 +117,8 @@ function desktopCoreNative(store: Store): DesktopCoreNative {
 }
 
 export async function initializeReadyRuntimeServices(): Promise<void> {
+  // Why first: daemon reconciliation and pane labels read the restored `--account` pins.
+  await seedClaudePinnedPtyRegistry(app.getPath('userData'))
   const store = state.store
   if (!store) {
     throw new Error('Store must be initialized before ready services')

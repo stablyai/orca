@@ -36,7 +36,7 @@ import { chatAssigneeOf, chatWorkerMode } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
-import { prepareLocalWorkerStart } from './launch/worker-start-validation'
+import { assertLocalWorktree, prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../../orchestration/workers/launch/worker-start-card'
@@ -98,7 +98,7 @@ export async function startLocalWorker(args: {
     )
   }
 
-  const { agent, launch } = prepareLocalWorkerStart({
+  const { agent, launch, claudeAccount } = prepareLocalWorkerStart({
     params: launchParams,
     createsWorktree,
     runtime,
@@ -117,16 +117,15 @@ export async function startLocalWorker(args: {
   }
   let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
     creationTarget ? undefined : await runtime.showManagedTerminalWorkspace(existingWorktree)
-  if (terminal) {
-    await assertExplicitWorkerUsable({
-      runtime,
-      db,
-      terminal,
-      from: params.from,
-      coordinator,
-      resolvedWorktreeId: resolvedWorktree?.id
-    })
-  }
+  await assertExplicitWorkerUsable({
+    runtime,
+    db,
+    terminal: terminal || null,
+    from: params.from,
+    coordinator,
+    resolvedWorktreeId: resolvedWorktree?.id
+  })
+  await assertLocalWorktree(runtime, claudeAccount && resolvedWorktree?.id)
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
@@ -174,6 +173,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launch,
+      ...(claudeAccount ? { claudeAccountId: claudeAccount.accountId } : {}),
       effects,
       onStage,
       followUp: args.followUp

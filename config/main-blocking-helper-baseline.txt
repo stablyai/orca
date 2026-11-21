@@ -1271,6 +1271,7 @@
 1 src/main/runtime/rpc/server/serve-network-source-policy.ts
 1 src/main/runtime/rpc/transports/websocket/static-web-client-handler.ts
 1 src/main/runtime/rpc/transports/websocket/ws-transport.ts
+1 src/main/runtime/runtime-worktree-startup-claude-account.ts # resolves the same PTY options the startup spawn then uses (spawn-startup-target); sync OpenSSH DefaultShell lookup + existsSync only on Windows SSH-managed hosts
 2 src/main/runtime/session-construction/agent-session/get-agent-session-execution-namespace.ts
 3 src/main/runtime/session-lifecycle/projection/restored-pane-materialize.ts
 1 src/main/runtime/session-tabs/chat/structured-session-create-support.ts

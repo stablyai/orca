@@ -12,19 +12,23 @@ import {
   type AgentTabLaunchContext
 } from '../../../lib/agent-session/launch/pane/agent-tab-launch-context'
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
+import { launchWithClaudeAccountChoice } from '../../claude-account-prompt/choose-claude-launch-account'
 
 function launchAgentTab(
   worktreeId: string,
   agent: TuiAgent,
   { groupId, focusIntent }: AgentTabLaunchContext
 ): void {
-  launchAgentInNewTabWithOutcome({
-    requestId: createNonSecureContextUuid(),
-    focusIntent,
-    agent,
-    worktreeId,
-    groupId,
-    launchSource: 'shortcut'
+  launchWithClaudeAccountChoice(agent, { worktreeId }, (claudeAccountId) => {
+    launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
+      focusIntent,
+      agent,
+      worktreeId,
+      groupId,
+      launchSource: 'shortcut',
+      ...(claudeAccountId ? { claudeAccountId } : {})
+    })
   })
 }
 

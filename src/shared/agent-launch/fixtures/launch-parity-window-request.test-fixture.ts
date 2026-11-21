@@ -31,7 +31,7 @@ export type WindowLaunchProducer =
   /** A terminal's "continue in new session": Claude gets a draft in the pane's cwd. */
   | { kind: 'continuation'; agent: 'claude'; prompt: string; initialCwd: string }
   | { kind: 'transcript-continue'; transcript: string; cwd: string | null }
-  /** A "+" launch with no prompt, as each "+" entry point calls launchAgentInNewTab. */
+  /** A "+" launch with no prompt, as each "+" entry point calls launchAgentInNewTabWithOutcome. */
   | { kind: 'plus'; agent: 'claude'; via: PlusEntry }
   /** A work item's "start agent" (launch-work-item-direct.ts): the workspace and its agent at once. */
   | {

@@ -12,7 +12,8 @@ export function launchConfigsEqual(
   if (
     a.agentCommand !== b.agentCommand ||
     a.agentArgs !== b.agentArgs ||
-    a.ompResumeFilePath !== b.ompResumeFilePath
+    a.ompResumeFilePath !== b.ompResumeFilePath ||
+    a.claudeAccountId !== b.claudeAccountId
   ) {
     return false
   }
@@ -41,7 +42,8 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     existing.origin === next.origin &&
-    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+    launchConfigsEqual(existing.launchConfig, next.launchConfig) &&
+    existing.claudeAccountId === next.claudeAccountId
   )
 }
 
@@ -64,7 +66,8 @@ export function recoveryRecordMatches(
     // Why: effort and permission mode are not session identity, but a stale value would resume wrong.
     existing.providerSession.effort === next.providerSession.effort &&
     existing.providerSession.permissionMode === next.providerSession.permissionMode &&
-    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+    launchConfigsEqual(existing.launchConfig, next.launchConfig) &&
+    existing.claudeAccountId === next.claudeAccountId
   )
 }
 

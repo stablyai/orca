@@ -12,6 +12,7 @@ import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnes
 import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
+import ClaudeAccountPromptDialog from './components/claude-account-prompt/ClaudeAccountPromptDialog'
 import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
@@ -132,6 +133,7 @@ function App(): React.JSX.Element {
       <SkillFreshnessNudge />
       {/* One account-link confirm at a time, over whatever screen the owner is on. */}
       <WorktreeBaseFallbackDialog />
+      <ClaudeAccountPromptDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />

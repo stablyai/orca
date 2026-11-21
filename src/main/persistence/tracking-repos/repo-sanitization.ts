@@ -9,7 +9,8 @@ import {
   type GhAccountBinding
 } from '../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
-
+import { sanitizeRepoAgentAccountsUpdate } from '../../../shared/claude/project-claude-account-preference'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -88,6 +89,7 @@ export function sanitizeRepoUpdatesForPersistence<
     >
   > & {
     ghAccount?: GhAccountBinding | null
+    agentAccounts?: RepoAgentAccounts | null
     browserProfileId?: string | null
   }
 >(updates: T): T {
@@ -183,6 +185,7 @@ export function sanitizeRepoUpdatesForPersistence<
       sanitized.ghAccount = ghAccount
     }
   }
+  sanitizeRepoAgentAccountsUpdate(sanitized)
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
       sanitized.customWorktreeVisibilitySources

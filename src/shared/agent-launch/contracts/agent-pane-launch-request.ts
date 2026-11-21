@@ -10,4 +10,6 @@ export type AgentPaneLaunchRequest = {
   startupPromptCarry?: 'force-line'
   /** Background owners report the launch failure in their existing run result. */
   returnLaunchFailure?: boolean
+  /** The user's retry of this pane's refused launch, so that refusal must not block it. */
+  replacesRefusedLaunch?: boolean
 }

@@ -7,10 +7,18 @@ import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
+/** `--account`: which managed Claude account ran, and whether that needed a pinned launch. */
+export type OrchestrationWorkerLaunchAccount = {
+  id: string
+  email: string
+  mode: 'pinned' | 'active'
+}
+
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
   model: string | null
   effort: string | null
+  account?: OrchestrationWorkerLaunchAccount
 }
 
 export type OrchestrationWorkerLaunchReceipt = {
@@ -29,6 +37,19 @@ export function createWorkerLaunchReceipt(args: {
     effort: args.effort ?? null
   }
   return { requested: selection, effective: { ...selection } }
+}
+
+export function withWorkerLaunchAccount(
+  receipt: OrchestrationWorkerLaunchReceipt,
+  account: OrchestrationWorkerLaunchAccount | undefined
+): OrchestrationWorkerLaunchReceipt {
+  if (!account) {
+    return receipt
+  }
+  return {
+    requested: { ...receipt.requested, account },
+    effective: receipt.effective ? { ...receipt.effective, account } : null
+  }
 }
 
 /** A chat worker launches with the model and effort its session was seeded with, not only those the caller asked for. */

@@ -9,6 +9,7 @@ import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
+import { ClaudeAskPerProjectSetting } from '../../ClaudeAskPerProjectSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import {
@@ -263,6 +264,7 @@ export function renderClaudeAccountsSection(
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}
+        <ClaudeAskPerProjectSetting settings={settings} updateSettings={updateSettings} />
       </SettingsGroup>
     </div>
   )

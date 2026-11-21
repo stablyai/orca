@@ -54,6 +54,14 @@ export type TerminalCreateOptions = {
   accountEnv?: Record<string, string>
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   launchPreferences?: AgentLaunchPreferences
+  /**
+   * `--account`: a managed host Claude account id this launch must run on. Background-lane only,
+   * and deliberately not part of `callerSuppliedLaunch`: it picks credentials, not the launch.
+   */
+  claudeAccountId?: string
+  /** The launch's own Claude account choice, the active sentinel included: read and recorded like
+   *  a saved launch config's, so it yields to an explicit `claudeAccountId`. */
+  launchClaudeAccountId?: string
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors

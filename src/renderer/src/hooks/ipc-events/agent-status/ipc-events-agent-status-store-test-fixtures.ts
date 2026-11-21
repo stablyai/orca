@@ -113,7 +113,8 @@ export function applyMockAgentStatusUpdate(
       ...update.payload,
       updatedAt: updatedAt ?? Date.now(),
       providerSession: update.metadata?.providerSession,
-      programStatus: update.payload.programStatus ?? undefined
+      programStatus: update.payload.programStatus ?? undefined,
+      claudeAccountId: update.payload.claudeAccountId ?? undefined
     })
   }
   state.agentStatusByPaneKey = acceptedAgentStatuses(next)

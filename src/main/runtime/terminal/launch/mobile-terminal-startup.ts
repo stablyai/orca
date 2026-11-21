@@ -40,6 +40,8 @@ export type ResumableAgentSessionSource = {
   /** The capture's connection; undefined when the caller compared hosts itself. */
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** Pinned Claude account when no launch config was recorded. */
+  claudeAccountId?: string
 }
 
 export type MobileTerminalCommand = {
@@ -86,12 +88,14 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     }
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, record.agent)
     const { launchConfig } = record
+    const claudeAccountId = launchConfig?.claudeAccountId ?? record.claudeAccountId
     // Throws WslHostWindowsOnlyAgentError; callers choose refusal or a plain-shell restore.
     const resumeInputs = resolveWslHostAgentResumeInputs({
       agent: record.agent,
       providerSession,
       cmdOverrides: settings.agentCmdOverrides ?? {},
       ...resolveResumeLaunchRecipe(launchConfig, record.agent, providerSession),
+      ...(claudeAccountId ? { claudeAccountId } : {}),
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
       isRemote: Boolean(workspace.connectionId),

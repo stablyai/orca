@@ -46,7 +46,7 @@ const mocks = vi.hoisted(() => ({
     ) => TerminalAgentTabShortcut
   >(() => ({ actionId: null, agent: null })),
   actualResolveAgentShortcut: vi.fn<typeof AgentTabShortcuts.resolveTerminalAgentTabShortcut>(),
-  launchAgentInNewTab: vi.fn()
+  launchAgentInNewTabWithOutcome: vi.fn()
 }))
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
@@ -87,7 +87,7 @@ vi.mock('./terminal-agent-tab-shortcut', async (importOriginal) => {
   return { ...actual, resolveTerminalAgentTabShortcut: mocks.resolveAgentShortcut }
 })
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTabWithOutcome
 }))
 
 vi.mock('../tab-lifecycle/terminal-tab-actions', () => ({

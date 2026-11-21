@@ -7,6 +7,7 @@ import type { SetupAgentStartupPolicy } from '../../../shared/workspace-setup/or
 import { buildSetupAgentStartupHookSettings } from '../../../shared/workspace-setup/repo-hook-settings-defaults'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -65,6 +66,8 @@ type RepositoryUpdates = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  /** Only null clears. */
+  agentAccounts?: RepoAgentAccounts | null
   browserProfileId?: string | null
   /** Changes this one hook setting, keeping the rest of the saved row's. */
   setupAgentStartupPolicy?: SetupAgentStartupPolicy

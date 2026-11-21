@@ -21,12 +21,19 @@ import { explainOlderRuntimeRunRequired } from '../recovery/older-runtime-run-bi
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { refuseAgentServerRoute } from '../identity/agent-server-route'
+import { readClaudeLaunchAccountFlag } from '../../workspaces/claude-launch-account-flag'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async (ctx) => {
     const { flags, client, cwd, json } = ctx
     await refuseAgentServerRoute('worker-start', ctx)
     const terminal = getPresentStringFlag(flags, 'terminal')
+    if (flags.has('account') && flags.has('terminal')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--account cannot be combined with --terminal; the reused terminal keeps its own account.'
+      )
+    }
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
     if (model || effort) {
@@ -42,6 +49,11 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
         )
       }
     }
+    const account = await readClaudeLaunchAccountFlag(
+      flags,
+      client,
+      getOptionalStringFlag(flags, 'agent')
+    )
     const task = getOptionalStringFlag(flags, 'task')
     const spec = await readTextOrFileFlag(flags, cwd, 'spec', false)
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
@@ -80,6 +92,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       agent: getOptionalStringFlag(flags, 'agent'),
       model,
       effort,
+      ...(account ? { account } : {}),
       terminal,
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),

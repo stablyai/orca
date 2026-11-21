@@ -4,6 +4,11 @@ import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../../shared/agent-laun
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './terminal-error-display'
 import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-foundation'
+import type { PtyPaneStartup } from '../pty-connection/startup/pty-pane-startup'
+import {
+  recordRefusedClaudeLaunchStartup,
+  refusedClaudeLaunchStartupsFor
+} from '../refused-claude-launch-recovery'
 
 export function useTerminalPaneErrorCallbacks({
   managerRef,
@@ -21,7 +26,13 @@ export function useTerminalPaneErrorCallbacks({
   | 'setTerminalErrorsByPaneId'
   | 'sshReconnectOwnsTerminalErrorsRef'
 >) {
-  const onPtyErrorRef = useRef((paneId: number, message: string) => {
+  const onPtyErrorRef = useRef((paneId: number, message: string, startup?: PtyPaneStartup) => {
+    recordRefusedClaudeLaunchStartup(
+      refusedClaudeLaunchStartupsFor(paneTransportsRef),
+      paneId,
+      message,
+      startup
+    )
     if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
       // A launch pane's verdict reached the tab typed; its notice shows it, not an error.
       return

@@ -67,6 +67,8 @@ type WorkerAgentPlacementArgs = {
     preferences: AgentLaunchPreferences | undefined
     receipt: OrchestrationWorkerLaunchReceipt
   }
+  /** `--account`: the managed Claude account a terminal worker runs on. */
+  claudeAccountId?: string
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
@@ -185,6 +187,7 @@ async function launchWorkerAgent(
             promisedAgentChat,
             onWorkspaceCreated,
             ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+            ...(args.claudeAccountId ? { claudeAccountId: args.claudeAccountId } : {}),
             effects: args.effects
           })
           return {
@@ -279,6 +282,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+        ...(args.claudeAccountId ? { claudeAccountId: args.claudeAccountId } : {}),
         taskId: args.taskId,
         effects: args.effects
       })

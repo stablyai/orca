@@ -144,7 +144,7 @@ export async function registerCoreHandlers(
     registerOrcaUninstallHandlers(store)
     registerPreflightHandlers(store)
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
-    registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
+    registerAgentHookHandlers(runtime, { getPtyIdForPaneKey, sessionStore: store })
     registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
     registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)

@@ -145,4 +145,34 @@ describe('Store', () => {
   // Git catalogs cannot enumerate sibling folder workspaces; changing kind would strand their tabs (STA-10638).
 
   // Git accepts subdirectories; conversion must separately prove this folder is the checkout root.
+  it('updateRepo persists, reloads, and clears agentAccounts', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        agentAccounts: { claude: { mode: 'account', accountId: ' acct-1 ' } }
+      }
+    )
+    expect(updated!.agentAccounts).toEqual({ claude: { mode: 'account', accountId: 'acct-1' } })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.agentAccounts).toEqual({
+      claude: { mode: 'account', accountId: 'acct-1' }
+    })
+
+    const malformed = reloaded.updateRepo(
+      { id: 'r1' },
+      {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercising a malformed value on purpose; the persistence layer must drop it rather than coerce it.
+        agentAccounts: { claude: { mode: 'bogus' } } as never
+      }
+    )
+    expect(malformed!.agentAccounts).toEqual({ claude: { mode: 'account', accountId: 'acct-1' } })
+
+    const cleared = reloaded.updateRepo({ id: 'r1' }, { agentAccounts: null })
+    expect(cleared!.agentAccounts).toBeUndefined()
+  })
 })

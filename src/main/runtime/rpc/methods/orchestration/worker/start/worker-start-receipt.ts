@@ -4,6 +4,7 @@ import type { WorkerDispatchRow } from '../../../../../orchestration/db/orchestr
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './readiness/failed-worker-start-teardown'
 import { reportFailedWorkerStart } from '../../../../../orchestration/workers/turn-stops/failed-worker-start-report'
+import { stripClaudePinnedLaunchMarker } from '../../../../../../../shared/claude/claude-pinned-launch-error'
 import {
   isUnknownWorkerStartOutcome,
   type createStructuredWorkerSessionForWorktree,
@@ -79,11 +80,14 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
-  const reason = redactString(
-    replaceDispatchCapabilities(
-      formatTerminalStartFailure(args.error) ??
-        (args.error instanceof Error ? args.error.message : String(args.error))
-    ).value
+  // The pinned-launch marker is stripped too: only the renderer's PTY spawn path reads it.
+  const reason = stripClaudePinnedLaunchMarker(
+    redactString(
+      replaceDispatchCapabilities(
+        formatTerminalStartFailure(args.error) ??
+          (args.error instanceof Error ? args.error.message : String(args.error))
+      ).value
+    )
   )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown

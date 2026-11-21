@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
@@ -86,6 +87,7 @@ export type RepositoryApi = {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      agentAccounts?: RepoAgentAccounts | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       browserProfileId?: string | null
     }

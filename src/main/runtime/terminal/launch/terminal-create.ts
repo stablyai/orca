@@ -23,6 +23,7 @@ import { randomUUID } from 'node:crypto'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { mergeTerminalEnvDeletionKeys } from './runtime-agent-launch-resolution'
+import { terminalCreateClaudeAccountIdField } from './terminal-create-claude-account-field'
 import { terminalSpawnOptions } from './terminal-spawn-options'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
@@ -100,9 +101,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         const agentTeams = await teamAllocation
           .prepare(
             {
-              launchConfig: launchOpts.launchConfig,
-              command: launchOpts.command,
-              claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
+              launch: launchOpts,
               claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
               baseEnv: { ...process.env, ...baseEnv },
               adoptedBeforeLaunch: null
@@ -151,6 +150,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               launchOpts.envToDelete,
               agentTeamsPlan?.envToDelete
             ),
+            ...terminalCreateClaudeAccountIdField(launchOpts),
             resumeProviderSession: launchOpts.resumeProviderSession,
             ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
             telemetry: launchOpts.telemetry,

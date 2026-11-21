@@ -5,6 +5,7 @@ import type {
 import type { WslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import type { RepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
 import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
@@ -81,6 +82,7 @@ export type RepoUpdate = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
   workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+  agentAccounts?: RepoAgentAccounts | null
   browserProfileId?: string | null
 }
 

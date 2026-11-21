@@ -17,6 +17,7 @@ import { recordPtyConnectDiagnostic } from './instrumentation/pty-connect-diagno
 import { defersToMainPaneStart } from './spawn/main-pane-start-request'
 import { findTerminalTabForPane } from './terminal-tab-id'
 import { isDeferredSplitInputHold } from './pane-transport-options'
+import { readClaudePinnedLaunchErrorCode } from '../../../../../shared/claude/claude-pinned-launch-error'
 import { bindBuildColdRestoreAgentResumeStartup } from './startup/cold-restore-resume-startup'
 import { bindForegroundOutputRefresh } from './output/foreground-output-refresh'
 import { bindRegisterPaneSerializer } from './serialization/pane-serializer-register'
@@ -59,6 +60,7 @@ import {
 import { bindParkRevealSnapshotVerdictActions } from './output-restore/park-reveal-snapshot-verdict'
 import { bindRemoteProgramRedraw } from './geometry/remote-program-redraw'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import type { PtyPaneStartup } from './startup/pty-pane-startup'
 
 // Preserve WebGL hook registration before deferred connection setup.
 
@@ -195,13 +197,18 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       )
     }
 
-    session.reportError = (message: string): void => {
+    session.reportError = (message: string, startup?: PtyPaneStartup): void => {
       // Drop async connect errors after disposal so teardown cannot race a user-facing toast.
       if (session.disposed) {
         return
       }
       if (isWorktreeRemovalFenceError(message)) {
         // Removal fences, including overlapping parent/child roots, are expected teardown; never flash their raw spawn/reattach errors.
+        return
+      }
+      if (startup && readClaudePinnedLaunchErrorCode(message)) {
+        // Why only refusals: recovery replays the refused spawn; other errors keep their old shape.
+        session.deps.onPtyErrorRef?.current?.(session.pane.id, message, startup)
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)

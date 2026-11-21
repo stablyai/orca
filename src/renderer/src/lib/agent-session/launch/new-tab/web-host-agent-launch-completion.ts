@@ -1,4 +1,4 @@
-import { toast } from 'sonner'
+import { toastWebHostLaunchFailure } from '@/lib/web-host-launch-failure-toast'
 import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
@@ -19,13 +19,15 @@ export function completeWebHostAgentLaunch(args: {
   promptDelivered: boolean
   submitFollowup?: boolean
   hostTabId?: string
+  /** Starts the same launch again, optionally on another Claude account, from a refusal toast. */
+  relaunch?: (claudeAccountId?: string) => void
 }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion {
   const { outcome, promptDelivered, hostTabId } = args
   if (outcome.status === 'failed') {
     if (args.legacyPreparationCancelled) {
       return { delivered: false, failureNotified: true, outcome: { status: 'failed', message: '' } }
     }
-    toast.error(args.failureMessage)
+    toastWebHostLaunchFailure(outcome.message, args.failureMessage, args.relaunch)
     return { delivered: false, failureNotified: true, outcome }
   }
   if (args.activate !== false) {
