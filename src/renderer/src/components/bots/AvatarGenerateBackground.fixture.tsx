@@ -35,14 +35,14 @@ function LeavableSettings(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      <Toaster toastOptions={{ className: 'font-sans text-sm' }} />
+      <Toaster position="top-left" toastOptions={{ className: 'font-sans text-sm' }} />
     </div>
   )
 }
 
 const LONG_DESCRIPTION =
   'A friendly orange fox astronaut in a round glass helmet, floating past a ringed planet, with a ' +
-  'tiny wrench in one paw, soft pastel stars behind, and a mission patch shaped like a acorn on its ' +
+  'tiny wrench in one paw, soft pastel stars behind, and a mission patch shaped like an acorn on its ' +
   'chest, drawn in a clean flat sticker style with a thick white outline'
 
 /** Closes the picker as a click on its picture does; the run goes on. */
@@ -88,7 +88,7 @@ export const generateFailedAfterLeaving = defineFixture({
     await openGenerate(frame, 'a friendly orange fox astronaut')
     await closePicture(frame)
     frame.querySelector<HTMLButtonElement>('button[aria-label="Leave settings"]')?.click()
-    await settle(3000)
+    await settle(2500)
   }
 })
 

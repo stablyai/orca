@@ -9,6 +9,7 @@ import type {
 import { useBotPictureSetting } from '@/components/settings/bots/use-bot-picture-setting'
 import { BotPictureButton } from '@/components/bots/BotPictureButton'
 import { NewBotDialog } from '@/components/bots/NewBotDialog'
+import { resetAvatarRequestsForTests } from '@/components/bots/avatar-generation-requests'
 
 export const perf: Bot = {
   id: 'perf',
@@ -158,6 +159,8 @@ export function stubGeneration(
 ): () => void {
   return () => {
     stubUpload()
+    // Fixtures share one page: a run left going by the one before would show here.
+    resetAvatarRequestsForTests()
     const api: AvatarGenerationApi = {
       capability: async () => capability,
       generate: async () => {
@@ -168,7 +171,7 @@ export function stubGeneration(
           return { ok: false, error: 'usage-limit', agent: 'codex' }
         }
         if (result === 'late-failure') {
-          await settle(1200)
+          await settle(2500)
           return { ok: false, error: 'timed-out', agent: 'codex' }
         }
         if (result === 'late-image') {
