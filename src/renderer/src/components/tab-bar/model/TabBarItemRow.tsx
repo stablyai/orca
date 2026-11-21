@@ -97,16 +97,15 @@ function TabBarItemRow({
     worktreeId,
     item.type === 'agent-session' ? item.data.executionHostId : undefined
   )
-  const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
-  const homeRule = useBotHomeRuleApplies(bot)
-  const ruledHome = useAppStore(
+  // The session names the Home; the host gate keeps a hostless tab this app may not own unlocked.
+  const isBotChat = useAppStore(
     (state) =>
-      state.workspaceSessionReady &&
-      homeRule &&
       item.type === 'agent-session' &&
-      isBotChat &&
+      isBotHomeTab(item.data, bot) &&
       isHostedBotChatTab(item.data, bot, hostlessChatsAreLocal(state, worktreeId))
   )
+  const homeRule = useBotHomeRuleApplies(bot)
+  const ruledHome = useAppStore((state) => state.workspaceSessionReady && homeRule && isBotChat)
   const ruledSideChat = useAppStore(
     (state) =>
       homeRule &&
