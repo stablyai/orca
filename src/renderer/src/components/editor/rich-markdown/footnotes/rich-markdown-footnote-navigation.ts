@@ -133,7 +133,7 @@ export function exitTrailingEmptyFootnoteParagraph(editor: Editor): boolean {
   const { selection } = state
   const { $from, empty } = selection
 
-  if (!empty || !$from.parent.isTextblock || $from.parent.content.size !== 0) {
+  if (!empty || $from.parent.type.name !== 'paragraph' || $from.parent.content.size !== 0) {
     return false
   }
 
@@ -179,7 +179,7 @@ export function unwrapEmptyFootnoteDefinition(editor: Editor): boolean {
 
   if (
     !empty ||
-    !$from.parent.isTextblock ||
+    $from.parent.type.name !== 'paragraph' ||
     $from.parentOffset !== 0 ||
     $from.parent.content.size !== 0
   ) {

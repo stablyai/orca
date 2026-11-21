@@ -1,4 +1,5 @@
 import { createMarkdownFenceTracker } from '../../../../../../shared/markdown/markdown-fence-scanner'
+import { advanceHtmlCommentStateOnLine } from '../../markdown/source-scanning/markdown-code-and-comment-scan'
 
 export const FOOTNOTE_IDENTIFIER_MAX_LENGTH = 256
 
@@ -82,9 +83,13 @@ export function matchFootnoteDefinitionOpening(
   }
 }
 
+export function extractFootnoteDefinitionIdentifier(line: string): string | null {
+  const match = line.match(DEFINITION_OPENING_PATTERN)
+  return match && isValidFootnoteIdentifier(match[1]) ? match[1] : null
+}
+
 export function isFootnoteDefinitionLine(line: string): boolean {
-  const match = DEFINITION_OPENING_PATTERN.exec(line)
-  return Boolean(match && isValidFootnoteIdentifier(match[1]))
+  return extractFootnoteDefinitionIdentifier(line) !== null
 }
 
 export function matchFootnoteDefinitionLinePrefix(content: string, start: number): number | null {
@@ -170,14 +175,20 @@ export function matchFootnoteDefinitionBlock(
 
     const stripped = stripOneIndentLevel(line)
     if (stripped !== null) {
-      if (bodyLines.length > 0 && pendingBlankLines.length > 0) {
+      const hadBlankBefore = pendingBlankLines.length > 0
+      const inActiveParagraph = !hadBlankBefore && canLazyContinue
+      if (bodyLines.length > 0 && hadBlankBefore) {
         bodyLines.push(...pendingBlankLines)
       }
       pendingBlankLines = []
       bodyLines.push(stripped)
       const isFenceLine = bodyFence.consume(stripped)
+      const startsIndentedCode = !inActiveParagraph && stripOneIndentLevel(stripped) !== null
       canLazyContinue =
-        !isFenceLine && !bodyFence.insideFence && !BLOCK_INTERRUPT_PATTERN.test(stripped)
+        !isFenceLine &&
+        !bodyFence.insideFence &&
+        !startsIndentedCode &&
+        !BLOCK_INTERRUPT_PATTERN.test(stripped)
       lastConsumedEnd = nextCursor
       cursor = nextCursor
       continue
@@ -205,15 +216,20 @@ export function collectDefinedFootnoteIdentifiers(content: string): Set<string> 
   if (!content.includes('[^')) {
     return identifiers
   }
+  const lastCommentClose = content.lastIndexOf('-->')
   const fence = createMarkdownFenceTracker()
   let quoteFence = createMarkdownFenceTracker()
+  let inHtmlComment = false
   let lineStart = 0
   while (lineStart <= content.length) {
     const { lineEnd, nextLineStart } = getLineEnd(content, lineStart)
     const line = content.slice(lineStart, lineEnd)
-    if (!fence.consume(line) && !fence.insideFence) {
-      const quoteMatch = BLOCKQUOTE_PREFIX_PATTERN.exec(line)
-      const unwrapped = quoteMatch ? line.slice(quoteMatch[0].length) : line
+    if (inHtmlComment) {
+      inHtmlComment = advanceHtmlCommentStateOnLine(line, lineStart, true, lastCommentClose)
+    } else if (!fence.consume(line) && !fence.insideFence) {
+      const quoteMatch = line.match(BLOCKQUOTE_PREFIX_PATTERN)
+      const quotePrefixLength = quoteMatch ? quoteMatch[0].length : 0
+      const unwrapped = quoteMatch ? line.slice(quotePrefixLength) : line
       if (!quoteMatch && quoteFence.insideFence) {
         quoteFence = createMarkdownFenceTracker()
       }
@@ -221,36 +237,21 @@ export function collectDefinedFootnoteIdentifiers(content: string): Set<string> 
         ? quoteFence.consume(unwrapped) || quoteFence.insideFence
         : false
       if (!blockedByQuoteFence) {
-        const match = DEFINITION_OPENING_PATTERN.exec(unwrapped)
+        const match = unwrapped.match(DEFINITION_OPENING_PATTERN)
         if (match && isValidFootnoteIdentifier(match[1])) {
           identifiers.add(normalizeFootnoteIdentifier(match[1]))
+        }
+        if (lastCommentClose !== -1) {
+          inHtmlComment = advanceHtmlCommentStateOnLine(
+            unwrapped,
+            lineStart + quotePrefixLength,
+            false,
+            lastCommentClose
+          )
         }
       }
     }
     if (nextLineStart <= lineStart || lineEnd === content.length) {
-      break
-    }
-    lineStart = nextLineStart
-  }
-  return identifiers
-}
-
-export function collectFootnoteDefinitionIdentifiersInOrder(contentWithoutCode: string): string[] {
-  const identifiers: string[] = []
-  if (!contentWithoutCode.includes('[^')) {
-    return identifiers
-  }
-  let lineStart = 0
-  while (lineStart <= contentWithoutCode.length) {
-    const { lineEnd, nextLineStart } = getLineEnd(contentWithoutCode, lineStart)
-    const unwrapped = contentWithoutCode
-      .slice(lineStart, lineEnd)
-      .replace(BLOCKQUOTE_PREFIX_PATTERN, '')
-    const match = DEFINITION_OPENING_PATTERN.exec(unwrapped)
-    if (match && isValidFootnoteIdentifier(match[1])) {
-      identifiers.push(match[1])
-    }
-    if (nextLineStart <= lineStart || lineEnd === contentWithoutCode.length) {
       break
     }
     lineStart = nextLineStart

@@ -1,6 +1,11 @@
 import {
-  collectFootnoteDefinitionIdentifiersInOrder,
+  countBlockquoteDepth,
+  stripClosedHtmlComments
+} from '../../markdown/source-scanning/markdown-code-and-comment-scan'
+import {
+  extractFootnoteDefinitionIdentifier,
   isFootnoteDefinitionLine,
+  matchFootnoteDefinitionBlock,
   matchFootnoteDefinitionLinePrefix,
   matchFootnoteReferenceSource,
   normalizeFootnoteIdentifier
@@ -9,29 +14,135 @@ import {
 export const FOOTNOTE_CANDIDATE_PATTERN = /^ {0,3}(?:> ?)* {0,3}\[\^[^\s[\]]+\]:/m
 
 const FOOTNOTE_CANDIDATE_LINE_PATTERN = /^ {0,3}(?:> ?)* {0,3}\[\^[^\s[\]]+\]:/
-const REFERENCE_LINK_LINE_PATTERN = /^\[[^\]]+\]:\s+\S+/
+const BLOCKQUOTE_PREFIX_PATTERN = /^ {0,3}(?:> ?)+/
+const SINGLE_LINE_REFERENCE_LINK_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]+\S/
+const MULTILINE_REFERENCE_LINK_LABEL_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]*$/
+const MULTILINE_REFERENCE_LINK_TARGET_PATTERN = /^ {0,3}\S/
 const TRANSPORT_ENVELOPE_PATTERN = /\[\[ORCA_RICH_MD:[a-f0-9]{32}:/
 
+export function hasFootnoteCandidate(contentWithoutCode: string): boolean {
+  if (!contentWithoutCode.includes('[^')) {
+    return false
+  }
+  return FOOTNOTE_CANDIDATE_PATTERN.test(stripClosedHtmlComments(contentWithoutCode))
+}
+
+function getLineBounds(
+  content: string,
+  lineStart: number
+): { lineEnd: number; nextLineStart: number } {
+  const newlineIndex = content.indexOf('\n', lineStart)
+  const rawEnd = newlineIndex === -1 ? content.length : newlineIndex
+  const lineEnd = rawEnd > lineStart && content.charCodeAt(rawEnd - 1) === 13 ? rawEnd - 1 : rawEnd
+  return { lineEnd, nextLineStart: newlineIndex === -1 ? content.length : newlineIndex + 1 }
+}
+
+function stripQuoteLevels(line: string, levels: number): string | null {
+  let index = 0
+  for (let level = 0; level < levels; level += 1) {
+    let spaces = 0
+    while (index < line.length && spaces < 3 && line.charCodeAt(index) === 32) {
+      index += 1
+      spaces += 1
+    }
+    if (index >= line.length || line.charCodeAt(index) !== 62) {
+      return null
+    }
+    index += 1
+    if (index < line.length && line.charCodeAt(index) === 32) {
+      index += 1
+    }
+  }
+  return line.slice(index)
+}
+
 export function hasNonFootnoteReferenceLinkCandidate(contentWithoutCode: string): boolean {
+  if (!contentWithoutCode.includes(']:')) {
+    return false
+  }
   let lineStart = 0
   while (lineStart <= contentWithoutCode.length) {
-    const newlineIndex = contentWithoutCode.indexOf('\n', lineStart)
-    const rawEnd = newlineIndex === -1 ? contentWithoutCode.length : newlineIndex
-    const lineEnd =
-      rawEnd > lineStart && contentWithoutCode.charCodeAt(rawEnd - 1) === 13 ? rawEnd - 1 : rawEnd
+    const { lineEnd, nextLineStart } = getLineBounds(contentWithoutCode, lineStart)
     const line = contentWithoutCode.slice(lineStart, lineEnd)
-    if (REFERENCE_LINK_LINE_PATTERN.test(line) && !isFootnoteDefinitionLine(line)) {
+    const quoteMatch = line.match(BLOCKQUOTE_PREFIX_PATTERN)
+    const quoteDepth = quoteMatch ? countBlockquoteDepth(quoteMatch[0]) : 0
+    const unwrapped = quoteMatch ? line.slice(quoteMatch[0].length) : line
+
+    if (isFootnoteDefinitionLine(unwrapped)) {
+      if (quoteDepth === 0) {
+        const block = matchFootnoteDefinitionBlock(contentWithoutCode, lineStart)
+        if (block) {
+          if (hasNonFootnoteReferenceLinkCandidate(block.body)) {
+            return true
+          }
+          const consumedEnd = lineStart + block.raw.length
+          if (consumedEnd >= contentWithoutCode.length) {
+            break
+          }
+          lineStart = consumedEnd
+          continue
+        }
+      } else {
+        const quotedLines: string[] = []
+        let scanStart = lineStart
+        let chunkEnd = nextLineStart
+        while (scanStart <= contentWithoutCode.length) {
+          const bounds = getLineBounds(contentWithoutCode, scanStart)
+          const stripped = stripQuoteLevels(
+            contentWithoutCode.slice(scanStart, bounds.lineEnd),
+            quoteDepth
+          )
+          if (stripped === null) {
+            break
+          }
+          quotedLines.push(stripped)
+          chunkEnd = bounds.nextLineStart
+          if (bounds.lineEnd === contentWithoutCode.length) {
+            break
+          }
+          scanStart = bounds.nextLineStart
+        }
+        const block = matchFootnoteDefinitionBlock(quotedLines.join('\n'), 0)
+        if (block && hasNonFootnoteReferenceLinkCandidate(block.body)) {
+          return true
+        }
+        if (chunkEnd <= lineStart || chunkEnd >= contentWithoutCode.length) {
+          break
+        }
+        lineStart = chunkEnd
+        continue
+      }
+    }
+
+    if (SINGLE_LINE_REFERENCE_LINK_PATTERN.test(unwrapped)) {
       return true
     }
-    if (newlineIndex === -1) {
+
+    if (
+      MULTILINE_REFERENCE_LINK_LABEL_PATTERN.test(unwrapped) &&
+      lineEnd < contentWithoutCode.length
+    ) {
+      const nextBounds = getLineBounds(contentWithoutCode, nextLineStart)
+      const nextRaw = contentWithoutCode.slice(nextLineStart, nextBounds.lineEnd)
+      const nextUnwrapped = quoteDepth > 0 ? stripQuoteLevels(nextRaw, quoteDepth) : nextRaw
+      if (nextUnwrapped !== null && MULTILINE_REFERENCE_LINK_TARGET_PATTERN.test(nextUnwrapped)) {
+        return true
+      }
+    }
+
+    if (nextLineStart <= lineStart || lineEnd === contentWithoutCode.length) {
       break
     }
-    lineStart = newlineIndex + 1
+    lineStart = nextLineStart
   }
   return false
 }
 
-export function preservesFootnotes(contentWithoutCode: string, roundTripOutput: string): boolean {
+export function preservesFootnotes(
+  contentWithoutCode: string,
+  roundTripOutput: string,
+  roundTripWithoutCode: string
+): boolean {
   if (
     TRANSPORT_ENVELOPE_PATTERN.test(roundTripOutput) &&
     !TRANSPORT_ENVELOPE_PATTERN.test(contentWithoutCode)
@@ -39,14 +150,15 @@ export function preservesFootnotes(contentWithoutCode: string, roundTripOutput: 
     return false
   }
 
-  const candidateLineCount = countFootnoteCandidateLines(contentWithoutCode)
-  const expectedDefs = collectFootnoteDefinitionIdentifiersInOrder(contentWithoutCode)
+  const cleanSource = stripClosedHtmlComments(contentWithoutCode)
+  const candidateLineCount = countFootnoteCandidateLines(cleanSource)
+  const expectedDefs = collectFootnoteDefinitionIdentifiersInOrder(cleanSource)
   if (expectedDefs.length === 0 || expectedDefs.length !== candidateLineCount) {
     return false
   }
 
-  const roundTripWithoutCode = stripCodeForFootnoteProof(roundTripOutput)
-  const actualDefs = collectFootnoteDefinitionIdentifiersInOrder(roundTripWithoutCode)
+  const cleanRoundTrip = stripClosedHtmlComments(roundTripWithoutCode)
+  const actualDefs = collectFootnoteDefinitionIdentifiersInOrder(cleanRoundTrip)
   if (
     actualDefs.length !== expectedDefs.length ||
     expectedDefs.some((identifier, index) => actualDefs[index] !== identifier)
@@ -55,12 +167,35 @@ export function preservesFootnotes(contentWithoutCode: string, roundTripOutput: 
   }
 
   const definedIdentifiers = new Set(expectedDefs.map(normalizeFootnoteIdentifier))
-  const expectedRefs = collectFootnoteReferencesInOrder(contentWithoutCode, definedIdentifiers)
-  const actualRefs = collectFootnoteReferencesInOrder(roundTripWithoutCode, definedIdentifiers)
+  const expectedRefs = collectFootnoteReferencesInOrder(cleanSource, definedIdentifiers)
+  const actualRefs = collectFootnoteReferencesInOrder(cleanRoundTrip, definedIdentifiers)
   return (
     actualRefs.length === expectedRefs.length &&
     expectedRefs.every((identifier, index) => actualRefs[index] === identifier)
   )
+}
+
+function collectFootnoteDefinitionIdentifiersInOrder(contentWithoutCode: string): string[] {
+  const identifiers: string[] = []
+  if (!contentWithoutCode.includes('[^')) {
+    return identifiers
+  }
+  let lineStart = 0
+  while (lineStart <= contentWithoutCode.length) {
+    const { lineEnd, nextLineStart } = getLineBounds(contentWithoutCode, lineStart)
+    const unwrapped = contentWithoutCode
+      .slice(lineStart, lineEnd)
+      .replace(BLOCKQUOTE_PREFIX_PATTERN, '')
+    const identifier = extractFootnoteDefinitionIdentifier(unwrapped)
+    if (identifier) {
+      identifiers.push(identifier)
+    }
+    if (nextLineStart <= lineStart || lineEnd === contentWithoutCode.length) {
+      break
+    }
+    lineStart = nextLineStart
+  }
+  return identifiers
 }
 
 function countFootnoteCandidateLines(contentWithoutCode: string): number {
@@ -122,91 +257,4 @@ function collectFootnoteReferencesInOrder(
     index += 1
   }
   return references
-}
-
-function stripInlineCodeSpans(line: string): string {
-  if (!line.includes('`')) {
-    return line
-  }
-  let output = ''
-  let index = 0
-  while (index < line.length) {
-    if (line[index] !== '`') {
-      output += line[index]
-      index += 1
-      continue
-    }
-    let tickCount = 0
-    while (line[index + tickCount] === '`') {
-      tickCount += 1
-    }
-    let searchFrom = index + tickCount
-    let closingIndex = -1
-    const delimiter = '`'.repeat(tickCount)
-    while (searchFrom < line.length) {
-      const candidate = line.indexOf(delimiter, searchFrom)
-      if (candidate === -1) {
-        break
-      }
-      if ((candidate === 0 || line[candidate - 1] !== '`') && line[candidate + tickCount] !== '`') {
-        closingIndex = candidate
-        break
-      }
-      searchFrom = candidate + 1
-    }
-    if (closingIndex !== -1) {
-      index = closingIndex + tickCount
-      continue
-    }
-    output += delimiter
-    index += tickCount
-  }
-  return output
-}
-
-function stripCodeForFootnoteProof(content: string): string {
-  let sanitized = ''
-  let activeFence: '`' | '~' | null = null
-  let activeFenceLength = 0
-  let lineStart = 0
-
-  while (lineStart <= content.length) {
-    const newlineIndex = content.indexOf('\n', lineStart)
-    const rawEnd = newlineIndex === -1 ? content.length : newlineIndex
-    const lineEnd =
-      rawEnd > lineStart && content.charCodeAt(rawEnd - 1) === 13 ? rawEnd - 1 : rawEnd
-    const line = content.slice(lineStart, lineEnd)
-    const fenceMatch = /^(?:[ \t]*>[ \t]?)*[ \t]*(`{3,}|~{3,})(.*)$/.exec(line)
-
-    if (fenceMatch) {
-      const marker = fenceMatch[1][0] as '`' | '~'
-      const length = fenceMatch[1].length
-      const trailing = fenceMatch[2]
-      if (activeFence === null) {
-        if (marker === '~' || !trailing.includes('`')) {
-          activeFence = marker
-          activeFenceLength = length
-        } else {
-          sanitized += stripInlineCodeSpans(line)
-        }
-      } else if (
-        activeFence === marker &&
-        length >= activeFenceLength &&
-        /^[ \t]*$/.test(trailing)
-      ) {
-        activeFence = null
-        activeFenceLength = 0
-      }
-    } else if (!activeFence) {
-      sanitized += stripInlineCodeSpans(line)
-    }
-
-    if (newlineIndex === -1) {
-      break
-    }
-    sanitized += '\n'
-    lineStart = newlineIndex + 1
-  }
-
-  return sanitized
 }
