@@ -11,6 +11,10 @@ import { installPluginAutomationOwnershipEnd } from '../contributions/plugin-aut
 import { installPluginResidentWorkerWarmer } from '../workers/worker-admission/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
+import {
+  pluginCommandWorkspaceResolver,
+  type PluginCommandWorkspaceSource
+} from '../commands/plugin-command-workspace'
 import type { DispatcherOptions } from '../../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from '../workers/host-api/plugin-host-runtime-call'
 import {
@@ -30,10 +34,11 @@ type PluginEvents = {
 
 type RuntimeDelegateSource = Omit<
   PluginRuntimeDelegate,
-  'listAgentStatuses' | 'listAgentTaskTitles' | 'callRuntime'
-> & {
-  listAgentTasksByPaneKey(): Readonly<Record<string, PluginAgentTask>>
-}
+  'listAgentStatuses' | 'listAgentTaskTitles' | 'callRuntime' | 'resolveCommandWorkspace'
+> &
+  Partial<PluginCommandWorkspaceSource> & {
+    listAgentTasksByPaneKey(): Readonly<Record<string, PluginAgentTask>>
+  }
 
 type PluginAgentTask = Pick<AgentStatusOrchestrationContext, 'taskTitle' | 'dispatchStatus'>
 
@@ -79,6 +84,13 @@ export function pluginRuntimeDelegate(
 ): PluginRuntimeDelegate {
   return {
     ...(callRuntime ? { callRuntime } : {}),
+    ...(runtime.resolveRuntimeFileTarget
+      ? {
+          resolveCommandWorkspace: pluginCommandWorkspaceResolver({
+            resolveRuntimeFileTarget: runtime.resolveRuntimeFileTarget.bind(runtime)
+          })
+        }
+      : {}),
     resolveActiveWorktreeContext: () => runtime.resolveActiveWorktreeContext(),
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),

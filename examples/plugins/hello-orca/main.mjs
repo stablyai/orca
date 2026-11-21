@@ -8,6 +8,14 @@ export default function activate(orca) {
     return count === 1 ? 'Pong! First ping.' : `Pong! ${count} pings so far.`
   })
 
+  // A workspace command run from a badge, the workspace menu, the palette or a shortcut gets the
+  // workspace in `args.worktree`; a `message` it returns is shown as a toast.
+  orca.commands.register('hello-folder', async (args) => ({
+    message: args?.worktree
+      ? `${args.worktree.displayName} is at ${args.worktree.path}`
+      : 'Run this command on a workspace.'
+  }))
+
   orca.events.on('workspace.created', async (payload) => {
     orca.log(`${payload.kind} created: ${payload.workspaceId} at ${payload.path}`)
     await orca.host.call('notifications.show', {

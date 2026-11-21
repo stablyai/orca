@@ -22,7 +22,7 @@ export function pluginCapabilityDescription(
     case 'workspace:read':
       return t(
         'auto.components.settings.PluginConsentDialog.capability.workspaceRead',
-        'Read workspace names, branches, and terminals'
+        'Read workspace names, branches, and terminals, and the folder of a workspace you run its commands on'
       )
     case 'agent:read':
       return t(
