@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatMediaViewer } from '../notes/NativeChatMediaViewer'
+import { nativeChatSentNotesNumberMax } from '../notes/native-chat-media-notes'
+import { useNativeChatHeldNotesCount } from '../notes/native-chat-held-notes'
+import { nativeChatNotesScopeKey } from '../notes/native-chat-notes-handoff'
 import {
   getLocalImageCacheKey,
   useLocalImageSrc
@@ -96,6 +99,11 @@ export function NativeChatImageTile({
   const { source, displaySrc, external } = useTranscriptImageSrc(block, runtimeContext, near)
   const label = nativeChatImageLabel(block)
   const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
+  // Notes kept for this image in this chat (the message box held a command) show on the tile.
+  const [scopeKey, setScopeKey] = useState<string | undefined>()
+  useLayoutEffect(() => setScopeKey(nativeChatNotesScopeKey(ref.current)), [])
+  const keptCount = useNativeChatHeldNotesCount(scopeKey, block.path ?? block.url)
+  const keptLabel = keptCount > 0 ? t('components.native-chat.notes.kept', 'Notes kept') : null
 
   useEffect(() => {
     const element = ref.current
@@ -135,7 +143,7 @@ export function NativeChatImageTile({
     <div ref={ref} className={cn('relative shrink-0', className)}>
       <button
         type="button"
-        aria-label={`${viewImageLabel}: ${label}`}
+        aria-label={`${viewImageLabel}: ${label}${keptLabel ? `, ${keptLabel}` : ''}`}
         title={label}
         data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
         onClick={onOpen}
@@ -149,6 +157,11 @@ export function NativeChatImageTile({
           className={imageClassName}
         />
       </button>
+      {keptLabel ? (
+        <span className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/90 px-1 text-center text-2xs font-medium text-foreground">
+          {keptLabel}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -161,7 +174,8 @@ export function NativeChatImageViewer({
   index,
   onIndexChange,
   runtimeContext,
-  opener
+  opener,
+  notesOffset = 0
 }: {
   blocks: readonly ImageRef[]
   /** The image shown; null when closed. */
@@ -170,6 +184,8 @@ export function NativeChatImageViewer({
   runtimeContext: RuntimeFileOperationArgs | null | undefined
   /** An element inside the chat, used to find its message box for notes; without one, view only. */
   opener?: React.RefObject<Element | null>
+  /** Marks already drawn into these images when they are sent marked copies; new ones follow. */
+  notesOffset?: number
 }): React.JSX.Element {
   const block = index === null ? undefined : blocks[index]
   const read = useTranscriptImageSrc(block, runtimeContext, block !== undefined)
@@ -203,8 +219,10 @@ export function NativeChatImageViewer({
       opener={opener ?? NO_OPENER}
       // Web images would need a cross-origin read to draw, so they are view-only.
       annotatable={opener !== undefined && !read.external}
+      offset={notesOffset}
       onPrevious={step(-1)}
       onNext={step(1)}
+      position={index === null ? undefined : { index, count: blocks.length }}
       onInteractOutside={keepPreviewOpenForChatMenu}
       copySrc={copyableNativeChatImageSrc(displaySrc)}
       fallback={<ImageLabelChip label={label} />}
@@ -291,6 +309,9 @@ export function NativeChatImageAttachments({
         onIndexChange={setViewing}
         runtimeContext={runtimeContext}
         opener={gallery}
+        notesOffset={nativeChatSentNotesNumberMax(
+          blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+        )}
       />
     </div>
   )

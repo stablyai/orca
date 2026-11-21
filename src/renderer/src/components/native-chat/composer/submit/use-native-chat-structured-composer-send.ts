@@ -168,7 +168,6 @@ export function useNativeChatStructuredComposerSend({
           return
         }
         consumed = true
-        clearNativeChatAttachmentNotes(draftScopeKey, notedIds)
         const left = nativeChatComposerDraftLeftAfterSend(
           readNativeChatComposerDraft(draftScopeKey),
           submitted
@@ -238,6 +237,8 @@ export function useNativeChatStructuredComposerSend({
             revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
           )
           consume()
+          // Notes leave with their images only once the send is accepted; a refusal returns both.
+          clearNativeChatAttachmentNotes(draftScopeKey, notedIds)
           return true
         })
         .catch((error) => {

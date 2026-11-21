@@ -30,6 +30,8 @@ export function useNativeChatGeneratedImageAttach(
         )
         return null
       }
+      // Read before the chip starts, so a failed read leaves no pending chip behind.
+      const png = new Uint8Array(await image.arrayBuffer())
       const { id: pendingId } = startImageChip(owner, image, {
         deferPreview: false,
         canShow: canPaste
@@ -37,7 +39,6 @@ export function useNativeChatGeneratedImageAttach(
       if (!pendingId) {
         return null
       }
-      const png = new Uint8Array(await image.arrayBuffer())
       return (await saveClipboardImage(owner, pendingId, false, undefined, undefined, png))
         ? pendingId
         : null

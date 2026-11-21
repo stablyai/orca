@@ -8,6 +8,8 @@ import {
   nativeChatNoteTimesNeedTenths,
   type NativeChatMediaNote
 } from './native-chat-media-notes'
+import { dismissNativeChatNotesNotice } from './native-chat-notes-notice'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 
 /** The media the notes were made on, so reopening the chip edits them on the original. */
 export type NativeChatNotesSource = { path?: string; url?: string; connectionId?: string }
@@ -100,20 +102,26 @@ export function setNativeChatAttachmentNotes(
     ...value,
     notes: value.notes.map((note) => ({ ...note, text: note.text.slice(0, NOTE_TEXT_MAX) }))
   })
-  while (entries.size > NATIVE_CHAT_ATTACHMENT_NOTES_MAX) {
-    const oldest = entries.keys().next().value
-    if (oldest === undefined) {
+  // Over the cap, notes whose image left its draft go first, oldest first; notes on an image still
+  // in a draft are never dropped.
+  for (const stale of entries.keys()) {
+    if (entries.size <= NATIVE_CHAT_ATTACHMENT_NOTES_MAX) {
       break
     }
-    entries.delete(oldest)
+    const [scope, id] = stale.split('\u0000')
+    if (!readNativeChatComposerDraft(scope ?? '').images.some((image) => image.id === id)) {
+      entries.delete(stale)
+    }
   }
   changed()
 }
 
+/** Also ends the chat's notes line: once notes are sent or taken out, its Undo no longer applies. */
 export function clearNativeChatAttachmentNotes(
   scopeKey: string,
   attachmentIds: readonly string[]
 ): void {
+  dismissNativeChatNotesNotice(scopeKey)
   load()
   let removed = false
   for (const id of attachmentIds) {
@@ -172,7 +180,8 @@ export function withNativeChatAttachmentNotes(
   if (blocks.length === 0) {
     return text
   }
-  return [text.trim(), ...blocks].filter(Boolean).join('\n\n')
+  // Only trailing space goes: a leading one is the user's and decides how the text is sent.
+  return [text.trimEnd(), ...blocks].filter(Boolean).join('\n\n')
 }
 
 /** Test-only. */

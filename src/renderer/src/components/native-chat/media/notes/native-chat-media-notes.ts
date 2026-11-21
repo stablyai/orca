@@ -111,6 +111,28 @@ export function nativeChatNotesText(
 }
 
 /** The marked image's file name: the media's name, its frame time if any, and "-notes". */
+const SENT_NOTES_HEAD = /^Notes on .+ \(numbered marks in the attached image\):$/
+
+/** The highest note number already drawn into the marked images of a sent message, read from the
+ *  notes text it carries, so new notes on one of those images continue after it. */
+export function nativeChatSentNotesNumberMax(text: string): number {
+  let max = 0
+  let inNotes = false
+  for (const line of text.split(/\r?\n/)) {
+    if (SENT_NOTES_HEAD.test(line)) {
+      inNotes = true
+      continue
+    }
+    const numbered = inNotes ? /^(\d+)\. /.exec(line) : null
+    if (numbered) {
+      max = Math.max(max, Number(numbered[1]))
+    } else {
+      inNotes = false
+    }
+  }
+  return max
+}
+
 export function nativeChatNotesImageName(mediaName: string, time: number | undefined): string {
   const base = mediaName.replace(/\.[^.]+$/, '').replace(/-notes(-\d+)?$/, '')
   const frame = time === undefined ? '' : `-${time.toFixed(2).replace('.', '_')}s`

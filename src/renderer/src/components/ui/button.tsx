@@ -53,6 +53,19 @@ const buttonVariants = cva(
         // A chat notice's quiet icon tool: faint until hovered or open; pressed fills like a toggle.
         'chat-tool':
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
+        // The chat media viewer (always a dark surround with light paper over it, in both themes):
+        // its one affirmative action, in the note-mark blue.
+        'media-note':
+          'bg-media-note text-media-note-foreground hover:bg-media-note-hover focus-visible:ring-media-note-ring',
+        // A paper tool over the dark surround; unavailable, it fades into the surround.
+        'media-tool':
+          'border border-media-paper-border bg-media-paper text-media-paper-foreground hover:bg-media-paper-hover focus-visible:ring-media-note-ring aria-disabled:border-transparent aria-disabled:bg-transparent aria-disabled:text-media-canvas-foreground',
+        // A secondary action on the viewer's light notes panel.
+        'media-paper':
+          'border border-media-paper-border bg-media-paper text-media-paper-foreground hover:bg-media-paper-hover focus-visible:ring-media-note/50',
+        // A quiet action on the notes panel.
+        'media-paper-ghost':
+          'text-media-paper-muted hover:bg-media-paper-hover hover:text-media-paper-foreground focus-visible:ring-media-note/50',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
           'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'

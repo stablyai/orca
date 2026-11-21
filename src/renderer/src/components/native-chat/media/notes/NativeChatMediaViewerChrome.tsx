@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Copy, Download, MessageSquare, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
+import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
@@ -12,9 +13,6 @@ import type { PanZoomViewport } from '@/components/editor/viewer-viewport/use-pa
 import { IMAGE_VIEWER_ZOOM_STEP } from '@/components/editor/viewer-viewport/image-viewer-zoom'
 import { imageClipboardPngDataUrl } from '@/components/editor/document-images/image-png-export'
 
-const TOOL =
-  'inline-flex h-7 min-w-7 items-center justify-center gap-1.5 rounded-[7px] border border-border bg-popover px-2 text-xs text-popover-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-media-note-ring disabled:opacity-55'
-
 /** Title and the top-right tools: Annotate/Done, Notes (when hidden), Copy, Download, Close. */
 export function NativeChatMediaViewerChrome({
   title,
@@ -24,6 +22,8 @@ export function NativeChatMediaViewerChrome({
   panelHidden,
   noteCount,
   step,
+  annotateReason,
+  annotateHidden,
   onAnnotate,
   onShowNotes,
   onClose
@@ -34,8 +34,19 @@ export function NativeChatMediaViewerChrome({
   canAnnotate: boolean
   panelHidden: boolean
   noteCount: number
-  /** In a message's set of images: back and on, null at that end or while notes are open. */
-  step: { previous: (() => void) | null; next: (() => void) | null } | null
+  /** In a message's set of images: back and on (null at that end), which image this is, and why the
+   *  arrows wait when notes are open. */
+  step: {
+    previous: (() => void) | null
+    next: (() => void) | null
+    index: number
+    count: number
+    blockedReason: string | null
+  } | null
+  /** Why notes can't be made here. */
+  annotateReason: string | null
+  /** Annotate is left out entirely (phones view notes only). */
+  annotateHidden: boolean
   onAnnotate: () => void
   onShowNotes: () => void
   onClose: () => void
@@ -74,85 +85,111 @@ export function NativeChatMediaViewerChrome({
       <div className="flex shrink-0 gap-1.5">
         {step ? (
           <>
-            <button
+            <span className="self-center px-1 text-xs text-media-canvas-foreground/80 tabular-nums">
+              {t('components.native-chat.notes.imageIndex', '{{index}} / {{total}}', {
+                index: step.index + 1,
+                total: step.count
+              })}
+            </span>
+            <Button
               type="button"
-              disabled={!step.previous}
+              // Not `disabled`: a disabled button shows no tooltip, and this one says why.
+              aria-disabled={!step.previous}
               onClick={() => step.previous?.()}
               aria-label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
-              title={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
-              className={TOOL}
+              title={
+                step.blockedReason ??
+                t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')
+              }
+              variant="media-tool"
+              size="icon-sm"
             >
               <ChevronLeft className="size-3.5" />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              disabled={!step.next}
+              aria-disabled={!step.next}
               onClick={() => step.next?.()}
               aria-label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
-              title={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
-              className={TOOL}
+              title={
+                step.blockedReason ??
+                t('auto.components.editor.PanZoomImageDialog.next', 'Next image')
+              }
+              variant="media-tool"
+              size="icon-sm"
             >
               <ChevronRight className="size-3.5" />
-            </button>
+            </Button>
           </>
         ) : null}
-        <button
-          type="button"
-          aria-pressed={annotating}
-          disabled={!canAnnotate}
-          onClick={onAnnotate}
-          className={cn(
-            TOOL,
-            annotating && 'bg-media-note text-media-note-foreground hover:bg-media-note-hover'
-          )}
-        >
-          <MessageSquare aria-hidden className="size-3.5" />
-          {annotating
-            ? t('components.native-chat.notes.done', 'Done')
-            : t('components.native-chat.notes.annotate', 'Annotate')}
-          <ShortcutKeyCombo size="compact" keys={[annotating ? 'Esc' : 'C']} onFill />
-        </button>
+        {annotateHidden ? null : (
+          <Button
+            type="button"
+            aria-pressed={annotating}
+            aria-disabled={!canAnnotate}
+            title={canAnnotate ? undefined : (annotateReason ?? undefined)}
+            onClick={() => canAnnotate && onAnnotate()}
+            variant={annotating ? 'media-note' : 'media-tool'}
+            size="sm"
+          >
+            <MessageSquare aria-hidden className="size-3.5" />
+            {annotating
+              ? t('components.native-chat.notes.done', 'Done')
+              : t('components.native-chat.notes.annotate', 'Annotate')}
+            <ShortcutKeyCombo size="compact" keys={[annotating ? 'Esc' : 'C']} onFill />
+          </Button>
+        )}
         {panelHidden ? (
-          <button
+          <Button
             type="button"
             onClick={onShowNotes}
             aria-label={t('components.native-chat.notes.showNotes', 'Show notes ({{count}})', {
               count: noteCount
             })}
-            className={TOOL}
+            variant="media-tool"
+            size="sm"
           >
             {t('components.native-chat.notes.title', 'Notes')}
             <span className="tabular-nums">{noteCount}</span>
-          </button>
+          </Button>
         ) : null}
-        <button
+        <Button
           type="button"
           onClick={() => void copy()}
-          disabled={!src}
+          aria-disabled={!src}
           aria-label={t('components.native-chat.notes.copy', 'Copy image')}
           title={t('components.native-chat.notes.copy', 'Copy image')}
-          className={TOOL}
+          variant="media-tool"
+          size="icon-sm"
         >
           <Copy className="size-3.5" />
-        </button>
-        <a
-          href={src ?? undefined}
-          download={title}
-          aria-label={t('components.native-chat.notes.download', 'Download')}
-          title={t('components.native-chat.notes.download', 'Download')}
-          className={cn(TOOL, !src && 'pointer-events-none opacity-55')}
+        </Button>
+        <Button
+          asChild
+          variant="media-tool"
+          size="icon-sm"
+          aria-disabled={!src}
+          className={cn(!src && 'pointer-events-none')}
         >
-          <Download className="size-3.5" />
-        </a>
-        <button
+          <a
+            href={src ?? undefined}
+            download={title}
+            aria-label={t('components.native-chat.notes.download', 'Download')}
+            title={t('components.native-chat.notes.download', 'Download')}
+          >
+            <Download className="size-3.5" />
+          </a>
+        </Button>
+        <Button
           type="button"
           onClick={onClose}
           aria-label={t('components.native-chat.notes.close', 'Close')}
           title={t('components.native-chat.notes.close', 'Close')}
-          className={TOOL}
+          variant="media-tool"
+          size="icon-sm"
         >
           <X className="size-3.5" />
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -160,46 +197,58 @@ export function NativeChatMediaViewerChrome({
 
 /** Zoom out, the current zoom, zoom in, and Fit, at the bottom left. */
 export function NativeChatMediaViewerZoom({
-  panZoom
+  panZoom,
+  aboveSheet = false
 }: {
   panZoom: PanZoomViewport
+  /** The narrow notes sheet covers the bottom of the viewer; sit just above it. */
+  aboveSheet?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const button =
-    'h-6 min-w-6 rounded-[5px] px-1 text-xs text-popover-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-45'
   return (
     <div
       role="group"
       aria-label={t('components.native-chat.notes.zoom', 'Zoom')}
-      className="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-[7px] border border-border bg-popover px-1 py-0.5"
+      className={cn(
+        'absolute left-3 z-10 flex items-center gap-0.5 rounded-md border border-media-paper-border bg-media-paper px-1 py-0.5',
+        aboveSheet ? 'bottom-[calc(52%+0.75rem)]' : 'bottom-3'
+      )}
     >
-      <button
+      <Button
         type="button"
-        className={button}
+        variant="media-paper-ghost"
+        size="icon-xs"
         disabled={!panZoom.canZoomOut}
         aria-label={t('components.native-chat.notes.zoomOut', 'Zoom out')}
         onClick={() => panZoom.zoomBy(1 / IMAGE_VIEWER_ZOOM_STEP)}
       >
         −
-      </button>
+      </Button>
       <span
         aria-live="polite"
-        className="min-w-10 text-center text-xs text-popover-foreground tabular-nums"
+        className="min-w-10 text-center text-xs text-media-paper-foreground tabular-nums"
       >
         {Math.round(panZoom.scale * 100)}%
       </span>
-      <button
+      <Button
         type="button"
-        className={button}
+        variant="media-paper-ghost"
+        size="icon-xs"
         disabled={!panZoom.canZoomIn}
         aria-label={t('components.native-chat.notes.zoomIn', 'Zoom in')}
         onClick={() => panZoom.zoomBy(IMAGE_VIEWER_ZOOM_STEP)}
       >
         +
-      </button>
-      <button type="button" className={button} disabled={panZoom.isFitted} onClick={panZoom.fit}>
+      </Button>
+      <Button
+        type="button"
+        variant="media-paper-ghost"
+        size="xs"
+        disabled={panZoom.isFitted}
+        onClick={panZoom.fit}
+      >
         {t('components.native-chat.notes.fit', 'Fit')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -229,15 +278,17 @@ export function NativeChatNotesSendButton({
           className={cn(
             'text-xs',
             inSheet
-              ? 'flex-1 text-muted-foreground'
+              ? 'flex-1 text-media-paper-muted'
               : 'rounded-md bg-media-canvas/80 px-2 py-1 text-media-canvas-foreground'
           )}
         >
           {reason}
         </span>
       ) : null}
-      <button
+      <Button
         type="button"
+        variant="media-note"
+        size="sm"
         disabled={!canSend}
         onClick={() => void onSend()}
         aria-describedby={reason ? 'native-chat-notes-send-reason' : undefined}
@@ -246,7 +297,6 @@ export function NativeChatNotesSendButton({
           'Send {{count}} notes to this chat',
           { defaultValue_one: 'Send {{count}} note to this chat', count }
         )}
-        className="inline-flex h-[30px] items-center gap-2 rounded-[7px] bg-media-note px-3 text-sm text-media-note-foreground hover:bg-media-note-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-media-note-ring disabled:opacity-55"
       >
         {busy
           ? t('components.native-chat.notes.preparing', 'Preparing…')
@@ -256,7 +306,7 @@ export function NativeChatNotesSendButton({
           keys={isMacPlatform() ? ['⌘', '↵'] : ['Ctrl', '↵']}
           onFill
         />
-      </button>
+      </Button>
     </>
   )
 }
@@ -264,9 +314,12 @@ export function NativeChatNotesSendButton({
 /** Reads the image's natural size off screen, so the viewer can lay it out and draw on it. */
 export function NativeChatMediaImageLoader({
   src,
-  onLoaded
+  onLoaded,
+  onError
 }: {
   src: string
+  /** The file is missing or isn't an image: the viewer shows its fallback instead. */
+  onError: () => void
   onLoaded: (loaded: { size: { width: number; height: number }; image: HTMLImageElement }) => void
 }): React.JSX.Element {
   return (
@@ -274,6 +327,7 @@ export function NativeChatMediaImageLoader({
       src={src}
       alt=""
       className="hidden"
+      onError={onError}
       onLoad={(event) => {
         const image = event.currentTarget
         if (image.naturalWidth > 0) {

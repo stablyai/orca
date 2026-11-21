@@ -58,6 +58,7 @@ export const viewing = defineFixture({
       opener={opener}
       onPrevious={null}
       onNext={() => {}}
+      position={{ index: 0, count: 3 }}
     />
   )
 })
@@ -71,7 +72,7 @@ const composer: NativeChatComposerHandle = {
   handlePasteEvent: () => {},
   pasteFromClipboard: () => {},
   contains: () => false,
-  notesAdmitted: () => true
+  notesBlocked: () => null
 }
 
 /** A chat with an empty message box, so Send is offered as it is in a real chat. */

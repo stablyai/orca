@@ -136,15 +136,18 @@ export function useNativeChatComposerEditSession({
   )
   const submit = useLatestHandler(() => send())
   // Notes may send with the draft only when Enter would deliver it as a message, never run it as a command.
-  const notesAdmitted = useLatestHandler((): boolean => {
-    if (isEditing || !submission.messageDelivery) {
-      return false
+  const notesBlocked = useLatestHandler((): 'editing' | 'command' | null => {
+    if (isEditing) {
+      return 'editing'
     }
     const text = readNativeChatComposerDraft(draftScopeKey).text
-    return Boolean(structuredTransport) || peekSendClassification(text) !== 'command'
+    return submission.messageDelivery &&
+      (Boolean(structuredTransport) || peekSendClassification(text) !== 'command')
+      ? null
+      : 'command'
   })
   // The pane's own handle object, so its identity changes only when that handle does.
-  useImperativeHandle(ref, () => Object.assign(handle.current!, { submit, notesAdmitted }))
+  useImperativeHandle(ref, () => Object.assign(handle.current!, { submit, notesBlocked }))
   const chooseEditItem = useCallback(
     (item: Parameters<typeof completeItem>[0]) => {
       if (item.kind === 'command' && refuseEditCommand(`/${item.name}`)) {

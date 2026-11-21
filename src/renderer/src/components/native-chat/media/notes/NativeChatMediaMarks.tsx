@@ -12,10 +12,10 @@ type Point = { x: number; y: number }
 
 // Fixed blue that also marks the image the agent receives, so it reads the same in both themes.
 const BADGE =
-  'flex size-5 items-center justify-center rounded-full border-2 border-media-note-foreground bg-media-note text-2xs font-semibold text-media-note-foreground shadow-[0_0_0_1px_var(--media-canvas)]'
+  'flex size-5 items-center justify-center rounded-full border-2 border-media-note-foreground bg-media-note text-2xs font-semibold text-media-note-foreground ring-1 ring-media-canvas'
 // Two-tone ring: dark edge and light halo, visible on light and dark media alike.
 const FOCUS_RING =
-  'focus-visible:outline-2 focus-visible:outline-media-canvas focus-visible:outline-offset-1 focus-visible:shadow-[0_0_0_5px_var(--media-note-ring)]'
+  'focus-visible:outline-2 focus-visible:outline-media-canvas focus-visible:outline-offset-1 focus-visible:ring-4 focus-visible:ring-media-note-ring'
 
 /** Numbered pins and boxes over the media, sized with it so zoom never moves a mark or scales its badge. */
 export function NativeChatMediaMarks({
@@ -35,7 +35,6 @@ export function NativeChatMediaMarks({
   onOpen: (id: string) => void
   onMove: (id: string, mark: NativeChatNoteMark) => void
 }): React.JSX.Element {
-  const t = useTranslate()
   const layerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ start: Point; startPx: Point } | null>(null)
   const [ghost, setGhost] = useState<NativeChatNoteMark | null>(null)
@@ -53,18 +52,9 @@ export function NativeChatMediaMarks({
     <div
       ref={layerRef}
       data-native-chat-note-layer=""
-      // Annotating, the media takes clicks and drags; pan stays on the wheel and Space-drag.
-      tabIndex={annotating ? 0 : -1}
-      role={annotating ? 'application' : undefined}
-      aria-label={
-        annotating
-          ? t(
-              'components.native-chat.notes.mediaLabel',
-              'Media. Click to pin a spot or drag to box an area; Enter pins the center.'
-            )
-          : undefined
-      }
-      className={cn('absolute inset-0', annotating && 'cursor-crosshair', FOCUS_RING)}
+      // Annotating, the media takes clicks and drags; pan stays on the wheel and Alt-drag. Keyboard
+      // focus and Enter belong to the viewport around it.
+      className={cn('absolute inset-0', annotating && 'cursor-crosshair')}
       onPointerDown={(event) => {
         if (!annotating || event.button !== 0 || event.target !== layerRef.current) {
           return
@@ -99,12 +89,6 @@ export function NativeChatMediaMarks({
       onPointerCancel={() => {
         dragRef.current = null
         setGhost(null)
-      }}
-      onKeyDown={(event) => {
-        if (annotating && event.target === layerRef.current && event.key === 'Enter') {
-          event.preventDefault()
-          onPlace({ kind: 'pin', x: 0.5, y: 0.5 })
-        }
       }}
     >
       {all.map((note) => (
@@ -185,14 +169,14 @@ function NoteMark({
     }
   }
   const ring = selected
-    ? 'outline-2 outline-media-canvas outline-offset-1 shadow-[0_0_0_5px_var(--media-note-selected)]'
+    ? 'outline-2 outline-media-canvas outline-offset-1 ring-4 ring-media-note-selected'
     : ''
   if (note.mark.kind === 'box') {
     return (
       <button
         {...common}
         className={cn(
-          'absolute rounded-[2px] border-2 border-media-note bg-media-note/15 shadow-[inset_0_0_0_1px_var(--media-note-foreground)]',
+          'absolute rounded-xs border-2 border-media-note bg-media-note/15 ring-1 ring-inset ring-media-note-foreground',
           ring,
           FOCUS_RING
         )}

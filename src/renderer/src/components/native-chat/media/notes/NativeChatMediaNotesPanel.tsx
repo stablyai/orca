@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { Button } from '@/components/ui/button'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+
+/** The panel's error line, focused when a hand-off fails. */
+export const NATIVE_CHAT_NOTES_ERROR_ID = 'native-chat-notes-error'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '@/components/ui/button'
 import { formatNativeChatNoteTime, type NativeChatMediaNote } from './native-chat-media-notes'
 import type { NativeChatNotesEditor } from './use-native-chat-notes-editor'
 
@@ -43,39 +47,38 @@ export function NativeChatMediaNotesPanel({
       aria-label={t('components.native-chat.notes.title', 'Notes')}
       className={cn(
         // A white card on dark media in both themes, as the media viewer always is.
-        'flex flex-col bg-popover text-popover-foreground shadow-[0_10px_30px_rgb(0_0_0/0.45)]',
-        narrow ? 'max-h-[52%] rounded-t-xl' : 'max-h-[calc(100%-7rem)] w-80 rounded-xl'
+        'flex flex-col bg-media-paper text-media-paper-foreground shadow-xl',
+        // The sheet shrinks within its capped holder, so a long list scrolls above Send.
+        narrow ? 'min-h-0 rounded-t-xl' : 'max-h-[calc(100%-7rem)] w-80 rounded-xl'
       )}
     >
-      <header className="flex shrink-0 items-center gap-1.5 border-b border-border py-2 pr-2 pl-3.5">
+      <header className="flex shrink-0 items-center gap-1.5 border-b border-media-paper-border py-2 pr-2 pl-3.5">
         <h2 className="text-sm font-semibold">
           {t('components.native-chat.notes.title', 'Notes')}
         </h2>
-        <span className="text-sm text-muted-foreground">{notes.length}</span>
+        <span className="text-sm text-media-paper-muted">{notes.length}</span>
         <span className="flex-1" />
         {notes.length > 1 ? (
-          <button
-            type="button"
-            onClick={editor.clear}
-            className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-          >
+          <Button type="button" variant="media-paper-ghost" size="xs" onClick={editor.clear}>
             {t('components.native-chat.notes.clear', 'Clear')}
-          </button>
+          </Button>
         ) : null}
-        <ShortcutKeyCombo size="compact" keys={isMacPlatform() ? ['⇧', 'C'] : ['Shift', 'C']} />
-        <button
+        <Button
           type="button"
           aria-label={t('components.native-chat.notes.hide', 'Hide notes')}
-          title={t('components.native-chat.notes.hide', 'Hide notes')}
+          aria-keyshortcuts="Shift+C"
+          // The shortcut belongs to Hide, so it is named here and not beside Clear.
+          title={`${t('components.native-chat.notes.hide', 'Hide notes')} (${isMacPlatform() ? '⇧C' : 'Shift+C'})`}
           onClick={onHide}
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+          variant="media-paper-ghost"
+          size="icon-xs"
         >
           <X className="size-3.5" />
-        </button>
+        </Button>
       </header>
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
         {notes.length === 0 && !pending ? (
-          <p className="px-1.5 py-1 text-sm leading-relaxed text-muted-foreground">
+          <p className="px-1.5 py-1 text-sm leading-relaxed text-media-paper-muted">
             {t('components.native-chat.notes.emptyPin', 'Click to pin a spot')}
             <br />
             {t('components.native-chat.notes.emptyBox', 'Drag to box an area')}
@@ -106,9 +109,12 @@ export function NativeChatMediaNotesPanel({
       </div>
       {status ? (
         <div
-          role="status"
+          // An error takes focus when it appears (a failed hand-off), so it is heard and seen.
+          role={status.kind === 'error' ? 'alert' : 'status'}
+          id={status.kind === 'error' ? NATIVE_CHAT_NOTES_ERROR_ID : undefined}
+          tabIndex={status.kind === 'error' ? -1 : undefined}
           className={cn(
-            'flex shrink-0 items-center gap-2 border-t border-border px-3.5 py-1.5 text-xs',
+            'flex shrink-0 items-center gap-2 border-t border-media-paper-border px-3.5 py-1.5 text-xs focus-visible:outline-2 focus-visible:outline-media-note',
             status.kind === 'error' || status.kind === 'frame-limit' ? 'text-destructive' : ''
           )}
         >
@@ -125,20 +131,16 @@ export function NativeChatMediaNotesPanel({
                 : status.message}
           </span>
           {status.kind === 'removed' ? (
-            <button
-              type="button"
-              onClick={editor.undo}
-              className="font-semibold text-foreground underline focus-visible:outline-2 focus-visible:outline-ring"
-            >
+            <Button type="button" variant="media-paper-ghost" size="xs" onClick={editor.undo}>
               {t('components.native-chat.notes.undo', 'Undo')}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
       {notes.length > 0 || pending ? (
         <p
           className={cn(
-            'shrink-0 border-t border-border px-3.5 py-2 text-xs text-muted-foreground',
+            'shrink-0 border-t border-media-paper-border px-3.5 py-2 text-xs text-media-paper-muted',
             narrow && 'hidden'
           )}
         >
@@ -146,7 +148,7 @@ export function NativeChatMediaNotesPanel({
         </p>
       ) : null}
       {narrow && sendSlot ? (
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-2.5 py-2">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-media-paper-border px-2.5 py-2">
           {sendSlot}
         </div>
       ) : null}
@@ -165,7 +167,7 @@ function NoteRow({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="group/note flex items-start gap-2 rounded-md p-1.5 hover:bg-accent focus-within:bg-accent">
+    <div className="group/note relative flex items-start gap-2 rounded-md p-1.5 hover:bg-media-paper-hover focus-within:bg-media-paper-hover">
       <NoteNumber number={note.number} />
       <div className="min-w-0 flex-1">
         <button
@@ -175,22 +177,26 @@ function NoteRow({
             number: note.number,
             text: note.text
           })}
-          className="block w-full rounded text-left text-sm whitespace-pre-wrap break-words focus-visible:outline-2 focus-visible:outline-ring"
+          className="block w-full rounded text-left text-sm whitespace-pre-wrap break-words focus-visible:outline-2 focus-visible:outline-media-note"
         >
           {note.text}
         </button>
-        {time ? <div className="text-xs text-muted-foreground">{time}</div> : null}
+        {time ? <div className="text-xs text-media-paper-muted">{time}</div> : null}
       </div>
-      <button
-        type="button"
-        onClick={() => editor.remove(note.id)}
-        aria-label={t('components.native-chat.notes.removeNote', 'Remove note {{number}}', {
-          number: note.number
-        })}
-        className="rounded px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 group-hover/note:opacity-100 group-focus-within/note:opacity-100 hover:bg-accent focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        {t('components.native-chat.notes.remove', 'Remove')}
-      </button>
+      {/* Laid over the row's end, so the note text keeps the full width until it is needed. */}
+      <span className="absolute top-1 right-1 opacity-0 group-hover/note:opacity-100 group-focus-within/note:opacity-100">
+        <Button
+          type="button"
+          variant="media-paper"
+          size="xs"
+          onClick={() => editor.remove(note.id)}
+          aria-label={t('components.native-chat.notes.removeNote', 'Remove note {{number}}', {
+            number: note.number
+          })}
+        >
+          {t('components.native-chat.notes.remove', 'Remove')}
+        </Button>
+      </span>
     </div>
   )
 }
@@ -240,13 +246,13 @@ function NoteEditor({
   return (
     <div
       data-note-editor=""
-      className="my-1.5 rounded-lg border border-border bg-background p-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
+      className="my-1.5 rounded-lg border border-media-paper-border bg-media-paper p-2 focus-within:border-media-note focus-within:ring-1 focus-within:ring-media-note"
     >
-      <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="mb-1 flex items-center gap-1.5 text-xs text-media-paper-muted">
         <NoteNumber number={note.number} />
         <span>{time ? `${heading} ${time}` : heading}</span>
         <span className="flex-1" />
-        <button
+        <Button
           type="button"
           onClick={close}
           aria-label={
@@ -256,10 +262,11 @@ function NoteEditor({
                 })
               : t('components.native-chat.notes.closeEditor', 'Close editor')
           }
-          className="flex size-6 items-center justify-center rounded hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+          variant="media-paper-ghost"
+          size="icon-xs"
         >
           <X className="size-3" />
-        </button>
+        </Button>
       </div>
       <textarea
         ref={ref}
@@ -269,7 +276,7 @@ function NoteEditor({
         placeholder={t('components.native-chat.notes.placeholder', 'Add a note')}
         onChange={(event) => editor.setDraftText(event.target.value)}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) {
+          if (isImeCompositionKeyDown(event)) {
             return
           }
           if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
@@ -283,11 +290,12 @@ function NoteEditor({
             close()
           }
         }}
-        className="w-full resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        className="w-full resize-none bg-transparent text-sm text-media-paper-foreground outline-none placeholder:text-media-paper-muted"
       />
       <div className="flex justify-end">
         <Button
           type="button"
+          variant="media-note"
           size="xs"
           disabled={!canCommit}
           onClick={() => editor.commit() && onClosed()}
@@ -323,7 +331,7 @@ function ConfirmPrompt({
     <div
       role="alertdialog"
       aria-label={message}
-      className="my-1.5 rounded-lg border border-status-warning-border bg-status-warning-background p-2 text-xs text-status-warning-foreground"
+      className="my-1.5 rounded-lg border border-status-warning-border bg-status-warning-background p-2 text-xs text-media-paper-foreground"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -337,6 +345,7 @@ function ConfirmPrompt({
         <Button
           ref={keep}
           type="button"
+          variant="media-note"
           size="xs"
           onClick={() => editor.commit() && onConfirmed(reason)}
         >
@@ -346,8 +355,8 @@ function ConfirmPrompt({
         </Button>
         <Button
           type="button"
+          variant="media-paper"
           size="xs"
-          variant="outline"
           onClick={() => {
             editor.closeEditor()
             onConfirmed(reason)
@@ -355,7 +364,12 @@ function ConfirmPrompt({
         >
           {t('components.native-chat.notes.discard', 'Discard')}
         </Button>
-        <Button type="button" size="xs" variant="outline" onClick={() => editor.setConfirm(null)}>
+        <Button
+          type="button"
+          variant="media-paper"
+          size="xs"
+          onClick={() => editor.setConfirm(null)}
+        >
           {t('components.native-chat.notes.keepEditing', 'Keep editing')}
         </Button>
       </div>

@@ -15,7 +15,8 @@ export type NativeChatNotesStatus =
   | { kind: 'frame-limit' }
   | { kind: 'error'; message: string }
 
-type Removed = { notes: NativeChatMediaNote[]; at: number[] }
+/** Undo steps kept per viewer. */
+const HISTORY_MAX = 50
 
 let noteSequence = 0
 const nextNoteId = (): string => `note-${Date.now().toString(36)}-${(noteSequence += 1)}`
@@ -33,7 +34,13 @@ export function useNativeChatNotesEditor(initial: {
   const [draftText, setDraftText] = useState('')
   const [confirm, setConfirm] = useState<NativeChatNotesConfirm | null>(null)
   const [status, setStatus] = useState<NativeChatNotesStatus | null>(null)
-  const [removed, setRemoved] = useState<Removed | null>(null)
+  // Every change to the notes can be undone and redone, as in Orca's other annotation tools.
+  const [past, setPast] = useState<NativeChatMediaNote[][]>([])
+  const [future, setFuture] = useState<NativeChatMediaNote[][]>([])
+  const record = useCallback((before: NativeChatMediaNote[]) => {
+    setPast((current) => [...current.slice(1 - HISTORY_MAX), before])
+    setFuture([])
+  }, [])
 
   const editing = editingId ? (notes.find((note) => note.id === editingId) ?? null) : null
   // Opening a note to read it is not a change; only different words are unsaved.
@@ -105,6 +112,7 @@ export function useNativeChatNotesEditor(initial: {
     if (!text) {
       return false
     }
+    record(notes)
     if (pending) {
       setNotes((current) => [...current, { ...pending, text }])
     } else if (editingId) {
@@ -114,7 +122,7 @@ export function useNativeChatNotesEditor(initial: {
     }
     closeEditor()
     return true
-  }, [closeEditor, draftText, editingId, pending])
+  }, [closeEditor, draftText, editingId, notes, pending, record])
 
   const remove = useCallback(
     (id: string) => {
@@ -122,7 +130,7 @@ export function useNativeChatNotesEditor(initial: {
       if (at === -1) {
         return
       }
-      const gone = notes[at]!
+      record(notes)
       setNotes(
         renumberNativeChatNotes(
           notes.filter((note) => note.id !== id),
@@ -133,38 +141,73 @@ export function useNativeChatNotesEditor(initial: {
       if (editingId === id) {
         closeEditor()
       }
-      setRemoved({ notes: [gone], at: [at] })
       setStatus({ kind: 'removed', count: 1 })
     },
-    [closeEditor, editingId, notes, offset]
+    [closeEditor, editingId, notes, offset, record]
   )
 
   const clear = useCallback(() => {
     if (notes.length === 0) {
       return
     }
-    setRemoved({ notes, at: notes.map((_, index) => index) })
+    record(notes)
     setNotes([])
     closeEditor()
     setStatus({ kind: 'removed', count: notes.length })
-  }, [closeEditor, notes])
+  }, [closeEditor, notes, record])
+
+  /** Shows an earlier or later set of notes. A note being written stays open, numbered after them;
+   *  an edit of a note that isn't in that set closes. */
+  const applyHistory = useCallback(
+    (shown: NativeChatMediaNote[]) => {
+      setNotes(shown)
+      setPending((current) => (current ? { ...current, number: offset + shown.length + 1 } : null))
+      if (editingId && !shown.some((note) => note.id === editingId)) {
+        closeEditor()
+      }
+      setStatus(null)
+    },
+    [closeEditor, editingId, offset]
+  )
 
   const undo = useCallback((): boolean => {
-    if (!removed) {
+    const previous = past.at(-1)
+    if (!previous) {
       return false
     }
-    const next = [...notes]
-    removed.notes.forEach((note, index) => next.splice(removed.at[index] ?? next.length, 0, note))
-    setNotes(renumberNativeChatNotes(next, offset))
-    setRemoved(null)
-    setStatus(null)
+    setPast(past.slice(0, -1))
+    setFuture((current) => [notes, ...current])
+    applyHistory(previous)
     return true
-  }, [notes, offset, removed])
+  }, [applyHistory, notes, past])
 
-  const move = useCallback((id: string, mark: NativeChatNoteMark) => {
-    setPending((current) => (current?.id === id ? { ...current, mark } : current))
-    setNotes((current) => current.map((note) => (note.id === id ? { ...note, mark } : note)))
-  }, [])
+  const redo = useCallback((): boolean => {
+    const next = future[0]
+    if (!next) {
+      return false
+    }
+    setFuture(future.slice(1))
+    setPast((current) => [...current, notes])
+    applyHistory(next)
+    return true
+  }, [applyHistory, future, notes])
+
+  /** Notes held from an earlier visit, once the viewer knows its chat. */
+  const restore = useCallback(
+    (held: readonly NativeChatMediaNote[]) => setNotes(renumberNativeChatNotes([...held], offset)),
+    [offset]
+  )
+
+  const move = useCallback(
+    (id: string, mark: NativeChatNoteMark) => {
+      setPending((current) => (current?.id === id ? { ...current, mark } : current))
+      if (notes.some((note) => note.id === id)) {
+        record(notes)
+        setNotes((current) => current.map((note) => (note.id === id ? { ...note, mark } : note)))
+      }
+    },
+    [notes, record]
+  )
 
   return useMemo(
     () => ({
@@ -178,7 +221,7 @@ export function useNativeChatNotesEditor(initial: {
       setConfirm,
       status,
       setStatus,
-      canUndo: removed !== null,
+      canUndo: past.length > 0,
       place,
       open,
       commit,
@@ -186,6 +229,8 @@ export function useNativeChatNotesEditor(initial: {
       remove,
       clear,
       undo,
+      redo,
+      restore,
       move
     }),
     [
@@ -196,7 +241,9 @@ export function useNativeChatNotesEditor(initial: {
       hasUnadded,
       confirm,
       status,
-      removed,
+      past,
+      redo,
+      restore,
       place,
       open,
       commit,

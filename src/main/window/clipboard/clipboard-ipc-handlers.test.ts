@@ -773,10 +773,17 @@ describe('registerClipboardHandlers', () => {
     ])
     registerClipboardHandlers(authorizeLocalPath)
     const save = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
+    // Only reads made by this save count.
+    clipboardAvailableFormatsMock.mockClear()
+    clipboardReadImageMock.mockClear()
+    clipboardReadBufferMock.mockClear()
 
     await expect(save?.(makeClipboardEvent(), { png })).resolves.toMatch(/\.png$/)
     expect(fsWriteFileMock).toHaveBeenCalledWith(expect.any(String), Buffer.from(png))
+    // Nothing on the clipboard is read for a notes image: neither its image nor its file formats.
+    expect(clipboardAvailableFormatsMock).not.toHaveBeenCalled()
     expect(clipboardReadImageMock).not.toHaveBeenCalled()
+    expect(clipboardReadBufferMock).not.toHaveBeenCalled()
 
     const notPng = Uint8Array.from({ length: 32 }, () => 7)
     await expect(save?.(makeClipboardEvent(), { png: notPng })).rejects.toThrow()

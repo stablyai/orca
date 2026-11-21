@@ -12,6 +12,7 @@ import {
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
 import { clearNativeChatAttachmentNotesWhere } from '../media/notes/native-chat-attachment-notes'
+import { clearNativeChatHeldNotesWhere } from '../media/notes/native-chat-held-notes'
 import type {
   StoredNativeChatComposerDraft,
   NativeChatComposerDraftOwner
@@ -23,6 +24,7 @@ export function deleteNativeChatComposerDraftsWhere(
   deleteLoadingNativeChatComposerDraftsWhere(matches)
   retireNativeChatComposerSubmissionsWhere(matches)
   clearNativeChatAttachmentNotesWhere((scope) => matches(scope, records.get(scope)))
+  clearNativeChatHeldNotesWhere((scope) => matches(scope, records.get(scope)))
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {

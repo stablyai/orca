@@ -91,8 +91,12 @@ export function useNativeChatPtyComposerSend(args: {
       text = retry
         ? resolveNativeChatPastedText(args.draftScopeKey, text)
         : serializeNativeChatAgentReferences(text, submitted.document, submitted.pastedTextFiles)
-      // A marked image's notes go with it, once; a retry resends the text it already carried.
-      const notedIds = retry ? [] : args.imageAttachments.flatMap(({ id }) => (id ? [id] : []))
+      // A marked image's notes go with a message, once; never into a command's arguments, and a
+      // retry resends the text it already carried.
+      const notedIds =
+        retry || classification === 'command'
+          ? []
+          : args.imageAttachments.flatMap(({ id }) => (id ? [id] : []))
       text = withNativeChatAttachmentNotes(text, args.draftScopeKey, notedIds)
       const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
         launchDraft: args.launchDraft,

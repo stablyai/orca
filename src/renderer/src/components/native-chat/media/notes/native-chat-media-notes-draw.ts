@@ -24,7 +24,7 @@ export function nativeChatNoteBadgePoint(
 
 /** Draws `source` with each note's numbered mark into a PNG no larger than the output limit. */
 export async function drawNativeChatNotesImage(
-  source: CanvasImageSource,
+  source: ImageBitmapSource,
   sourceSize: { width: number; height: number },
   notes: readonly NativeChatMediaNote[]
 ): Promise<Blob> {
@@ -37,7 +37,18 @@ export async function drawNativeChatNotesImage(
     if (!context) {
       throw new Error('Canvas drawing is unavailable.')
     }
-    context.drawImage(source, 0, 0, width, height)
+    // Decoded straight to the output size: a full-size second decode of a large source would cost
+    // up to ~160 MB more at 33 MP (measured), this costs about the output's own size.
+    const bitmap = await createImageBitmap(source, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'high'
+    })
+    try {
+      context.drawImage(bitmap, 0, 0)
+    } finally {
+      bitmap.close()
+    }
     const unit = Math.max(width, height) / 1000
     const radius = Math.max(9, 14 * unit)
     for (const note of notes) {

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/class-names'
+import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { usePanZoomViewport } from '@/components/editor/viewer-viewport/use-pan-zoom-viewport'
 import type { PanZoomSize } from '../../../../../../shared/document-preview/pan-zoom-view'
@@ -16,16 +16,12 @@ import {
 import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import { nativeChatNoteTimesNeedTenths, type NativeChatMediaNote } from './native-chat-media-notes'
 import type { NativeChatNotesSource } from './native-chat-attachment-notes'
+import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
+import { useViewerZoomCommands } from '@/components/editor/viewer-viewport/use-viewer-zoom-commands'
 import {
-  afterComposerRender,
-  attachNativeChatNotes,
-  detachNativeChatNotes,
-  nativeChatNotesComposer,
-  nativeChatNotesStillInDraft,
-  watchNativeChatNotesLeaveDraft,
-  type NativeChatNotesComposer
-} from './native-chat-notes-handoff'
-import { holdNativeChatNotes, takeHeldNativeChatNotes } from './native-chat-held-notes'
+  focusNativeChatMediaViewportSoon,
+  handleNativeChatMediaViewportKey
+} from './native-chat-media-viewport-keys'
 
 /** Below this width the notes panel becomes a bottom sheet. */
 const NARROW_WIDTH = 720
@@ -42,8 +38,12 @@ export type NativeChatMediaViewerProps = {
   /** Reopening a marked image: its notes, editable again on the original. */
   initialNotes?: readonly NativeChatMediaNote[]
   offset?: number
-  /** The marked images a hand-off attached, so a reopened chip can be replaced by them. */
-  onAttached?: (ids: string[]) => void
+  /** The marked images a hand-off attached; a returned function undoes what the caller replaced. */
+  onAttached?: (ids: string[]) => (() => void) | void
+  /** A reopened marked image whose notes were all deleted on close; returns its Undo. */
+  onCleared?: () => () => void
+  /** The draft image these notes replace (a chip opened from the message box). */
+  replacesAttachmentId?: string
   fallback?: React.ReactNode
   /** False for web images: drawing them would need a cross-origin read, so they are view-only. */
   annotatable?: boolean
@@ -53,6 +53,8 @@ export type NativeChatMediaViewerProps = {
   copySrc?: string
   /** In a message's set of images: back and on, by the arrows or ← and →; null at that end. */
   onPrevious?: (() => void) | null
+  /** Which of the message's images this is. */
+  position?: { index: number; count: number }
   onNext?: (() => void) | null
 }
 
@@ -75,152 +77,85 @@ function ViewerBody({
   initialNotes,
   offset = 0,
   onAttached,
+  onCleared,
+  replacesAttachmentId,
   fallback,
   annotatable = true,
   onInteractOutside,
   copySrc,
   onPrevious,
-  onNext
+  onNext,
+  position
 }: NativeChatMediaViewerProps): React.JSX.Element {
-  const t = useTranslate()
-  const sourceKey = source.path ?? source.url ?? title
-  const [held] = useState(() => (initialNotes ? null : takeHeldNativeChatNotes(sourceKey)))
-  const editor = useNativeChatNotesEditor({ notes: initialNotes ?? held ?? [], offset })
-  const [annotating, setAnnotating] = useState(Boolean(initialNotes?.length || held?.length))
+  const editor = useNativeChatNotesEditor({ notes: initialNotes ?? [], offset })
+  const [annotating, setAnnotating] = useState(Boolean(initialNotes?.length))
   const [panelHidden, setPanelHidden] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_WIDTH)
   const [loaded, setLoaded] = useState<{ size: PanZoomSize; image: HTMLImageElement } | null>(null)
   const panZoom = usePanZoomViewport({ content: loaded?.size ?? null, contain: true })
+  // ⌘+ ⌘− ⌘0 zoom here as in Orca's other image viewers.
+  useViewerZoomCommands(panZoom, 'popup')
+  const [broken, setBroken] = useState(false)
+  const openerFocus = useRef<Element | null>(null)
+  // Set when the close prompt is answered: the viewer closes once the answered note is settled.
+  const closeRequested = useRef(false)
   const { setCanvas, canvasHandlers, cursor, scale, offset: viewOffset } = panZoom
-  const layerRef = useRef<HTMLDivElement>(null)
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const t = useTranslate()
   useEffect(() => {
     const onResize = (): void => setNarrow(window.innerWidth < NARROW_WIDTH)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  // Phones view sent notes; making notes needs a pointer and a keyboard.
-  const canAnnotate =
-    annotatable && Boolean(loaded) && !window.matchMedia('(pointer: coarse)').matches
+  // Phones view sent notes; making notes needs a pointer and a keyboard, so they get no Annotate.
+  const phone = window.matchMedia('(pointer: coarse)').matches
+  const canAnnotate = annotatable && Boolean(loaded) && !phone
+  const annotateReason = annotatable
+    ? null
+    : t('components.native-chat.notes.annotateUnavailable', 'Notes can’t be drawn on this image.')
   const { notes } = editor
-  // The message box lives outside the viewer: looked up once the viewer and its image are on screen.
-  const [composer, setComposer] = useState<NativeChatNotesComposer | null>(null)
-  useLayoutEffect(() => setComposer(nativeChatNotesComposer(opener.current)), [opener, loaded])
-  const admitted = composer?.handle.notesAdmitted?.() ?? false
-  const sendReason = editor.hasUnadded
-    ? t('components.native-chat.notes.addFirst', 'Add or discard note {{number}} first', {
-        number: editor.pending?.number ?? editor.editing?.number ?? 0
-      })
-    : !admitted
-      ? t(
-          'components.native-chat.notes.commandHeld',
-          'Your message box holds a command. Send or clear it first.'
-        )
-      : null
-  const canSend = notes.length > 0 && !editor.hasUnadded && admitted && !busy && Boolean(composer)
-  const focusMedia = (): void => layerRef.current?.focus({ preventScroll: true })
+  // The unzoomed viewport takes focus, so its ring always shows whole, at any zoom.
+  const focusMedia = (): void => viewportRef.current?.focus({ preventScroll: true })
+  const resumeAnnotating = useCallback(() => setAnnotating(true), [])
+  const showPanel = useCallback(() => setPanelHidden(false), [])
+  const { busy, canSend, sendReason, close, send } = useNativeChatNotesDelivery({
+    opener,
+    loaded,
+    editor,
+    title,
+    source,
+    offset,
+    initialNotes,
+    onAttached,
+    onCleared,
+    replacesAttachmentId,
+    onOpenChange,
+    showPanel,
+    onRestored: resumeAnnotating
+  })
   // Stepping away would drop notes in progress, so it waits until there are none.
-  const stepping = !annotating && notes.length === 0
+  const stepping = notes.length === 0 && !editor.pending
   const step =
-    onPrevious === undefined && onNext === undefined
-      ? null
-      : {
+    position && (onPrevious !== undefined || onNext !== undefined)
+      ? {
           previous: stepping ? (onPrevious ?? null) : null,
-          next: stepping ? (onNext ?? null) : null
+          next: stepping ? (onNext ?? null) : null,
+          ...position,
+          blockedReason: stepping
+            ? null
+            : t(
+                'components.native-chat.notes.stepBlocked',
+                'Send or close notes to move between images'
+              )
         }
+      : null
 
-  const handOff = useCallback(
-    async (send: boolean): Promise<boolean> => {
-      if (!composer || !loaded || notes.length === 0) {
-        return false
-      }
-      setBusy(true)
-      let handed = false
-      try {
-        const ids = await attachNativeChatNotes({
-          composer,
-          mediaName: title,
-          kind: 'image',
-          source,
-          notes,
-          offset,
-          frame: async () => ({ image: loaded.image, ...loaded.size })
-        })
-        onAttached?.(ids)
-        handed = true
-        if (send) {
-          await afterComposerRender()
-          composer.handle.submit?.()
-          setBusy(false)
-          return true
-        }
-        const count = notes.length
-        // Undo stays live only while those images are still in the draft.
-        const toastId = toast(
-          t(
-            'components.native-chat.notes.addedToMessage',
-            '{{count}} notes added to your message',
-            { defaultValue_one: '{{count}} note added to your message', count }
-          ),
-          {
-            action: {
-              label: t('components.native-chat.notes.undo', 'Undo'),
-              onClick: () => {
-                if (nativeChatNotesStillInDraft(composer.scopeKey, ids)) {
-                  detachNativeChatNotes(composer.scopeKey, ids)
-                  holdNativeChatNotes(sourceKey, notes)
-                }
-              }
-            }
-          }
-        )
-        watchNativeChatNotesLeaveDraft(composer.scopeKey, ids, () => toast.dismiss(toastId))
-      } catch (error) {
-        editor.setStatus({
-          kind: 'error',
-          message: t(
-            'components.native-chat.notes.prepareFailed',
-            'Couldn’t prepare the marked image. Your notes are still here.'
-          )
-        })
-        console.error('[native-chat] notes hand-off failed', error)
-      }
-      setBusy(false)
-      return handed
-    },
-    [composer, editor, loaded, notes, offset, onAttached, source, sourceKey, t, title]
-  )
-
-  const close = async (): Promise<void> => {
-    if (editor.hasUnadded) {
-      setPanelHidden(false)
-      editor.setConfirm({ reason: 'close' })
-      return
+  useEffect(() => {
+    if (closeRequested.current && !editor.hasUnadded && !editor.confirm) {
+      closeRequested.current = false
+      void close()
     }
-    if (notes.length > 0 && !initialNotes) {
-      if (!admitted) {
-        // A command waits in the message box: the notes stay with this image for later.
-        holdNativeChatNotes(sourceKey, notes)
-        toast(
-          t(
-            'components.native-chat.notes.keptWithImage',
-            'Notes kept with {{name}}. Your message box holds a command.',
-            { name: title }
-          )
-        )
-      } else if (!(await handOff(false))) {
-        return
-      }
-    } else if (notes.length > 0 && initialNotes && !(await handOff(false))) {
-      return
-    }
-    onOpenChange(false)
-  }
-  const send = async (): Promise<void> => {
-    if (canSend && (await handOff(true))) {
-      onOpenChange(false)
-    }
-  }
+  }, [close, editor.confirm, editor.hasUnadded])
   const finishAnnotating = (): void => {
     if (editor.hasUnadded) {
       setPanelHidden(false)
@@ -242,6 +177,19 @@ function ViewerBody({
       onInteractOutside={onInteractOutside}
       data-native-chat-copy-image-src={copySrc}
       surface="media"
+      onOpenAutoFocus={(event) => {
+        // Focus starts on the media, not on the first toolbar button, and returns to the opener.
+        openerFocus.current = document.activeElement
+        event.preventDefault()
+        focusMedia()
+      }}
+      onCloseAutoFocus={(event) => {
+        const previous = openerFocus.current
+        if (previous instanceof HTMLElement && previous.isConnected) {
+          event.preventDefault()
+          previous.focus({ preventScroll: true })
+        }
+      }}
       onEscapeKeyDown={(event) => {
         // Esc steps back one layer: the prompt, the note editor, annotating, then the viewer.
         event.preventDefault()
@@ -264,11 +212,16 @@ function ViewerBody({
       onKeyDown={(event) => {
         const typing =
           event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement
-        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        if (event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)) {
           event.preventDefault()
           void send()
-        } else if (!typing && event.key.toLowerCase() === 'z' && (event.metaKey || event.ctrlKey)) {
-          if (editor.undo()) {
+        } else if (
+          !typing &&
+          event.key.toLowerCase() === 'z' &&
+          (isMacPlatform() ? event.metaKey : event.ctrlKey)
+        ) {
+          // ⌘Z / Ctrl+Z undoes any change to the notes; with Shift it redoes, as in Orca's markup.
+          if (event.shiftKey ? editor.redo() : editor.undo()) {
             event.preventDefault()
           }
         } else if (
@@ -283,7 +236,7 @@ function ViewerBody({
             finishAnnotating()
           } else {
             setAnnotating(true)
-            requestAnimationFrame(focusMedia)
+            focusNativeChatMediaViewportSoon(viewportRef.current)
           }
         } else if (!typing && step && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
           const go = event.key === 'ArrowLeft' ? step.previous : step.next
@@ -291,7 +244,15 @@ function ViewerBody({
             event.preventDefault()
             go()
           }
-        } else if (!typing && event.key === 'C' && event.shiftKey && annotating) {
+        } else if (
+          !typing &&
+          event.key === 'C' &&
+          event.shiftKey &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          annotating
+        ) {
           event.preventDefault()
           setPanelHidden((hidden) => !hidden)
         }
@@ -306,8 +267,12 @@ function ViewerBody({
         panelHidden={annotating && panelHidden}
         noteCount={notes.length}
         step={step}
+        annotateReason={annotateReason}
+        annotateHidden={phone}
         onAnnotate={() =>
-          annotating ? finishAnnotating() : (setAnnotating(true), requestAnimationFrame(focusMedia))
+          annotating
+            ? finishAnnotating()
+            : (setAnnotating(true), focusNativeChatMediaViewportSoon(viewportRef.current))
         }
         onShowNotes={() => setPanelHidden(false)}
         onClose={() => void close()}
@@ -320,10 +285,29 @@ function ViewerBody({
         )}
       >
         <div
-          ref={setCanvas}
+          ref={(element) => {
+            viewportRef.current = element
+            setCanvas(element)
+          }}
           {...canvasHandlers}
+          tabIndex={0}
+          role={annotating ? 'application' : undefined}
+          aria-label={
+            annotating
+              ? t(
+                  'components.native-chat.notes.mediaLabel',
+                  'Media. Click to pin a spot or drag to box an area; Enter pins the center.'
+                )
+              : title
+          }
+          onKeyDown={(event) => {
+            if (handleNativeChatMediaViewportKey(event, { panZoom, annotating, onPlace: place })) {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+          }}
           className={cn(
-            'relative size-full touch-none overflow-hidden',
+            'relative size-full touch-none overflow-hidden rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-media-note-ring',
             !annotating && cursor === 'grab' && 'cursor-grab'
           )}
         >
@@ -340,9 +324,9 @@ function ViewerBody({
                 src={src}
                 alt={title}
                 draggable={false}
-                className="pointer-events-none size-full select-none rounded-[3px]"
+                className="pointer-events-none size-full select-none rounded-sm"
               />
-              <div ref={layerRef} className="absolute inset-0">
+              <div className="absolute inset-0">
                 <NativeChatMediaMarks
                   notes={notes}
                   pending={editor.pending}
@@ -358,15 +342,23 @@ function ViewerBody({
               </div>
             </div>
           ) : null}
-          {src && !loaded ? <NativeChatMediaImageLoader src={src} onLoaded={setLoaded} /> : null}
-          {!src ? (
+          {src && !loaded && !broken ? (
+            <NativeChatMediaImageLoader
+              src={src}
+              onLoaded={setLoaded}
+              onError={() => setBroken(true)}
+            />
+          ) : null}
+          {!src || broken ? (
             <div className="flex size-full items-center justify-center">{fallback}</div>
           ) : null}
         </div>
       </div>
-      {!(narrow && annotating && !panelHidden) ? (
-        <NativeChatMediaViewerZoom panZoom={panZoom} />
-      ) : null}
+      {/* Above the narrow sheet while it is open, so zoom and Fit stay at hand. */}
+      <NativeChatMediaViewerZoom
+        panZoom={panZoom}
+        aboveSheet={narrow && annotating && !panelHidden}
+      />
       {annotating && !panelHidden ? (
         <div
           className={cn(
@@ -383,7 +375,8 @@ function ViewerBody({
             onHide={() => setPanelHidden(true)}
             onConfirmed={(reason) => {
               if (reason === 'close') {
-                void close()
+                // Closes on the next render, once the answered note is added or gone.
+                closeRequested.current = true
               } else if (reason === 'done') {
                 setAnnotating(false)
               } else {
