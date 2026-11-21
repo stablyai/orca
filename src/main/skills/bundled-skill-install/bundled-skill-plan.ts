@@ -15,7 +15,8 @@ import {
   bundledSkillTextDigest,
   classifyBundledSkillPath,
   bundledSkillFreshnessClass,
-  type BundledSkillFolderClass
+  keptBesideAgentFiles,
+  ORCA_COPY_CLASSES
 } from './bundled-skill-classification'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
@@ -57,7 +58,14 @@ type SkillContext = {
 }
 
 // `otherBuild`: the shared folder holds another Orca build's copy, so links to it are already right.
-type SharedTarget = { path: string; realPath: string; current: boolean; otherBuild?: boolean }
+// `besideAgentFiles`: it was kept although an agent's files sit beside its SKILL.md.
+type SharedTarget = {
+  path: string
+  realPath: string
+  current: boolean
+  otherBuild?: boolean
+  besideAgentFiles?: boolean
+}
 
 const WRITES_SHARED_CURRENT = new Set<BundledSkillOp['kind']>([
   'keep',
@@ -72,15 +80,6 @@ type PlannedTarget = {
   formerInstalled: boolean
   leaves: BundledSkillOp[]
 }
-
-type PlannedFolderClass = BundledSkillFolderClass | 'other-build'
-
-const ORCA_COPY_CLASSES = new Set<PlannedFolderClass>([
-  'current',
-  'released',
-  'edited',
-  'other-build'
-])
 
 /** Classifies one root's copy of the skill and decides its op, including another build's copy. */
 async function planTarget(
@@ -108,7 +107,7 @@ async function planTarget(
     context.sharedRoot
   )
   const retiresFormer = former.previous.some((previous) => !previous.retain)
-  let folderClass: PlannedFolderClass = bundledSkillFreshnessClass(classified, context.digest)
+  let folderClass = bundledSkillFreshnessClass(classified, context.digest)
   // Cloud receipts identify a different package; a current replaced copy must settle as keep.
   if (
     (classified.folderClass === 'released' || classified.folderClass === 'edited') &&
@@ -213,10 +212,9 @@ async function planTarget(
         }
       : decided
   // Beside a current copy, a former-name folder Orca doesn't own is the user's own skill, not a blocker.
-  // A folder current only by its SKILL.md keeps them visible: an agent's files sit beside it.
-  const currentBySkillOnly = observed.kind === 'folder' && classified.folderClass !== 'current'
+  // Beside a copy holding an agent's files, they stay listed so the user decides on them.
   const leaves =
-    op.kind === 'keep' && !currentBySkillOnly
+    op.kind === 'keep' && !keptBesideAgentFiles(op, shared?.besideAgentFiles)
       ? former.leaves.filter((stale) => stale.reason !== 'edited' && stale.reason !== 'other')
       : former.leaves
   const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
@@ -260,7 +258,8 @@ async function planSkill(
           path: sharedTarget.op.path,
           realPath: join(sharedRoot.realPath, source.name),
           current: WRITES_SHARED_CURRENT.has(sharedTarget.op.kind),
-          otherBuild: sharedTarget.op.reason === 'other-build'
+          otherBuild: sharedTarget.op.reason === 'other-build',
+          besideAgentFiles: keptBesideAgentFiles(sharedTarget.op)
         }
       : null
   const planAgents = async (target: SharedTarget | null) => {

@@ -179,6 +179,34 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
     expect(await formerReason()).toBe('other-build')
   })
 
+  it.each([
+    ['installed-only', true],
+    ['explicit', false]
+  ])(
+    "keeps asking about an agent's former-name copy beside a link into a shared copy with a sidecar (%s plan)",
+    async (_, installedOnly) => {
+      const home = await makeSkillHome()
+      await writeCopy(home.shared, NEW_TEXT)
+      await addSidecar(home.shared)
+      await mkdir(dirname(home.claude), { recursive: true })
+      await linkDirectory(home.shared, home.claude)
+      const formerAgentCopy = join(dirname(home.claude), FORMER_NAME)
+      await writeCopy(formerAgentCopy, FORMER_TEXT)
+      await addSidecar(formerAgentCopy)
+
+      const plan = await previewBundledSkillInstall({
+        ...serviceInput(home, { installedOnly }),
+        sources: [RENAMED]
+      })
+      expect(plan.skills[0].ops.map((op) => [op.path, op.kind, op.reason])).toEqual([
+        [home.shared, 'keep', undefined],
+        [home.claude, 'keep', undefined],
+        [formerAgentCopy, 'leave', 'edited']
+      ])
+      expect(bundledSkillNudgeEntries(plan).map((entry) => entry.name)).toEqual([NAME])
+    }
+  )
+
   it('waits for consent when retiring an agent copy depends on backing up an edited sibling', async () => {
     for (const sidecar of [false, true]) {
       const home = await makeSkillHome()
