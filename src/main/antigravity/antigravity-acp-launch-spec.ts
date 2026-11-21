@@ -70,6 +70,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
+  compaction: 'reported',
   clientInfo: antigravityClientInfo,
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>

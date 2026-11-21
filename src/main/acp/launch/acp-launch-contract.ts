@@ -73,7 +73,7 @@ export type AcpLaunchSpec = {
     fullAccessAnswersRequests?: true
   }
   /** Enables /compact as a prompt command. */
-  compaction?: true
+  compaction?: true | 'reported'
   /** The agent's `/compact` honours text after the command; others would silently drop it. */
   compactionInstructions?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */
