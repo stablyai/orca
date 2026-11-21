@@ -28,11 +28,14 @@ function track(guest: Electron.WebContents, frame: Electron.WebFrameMain, demand
   } else {
     frames.delete(frame.frameTreeNodeId)
   }
-  // A page commit drops all iframe demand; frames it left behind go with the next change.
+  // A page commit drops all iframe demand; frames it left behind go with the next change. Only
+  // then are there more frames than demand, so the walk runs once per commit, not per update.
   const demand = getBrowserGuestFrameUserAgentDemand(guest.id)
-  for (const id of frames.keys()) {
-    if (!demand.has(id)) {
-      frames.delete(id)
+  if (frames.size > demand.size) {
+    for (const id of frames.keys()) {
+      if (!demand.has(id)) {
+        frames.delete(id)
+      }
     }
   }
 }
@@ -145,13 +148,22 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
 }
 
 /**
- * Route popups skip the tab manager, so their page demand is noted here: a navigation's target
- * needs rewrites from its first request, and the committed page until the next commit.
+ * Route popups skip the tab manager, so their demand is noted here: a navigation's target needs
+ * rewrites from its first request, the committed page until the next commit, and site iframes as
+ * in a tab.
  */
 export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
   const { id, session } = contents
-  const onStart = (details: Electron.Event<{ url: string; isMainFrame: boolean }>): void => {
-    if (details.isMainFrame) {
+  const onStart = (
+    details: Electron.Event<{
+      url: string
+      isMainFrame: boolean
+      frame?: Electron.WebFrameMain | null
+    }>
+  ): void => {
+    if (!details.isMainFrame) {
+      noteBrowserGuestSubframeNavigation(contents, details.url, details.frame)
+    } else {
       setBrowserGuestPageUserAgentDemand(
         session,
         id,
@@ -170,5 +182,13 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
       'clear'
     )
   })
+  contents.on(
+    'did-frame-navigate',
+    (_event, _url, _code, _status, isMainFrame, frameProcessId, frameRoutingId) => {
+      if (!isMainFrame) {
+        settleBrowserGuestSubframe(contents, frameProcessId, frameRoutingId)
+      }
+    }
+  )
   contents.once('destroyed', () => clearBrowserGuestUserAgentDemand(id))
 }

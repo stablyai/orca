@@ -58,7 +58,9 @@ export function installBrowserGuestFormPostReport(port: {
   }
   navigation.addEventListener('navigate', (event) => {
     pendingForm = null
-    if (!event.isTrusted || !event.formData || event.hashChange) {
+    // Chromium sets formData from the form's own method, so a `formmethod="post"` submitter on a
+    // GET form (unseen in a shadow root) is recognised from the navigation's source element.
+    if (!event.isTrusted || event.hashChange || !(event.formData || postsFrom(event))) {
       return
     }
     const formPost = event.destination.url
@@ -82,6 +84,15 @@ export function installBrowserGuestFormPostReport(port: {
   }
   navigation.addEventListener('navigatesuccess', settled)
   navigation.addEventListener('navigateerror', settled)
+}
+
+function postsFrom(event: NavigateEvent): boolean {
+  const source: unknown = (event as { sourceElement?: unknown }).sourceElement
+  return (
+    (source instanceof HTMLButtonElement || source instanceof HTMLInputElement) &&
+    source.hasAttribute('formmethod') &&
+    source.formMethod === 'post'
+  )
 }
 
 /** The action URL of a POST that replaces the top page; null for GET or another target. */
