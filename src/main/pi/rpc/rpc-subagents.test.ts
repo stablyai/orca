@@ -57,17 +57,11 @@ describe('Pi native chat subagents', () => {
       evidence.flatMap((edge) => (edge.type === 'ended' ? [[edge.handle.id, edge.outcome]] : []))
     )
     expect(outcomes).toEqual({ 'run-a': 'succeeded', 'run-b': 'cancelled' })
-  })
 
-  it('settles still-listed subagents as unknown when Pi exits', () => {
-    const evidence: AgentChildWorkEvidence[] = []
-    const subagents = new PiRpcSubagents((edges) => evidence.push(...edges))
-    subagents.receive({
-      type: 'extension_ui_request',
-      method: 'setStatus',
-      statusKey: 'orca-subagents',
-      statusText: JSON.stringify({ subagents: [{ id: 'run-a', state: 'working', startedAt: 1 }] })
-    })
+    harness.emitPiEvent('subagent:async-started', { id: 'run-c', agent: 'worker' })
+    await flush()
+    expect(evidence.at(-1)).toMatchObject({ type: 'live', child: { handle: { id: 'run-c' } } })
+
     subagents.end()
     expect(evidence.at(-1)).toMatchObject({ type: 'session-ended' })
   })

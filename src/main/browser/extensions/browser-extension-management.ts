@@ -48,6 +48,7 @@ import { forgetPinnedBrowserExtension } from './actions/browser-extension-toolba
 import { getBrowserExtensionProfileStateStore } from './profile-storage/browser-extension-profile-state-store'
 import { getBrowserExtensionSyncStorageStore } from './profile-storage/browser-extension-sync-storage-store'
 import { getBrowserExtensionDnrStore } from './declarative-net-request/session/browser-extension-dnr-store'
+import { dropBrowserExtensionIdleState } from './profile-sessions/browser-extension-idle-kept-state'
 import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-webstore-events'
 
 /** Settings actions. Each returns a result instead of throwing so the renderer can show the reason. */
@@ -155,6 +156,7 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
       ])
       forgetBrowserExtensionLoadFailures({ extensionId })
       forgetHeldBrowserExtensionUpdate(extensionId)
+      dropBrowserExtensionIdleState({ extensionId })
       const removed = await getBrowserExtensionInstallStore().remove(extensionId)
       if (removed) {
         forgetPreparedBrowserExtensionDirectory(removed.path)

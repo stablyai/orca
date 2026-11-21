@@ -14,12 +14,12 @@ export type AiVaultAppliedScan = {
   stale?: true
 }
 
-export function useAppliedAiVaultScan(): {
+export function useAppliedAiVaultScan(initialScan?: () => AiVaultAppliedScan | null): {
   scan: AiVaultAppliedScan | null
   applyScan: (applied: AiVaultAppliedScan, onApplied?: (result: AiVaultListResult) => void) => void
 } {
-  const [scan, setScan] = useState<AiVaultAppliedScan | null>(null)
-  const acceptedScanRef = useRef<AiVaultAppliedScan | null>(null)
+  const [scan, setScan] = useState<AiVaultAppliedScan | null>(initialScan ?? null)
+  const acceptedScanRef = useRef(scan)
   // Preserve identity on unchanged republication so React still bails out.
   const applyScan = useCallback(
     (applied: AiVaultAppliedScan, onApplied?: (result: AiVaultListResult) => void) => {

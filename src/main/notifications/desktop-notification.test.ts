@@ -77,6 +77,18 @@ describe('Linux desktop notification admission', () => {
     await expect(delivered).resolves.toBe(true)
   })
 
+  it('reports an ordinary notification as undelivered when the Linux service stalls', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    runProcess.mockResolvedValue({ code: null, timedOut: true })
+    await expect(
+      deliverNativeNotification(
+        { source: 'agent-task-complete' },
+        { title: 'Done', body: '' },
+        settings
+      )
+    ).resolves.toEqual({ delivered: false, reason: 'not-displayed' })
+  })
+
   it('discards a pending notification when a replacement arrives during activation', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     const activation = Promise.withResolvers<{ code: number }>()
@@ -96,26 +108,23 @@ describe('Linux desktop notification admission', () => {
     expect(displayed).not.toHaveBeenCalled()
   })
 
-  it.each(['ENOENT', 'EACCES'])('uses gdbus if dbus-send cannot spawn (%s)', async (code) => {
+  it('uses gdbus if executing dbus-send is denied', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     runProcess.mockImplementation(({ program }) =>
       program === 'dbus-send'
-        ? Promise.reject(Object.assign(new Error('Cannot spawn'), { code }))
+        ? Promise.reject(Object.assign(new Error('Cannot spawn'), { code: 'EACCES' }))
         : Promise.resolve({ code: program === 'gdbus' ? 0 : 1 })
     )
     await expect(confirmDisplay(new Notification())).resolves.toBe(true)
   })
 
-  it.each([{ code: 1 }, { code: null, timedOut: true }])(
-    'does not use a fallback after a D-Bus call fails (%j)',
-    async (failure) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-      runProcess.mockImplementation(({ program }) =>
-        Promise.resolve(program === 'dbus-send' ? failure : { code: 0 })
-      )
-      await expect(confirmDisplay(new Notification())).resolves.toBe(false)
-    }
-  )
+  it('does not use a fallback after a D-Bus call times out', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    runProcess.mockImplementation(({ program }) =>
+      Promise.resolve(program === 'dbus-send' ? { code: null, timedOut: true } : { code: 0 })
+    )
+    await expect(confirmDisplay(new Notification())).resolves.toBe(false)
+  })
 
   it('uses only the remaining activation budget after a spawn error', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')

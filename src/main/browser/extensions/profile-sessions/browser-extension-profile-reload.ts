@@ -2,6 +2,11 @@ import type { InstalledBrowserExtension } from '../../../../shared/browser/exten
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { prepareBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
 import {
+  noteBrowserExtensionReloadedWhileIdle,
+  noteBrowserExtensionReloadPendingInIdleProfile
+} from './browser-extension-idle-kept-state'
+import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
+import {
   getBrowserExtensionSessionForProfile,
   loadBrowserExtensionIntoProfile,
   unloadBrowserExtensionFromProfile
@@ -36,12 +41,29 @@ export async function reloadBrowserExtensionWhereEnabled(
   for (const profileId of profileIds) {
     unloadBrowserExtensionFromProfile(profileId, extension.id)
   }
+  const attached = new Set(profileIds)
+  getBrowserExtensionDnrStore().forgetSessionRulesOfOtherVersions(extension)
+  // Profiles idle or going idle load the new copy, as a reload, when they reopen.
+  noteBrowserExtensionReloadedWhileIdle(
+    extension.id,
+    browserSessionRegistry
+      .listProfiles()
+      .map((profile) => profile.id)
+      .filter((profileId) => isEnabledIn(profileId, extension.id) && !attached.has(profileId))
+  )
   if (options.refresh) {
     await prepareBrowserExtensionDirectory(extension, { refresh: true })
+  }
+  // Why: a profile that went idle meanwhile gets onInstalled(update) when it reopens.
+  const skipped = (profileId: string): void => {
+    if (isEnabledIn(profileId, extension.id)) {
+      noteBrowserExtensionReloadPendingInIdleProfile(profileId, extension.id)
+    }
   }
   for (const profileId of profileIds) {
     // Why recheck: a Disable during an earlier await had no load of ours to cancel.
     if (!stillLoadsIn(profileId, extension.id)) {
+      skipped(profileId)
       continue
     }
     await loadBrowserExtensionIntoProfile(profileId, extension, 'reload').catch((error) => {
@@ -49,6 +71,7 @@ export async function reloadBrowserExtensionWhereEnabled(
       if (stillLoadsIn(profileId, extension.id)) {
         throw error
       }
+      skipped(profileId)
     })
   }
 }

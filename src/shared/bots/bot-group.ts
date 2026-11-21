@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import { BotNameSchema } from '../bot-types'
 import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -13,12 +14,13 @@ import {
   type BotGroupMessage
 } from './bot-group-schema'
 
-export { BotGroupReplyMode } from './bot-group-schema'
+export { BotGroupReplyMode, botGroupOwnerMessageBlocks } from './bot-group-schema'
 export type {
   BotGroup,
   BotGroupLatest,
   BotGroupMember,
   BotGroupMessage,
+  BotGroupMessageImage,
   BotGroupThread,
   BotGroupTurn
 } from './bot-group-schema'
@@ -114,8 +116,15 @@ export const BotGroupReorder = GroupId.extend({ sidebarOrder: z.number().int().n
 export const BotGroupSend = Revision.extend({
   threadId: Room.shape.threadId,
   messageId: z.string().uuid(),
-  text: z.string().trim().min(1).max(100_000)
-})
+  text: z.string().trim().max(100_000),
+  images: z
+    .array(z.string().min(1).max(4096))
+    .max(AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT, 'Group messages take up to 20 images.')
+    .optional()
+}).refine(
+  (value) => value.text.length > 0 || (value.images?.length ?? 0) > 0,
+  'Message text or image is required.'
+)
 export const BotGroupStop = Room.extend({ botId: z.string().min(1).optional() })
 export const BotGroupNewThread = GroupId.extend({})
 export const BotGroupDelete = GroupId
@@ -239,24 +248,24 @@ export function botGroupCompletedText(items: readonly AgentJournalRenderItem[]):
   return botGroupCompletedReply(items)?.text ?? null
 }
 
-/** A turn's finished reply and when it finished; null until it completes with text. */
+/** A turn's finished reply (`text` cut for room history, `full` whole) and when it finished; null
+ *  until it completes with text. */
 export function botGroupCompletedReply(
   items: readonly AgentJournalRenderItem[]
-): { text: string; completedAt: number | undefined } | null {
+): { text: string; full: string; completedAt: number | undefined } | null {
   const turn = items.find((item) => item.body.kind === 'turn')
   if (turn?.body.kind !== 'turn' || turn.body.state !== 'completed') {
     return null
   }
   const completedAt = turn.body.completedAt
-  const text = items
+  const full = items
     .flatMap((item) =>
       item.body.kind === 'message' && item.body.role === 'assistant'
         ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
         : []
     )
     .join('\n')
-    .slice(-16_000)
-  return text ? { text, completedAt } : null
+  return full ? { text: full.slice(-16_000), full, completedAt } : null
 }
 
 /** What a member's own session has not seen: room posts and peer replies since its last delivered
@@ -272,7 +281,17 @@ export function botGroupContext(
     )
   )
   const lines = messages.slice(Math.max(seen, 0)).flatMap((message, index) => [
-    ...(seen !== -1 && index === 0 ? [] : [{ author: message.author, text: message.text }]),
+    ...(seen !== -1 && index === 0
+      ? []
+      : [
+          {
+            author: message.author,
+            text: message.text,
+            ...(message.images?.length
+              ? { images: message.images.map(({ name, path }) => ({ name, path })) }
+              : {})
+          }
+        ]),
     ...message.turns.flatMap((turn) => {
       const text = completed.get(turn.operationId)
       return text && turn.botId !== member.botId
@@ -280,8 +299,21 @@ export function botGroupContext(
         : []
     })
   ])
-  while (lines.length > 0 && JSON.stringify(lines).length > 24_000) {
-    lines.shift()
+  return fitBotGroupContext(lines)
+}
+
+/** The serialized room history a member turn quotes, at most. */
+export const BOT_GROUP_CONTEXT_MAX = 24_000
+
+/** Room history lines serialized under the context budget: the oldest go first, never the last
+ *  `kept` (lines a turn must see, such as the reply that handed it the turn). */
+export function fitBotGroupContext(lines: readonly unknown[], kept = 0): string {
+  let start = 0
+  while (
+    start < lines.length - kept &&
+    JSON.stringify(lines.slice(start)).length > BOT_GROUP_CONTEXT_MAX
+  ) {
+    start += 1
   }
-  return JSON.stringify(lines)
+  return JSON.stringify(lines.slice(start))
 }

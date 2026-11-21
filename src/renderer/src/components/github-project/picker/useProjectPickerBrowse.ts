@@ -16,7 +16,7 @@ import {
 
 export function useProjectPickerBrowse(
   settings: RuntimeClientTarget,
-  browseHost: string
+  browseHost: string | undefined
 ): {
   browseProjects: GitHubProjectSummary[]
   partialFailures: { owner: string; message: string }[]
@@ -59,10 +59,16 @@ export function useProjectPickerBrowse(
         wake: true
       })
       if (result.ok) {
-        rememberProjectPickerBrowseCacheEntry(cacheKey, {
-          projects: result.projects,
-          partialFailures: result.partialFailures
-        })
+        const entry = { projects: result.projects, partialFailures: result.partialFailures }
+        rememberProjectPickerBrowseCacheEntry(cacheKey, entry)
+        const resolvedHost = result.projects[0]?.host
+        if (browseHost === undefined && resolvedHost) {
+          // Picking a project pins its host; reuse this list instead of refetching under that key.
+          rememberProjectPickerBrowseCacheEntry(
+            getProjectPickerRuntimeScope(settings, resolvedHost),
+            entry
+          )
+        }
       }
       if (!mountedRef.current || activeCacheKeyRef.current !== cacheKey) {
         return

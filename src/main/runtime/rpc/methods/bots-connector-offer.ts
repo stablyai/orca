@@ -1,5 +1,6 @@
 // `orca bot connectors --offer`: a bot that needs Slack, Linear, GitHub or Google asks Orca to put a
 // Connect card in its chat, instead of telling its owner where to click.
+import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../../../shared/bot-types'
 import {
@@ -16,6 +17,7 @@ import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError } from '../core'
+import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 
 /** The bot whose own chat on this host asks; never one a paired device or a Look around names. */
 function offeringBot(
@@ -38,7 +40,8 @@ function offeringBot(
 export async function postConnectorOffer(
   callerSessionId: string,
   bot: Pick<Bot, 'name'>,
-  offer: ConnectorOffer
+  offer: ConnectorOffer,
+  runtime: Pick<OrcaRuntimeService, 'servesWithoutWindow'>
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
   // Null for a session this host doesn't run.
@@ -48,7 +51,10 @@ export async function postConnectorOffer(
   }
   await host.appendAgentStart(
     destination,
-    { body: connectorOfferBody(offer, bot.name), messageId: `connector-offer:${randomUUID()}` },
+    {
+      body: connectorOfferBody(offer, bot.name, orcaSignInServer(runtime)),
+      messageId: `connector-offer:${randomUUID()}`
+    },
     Date.now()
   )
 }
@@ -63,11 +69,17 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
     const signIn = signInOfferReply(
       bot,
       source,
-      runtime.getConnectorCloud()?.status() === 'signed-out'
+      runtime.getConnectorCloud()?.status(),
+      orcaSignInServer(runtime)
     )
     if (signIn) {
       if (signIn.offered) {
-        await postConnectorOffer(callerSessionId, bot, { botId: bot.id, source, signIn: true })
+        await postConnectorOffer(
+          callerSessionId,
+          bot,
+          { botId: bot.id, source, signIn: true },
+          runtime
+        )
       }
       return signIn
     }
@@ -77,18 +89,23 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
     const answer: ReturnType<typeof connectorOfferReply> =
       source === 'google'
         ? googleOfferReply(await hostGoogleBotState(bot), {
-            headless: runtime.servesWithoutWindow(),
+            headless: noWindowAnswersGoogleCards(runtime),
             botName: bot.name
           })
         : connectorOfferReply(bot, source, workspace)
     const { addAccess, ...reply } = answer
     if (reply.offered) {
-      await postConnectorOffer(callerSessionId, bot, {
-        botId: bot.id,
-        source,
-        ...(workspace ? { workspace } : {}),
-        ...(addAccess ? { addAccess } : {})
-      })
+      await postConnectorOffer(
+        callerSessionId,
+        bot,
+        {
+          botId: bot.id,
+          source,
+          ...(workspace ? { workspace } : {}),
+          ...(addAccess ? { addAccess } : {})
+        },
+        runtime
+      )
     }
     return reply
   }

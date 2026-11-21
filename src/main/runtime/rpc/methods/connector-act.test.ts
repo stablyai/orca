@@ -25,6 +25,9 @@ const [act] = eraseRpcMethods([CONNECTOR_ACT_METHOD])
 function actContext(cloud: {
   features: string[] | null
   answers?: unknown[]
+  /** A headless Orca server's: its signed-out copy names it. */
+  headless?: boolean
+  status?: string
   // The cloud conversation the calling chat answers, if it answers one.
   conversation?: { source: string; externalId: string }
 }): {
@@ -34,6 +37,7 @@ function actContext(cloud: {
   const calls: { path: string; body: unknown }[] = []
   const runtime = {
     bots: { enabled: () => true, list: () => [] },
+    servesWithoutWindow: () => cloud.headless === true,
     getOrchestrationDb: () => ({}),
     lookAround: {
       botOfLook: (sessionId: string) => (sessionId === 'look-session' ? 'b1' : null),
@@ -44,6 +48,7 @@ function actContext(cloud: {
     }),
     getConnectorCloud: () => ({
       cloudFeatures: () => (cloud.features ? new Set(cloud.features) : null),
+      status: () => cloud.status ?? 'ok',
       call: async (path: string, body: unknown) => {
         calls.push({ path, body })
         return (
@@ -255,6 +260,19 @@ describe('connector.act', () => {
     expect(newer.calls[0]?.body).toMatchObject({ verb: 'post', args: later.args })
   })
 
+  it('sends Slack’s own verbs only to a cloud that takes them', async () => {
+    const pin = { sessionId: 'bot-session', verb: 'pin', ref: 'slack:T1:C1::1.1', args: {} }
+    const older = actContext({ features: ['actions'] })
+    await expect(run(pin, older.context)).rejects.toMatchObject({ code: 'cloud_lacks_slack_tools' })
+    expect(older.calls).toEqual([])
+    const newer = actContext({
+      features: ['actions', 'slack.tools'],
+      answers: [{ ok: true, value: { ok: true, result: {} } }]
+    })
+    await run(pin, newer.context)
+    expect(newer.calls[0]?.body).toMatchObject({ verb: 'pin', ref: 'slack:T1:C1::1.1' })
+  })
+
   it('sends a search only to a cloud that takes one', async () => {
     const find = {
       sessionId: 'bot-session',
@@ -330,6 +348,61 @@ describe('connector.act', () => {
     })
   })
 
+  it.each<[string, boolean, string[] | null]>([
+    ['signed-out', true, null],
+    ['needs-sign-in', true, null],
+    // Orca Cloud refused the sign-in after its hello: its features stay cached.
+    ['needs-sign-in', true, ['actions']],
+    ['signed-out', false, null],
+    ['needs-sign-in', false, ['actions']]
+  ])(
+    'refuses before calling the cloud while the host is not signed in (%s, headless %s, features %j)',
+    async (status, headless, features) => {
+      const { context, calls } = actContext({ features, status, headless })
+      const refused = run({ sessionId: 'bot-session', verb: 'places' }, context)
+      await expect(refused).rejects.toMatchObject({ code: 'connector_not_connected' })
+      const error: unknown = await refused.catch((caught: unknown) => caught)
+      const message = error instanceof Error ? error.message : ''
+      if (headless) {
+        expect(message).toMatch(
+          /^This Orca server \(.+\) isn't signed in to Orca Cloud, so it can't reach Orca Cloud\. Your owner can sign it in by running `orca auth login` in a terminal on .+ Then try again\.$/
+        )
+      } else {
+        expect(message).toBe(
+          "This computer isn't signed in to Orca Cloud: sign in to Orca Cloud on this computer, then try again."
+        )
+      }
+      expect(calls).toEqual([])
+    }
+  )
+
+  it.each([
+    { status: 401, error: 'signed_out' },
+    // The connector-token route refused the sign-in after the session refresh.
+    { status: 401, error: 'invalid_token', sessionRefused: true as const }
+  ])('names a headless server when the cloud refuses its sign-in (%j)', async (failure) => {
+    const { context } = actContext({
+      features: ['actions'],
+      headless: true,
+      answers: [{ ok: false, retryAfterMs: null, ...failure }]
+    })
+    await expect(
+      run({ sessionId: 'bot-session', verb: 'read', ref: 'slack:T1:C1' }, context)
+    ).rejects.toMatchObject({
+      code: 'connector_not_connected',
+      message: expect.stringContaining('`orca auth login` in a terminal on')
+    })
+  })
+
+  it("says Orca isn't connected only when this host has no Orca Cloud features and is signed in", async () => {
+    const { context } = actContext({ features: null, status: 'ok' })
+    await expect(run({ sessionId: 'bot-session', verb: 'places' }, context)).rejects.toMatchObject({
+      code: 'connector_not_connected',
+      message:
+        "Orca isn't connected to Orca Cloud: sign in to Orca Cloud and connect a bot to Slack, Linear or GitHub, then try again."
+    })
+  })
+
   it.each([
     [{ status: 404, error: 'unknown_bot' }, 'bot_not_in_cloud', "isn't on Orca Cloud"],
     [{ status: 400, error: 'invalid_ref' }, 'connector_invalid_request', 'invalid_ref'],
@@ -337,7 +410,7 @@ describe('connector.act', () => {
     [
       { status: 401, error: 'signed_out' },
       'connector_not_connected',
-      'sign in to Orca Cloud on this computer'
+      "isn't signed in to Orca Cloud: sign in to Orca Cloud on this computer"
     ]
   ])('names the cloud refusal %j', async (failure, code, says) => {
     const { context } = actContext({
@@ -373,6 +446,88 @@ describe('connector.act', () => {
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'bot_not_in_cloud', message: "This bot isn't on Orca Cloud." }
+    })
+  })
+
+  describe('Slack words never carry a path on this machine', () => {
+    const OK = { ok: true, value: { ok: true, result: {} } }
+    const sent = async (
+      input: Record<string, unknown>,
+      conversation?: { source: string; externalId: string }
+    ) => {
+      const { context, calls } = actContext({
+        features: ['actions', 'slack.tools', 'reply.files', 'files.direct', 'create'],
+        answers: [OK],
+        ...(conversation ? { conversation } : {})
+      })
+      await run({ sessionId: 'bot-session', ...input }, context)
+      const body: unknown = calls[0]?.body
+      return typeof body === 'object' && body !== null && 'args' in body ? body.args : undefined
+    }
+
+    it('scrubs a post, an edit, a canvas and a list in Slack', async () => {
+      await expect(
+        sent({
+          verb: 'post',
+          ref: 'slack:T1:C1',
+          args: {
+            text: 'Report: ![side by side](~/.orca/reports/r/side.png) at /Users/ada/r/report.html'
+          }
+        })
+      ).resolves.toEqual({ text: 'Report: side by side at report.html' })
+      await expect(
+        sent({ verb: 'edit', ref: 'slack:T1:C1:1.2', args: { text: 'See /tmp/run/out.log' } })
+      ).resolves.toEqual({ text: 'See out.log' })
+      await expect(
+        sent({
+          verb: 'canvas',
+          ref: '#eng',
+          args: { title: 'Notes /Users/ada/n.md', text: '[plan](/Users/ada/plan.md)' }
+        })
+      ).resolves.toEqual({ title: 'Notes n.md', text: 'plan' })
+      await expect(
+        sent({
+          verb: 'list',
+          ref: '#eng',
+          args: { title: 'Todo', items: ['open ~/a/b.pdf', 'ship'] }
+        })
+      ).resolves.toEqual({ title: 'Todo', items: ['open b.pdf', 'ship'] })
+    })
+
+    it("keeps an explicit file's staging and only scrubs the caption", async () => {
+      await expect(
+        sent(
+          {
+            verb: 'reply',
+            args: { files: ['p1'], postId: 'p2', text: 'Here is /Users/ada/r/report.html' }
+          },
+          { source: 'slack', externalId: 'T1:C1:1.2:U0BOT' }
+        )
+      ).resolves.toEqual({ files: ['p1'], postId: 'p2', text: 'Here is report.html' })
+    })
+
+    it('scrubs a post to a person or a pasted Slack link', async () => {
+      for (const ref of ['@dana', 'https://acme.slack.com/archives/C0123ABCD/p1700000000000100']) {
+        await expect(
+          sent({ verb: 'post', ref, args: { text: 'At /tmp/r/a.md' } })
+        ).resolves.toEqual({ text: 'At a.md' })
+      }
+    })
+
+    it('leaves GitHub, Linear and names only Orca Cloud resolves as they are', async () => {
+      const text = 'See /Users/ada/r/report.html'
+      await expect(
+        sent({ verb: 'post', ref: 'ENG', args: { title: 'Bug', text } })
+      ).resolves.toEqual({ title: 'Bug', text })
+      await expect(sent({ verb: 'post', ref: 'deploys', args: { text } })).resolves.toEqual({
+        text
+      })
+      await expect(
+        sent({ verb: 'reply', args: { text } }, { source: 'github', externalId: 'o/r#1' })
+      ).resolves.toEqual({ text })
+      await expect(
+        sent({ verb: 'post', ref: 'linear:acme:team:ENG', args: { title: 'Bug', text } })
+      ).resolves.toEqual({ title: 'Bug', text })
     })
   })
 })

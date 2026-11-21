@@ -15,6 +15,12 @@ import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost
 } from '../../lib/workspace/persistence/workspace-session-host-persistence'
+import {
+  desktopRelaysSupported,
+  forgetAcknowledgedDesktopRelays,
+  probeDesktopRelays
+} from '../../lib/workspace/persistence/desktop-relay-writes'
+import type { DesktopRelayWrite } from '../../../../shared/workspace-session/desktop-relay-write'
 import { windowAcknowledgedSessionEntries } from '../../lib/workspace/persistence/workspace-session-acknowledged-entries'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
@@ -49,6 +55,8 @@ export function useAppSessionPersistence(): void {
   useEffect(() => {
     // A remount starts from whole fields again.
     windowAcknowledgedSessionEntries.forget()
+    forgetAcknowledgedDesktopRelays()
+    probeDesktopRelays(window.api.session)
     return createSessionWriteSubscriber({
       store: useAppStore,
       onPersistError: (error) => console.warn('[session] Session patch failed:', error),
@@ -67,6 +75,7 @@ export function useAppSessionPersistence(): void {
   // Capture renderer-owned state into one synchronous shutdown checkpoint.
   useEffect(() => {
     // Quit can trigger synthetic and native beforeunload. Preserve the first capture before PTY exits unmount panes and empty their buffers.
+    let stagedRelays: DesktopRelayWrite['hosts'] | undefined
     const shutdownCheckpointPersist = createShutdownCheckpointPersist({
       shouldCaptureSession: () => shouldPersistWorkspaceSession(useAppStore.getState()),
       captureTerminalBuffers: () => {
@@ -85,17 +94,25 @@ export function useAppSessionPersistence(): void {
       // Reread after capture setters populate scrollback; the earlier gating snapshot lacks it.
       buildSessionSnapshots: () => {
         const freshState = useAppStore.getState()
-        return buildWorkspaceSessionHostSnapshots(
+        const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(
           buildWorkspaceSessionPayload(freshState),
-          freshState
+          freshState,
+          // Unsettled at unload: relay ids stay in the snapshots, as for an older main.
+          desktopRelaysSupported(window.api.session) === true
         )
+        stagedRelays = desktopRelays?.hosts
+        return snapshots
       },
       buildUiPatch: () => buildActiveViewUnloadPatch(useAppStore.getState()),
       hasDirtyOpenFiles: () => useAppStore.getState().openFiles.some((file) => file.isDirty),
       // Allow quit fallback too; SIGKILL to escape a blocked quit loses more state (#15352).
       isDegradableShutdownInProgress: () =>
         isIntentionalAppRestartInProgress() || isWindowCloseCheckpointInProgress(),
-      stageBeforeUnloadSync: (args) => window.api.app.stageBeforeUnloadSync(args)
+      // Relay ids left the snapshots; a stage without them (durable fallback) leaves main's as they are.
+      stageBeforeUnloadSync: (args) =>
+        window.api.app.stageBeforeUnloadSync(
+          args.sessions.length > 0 && stagedRelays ? { ...args, desktopRelays: stagedRelays } : args
+        )
     })
     const shutdownCheckpoint = createShutdownCheckpointGuard(
       shutdownCheckpointPersist.run,

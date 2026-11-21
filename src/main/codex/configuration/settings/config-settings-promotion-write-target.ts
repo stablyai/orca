@@ -1,4 +1,4 @@
-import { lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs'
+import { lstatSync, readlinkSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import {
   observeResolvedFilePath,
@@ -6,16 +6,10 @@ import {
 } from '../../../filesystem/file-content-observation'
 
 /** Follow dotfile-manager symlinks, including dangling links realpath cannot resolve. */
-export function resolvePromotionWriteTarget(systemTomlPath: string): {
-  path: string
-  mode: number
-} {
+export function resolvePromotionWriteTarget(systemTomlPath: string): { path: string } {
   try {
     const realPath = realpathSync(systemTomlPath)
-    return {
-      path: observeResolvedFilePath('promotion-write', systemTomlPath, realPath),
-      mode: statSync(realPath).mode & 0o777
-    }
+    return { path: observeResolvedFilePath('promotion-write', systemTomlPath, realPath) }
   } catch (error) {
     observeResolvedFilePathError('promotion-write', systemTomlPath, error)
     // Continue below: realpath also fails for a valid dangling dotfile link.
@@ -23,19 +17,13 @@ export function resolvePromotionWriteTarget(systemTomlPath: string): {
   try {
     if (lstatSync(systemTomlPath).isSymbolicLink()) {
       const targetPath = resolveDanglingSymlinkTarget(systemTomlPath)
-      return {
-        path: observeResolvedFilePath('promotion-write', systemTomlPath, targetPath),
-        mode: 0o600
-      }
+      return { path: observeResolvedFilePath('promotion-write', systemTomlPath, targetPath) }
     }
   } catch (error) {
     observeResolvedFilePathError('promotion-write', systemTomlPath, error)
     // Missing non-link targets are created owner-only at the requested path.
   }
-  return {
-    path: observeResolvedFilePath('promotion-write', systemTomlPath, systemTomlPath),
-    mode: 0o600
-  }
+  return { path: observeResolvedFilePath('promotion-write', systemTomlPath, systemTomlPath) }
 }
 
 function resolveDanglingSymlinkTarget(linkPath: string): string {

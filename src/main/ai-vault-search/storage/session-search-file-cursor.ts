@@ -4,6 +4,9 @@ import type { FileWithMtime } from '../../ai-vault/session-scanner-types'
 
 export type SessionSearchFileIdentity = { dev: number; ino: number } | null
 
+/** No resume offset exists for a mid-read chunk; force a whole read after interruption. */
+export const PARTIAL_FILE_CURSOR = -1
+
 /** A null byteOffset marks a committed prefix that needs a whole read before it can resume. */
 export type SessionSearchIndexedFile = {
   byteOffset: number | null

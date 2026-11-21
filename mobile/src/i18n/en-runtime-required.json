@@ -169,6 +169,20 @@
       "showMoreWorkers_one": "Show {{count}} more worker",
       "showMoreWorkers_other": "Show {{count}} more workers"
     },
+    "groups": {
+      "items": {
+        "needsYouCount_one": "{{count}} needs you",
+        "needsYouCount_other": "{{count}} needs you",
+        "outsideRoom_one": "{{count}} more outside this room",
+        "outsideRoom_other": "{{count}} more outside this room",
+        "outsideThread_one": "{{count}} more outside this thread",
+        "outsideThread_other": "{{count}} more outside this thread",
+        "outside_one": "{{count}} more outside this group",
+        "outside_other": "{{count}} more outside this group",
+        "workingCount_one": "{{count}} working",
+        "workingCount_other": "{{count}} working"
+      }
+    },
     "items": {
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
@@ -189,9 +203,21 @@
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
     },
+    "settings": {
+      "requests_one": "{{count}} request",
+      "requests_other": "{{count}} requests"
+    },
     "upNext": {
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more"
+    },
+    "webhooks": {
+      "hookCount_one": "{{count}} hook",
+      "hookCount_other": "{{count}} hooks",
+      "rotate": {
+        "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
+        "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled."
+      }
     }
   },
   "chat": {
@@ -252,6 +278,10 @@
         "starts": "Webhook · starts “{{automation}}”",
         "title": "Webhook"
       }
+    },
+    "goal": {
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks"
     },
     "mcp": {
       "status": {

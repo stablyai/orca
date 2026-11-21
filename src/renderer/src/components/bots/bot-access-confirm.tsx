@@ -208,10 +208,15 @@ function nextConfirmKey(): number {
   return confirmsOpened
 }
 
-export function useConfirmBotAccess(): (grant: BotAccessConfirm) => Promise<boolean> {
+/** `onReject`, for a confirm that answers a request: its dismiss button reads Reject and declines it,
+ *  while Escape or a press outside still leaves the request waiting. */
+export function useConfirmBotAccess(): (
+  grant: BotAccessConfirm,
+  onReject?: () => void
+) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (grant) => {
+    (grant, onReject) => {
       const { firstName, count } = botAccessGrantFacts(grant)
       const opened = nextConfirmKey()
       const place = grant.workspace
@@ -236,7 +241,15 @@ export function useConfirmBotAccess(): (grant: BotAccessConfirm) => Promise<bool
         subtitle: <AccessWho grant={grant} place={place} />,
         details: <AccessFacts key={opened} grant={grant} />,
         confirmLabel: translate('bots.access.confirm', BOT_ACCESS_COPY.confirm),
-        confirmVariant: 'destructive'
+        confirmVariant: 'destructive',
+        ...(onReject
+          ? {
+              cancelLabel: translate('bots.access.reject', BOT_ACCESS_COPY.reject),
+              onCancelClicked: onReject,
+              // Both buttons answer: a held Enter or a double-click on Review… must answer neither.
+              ignoresOpeningGesture: 'buttons' as const
+            }
+          : {})
       })
     },
     [confirm]

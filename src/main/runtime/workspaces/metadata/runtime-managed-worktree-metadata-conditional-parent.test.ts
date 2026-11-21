@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore, makeRepo } from '../../../persistence/persistence-test-harness'
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  makeRepo
+} from '../../../persistence/persistence-test-harness'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
@@ -64,7 +69,8 @@ describe('a conditional parent write (ifParentWorkspace)', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-conditional-parent-'))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

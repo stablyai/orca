@@ -32,6 +32,8 @@ import {
   getKiroManagedScriptPath,
   getKiroRemoteAgentsDir,
   getKiroRemoteManagedCommand,
+  getKiroRemoteStandaloneManagedCommand,
+  getKiroStandaloneManagedCommand,
   isKiroAgentConfigFileName,
   isKiroHooksConfigSupported,
   KIRO_HOOK_EVENTS,
@@ -211,7 +213,7 @@ export class KiroHookService {
       })
     }
     // V3 applies it to every agent, including the built-in default.
-    installKiroStandaloneHooks(command)
+    installKiroStandaloneHooks(getKiroStandaloneManagedCommand(scriptPath))
     return this.getStatus()
   }
 
@@ -230,7 +232,7 @@ export class KiroHookService {
       const standalone = await installKiroStandaloneHooksRemote(
         sftp,
         getKiroRemoteStandaloneHooksFilePath(remoteHome, kiroHomeDir),
-        command
+        getKiroRemoteStandaloneManagedCommand(scriptPath)
       )
       const fileNames = ((await listRemoteDirectory(sftp, agentsDir)) ?? [])
         .filter(isKiroAgentConfigFileName)

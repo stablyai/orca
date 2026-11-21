@@ -15,6 +15,11 @@ import {
   reserveBrowserPageDiscard,
   acknowledgeBrowserPageRemoval
 } from '../../../browser/guest-lifecycle/browser-page-memory'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 
 const pageId = 'modal-page'
 let nextId = 700
@@ -41,7 +46,7 @@ export function createModalAdmissionFixture(
     getRuntimeBrowserPageRegistry: () => ({
       getPage: (page: string) => (managedPages.has(page) ? { browserPageId: page } : undefined)
     }),
-    getAuthoritativeWindow: () => ({ webContents: { send } }),
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
     resolveWorkspaceSelector: async (selector: string) => {
       if (selector === 'reject') {
         throw new Error('Unknown workspace')
@@ -50,6 +55,7 @@ export function createModalAdmissionFixture(
     },
     readBrowserTabBar: () => catalog
   } as unknown as RuntimeBrowserCommandHost
+  setRuntimeDesktopSurface(rendererWindowSurfaceForTest({ send }))
   const commands = new RuntimeBrowserCommands(host)
   const attach = (page = pageId, register = true) => {
     const id = ++nextId

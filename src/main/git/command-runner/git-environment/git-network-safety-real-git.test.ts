@@ -39,7 +39,9 @@ beforeEach(async () => {
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_SSH: undefined,
     GIT_SSH_COMMAND: undefined,
-    GIT_SSH_VARIANT: undefined
+    GIT_SSH_VARIANT: undefined,
+    // The guard keeps a caller's askpass, and Git Bash exports its own SSH_ASKPASS.
+    SSH_ASKPASS: undefined
   }
   await writeFile(
     script,
