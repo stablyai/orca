@@ -8,10 +8,12 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../src/shared/bots/bot-templates'
+import { BOT_TEMPLATE_SKILL_LINES } from '../../../src/shared/bots/bot-template-view'
 import {
-  BOT_TEMPLATE_SKILL_LINES,
-  botTemplateEventParts
-} from '../../../src/shared/bots/bot-template-view'
+  botTemplateEventWords,
+  botTemplateSkillName,
+  botTemplateText
+} from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
 
@@ -27,7 +29,7 @@ export function MobileBotTemplateDetail(props: {
   return (
     <View style={styles.page}>
       <SheetHeader
-        title={template.name}
+        title={botTemplateText(template.name, t)}
         subtitle={t('bots.templates.byOrca', '{{category}} · by Orca', {
           category: label(template.category)
         })}
@@ -40,7 +42,7 @@ export function MobileBotTemplateDetail(props: {
         <View style={styles.picture}>
           <MobileBotAvatar avatar={{ kind: 'mascot', id: template.mascot }} size={56} />
         </View>
-        <Text style={[styles.body, styles.line]}>{template.line}</Text>
+        <Text style={[styles.body, styles.line]}>{botTemplateText(template.line, t)}</Text>
         <View style={styles.use}>
           <SheetPrimaryButton
             label={t('bots.templates.useTemplate', 'Use template…')}
@@ -50,16 +52,18 @@ export function MobileBotTemplateDetail(props: {
         <View style={styles.example}>
           {template.example.map((line) => (
             <Text key={line} style={styles.body}>
-              {line}
+              {botTemplateText(line, t)}
             </Text>
           ))}
         </View>
         <SectionHeader title={t('bots.templates.firstChat', 'What it does first')} />
-        <Text style={[styles.body, styles.inset]}>{template.firstChat}</Text>
+        <Text style={[styles.body, styles.inset]}>{botTemplateText(template.firstChat, t)}</Text>
         {template.needsSetup ? (
           <>
             <SectionHeader title={t('bots.templates.needsSetup', 'Needs setup')} />
-            <Text style={[styles.body, styles.inset]}>{template.needsSetup}</Text>
+            <Text style={[styles.body, styles.inset]}>
+              {botTemplateText(template.needsSetup, t)}
+            </Text>
           </>
         ) : null}
         <SectionHeader title={t('bots.templates.comesWith', 'Comes with')} />
@@ -67,23 +71,23 @@ export function MobileBotTemplateDetail(props: {
           {template.skills.map((skill) => (
             <ListRow
               key={`skill:${skill}`}
-              title={skill}
-              subtitle={BOT_TEMPLATE_SKILL_LINES[skill]}
+              title={botTemplateSkillName(skill, t)}
+              subtitle={botTemplateText(BOT_TEMPLATE_SKILL_LINES[skill], t)}
               subtitleLines={0}
             />
           ))}
           {template.schedules.map((schedule) => (
             <ListRow
               key={`schedule:${schedule.id}`}
-              title={schedule.when}
+              title={botTemplateText(schedule.when, t)}
               wrapTitle
-              subtitle={schedule.what}
+              subtitle={botTemplateText(schedule.what, t)}
               subtitleLines={0}
               value={t('bots.templates.stateOff', 'Off')}
             />
           ))}
           {template.events.map((event) => {
-            const parts = botTemplateEventParts(event.name)
+            const parts = botTemplateEventWords(event.name, t)
             return (
               <ListRow
                 key={`event:${event.id}`}

@@ -25,7 +25,8 @@ import { MobileBotShareReceiveSheet } from './sharing/MobileBotShareReceiveSheet
 import { useBotImportSources } from './bot-import-host-reads'
 import { botImportNudge } from '../../../src/shared/bots/bot-import'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../src/shared/bot-types'
-import { botCreate } from './bot-sheet-operations'
+import { botCreate, botUpdate } from './bot-sheet-operations'
+import { botTemplateShownName } from '../../../src/shared/bots/bot-template-text'
 import type { ListedBot, PhoneBot } from './host-bots-operations'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
@@ -133,6 +134,12 @@ function NewBotForm(props: NewBotSheetProps) {
   const choosesComputer = props.computers.length > 1 || seed !== undefined || !listed
   const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
+  const shownName = botTemplateShownName(
+    proposal?.value,
+    name,
+    computer ? props.botsOn(computer.id).map((bot) => bot.name) : [],
+    t
+  )
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
   const agentsReady = client !== null && choices !== null && choices.length > 0
   const ready = trimmed.length > 0 && agentsReady
@@ -163,10 +170,20 @@ function NewBotForm(props: NewBotSheetProps) {
               }
         )
       )
+      const goesBy = shownName.trim()
+      // Made under the template's English name (its folder, handle and SOUL.md); it goes by the shown
+      // one. A rename that fails leaves the English name, which still names the bot correctly.
+      const named =
+        goesBy === trimmed
+          ? bot
+          : await botUpdate
+              .request(client, { botId: bot.id, updates: { name: goesBy } })
+              .then((reply) => botUpdate.interpret(reply).bot)
+              .catch(() => bot)
       setName('')
       setProposal(null)
       setAvatar(randomMascotAvatar(null))
-      props.onCreated(bot, computer)
+      props.onCreated(named, computer)
     } catch (error) {
       triggerError()
       setError(
@@ -374,7 +391,7 @@ function NewBotForm(props: NewBotSheetProps) {
         {runsOn}
         <View style={styles.picture}>{pictureView}</View>
         <TextField
-          value={name}
+          value={shownName}
           onChangeText={setName}
           placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
           maxLength={BOT_NAME_MAX_LENGTH}

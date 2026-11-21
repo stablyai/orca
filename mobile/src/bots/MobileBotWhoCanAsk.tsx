@@ -1,9 +1,5 @@
 import type { ReactNode } from 'react'
-import {
-  botAccessPlace,
-  botAccessCopy,
-  type BotAccessCopyId
-} from '../../../src/shared/bots/bot-access-copy'
+import type { BotAccessCopyId } from '../../../src/shared/bots/bot-access-copy'
 import {
   botAccessAdvice,
   botAccessSummary,
@@ -17,6 +13,11 @@ import { ListRow } from '../components/list/ListGroup'
 import { SettingsSection } from '../settings/settings-screen-frame'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
+import {
+  mobileBotAccessCopy,
+  mobileBotAccessNames,
+  mobileBotAccessPlace
+} from './mobile-bot-access-copy'
 
 // The phone can't read the app's chat permission, nor turn Google off: those stay on the desktop.
 const PHONE_FIXES: Record<
@@ -60,9 +61,10 @@ export function MobileBotWhoCanAsk(props: {
   /** Each connector's people, under the summary. */
   children: ReactNode
 }) {
+  const t = useMobileTranslation()
   const { bot } = props
   const name = bot.name
-  const place = botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
+  const place = mobileBotAccessPlace(t, bot.accessHost ?? { kind: 'unknown', name: null })
   const others = bot.members.map((member) => member.name || member.id)
   const permission = botStartingPermission(bot, null)
   const { who, control } = botAccessSummary(others)
@@ -74,41 +76,43 @@ export function MobileBotWhoCanAsk(props: {
   })
   const fixDetail = (fix: Exclude<BotAccessFix, 'google-off'>): string =>
     fix === 'only-me'
-      ? botAccessCopy('fixOnlyMeDetail')
-      : botAccessCopy(bot.agent === 'codex' ? 'fixAskDetailCodex' : 'fixAskDetail', { name })
+      ? mobileBotAccessCopy(t, 'fixOnlyMeDetail')
+      : mobileBotAccessCopy(t, bot.agent === 'codex' ? 'fixAskDetailCodex' : 'fixAskDetail', {
+          name
+        })
   const fixes = advice.fixes.filter(
     (fix): fix is Exclude<BotAccessFix, 'google-off'> => fix !== 'google-off'
   )
   return (
     <>
       <SettingsSection
-        title={botAccessCopy('whoCanAsk', { name })}
-        footer={botAccessCopy(control.id, { ...control.values, name, ...place })}
+        title={mobileBotAccessCopy(t, 'whoCanAsk', { name })}
+        footer={mobileBotAccessCopy(t, control.id, { ...control.values, name, ...place })}
       >
-        <ListRow title={botAccessCopy(who.id, { ...who.values, name })} wrapTitle />
+        <ListRow title={mobileBotAccessCopy(t, who.id, { ...who.values, name })} wrapTitle />
       </SettingsSection>
       {props.children}
       {others.length > 0 ? (
-        <SettingsSection title={botAccessCopy('reachHeading', { name })}>
-          {phoneBotReachLines(bot).map((line) => (
+        <SettingsSection title={mobileBotAccessCopy(t, 'reachHeading', { name })}>
+          {phoneBotReachLines(bot, t).map((line) => (
             <ListRow key={line.title} title={line.title} wrapTitle subtitle={line.detail} />
           ))}
         </SettingsSection>
       ) : null}
       {fixes.length > 0 ? (
         <SettingsSection
-          title={botAccessCopy('adviceHeading')}
-          footer={botAccessCopy('separateBot', place)}
+          title={mobileBotAccessCopy(t, 'adviceHeading')}
+          footer={mobileBotAccessCopy(t, 'separateBot', place)}
         >
           {fixes.map((fix) => (
             <ListRow
               key={fix}
-              title={botAccessCopy(PHONE_FIXES[fix].headingId, { name })}
+              title={mobileBotAccessCopy(t, PHONE_FIXES[fix].headingId, { name })}
               wrapTitle
               subtitle={fixDetail(fix)}
               accessory={
                 <MobileBotTextButton
-                  label={botAccessCopy(PHONE_FIXES[fix].actionId)}
+                  label={mobileBotAccessCopy(t, PHONE_FIXES[fix].actionId)}
                   disabled={props.disabled}
                   onPress={fix === 'only-me' ? props.onKeepOnlyMe : props.onAskForApproval}
                 />
@@ -128,27 +132,32 @@ export function MobileAccessFixConfirm(props: {
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const t = useMobileTranslation()
   const { bot } = props
   const name = bot.name
   return props.fix === 'only-me' ? (
     <ConfirmContent
-      title={botAccessCopy('fixOnlyMeConfirm', { name })}
-      message={botAccessCopy('fixOnlyMeConfirmDetail', {
-        people: bot.members.map((member) => member.name || member.id).join(', '),
+      title={mobileBotAccessCopy(t, 'fixOnlyMeConfirm', { name })}
+      message={mobileBotAccessCopy(t, 'fixOnlyMeConfirmDetail', {
+        people: mobileBotAccessNames(bot.members.map((member) => member.name || member.id)),
         name
       })}
-      confirmLabel={botAccessCopy('fixOnlyMeAction')}
+      confirmLabel={mobileBotAccessCopy(t, 'fixOnlyMeAction')}
       destructive
       onCancel={props.onCancel}
       onConfirm={props.onConfirm}
     />
   ) : (
     <ConfirmContent
-      title={botAccessCopy('fixAskConfirm')}
-      message={botAccessCopy(bot.agent === 'codex' ? 'fixAskDetailCodex' : 'fixAskDetail', {
-        name
-      })}
-      confirmLabel={botAccessCopy('fixAskAction')}
+      title={mobileBotAccessCopy(t, 'fixAskConfirm')}
+      message={mobileBotAccessCopy(
+        t,
+        bot.agent === 'codex' ? 'fixAskDetailCodex' : 'fixAskDetail',
+        {
+          name
+        }
+      )}
+      confirmLabel={mobileBotAccessCopy(t, 'fixAskAction')}
       onCancel={props.onCancel}
       onConfirm={props.onConfirm}
     />

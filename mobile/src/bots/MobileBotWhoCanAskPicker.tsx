@@ -2,6 +2,7 @@
 // connector's workspace, then add them together; whoever can already ask stays listed, greyed.
 import { useEffect, useState } from 'react'
 import { BOT_MAX_MEMBERS, type BotMember } from '../../../src/shared/bot-types'
+import { joinSentences } from '../../../src/shared/text/sentence-joining'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -192,16 +193,20 @@ export function MobileBotWhoCanAskPicker(props: {
         </>
       ) : null}
       <SettingsNote>
-        {t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
-          count: added.size + picked.length,
-          max: connector.max
-        })}
-        {search.status === 'ready' && !idle && !search.found.complete
-          ? ` ${t(
-              'bots.whoCanAsk.incomplete',
-              'Not everyone is listed. Search by name to find someone.'
-            )}`
-          : ''}
+        {joinSentences([
+          t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
+            count: added.size + picked.length,
+            max: connector.max
+          }),
+          ...(search.status === 'ready' && !idle && !search.found.complete
+            ? [
+                t(
+                  'bots.whoCanAsk.incomplete',
+                  'Not everyone is listed. Search by name to find someone.'
+                )
+              ]
+            : [])
+        ])}
       </SettingsNote>
       {picked.length > 0 ? (
         <>

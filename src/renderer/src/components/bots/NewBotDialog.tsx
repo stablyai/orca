@@ -19,7 +19,7 @@ import {
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { createBot, useHostBots } from '@/lib/bot-catalog'
+import { createBot, updateBot, useHostBots } from '@/lib/bot-catalog'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
@@ -48,12 +48,20 @@ import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
-import { NewBotPurposeField, PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
+import { NewBotPurposeField } from './NewBotPurposeField'
+import { botTemplateShownName } from '../../../../shared/bots/bot-template-text'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { pictureTintFor } from './avatar-picture-tint'
-import { draftOf, editedProposal, templateIdentity } from './new-bot-draft'
+import {
+  canonicalDraft,
+  draftOf,
+  editedProposal,
+  templateIdentityTooLong,
+  shownDraft,
+  shownTemplateIdentity
+} from './new-bot-draft'
 import { botShareErrorMessage } from './sharing/bot-share-error-copy'
 import {
   createNewBotFromShare,
@@ -124,6 +132,8 @@ export function NewBotDialog({
   )
   const [addHostMode, setAddHostMode] = useState<AddRemoteHostMode | null>(null)
   const [draft, setDraft] = useState(() => draftOf(proposal, initialPurpose))
+  const shown = shownDraft(proposal, draft, t)
+  const keepDraft = (next: typeof draft): void => setDraft(canonicalDraft(proposal, next, t))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
   const { hostId, blocked } = hostChoice.host
   const hostBots = useHostBots(hostId)
@@ -134,6 +144,12 @@ export function NewBotDialog({
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent, fromShare && 'ask')
   const [creating, setCreating] = useState(false)
   const trimmedName = name.trim()
+  const shownName = botTemplateShownName(
+    proposal,
+    name,
+    hostBots.map((bot) => bot.name),
+    t
+  )
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
     useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
@@ -142,12 +158,8 @@ export function NewBotDialog({
   )
   // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
   const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
-  const prefilledIdentity = templateIdentity(proposal)
-  // An edited template identity becomes the bot's purpose, so it keeps the purpose's limit.
-  const identityTooLong =
-    prefilledIdentity !== undefined &&
-    draft.purpose.trim() !== prefilledIdentity &&
-    draft.purpose.trim().length > PURPOSE_MAX_LENGTH
+  const shownIdentity = shownTemplateIdentity(proposal, t)
+  const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
   // A picture still being read would miss the bot, so Create waits for it.
   const canCreate =
     !creating &&
@@ -208,7 +220,10 @@ export function NewBotDialog({
         }
         bot = shared
       } else {
-        const made = editedProposal(proposal, draft, trimmedName)
+        const goesBy = shownName.trim()
+        // A shown name differs from the English one it is created under, which must be free too.
+        const createName = goesBy === trimmedName ? trimmedName : freeBotName(trimmedName, hostBots)
+        const made = editedProposal(proposal, draft, createName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
         bot = await createBot(hostId, {
           ...(made
@@ -221,12 +236,16 @@ export function NewBotDialog({
                   fromOffer: offerHere ? fromOffer : undefined
                 }
               )
-            : { name: trimmedName }),
+            : { name: createName }),
           ...agentSetup.setup,
           avatar: picture.avatar,
           avatarColor: picture.avatarColor,
           ...(takingOver ? { takingOver } : {})
         })
+        if (goesBy !== createName) {
+          // A rename that fails leaves the English name, which still names the bot correctly.
+          bot = await updateBot(bot, { name: goesBy }).catch(() => bot)
+        }
         bot = await picture.saveUpload(bot)
       }
     } catch (error) {
@@ -340,7 +359,7 @@ export function NewBotDialog({
                   aria-label={t('bots.new.name', 'Name')}
                   autoComplete="off"
                   spellCheck={false}
-                  value={name}
+                  value={shownName}
                   maxLength={BOT_NAME_MAX_LENGTH}
                   placeholder={t('bots.new.name', 'Name')}
                   onChange={(event) => setName(event.target.value)}
@@ -348,9 +367,9 @@ export function NewBotDialog({
               </NewBotPictureButton>
               {fromShare ? null : (
                 <NewBotPurposeField
-                  value={draft.purpose}
-                  prefilled={prefilledIdentity}
-                  onChange={(purpose) => setDraft({ ...draft, purpose })}
+                  value={shown.purpose}
+                  prefilled={shownIdentity}
+                  onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
             </div>
@@ -384,9 +403,9 @@ export function NewBotDialog({
             ) : proposal ? (
               <div className="border-t border-border pt-4">
                 <NewBotProposalFields
-                  draft={draft}
+                  draft={shown}
                   worktrees={proposal.worktrees}
-                  onChange={(fields) => setDraft({ ...draft, ...fields })}
+                  onChange={(fields) => keepDraft({ ...draft, ...fields })}
                 />
               </div>
             ) : null}

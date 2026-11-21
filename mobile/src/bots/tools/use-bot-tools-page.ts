@@ -2,6 +2,7 @@
 // which starts them, so it runs only while the page is open and stops when it closes.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotToolProblem } from '../../../../src/shared/bot-tools'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   botToolProblemsCancel,
@@ -15,9 +16,8 @@ export type PhoneBotTools = {
   inherited: { name: string; plugin?: true }[]
 }
 
-const UNFINISHED = 'The native check did not finish. Check again to retry.'
-
 export function useBotToolsPage(client: RpcClient | null, botId: string) {
+  const t = useMobileTranslation()
   const [tools, setTools] = useState<PhoneBotTools | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Null while the check runs. */
@@ -53,7 +53,16 @@ export function useBotToolsPage(client: RpcClient | null, botId: string) {
           Object.fromEntries(
             own
               .filter((tool) => !tool.signIn)
-              .map((tool) => [tool.name, { kind: 'unconfirmed' as const, detail: UNFINISHED }])
+              .map((tool) => [
+                tool.name,
+                {
+                  kind: 'unconfirmed' as const,
+                  detail: t(
+                    'bots.tools.checkUnfinished',
+                    'The native check did not finish. Check again to retry.'
+                  )
+                }
+              ])
           )
         )
         .then((found) => {
@@ -63,7 +72,7 @@ export function useBotToolsPage(client: RpcClient | null, botId: string) {
           }
         })
     },
-    [client, botId, stopCheck]
+    [client, botId, stopCheck, t]
   )
 
   /** Reads the tools again; `recheck` also checks the servers again (a tool was added or edited). */

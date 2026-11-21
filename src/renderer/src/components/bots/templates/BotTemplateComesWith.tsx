@@ -7,10 +7,12 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotAppBrandLogo, hasBotAppBrand } from '../apps/BotAppBrandLogo'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../../../shared/bots/bot-templates'
+import { BOT_TEMPLATE_SKILL_LINES } from '../../../../../shared/bots/bot-template-view'
 import {
-  BOT_TEMPLATE_SKILL_LINES,
-  botTemplateEventParts
-} from '../../../../../shared/bots/bot-template-view'
+  botTemplateEventWords,
+  botTemplateSkillName,
+  botTemplateText
+} from '../../../../../shared/bots/bot-template-text'
 
 export function BotTemplateComesWithHeading(): React.JSX.Element {
   const t = useTranslate()
@@ -73,26 +75,30 @@ export function BotTemplateComesWith({ template }: { template: BotTemplate }): R
   const muted = (text: string) => <span className="text-muted-foreground">{text}</span>
   return (
     <ul>
-      {template.skills.map((skill) => (
-        <Row
-          key={skill}
-          mono
-          icon={<BookOpen className="size-4" />}
-          title={skill}
-          line={BOT_TEMPLATE_SKILL_LINES[skill]}
-        />
-      ))}
+      {template.skills.map((skill) => {
+        const name = botTemplateSkillName(skill, t)
+        return (
+          <Row
+            key={skill}
+            // The folder name reads as code; a translated name reads as words.
+            mono={name === skill}
+            icon={<BookOpen className="size-4" />}
+            title={name}
+            line={botTemplateText(BOT_TEMPLATE_SKILL_LINES[skill], t)}
+          />
+        )
+      })}
       {template.schedules.map((schedule) => (
         <Row
           key={schedule.id}
           icon={<Clock className="size-4" />}
-          title={schedule.when}
-          line={schedule.what}
+          title={botTemplateText(schedule.when, t)}
+          line={botTemplateText(schedule.what, t)}
           state={muted(t('bots.templates.stateOff', 'Off'))}
         />
       ))}
       {template.events.map((event) => {
-        const parts = botTemplateEventParts(event.name)
+        const parts = botTemplateEventWords(event.name, t)
         return (
           <Row
             key={event.id}

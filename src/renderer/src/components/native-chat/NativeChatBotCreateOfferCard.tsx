@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { createBot, openBotHomeTabById, useBots } from '@/lib/bot-catalog'
+import { createBot, openBotHomeTabById, updateBot, useBots } from '@/lib/bot-catalog'
 import { botHostHas } from '@/lib/bot-host-status'
 import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { BotAvatar, BotAvatarTile } from '../bots/BotAvatar'
@@ -30,6 +30,7 @@ import {
   botProposalDetails,
   type BotCreateOfferSay
 } from '../../../../shared/bots/bot-create-offer-view'
+import { botTemplateShownName, botTemplateText } from '../../../../shared/bots/bot-template-text'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import {
   NativeChatCardActions,
@@ -129,10 +130,11 @@ export function ProposalAvatar({
 
 /** What a proposed bot would watch, do and report, under its card's Details. */
 export function ProposalDetails({ proposal }: { proposal: BotProposal }): React.JSX.Element {
-  const say = sayWith(useTranslate())
+  const t = useTranslate()
+  const say = sayWith(t)
   return (
     <dl className="mt-3 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 border-t border-border pt-3">
-      {botProposalDetails(proposal).map((detail) => (
+      {botProposalDetails(proposal, (text) => botTemplateText(text, t)).map((detail) => (
         <NativeChatCardFact key={detail.label} label={say(detail.label)}>
           {detail.text}
         </NativeChatCardFact>
@@ -169,11 +171,15 @@ function OfferCard({
   const created = state.kind === 'created' ? bots.find((bot) => bot.id === state.botId) : undefined
   const fromOffer = { botId: proposer.id, offerId: offer.offerId }
   const taken = useTakenOver(created, proposal.worktrees)
-  const view = botCreateOfferView(offer, state, created, taken, say)
+  const view = botCreateOfferView(offer, state, created, taken, say, (text) =>
+    botTemplateText(text, t)
+  )
   const Chevron = open ? ChevronUp : ChevronDown
 
   const create = (): void => {
     setCreating(true)
+    const hostNames = bots.filter((bot) => bot.hostId === proposer.hostId).map((bot) => bot.name)
+    const goesBy = botTemplateShownName(proposal, proposal.name, hostNames, t)
     // The new bot runs on the agent its proposer runs on, which the owner already uses.
     void createBot(
       proposer.hostId,
@@ -182,6 +188,10 @@ function OfferCard({
         fromOffer
       })
     )
+      // Made under the template's English name, which names its folder; a failed rename keeps it.
+      .then((bot) =>
+        goesBy === bot.name ? bot : updateBot(bot, { name: goesBy }).catch(() => bot)
+      )
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setCreating(false))
   }
@@ -282,7 +292,9 @@ function OfferCard({
           proposal={proposal}
           fromOffer={fromOffer}
           offerHostId={proposer.hostId}
-          origin={botCreateOfferOrigin(proposal, proposer.name, say)}
+          origin={botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
+            botTemplateText(text, t)
+          )}
         />
       ) : null}
     </div>

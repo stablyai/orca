@@ -40,6 +40,7 @@ import {
   botTemplateMatches,
   freeBotName
 } from '../../../../../shared/bots/bot-template-view'
+import { botTemplateText } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateDetail } from './BotTemplateDetail'
 import { BotTemplateRow } from './BotTemplateRow'
 import { botTemplateCategoryLabel } from './bot-template-labels'
@@ -92,7 +93,8 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
   const label = (category: BotTemplateCategory) => botTemplateCategoryLabel(category, t)
   const groups = botTemplateGroups(
     (template) =>
-      (!category || template.category === category) && botTemplateMatches(template, query, label)
+      (!category || template.category === category) &&
+      botTemplateMatches(template, query, label, (english) => botTemplateText(english, t))
   )
   const shown = groups.flatMap((group) => group.templates)
   const selectedId = picked ?? asked ?? lastSelected
