@@ -57,8 +57,9 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
   const oldest = (group: typeof snapshot): string =>
     group.map(({ fact }) => fact.date ?? '').toSorted()[0] ?? ''
   for (const group of [...groups.values()].toSorted((a, b) => oldest(a).localeCompare(oldest(b)))) {
+    // A group too big for what's left waits for a later run; smaller ones still go now.
     if (status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
-      break
+      continue
     }
     status.push(...group)
   }

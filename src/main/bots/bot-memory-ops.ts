@@ -61,7 +61,7 @@ const OpSchema = z.discriminatedUnion('op', [
     kind: z.enum(BOT_MEMORY_KINDS),
     scope: z.string().optional(),
     text: z.string(),
-    evidence: z.string()
+    evidence: z.string().optional()
   }),
   z.object({ op: z.literal('replace'), line: z.string(), text: z.string(), evidence: Evidence }),
   z.object({
@@ -98,8 +98,8 @@ function checkedKind(kind: BotMemoryKind, text: string): BotMemoryKind {
 }
 
 export type TidyUpOpsInput = {
-  /** What the owner typed in the chats the run read, one entry per typed segment. */
-  ownerWords: readonly string[]
+  /** What the owner typed in the chats the run read: each message's typed segments. */
+  ownerWords: readonly (readonly string[])[]
   today: string
 }
 
@@ -284,13 +284,15 @@ export function checkTidyUpOps(
   return { plan, skipped }
 }
 
-/** How many lines state each fact `lines` holds, by its words. */
-export function lineGroups(lines: readonly string[]): Map<string, number> {
-  const counts = new Map<string, number>()
+/** The lines stating each fact `lines` holds, by its words, exactly as written: the apply checks
+ *  the live file still has exactly these, so a copy rewritten or added since (say, undated by the
+ *  owner) is never taken with them. */
+export function lineGroups(lines: readonly string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>()
   for (const line of lines) {
-    counts.set(keyOf(line), (counts.get(keyOf(line)) ?? 0) + 1)
+    groups.set(keyOf(line), [...(groups.get(keyOf(line)) ?? []), line.trimEnd()].toSorted())
   }
-  return counts
+  return groups
 }
 
 const changeLine = ({ raw, after }: MemorySnapshotLine): BotMemoryLine => ({ line: raw, after })

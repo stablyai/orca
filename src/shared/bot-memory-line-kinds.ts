@@ -46,10 +46,12 @@ const OWNER_RULE_MARKS =
   /\bowner rule\b|\bfrom now on\b|\bowner (?:said|says|wants|prefers|decided)\b/i
 
 // "Never merge … while CI is red", also after a clause break ("PR #4417 pending: never merge",
-// "…, please **don't** merge"): a standing word that starts a clause is shaped as a rule; one inside
-// a clause ("CI never went green") is not. "only" is left out: "only smoke tests are red" is status.
+// "…, please **don't** merge", "_never_ force push"): a standing word that starts a clause, with
+// any Markdown or "please" around it, is shaped as a rule; one inside a clause ("CI never went
+// green") is not. "only" counts too: keeping a descriptive "only N are red" in MEMORY.md is the
+// safe side of the line.
 const RULE_OPENING =
-  /(?:^|[:;.!?,(\u2013\u2014]\s*|\s-\s+)(?:\*\*|__|\*|_)?(?:please\s+)?(?:always|never|don['’]?t|do not|must|stop|from now on)\b/i
+  /(?:^|[:;.!?,(\u2013\u2014]\s*|\s-\s+)[*_]{0,2}(?:please[*_]{0,2}\s+[*_]{0,2})?(?:always|never|don['’]?t|do not|must|only|stop|from now on)(?![a-z0-9])/i
 
 /** A line a status cleanup must never move: typed as the owner's, marked as an owner rule, or
  *  opening with a standing word. */

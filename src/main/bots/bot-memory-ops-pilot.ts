@@ -2,6 +2,7 @@
 // repeat: one physical line at a time, with pasted blocks and quoted lines cut out.
 import { parseBotMemoryFacts } from '../../shared/bot-memory-lines'
 import type { TidyUpChat } from './bot-memory-tidy-up'
+import { hasNegation } from './bot-memory-line-words'
 
 /** A bot's Tidy-up runs on ops only while this file is in its home (the pilot). */
 export const TIDY_UP_OPS_PILOT_FILE = '.orca-memory-pilot'
@@ -33,23 +34,24 @@ export function ownerTypedSegments(text: string): string[] {
     .filter((segment) => segment !== '')
 }
 
-/** The owner's own typed words in the chats, one entry per segment. */
-export function ownerTypedWords(chats: readonly TidyUpChat[]): string[] {
+/** The owner's own typed words in the chats: each message's segments. */
+export function ownerTypedWords(chats: readonly TidyUpChat[]): string[][] {
   return chats.flatMap(({ lines }) =>
-    lines.flatMap(({ by, text }) => (by === 'owner' ? ownerTypedSegments(text) : []))
+    lines.flatMap(({ by, text }) => {
+      const segments = by === 'owner' ? ownerTypedSegments(text) : []
+      return segments.length > 0 ? [segments] : []
+    })
   )
 }
 
-const NEGATING =
-  /\b(?:not|no|never|don['’]?t|doesn['’]?t|isn['’]?t|can['’]?t|cannot|won['’]?t|without|neither|nor)\b/i
 const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
- * Whether `text` is a whole clause the owner typed, word for word: it starts where a segment or a
- * clause starts and ends where one ends, and nothing negating comes before it in its sentence, so
- * "deploy staging" can't be cut from "Do not deploy staging" or "Don't, ever, deploy staging".
+ * Whether `text` is a whole clause the owner typed, word for word, in a message with no negation,
+ * condition or question anywhere in it: refused by default, so a prohibition ("Don't:", "Never,
+ * on v1.4, …", a list under "Do not") can never come back as its affirmative.
  */
-export function isOwnerClause(text: string, segments: readonly string[]): boolean {
+export function isOwnerClause(text: string, messages: readonly (readonly string[])[]): boolean {
   const wanted = text
     .replace(/\s+/g, ' ')
     .trim()
@@ -58,14 +60,15 @@ export function isOwnerClause(text: string, segments: readonly string[]): boolea
     return false
   }
   const clause = new RegExp(
-    `(^|[.;:!?,\\u2013\\u2014(]\\s*)${escape(wanted)}\\s*(?=$|[.;:!?,\\u2013\\u2014)])`,
-    'gi'
+    `(?:^|[.;:!,\\u2013\\u2014(]\\s*)${escape(wanted)}\\s*(?:$|[.;:!,\\u2013\\u2014)])`,
+    'i'
   )
-  return segments.some((segment) =>
-    [...segment.matchAll(clause)].some((match) => {
-      const before = segment.slice(0, match.index + match[1].length)
-      const sentence = before.split(/[.;!?]/).at(-1) ?? ''
-      return !NEGATING.test(sentence)
-    })
-  )
+  return messages.some((segments) => {
+    const whole = segments.join('\n')
+    return (
+      !hasNegation(whole) &&
+      !whole.includes('?') &&
+      segments.some((segment) => clause.test(segment))
+    )
+  })
 }

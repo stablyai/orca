@@ -35,19 +35,19 @@ function topLevelArrays(text: string): string[] {
   return spans
 }
 
-/** The reply's ops: a fenced block's whole payload, else the one top-level array in the reply that
+/** The reply's ops: every fenced block's whole payload, else the one top-level array in the reply that
  *  parses; null when there is none or more than one (nothing from the model applies). */
 export function parseTidyUpOps(reply: string): unknown[] | null {
-  const fenced = /```(?:json)?\s*\n([\s\S]*?)```/.exec(reply)?.[1]
-  const arrays = (fenced !== undefined ? [fenced.trim()] : topLevelArrays(reply)).flatMap(
-    (span) => {
-      try {
-        const parsed: unknown = JSON.parse(span)
-        return Array.isArray(parsed) ? [parsed] : []
-      } catch {
-        return []
-      }
-    }
+  const fenced = [...reply.matchAll(/```(?:json)?\s*\n([\s\S]*?)```/g)].map((match) =>
+    match[1].trim()
   )
+  const arrays = (fenced.length > 0 ? fenced : topLevelArrays(reply)).flatMap((span) => {
+    try {
+      const parsed: unknown = JSON.parse(span)
+      return Array.isArray(parsed) ? [parsed] : []
+    } catch {
+      return []
+    }
+  })
   return arrays.length === 1 ? arrays[0] : null
 }

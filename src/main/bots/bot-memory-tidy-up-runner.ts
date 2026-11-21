@@ -196,11 +196,14 @@ export class BotTidyUpRunner {
     let historyRows: BotMemoryHistoryRow[] = []
     let startedAt = this.deps.now()
     let chatCount = 0
-    /** Where this run read chats from; a first run that fails keeps it, so its chats aren't lost. */
-    let readFrom: number | undefined
     try {
       const at = tidyUpState(this.deps.store.get(bot.id))
-      readFrom = at.through ?? at.firstFrom ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS
+      const readFrom = at.through ?? at.firstFrom ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS
+      // Before any run applied, where reading starts is kept first, so a run that fails, can't
+      // read its chats, or is cut off by a restart never moves the next one's start later.
+      if (at.through === undefined && at.firstFrom === undefined) {
+        this.change(bot.id, (state) => ({ ...state, firstFrom: readFrom }))
+      }
       const chats = await this.deps.newChats(bot, readFrom).catch((error: unknown) => {
         console.warn('[bots] tidy-up could not read its chats', error)
         return null
@@ -295,14 +298,11 @@ export class BotTidyUpRunner {
         this.change(bot.id, (state) => {
           const quiet = 'error' in ended && ended.alerted && lookFailureIsQuiet(state, sessionId)
           const ending = quiet ? { ...ended, alerted: false } : ended
-          // A failed first run keeps where it read from, so the next one reads those chats too.
-          const firstFrom =
-            'error' in ending && state.through === undefined
-              ? (state.firstFrom ?? readFrom)
-              : undefined
-          const next = endTidyUp(state, sessionId, this.deps.now(), ending)
-          const kept = firstFrom !== undefined ? { ...next, firstFrom } : next
-          return summary ? { ...kept, last: summary } : kept
+          const closed = endTidyUp(state, sessionId, this.deps.now(), ending)
+          // Once a run applied, its watermark is where reading starts.
+          const { firstFrom: _firstFrom, ...onward } = closed
+          const next = 'through' in ending ? onward : closed
+          return summary ? { ...next, last: summary } : next
         })
         if (summary) {
           this.deps.noteTidied(bot, { botId: bot.id, changes: tidyUpChangeCount(summary) })

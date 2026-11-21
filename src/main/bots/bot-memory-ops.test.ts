@@ -17,8 +17,8 @@ const MEMORY = [
   ''
 ].join('\n')
 const ref = (n: number, memory = MEMORY): string => memorySnapshot(memory)[n - 1].ref
-const check = (ops: unknown[], ownerWords: string[] = [], memory = MEMORY) =>
-  checkTidyUpOps(memory, ops, { ownerWords, today: '2026-11-21' })
+const check = (ops: unknown[], owner: string[] = [], memory = MEMORY) =>
+  checkTidyUpOps(memory, ops, { ownerWords: owner.map((line) => [line]), today: '2026-11-21' })
 const OWNER_ONLY = "names your owner's rule or an undated line, which only your owner changes"
 
 describe("Orca's checks on a tidy-up's ops", () => {
@@ -46,6 +46,16 @@ describe("Orca's checks on a tidy-up's ops", () => {
       check([{ op: 'replace', line: ref(1, modal), text: 'Staging deploys on Fridays' }], [], modal)
         .skipped
     ).toEqual(['replace 1: rewrites a line with a negation or modal; move it or leave it'])
+    for (const line of [
+      "Staging didn't deploy on Fridays",
+      'Staging is neither safe nor approved'
+    ]) {
+      const memory = `# M\n- 2026-10-01 ${line}\n`
+      expect(
+        check([{ op: 'replace', line: ref(1, memory), text: 'Staging deployed' }], [], memory)
+          .skipped
+      ).toEqual(['replace 1: rewrites a line with a negation or modal; move it or leave it'])
+    }
   })
 
   it("never touches an owner rule or an undated line, even with the owner's words", () => {
@@ -92,8 +102,8 @@ describe("Orca's checks on a tidy-up's ops", () => {
     ])
     expect(ranged.plan.groups).toEqual(
       new Map([
-        ['Staging notes', 2],
-        ['keep me', 1]
+        ['Staging notes', ['- 2026-10-05 Staging notes', '- 2026-10-07 Staging notes']],
+        ['keep me', ['- 2026-10-06 keep me']]
       ])
     )
     expect(
@@ -144,26 +154,44 @@ describe("Orca's checks on a tidy-up's ops", () => {
           { by: 'owner', text: 'From now on, always run the e2e suite before a release.' },
           { by: 'owner', text: 'Do not deploy staging on Fridays' },
           { by: 'owner', text: "Don't, under any circumstances, deploy on Fridays" },
-          { by: 'owner', text: 'open PRs ready\nnot draft' }
+          { by: 'owner', text: 'open PRs ready\nnot draft' },
+          { by: 'owner', text: "Don't:\n1. force push to main" },
+          { by: 'owner', text: 'Never, on v1.4, deploy staging builds' },
+          {
+            by: 'owner',
+            text: 'Staging deploys are fine <pasted_content>x</pasted_content> but not on Fridays'
+          },
+          { by: 'owner', text: 'If the tests fail, deploy to production' },
+          { by: 'owner', text: 'should we force-push to main for the hotfix' },
+          { by: 'owner', text: 'staging builds go out on Thursdays?' },
+          { by: 'owner', text: "We shouldn't merge on Fridays; merge on Mondays" }
         ]
       }
     ])
-    const add = (text: string) => ({ op: 'add', kind: 'lesson', text, evidence: text })
-    const { plan, skipped } = check(
-      [
-        add('Always run the e2e suite before a release'),
-        add('run the e2e suite before a release'),
-        add('deploy staging on Fridays'),
-        add('deploy on Fridays'),
-        add('open PRs ready not draft')
-      ],
-      owner
-    )
+    const add = (text: string) => ({ op: 'add', kind: 'lesson', text })
+    const tries = [
+      'Always run the e2e suite before a release',
+      'run the e2e suite before a release',
+      'deploy staging on Fridays',
+      'deploy on Fridays',
+      'open PRs ready not draft',
+      '1. force push to main',
+      'deploy staging builds',
+      'Staging deploys are fine',
+      'deploy to production',
+      'force-push to main for the hotfix',
+      'staging builds go out on Thursdays',
+      'merge on Mondays'
+    ]
+    const { plan, skipped } = checkTidyUpOps(MEMORY, tries.map(add), {
+      ownerWords: owner,
+      today: '2026-11-21'
+    })
     expect(plan.change.added.map(({ line }) => line)).toEqual([
       '- 2026-11-21 Rule: Always run the e2e suite before a release'
     ])
     const no = "isn't a whole clause your owner typed"
-    expect(skipped).toEqual([`add 2: ${no}`, `add 3: ${no}`, `add 4: ${no}`, `add 5: ${no}`])
+    expect(skipped).toEqual(tries.slice(1).map((_, index) => `add ${index + 2}: ${no}`))
   })
 
   it("refuses a hostile scope, a kind the lines don't have, and a rewrite into another line", () => {
@@ -242,6 +270,11 @@ describe('the status move', () => {
       '- 2026-11-05 PR #4419 waiting, **never** merge it at b2c3d4e5',
       '- 2026-11-08 Lesson: after round 2 of #4390 the head moved; re-read it before a verdict',
       '- 2026-11-04 #4420 pending: only smoke tests are red at c3d4e5f6',
+      "- 2026-11-03 #4421 waiting, please **don't** merge at d4e5f6a7",
+      '- 2026-11-03 #4422 pending: _never_ force push at e5f6a7b8',
+      "- 2026-11-03 #4423 pending: **Please** don't merge at f6a7b8c9",
+      '- 2026-11-02 #4424 waiting: only merge when CI green at a7b8c9d0',
+      '- 2026-11-02 #4425 merged; CI never went green at b8c9d0e1',
       '- #4380 merged at 9f8e7d6c5b'
     ].join('\n')
     expect(statusMigrationPlan(memory, '2026-11-21')?.topics).toEqual(
@@ -250,13 +283,23 @@ describe('the status move', () => {
           'journal/2026-11',
           [
             '# Status moved out of MEMORY.md, 2026-11',
-            '- 2026-11-04 #4420 pending: only smoke tests are red at c3d4e5f6',
+            '- 2026-11-02 #4425 merged; CI never went green at b8c9d0e1',
             '- 2026-11-10 Worker ctx_0f390877234a owns #4402, round 2 pending',
             '- 2026-11-12 #4417 merged at a1b2c3d4; follow-up waiting on review'
           ]
         ]
       ])
     )
+    // A group of copies too big for one run waits; smaller groups still move.
+    const crowded = [
+      '# M',
+      ...Array.from({ length: 1_001 }, () => '- 2026-11-01 #4417 merged at a1b2c3d4'),
+      '- 2026-11-02 #4500 merged at b2c3d4e5'
+    ].join('\n')
+    expect(statusMigrationPlan(crowded, '2026-11-21')?.topics.get('journal/2026-11')).toEqual([
+      '# Status moved out of MEMORY.md, 2026-11',
+      '- 2026-11-02 #4500 merged at b2c3d4e5'
+    ])
     // Lines leave by their words: a status line whose undated copy stays, stays too.
     const copied = '# M\n- 2026-11-12 #4417 merged at a1b2c3d4\n- #4417 merged at a1b2c3d4\n'
     expect(statusMigrationPlan(copied, '2026-11-21')).toBeNull()

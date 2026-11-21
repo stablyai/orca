@@ -45,7 +45,7 @@ export async function applyTidyUpOps(
     memory: string
     reply: string
     today: string
-    ownerWords: readonly string[]
+    ownerWords: readonly (readonly string[])[]
     migration: TidyUpPlan | null
   }
 ): Promise<Applied> {

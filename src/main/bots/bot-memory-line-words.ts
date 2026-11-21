@@ -7,37 +7,21 @@ const STOPWORDS = new Set(
   )
 )
 
-/** Negations and modals flip a line's meaning, so a rewrite may use one only when a source does. */
-const MEANING_WORDS = new Set([
-  'not',
-  'no',
-  'never',
-  'always',
-  'must',
-  'only',
-  "don't",
-  'dont',
-  "can't",
-  'cant',
-  'cannot',
-  'should',
-  'instead',
-  "won't",
-  'without',
-  'will',
-  'would',
-  'can',
-  'could',
-  'may',
-  'might',
-  "shouldn't",
-  "doesn't",
-  "isn't"
-])
+/** Words that negate or make a line conditional, any "n't" form among them: one list for every
+ *  check that refuses on negation, so they never drift apart. */
+const NEGATING =
+  /n['’]?t\b|\b(?:not|no|never|none|neither|nor|without|unless|except|avoid|stop|if|instead|cannot)\b/i
+/** Words that change how strongly a line holds. */
+const MODAL = /\b(?:always|must|only|should|will|would|can|could|may|might|shall)\b/i
 
-/** Whether `text` holds a negation or modal: a line Orca never lets a model rewrite. */
+/** Whether `text` negates or makes something conditional. */
+export function hasNegation(text: string): boolean {
+  return NEGATING.test(text)
+}
+
+/** Whether `text` holds a negation, condition or modal: a line Orca never lets a model rewrite. */
 export function hasMeaningWords(text: string): boolean {
-  return lineWords(text).some((word) => MEANING_WORDS.has(word))
+  return NEGATING.test(text) || MODAL.test(text)
 }
 
 const MAX_NEW_WORDS = 3

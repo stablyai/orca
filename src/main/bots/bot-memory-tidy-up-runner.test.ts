@@ -125,10 +125,12 @@ function harness(
     bot = { ...bot, tidyUp: { on: false } }
   })
   const noteTidied = vi.fn()
+  const readFrom: number[] = []
   const runner = new BotTidyUpRunner({
     bots: () => [bot],
     store,
-    newChats: async () => {
+    newChats: async (_bot, since) => {
+      readFrom.push(since)
       if (options.readChats) {
         return options.readChats()
       }
@@ -175,6 +177,7 @@ function harness(
     rows: () => history.list('b1'),
     runs: () => store.get('b1').tidyUp?.runs ?? [],
     state: () => store.get('b1').tidyUp,
+    readFrom,
     through: () => store.get('b1').tidyUp?.through,
     /** A tick, and the run it starts, to its end: every step here settles on the task queue. */
     tick: async () => {
@@ -799,6 +802,19 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     )
   })
 
+  it('takes nothing out when the owner undated a line it moves during the run', async () => {
+    const undated = OLD.replace('- 2026-10-02 times in Eastern', '- times in Eastern')
+    const run = harness({
+      memory: OLD,
+      reply: merge(),
+      duringRun: (files) => files.set(MEMORY, undated)
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(undated)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.changed)
+  })
+
   it('takes nothing out when a copy of a line it moves was written during the run', async () => {
     const run = harness({
       memory: OLD,
@@ -816,7 +832,9 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
     await run.tick()
     expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noOps)
-    expect(run.state()?.firstFrom).toBe(NIGHT - DAY)
+    run.setNow(NIGHT + DAY)
+    await run.tick()
+    expect(run.readFrom).toEqual([NIGHT - DAY, NIGHT - DAY])
   })
 
   it('fails a run whose every op was skipped, so its chats are read again', async () => {

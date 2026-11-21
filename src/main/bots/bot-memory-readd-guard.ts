@@ -64,7 +64,7 @@ export async function readdGuard(
   return async (added) => {
     const owner = ownerTypedWords([{ title: null, lines: ownerChatLines(turn, 0) }])
     const rows = await record.history(botId).catch(() => [])
-    const out = linesToKeepOut(added, rows, owner.join('\n'), now)
+    const out = linesToKeepOut(added, rows, owner.flat().join('\n'), now)
     const today = botMemoryDate(new Date(now))
     return out.length > 0 && (await fileKeptOutLines(fs, folder, out, today)) ? out : []
   }
