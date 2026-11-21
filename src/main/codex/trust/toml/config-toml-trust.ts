@@ -29,8 +29,6 @@ export type CodexEventLabel =
   | 'post_tool_use'
   | 'pre_compact'
   | 'post_compact'
-  | 'pre_model_request'
-  | 'post_model_request'
   | 'session_start'
   | 'session_end'
   | 'user_prompt_submit'

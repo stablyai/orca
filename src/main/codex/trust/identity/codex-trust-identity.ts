@@ -24,8 +24,6 @@ function matcherPatternForEvent(
   matcher: string | undefined
 ): string | undefined {
   switch (eventLabel) {
-    case 'pre_model_request':
-    case 'post_model_request':
     case 'user_prompt_submit':
     case 'stop':
     case 'interrupt':
@@ -239,8 +237,6 @@ function isCodexEventLabel(value: string): value is CodexEventLabel {
     value === 'post_tool_use' ||
     value === 'pre_compact' ||
     value === 'post_compact' ||
-    value === 'pre_model_request' ||
-    value === 'post_model_request' ||
     value === 'session_start' ||
     value === 'session_end' ||
     value === 'user_prompt_submit' ||

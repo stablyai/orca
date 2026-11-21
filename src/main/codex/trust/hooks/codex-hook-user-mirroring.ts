@@ -14,7 +14,7 @@ import {
 import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
 import {
   createCodexHookTrustEntry,
-  getCodexHookTrustSignature
+  getCodexUserHookMirrorSignature
 } from '../../hooks/definitions/codex-hook-identity'
 import {
   CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS,
@@ -131,7 +131,7 @@ function collectMirroredRuntimeUserHookTrustEntries(
         if (!entry) {
           return
         }
-        const signature = getCodexHookTrustSignature(entry)
+        const signature = getCodexUserHookMirrorSignature(entry)
         const state = trustedSystemHookSignatures.get(signature)
         if (state !== undefined) {
           entries.push({

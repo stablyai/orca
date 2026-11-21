@@ -12,8 +12,6 @@ export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   UserPromptSubmit: 'user_prompt_submit',
   SubagentStart: 'subagent_start',
   SubagentStop: 'subagent_stop',
-  PreModelRequest: 'pre_model_request',
-  PostModelRequest: 'post_model_request',
   PreToolUse: 'pre_tool_use',
   PermissionRequest: 'permission_request',
   PostToolUse: 'post_tool_use',
@@ -29,8 +27,6 @@ export const CODEX_EVENT_NAME_BY_LABEL: Record<CodexEventLabel, string> = {
   user_prompt_submit: 'UserPromptSubmit',
   subagent_start: 'SubagentStart',
   subagent_stop: 'SubagentStop',
-  pre_model_request: 'PreModelRequest',
-  post_model_request: 'PostModelRequest',
   pre_tool_use: 'PreToolUse',
   permission_request: 'PermissionRequest',
   post_tool_use: 'PostToolUse',
@@ -80,4 +76,9 @@ export function getCodexHookTrustSignature(entry: CodexTrustEntry): string {
     matcher: entry.matcher ?? null,
     statusMessage: entry.statusMessage ?? null
   })
+}
+
+// Codex clamps some timeouts, so clamped-equal user hooks can carry different trust; keep them apart.
+export function getCodexUserHookMirrorSignature(entry: CodexTrustEntry): string {
+  return JSON.stringify([getCodexHookTrustSignature(entry), entry.timeoutSec ?? null])
 }
