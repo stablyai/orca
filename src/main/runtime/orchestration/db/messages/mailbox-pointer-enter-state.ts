@@ -1,3 +1,4 @@
+import { emitDrained } from './question-shadow-edges'
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
@@ -154,6 +155,7 @@ export function settleMailboxPointerEnter(
   if (taker) {
     stampQuestionTakes(this, pointersHeldBy(this, ids, target, expectedPhases), taker)
   }
+  emitDrained(this, ids) // SPIKE: E6, a pointer's Enter settled
   mutatePointerMessages(this, ids, (placeholders) => ({
     sql: `UPDATE messages
           SET delivered_at = COALESCE(delivered_at, datetime('now')),
@@ -177,6 +179,7 @@ export function releaseMailboxPointerEnter(
   if (expectedPhases.length === 0) {
     return
   }
+  emitDrained(this, ids) // SPIKE: E6, a pointer's Enter settled
   mutatePointerMessages(this, ids, (placeholders) => ({
     sql: `UPDATE messages
           SET delivered_at = NULL, pointer_enter_pending = 0,

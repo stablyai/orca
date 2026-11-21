@@ -55,6 +55,17 @@ const QUESTION_TAKE_TABLES = [
   ['remote_owned_questions', '']
 ] as const
 
+// SPIKE: the kinds the shadow reconcile decides are marked awaiting when taken, unless already ended.
+const AWAITING_WHEN_TAKEN: Record<(typeof QUESTION_TAKE_TABLES)[number][0], string> = {
+  bot_requests: `CASE WHEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o
+                   WHERE o.message_id = bot_requests.message_id) THEN 1 END`,
+  question_threads: "CASE WHEN status = 'pending' THEN 1 END",
+  remote_owned_questions: 'awaiting'
+}
+
+/** SPIKE: E4. Called after a take commits, with the taker key. */
+export const questionTakeListeners = new Set<(takerKey: string) => void>()
+
 /** Stamps the taker on these messages' question rows that have none, while the mail is still unread;
  *  callers run it in the same write as the read, or as the delivery that hands the question over. */
 export function stampQuestionTakes(
@@ -67,11 +78,19 @@ export function stampQuestionTakes(
   for (const [table, scope] of QUESTION_TAKE_TABLES) {
     db.db
       .prepare(
-        `UPDATE ${table} SET taken_by = ?
+        `UPDATE ${table} SET taken_by = ?, awaiting = ${AWAITING_WHEN_TAKEN[table]}
          WHERE ${scope}taken_by IS NULL AND message_id IN (
            SELECT id FROM messages WHERE id IN (${placeholders}) AND read = 0)`
       )
       .run(key, ...ids)
+  }
+  if (questionTakeListeners.size > 0) {
+    // After the caller's transaction commits (node:sqlite is synchronous).
+    queueMicrotask(() => {
+      for (const listener of questionTakeListeners) {
+        listener(key)
+      }
+    })
   }
 }
 

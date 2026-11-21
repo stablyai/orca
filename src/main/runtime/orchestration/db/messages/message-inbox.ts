@@ -1,3 +1,4 @@
+import { emitDrained } from './question-shadow-edges'
 import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
@@ -169,6 +170,7 @@ export function markAsRead(this: OrchestrationDb, ids: string[], taker: MailTake
 }
 
 export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHandle: string): void {
+  emitDrained(this, ids)
   runBatchedMessageMutation(
     this,
     ids,
@@ -216,6 +218,7 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[], tak
 }
 
 function markRead(db: OrchestrationDb, ids: string[], taker: MailTaker, delivered: string): void {
+  emitDrained(db, ids)
   runBatchedMessageMutation(
     db,
     ids,

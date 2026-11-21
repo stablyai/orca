@@ -1,3 +1,4 @@
+import { emitDrained } from './question-shadow-edges'
 import type { OrchestrationDb } from '../orchestration-db'
 import { stampQuestionTakes, type MailTaker } from './mail-taker'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
@@ -198,6 +199,7 @@ export function retireStructuredMailSend(
 ): boolean {
   return runLifecycleWriteTransaction(this.db, 'retire_structured_mail_send', () => {
     const retired = deleteCurrentAttempt(this, row)
+    emitDrained(this, [row.message_id]) // SPIKE: E6, a send ended
     if (retired && ending.read) {
       this.markAsReadAndDelivered([row.message_id], ending.taker)
     } else if (retired) {

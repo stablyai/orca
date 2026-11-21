@@ -1,3 +1,4 @@
+import * as shadow from '../../../runtime/orchestration/db/messages/question-shadow-edges'
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
@@ -75,7 +76,13 @@ export class StructuredAgentSessionTurnCompletionFeed {
   private readonly subscribers = new Map<string, StructuredAgentSessionTurnCompletionSubscriber>()
   private readonly baselines = new Map<string, SessionBaseline>()
 
-  constructor(private readonly deps: StructuredAgentSessionTurnCompletionFeedDeps) {}
+  constructor(private readonly deps: StructuredAgentSessionTurnCompletionFeedDeps) {
+    // SPIKE: the shadow question reconcile reads a chat's status fresh, not from its last event.
+    shadow.chatRunningReaders.add(async (id) => {
+      const state = deps.sessions.has(id) ? await deps.readStatusState(id) : null
+      return state ? shadow.chatRunning(state) : null
+    })
+  }
 
   subscribe(subscriber: StructuredAgentSessionTurnCompletionSubscriber): () => void {
     this.subscribers.set(subscriber.id, subscriber)
@@ -98,6 +105,11 @@ export class StructuredAgentSessionTurnCompletionFeed {
   /** A closed session: its reattachment baselines silently instead of announcing old work. */
   forget(sessionId: string): void {
     this.baselines.delete(sessionId)
+    shadow.emitAfterCommit(shadow.structuredStateObservers, {
+      sessionId,
+      running: false,
+      closed: true
+    }) // SPIKE: E2
     for (const subscriber of this.subscribers.values()) {
       try {
         subscriber.onClosed?.(sessionId)
@@ -145,6 +157,12 @@ export class StructuredAgentSessionTurnCompletionFeed {
   ): void {
     const request = state.latestRequest
     const prompts = new Set(state.pendingPromptIds)
+    // SPIKE: E1 for the shadow question reconcile.
+    shadow.emitAfterCommit(shadow.structuredStateObservers, {
+      sessionId,
+      running: shadow.chatRunning(state),
+      closed: false
+    })
     const baseline = this.baselines.get(sessionId)
     if (!baseline || options?.historical || [...baseline.prompts].some((id) => !prompts.has(id))) {
       this.publishState(session, sessionId, state.pendingPromptIds)

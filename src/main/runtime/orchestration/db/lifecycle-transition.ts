@@ -1,3 +1,4 @@
+import { dispatchTransitionListeners, emitAfterCommit } from './messages/question-shadow-edges'
 import type Database from '../../../sqlite/sync-database'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
@@ -127,6 +128,9 @@ export function transitionLifecycleWithDb(
   db: Database.Database,
   params: LifecycleTransitionParams
 ): { changed: boolean } {
+  if (params.entity === 'dispatch' || params.entity === 'worker') {
+    emitAfterCommit(dispatchTransitionListeners, params.id) // SPIKE: E5
+  }
   const entity = ENTITY_TABLE[params.entity]
   const allowed = Array.isArray(params.from) ? params.from : [params.from]
   const current = db
