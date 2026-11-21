@@ -30,7 +30,13 @@ export function shownTemplateIdentity(
   const watches = shownText(proposal.watches, t)
   const does = shownText(proposal.does, t)
   const reports = shownText(proposal.reports, t)
-  if (watches === proposal.watches && does === proposal.does && reports === proposal.reports) {
+  // Translated only when every line is: a bot's own lines beside template ones would mix languages.
+  const lines = [
+    [proposal.watches, watches],
+    [proposal.does, does],
+    [proposal.reports, reports]
+  ] as const
+  if (lines.some(([own, line]) => own && line === own)) {
     return identity
   }
   const text = joinSentences(

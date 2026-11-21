@@ -30,6 +30,7 @@ import {
   botProposalDetails,
   type BotCreateOfferSay
 } from '../../../../shared/bots/bot-create-offer-view'
+import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import {
   NativeChatCardActions,
@@ -129,10 +130,11 @@ export function ProposalAvatar({
 
 /** What a proposed bot would watch, do and report, under its card's Details. */
 export function ProposalDetails({ proposal }: { proposal: BotProposal }): React.JSX.Element {
-  const say = sayWith(useTranslate())
+  const t = useTranslate()
+  const say = sayWith(t)
   return (
     <dl className="mt-3 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 border-t border-border pt-3">
-      {botProposalDetails(proposal).map((detail) => (
+      {botProposalDetails(proposal, (text) => botTemplateText(text, t)).map((detail) => (
         <NativeChatCardFact key={detail.label} label={say(detail.label)}>
           {detail.text}
         </NativeChatCardFact>
@@ -169,7 +171,9 @@ function OfferCard({
   const created = state.kind === 'created' ? bots.find((bot) => bot.id === state.botId) : undefined
   const fromOffer = { botId: proposer.id, offerId: offer.offerId }
   const taken = useTakenOver(created, proposal.worktrees)
-  const view = botCreateOfferView(offer, state, created, taken, say)
+  const view = botCreateOfferView(offer, state, created, taken, say, (text) =>
+    botTemplateText(text, t)
+  )
   const Chevron = open ? ChevronUp : ChevronDown
 
   const create = (): void => {
@@ -282,7 +286,9 @@ function OfferCard({
           proposal={proposal}
           fromOffer={fromOffer}
           offerHostId={proposer.hostId}
-          origin={botCreateOfferOrigin(proposal, proposer.name, say)}
+          origin={botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
+            botTemplateText(text, t)
+          )}
         />
       ) : null}
     </div>
