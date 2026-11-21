@@ -126,6 +126,10 @@ async function workForTitleChanges(size: number) {
     const hostUnions = vi.spyOn(acknowledged, 'settledHosts')
     store.getState().updateTabTitle('tab-3-b', 'Renamed by agent')
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    // Read now: the whole retry after the rejection below would rewrite it either way.
+    const measuredTitle = main
+      .stored()
+      .tabsByWorktree[worktrees[3]!.id]?.find((tab) => tab.id === 'tab-3-b')?.title
     const counts = {
       deepCompares: deepCompares.mock.calls.length,
       routedKeys: routedKeys.mock.calls.length,
@@ -160,7 +164,9 @@ async function workForTitleChanges(size: number) {
     // A title in the workspace that receives the moved editor must keep that editor saved.
     store.getState().updateTabTitle('tab-1-a', 'Owner renamed')
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-    const ownerTabs = main.stored().unifiedTabs?.[worktrees[1]!.id]?.map((tab) => tab.label)
+    const ownerUnifiedTabs = main.stored().unifiedTabs?.[worktrees[1]!.id]
+    const ownerTabs = ownerUnifiedTabs?.map((tab) => tab.entityId)
+    const ownerLabel = ownerUnifiedTabs?.find((tab) => tab.entityId === 'tab-1-a')?.label
     // A rejected title save is still owed, and is sent with the next one.
     main.rejectNextSave()
     store.getState().updateTabTitle('tab-4-a', 'Rejected once')
@@ -176,13 +182,9 @@ async function workForTitleChanges(size: number) {
     return {
       ...counts,
       repeatedPlacementChecks,
-      titles: [
-        titleOf(3, 'tab-3-b'),
-        titleOf(1, 'tab-1-a'),
-        titleOf(4, 'tab-4-a'),
-        titleOf(5, 'tab-5-a')
-      ],
+      titles: [measuredTitle, titleOf(1, 'tab-1-a'), titleOf(4, 'tab-4-a'), titleOf(5, 'tab-5-a')],
       ownerTabs,
+      ownerLabel,
       movedEditorHost,
       fallbackSlotReads
     }
@@ -199,7 +201,8 @@ it('a title change compares and routes only its workspace’s entries at N and 1
     hostUnions: 1,
     repeatedPlacementChecks: 0,
     titles: ['Renamed by agent', 'Owner renamed', 'Rejected once', 'After the rejection'],
-    ownerTabs: ['Owner renamed', 'Terminal 2', 'file.ts'],
+    ownerTabs: ['tab-1-a', 'tab-1-b', 'file-of-wt-1'],
+    ownerLabel: 'Owner renamed',
     movedEditorHost: 'ssh:target-1',
     fallbackSlotReads: 4
   }
