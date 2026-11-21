@@ -63,7 +63,7 @@ const DONE_KEY_READ_TIMEOUT_MS = 3000
 /** Whether a key found in Downloads replaces the host's saved one: only a newer file does (Make a
  *  new key), so a key saved elsewhere, or one Google no longer knows, isn't re-imported. A host
  *  that didn't answer may hold a newer key, so nothing is imported over it: Done answers as before,
- *  and the key step still offers Import. */
+ *  and a missing key shows Import a key file. */
 function importsFoundKey(found: GoogleSetupFoundKey, host: GoogleHostView | null): boolean {
   if (host?.status !== 'ready') {
     return false
