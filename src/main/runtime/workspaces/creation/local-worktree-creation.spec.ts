@@ -1,23 +1,84 @@
-import '../../../git/command-runner/git-exec-file'
+import * as gitExecFile from '../../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
 import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import '../../../git/worktrees/creation/worktree-add'
+import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
 import {
   addWorktreeMock,
-  deleteWorktreeHistoryDirMock
+  computeWorktreePathMock,
+  deleteWorktreeHistoryDirMock,
+  ensurePathWithinWorkspaceMock
 } from '../../orca-runtime-test-mocks/setup.spec'
 import '../../../git/refs/resolution/repo-default-base-ref'
 import '../../../git/refs/resolution/repo-branch-conflict'
-import '../../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
+  TEST_REPO_PATH,
   makeWorktreeMeta,
   store
 } from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
+  it('reports stale local base drift without replacing the selected base', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/local-stale-base',
+      head: 'develop-sha',
+      branch: 'local-stale-base',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const repo = { ...store.getRepos()[0]!, worktreeBaseRef: 'develop' }
+    const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([repo])
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(addWorktree).mockResolvedValueOnce({})
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'rev-list') {
+        return { stdout: '0\t692\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
+        return { stdout: 'develop-sha\n', stderr: '' }
+      }
+      if (args.includes('fetch')) {
+        throw new Error('network unavailable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'local-stale-base'
+      })
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'local-stale-base',
+        'develop',
+        false,
+        false,
+        {}
+      )
+      expect(result.localBaseRefDriftWarning).toEqual({
+        baseRef: 'develop',
+        defaultBaseRef: 'origin/main',
+        ahead: 0,
+        behind: 692,
+        relation: 'behind'
+      })
+      expect(result.warning).toContain('develop is 692 commit(s) behind origin/main')
+    } finally {
+      getReposSpy.mockRestore()
+      gitSpy.mockRestore()
+    }
+  })
+
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
     const folderRepo = {
       id: 'folder-repo',

@@ -203,7 +203,7 @@ export function createCreateWorktree(
             holdCreatedSidebarWorkspace({ worktree: created })
           }
           const { result } = outcome
-          showWorktreeCreateWarningToast(result.warning)
+          showWorktreeCreateWarningToast(result)
           reviewSetupTrustMismatch(
             get,
             repoId,

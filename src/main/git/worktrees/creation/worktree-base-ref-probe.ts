@@ -8,6 +8,7 @@ import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-refs
 type GitExecOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  timeout?: number
   canStart?: () => boolean
 }
 
