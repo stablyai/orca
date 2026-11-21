@@ -1,4 +1,3 @@
-import type { Session } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ webFrameMain: { fromId: vi.fn() } }))
@@ -30,9 +29,9 @@ afterEach(() => {
 function guestWithFrames(count: number): { guest: Electron.WebContents; reads: () => number } {
   let reads = 0
   const frames = Array.from({ length: count }, (_, frameTreeNodeId) => ({ frameTreeNodeId }))
-  const guest = {
+  const fake = {
     id: 7,
-    session: {} as Session,
+    session: {},
     isDestroyed: () => false,
     mainFrame: {
       get framesInSubtree() {
@@ -40,7 +39,9 @@ function guestWithFrames(count: number): { guest: Electron.WebContents; reads: (
         return frames
       }
     }
-  } as unknown as Electron.WebContents
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: has every WebContents member the frame tracker reads.
+  const guest = fake as unknown as Electron.WebContents
   return { guest, reads: () => reads }
 }
 
@@ -87,6 +88,7 @@ it.each([30, 300])(
           return false
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: has every WebFrameMain member the frame tracker reads.
       return frame as typeof frame & Electron.WebFrameMain
     }
     const teams = 'https://teams.microsoft.com/v2/'

@@ -11,7 +11,7 @@ import { rewritesRequestHeaders } from './browser-manager-navigation'
 
 // An unloading frame leaves the frame tree just after its pagehide.
 const REMOVAL_CHECK_DELAY_MS = 250
-const POPUP_FRAME_RECHECK_MS = 2_000
+const POPUP_FRAME_RECHECK_MS = { first: 2_000, last: 32_000 }
 // One check per guest covers a burst of unloads; churn can't postpone it, and an unload during a
 // pending check earns one more pass in case its frame left the tree after that check.
 const removalChecks = new Map<number, { again: boolean }>()
@@ -157,21 +157,27 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   const { id, session } = contents
   // Electron 43 reports frame creation but not removal, and route popups run no guest preload to
   // report an iframe's unload. So only while a popup has a site iframe, its tracked frames (only
-  // those, not the frame tree) are rechecked every 2 s; the timer stops once demand is gone.
+  // those, not the frame tree) are rechecked, backing off from 2 s to 32 s; a new site iframe
+  // starts over, and the checks stop once demand is gone.
   let recheck: NodeJS.Timeout | null = null
-  const watchPopupSiteFrames = (): void => {
-    if (recheck || getBrowserGuestFrameUserAgentDemand(id).size === 0) {
-      return
-    }
-    recheck = setInterval(() => {
+  let recheckDelay = POPUP_FRAME_RECHECK_MS.first
+  const scheduleRecheck = (): void => {
+    recheck = setTimeout(() => {
+      recheck = null
       if (contents.isDestroyed() || getBrowserGuestFrameUserAgentDemand(id).size === 0) {
-        clearInterval(recheck ?? undefined)
-        recheck = null
         return
       }
       scheduleRemovalCheck(contents)
-    }, POPUP_FRAME_RECHECK_MS)
+      recheckDelay = Math.min(recheckDelay * 2, POPUP_FRAME_RECHECK_MS.last)
+      scheduleRecheck()
+    }, recheckDelay)
     recheck.unref?.()
+  }
+  const watchPopupSiteFrames = (): void => {
+    recheckDelay = POPUP_FRAME_RECHECK_MS.first
+    if (!recheck && getBrowserGuestFrameUserAgentDemand(id).size > 0) {
+      scheduleRecheck()
+    }
   }
   const onStart = (
     details: Electron.Event<{
@@ -220,7 +226,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   )
   contents.once('destroyed', () => {
     if (recheck) {
-      clearInterval(recheck)
+      clearTimeout(recheck)
     }
     clearBrowserGuestUserAgentDemand(id)
   })
