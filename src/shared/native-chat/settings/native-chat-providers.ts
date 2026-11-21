@@ -59,15 +59,16 @@ export function carriedChatUiLaunchSettings(
   }
 }
 
-// Phones start agents as chats on a headless host with no choice, since nothing there can set one.
+// Phones start agents as chats on a headless host nobody chose for (Settings on a paired desktop can).
 export function hostNativeChatDefaults(
-  settings: NativeChatDefaultSettings,
+  settings: NativeChatDefaultSettings & Pick<GlobalSettings, 'agentDefaultSurfaceChosen'>,
   headless: boolean
 ): NativeChatDefaultSettings | null {
   const nativeChatProviders = normalizeNativeChatProviderChoices(settings.nativeChatProviders)
   const agentDefaultSurface = normalizeAgentDefaultSurface(settings.agentDefaultSurface)
   if (
     headless &&
+    settings.agentDefaultSurfaceChosen !== true &&
     agentDefaultSurface === 'terminal' &&
     Object.keys(nativeChatProviders).length === 0
   ) {

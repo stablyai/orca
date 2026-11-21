@@ -4,6 +4,7 @@ import type {
   StructuredAttentionState
 } from '../../../shared/agent-session/view/agent-session-attention'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { formatUsageLimitResetClock } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { NotificationSettings } from '../../../shared/notifications/notification-settings-types'
 import {
@@ -104,24 +105,29 @@ describe('structured attention mobile delivery', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const h = harness()
-      vi.setSystemTime(new Date(2026, 9, 28, 18, 18))
+      const now = new Date(2026, 9, 28, 18, 18).getTime()
+      vi.setSystemTime(now)
       h.delivery.deliver(failedWith(limit), SUMMARY)
       h.delivery.deliver(failedWith({ kind: 'notSignedIn' }), SUMMARY)
       // A reset on another day says which day.
-      vi.setSystemTime(new Date(2026, 9, 29, 9, 0))
+      const otherDay = new Date(2026, 9, 29, 9, 0).getTime()
+      vi.setSystemTime(otherDay)
       h.delivery.deliver(failedWith(limit), SUMMARY)
+      // The reader formats in its own locale; ask the same formatter, so the words match anywhere.
+      const resetsAtToday = formatUsageLimitResetClock(resetsAt, now)
+      const resetsAtOtherDay = formatUsageLimitResetClock(resetsAt, otherDay)
       expect(h.sent.map((event) => [event.title, event.body])).toEqual([
-        ['orca / feature - Claude failed', 'Claude hit its weekly limit. It resets at 6:39 PM.'],
+        [
+          'orca / feature - Claude failed',
+          `Claude hit its weekly limit. It resets at ${resetsAtToday}.`
+        ],
         [
           'orca / feature - Claude failed',
           "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
         ],
         [
           'orca / feature - Claude failed',
-          // ICU builds join the day and time with ", " or " at ".
-          expect.stringMatching(
-            /^Claude hit its weekly limit\. It resets at Wed, Oct 28(,| at) 6:39 PM\.$/
-          )
+          `Claude hit its weekly limit. It resets at ${resetsAtOtherDay}.`
         ]
       ])
     } finally {

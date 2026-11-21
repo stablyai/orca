@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestrat
 import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
 import { WorkerAutoReleaseActivity } from '../../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import type { AgentPhase } from '../../../../../../../shared/agent-status/lifecycle/agent-transitions'
+import { removeTree } from '../../../../../../../shared/file-write/windows-transient-lock-removal'
 
 const GRACE_MS = 2 * 60_000
 
@@ -192,10 +193,13 @@ describe('orchestration worker automatic release', () => {
   describe('across a restart', () => {
     let userDataDir: string
 
-    beforeEach(() => {
-      userDataDir = mkdtempSync(join(tmpdir(), 'orca-auto-release-restart-'))
+    beforeEach(({ onTestFinished }) => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-auto-release-restart-'))
+      userDataDir = dir
+      // After the outer afterEach closes the database: Windows cannot delete an open file, and the
+      // checkpoint thread lets go of it only once its termination lands.
+      onTestFinished(() => removeTree(dir))
     })
-    afterEach(() => rmSync(userDataDir, { recursive: true, force: true }))
 
     function setupFileBacked(): void {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })

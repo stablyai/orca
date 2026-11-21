@@ -108,7 +108,7 @@ describe('graph-sync deletion fence', () => {
     return { runtime, internals, events, sync, recreate, remove }
   }
 
-  it("rejects the deleted occupant's late snapshot after same-id recreation", async () => {
+  it('publishes only the recreated occupant after same-id recreation', async () => {
     const { internals, events, sync, recreate, remove } = createFencedRuntime()
     await sync([{ ...makeRendererSnapshot({ version: 1 }), worktreeInstanceId: 'old-instance' }])
     vi.advanceTimersByTime(60)
@@ -125,13 +125,6 @@ describe('graph-sync deletion fence', () => {
 
     expect(internals.mobileSessionTabsByWorktree.has(WT)).toBe(false)
     expect(events).toHaveLength(0)
-  })
-
-  it("accepts the recreated occupant's snapshot and clears the fence", async () => {
-    const { internals, events, sync, recreate, remove } = createFencedRuntime()
-    remove()
-    events.length = 0
-    recreate('new-instance')
 
     await sync([{ ...makeRendererSnapshot({ version: 3 }), worktreeInstanceId: 'new-instance' }])
     vi.advanceTimersByTime(60)

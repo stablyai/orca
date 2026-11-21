@@ -722,9 +722,7 @@
           "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL."
         },
         "ReleaseChannelSection": {
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+          "devChannelPlatforms": "macOS and Windows"
         },
         "RepositoryRemoveProjectSection": {
           "checkoutCount_one": "{{count}} checkout",
@@ -1515,6 +1513,10 @@
       "confirmMaySkipApprovals": "May act without asking first",
       "confirmNoApprovals": "Acts without asking first",
       "confirmWarning": "They’ll act as you on {{computer}}.",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
@@ -1553,6 +1555,7 @@
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
       "reachSlack": "Post in Slack as @{{name}}",
+      "reject": "Reject",
       "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
       "summaryMany": "You and {{count}} other people can ask {{name}}.",
       "summaryOne": "You and {{person}} can ask {{name}}.",
@@ -1696,9 +1699,11 @@
       "showMore_one": "Show {{count}} more bot",
       "showMore_other": "Show {{count}} more bots"
     },
-    "settingsPage": {
-      "memoryFiles_one": "MEMORY.md and {{count}} topic file",
-      "memoryFiles_other": "MEMORY.md and {{count}} topic files"
+    "settingsView": {
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "youAndOthers_one": "You and {{count}} other",
+      "youAndOthers_other": "You and {{count}} others"
     },
     "slack": {
       "postAs": {
@@ -2136,6 +2141,10 @@
         "paused": "{{bot}} is paused."
       },
       "composer": {
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "composerErrors": {
@@ -2283,6 +2292,10 @@
         "usageLimitWindowWeekly": "weekly",
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       },
       "goalControl": {
         "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
@@ -2611,10 +2624,6 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
-      },
-      "goal": {
-        "checks_one": "{{count}} check",
-        "checks_other": "{{count}} checks"
       }
     },
     "onboarding": {
@@ -2953,6 +2962,26 @@
       "connectorRequests": "{{count}} requests",
       "connectorRequests_one": "{{count}} request",
       "connectorRequests_other": "{{count}} requests",
+      "memoryHistory": {
+        "aChat": "A chat",
+        "added": "Added: {{fact}}",
+        "addedMany": "Added {{count}} lines",
+        "bot": "Forget, from {{chat}}",
+        "changedMany": "Changed {{count}} lines",
+        "chat": "Chat \"{{title}}\"",
+        "chatFrom": "{{chat}} · from {{source}}",
+        "edited": "Edited: {{fact}}",
+        "forgot": "Forgot: {{fact}}",
+        "forgotMany": "Forgot {{count}} lines",
+        "kept": "Orca · {{chat}} wrote over it",
+        "keptMany": "Kept {{count}} lines other chats wrote over",
+        "keptOne": "Kept a line another chat wrote over",
+        "owner": "You, in Settings",
+        "secret": "{{author}} · Can’t be undone: it held a secret",
+        "tidied": "Tidied {{count}} lines",
+        "tidyUp": "Tidy-up · Undo puts back all of its MEMORY.md changes",
+        "undo": "Undo"
+      },
       "skills": {
         "count_one": "{{count}} skill",
         "count_other": "{{count}} skills"

@@ -37,8 +37,12 @@ import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-out
 import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
+import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
+import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
+import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -51,6 +55,9 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
     relinkBotSkills(bot, context.runtime.listRepos())
+  }
+  if (params.updates.agent !== undefined) {
+    void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
   }
   if (params.updates.paused === true) {
     await dropUnreadBotRequests(context.runtime, bot.id, 'paused')
@@ -121,9 +128,12 @@ export const BOT_METHODS = [
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
     // can't reach Orca Cloud, refused (connectorMessage says why), or ok; absent without Orca Cloud.
+    // signInServer: this host's name when it is a headless server, whose signed-out copy names it;
+    // null with a window (an older host omits it, so the CLI can't tell which).
     handler: async (_params, { runtime }) => {
       const webhooks = runtime.getWebhooks()
       const listing = runtime.bots.listing()
+      const signInServer = orcaSignInServer(runtime)
       return {
         ...listing,
         // The host's Bot options, so a phone lists its bots as this sidebar does.
@@ -134,7 +144,8 @@ export const BOT_METHODS = [
           threadReplies: false,
           githubEvents2: false,
           githubWorkflows: false
-        })
+        }),
+        signInServer
       }
     }
   }),
@@ -154,7 +165,10 @@ export const BOT_METHODS = [
       // A paired client reads each server itself, so only a host's own callers fan out.
       const paired =
         params.allComputers && context.pairedDeviceId === undefined
-          ? readPairedBotRosters(runtime)
+          ? readPairedBotRosters(runtime).then((rosters) => {
+              runtime.pairedBotRosters.remember(rosters, { complete: true })
+              return rosters
+            })
           : null
       const own = await Promise.all(
         (await runtime.bots.roster()).map(async (rosterEntry) => {
@@ -189,9 +203,16 @@ export const BOT_METHODS = [
     name: 'bots.skillProjects.scan',
     permission: 'workspace',
     params: BotSkillProjectsScan,
-    handler: async (params, { runtime }) => ({
-      projects: await botSkillProjectViews(params.repoIds, runtime.listRepos())
-    })
+    handler: async (params, { runtime }) => {
+      const bot = params.botId
+        ? runtime.bots.list().find((entry) => entry.id === params.botId)
+        : undefined
+      const [projects, own] = await Promise.all([
+        botSkillProjectViews(params.repoIds, runtime.listRepos()),
+        bot ? botOwnSkillsView(botHomeFolder(bot)) : undefined
+      ])
+      return own ? { projects, own } : { projects }
+    }
   }),
   defineMethod({
     name: 'bots.avatar.upload',
@@ -224,6 +245,8 @@ export const BOT_METHODS = [
     handler: async (params, { runtime }) => {
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       if (bot) {
+        // Before anything goes: its home's purge would drop unsaved editor text, as on the desktop.
+        refuseUnsavedFolderDrafts(runtime.requireStore(), bot.folderWorkspaceId)
         // Listed first so a crash mid-delete still cleans up; nothing goes while the bot is here.
         await composioBotsOf(runtime).willDelete(bot.id)
         await forgetDeletedBotTools(runtime, bot)

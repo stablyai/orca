@@ -14,6 +14,7 @@ import { createTabsDragPreviewActions } from './tabs-drag-preview-actions'
 import { createTabsSessionActions } from './tabs-session-actions'
 import { pruneSplitLandingGroupsOnGroupRemoval } from './split-landing-groups'
 import { refusingBotSideChats } from './bot-side-chat-pin-rule'
+import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get, api) => {
   pruneSplitLandingGroupsOnGroupRemoval(api)
@@ -29,7 +30,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     ...createTabsCloseActions(set, get),
     ...createTabsBulkCloseActions(set, get),
     ...labelActions,
-    pinTab: refusingBotSideChats(get, labelActions.pinTab),
+    pinTab: refusingBotSideChats(
+      get,
+      () => runtimeStatusSubscriptionsFor(api).readStatuses(),
+      labelActions.pinTab
+    ),
     ...createTabsGroupActions(set, get),
     ...createTabsMoveActions(set, get),
     ...createTabsDropActions(set, get),

@@ -1161,7 +1161,6 @@
       "src/main/daemon/shell-readiness/testing/terminal-shell-recovery-clean-exit-retirement.test.ts": 57,
       "src/main/daemon/emulation/testing/terminal-snapshot-color-parity.test.ts": 150,
       "src/main/daemon/emulation/testing/terminal-snapshot-mouse-encoding.test.ts": 187,
-      "src/main/daemon/emulation/testing/terminal-snapshot-osc8-roundtrip.test.ts": 78,
       "src/main/daemon/emulation/testing/terminal-snapshot-serialize-roundtrip.test.ts": 267,
       "src/main/daemon/admission/testing/terminal-spawn-gate-legacy-restores.test.ts": 507,
       "src/main/daemon/admission/testing/terminal-spawn-gate-shared-budget.test.ts": 678,

@@ -1,6 +1,7 @@
 import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
@@ -52,6 +53,9 @@ export const mainProcessState = {
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
+  // Main's native consumers read settings through this; it never exposes the Store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-ready-foundation.
+  nativeSettings: null as NativeSettingsProjection | null,
   profileStateStartup: createInitialProfileStateStartup(),
   core: new DesktopCore(),
   profileStateAdmission: createInitialProfileStateAdmission(),
