@@ -1,10 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../command-runner/git-exec-file'
-import { refreshLocalBaseRefForWorktreeCreate } from './worktree-base-refresh'
+import {
+  fastForwardCheckedOutLocalBaseAfterCreate,
+  getLocalBaseRefUpdateSuggestionForWorktreeCreate,
+  refreshLocalBaseRefForWorktreeCreate
+} from './worktree-base-refresh'
 
 const tempRoots: string[] = []
 
@@ -256,4 +260,303 @@ describe('concurrent local base refreshes toward different remotes with real Git
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(upstreamOid)
     expect(spy.maxConcurrent()).toBe(1)
   })
+})
+
+describe('local base refresh reads worktree ownership from git dirs with real Git', () => {
+  it('fast-forwards main in the primary checkout that owns it', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['checkout', '--quiet', 'main'])
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+    fastForwardCheckedOutLocalBaseAfterCreate(
+      repoPath,
+      'origin/main',
+      'refs/remotes/origin/main',
+      {}
+    )
+
+    // The follow-up runs detached; Windows Git takes seconds.
+    await vi.waitFor(() => expect(git(repoPath, ['rev-parse', 'HEAD'])).toBe(remoteOid), {
+      timeout: 25_000,
+      interval: 250
+    })
+    expect(await readFile(join(repoPath, 'version.txt'), 'utf8')).toBe('two\n')
+  })
+
+  it('still suggests updating a main that two checkouts share', async () => {
+    const { repoPath, lockPath } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    git(repoPath, [
+      'worktree',
+      'add',
+      '--quiet',
+      '--force',
+      join(repoPath, '..', 'also-main'),
+      'main'
+    ])
+
+    await expect(
+      getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+        repoPath,
+        'origin/main',
+        'refs/remotes/origin/main'
+      )
+    ).resolves.toMatchObject({ localBranch: 'main', behind: 1 })
+  })
+
+  it.each(['ref:refs/heads/main\n', 'ref:\trefs/heads/main\n'])(
+    'leaves main alone while a linked checkout names it as %j',
+    async (head) => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      git(repoPath, ['worktree', 'add', '--quiet', join(repoPath, '..', 'spelled'), '--detach'])
+      await writeFile(join(repoPath, '.git', 'worktrees', 'spelled', 'HEAD'), head)
+
+      await refresh(repoPath)
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a checkout has it through a symlinked branch alias',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'symlinked-alias')
+      git(repoPath, [
+        '-c',
+        'core.preferSymlinkRefs=true',
+        'symbolic-ref',
+        'refs/heads/alias',
+        'refs/heads/main'
+      ])
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+      git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+
+      await refresh(repoPath)
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  it('leaves main alone while a linked checkout has it through a per-worktree alias', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'worktree-alias')
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'refs/worktree/alias', 'refs/heads/main'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/worktree/alias'])
+
+    await refresh(repoPath)
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+
+  it('skips the write when a checkout alias is retargeted to main while update-ref waits to start', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'retargeted')
+    git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/develop'])
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+    const original = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args[0] === 'update-ref') {
+        git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/main'])
+      }
+      return original(args, options)
+    })
+
+    await refresh(repoPath)
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+
+  it('still moves main past an unborn branch named like a ref directory', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'unborn')
+    git(repoPath, ['branch', 'feature/foo'])
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    await writeFile(
+      join(repoPath, '.git', 'worktrees', 'unborn', 'HEAD'),
+      'ref: refs/heads/feature\n'
+    )
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
+
+  it('still moves main past a per-worktree alias of another branch', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'other-worktree-alias')
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'refs/worktree/alias', 'refs/heads/develop'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/worktree/alias'])
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'still moves main past a symlinked alias of another branch',
+    async () => {
+      const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'other-alias')
+      git(repoPath, [
+        '-c',
+        'core.preferSymlinkRefs=true',
+        'symbolic-ref',
+        'refs/heads/alias',
+        'refs/heads/develop'
+      ])
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+      git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+
+      await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+    }
+  )
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a linked checkout has a symlinked HEAD to it',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'symlinked-head')
+      git(repoPath, ['config', 'core.preferSymlinkRefs', 'true'])
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, 'main'])
+      git(repoPath, ['pack-refs', '--all'])
+
+      await refresh(repoPath)
+
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a checkout has it through an absolute symlink naming it',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'absolute-alias')
+      const target = join(repoPath, '..', 'alias-ref')
+      await writeFile(target, 'ref: refs/heads/main\n')
+      await symlink(target, join(repoPath, '.git', 'refs', 'heads', 'alias'))
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+      git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+
+      await refresh(repoPath)
+
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  // Windows has no chmod-unreadable files; root reads them anyway.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'still moves main while another checkout has a branch whose ref is unreadable',
+    async () => {
+      const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'unreadable')
+      git(repoPath, ['worktree', 'add', '--quiet', '-b', 'private', linkedPath])
+      const privateRef = join(repoPath, '.git', 'refs', 'heads', 'private')
+      await chmod(privateRef, 0)
+      try {
+        await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+      } finally {
+        await chmod(privateRef, 0o644)
+      }
+
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+    }
+  )
+
+  it('moves main in a bare repo whose core.bare is unset', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const barePath = join(repoPath, '..', 'unset.git')
+    execFileSync('git', ['clone', '--quiet', '--bare', repoPath, barePath])
+    git(barePath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+    git(barePath, ['update-ref', 'refs/remotes/origin/main', remoteOid])
+    git(barePath, ['config', '--unset', 'core.bare'])
+
+    await expect(refresh(barePath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(barePath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
+
+  it('leaves main alone while a linked checkout has it through a branch alias', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'aliased')
+    git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/main'])
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+
+    await refresh(repoPath)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a symlinked worktree registration has it checked out',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'moved-admin')
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, 'main'])
+      const adminDir = join(repoPath, '.git', 'worktrees', 'moved-admin')
+      const movedAdmin = join(repoPath, '..', 'admin-elsewhere')
+      await rename(adminDir, movedAdmin)
+      await symlink(movedAdmin, adminDir)
+      await writeFile(join(movedAdmin, 'commondir'), `${join(repoPath, '.git')}\n`)
+
+      await refresh(repoPath)
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone when a symlinked HEAD has it checked out',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      git(repoPath, ['checkout', '--quiet', 'main'])
+      await rm(join(repoPath, '.git', 'HEAD'))
+      await symlink('refs/heads/main', join(repoPath, '.git', 'HEAD'))
+
+      await expect(refresh(repoPath)).resolves.toBeUndefined()
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  it.each(['bare.git', 'bare/.git'])(
+    'moves the main a bare repo at %s names from one of its linked worktrees',
+    async (bareDir) => {
+      const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const barePath = join(repoPath, '..', bareDir)
+      execFileSync('git', ['clone', '--quiet', '--bare', repoPath, barePath])
+      git(barePath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+      git(barePath, ['update-ref', 'refs/remotes/origin/main', remoteOid])
+      const linkedPath = join(repoPath, '..', 'bare-linked')
+      git(barePath, ['worktree', 'add', '--quiet', linkedPath, 'develop'])
+
+      await expect(refresh(linkedPath)).resolves.toMatchObject({ status: 'updated' })
+
+      expect(git(barePath, ['rev-parse', 'main'])).toBe(remoteOid)
+    }
+  )
 })

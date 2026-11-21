@@ -58,8 +58,8 @@ function installGitFake(fake: GitFake): void {
     if (command === 'rev-list') {
       return { stdout: '0\t3\n' }
     }
-    if (command === 'worktree') {
-      return { stdout: '' }
+    if (command === 'config') {
+      throw Object.assign(new Error('key unset'), { code: 1 })
     }
     if (command === 'merge-base') {
       // Local is still an ancestor of the target unless asked whether it already contains it.
@@ -149,9 +149,6 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
         }
         if (command === 'rev-list') {
           return { stdout: '0\t3\n' }
-        }
-        if (command === 'worktree') {
-          return { stdout: `worktree ${repoPath}\nHEAD ${localOid}\nbranch refs/heads/develop\n` }
         }
         if (command === 'update-ref') {
           resolve()

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -53,7 +53,10 @@ const commonDir = mkdtempSync(join(tmpdir(), 'orca-add-refresh-common-'))
 afterAll(() => rmSync(commonDir, { recursive: true, force: true }))
 
 describe('addWorktree', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    rmSync(join(commonDir, 'HEAD'), { force: true })
+  })
   beforeEach(() => {
     // These branch-safety assertions use POSIX argv; Windows flags have separate coverage.
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
@@ -71,7 +74,7 @@ describe('addWorktree', () => {
         args[0] === 'rev-parse' && args[1] === '--git-common-dir'
           ? { stdout: `${commonDir}\n` }
           : (args[0] === 'worktree' && args[1] === 'add') ||
-              args[0] === 'config' ||
+              args.includes('config') ||
               (args[0] === 'branch' && args[1] === '--set-upstream-to')
             ? checkoutGitMock(args, opts)
             : refreshGitMock(args, opts)
@@ -86,15 +89,13 @@ describe('addWorktree', () => {
     const moveStarted = new Promise<void>((resolve) => {
       markMoveStarted = resolve
     })
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finishMove = () => resolve({ stdout: '' })
-            markMoveStarted()
-          })
-      )
+    queueBehindInspection().mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishMove = () => resolve({ stdout: '' })
+          markMoveStarted()
+        })
+    )
     checkoutGitMock.mockImplementationOnce(async () => {
       await moveStarted
       finishMove()
@@ -111,8 +112,10 @@ describe('addWorktree', () => {
     expect(checkoutGitMock.mock.calls[0]?.[0]).toContain('add')
   })
 
-  it('skips local base refresh when worktree ownership cannot be listed', async () => {
-    queueBehindInspection({ worktrees: new Error('worktree list failed') })
+  it('skips local base refresh when worktree ownership cannot be read', async () => {
+    // A HEAD the files cannot resolve leaves the answer to Git's listing, which fails.
+    writeFileSync(join(commonDir, 'HEAD'), 'ref: refs/heads/.invalid\n')
+    queueBehindInspection({ listing: new Error('worktree list failed') })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -121,12 +124,6 @@ describe('addWorktree', () => {
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(refreshGitMock.mock.calls.map(([args]) => args[0])).toEqual([
-      'rev-parse',
-      'rev-parse',
-      'rev-parse',
-      'worktree'
-    ])
   })
 
   it('still suggests nothing but keeps the warning when the local base ref exists and diverged', async () => {
@@ -140,22 +137,17 @@ describe('addWorktree', () => {
       localBranch: 'main'
     })
     // The only call past the counts is the read-only shallow probe; nothing moves main.
-    expect(refreshGitMock.mock.calls).toHaveLength(6)
     expect(refreshGitMock.mock.calls.at(-1)?.[0]).toEqual(['rev-parse', '--is-shallow-repository'])
   })
 })
 
-function queueBehindInspection(
-  options: { worktrees?: string | Error; counts?: { stdout: string } } = {}
-) {
-  const worktrees = options.worktrees ?? 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
+function queueBehindInspection(options: { listing?: Error; counts?: { stdout: string } } = {}) {
   refreshGitMock
     .mockResolvedValueOnce({ stdout: 'abc123\n' })
     .mockResolvedValueOnce({ stdout: 'old-main\n' })
     .mockResolvedValueOnce({ stdout: 'remote-main\n' })
-  if (worktrees instanceof Error) {
-    return refreshGitMock.mockRejectedValueOnce(worktrees)
+  if (options.listing) {
+    return refreshGitMock.mockRejectedValueOnce(options.listing)
   }
-  refreshGitMock.mockResolvedValueOnce({ stdout: worktrees })
   return refreshGitMock.mockResolvedValueOnce(options.counts ?? { stdout: '0\t3\n' })
 }

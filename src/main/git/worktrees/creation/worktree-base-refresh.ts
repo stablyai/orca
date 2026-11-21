@@ -1,4 +1,3 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
@@ -16,6 +15,9 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { hasLinkedPlaceholderHead, isSamePath, readGitDirState } from './git-dir-branch-state'
+import { resolveBranchCheckouts } from './branch-checkout-resolution'
+import { readOwnerCheckoutPath } from './checkout-dir-from-files'
 import {
   translateWslOutputPath,
   translateWslOutputPaths
@@ -139,11 +141,9 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   if (!parsed) {
     return undefined
   }
-  const inspection = await inspectLocalBaseBranch(localBaseBranchGit(options), {
-    repoPath,
-    fullRef: parsed.fullRef,
-    remoteTrackingRef
-  })
+  const refs = { repoPath, fullRef: parsed.fullRef, remoteTrackingRef }
+  const git = localBaseBranchGit(options)
+  const inspection = await inspectLocalBaseBranch(git, refs, { occupancyOnly: true })
   return inspection.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
     : undefined
@@ -177,38 +177,94 @@ function localBaseBranchGit(
       execOptions(repoPath)
     )
     // Only strip the line ending: a path may end in spaces.
-    const commonDir = stdout.replace(/\r?\n$/, '')
-    return isAbsolute(commonDir)
-      ? translateWslOutputPath(commonDir, repoPath, routed(repoPath))
-      : join(repoPath, commonDir)
+    const raw = stdout.replace(/\r?\n$/, '')
+    const path = isAbsolute(raw)
+      ? translateWslOutputPath(raw, repoPath, routed(repoPath))
+      : join(repoPath, raw)
+    return { raw, path }
   }
+  // core.bare as the common dir reads it (config.worktree included); a linked checkout's config could claim bare and
+  // hide a real primary checkout. Unset, Git infers bare only for the git dir itself. Asked once per refresh.
+  const bareRepos = new Map<string, Promise<boolean>>()
+  const isBareRepo = (repoPath: string, commonDir: { raw: string; path: string }) => {
+    const known =
+      bareRepos.get(commonDir.path) ??
+      gitExecFileAsync(
+        [`--git-dir=${commonDir.raw}`, 'config', '--bool', '--get', 'core.bare'],
+        execOptions(repoPath)
+      ).then(
+        ({ stdout }) => stdout.trim() === 'true',
+        async (error: unknown) => isConfigUnset(error) && isSamePath(repoPath, commonDir.path)
+      )
+    bareRepos.set(commonDir.path, known)
+    return known
+  }
+  const bareDirOf = async (repoPath: string, commonDir: { raw: string; path: string }) =>
+    (await isBareRepo(repoPath, commonDir)) ? commonDir.path : undefined
+  const ownerPathOf = (repoPath: string, gitDir: string, commonDir: string) =>
+    readOwnerCheckoutPath(repoPath, gitDir, commonDir, (path) =>
+      translateWslOutputPath(path, repoPath, routed(repoPath))
+    )
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
-    listWorktrees,
-    listReservedBranches: async (repoPath) =>
-      (await readGitDirState(await commonDirOf(repoPath))).reserved,
+    // HEAD files answer the common cases; listing every worktree costs seconds at thousands of them.
+    readBranchUse: async (repoPath, fullRef, occupancyOnly = false) => {
+      const commonDir = await commonDirOf(repoPath)
+      const state = await readGitDirState(commonDir.path)
+      // Only a sole direct owner is located, and it stays owners[0].
+      let located: Promise<string | undefined> | undefined
+      const locate = (gitDir: string) => (located ??= ownerPathOf(repoPath, gitDir, commonDir.path))
+      if (state.reserved.has(fullRef)) {
+        return { reserved: true }
+      }
+      // A linked reftable placeholder already needs Git's listing, whatever core.bare says.
+      const use = hasLinkedPlaceholderHead(state, commonDir.path)
+        ? { kind: 'unknown' as const }
+        : await resolveBranchCheckouts(state, commonDir.path, fullRef, {
+            bareCommonDir: await bareDirOf(repoPath, commonDir),
+            firstOwnerSettles: occupancyOnly,
+            canLocate: async (gitDir) => (await locate(gitDir)) !== undefined
+          })
+      if (use.kind === 'free') {
+        return { reserved: false }
+      }
+      // Skipping callers never read the path.
+      if (occupancyOnly && use.kind === 'owned') {
+        return { reserved: false, ownerPath: repoPath }
+      }
+      const [onlyOwner, ...others] = use.kind === 'owned' ? use.gitDirs : []
+      const ownerPath = onlyOwner && others.length === 0 ? await locate(onlyOwner) : undefined
+      if (ownerPath !== undefined) {
+        return { reserved: false, ownerPath }
+      }
+      // No caller acts on a shared checkout's path: the refresh and follow-up skip it.
+      if (others.length > 0) {
+        return { reserved: false, ownerPath: repoPath, sharedCheckout: true }
+      }
+      // What the files cannot tell: Git's listing decides.
+      const owner = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
+      return { reserved: false, ...(owner ? { ownerPath: owner.path } : {}) }
+    },
+    // The inspection just ran; the admitted file recheck below guards the gap.
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
-      const worktrees = await listWorktrees(repoPath)
-      if (worktrees.some((wt) => wt.branch === fullRef)) {
-        return false
-      }
-      // A bare repo's own HEAD names a branch without checking it out.
-      const bareCommonDir = worktrees[0]?.isBare === true
+      // Resolve before admission: the recheck below must not run Git while it holds the slot.
+      const bareCommonDir = await bareDirOf(repoPath, commonDir)
       let inUse = false
       try {
         await gitExecFileAsync(args, {
           ...execOptions(repoPath),
+          // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
-            const { heads, reserved } = await readGitDirState(commonDir)
+            const state = await readGitDirState(commonDir.path)
             inUse =
-              reserved.has(fullRef) ||
-              [...heads].some(
-                ([gitDir, head]) =>
-                  !(bareCommonDir && gitDir === commonDir) &&
-                  // Reftable keeps HEAD elsewhere and leaves this placeholder: fail closed.
-                  (head === `ref: ${fullRef}` || head === 'ref: refs/heads/.invalid')
-              )
+              state.reserved.has(fullRef) ||
+              (
+                await resolveBranchCheckouts(state, commonDir.path, fullRef, {
+                  bareCommonDir,
+                  firstOwnerSettles: true
+                })
+              ).kind !== 'free'
             return !inUse
           }
         })
@@ -223,72 +279,9 @@ function localBaseBranchGit(
   }
 }
 
-type GitDirState = {
-  /** Each git dir's HEAD file, keyed by git dir. */
-  heads: ReadonlyMap<string, string>
-  /** Branches a rebase (head-name, --update-refs) or bisect reserves: Git's own in-use rule. */
-  reserved: ReadonlySet<string>
-}
-
-// Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
-async function readGitDirState(commonDir: string): Promise<GitDirState> {
-  // Fail closed: an unreadable common dir must not look like "nothing in use".
-  if (!(await stat(commonDir)).isDirectory()) {
-    throw new Error(`${commonDir} is not a Git directory`)
-  }
-  const gitDirs = [commonDir]
-  try {
-    for (const entry of await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        gitDirs.push(join(commonDir, 'worktrees', entry.name))
-      }
-    }
-  } catch (error) {
-    rethrowUnlessMissing(error)
-  }
-  const heads = new Map<string, string>()
-  const reserved = new Set<string>()
-  await Promise.all(
-    gitDirs.map(async (gitDir) => {
-      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-        readOptional(join(gitDir, 'HEAD')),
-        readOptional(join(gitDir, 'rebase-merge', 'head-name')),
-        readOptional(join(gitDir, 'rebase-apply', 'head-name')),
-        readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
-        readOptional(join(gitDir, 'BISECT_START'))
-      ])
-      heads.set(gitDir, head.trim())
-      for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
-        text.split('\n')
-      )) {
-        if (line.startsWith('refs/heads/')) {
-          reserved.add(line.trim())
-        }
-      }
-      const bisected = bisectStart.trim()
-      if (bisected) {
-        reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
-      }
-    })
-  )
-  return { heads, reserved }
-}
-
-async function readOptional(path: string): Promise<string> {
-  try {
-    return await readFile(path, 'utf8')
-  } catch (error) {
-    rethrowUnlessMissing(error)
-    return ''
-  }
-}
-
-function rethrowUnlessMissing(error: unknown): void {
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
-  if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-    throw error
-  }
+// `git config --get` exits 1 for an unset key.
+function isConfigUnset(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 1
 }
 
 function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
