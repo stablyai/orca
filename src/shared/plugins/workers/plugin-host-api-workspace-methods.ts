@@ -117,7 +117,12 @@ const projectListResult = z.object({
   truncated: z.boolean()
 })
 
-const workspaceOpenParams = z.strictObject({ workspaceId })
+const workspaceOpenParams = z.strictObject({
+  workspaceId,
+  /** Also bring Orca's window in front of other apps once it shows the workspace; desktop app
+   *  only (host API 1.11; older hosts refuse it with `invalid_params`). */
+  raiseWindow: z.boolean().optional()
+})
 const workspaceOpenResult = z.object({ opened: z.literal(true) })
 
 export const PLUGIN_WORKSPACE_NAME_MAX = 200
@@ -252,8 +257,9 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
   }),
   'workspace.open': spec({
     summary:
-      'Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app.',
+      "Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. `raiseWindow` also brings Orca's window in front of other apps, and needs the desktop app too.",
     since: 3,
+    paramsSince: { raiseWindow: 11 },
     scope: 'any-workspace',
     capability: 'workspace:write',
     mutation: true,

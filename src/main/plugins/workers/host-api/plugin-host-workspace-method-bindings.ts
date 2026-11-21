@@ -7,6 +7,7 @@ import { claimPluginReplacedActionRun } from '../../commands/plugin-command-repl
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   pluginHostEffect as effect,
+  pluginHostRaiseWindow as raise,
   pluginHostRenderer as renderer,
   pluginHostRpc as rpc,
   pluginWorkspaceSelector as workspaceSelector
@@ -52,15 +53,20 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
   'project.list': bind(api['project.list'], async (_params, { services }) =>
     listPluginProjects(rpc(services))
   ),
-  'workspace.open': bind(api['workspace.open'], async ({ workspaceId }, ctx) => {
+  'workspace.open': bind(api['workspace.open'], async ({ workspaceId, raiseWindow }, ctx) => {
+    // Refused before anything opens: headless serve has no window to raise.
+    const window = raiseWindow ? renderer(ctx.services) : null
     const scope = parseWorkspaceKey(workspaceId)
     if (scope?.type === 'folder') {
       // The runtime activates Git worktrees only; Orca's window shows a folder workspace.
       ctx.scope.assertActive()
       await renderer(ctx.services).openFolderWorkspace(scope.folderWorkspaceId)
-      return { opened: true as const }
+    } else {
+      await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
     }
-    await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
+    if (window) {
+      raise(ctx, window)
+    }
     return { opened: true as const }
   }),
   'workspace.rename': bind(api['workspace.rename'], async ({ workspaceId, name }, ctx) => {
