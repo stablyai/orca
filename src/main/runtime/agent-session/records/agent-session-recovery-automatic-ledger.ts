@@ -5,10 +5,7 @@
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
-import {
-  restartActivityLeadFinished,
-  restartActivityWaitsOnPerson
-} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import { restartActivityWaitsOnPerson } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { writeRecoveryFileDurable } from './agent-session-recovery-capsule-file'
 import type { RecoveryEntry } from './agent-session-recovery-capsule-entries'
@@ -125,7 +122,7 @@ export function writeAutomaticRestartLedger(
 }
 
 /** Orca continues on its own only a cut from the run that just ended, whose agent was proven to
- *  have exited, whose lead was mid-turn, that no person is being asked about, that it has not continued before, and while it
+ *  have exited, that no person is being asked about, that it has not continued before, and while it
  *  took fewer than three in five minutes. */
 export function automaticallyContinuable(
   ledger: AutomaticRestartLedger,
@@ -137,7 +134,6 @@ export function automaticallyContinuable(
     !ledger.passed.includes(offerKey(marker)) &&
     marker.exitUnproven !== true &&
     !restartActivityWaitsOnPerson(marker.activity) &&
-    !restartActivityLeadFinished(marker.activity) &&
     !taken.some((entry) => entry.work === cutOf(marker)) &&
     taken.filter((entry) => now - entry.at <= AUTOMATIC_CONTINUATION_WINDOW_MS).length <
       AUTOMATIC_CONTINUATION_LIMIT

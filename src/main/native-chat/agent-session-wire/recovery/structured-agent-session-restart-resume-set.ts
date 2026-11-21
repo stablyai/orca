@@ -54,6 +54,24 @@ export function restartRowsFor<T extends { agent: string }>(
   return audience ? rows.filter((row) => audience(row.agent)) : rows
 }
 
+/** The offers an action may take: asked for, recorded since its cut-off, and not left to the person. */
+export function restartRowsAdmitted<T extends StructuredAgentSessionResumeCandidate>(
+  rows: T[],
+  audience: StructuredAgentSessionRestartAudience | undefined,
+  requested: ReadonlySet<string>,
+  options: {
+    recordedSince?: number
+    leaveToPerson?: (candidate: StructuredAgentSessionResumeCandidate) => boolean
+  }
+): T[] {
+  return restartRowsFor(rows, audience).filter(
+    (candidate) =>
+      requested.has(candidate.sessionId) &&
+      candidate.recordedAt >= (options.recordedSince ?? Number.NEGATIVE_INFINITY) &&
+      options.leaveToPerson?.(candidate) !== true
+  )
+}
+
 export type StructuredAgentSessionResumableSet = {
   candidates: StructuredAgentSessionResumeCandidate[]
   /** Retire these durable markers instead of repeatedly hiding them. */

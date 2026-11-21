@@ -62,18 +62,6 @@ it('leaves a crash cut whose agent was not proven to have exited to the person',
   expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
 })
 
-it('leaves a cut whose lead had finished, with only background work running, to the person', async () => {
-  const backgroundOnly = {
-    state: 'done' as const,
-    prompts: [],
-    tasks: [{ kind: 'agent' as const, label: 'tests' }]
-  }
-  expect(await launch('turn-1', NOW, { activity: backgroundOnly })).toBe(0)
-  expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
-  const midTurn = { ...backgroundOnly, state: 'working' as const }
-  expect(await launch('turn-2', NOW + MINUTE, { sessionId: 'mid-turn', activity: midTurn })).toBe(1)
-})
-
 it('continues on its own only what the run that just ended cut', async () => {
   await capsule.record([marker({ teardownId: 'quit-earlier', recordedAt: NOW })], NOW)
   // A launch with the setting off passed over it.

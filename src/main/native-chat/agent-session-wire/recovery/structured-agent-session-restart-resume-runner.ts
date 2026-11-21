@@ -55,7 +55,9 @@ export class StructuredAgentSessionResumeAdmission {
     sessionId: string,
     owner: string,
     task: () => Promise<T>,
-    onPhase?: (phase: 'queued' | 'starting') => void
+    onPhase?: (phase: 'queued' | 'starting') => void,
+    /** Lower starts first. */
+    priority = 0
   ): Promise<T> {
     const live = this.owners.get(sessionId)
     if (live !== undefined) {
@@ -65,7 +67,7 @@ export class StructuredAgentSessionResumeAdmission {
     this.owners.set(sessionId, owner)
     try {
       onPhase?.('queued')
-      const release = await this.starts.acquire(0)
+      const release = await this.starts.acquire(priority)
       try {
         onPhase?.('starting')
         return await task()
@@ -92,9 +94,13 @@ export async function resumeStructuredAgentSessionsFromRestart(
   candidates: readonly StructuredAgentSessionResumeCandidate[],
   owner: string
 ): Promise<StructuredAgentSessionResumeOutcome[]> {
+  // A chat cut mid-turn starts before one whose lead had finished and only its background work was cut.
+  const rank = (candidate: StructuredAgentSessionResumeCandidate) =>
+    candidate.activity?.state === 'done' ? 1 : 0
+  const ordered = [...candidates].sort((a, b) => rank(a) - rank(b))
   return Promise.all(
-    candidates.map(async (candidate) => {
-      const outcome = await resumeOne(deps, candidate.sessionId, owner)
+    ordered.map(async (candidate) => {
+      const outcome = await resumeOne(deps, candidate.sessionId, owner, rank(candidate))
       if (outcome.outcome === 'refused') {
         deps.onRefused?.(candidate.sessionId)
       }
@@ -106,7 +112,8 @@ export async function resumeStructuredAgentSessionsFromRestart(
 async function resumeOne(
   deps: StructuredAgentSessionResumeRunnerDeps,
   sessionId: string,
-  owner: string
+  owner: string,
+  priority: number
 ): Promise<StructuredAgentSessionResumeOutcome> {
   try {
     return await deps.admission.run(
@@ -124,7 +131,8 @@ async function resumeOne(
         await deps.resume(sessionId)
         return { sessionId, outcome: 'resumed' as const }
       },
-      (phase) => deps.onPhase?.(sessionId, phase)
+      (phase) => deps.onPhase?.(sessionId, phase),
+      priority
     )
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)

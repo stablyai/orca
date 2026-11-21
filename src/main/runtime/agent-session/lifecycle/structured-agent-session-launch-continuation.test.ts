@@ -72,7 +72,8 @@ function launch(resumeWorkOnRestart: boolean) {
     },
     startedAt: 5,
     previousRunStartedAt: async () => 3,
-    resumeWorkOnRestart: () => resumeWorkOnRestart
+    resumeWorkOnRestart: () => resumeWorkOnRestart,
+    openWorker: (sessionId) => sessionId === 'worker'
   }
   return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
 }
@@ -100,9 +101,38 @@ describe('continuing interrupted chats at launch', () => {
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      { automatic: true, onReserved: expect.any(Function), recordedSince: 3 }
+      {
+        automatic: true,
+        onReserved: expect.any(Function),
+        recordedSince: 3,
+        leaveToPerson: expect.any(Function)
+      }
     )
     expect(calls).toEqual(['adopt', 'continue', 'pass over'])
+  })
+
+  it('leaves to the person only a finished chat whose cut work nothing awaited and no task waits on', async () => {
+    const { result, restartResume } = launch(true)
+    await result
+    const options = restartResume.continueAfterRestart.mock.calls[0]?.[3] as {
+      leaveToPerson: (candidate: StructuredAgentSessionResumeCandidate) => boolean
+    }
+    const finished = (sessionId: string, kinds: ('command' | 'monitor' | 'agent')[]) => ({
+      ...offer(sessionId, 4),
+      activity: {
+        state: 'done' as const,
+        prompts: [],
+        tasks: kinds.map((kind) => ({ kind, label: kind }))
+      }
+    })
+    expect(options.leaveToPerson(finished('chat', ['command', 'monitor']))).toBe(true)
+    // A worker's task waits on it, and a cut helper agent's result was awaited.
+    expect(options.leaveToPerson(finished('worker', ['command']))).toBe(false)
+    expect(options.leaveToPerson(finished('chat', ['command', 'agent']))).toBe(false)
+    const midTurn = finished('chat', ['command'])
+    expect(
+      options.leaveToPerson({ ...midTurn, activity: { ...midTurn.activity, state: 'working' } })
+    ).toBe(false)
   })
 
   it('does not count as cut a chat whose continuation its provider has not confirmed yet', async () => {
