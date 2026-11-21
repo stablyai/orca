@@ -103,6 +103,7 @@ export class ClaudeAgentViewRegistryFile {
       // Still locked: never overwrite entries this run could not read. Without saves nothing is
       // durable, so every mod keeps its 5 s check-in instead of going quiet.
       this.closed = true
+      return
     }
     if (this.closed) {
       return
