@@ -1951,6 +1951,13 @@ html.native-shell .app-layout {
   box-shadow: none;
 }
 
+/* The open workspace menu outlines its whole card, even from an agent row. Outline, not box-shadow:
+   the active, selected and family rules above own box-shadow, and this must show over each of them. */
+[data-worktree-card-surface][data-worktree-card-menu-open] {
+  outline: 1px solid color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent);
+  outline-offset: -1px;
+}
+
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
 [data-worktree-sleeping-dim] {
   color: color-mix(in oklab, var(--worktree-sidebar-foreground) 52%, var(--worktree-sidebar));

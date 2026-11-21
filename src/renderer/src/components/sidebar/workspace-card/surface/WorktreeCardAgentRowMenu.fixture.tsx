@@ -70,7 +70,11 @@ const entries: AgentStatusEntry[] = tabs.map((tab, index) => ({
 
 type From = 'agent-row' | 'header' | 'expander'
 
-function menuFrom(from: From, mode: 'compact' | 'full') {
+function menuFrom(
+  from: From,
+  mode: 'compact' | 'full',
+  card: { isActive?: boolean; isMultiSelected?: boolean } = {}
+) {
   return defineFixture({
     width: 380,
     store: {
@@ -93,7 +97,8 @@ function menuFrom(from: From, mode: 'compact' | 'full') {
           <WorktreeCard
             worktree={worktree}
             repo={repo}
-            isActive={false}
+            isActive={card.isActive ?? false}
+            isMultiSelected={card.isMultiSelected ?? false}
             nativeDragEnabled={false}
           />
         </div>
@@ -127,3 +132,6 @@ export const compactAgentRow = menuFrom('agent-row', 'compact')
 export const fullAgentRow = menuFrom('agent-row', 'full')
 export const cardHeader = menuFrom('header', 'compact')
 export const agentsExpander = menuFrom('expander', 'compact')
+// The outline must show over the active and multi-selected looks too.
+export const activeCardAgentRow = menuFrom('agent-row', 'compact', { isActive: true })
+export const selectedCardAgentRow = menuFrom('agent-row', 'compact', { isMultiSelected: true })

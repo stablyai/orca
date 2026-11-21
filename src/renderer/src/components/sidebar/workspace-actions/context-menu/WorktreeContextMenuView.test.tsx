@@ -5,8 +5,20 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WORKSPACE_AGENT_ROW_ATTR } from './workspace-agent-row-marker'
+import type * as DropdownMenuModule from '@/components/ui/dropdown-menu'
 
 const stub = (name: string) => () => <div data-testid={name} />
+// While set, the menu stays mounted after the view closes it, as during its exit animation.
+const radixHold = vi.hoisted(() => ({ keepMounted: false }))
+vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof DropdownMenuModule>()
+  return {
+    ...actual,
+    DropdownMenu: (props: React.ComponentProps<typeof actual.DropdownMenu>) => (
+      <actual.DropdownMenu {...props} open={props.open || radixHold.keepMounted} />
+    )
+  }
+})
 vi.mock('./WorktreeContextMenuDeleteItems', () => ({
   WorktreeContextMenuDeleteItems: stub('delete-items')
 }))
@@ -102,7 +114,12 @@ function Card({ isMultiContext = false }: { isMultiContext?: boolean }): React.J
     worktree: { id: 'repo::/w', isPinned: false },
     workspaceStatuses: []
   } as unknown as WorktreeContextMenuModel
-  return <WorktreeContextMenuView model={model} />
+  return (
+    <>
+      <button type="button" data-testid="close-menu" onClick={() => setMenuOpen(false)} />
+      <WorktreeContextMenuView model={model} />
+    </>
+  )
 }
 
 function openFrom(testId: string): void {
@@ -119,6 +136,7 @@ function close(): void {
 
 afterEach(() => {
   cleanup()
+  radixHold.keepMounted = false
 })
 
 describe('WorktreeContextMenuView from an agent row', () => {
@@ -157,8 +175,25 @@ describe('WorktreeContextMenuView from an agent row', () => {
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })
 
+  it('keeps Delete out while a row-opened menu is still mounted after closing', () => {
+    render(<Card />)
+    openFrom('header')
+    expect(screen.getByTestId('delete-items')).toBeTruthy()
+    close()
+    openFrom('agent-row')
+    radixHold.keepMounted = true
+    act(() => {
+      screen.getByTestId('close-menu').click()
+    })
+    expect(screen.getByTestId('mute-item')).toBeTruthy()
+    expect(screen.queryByTestId('delete-items')).toBeNull()
+  })
+
   it('omits the batch Delete of a multi-selection too', () => {
     render(<Card isMultiContext />)
+    openFrom('header')
+    expect(screen.getByTestId('delete-items')).toBeTruthy()
+    close()
     openFrom('agent-row')
     expect(screen.queryByTestId('delete-items')).toBeNull()
   })
