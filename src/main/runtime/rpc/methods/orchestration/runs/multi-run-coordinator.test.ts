@@ -24,9 +24,9 @@ describe('a coordinator that creates a second Run', () => {
     return state.db.getCurrentRunForPane(COORDINATOR_PANE_KEY)!.id
   }
 
-  it('keeps reading, answering and sending in its earlier Run', async () => {
+  it('keeps using its earlier Run until another coordinator takes it over', async () => {
     const state = setupTwoRuns()
-    const { db, ctx, runA, dispatch } = state
+    const { db, ctx, runtime, runA, dispatch } = state
     const report = db.insertMessage({
       from: 'term_worker',
       to: `run:${runA}`,
@@ -66,6 +66,20 @@ describe('a coordinator that creates a second Run', () => {
     expect(await h.call('orchestration.check', { terminal: 'term_coord' }, ctx)).toMatchObject({
       runId: runB
     })
+
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_coord'
+        ? COORDINATOR_PANE_KEY
+        : handle === 'term_other'
+          ? OTHER_PANE_KEY
+          : null
+    )
+    await h.call('orchestration.runUse', { from: 'term_other', id: runA }, ctx)
+
+    await expect(
+      h.call('orchestration.check', { terminal: 'term_coord', run: runA }, ctx)
+    ).rejects.toMatchObject({ code: 'consumer_fenced' })
+    expect(db.getRun(runA)?.coordinator_handle).toBe('term_other')
   })
 
   it('ends a wait on the earlier Run when run-use keeps only another Run', async () => {
@@ -83,24 +97,5 @@ describe('a coordinator that creates a second Run', () => {
     await h.call('orchestration.runUse', { from: 'term_coord', id: runB }, ctx)
 
     await expect(waiting).rejects.toMatchObject({ code: 'consumer_fenced' })
-  })
-
-  it('still loses the earlier Run when another coordinator takes it over', async () => {
-    const state = setupTwoRuns()
-    const { db, ctx, runtime, runA } = state
-    await createRunB(state)
-    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_coord'
-        ? COORDINATOR_PANE_KEY
-        : handle === 'term_other'
-          ? OTHER_PANE_KEY
-          : null
-    )
-    await h.call('orchestration.runUse', { from: 'term_other', id: runA }, ctx)
-
-    await expect(
-      h.call('orchestration.check', { terminal: 'term_coord', run: runA }, ctx)
-    ).rejects.toMatchObject({ code: 'consumer_fenced' })
-    expect(db.getRun(runA)?.coordinator_handle).toBe('term_other')
   })
 })

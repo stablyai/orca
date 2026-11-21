@@ -124,15 +124,20 @@ describe('how a bot request ends', () => {
     expect(JSON.parse(payload).botAnswer.next).toMatch(/don't post it again/)
   })
 
-  it('wakes the sender once when a turn on the request ends with no answer', async () => {
-    const id = request()
-    acting.requestIds = [id]
+  it('settles each unanswered request once and wakes the sender for each', async () => {
+    const handoff = request('handoff', 'a')
+    const question = request('question', 'b')
+    acting.requestIds = [handoff, question]
     await settleBotRequestTurn(runtime, 'docs-session')
     await settleBotRequestTurn(runtime, 'docs-session')
-    expect(mailToRanger().map((mail) => mail.body)).toEqual([
-      "Docs ended its turn without answering your handoff, so do it yourself or tell Nora on Slack that Docs couldn't take it."
+
+    expect(mailToRanger()).toHaveLength(2)
+    expect(db.getBotRequestOutcome(handoff)).toBe('unanswered')
+    expect(db.getBotRequestOutcome(question)).toBe('unanswered')
+    expect(notified).toEqual([
+      'orca_session_id:11111111-1111-4111-8111-111111111111',
+      'orca_session_id:11111111-1111-4111-8111-111111111111'
     ])
-    expect(notified).toEqual(['orca_session_id:11111111-1111-4111-8111-111111111111'])
   })
 
   it("says a failed turn failed and why, not that the bot read the owner's handoff", async () => {
@@ -175,12 +180,6 @@ describe('how a bot request ends', () => {
     const original = db.getMessageById(id)!
     expect(botAnswerPayload(db, original)).toBeDefined()
     expect(() => botAnswerPayload(db, original)).toThrow('You already answered that request')
-  })
-
-  it('tells the sender of every request a turn took and left unanswered', async () => {
-    acting.requestIds = [request('handoff', 'a'), request('handoff', 'b')]
-    await settleBotRequestTurn(runtime, 'docs-session')
-    expect(mailToRanger()).toHaveLength(2)
   })
 
   it("settles no turn outside a bot's home", async () => {

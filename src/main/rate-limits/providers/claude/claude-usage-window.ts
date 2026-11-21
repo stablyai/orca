@@ -77,7 +77,7 @@ export function mapClaudeUsageWindow(
 // Same-window statusline/OAuth reset precision differs; separate windows are hours apart.
 const SAME_WINDOW_TOLERANCE_MS = 60 * 1000
 
-function isSameClaudeUsageReset(a: number | null, b: number | null): boolean {
+export function isSameClaudeUsageReset(a: number | null, b: number | null): boolean {
   return a === null || b === null ? a === b : Math.abs(a - b) <= SAME_WINDOW_TOLERANCE_MS
 }
 

@@ -1,14 +1,15 @@
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { FilenameFirstPath } from '@/components/file-actions/file-path-cursor-tooltip'
-import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
+import { isFolderPath } from '../../../../shared/quick-open/quick-open-folder-paths'
 import { cn } from '@/lib/class-names'
 import {
   nativeChatMentionValue,
   type NativeChatRoomMention
 } from './composer/native-chat-composer-types'
 
-/** One `@` menu row: a room member (a bot), or else a workspace file. */
+/** One `@` menu row: a room member (a bot), or else a workspace file or folder. */
 export function NativeChatMentionOption({
   value,
   member
@@ -55,9 +56,14 @@ export function NativeChatMentionOption({
       </>
     )
   }
+  const iconClass = 'mt-0.5 size-3.5 shrink-0 text-muted-foreground'
   return (
     <>
-      <FileTypeIcon filePath={value} className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+      {isFolderPath(value) ? (
+        <FolderIcon folderPath={value.slice(0, -1)} open={false} className={iconClass} />
+      ) : (
+        <FileTypeIcon filePath={value} className={iconClass} />
+      )}
       <FilenameFirstPath path={value} />
     </>
   )

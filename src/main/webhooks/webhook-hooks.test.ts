@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,7 +81,11 @@ function setup(
   cloud: Partial<Record<keyof WebhookCloudCalls, unknown>>,
   automations: Automation[] = []
 ) {
-  const ledger = new WebhookHostLedger(userDataPath, () => 'acct-1')
+  const ledger = new WebhookHostLedger(
+    userDataPath,
+    () => 'acct-1',
+    () => new Set()
+  )
   const confirmed = vi.fn()
   let now = NOW
   const store = {
@@ -242,7 +254,11 @@ describe('a webhook on its host', () => {
     expect(setState).toHaveBeenCalledTimes(1)
     // A restart still has it; the owner resumed meanwhile.
     automations[0] = automation({ enabled: true })
-    const restarted = new WebhookHostLedger(userDataPath, () => 'acct-1')
+    const restarted = new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => new Set()
+    )
     expect(restarted.hook(HOOK)?.change).toEqual(pause)
     later(30_001)
     up = true
@@ -317,5 +333,78 @@ describe('a webhook on its host', () => {
     const second = setup({}, [withSlack])
     second.hooks.dropTombstoned([HOOK])
     expect(second.store.setTriggers).toHaveBeenCalledWith('auto-2', [slack])
+  })
+
+  it("keeps a newer-agent bot's hook where an older build can't delete it", async () => {
+    const live = { hookId: HOOK, automationId: 'auto-1', botId: 'bot-1', epoch: 1, state: 'live' }
+    // Saved by a build that keeps every hook in webhook-host.json; this one moves it out.
+    new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => new Set()
+    ).saveHook({ ...live, state: 'live' })
+    const newerAgents = new Set(['bot-1'])
+    new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => newerAgents
+    ).refile()
+
+    // An older build reads only webhook-host.json and can't find the bot, so it would delete the hook.
+    const olderBuild = mkdtempSync(join(tmpdir(), 'orca-webhook-older-'))
+    const file = 'webhook-host.json'
+    copyFileSync(join(userDataPath, file), join(olderBuild, file))
+    const remove = vi.fn(async () => ok(undefined))
+    const older = new WebhookHooks({
+      ledger: new WebhookHostLedger(
+        olderBuild,
+        () => 'acct-1',
+        () => new Set()
+      ),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: it reaches only remove.
+      cloud: { remove } as unknown as WebhookCloudCalls,
+      automations: { list: () => [automation()], setTriggers: vi.fn(), remove: vi.fn() },
+      botExists: () => false
+    })
+    await older.reconcile()
+    rmSync(olderBuild, { recursive: true, force: true })
+    expect(remove).not.toHaveBeenCalled()
+
+    // Its rewrite of that file leaves the hook, and an agent it reads puts the hook back there.
+    writeFileSync(
+      join(userDataPath, file),
+      JSON.stringify({ account: 'acct-1', hooks: [], calls: [], intents: [] })
+    )
+    const upgraded = new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => newerAgents
+    )
+    expect(upgraded.hook(HOOK)).toMatchObject(live)
+    newerAgents.clear()
+    upgraded.refile()
+    expect(JSON.parse(readFileSync(join(userDataPath, file), 'utf8')).hooks).toMatchObject([live])
+  })
+
+  it("rewrites only the newer-agent file when only a newer-agent bot's hook changes", () => {
+    const ledger = new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => new Set(['bot-1'])
+    )
+    ledger.saveHook({
+      hookId: HOOK,
+      automationId: 'auto-1',
+      botId: 'bot-1',
+      epoch: 1,
+      state: 'live'
+    })
+    rmSync(join(userDataPath, 'webhook-host.json'))
+    ledger.setChange(HOOK, { state: 'paused', operationId: 'op-1' })
+    expect(existsSync(join(userDataPath, 'webhook-host.json'))).toBe(false)
+    const newer = JSON.parse(
+      readFileSync(join(userDataPath, 'webhook-host-newer-agents.json'), 'utf8')
+    )
+    expect(newer.hooks[0].change).toEqual({ state: 'paused', operationId: 'op-1' })
   })
 })

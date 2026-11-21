@@ -8,6 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
+import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,
@@ -38,6 +39,9 @@ const HEALTH_SETTINGS = [
   'nativeChatShellEnvironmentVariables',
   // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
   'antigravityChatAuth',
+  'antigravityManagedAgyEnabled',
+  // Why: choosing Orca's Google sign-in moves new chats off a signed-in agy (hostAlternative).
+  'antigravityGoogleSignIn',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
@@ -174,6 +178,8 @@ export function installStructuredAgentAvailability(
   })
   onAgentsRefreshedOnHost(() => derive(false))
   onManagedRuntimeReleasesChanged(() => derive(false))
+  // A host program's new answer (e.g. agy found incompatible at a chat start) changes its chat program.
+  ACP_LAUNCH_SPECS.forEach((spec) => spec.hostBackend?.onSelectionChanged?.(() => derive(false)))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

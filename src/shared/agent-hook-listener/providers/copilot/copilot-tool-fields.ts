@@ -192,7 +192,8 @@ export function extractCopilotToolFields(
       update.lastAssistantMessage = direct
     } else {
       const lastFromTranscript = readLastAssistantFromTranscript(
-        hookPayload.transcript_path ?? hookPayload.transcriptPath
+        hookPayload.transcript_path ?? hookPayload.transcriptPath,
+        'copilot'
       )
       if (lastFromTranscript) {
         update.lastAssistantMessage = lastFromTranscript

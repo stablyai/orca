@@ -7,11 +7,18 @@ import type {
 
 /** Which program a chat runs and its version, so its models and account are no surprise. */
 export function antigravityProgramLabel(
-  backend: 'managed' | 'agy',
+  program: 'managed' | 'agy' | 'orcasAgy',
   version: string | null | undefined,
   t: Translate = translate
 ): string {
-  if (backend === 'agy') {
+  if (program === 'orcasAgy') {
+    return version
+      ? t('components.native-chat.antigravityAuth.orcasAgyVersion', "Orca's agy · v{{version}}", {
+          version
+        })
+      : t('components.native-chat.antigravityAuth.orcasAgy', "Orca's agy")
+  }
+  if (program === 'agy') {
     return version
       ? t('components.native-chat.antigravityAuth.yourAgyVersion', 'Your agy · v{{version}}', {
           version

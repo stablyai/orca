@@ -98,6 +98,8 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
+    // Inside the slot: a checkout swapped in while this request queued must still be refused.
+    await options.beforeCheckoutDelete?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,

@@ -2,7 +2,7 @@ import { Fragment, useMemo, useRef, useState } from 'react'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { Pressable, Text, View } from 'react-native'
-import { Plus, X } from 'lucide-react-native'
+import { Bell, Plus, X } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
@@ -111,6 +111,7 @@ function MobileSessionTabsSheetContent({
   const renderRow = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId
     const badge = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
+    const unreadBell = row.unread && row.group === 'other'
     const time = current
       ? t('session.tabsSheet.open', 'Open')
       : row.timeAt !== null
@@ -155,9 +156,13 @@ function MobileSessionTabsSheetContent({
                 {current || pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
                 <View style={styles.tile}>
                   <MobileSessionTabMark row={row} size={17} />
-                  {badge ? (
+                  {unreadBell || badge ? (
                     <View style={styles.tileBadge}>
-                      <AgentStateDot state={badge} />
+                      {unreadBell ? (
+                        <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
+                      ) : badge ? (
+                        <AgentStateDot state={badge} />
+                      ) : null}
                     </View>
                   ) : null}
                 </View>

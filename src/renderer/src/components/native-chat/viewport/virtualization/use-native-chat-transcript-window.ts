@@ -16,6 +16,7 @@ import {
   useNativeChatViewportAlign,
   type NativeChatAlignEdge
 } from './use-native-chat-viewport-align'
+import { useNativeChatRetiredMeasurements } from './use-native-chat-retired-measurements'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
 export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
@@ -23,8 +24,8 @@ export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
 const FALLBACK_ROW_PX = 48
 /** Past this gap the DOM's offset is a write the virtualizer has yet to hear of. */
 const UNSEEN_SCROLL_PX = 1
-/** Compact retired measurement keys before capped-transcript churn accumulates material stale state. */
-export const MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS = 512
+/** Marks the older-history row; a bot chat's transcript makes room for it below the floating pill. */
+const OLDER_HISTORY_ROW_ATTRIBUTE = 'data-native-chat-older-history'
 
 export type NativeChatTranscriptWindow = {
   virtualItems: VirtualItem[]
@@ -70,10 +71,10 @@ export function useNativeChatTranscriptWindow({
   const sizerElementRef = useRef<HTMLDivElement | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const measuredScrollMargin = useRef(0)
+  /** Whether the older-history row showed at the last margin read; null before the first. */
+  const hadOlderRow = useRef<boolean | null>(null)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const readerTakeoverFrameRef = useRef<number | null>(null)
-  const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
-  const retiredMeasurementCountRef = useRef(0)
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
     [slots.length, revealIndex, newRowsMarkerIndex]
@@ -95,6 +96,7 @@ export function useNativeChatTranscriptWindow({
   )
 
   const scaledGapPx = NATIVE_CHAT_ROW_GAP_PX * typography.spacingScale
+  const [jumpDrawnAbovePx, setJumpDrawnAbovePx] = useState(0)
   // Keep offscreen sizes as estimates through reflows; ResizeObserver refreshes mounted rows.
   const virtualizer = useVirtualizer({
     count: slots.length,
@@ -105,6 +107,7 @@ export function useNativeChatTranscriptWindow({
     overscan: NATIVE_CHAT_WINDOW_OVERSCAN,
     gap: scaledGapPx,
     scrollMargin,
+    scrollPaddingStart: jumpDrawnAbovePx, // A jump's row drawn above its top lands by its first line.
     // A hidden pane has no boxes to measure; retain its last visible row sizes.
     useCachedMeasurements: !isVisible,
     anchorTo: 'end',
@@ -137,11 +140,32 @@ export function useNativeChatTranscriptWindow({
     const sizer = sizerElementRef.current
     // Avoid rect fallback without layout: it reports scrollTop as margin and would pin the window at the transcript’s start.
     const offset = container && sizer ? nativeChatScrollOffsetWithin(sizer, container) : null
-    if (offset !== null && offset !== measuredScrollMargin.current) {
-      measuredScrollMargin.current = offset
-      setScrollMargin(offset)
+    if (!container || offset === null) {
+      return
     }
-  }, [scrollRef])
+    // A bot chat makes room for the older-history row only while it shows. When the row comes or goes,
+    // keep the rows the reader sees in place; at the very top there is nothing above to keep.
+    // The row renders first in the scroller; reading one child keeps this per-render read O(1).
+    const hasOlderRow =
+      container.firstElementChild?.hasAttribute(OLDER_HISTORY_ROW_ATTRIBUTE) === true
+    const rowToggled = hadOlderRow.current !== null && hasOlderRow !== hadOlderRow.current
+    hadOlderRow.current = hasOlderRow
+    if (offset === measuredScrollMargin.current) {
+      return
+    }
+    if (rowToggled && container.scrollTop > 0) {
+      const previous = container.scrollTop
+      // Near the end the shrink has already clamped scrollTop; start from the offset the virtualizer meant.
+      const atEnd = previous >= container.scrollHeight - container.clientHeight - UNSEEN_SCROLL_PX
+      const base = atEnd ? Math.max(previous, virtualizer.scrollOffset ?? previous) : previous
+      container.scrollTop = base + offset - measuredScrollMargin.current
+      if (container.scrollTop !== previous) {
+        programmaticScrollMarks.mark(container.scrollTop)
+      }
+    }
+    measuredScrollMargin.current = offset
+    setScrollMargin(offset)
+  }, [programmaticScrollMarks, scrollRef, virtualizer])
   // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
   useLayoutEffect(() => {
     if (isVisible) {
@@ -163,36 +187,7 @@ export function useNativeChatTranscriptWindow({
     return () => observer.disconnect()
   }, [readScrollMargin, scrollRef])
 
-  useLayoutEffect(() => {
-    const currentKeys = new Set(itemKeys)
-    const previousKeys = previousMeasurementKeysRef.current
-    previousMeasurementKeysRef.current = currentKeys
-    if (previousKeys !== null) {
-      for (const key of previousKeys) {
-        if (!currentKeys.has(key)) {
-          retiredMeasurementCountRef.current += 1
-        }
-      }
-    }
-    if (retiredMeasurementCountRef.current < MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS) {
-      return
-    }
-
-    const retainedMeasurements = virtualizer
-      .takeSnapshot()
-      .filter((item) => typeof item.key === 'string' && currentKeys.has(item.key))
-    const scrollTop = scrollRef.current?.scrollTop
-    virtualizer.measure()
-    // Materialize the estimate-only layout before restoring retained sizes.
-    virtualizer.getTotalSize()
-    for (const item of retainedMeasurements) {
-      virtualizer.resizeItem(item.index, item.size)
-    }
-    if (scrollTop !== undefined) {
-      virtualizer.scrollToOffset(scrollTop)
-    }
-    retiredMeasurementCountRef.current = 0
-  }, [itemKeys, scrollRef, virtualizer])
+  useNativeChatRetiredMeasurements({ itemKeys, scrollRef, virtualizer })
 
   const sizerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -215,7 +210,8 @@ export function useNativeChatTranscriptWindow({
     scrollRef,
     virtualizer,
     finishReaderTakeover,
-    programmaticScrollMarks
+    programmaticScrollMarks,
+    holdJumpDrawnAbove: setJumpDrawnAbovePx
   })
 
   // Compensate rows above the reader, excluding visible/first jump-target measurements, unseen scroll writes and backward-reader scrolling; preserve landed jumps.

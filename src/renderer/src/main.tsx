@@ -29,7 +29,6 @@ import { registerBrowserClientPageGuestMessageHandler } from './components/brows
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { installLoopingAnimationClock } from './lib/window-activity/looping-animation-clock'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 import {
   trackPageFocusLossForTerminalIme,
@@ -40,8 +39,6 @@ const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
-const disposeLoopingAnimationClock = installLoopingAnimationClock()
-import.meta.hot?.dispose(disposeLoopingAnimationClock)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()

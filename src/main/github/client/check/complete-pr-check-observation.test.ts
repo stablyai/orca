@@ -60,7 +60,7 @@ function page(
 const read = () => readCompletePRCheckObservation(repository, 42, sha, { cwd: '/repo' })
 beforeEach(() => vi.resetAllMocks())
 
-it('counts a hidden failure and suite-only blocker after both first pages without counting a represented suite twice', async () => {
+it('counts a hidden failure and a suite-only approval blocker as pending after both first pages without counting a represented suite twice', async () => {
   exec
     .mockResolvedValueOnce(
       page(
@@ -77,9 +77,10 @@ it('counts a hidden failure and suite-only blocker after both first pages withou
     state: 'failure',
     total: 102,
     passed: 100,
-    failed: 2,
+    failed: 1,
     cancelled: 0,
-    pending: 0,
+    pending: 1,
+    actionRequired: 1,
     neutral: 0
   })
 })
@@ -143,9 +144,10 @@ it('recovers every REST page and endpoint before publishing a full verdict', asy
     state: 'failure',
     total: 103,
     passed: 100,
-    failed: 3,
+    failed: 2,
     cancelled: 1,
-    pending: 0,
+    pending: 1,
+    actionRequired: 1,
     neutral: 0
   })
 })

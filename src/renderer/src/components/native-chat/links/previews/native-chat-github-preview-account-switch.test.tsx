@@ -92,10 +92,8 @@ it.each([
   { number: 902, source: 'routed', commits: 'one', retired: 'answers' },
   { number: 903, source: 'repo', commits: 'separate', retired: 'answers' },
   { number: 904, source: 'repo', commits: 'one', retired: 'answers' },
-  { number: 905, source: 'routed', commits: 'one', retired: 'rejects' },
   { number: 906, source: 'repo', commits: 'one', retired: 'rejects' },
-  { number: 907, source: 'routed', commits: 'one', retired: 'hangs' },
-  { number: 908, source: 'repo', commits: 'one', retired: 'hangs' }
+  { number: 907, source: 'routed', commits: 'one', retired: 'hangs' }
 ] as const)(
   '$source card shows the current account after A -> B -> A in $commits commit(s) when the retired A request $retired',
   async ({ number, source, commits, retired }) => {

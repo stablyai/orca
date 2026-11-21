@@ -2,6 +2,7 @@ import { parseExecutionHostId } from '../../../../src/shared/execution-host/exec
 import { HOST_GROUP_ROUTE, type HostStackRouteTarget } from '../../navigation/host-stack-navigation'
 import { botGroupIdOfRoomPaneKey } from '../../../../src/shared/bots/bot-group-room-pane-key'
 import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
+import { mobileSessionAccessTarget } from '../../session/mobile-session-item-target'
 import type { HostCredentialStatus } from '../../host-catalog/host-profile'
 
 export type NotificationNavigationOptions = {
@@ -51,6 +52,7 @@ export function getNotificationNavigationTarget(
   const groupId = botGroupIdOfRoomPaneKey(paneKey)
   // Accept only relayed servers; unknown execution hosts retain the paired desktop route.
   const executionHost = parseExecutionHostId(readNonEmptyString(record.executionHost))
+  const accessRequestId = readNonEmptyString(record.accessRequestId)
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
   return {
     hostId,
@@ -61,6 +63,8 @@ export function getNotificationNavigationTarget(
             hostId,
             worktreeId,
             paneKey: paneKey ?? undefined,
+            // An access request's push opens its decision in the bot's panel.
+            ...(accessRequestId ? { botItem: mobileSessionAccessTarget(accessRequestId) } : {}),
             ...(executionHost?.kind === 'runtime' ? { executionHost: executionHost.id } : {})
           })
         : null,

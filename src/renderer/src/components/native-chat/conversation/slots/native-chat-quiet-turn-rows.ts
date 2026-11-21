@@ -65,6 +65,26 @@ export function nativeChatShownRows(
   return { quiet, leaving, messages }
 }
 
+/** A new bot's first turn when it only greeted: the intro already shows its start time, so its
+ *  bar and response actions don't draw. One that ran tools (an import) or failed keeps them. */
+export function nativeChatBotIntroTurn(
+  input: Pick<NativeChatTranscriptSlotsInput, 'turnKeys' | 'turnStatuses'>,
+  messages: readonly NativeChatMessage[]
+): string | undefined {
+  const { turnKeys, turnStatuses } = input
+  const kickoff = messages.findIndex((message) => message.orcaNotice === 'bot-created')
+  const key = kickoff === -1 ? undefined : turnKeys[kickoff]
+  if (key === undefined) {
+    return undefined
+  }
+  const verdict = turnStatuses.completedByTurn[key]?.verdict
+  const ranTools = messages.some(
+    (message, index) =>
+      turnKeys[index] === key && message.blocks.some((block) => block.type === 'tool-call')
+  )
+  return ranTools || (verdict !== undefined && verdict !== 'success') ? undefined : key
+}
+
 /** A settling quiet turn's row that fades out whole: one of its hidden rows, or the row holding only
  *  its bar. */
 export function nativeChatSlotLeavesWhole(slot: NativeChatTranscriptSlot): boolean {

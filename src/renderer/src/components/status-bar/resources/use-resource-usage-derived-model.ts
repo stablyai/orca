@@ -20,7 +20,6 @@ import {
 } from './popover/resource-manager-terminal-copy'
 import {
   getCommitPressureToneClass,
-  getResourceCommitMetricCopy,
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
@@ -176,10 +175,6 @@ export function useResourceUsageDerivedModel({
     resourceSnapshot?.processMemoryMetric ?? 'rss',
     t
   )
-  // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
-  const commitMetricCopy = resourceSnapshot?.processCommitMetric
-    ? getResourceCommitMetricCopy(t)
-    : null
   const { totalPrivateMemory, commitToneClass } = useMemo(() => {
     const privateMemory = resourceSnapshot?.totalPrivateMemory
     return {
@@ -190,8 +185,11 @@ export function useResourceUsageDerivedModel({
       })
     }
   }, [resourceSnapshot])
+  // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
   const commitBadgeLabel =
-    commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
+    resourceSnapshot?.processCommitMetric && totalPrivateMemory !== undefined
+      ? formatMemory(totalPrivateMemory)
+      : null
 
   // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
@@ -218,7 +216,6 @@ export function useResourceUsageDerivedModel({
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
-    commitMetricCopy,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,
