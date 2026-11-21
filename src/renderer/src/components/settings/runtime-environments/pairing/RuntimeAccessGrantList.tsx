@@ -61,7 +61,9 @@ export function RuntimeAccessGrantList({
           {t('auto.components.settings.RuntimeAccessGrantList.noActiveLinks', 'No active links.')}
         </p>
       ) : (
-        <div className="space-y-2">
+        // Why: links pile up over time; past ~3.5 rows (56px row + 8px gap) the list scrolls
+        // under a fixed heading, and the half row that peeks shows there is more.
+        <div className="scrollbar-sleek max-h-[13.75rem] space-y-2 overflow-y-auto">
           {grants.map((grant) => {
             const isCurrent = currentGrantId === grant.deviceId
             const isRevoking = revokingGrantId === grant.deviceId
