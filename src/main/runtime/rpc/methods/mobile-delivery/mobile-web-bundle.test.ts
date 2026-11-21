@@ -1,4 +1,12 @@
-import { mkdtempSync, rmSync, truncateSync } from 'node:fs'
+import '../../dispatch/testing/unused-default-rpc-methods.test-fixture'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  truncateSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 
 import { tmpdir } from 'node:os'
 
@@ -6,13 +14,27 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { MobileWebBundleManifestResultSchema } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
+import {
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+  MobileWebBundleChunkResultSchema,
+  MobileWebBundleManifestResultSchema
+} from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 
 import '../../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcRequest, RpcResponse } from '../../core'
 
-import '../../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import {
+  ORCAD_MOBILE_WEB_DIR,
+  ORCAD_MOBILE_WEB_MANIFEST
+} from '../../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { RpcDispatcher } from '../../dispatcher'
+
+import { installFakeAppEnvironment } from '../../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import {
+  getBundledMobileWebBundleRoot,
+  loadBundledMobileWebBundle,
+  resetBundledMobileWebBundleCacheForTests
+} from './bundled-mobile-web-bundle'
 
 import {
   fillMobileWebBundleReadWindow,
@@ -25,12 +47,14 @@ import {
   installMobileWebBundleAppPath,
   mobileWebBundleDispatcher,
   mobileWebBundleFiller,
+  sha256Hex,
   writeSyntheticMobileWebBundle,
   type SyntheticMobileWebBundle
 } from './mobile-web-bundle.test-fixture'
 
 let scratch: string
 let dispatcher: RpcDispatcher
+const previousBundleDir = process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
 
 function request(method: string, params?: unknown): RpcRequest {
   return { id: `req-${method}`, authToken: 'tok', method, params }
@@ -50,9 +74,36 @@ async function chunk(params: unknown, options?: DispatchOptions) {
   return call('mobileWeb.bundle.chunk', params, options)
 }
 
+/** Pages one asset to the end the way a client must: never assuming a size it did not read. */
+async function download(buildId: string, path: string): Promise<{ bytes: Buffer; calls: number }> {
+  const pieces: Buffer[] = []
+  let offset = 0
+  let calls = 0
+  for (;;) {
+    const response = await chunk({ buildId, path, offset })
+    calls++
+    if (!response.ok) {
+      throw new Error(`chunk at ${String(offset)} failed: ${response.error.message}`)
+    }
+    const body = MobileWebBundleChunkResultSchema.parse(response.result)
+    expect(body.buildId).toBe(buildId)
+    expect(body.path).toBe(path)
+    expect(body.offset).toBe(offset)
+    pieces.push(Buffer.from(body.dataBase64, 'base64'))
+    if (body.eof) {
+      expect(offset + pieces.at(-1)!.byteLength).toBe(body.assetByteLength)
+      break
+    }
+    offset += MOBILE_WEB_BUNDLE_CHUNK_BYTES
+  }
+  return { bytes: Buffer.concat(pieces), calls }
+}
+
 beforeEach(() => {
+  delete process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-'))
   installMobileWebBundleAppPath(scratch)
+  resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
   resetMobileWebBundleReadAdmissionForTests()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -60,6 +111,11 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  if (previousBundleDir === undefined) {
+    delete process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
+  } else {
+    process.env.ORCA_MOBILE_WEB_BUNDLE_DIR = previousBundleDir
+  }
   rmSync(scratch, { recursive: true, force: true })
   vi.restoreAllMocks()
 })
@@ -69,6 +125,97 @@ describe('an install that carries a mobile web bundle', () => {
 
   beforeEach(() => {
     bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 1)
+  })
+
+  it('answers the manifest with the chunk size it will actually serve', async () => {
+    const response = await call('mobileWeb.bundle.manifest')
+
+    expect(response.ok).toBe(true)
+    const body = MobileWebBundleManifestResultSchema.parse(
+      response.ok ? response.result : undefined
+    )
+    expect(body.chunkBytes).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+    expect(body.manifest.buildId).toBe(bundle.buildId)
+    expect(body.manifest.assets).toEqual(bundle.assets)
+  })
+
+  // Same mtime returns the cached object. Re-parsing would allocate a new bundle and recompute
+  // buildId on the event loop; a dev rebuild changes mtime and is covered separately.
+  it('answers from the manifest it already read, without going back to disk', async () => {
+    const first = await call('mobileWeb.bundle.manifest')
+    const cached = await loadBundledMobileWebBundle()
+
+    expect(await loadBundledMobileWebBundle()).toBe(cached)
+
+    const second = await call('mobileWeb.bundle.manifest')
+
+    expect(errorMessage(second)).toBeUndefined()
+    expect(MobileWebBundleManifestResultSchema.parse(second.ok && second.result).manifest).toEqual(
+      MobileWebBundleManifestResultSchema.parse(first.ok && first.result).manifest
+    )
+  })
+
+  it('reloads when manifest.json gets a new buildId and a new mtime', async () => {
+    expect((await loadBundledMobileWebBundle())?.manifest.buildId).toBe(bundle.buildId)
+
+    const replacement = writeSyntheticMobileWebBundle(bundle.root, 9)
+    const manifestPath = join(bundle.root, 'manifest.json')
+    const bumped = new Date(Date.now() + 10_000)
+    utimesSync(manifestPath, bumped, bumped)
+
+    expect((await loadBundledMobileWebBundle())?.manifest.buildId).toBe(replacement.buildId)
+    expect(replacement.buildId).not.toBe(bundle.buildId)
+  })
+
+  it('pages every asset back byte for byte, and each reassembly matches its manifest hash', async () => {
+    for (const asset of bundle.assets) {
+      const { bytes, calls } = await download(bundle.buildId, asset.path)
+
+      expect(bytes.byteLength).toBe(asset.byteLength)
+      expect(sha256Hex(bytes)).toBe(asset.sha256)
+      expect(calls).toBe(Math.max(1, Math.ceil(asset.byteLength / MOBILE_WEB_BUNDLE_CHUNK_BYTES)))
+    }
+  })
+
+  // Exact chunk multiples must report EOF now; the next offset is invalid.
+  it('ends an exactly-one-chunk asset on its first chunk', async () => {
+    const stylesheet = bundle.assets.find((asset) => asset.path.endsWith('.css'))!
+    expect(stylesheet.byteLength).toBe(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+
+    const first = await chunk({ buildId: bundle.buildId, path: stylesheet.path, offset: 0 })
+    const past = await chunk({
+      buildId: bundle.buildId,
+      path: stylesheet.path,
+      offset: MOBILE_WEB_BUNDLE_CHUNK_BYTES
+    })
+
+    expect(MobileWebBundleChunkResultSchema.parse(first.ok && first.result).eof).toBe(true)
+    expect(errorMessage(past)).toBe('mobile_web_bundle_offset_invalid')
+  })
+
+  // Allow offset zero for empty assets so clients can fetch every manifest member.
+  it('serves a zero-byte asset as one empty chunk at eof', async () => {
+    const mark = bundle.assets.find((asset) => asset.byteLength === 0)!
+
+    const response = await chunk({ buildId: bundle.buildId, path: mark.path, offset: 0 })
+
+    const body = MobileWebBundleChunkResultSchema.parse(response.ok && response.result)
+    expect(body).toMatchObject({ dataBase64: '', eof: true, assetByteLength: 0 })
+  })
+
+  // After auto-update, report build-changed before path lookup so clients restart from the manifest.
+  it('refuses the old buildId after the install swaps bundles mid-download', async () => {
+    const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!
+    expect((await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })).ok).toBe(true)
+
+    rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
+    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 2)
+    resetBundledMobileWebBundleCacheForTests()
+    expect(replacement.buildId).not.toBe(bundle.buildId)
+
+    const stale = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
+
+    expect(errorMessage(stale)).toBe('mobile_web_bundle_build_changed')
   })
 
   // Linux package managers replace the install under a running host (STA-14385): serve the new build, never the gone one.
@@ -101,6 +248,122 @@ describe('an install that carries a mobile web bundle', () => {
     const response = await chunk({ buildId: bundle.buildId, path: script.path, offset: 0 })
 
     expect(errorMessage(response)).toBe('mobile_web_bundle_asset_changed')
+  })
+
+  it('stops before reading anything for a client that already disconnected', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const response = await chunk(
+      { buildId: bundle.buildId, path: 'index.html', offset: 0 },
+      {
+        signal: controller.signal
+      }
+    )
+
+    expect(response.ok).toBe(false)
+    expect(errorMessage(response)).toBe('client_disconnected')
+  })
+})
+
+describe('where the resolver probes', () => {
+  it('finds out/mobile-web under the install root', () => {
+    const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
+
+    expect(getBundledMobileWebBundleRoot()).toBe(bundle.root)
+  })
+
+  it('finds the page an orcad slot ships, without a resolver of its own', () => {
+    const bundle = writeSyntheticMobileWebBundle(
+      join(scratch, ...ORCAD_MOBILE_WEB_DIR.split('/')),
+      2
+    )
+
+    expect(getBundledMobileWebBundleRoot()).toBe(bundle.root)
+    expect(join(bundle.root, 'manifest.json')).toBe(
+      join(scratch, ...ORCAD_MOBILE_WEB_MANIFEST.split('/'))
+    )
+  })
+
+  it('answers undefined when neither layout holds a manifest', () => {
+    expect(getBundledMobileWebBundleRoot()).toBeUndefined()
+  })
+
+  it('prefers ORCA_MOBILE_WEB_BUNDLE_DIR over the install layout', () => {
+    writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
+    const override = writeSyntheticMobileWebBundle(join(scratch, 'override'), 6)
+    process.env.ORCA_MOBILE_WEB_BUNDLE_DIR = override.root
+
+    expect(getBundledMobileWebBundleRoot()).toBe(override.root)
+  })
+
+  it('reads the repo bundle four levels above an unpackaged app before the install copy', () => {
+    const repoBundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    const appPath = join(scratch, 'level4', 'level3', 'level2', 'level1')
+    writeSyntheticMobileWebBundle(join(appPath, 'out', 'mobile-web'), 4)
+    installMobileWebBundleAppPath(appPath)
+
+    expect(getBundledMobileWebBundleRoot()).toBe(repoBundle.root)
+  })
+
+  it('reads the repo bundle four levels above win-unpacked even when packaged', () => {
+    const repoBundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    const appPath = join(scratch, 'dist', 'win-unpacked', 'resources', 'app')
+    writeSyntheticMobileWebBundle(join(appPath, 'out', 'mobile-web'), 4)
+    installFakeAppEnvironment({
+      getAppPath: () => appPath,
+      getPath: () => appPath,
+      isPackaged: () => true
+    })
+
+    expect(getBundledMobileWebBundleRoot()).toBe(repoBundle.root)
+  })
+
+  it('keeps a packaged install on its own out/mobile-web', () => {
+    writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    const appPath = join(scratch, 'level4', 'level3', 'level2', 'level1')
+    const installed = writeSyntheticMobileWebBundle(join(appPath, 'out', 'mobile-web'), 4)
+    installFakeAppEnvironment({
+      getAppPath: () => appPath,
+      getPath: () => appPath,
+      isPackaged: () => true
+    })
+
+    expect(getBundledMobileWebBundleRoot()).toBe(installed.root)
+  })
+
+  // Unpacked electron-vite entrypoints set appPath to out/main, next to the bundle.
+  it('finds the bundle beside an out/main app path', async () => {
+    const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    installMobileWebBundleAppPath(join(scratch, 'out', 'main'))
+    resetBundledMobileWebBundleCacheForTests()
+
+    const response = await call('mobileWeb.bundle.manifest')
+
+    expect(
+      MobileWebBundleManifestResultSchema.parse(response.ok && response.result).manifest.buildId
+    ).toBe(bundle.buildId)
+  })
+})
+
+describe('an install with no mobile web bundle', () => {
+  it('reports both methods unavailable rather than failing some other way', async () => {
+    const manifest = await call('mobileWeb.bundle.manifest')
+    const body = await chunk({ buildId: '0'.repeat(64), path: 'index.html', offset: 0 })
+
+    expect(errorMessage(manifest)).toBe('mobile_web_bundle_unavailable')
+    expect(errorMessage(body)).toBe('mobile_web_bundle_unavailable')
+  })
+
+  it('reads an unparseable manifest as no bundle at all', async () => {
+    const root = join(scratch, 'out', 'mobile-web')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'manifest.json'), 'not json', 'utf8')
+    resetBundledMobileWebBundleCacheForTests()
+
+    expect(errorMessage(await call('mobileWeb.bundle.manifest'))).toBe(
+      'mobile_web_bundle_unavailable'
+    )
   })
 })
 
