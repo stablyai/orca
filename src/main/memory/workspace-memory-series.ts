@@ -13,7 +13,7 @@ type Usage = { cpu: number; memory: number; privateMemory: number }
 /**
  * Records one sample of each workspace's history. The plain series is what this machine shows (chats
  * included). From a workspace's first chat it also keeps a terminal-only series for paired machines:
- * a copy of the plain one while that was terminal-only. Returns those workspaces' terminal usage.
+ * a copy of the plain one, which held terminals alone until then. Returns those workspaces' terminal usage.
  */
 export function recordWorkspaceMemorySeries(
   buckets: readonly WorktreeMemoryBucket[],
@@ -25,7 +25,8 @@ export function recordWorkspaceMemorySeries(
     const terminalKey = terminalOnlyHistoryKey(bucket.worktreeId)
     let separate = hasMemoryHistory(terminalKey)
     if (bucket.chats && !separate) {
-      seedMemoryHistory(terminalKey, bucket.sessions.length > 0 ? bucket.worktreeId : null, now)
+      // Until its first chat, the plain series held terminals alone, so it seeds the terminal-only one.
+      seedMemoryHistory(terminalKey, bucket.worktreeId, now)
       separate = true
     }
     if (separate) {

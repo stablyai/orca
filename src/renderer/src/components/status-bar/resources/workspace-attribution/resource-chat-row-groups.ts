@@ -34,17 +34,14 @@ function sameInputs(a: readonly unknown[], b: readonly unknown[]): boolean {
 }
 
 function buildChatRowGroups(
-  source: readonly WorktreeMemory[],
+  chatOnly: readonly WorktreeMemory[],
   place: (wt: WorktreeMemory) => SamplePlacement | null
 ): ChatRowGroup[] {
   const byRepo = new Map<
     string,
     { group: UnifiedProjectGroup; rowIndexById: Map<string, number> }
   >()
-  for (const wt of source) {
-    if (!isChatOnlySample(wt)) {
-      continue
-    }
+  for (const wt of chatOnly) {
     const placement = place(wt)
     if (!placement) {
       continue
@@ -97,15 +94,20 @@ export function sampleRowsFor(
   place: (wt: WorktreeMemory) => SamplePlacement | null
 ): SampleChatRows {
   const prior = cache?.bySample.get(owner)
-  const entry =
-    prior && prior.source === source && sameInputs(prior.inputs, inputs)
-      ? prior
-      : {
-          source,
-          inputs,
-          groups: buildChatRowGroups(source, place),
-          terminalSamples: source.filter((wt) => !isChatOnlySample(wt))
-        }
-  next.set(owner, entry)
-  return entry
+  const entry = prior && prior.source === source && sameInputs(prior.inputs, inputs) ? prior : null
+  if (entry) {
+    next.set(owner, entry)
+    return entry
+  }
+  // A sample without chat-only workspaces goes to the terminal ingest as it is, after one check per row.
+  const built: SampleChatRows = source.some(isChatOnlySample)
+    ? {
+        source,
+        inputs,
+        groups: buildChatRowGroups(source.filter(isChatOnlySample), place),
+        terminalSamples: source.filter((wt) => !isChatOnlySample(wt))
+      }
+    : { source, inputs, groups: [], terminalSamples: source }
+  next.set(owner, built)
+  return built
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '@orca/process-host'
 import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { listAgentProcessRoots } from '../memory/agent-process-registry'
+import { listAgentProcessRoots, noteAgentProcessChat } from '../memory/agent-process-registry'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 import { DirectProviderChild } from './direct-provider-child'
 
@@ -26,6 +26,7 @@ describe('agent memory registrations', () => {
   it('end with their process however it ends, so none outlive it', async () => {
     const ended = Array.from({ length: 100 }, (_, i) => launch(9_000_000 + i))
     await settle()
+    ended.forEach((_child, i) => noteAgentProcessChat(9_000_000 + i, `chat-${i}`))
     ended.forEach((child, i) => {
       if (i % 2 === 0) {
         child.emit('exit', 0, null)
@@ -39,8 +40,9 @@ describe('agent memory registrations', () => {
     beforeReady.emit('close', null, null)
     const live = launch(9_200_000)
     await settle()
+    noteAgentProcessChat(9_200_000, 'chat')
 
-    expect(listAgentProcessRoots()).toEqual([{ pid: 9_200_000, agentSessionId: null }])
+    expect(listAgentProcessRoots()).toEqual([{ pid: 9_200_000, agentSessionId: 'chat' }])
     live.emit('close', null, null)
     expect(listAgentProcessRoots()).toEqual([])
   })
@@ -60,8 +62,9 @@ describe('agent memory registrations', () => {
       raw: { value: owner }
     })
     await settle()
+    noteAgentProcessChat(9_300_000, 'owned')
 
-    expect(listAgentProcessRoots()).toEqual([{ pid: 9_300_001, agentSessionId: null }])
+    expect(listAgentProcessRoots()).toEqual([{ pid: 9_300_001, agentSessionId: 'owned' }])
     owner.exitCode = 0
     expect(listAgentProcessRoots()).toEqual([])
     child.emit('close', 0, null)

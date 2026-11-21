@@ -45,10 +45,12 @@ export function hasMemoryHistory(key: string): boolean {
   return historyByKey.has(key)
 }
 
-/** Starts `key` as a copy of `fromKey`'s series (empty without one), so a new series continues the old one. */
-export function seedMemoryHistory(key: string, fromKey: string | null, now: number): void {
-  const samples = fromKey === null ? [] : [...(historyByKey.get(fromKey)?.samples ?? [])]
-  historyByKey.set(key, { samples, touchedAt: now })
+/** Starts `key` as a copy of `fromKey`'s series, so a new series continues the old one. */
+export function seedMemoryHistory(key: string, fromKey: string, now: number): void {
+  historyByKey.set(key, {
+    samples: [...(historyByKey.get(fromKey)?.samples ?? [])],
+    touchedAt: now
+  })
 }
 
 /** Keeps a series that took no sample this sweep from being swept as stale. */

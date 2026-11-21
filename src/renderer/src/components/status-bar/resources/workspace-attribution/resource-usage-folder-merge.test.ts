@@ -152,6 +152,27 @@ describe('folder Resource Manager rows', () => {
     ])
   })
 
+  it("keeps this machine's chats when its terminals follow a repo hosted on a paired machine", () => {
+    const chat = { agentSessionId: 'chat-5', agent: 'claude', name: 'Fix', cpu: 1, memory: 512 }
+    const repos = mergeSnapshotAndSessions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+      {
+        worktrees: [{ ...oldRow, worktreeId: 'repo-1::/local', repoId: 'repo-1', chats: [chat] }]
+      } as MemorySnapshot,
+      [],
+      context({ repoRuntimeHostIdById: new Map([['repo-1', 'runtime:studio']]) })
+    )
+
+    expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
+      expect.objectContaining({
+        worktreeId: 'repo-1::/local',
+        memory: 512,
+        chats: [chat],
+        sessions: []
+      })
+    ])
+  })
+
   it("keeps this machine's live terminal when a same-id record is stamped with a paired machine", () => {
     const worktree: Worktree = {
       ...workspace,

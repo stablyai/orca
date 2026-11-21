@@ -58,7 +58,8 @@ export function listAgentProcessRoots(
 ): { pid: number; agentSessionId: string | null }[] {
   const roots: { pid: number; agentSessionId: string | null }[] = []
   for (const [pid, { chats, isLive, sequence }] of registrationByRoot) {
-    if (sequence <= mark && isLive()) {
+    // A run no chat has linked (a sign-in, a probe) isn't a chat agent, so it isn't counted.
+    if (chats.size > 0 && sequence <= mark && isLive()) {
       const [only] = chats
       roots.push({ pid, agentSessionId: chats.size === 1 ? (only ?? null) : null })
     }

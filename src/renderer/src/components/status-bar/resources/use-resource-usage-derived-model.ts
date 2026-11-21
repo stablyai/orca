@@ -185,9 +185,12 @@ export function useResourceUsageDerivedModel({
     return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
       const repoId =
         resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
-      return worktree.sessions.length === 0
-        ? !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
-        : !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId
+      // Chats show unless the record is stamped with a paired host, or beside terminals shown here.
+      return (
+        (worktree.sessions.length > 0 &&
+          !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId) ||
+        !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
+      )
     })
   }, [
     open,

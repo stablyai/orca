@@ -5,7 +5,6 @@ import type {
   RuntimeHostResourceSample,
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
-import { isChatOnlySample } from './resource-chat-row-groups'
 import {
   resolveResourceFolderWorkspace,
   resolveResourceWorkspaceHost,
@@ -42,12 +41,13 @@ export function placementInputs(ctx: MergeContext): readonly unknown[] {
  */
 export function localSamplePlacement(
   ctx: MergeContext,
-  wt: WorktreeMemory
+  wt: WorktreeMemory,
+  chatOnly: boolean
 ): SamplePlacement | null {
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
   const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-  if (isChatOnlySample(wt) ? stampedRuntimeHostId(ctx, wt.worktreeId) : runtimeHostId) {
+  if (chatOnly ? stampedRuntimeHostId(ctx, wt.worktreeId) : runtimeHostId) {
     return null
   }
   return {

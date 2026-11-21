@@ -36,7 +36,8 @@ describe('agent process registry', () => {
     noteAgentProcessChat(4343, 'old-chat')
     const releaseNew = registerAgentProcess(4343)
 
-    expect(listAgentProcessRoots()).toEqual([{ pid: 4343, agentSessionId: null }])
+    // The new run hasn't linked a chat yet, so nothing is counted under the old one.
+    expect(listAgentProcessRoots()).toEqual([])
     releaseNew()
     expect(listAgentProcessRoots()).toEqual([])
     releaseOld()
@@ -48,7 +49,8 @@ describe('agent process registry', () => {
     noteAgentProcessChat(4300, 'old-chat')
     const releaseNew = registerAgentProcess(4444, 4400)
 
-    expect(listAgentProcessRoots()).toEqual([{ pid: 4444, agentSessionId: null }])
+    // The new run hasn't linked a chat yet, so nothing is counted under the old one.
+    expect(listAgentProcessRoots()).toEqual([])
     releaseOld()
     noteAgentProcessChat(4400, 'new-chat')
     expect(listAgentProcessRoots()).toEqual([{ pid: 4444, agentSessionId: 'new-chat' }])
