@@ -150,6 +150,47 @@ it.each([
   }
 )
 
+it('shares a transaction among small item writes but commits two 200 KB tool outputs alone', () => {
+  const toolOutput = (id: number, reservedBytes: number): JournalSqlRequest =>
+    prepareJournalSqlRequest(id, {
+      type: 'write',
+      command: {
+        target: { sessionId: `chat${id}`, epoch: 'epoch', ownerToken: 'owner' },
+        operation: {
+          kind: 'steps',
+          steps: [
+            {
+              kind: 'resolved-item',
+              reservedBytes,
+              options: { fence: 1, turnScope: { kind: 'thread' } },
+              resolution: {
+                kind: 'literal',
+                identity: { provider: 'orca', clientMessageId: `call${id}` },
+                body: {
+                  kind: 'tool-call',
+                  name: 'shell',
+                  callId: `call${id}`,
+                  input: { command: 'cat build.log' },
+                  state: 'completed'
+                }
+              }
+            }
+          ]
+        },
+        savedAt: 100
+      }
+    })
+  const queue = [
+    ...Array.from({ length: 20 }, (_, index) => toolOutput(index + 1, 8 * 1024)),
+    toolOutput(21, 200 * 1024),
+    toolOutput(22, 200 * 1024)
+  ]
+  const ids = () => takeJournalSqlReadyBatch(queue).map((request) => request.id)
+  expect(ids()).toEqual(Array.from({ length: 20 }, (_, index) => index + 1))
+  expect(ids()).toEqual([21])
+  expect(ids()).toEqual([22])
+})
+
 it('does not claim rollback when both command and outer rollback fail', async () => {
   const { db, batch } = fixture()
   const exec = db.exec.bind(db)

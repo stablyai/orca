@@ -71,6 +71,18 @@ export const groupStop = bindDeferredRpcOperation(
     )
   })
 )
+export const groupNewThread = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bot-groups.new-thread',
+    method: 'bots.groups.newThread',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'group-thread',
+      z.object({ group: BotGroupSchema, threadId: z.string().min(1) })
+    )
+  })
+)
 export const groupDelete = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'bot-groups.delete',

@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -56,7 +57,7 @@ export const createCheckActions = (
     )
     const repoId = options?.repoId ?? repo?.id
     const checkContract = capturePRCheckContract(
-      get,
+      readAppRuntimeStatuses,
       getGitHubSourceTarget(get(), repo, options?.sourceContext)
     )
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)

@@ -7,7 +7,8 @@ import {
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 import {
   prepareCodexAccountRestartResume,
-  prepareLegacySharedCodexSessionResume
+  prepareLegacySharedCodexSessionResume,
+  settleLegacySessionCopyBeforeResume
 } from './codex-legacy-session-resume'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { codexHookService } from '../../hooks/installation/hook-service'
@@ -16,7 +17,8 @@ import { ensureCodexDaemonSocketGuard } from '../../configuration/settings/codex
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   getOrcaManagedCodexHomePath,
-  getSystemCodexHomePath
+  getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
@@ -68,6 +70,10 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
     // Refuse unreadable selections before provenance matching can choose another account.
     const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
+    await settleLegacySessionCopyBeforeResume(
+      args.providerSession.transcriptPath,
+      resolveOrcaManagedCodexHomePath()
+    )
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath: args.providerSession.transcriptPath,
@@ -88,7 +94,8 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
             {
               isHostSystemDefaultRealHomeSelected: () =>
                 runtimeHome.isHostSystemDefaultRealHomeSelected(),
-              systemCodexHomePath: systemHomePath
+              systemCodexHomePath: systemHomePath,
+              leaveSwapToAccountRestart: args.useSelectedAccount === true
             }
           )
         } catch (error) {

@@ -116,6 +116,27 @@ export function clearFailedOpenedDirectoryLink(
   return changed ? { ...cache, [parentPath]: { ...parent, children } } : cache
 }
 
+export function markOpenedPathAsDirectory(
+  cache: Record<string, DirCache>,
+  path: string
+): Record<string, DirCache> {
+  let changed = false
+  const next: Record<string, DirCache> = {}
+  for (const [dirPath, dir] of Object.entries(cache)) {
+    let dirChanged = false
+    const children = dir.children.map((child) => {
+      if (child.path !== path || child.isDirectory) {
+        return child
+      }
+      changed = true
+      dirChanged = true
+      return { ...child, isDirectory: true, isDirectoryFromOpenedLink: child.isSymlink === true }
+    })
+    next[dirPath] = dirChanged ? { ...dir, children } : dir
+  }
+  return changed ? next : cache
+}
+
 /** A gesture, a listed link row, or an already-outside listing may follow a project folder link; a folder that only became a link stays refused until clicked. */
 export function canFollowFolderLink(
   cache: Readonly<Record<string, DirCache>>,

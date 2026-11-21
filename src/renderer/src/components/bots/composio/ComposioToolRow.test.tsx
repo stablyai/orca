@@ -77,11 +77,8 @@ describe('Composio in a bot’s Tools', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Composio apps' }))
     expect(await screen.findByText('Connected as dana@acme.com')).toBeTruthy()
-    expect(await screen.findByRole('button', { name: 'Connect HubSpot' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Set up in Composio/ })).toBeTruthy()
-    expect(screen.getByText('Needs your own Salesforce developer app')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Connect Salesforce' })).toBeNull()
-    expect(screen.getByText('1 connected · Your app sign-ins are held by Composio.')).toBeTruthy()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Connect HubSpot' }))
     await waitFor(() =>

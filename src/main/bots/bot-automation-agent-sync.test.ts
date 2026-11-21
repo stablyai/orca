@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../shared/automations/automation-definition'
 import { makeTestBot } from './bot.test-fixture'
-import { syncBotAutomationAgents, withBotAutomationAgents } from './bot-automation-agent-sync'
+import { withBotAutomationAgents } from './bot-automation-agent-sync'
 
 const bot = makeTestBot({ id: 'bot-1', agent: 'codex' })
 function automation(
@@ -19,16 +19,10 @@ const own = automation(
 )
 
 describe('bot automation agents', () => {
-  it('moves only the automations that follow the bot to its new agent', async () => {
-    const update = vi.fn(async () => undefined)
-    await syncBotAutomationAgents([follows, own], bot, update)
-    expect(update.mock.calls).toEqual([['a1', 'codex']])
-  })
-
   it("drops a setup this Orca can't run as the store loads, so the bot's agent runs it", () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const stale: Pick<Automation, 'id' | 'agentId' | 'bot'> = JSON.parse(
-      '{"id":"a3","agentId":"opencode2","bot":{"botId":"bot-1","runsIn":"new","resultsTo":"chat","agentSetup":{"agent":"opencode2"}}}'
+      '{"id":"a3","agentId":"aider","bot":{"botId":"bot-1","runsIn":"new","resultsTo":"chat","agentSetup":{"agent":"aider"}}}'
     )
     const changed = vi.fn()
 

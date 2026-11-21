@@ -28,6 +28,8 @@ type RunTargetComboboxProps = {
   onOpenChange?: (open: boolean) => void
   fieldName?: string
   emptyMessage?: string
+  /** The chosen host's name loses its middle rather than its end when it doesn't fit. */
+  truncateMiddle?: boolean
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
@@ -44,7 +46,8 @@ export default function RunTargetCombobox({
   onAddSshHost,
   onOpenChange,
   fieldName,
-  emptyMessage
+  emptyMessage,
+  truncateMiddle
 }: RunTargetComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | 'add-host-keyboard' | null>(null)
@@ -191,6 +194,7 @@ export default function RunTargetCombobox({
         hasArmedRow={armedRow !== null}
         inputRef={inputRef}
         onKeyDown={handleKeyDown}
+        truncateMiddle={truncateMiddle}
       />
       <PopoverContent
         align="start"

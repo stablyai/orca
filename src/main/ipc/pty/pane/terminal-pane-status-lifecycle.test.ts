@@ -9,7 +9,7 @@ const { setTerminalPaneLifecycle, getProviderForPty, confirmRootShellAlone } = v
   confirmRootShellAlone: vi.fn()
 }))
 vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
-  agentHookServer: { setTerminalPaneLifecycle, pruneUnplacedSleepingPanes: () => {} }
+  agentHookServer: { setTerminalPaneLifecycle, pruneUnplacedPanes: () => {} }
 }))
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
 vi.mock('../../../memory/pty-registry', () => ({

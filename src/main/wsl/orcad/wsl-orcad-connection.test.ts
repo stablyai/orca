@@ -35,6 +35,13 @@ import { WslOrcadConnectionSupersededError } from './wsl-orcad-connection-errors
 import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
+import type * as BackgroundDistroGate from '../discovery/wsl-background-distro-gate'
+
+// On Windows each bridge dial asks whether the distro runs (E9); keep the host's real WSL out of it.
+vi.mock('../discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 let first: { server: Server; port: number }
 let second: { server: Server; port: number }

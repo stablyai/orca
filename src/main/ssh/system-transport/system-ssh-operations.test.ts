@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
+const { accessMock, existsSyncMock, spawnMock } = vi.hoisted(() => ({
+  // Windows directory uploads probe System32 tar.exe first; default to it existing.
+  accessMock: vi.fn(async () => {}),
   existsSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -12,6 +14,14 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...actual,
     existsSync: existsSyncMock
+  }
+})
+
+vi.mock('fs/promises', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    access: accessMock
   }
 })
 
@@ -102,6 +112,7 @@ describe('spawnSystemSsh', () => {
 
 describe('system SSH operation aborts', () => {
   beforeEach(() => {
+    accessMock.mockReset()
     existsSyncMock.mockReset()
     spawnMock.mockReset()
     mockSystemSshExists()
@@ -119,6 +130,8 @@ describe('system SSH operation aborts', () => {
       '/tmp/remote-relay',
       { signal: controller.signal }
     )
+    // Windows awaits the tar.exe probe before spawning, so abort only once both children exist.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     controller.abort()
 
     const outcome = await Promise.race([
@@ -155,4 +168,81 @@ describe('system SSH operation aborts', () => {
     expect(outcome).toBe('AbortError')
     expect(sshProcess.kill).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('system SSH directory upload tar binary', () => {
+  const originalPlatform = process.platform
+
+  beforeEach(() => {
+    accessMock.mockReset()
+    spawnMock.mockReset()
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    vi.unstubAllEnvs()
+  })
+
+  it('keeps the inherited cwd for tar on Unix so PATH lookup is unchanged', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', '/usr/bin/ssh')
+    const tarCreate = createMockChildProcess()
+    const sshExtract = createMockChildProcess()
+    spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(sshExtract)
+
+    const uploadPromise = uploadDirectoryViaSystemSsh(
+      createTarget(),
+      '/local-relay',
+      '/tmp/remote-relay'
+    )
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    tarCreate.stdout.end()
+    tarCreate.emit('close', 0, null)
+    sshExtract.emit('close', 0, null)
+    await uploadPromise
+
+    const [program, args, options] = spawnMock.mock.calls[0]
+    expect(program).toBe('tar')
+    expect(args).toEqual(['-czf', '-', '-C', '/local-relay', '.'])
+    expect(options).not.toHaveProperty('cwd')
+  })
+
+  it.each([
+    { systemTarExists: true, expected: 'D:\\Windows\\System32\\tar.exe' },
+    { systemTarExists: false, expected: 'tar' }
+  ])(
+    'spawns $expected on Windows when System32 tar.exe exists=$systemTarExists',
+    async ({ systemTarExists, expected }) => {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      vi.stubEnv('SystemRoot', 'D:\\Windows')
+      vi.stubEnv('ORCA_SYSTEM_SSH_PATH', 'D:\\Windows\\System32\\OpenSSH\\ssh.exe')
+      accessMock.mockImplementation(async () => {
+        if (!systemTarExists) {
+          throw new Error('ENOENT')
+        }
+      })
+      const tarCreate = createMockChildProcess()
+      const sshExtract = createMockChildProcess()
+      spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(sshExtract)
+
+      const uploadPromise = uploadDirectoryViaSystemSsh(
+        createTarget(),
+        'C:\\local-relay',
+        '/tmp/remote-relay'
+      )
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      tarCreate.stdout.end()
+      tarCreate.emit('close', 0, null)
+      sshExtract.emit('close', 0, null)
+      await uploadPromise
+
+      expect(accessMock).toHaveBeenCalledWith('D:\\Windows\\System32\\tar.exe')
+      expect(spawnMock).toHaveBeenNthCalledWith(
+        1,
+        expected,
+        ['-czf', '-', '.'],
+        expect.objectContaining({ cwd: 'C:\\local-relay', windowsHide: true })
+      )
+    }
+  )
 })

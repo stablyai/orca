@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
 
+// The process worker's entry is build output absent from src/; keep Windows launches on the direct spawn.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildModule>()),
+    canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false
+  })
+)
 const readStdin = [
   '-e',
   'process.stdin.setEncoding("utf8"); let input = ""; process.stdin.on("data", chunk => { input += chunk }); process.stdin.on("end", () => { process.stdout.write(JSON.stringify({ input })) })'

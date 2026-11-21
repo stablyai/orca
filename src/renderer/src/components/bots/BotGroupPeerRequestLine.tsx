@@ -20,7 +20,13 @@ export function BotGroupPeerRequestLine({
           ? t('bots.groups.peerTold', '{{from}} told {{to}}', line)
           : line.kind === 'read'
             ? t('bots.groups.peerReplyRead', "{{reader}} read {{peer}}'s reply", line)
-            : t('bots.groups.peerFollowedUp', '{{bot}} followed up', line)}
+            : line.kind === 'paused'
+              ? t(
+                  'bots.groups.handoffsPaused',
+                  'Paused after {{count}} hand-offs. Reply to continue.',
+                  line
+                )
+              : t('bots.groups.peerFollowedUp', '{{bot}} followed up', line)}
     </p>
   )
 }

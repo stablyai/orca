@@ -1,10 +1,10 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { botAgentNeedsManagedRuntime } from '../../../../shared/bots/bot-agent-runtime'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
+  acpHostProgramTakesNewChats,
   resolveAcpLaunchCommand,
   selectAcpHostAccountHome,
   selectAcpHostAccountHomeForCatalog
@@ -58,9 +58,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings) =>
-            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null,
+          hostAlternative: (shellEnv, settings) =>
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
@@ -105,22 +104,24 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     // New chats and their model catalog prefer a compatible host program, which a chat's account
     // home then pins; reads such as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
-      { launchEnv, purpose, permissionMode, bot },
+      { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
     ) => {
       // A host program without the chat's permission mode never takes it; `own` sets none.
       const host =
         spec.hostBackend &&
         (purpose === 'launch' || purpose === 'catalog') &&
-        !(bot && botAgentNeedsManagedRuntime(spec.agent)) &&
         (permissionMode === undefined ||
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
               .then((env) =>
-                (purpose === 'catalog'
-                  ? selectAcpHostAccountHomeForCatalog
-                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+                purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog(spec, env, stateDirectory, hostSettings())
+                  : // A chat starting is someone using the agent, so its program may be asked.
+                    selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings(), {
+                      startsProgram: true
+                    })
               )
               .catch(() => null)
           : null
@@ -223,9 +224,4 @@ export function supportedStructuredSeedOptions(
   return Object.fromEntries(
     Object.entries(options ?? {}).filter(([key]) => definition?.restingOptions.acceptsKey(key))
   )
-}
-
-/** Whether this host has Orca's managed runtime for `agent`, as its agent list publishes it. */
-export function hostHasManagedRuntime(agent: string): boolean {
-  return structuredAgentRuntimeMetadata(agent)?.definition.managedRuntime?.() === true
 }

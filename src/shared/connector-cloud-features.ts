@@ -50,6 +50,14 @@ export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
  *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
 
+/** The cloud takes a post's `postAt` and has the source post it then. Its own constant, as the
+ *  cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
+
+/** The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Its own
+ *  constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+
 /** The cloud takes the `activity` event and shows what a running turn is doing. Its own constant,
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
@@ -57,3 +65,7 @@ export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
+
+/** The cloud shows a usage-limit pause this Orca will resume (turn-ended `resumes`) as paused. Its
+ *  own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'

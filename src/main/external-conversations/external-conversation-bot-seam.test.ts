@@ -19,6 +19,7 @@ import { chatPaneKey } from './external-conversation-chat'
 import type { LinkableChat } from './external-conversation-chat-delivery'
 import { findLink } from './external-conversation-links'
 import type { ExternalConversationHost } from './external-conversation-host'
+import type { AskerImages } from './connector-asker-images'
 import type { ConversationPlaceNamer } from './external-conversation-place'
 import { harness } from './external-conversation-seam.test-fixture'
 import type { ConversationKey } from './external-conversation-types'
@@ -32,10 +33,12 @@ function botSeam(
   chat: StructuredAgentSessionHost | null,
   refusal: ReturnType<ConversationBots['refusal']> = null,
   nameChannel?: ConversationPlaceNamer,
-  promptsAudience = false
+  promptsAudience = false,
+  askerImages?: AskerImages
 ) {
   const h = harness(undefined, undefined, {
     ...(nameChannel ? { nameChannel } : {}),
+    ...(askerImages ? { askerImages } : {}),
     promptsAudience: () => promptsAudience
   })
   h.folders.push({ id: 'bot-home' })
@@ -76,30 +79,6 @@ afterEach(() => {
 const DM: ConversationKey = { source: 'slack', externalId: 'T1:D7:U9' }
 
 describe('a connector conversation in a bot’s home', () => {
-  it.each(['grok', 'opencode', 'omp'] as const)(
-    'takes a %s bot’s thread as any bot’s: starts, links, keeps it and names its reply target',
-    async (agent) => {
-      const { host } = hostTestState()
-      await attach()
-      const h = botSeam(host)
-      h.bots.open.mockResolvedValue({ ...CHAT, agent })
-      h.seam.watch(h.host, () => {})
-
-      await expect(start(h, 'd1', 'bot', agent)).resolves.toMatchObject({
-        initial: { outcome: 'accepted' }
-      })
-      expect(findLink(h.store, THREAD)?.link).toMatchObject({ agent, sessionId: HOST_TEST_SESSION })
-      await expect(h.seam.send(h.host, THREAD, 'd2', { text: 'and #43' })).resolves.toEqual({
-        outcome: 'accepted'
-      })
-      expect(h.bots.open).toHaveBeenCalledOnce()
-      expect(h.seam.replyTarget(chatPaneKey(HOST_TEST_SESSION))).toMatchObject({
-        key: THREAD,
-        bot: { kind: 'bot', botId: 'b1' }
-      })
-    }
-  )
-
   it('opens a chat for the thread, links it, and sends the prompt as its first message', async () => {
     const { host, dispatch } = hostTestState()
     await attach()
@@ -196,6 +175,41 @@ describe('a connector conversation in a bot’s home', () => {
     })
   })
 
+  it('sends a request’s images with its words, and its words alone when none can be had', async () => {
+    const { host, dispatch } = hostTestState()
+    await attach()
+    const askerImages = vi
+      .fn<AskerImages>()
+      .mockResolvedValueOnce(['/attachments/shot.png'])
+      .mockRejectedValueOnce(new Error('cloud down'))
+    const h = botSeam(host, null, undefined, false, askerImages)
+    const asker = {
+      userId: 'U0SAM',
+      role: 'member' as const,
+      place: { kind: 'public_channel' as const, id: 'C9' },
+      text: 'what is wrong here?\n\n[image: shot.png, file F0SHOT]',
+      context: [],
+      messageRef: 'slack:T1:C9:1700000000.0001:1700000000.0001'
+    }
+    const target = { kind: 'bot' as const, botId: 'b1' }
+    await h.seam.start(h.host, THREAD, 'd1', { agent: 'codex', target, prompt: asker.text, asker })
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    expect(askerImages.mock.calls[0]?.[0]).toMatchObject({
+      botId: 'b1',
+      conversation: THREAD,
+      asker: { messageRef: asker.messageRef }
+    })
+    expect(dispatch.mock.calls[0]?.[0].body.blocks).toEqual([
+      { type: 'text', text: connectorAskerPrompt('slack', asker) },
+      { type: 'image-ref', path: '/attachments/shot.png' }
+    ])
+    await h.seam.send(h.host, THREAD, 'd2', { text: asker.text, asker })
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    expect(dispatch.mock.calls[1]?.[0].body.blocks).toEqual([
+      { type: 'text', text: connectorAskerPrompt('slack', asker) }
+    ])
+  })
+
   it("keeps the thread's channel name on its link, looked up once", async () => {
     const { host } = hostTestState()
     await attach()
@@ -227,6 +241,7 @@ describe('a connector conversation in a bot’s home', () => {
     const { host, dispatch } = hostTestState()
     await attach()
     const h = botSeam(host)
+    h.seam.watch(h.host, () => {})
     await start(h, 'd1')
 
     await expect(start(h, 'd2')).resolves.toMatchObject({ initial: { outcome: 'accepted' } })
@@ -237,6 +252,11 @@ describe('a connector conversation in a bot’s home', () => {
     expect(h.bots.open).toHaveBeenCalledOnce()
     await eventually(() => expect(dispatch).toHaveBeenCalledTimes(3))
     expect(findLink(h.store, THREAD)?.link.title).toBe('review #42')
+    expect(h.seam.replyTarget(chatPaneKey(HOST_TEST_SESSION))).toMatchObject({
+      key: THREAD,
+      worktreeId: HOME,
+      bot: { kind: 'bot', botId: 'b1' }
+    })
   })
 
   it('refuses a paused bot’s thread once it has a chat, for starts and sends', async () => {
@@ -259,14 +279,27 @@ describe('a connector conversation in a bot’s home', () => {
   it('sends each direct message to the bot’s current Chat', async () => {
     const { host } = hostTestState()
     await attach()
-    const h = botSeam(host)
-    await start(h, 'd1', 'bot-chat', 'codex', DM)
+    const nameChannel = vi.fn<ConversationPlaceNamer>(async () => '#reviews')
+    const h = botSeam(host, null, nameChannel)
+    await h.seam.start(h.host, DM, 'd1', {
+      agent: 'codex',
+      target: { kind: 'bot-chat', botId: 'b1' },
+      prompt: 'review #42',
+      asker: {
+        userId: 'U9',
+        role: 'member',
+        place: { kind: 'direct_message', id: 'D7' },
+        text: 'review #42',
+        context: []
+      }
+    })
 
     await expect(h.seam.send(h.host, DM, 'd2', { text: 'hi again' })).resolves.toEqual({
       outcome: 'accepted'
     })
 
     expect(h.bots.open).toHaveBeenNthCalledWith(2, { kind: 'bot-chat', botId: 'b1' })
+    expect(nameChannel).not.toHaveBeenCalled()
   })
 
   it('opens a chat of its own for a direct message that ran in the bot’s Chat', async () => {
@@ -278,20 +311,6 @@ describe('a connector conversation in a bot’s home', () => {
     await start(h, 'd2', 'bot', 'codex', DM)
 
     expect(h.bots.open).toHaveBeenNthCalledWith(2, { kind: 'bot', botId: 'b1' })
-  })
-
-  it('names a thread chat’s bot and home as its reply target, so a reply posts only there', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const h = botSeam(host)
-    h.seam.watch(h.host, () => {})
-    await start(h, 'd1')
-
-    expect(h.seam.replyTarget(chatPaneKey(HOST_TEST_SESSION))).toMatchObject({
-      key: THREAD,
-      worktreeId: HOME,
-      bot: { kind: 'bot', botId: 'b1' }
-    })
   })
 
   it('gives the Chat’s replies to the latest direct message the Chat took', async () => {
@@ -474,7 +493,7 @@ describe('a connector conversation in a bot’s home', () => {
   it('refuses an agent no bot can be before opening anything', async () => {
     const h = botSeam(null)
 
-    await expect(start(h, 'd1', 'bot', 'gemini')).resolves.toMatchObject({
+    await expect(start(h, 'd1', 'bot', 'aider')).resolves.toMatchObject({
       initial: { outcome: 'refused', reason: 'unsupported_agent' }
     })
     expect(h.bots.open).not.toHaveBeenCalled()

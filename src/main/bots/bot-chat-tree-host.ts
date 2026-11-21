@@ -18,13 +18,9 @@ import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotBackgroundRuns } from './bot-background-run-records'
-import {
-  buildBotChatBase,
-  orderedBaseChats,
-  overlayBotChats,
-  readBotChatInputs
-} from './bot-chat-tree-base'
+import { buildBotChatBase, orderedBaseChats, readBotChatInputs } from './bot-chat-tree-base'
 import { createBotChatTreeIndex, type BotChatTreeIndex } from './bot-chat-tree-index'
+import { overlayBotChats } from './bot-chat-tree-overlay'
 import { createSharedBotBuilds } from './shared-bot-builds'
 import {
   botStatusRowsByPaneKey,
@@ -206,7 +202,8 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
       return readAgentSessionRecordStore()
     },
     db: () => runtime.getOrchestrationDb(),
-    dispatchWorkers: (dispatchIds) => readDispatchWorkers(runtime, dispatchIds),
+    dispatchWorkers: (dispatchIds) =>
+      readDispatchWorkers(runtime, dispatchIds, { lostTerminalsEnded: true }),
     backgroundRuns: runtime.lookAround,
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
     ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {})

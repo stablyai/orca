@@ -95,7 +95,7 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
   return (
     <TruncatedSidebarLabel
       text={text}
-      className="text-[11px] text-muted-foreground leading-none"
+      variant="meta"
       // Why: a whole-card hover already shows the full identity; a nested tooltip would compete.
       tooltipEnabled={tooltip !== false}
     />

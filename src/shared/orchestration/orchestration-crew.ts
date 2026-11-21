@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isPublicOrchestrationAddress } from './mailbox/orchestration-agent-reference'
 import { WorkerApprovalPayloadSchema } from './approvals/worker-approval-payload'
 import { parseOrcaSessionAddress } from '../agent-session/identity/orca-session-address'

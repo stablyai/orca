@@ -10,6 +10,7 @@ import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/anti
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { AntigravitySignInSentence, closeAntigravitySignInOwner } from './antigravity-chat-account'
 import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
+import { ANTIGRAVITY_OAUTH_TOKEN_FILES } from './antigravity-saved-google-token'
 
 const SESSION_FAILED =
   'Antigravity authenticated, but could not initialize a session or load models.'
@@ -87,8 +88,10 @@ export function antigravitySignInServers({
       if (!(error instanceof AcpSignInPromptError)) {
         throw error
       }
-      // The server keeps each account type's sign-in in its own file.
-      const token = method === 'oauth-business' ? 'acp_business_token.json' : 'acp_token.json'
+      const token = ANTIGRAVITY_OAUTH_TOKEN_FILES[method]
+      if (!token) {
+        throw error
+      }
       await rm(join(home, ANTIGRAVITY_ACP_HOME, token), { force: true })
       throw new AntigravitySignInSentence(SAVED_SIGN_IN_UNUSABLE, { cause: error })
     })

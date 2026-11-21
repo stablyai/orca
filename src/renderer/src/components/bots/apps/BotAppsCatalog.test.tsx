@@ -14,6 +14,8 @@ import { AddConnectorDialog } from '../AddConnectorDialog'
 import { resetComposioClientForTest } from '../composio/composio-client'
 import { retryBotToolCheck } from '../bot-tools-revision'
 import { COMPOSIO_PAGES } from '../../../../../shared/composio/composio-apps'
+import { i18n } from '@/i18n/i18n'
+import zh from '@/i18n/locales/zh.json'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -125,7 +127,7 @@ describe('Add to <bot>', () => {
 
     expect(screen.getByText('Finish in your browser')).toBeTruthy()
     expect(screen.queryByText(/is on Reviewer/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Signing in on another computer?' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remote sign-in' })).toBeNull()
 
     signedIn = true
     await act(() => vi.advanceTimersByTimeAsync(2_000))
@@ -168,6 +170,127 @@ describe('Add to <bot>', () => {
     expect(calls('bots.composio.connect')).toHaveLength(0)
   })
 
+  it('adds an app with sites at the picked site’s server, under the app’s own name', async () => {
+    answer({ ...tools, 'bots.tools.add': () => ({ tool: signInTool('datadog') }) })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Datadog' }))
+
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Datadog site' }), {
+      key: 'ArrowDown'
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /^EU/ }))
+    expect(calls('bots.tools.add')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(calls('bots.tools.add')).toHaveLength(1))
+    expect(calls('bots.tools.add')[0]?.[2]).toEqual({
+      botId: 'bot-1',
+      source: 'https://mcp.datadoghq.eu/v1/mcp',
+      name: 'datadog'
+    })
+  })
+
+  it('on Try again, names the other site already added instead of signing in to it', async () => {
+    let saved = false
+    answer({
+      ...tools,
+      'bots.tools.list': () => ({
+        own: saved
+          ? [{ name: 'datadog', detail: 'https://mcp.datadoghq.com/v1/mcp', remote: true }]
+          : [],
+        inherited: []
+      }),
+      'bots.tools.add': () => {
+        // Another window adds US1 while this one picks EU.
+        saved = true
+        throw new Error('A tool named datadog already exists.')
+      }
+    })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Datadog' }))
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Datadog site' }), {
+      key: 'ArrowDown'
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /^EU/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Datadog is already on Reviewer')).toBeTruthy()
+    expect(screen.getByText('It’s added at US1. Remove it in Manage to add another.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Manage' })).toBeTruthy()
+    expect(calls('bots.tools.connect')).toHaveLength(0)
+    expect(calls('bots.tools.add')).toHaveLength(1)
+  })
+
+  it('on Try again, names no place for a same-name tool the app’s template doesn’t make', async () => {
+    let saved = false
+    answer({
+      ...tools,
+      'bots.tools.list': () => ({
+        own: saved
+          ? [{ name: 'datadog', detail: 'npx dd-mcp --api-key=secret', remote: false }]
+          : [],
+        inherited: []
+      }),
+      'bots.tools.add': () => {
+        saved = true
+        throw new Error('A tool named datadog already exists.')
+      }
+    })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Datadog' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Remove it in Manage to add another.')).toBeTruthy()
+    expect(screen.queryByText(/secret/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Manage' })).toBeTruthy()
+    expect(calls('bots.tools.connect')).toHaveLength(0)
+  })
+
+  it('shows the site field and places in the user’s language, site codes as they are', async () => {
+    i18n.addResourceBundle('zh', 'translation', zh)
+    await i18n.changeLanguage('zh')
+    try {
+      answer(tools)
+      open()
+      fireEvent.click(screen.getByRole('button', { name: /^监控|^Monitoring/ }))
+      fireEvent.click(await screen.findByRole('button', { name: /Datadog/ }))
+      fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Datadog 站点' }), {
+        key: 'ArrowDown'
+      })
+      expect(await screen.findByRole('option', { name: 'EU · 欧洲' })).toBeTruthy()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('adds GitLab at a typed self-managed host, refusing one that is not a host', async () => {
+    answer({ ...tools, 'bots.tools.add': () => ({ tool: signInTool('gitlab') }) })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Coding/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add GitLab' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Advanced' }))
+    const field = screen.getByLabelText('GitLab address (optional)')
+    fireEvent.change(field, { target: { value: 'gitlab acme' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(calls('bots.tools.add')).toHaveLength(0)
+
+    fireEvent.change(field, { target: { value: 'https://GitLab.acme.dev/explore' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(calls('bots.tools.add')).toHaveLength(1))
+    expect(calls('bots.tools.add')[0]?.[2]).toEqual({
+      botId: 'bot-1',
+      source: 'https://gitlab.acme.dev/api/v4/mcp',
+      name: 'gitlab'
+    })
+  })
+
   it('retries an MCP app at the failed step without adding it twice', async () => {
     let added = false
     let adds = 0
@@ -175,7 +298,7 @@ describe('Add to <bot>', () => {
     answer({
       ...tools,
       'bots.tools.list': () => ({
-        own: added ? [signInTool('sentry')] : [],
+        own: added ? [{ ...signInTool('sentry'), detail: 'https://mcp.sentry.dev/mcp' }] : [],
         inherited: []
       }),
       'bots.tools.add': () => {
@@ -239,5 +362,25 @@ describe('Add to <bot>', () => {
     expect(await screen.findByRole('button', { name: 'Manage Sentry' })).toBeTruthy()
     // Which apps it has comes from its tools alone: no check starts its servers.
     expect(calls('bots.tools.problems')).toHaveLength(0)
+  })
+  it('tags an app added at another site or host, and not one at its default', async () => {
+    retryBotToolCheck()
+    answer({
+      ...tools,
+      'bots.tools.list': () => ({
+        own: [
+          { name: 'datadog', detail: 'https://mcp.datadoghq.eu/v1/mcp', remote: true },
+          { name: 'gitlab', detail: 'https://gitlab.acme.dev/api/v4/mcp', remote: true },
+          { name: 'sentry', detail: 'https://mcp.sentry.dev/mcp', remote: true }
+        ],
+        inherited: []
+      })
+    })
+    open()
+    const row = async (name: string) =>
+      (await screen.findByRole('button', { name: `Manage ${name}` })).closest('li')?.textContent
+    expect(await row('Datadog')).toContain('DatadogEU')
+    expect(await row('GitLab')).toContain('GitLabgitlab.acme.dev')
+    expect(await row('Sentry')).toMatch(/^SentryLook/)
   })
 })

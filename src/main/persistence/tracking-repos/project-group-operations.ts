@@ -4,6 +4,7 @@ import type { PersistedState } from '../../../shared/orca-profiles/persisted-sta
 import type {
   ProjectGroup,
   ProjectGroupMutation,
+  ProjectGroupParentMove,
   ProjectGroupUpdate
 } from '../../../shared/project/groups/project-group-types'
 import {
@@ -98,6 +99,35 @@ export class ProjectGroupPersistenceOperations {
       this.scheduleSave(['projectGroups'])
     }
     return updated
+  }
+
+  /** Moves nested groups under other groups in order, skipping unknown groups and moves that would form a cycle. */
+  setProjectGroupParents(moves: readonly ProjectGroupParentMove[]): ProjectGroup[] {
+    const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
+    const moved: ProjectGroup[] = []
+    for (const { groupId, parentGroupId } of moves) {
+      const group = byId.get(groupId)
+      if (!group || !byId.has(parentGroupId) || group.parentGroupId === parentGroupId) {
+        continue
+      }
+      // A cycle exists if the group is the new parent or one of its ancestors.
+      const visited = new Set<string>()
+      let ancestor = byId.get(parentGroupId)
+      while (ancestor && ancestor.id !== groupId && !visited.has(ancestor.id)) {
+        visited.add(ancestor.id)
+        ancestor = ancestor.parentGroupId ? byId.get(ancestor.parentGroupId) : undefined
+      }
+      if (ancestor?.id === groupId) {
+        continue
+      }
+      group.parentGroupId = parentGroupId
+      group.updatedAt = Date.now()
+      moved.push(group)
+    }
+    if (moved.length > 0) {
+      this.scheduleSave(['projectGroups'])
+    }
+    return moved
   }
 
   private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {

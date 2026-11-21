@@ -5,6 +5,9 @@ import type { BotRowLineChat } from '../../shared/bots/bot-row-line'
 import { buildBotChatBase, readBotChatInputs } from './bot-chat-tree-base'
 import type { BotChatTreeHost } from './bot-chat-tree-host'
 import { isBotOwnChat } from './bot-own-chat'
+import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
+import { readSessionParties } from '../runtime/orchestration/addressing/session-party-reader'
+import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 
 /** Bot id to its open side chats, Home and threads left out (the line names those its own way). */
 export async function readBotOwnChatPanes(
@@ -32,17 +35,27 @@ export async function readBotOwnChatPanes(
           store.listRecords()
         )
     const threads = new Set(inputs.links.map((link) => build.rootOf(link.sessionId)))
-    // The chats tree lists a Dispatch worker in the home as a side chat; the line counts it as a worker.
-    const own = [...build.chats.values()].filter((chat) => {
+    const sides = [...build.chats.values()].flatMap((chat) => {
       const record = store.getRecord(build.sessionOfChat.get(chat.chatId) ?? chat.chatId)
-      return (
-        chat.origin === 'side' &&
-        !chat.closed &&
-        !threads.has(chat.chatId) &&
-        record !== null &&
-        isBotOwnChat(record, db, store)
-      )
+      return chat.origin === 'side' && !chat.closed && !threads.has(chat.chatId) && record
+        ? [{ chat, record }]
+        : []
     })
+    if (sides.length === 0) {
+      continue
+    }
+    // One party read for the bot's side chats, not two lookups for each.
+    const root = createCanonicalOrcaSessionResolver(store)
+    const parties = readSessionParties(
+      db,
+      sides.flatMap(({ record }) =>
+        isOrcaSessionId(record.sessionId) ? [root(record.sessionId)] : []
+      )
+    )
+    // The chats tree lists a Dispatch worker in the home as a side chat; the line counts it as a worker.
+    const own = sides.flatMap(({ chat, record }) =>
+      isBotOwnChat(record, parties, store) ? [chat] : []
+    )
     if (own.length === 0) {
       continue
     }

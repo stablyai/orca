@@ -14,6 +14,7 @@ const PIECES: Record<NativeChatSessionOptionCopyId, (values?: { value0: string }
   thinking: () => translate('components.native-chat.composer.thinking', 'Thinking'),
   standard: () => translate('components.native-chat.composer.optionValue.standard', 'Standard'),
   none: () => translate('components.native-chat.composer.optionValue.none', 'None'),
+  off: () => translate('components.native-chat.composer.optionValue.off', 'Off'),
   minimal: () => translate('components.native-chat.composer.optionValue.minimal', 'Minimal'),
   low: () => translate('components.native-chat.composer.optionValue.low', 'Low'),
   medium: () => translate('components.native-chat.composer.optionValue.medium', 'Medium'),

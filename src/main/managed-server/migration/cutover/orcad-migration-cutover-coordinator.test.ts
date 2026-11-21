@@ -131,33 +131,27 @@ describe('migration cutover coordinator', () => {
     expect(h.destination.commit).not.toHaveBeenCalled()
   })
 
-  it('aborts a stage and releases the fence only once the destination proves it absent', async () => {
+  it('keeps the fence after an abort loses its reply until the destination proves absence', async () => {
     const h = await setup()
     await stageOrcadMigrationDestination(h.context, h.migrationId)
+    const abortError = new Error('abort reply lost')
+    h.destination.abort.mockRejectedValueOnce(abortError)
+    h.destination.readState.mockResolvedValueOnce({
+      state: 'absent',
+      migrationId: h.migrationId,
+      manifestSha256: h.journal()!.manifestSha256
+    })
+    h.destination.readState.mockRejectedValueOnce(new Error('status reply lost'))
+    await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).rejects.toBe(abortError)
+    expect(h.owner()).toBe('env-1')
+    expect(h.journal()?.phase).toBe('destination-staged')
+
     await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).resolves.toEqual({
       outcome: 'released',
       evidence: 'catalog-absent'
     })
     expect(h.owner()).toBeNull()
     expect(h.journal()).toBeUndefined()
-  })
-
-  it('keeps the fence when the abort answer is lost and the destination cannot be read', async () => {
-    const h = await setup()
-    await stageOrcadMigrationDestination(h.context, h.migrationId)
-    h.destination.abort.mockRejectedValueOnce(new Error('socket closed'))
-    h.destination.readState.mockResolvedValueOnce({
-      state: 'absent',
-      migrationId: h.migrationId,
-      manifestSha256: h.journal()!.manifestSha256
-    })
-    h.destination.readState.mockRejectedValueOnce(new Error('socket closed'))
-    h.destination.abort.mockRejectedValueOnce(new Error('socket closed'))
-    await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).rejects.toThrow(
-      'socket closed'
-    )
-    expect(h.owner()).toBe('env-1')
-    expect(h.journal()?.phase).toBe('destination-staged')
   })
 
   it('never releases a committed destination, even when the journal lags behind it', async () => {

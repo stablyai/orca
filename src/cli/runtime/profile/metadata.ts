@@ -6,6 +6,7 @@ import {
   getRuntimeMetadataPath,
   type RuntimeMetadata
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import { runtimeAccessDeniedError } from '../connection/runtime-access-denied'
 import { RuntimeClientError } from '../connection/types'
 
 export function readMetadata(userDataPath: string): RuntimeMetadata {
@@ -23,13 +24,18 @@ export function readMetadata(userDataPath: string): RuntimeMetadata {
     if (error instanceof RuntimeClientError) {
       throw error
     }
-    throw new RuntimeClientError(
-      'runtime_unavailable',
-      `Could not read Orca runtime metadata at ${metadataPath}. Start the Orca app first.`
+    const denied = error instanceof Error ? runtimeAccessDeniedError(error, metadataPath) : null
+    throw (
+      denied ??
+      new RuntimeClientError(
+        'runtime_unavailable',
+        `Could not read Orca runtime metadata at ${metadataPath}. Start the Orca app first.`
+      )
     )
   }
 }
 
+// Status and offline admission treat a denied read as absent, so an unreadable profile still reports not running.
 export function tryReadMetadata(userDataPath: string): RuntimeMetadata | null {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   try {

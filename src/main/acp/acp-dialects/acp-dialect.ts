@@ -137,6 +137,14 @@ export type AcpModelCommandReply =
   | { applied: string }
   | { refused: 'notSignedIn' | 'modelUnavailable'; detail: string }
 
+/** A listed chat model and the choices a CLI model id encodes for it. */
+export type AcpListedChatModel = {
+  model: string
+  effort?: string
+  fastMode: 'true' | 'false'
+  thinking: 'true' | 'false'
+}
+
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
   /** Effort replaces part of the native composite model selection. */
@@ -213,6 +221,13 @@ export type AcpDialect = {
   compactionReply?(text: string): AcpCompactionReply | undefined
   /** The agent's own command for /compact. */
   compactCommand?: string
+  /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */
+  chatModelIds?: ReadonlyMap<string, string>
+  /** Resolves a CLI model id the chat server does not list to a listed model plus its effort,
+   *  thinking and Fast; null if none. */
+  unlistedChatModel?(value: string, listed: readonly string[]): AcpListedChatModel | null
+  /** CLI efforts some of the chat server's models spell differently, as those models' ids. */
+  chatEffortIds?: ReadonlyMap<string, string>
   /** The agent's own model command resolves selections its model option cannot name. */
   modelCommand?: {
     /** Only the model option's own "unknown model" refusal sends the value to the command. */
@@ -236,6 +251,8 @@ export type AcpDialect = {
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
   /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
   fastConfigId?: string
+  /** This agent's on/off thinking parameter, written only for a CLI model id that names it. */
+  thinkingConfigId?: string
   /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
   interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
 }

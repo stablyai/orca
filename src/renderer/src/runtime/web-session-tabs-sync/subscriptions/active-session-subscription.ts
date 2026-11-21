@@ -43,7 +43,7 @@ import { createWebRuntimeSessionTerminal } from '../../hosted-terminals/creation
 import { releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame } from '../initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { createInitialTerminalSeeder } from '../initial-terminal/initial-terminal-seeder'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
-import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 
 import type { SessionTabsSnapshotHandler } from '../visibility-resume/visibility-resume-types'
 import { subscribeRuntimeEnvironment } from '../../rpc/environment-revisions/runtime-environment-pairing-refresh'

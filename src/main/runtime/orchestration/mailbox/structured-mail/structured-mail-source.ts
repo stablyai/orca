@@ -17,7 +17,8 @@ import {
 } from '../senders/agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import { answersConversationAsk } from '../senders/conversation-ask-answer'
-import { importedRemoteDispatchId } from '../senders/sender-reported-dispatch'
+import { readMessageSenderDispatch } from '../../db/messages/message-sender-dispatch'
+import type { WorkerIdentity } from '../../workers/identity/worker-identity'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import {
@@ -44,22 +45,22 @@ export function structuredMailSource(input: {
 }): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
   const groups = new Map<
     string,
-    { message: MailSourceMessage; report: ReportFact; imported: string | undefined }[]
+    { message: MailSourceMessage; report: ReportFact; recorded: WorkerIdentity | null }[]
   >()
   for (const message of input.batch) {
-    // A server's reused terminal can send for several Dispatches; each is its own sender.
-    const imported = importedDispatch(input.db, message)
+    // A reused terminal can send for several Dispatches; each is its own sender.
+    const recorded = recordedWorker(input.db, message)
     const key = JSON.stringify([
       message.from_handle,
       message.answer_sender_snapshot ?? null,
-      imported ?? null
+      recorded?.dispatchId ?? null
     ])
     let group = groups.get(key)
     if (!group) {
       group = []
       groups.set(key, group)
     }
-    group.push({ message, report: reportFact(message), imported })
+    group.push({ message, report: reportFact(message), recorded })
   }
   const senders: AgentMessageSender[] = []
   for (const group of groups.values()) {
@@ -77,14 +78,22 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        group[0]!.imported ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined),
+        group[0]!.recorded?.dispatchId ??
+          (reported?.kind === 'valid' ? reported.dispatchId : undefined),
         // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
-        group.map(({ message }) => message.created_at).toSorted()[0]
+        group.map(({ message }) => message.created_at).toSorted()[0],
+        group[0]!.recorded
       )
     const relations = new Map<string, Lineage | undefined>()
     const values = group.map(({ message, report }) => {
       // Sender and DB are fixed by this group/invocation; every varying evidence field is keyed.
-      const key = JSON.stringify([input.mailboxHandle, input.dispatchId, message.run_id, report])
+      const key = JSON.stringify([
+        input.mailboxHandle,
+        input.dispatchId,
+        message.run_id,
+        message.type,
+        report
+      ])
       if (!relations.has(key)) {
         relations.set(
           key,
@@ -96,7 +105,8 @@ export function structuredMailSource(input: {
                 recipient: input.mailboxHandle,
                 runId: message.run_id,
                 reportedDispatchId: report.kind === 'valid' ? report.dispatchId : undefined,
-                recipientDispatchId: input.dispatchId
+                recipientDispatchId: input.dispatchId,
+                messageType: message.type
               })
         )
       }
@@ -225,16 +235,16 @@ function withConversationNote(
   return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
 }
 
-/** The paired server's Dispatch the import recorded for this mail. */
-function importedDispatch(
+/** The worker this mail was recorded from when it was written. */
+function recordedWorker(
   db: OrchestrationDb | null,
   message: MailSourceMessage
-): string | undefined {
+): WorkerIdentity | null {
   try {
-    return db ? importedRemoteDispatchId(db, message.id) : undefined
+    return db ? readMessageSenderDispatch(db, message.id) : null
   } catch {
     // Failure to resolve a label must not block delivery.
-    return undefined
+    return null
   }
 }
 

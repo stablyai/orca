@@ -1,4 +1,6 @@
 import { reconcileChatTabIdentities } from '../chat/agent-session-tab-identity'
+import { botHomeSessionId, placeBotHomeInSnapshot } from '../chat/bot-home-snapshot'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { preserveTerminalRetirementProofs } from '../../terminal/surface/mobile-session-terminal-retirement-proof'
 import { stampMobileSnapshotVersion } from '../publication/mobile-session-snapshot-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -27,6 +29,18 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     snapshot = reconcileChatTabIdentities(snapshot, existing)
+    // Only a windowless host places Home; an attached window's own placer already did, and main-owned layouts are not yet covered.
+    const homeSessionId =
+      ORCA_LAYOUT_OWNER_IS_MAIN || this.hasAuthoritativeWindow()
+        ? null
+        : botHomeSessionId(this.store, worktreeId)
+    if (homeSessionId) {
+      snapshot = placeBotHomeInSnapshot(
+        snapshot,
+        homeSessionId,
+        getStructuredAgentSessionHost()?.getSessionTabId(homeSessionId) ?? null
+      )
+    }
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
       // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.

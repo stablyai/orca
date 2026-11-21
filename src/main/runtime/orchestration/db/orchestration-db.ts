@@ -74,7 +74,8 @@ class OrchestrationDbCore {
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
-      ['federation_relay_items', ['answer_sender_report']]
+      ['federation_relay_items', ['answer_sender_report']],
+      ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
       const existing = new Set(
         this.db

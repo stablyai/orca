@@ -1,4 +1,5 @@
 import type { Notification } from 'electron'
+import { closeDesktopNotification } from '../../notifications/desktop-notification'
 
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
@@ -50,7 +51,7 @@ export function retainNotificationUntilRelease(
       const oldest = retainedHistoryNotifications.entries().next().value
       if (oldest) {
         // Remove the toast too, so history never contains a target whose handler we discarded.
-        oldest[0].close()
+        closeDesktopNotification(oldest[0])
         oldest[1]()
       }
     }
@@ -64,41 +65,47 @@ export function retainNotificationUntilRelease(
   return release
 }
 
-export function waitForNotificationDisplay(notification: Notification): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
+export function trackNotificationDisplay(notification: Notification): {
+  result: Promise<boolean>
+  start: () => void
+  cancel: () => void
+} {
+  const { promise: result, resolve } = Promise.withResolvers<boolean>()
+  let settled = false
+  let timer: ReturnType<typeof setTimeout> | undefined
 
-    function cleanup(): void {
-      notification.removeListener('show', onShow)
-      notification.removeListener('failed', onFailed)
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
+  function settle(displayed: boolean): void {
+    if (settled) {
+      return
+    }
+    settled = true
+    notification.removeListener('show', onShow)
+    notification.removeListener('failed', cancel)
+    notification.removeListener('close', cancel)
+    clearTimeout(timer)
+    resolve(displayed)
+  }
+
+  function onShow(): void {
+    settle(true)
+  }
+
+  function cancel(): void {
+    settle(false)
+  }
+
+  notification.once('show', onShow)
+  notification.once('failed', cancel)
+  notification.once('close', cancel)
+  return {
+    result,
+    start: () => {
+      if (!settled) {
+        timer = setTimeout(cancel, NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
       }
-    }
-
-    function settle(displayed: boolean): void {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      resolve(displayed)
-    }
-
-    function onShow(): void {
-      settle(true)
-    }
-
-    function onFailed(): void {
-      settle(false)
-    }
-
-    notification.once('show', onShow)
-    notification.once('failed', onFailed)
-    timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
-  })
+    },
+    cancel
+  }
 }
 
 export function logNativeNotificationFailure(context: string, error?: string): void {

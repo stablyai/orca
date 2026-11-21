@@ -21,3 +21,14 @@ describe('rankNativeChatRoomMembers', () => {
     expect(rankNativeChatRoomMembers(members, 'bugs')).toEqual(['Triage'])
   })
 })
+
+it('matches a name across its spaces and punctuation', () => {
+  const names = ['Eng - Perf', 'Eng - Reviewer', 'Eng - Reviewer - Official']
+  expect(rankNativeChatRoomMentions(names, 'eng-rev')).toEqual([
+    'Eng - Reviewer',
+    'Eng - Reviewer - Official'
+  ])
+  expect(
+    rankNativeChatRoomMembers([{ name: 'Eng - Reviewer - Official' }], 'reviewer-off')
+  ).toEqual(['Eng - Reviewer - Official'])
+})
