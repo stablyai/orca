@@ -298,11 +298,19 @@ describe('tab identity ownership', () => {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
     const { handle } = openTab(ORDINARY_URL)
     const teamsUrl = 'https://teams.microsoft.com/v2/'
-    type FakeFrame = { frameTreeNodeId: number; url: string; origin: string }
+    type FakeFrame = {
+      frameTreeNodeId: number
+      url: string
+      origin: string
+      detached: boolean
+      isDestroyed: () => boolean
+    }
     const frame = (frameTreeNodeId: number, url: string, origin: string): FakeFrame => ({
       frameTreeNodeId,
       url,
-      origin
+      origin,
+      detached: false,
+      isDestroyed: () => false
     })
     const mainFrame: FakeFrame & { framesInSubtree: FakeFrame[] } = {
       ...frame(1, ORDINARY_URL, 'https://example.com'),
@@ -351,6 +359,7 @@ describe('tab identity ownership', () => {
       expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
       // The page removes it after loading.
       mainFrame.framesInSubtree = [mainFrame, blocked]
+      loading.detached = true
       unloaded(loading)
       expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
     } finally {

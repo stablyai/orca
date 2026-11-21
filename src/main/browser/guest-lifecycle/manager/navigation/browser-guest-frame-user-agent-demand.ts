@@ -14,6 +14,30 @@ const REMOVAL_CHECK_DELAY_MS = 250
 // One check per guest covers a burst of unloads; churn can't postpone it, and an unload during a
 // pending check earns one more pass in case its frame left the tree after that check.
 const removalChecks = new Map<number, { again: boolean }>()
+// The frame each tracked site iframe was last seen as, so a check visits only those frames.
+const trackedFrames = new WeakMap<Electron.WebContents, Map<number, Electron.WebFrameMain>>()
+
+function track(guest: Electron.WebContents, frame: Electron.WebFrameMain, demanding: boolean): void {
+  let frames = trackedFrames.get(guest)
+  if (!frames) {
+    frames = new Map()
+    trackedFrames.set(guest, frames)
+  }
+  if (demanding) {
+    frames.set(frame.frameTreeNodeId, frame)
+  } else {
+    frames.delete(frame.frameTreeNodeId)
+  }
+}
+
+// Removed, or replaced by a document that never committed to this frame.
+function frameGone(frame: Electron.WebFrameMain | undefined): boolean {
+  try {
+    return !frame || frame.isDestroyed() || frame.detached
+  } catch {
+    return true
+  }
+}
 
 function defaultIdentityRewritesRequestHeaders(url: string): boolean {
   return rewritesRequestHeaders(
@@ -33,10 +57,12 @@ export function noteBrowserGuestSubframeNavigation(
   frame: Electron.WebFrameMain | null | undefined
 ): void {
   if (frame && defaultIdentityRewritesRequestHeaders(url)) {
+    const isNew = !getBrowserGuestFrameUserAgentDemand(guest.id).has(frame.frameTreeNodeId)
     setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, frame.frameTreeNodeId, true)
+    track(guest, frame, true)
     // A site iframe removed before it committed reports nothing; each new one sweeps those out,
     // so dead entries never outnumber live frames.
-    if (getBrowserGuestFrameUserAgentDemand(guest.id).size > 1) {
+    if (isNew && getBrowserGuestFrameUserAgentDemand(guest.id).size > 1) {
       scheduleRemovalCheck(guest)
     }
   }
@@ -57,6 +83,7 @@ export function settleBrowserGuestSubframe(
   }
   const demanding = frame.origin !== 'null' && defaultIdentityRewritesRequestHeaders(frame.url)
   setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, frame.frameTreeNodeId, demanding)
+  track(guest, frame, demanding)
 }
 
 /**
@@ -89,15 +116,18 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
     if (guest.isDestroyed() || getBrowserGuestFrameUserAgentDemand(guest.id).size === 0) {
       return
     }
-    try {
-      const present = new Set(guest.mainFrame.framesInSubtree.map((frame) => frame.frameTreeNodeId))
-      for (const id of getBrowserGuestFrameUserAgentDemand(guest.id)) {
-        if (!present.has(id)) {
-          setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, id, false)
-        }
+    const frames = trackedFrames.get(guest)
+    const demanding = getBrowserGuestFrameUserAgentDemand(guest.id)
+    for (const id of [...demanding]) {
+      if (frameGone(frames?.get(id))) {
+        setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, id, false)
       }
-    } catch {
-      // A disposed frame tree can't prove the site iframes gone; keep the policy on.
+    }
+    // A page commit drops all iframe demand; forget the frames it left behind.
+    for (const id of frames?.keys() ?? []) {
+      if (!demanding.has(id)) {
+        frames?.delete(id)
+      }
     }
     if (check.again && getBrowserGuestFrameUserAgentDemand(guest.id).size > 0) {
       scheduleRemovalCheck(guest)

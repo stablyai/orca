@@ -44,3 +44,18 @@ it.each([100, 1000])(
     expect(reads()).toBe(0)
   }
 )
+
+it.each([100, 1000])(
+  'checks only the tracked site iframes, not the whole frame tree (%i frames)',
+  (count) => {
+    vi.useFakeTimers()
+    const { guest, reads } = guestWithFrames(count)
+    setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, 3, true)
+    setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, 4, true)
+    for (let i = 0; i < 20; i += 1) {
+      noteBrowserGuestSubframeUnloaded(guest, null)
+      vi.advanceTimersByTime(300)
+    }
+    expect(reads()).toBe(0)
+  }
+)
