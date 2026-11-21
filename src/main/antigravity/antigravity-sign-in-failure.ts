@@ -5,7 +5,10 @@ import {
 } from '../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 import { AcpAgentError } from '../acp/transport/acp-errors'
 import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import {
+  AgentSessionAcquisitionRefusal,
+  isAgentSessionPreSpawnError
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AntigravitySignInSentence } from './antigravity-chat-account'
 
 export const SIGN_IN_FAILED = 'Google sign-in for Antigravity failed. Start sign-in again.'
@@ -17,6 +20,10 @@ export function antigravitySignInFailure(error: unknown): string {
     cause instanceof AntigravityChatAuthConfigError
   ) {
     return cause.message
+  }
+  // A chat home missing its key or gcloud login says which, rather than that Google sign-in failed.
+  if (error instanceof AgentSessionAcquisitionRefusal && error.reason === 'notSignedIn') {
+    return error.message
   }
   if (isAgentSessionPreSpawnError(error) && error.reason === 'runtimeNotInstalled') {
     return 'Antigravity is not installed on this host. Install it, then start sign-in again.'
