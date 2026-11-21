@@ -38,6 +38,8 @@ export type AgentSessionSubscribeInput = {
    *  said it is shown. Without one the stream gets saves only. */
   liveTextViewer?: string
   liveTextShown?: boolean
+  /** Hands the stream a setter for when its viewer says it is shown or hidden. */
+  onLiveTextShown?: (set: (shown: boolean) => void) => void
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void

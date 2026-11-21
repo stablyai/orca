@@ -15,6 +15,7 @@ import {
 import { SubscribeParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-subscribe-params'
 import * as queuedImages from '../attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
+import { registerLiveTextViewer } from './structured-agent-session-live-text-viewers'
 
 export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   name: 'agentSession.subscribe',
@@ -29,7 +30,15 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
     // A stream reads; it never keeps an agent alive or starts one.
     let dispose = (): void => {}
-    const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
+    let releaseViewer = (): void => {}
+    const viewer =
+      capabilities?.liveTextViewer === 1
+        ? structuredAgentSessionSubscriptionBase(ctx, params.sessionId)
+        : undefined
+    const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
+      releaseViewer()
+      dispose()
+    })
     if (stream.isClosed()) {
       return
     }
@@ -69,16 +78,20 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
       snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
       ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
       ...(appends ? { holdsTextBase: appends.holdsBase } : {}),
-      ...(capabilities?.liveTextViewer === 1
+      ...(viewer
         ? {
-            liveTextViewer: structuredAgentSessionSubscriptionBase(ctx, params.sessionId),
-            liveTextShown: params.shown === true
+            liveTextViewer: viewer,
+            liveTextShown: params.shown === true,
+            onLiveTextShown: (set: (shown: boolean) => void) => {
+              releaseViewer = registerLiveTextViewer(viewer, set)
+            }
           }
         : {}),
       // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
       ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
     })
     if (stream.isClosed()) {
+      releaseViewer()
       dispose()
       return
     }

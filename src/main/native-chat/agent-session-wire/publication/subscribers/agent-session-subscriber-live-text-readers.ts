@@ -71,20 +71,26 @@ const SHOWN_TAIL_ATTEMPTS = 3
 export class LiveTextViewerShows {
   constructor(
     private readonly deps: {
-      subscribers: (sessionId: string) => readonly Subscriber[]
+      isActive: (subscriber: Subscriber) => boolean
       enqueue: (subscriber: Subscriber, deliver: () => Promise<unknown>) => void
       journal: (sessionId: string) => AgentSessionJournal | undefined
       sendTail: (subscriber: Subscriber, journal: AgentSessionJournal) => Promise<unknown>
     }
   ) {}
 
-  set(sessionId: string, viewer: string, shown: boolean): void {
-    for (const subscriber of this.deps.subscribers(sessionId)) {
-      if (subscriber.liveTextViewer === viewer && subscriber.liveTextShown !== shown) {
-        subscriber.liveTextShown = shown
-        if (shown) {
-          this.sendTail(subscriber, SHOWN_TAIL_ATTEMPTS)
-        }
+  /** Takes the viewer's word for the stream it opened, while the stream lasts. */
+  watch(subscriber: Subscriber, onShown: ((set: (shown: boolean) => void) => void) | undefined) {
+    onShown?.((shown) => this.set(subscriber, shown))
+  }
+
+  private set(subscriber: Subscriber, shown: boolean): void {
+    if (subscriber.liveTextViewer === undefined || !this.deps.isActive(subscriber)) {
+      return
+    }
+    if (subscriber.liveTextShown !== shown) {
+      subscriber.liveTextShown = shown
+      if (shown) {
+        this.sendTail(subscriber, SHOWN_TAIL_ATTEMPTS)
       }
     }
   }
@@ -92,7 +98,7 @@ export class LiveTextViewerShows {
   private sendTail(subscriber: Subscriber, attempts: number): void {
     this.deps.enqueue(subscriber, async () => {
       const journal = this.deps.journal(subscriber.sessionId)
-      if (!journal || !receivesLiveText(subscriber)) {
+      if (!journal || !receivesLiveText(subscriber) || !this.deps.isActive(subscriber)) {
         return
       }
       // Behind a save, the catch-up already queued for it runs first, then this tries again.

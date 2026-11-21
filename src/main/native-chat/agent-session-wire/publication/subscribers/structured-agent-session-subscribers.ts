@@ -52,7 +52,7 @@ export class AgentSessionSubscribers {
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
   private readonly viewerShows = new liveText.LiveTextViewerShows({
-    subscribers: (sessionId) => this.subscribers(sessionId),
+    isActive: (subscriber) => this.isActive(subscriber),
     enqueue: (subscriber, deliver) => this.enqueue(subscriber, deliver),
     journal: (sessionId) => this.hooks.readSessionJournal?.(sessionId),
     sendTail: (subscriber, journal) => this.sendLiveTail(subscriber, journal, subscriber.fence)
@@ -98,6 +98,7 @@ export class AgentSessionSubscribers {
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
+    this.viewerShows.watch(subscriber, input.onLiveTextShown)
 
     this.forkMarkers.add(subscriber)
     this.enqueue(subscriber, async () => {
@@ -238,8 +239,6 @@ export class AgentSessionSubscribers {
 
   liveTextReaders = (sessionId: string) =>
     liveText.sessionLiveTextReaders(this.bySession.get(sessionId))
-  setLiveTextShown = (sessionId: string, viewer: string, shown: boolean): void =>
-    this.viewerShows.set(sessionId, viewer, shown)
   /** A subscriber's newest live text as it opens, takes a snapshot, or says it is shown, counted
    *  against its cap. One behind a save gets none, leaving it for after its catch-up. */
   private sendLiveTail(subscriber: Subscriber, journal: AgentSessionJournal, fence: number) {

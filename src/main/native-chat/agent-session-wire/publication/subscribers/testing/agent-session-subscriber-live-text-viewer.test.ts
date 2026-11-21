@@ -42,6 +42,7 @@ async function chat() {
     readLiveText: () => read(),
     readSessionJournal: () => journal
   })
+  let setShown = (_shown: boolean): void => {}
   const open = async (viewer?: { shown: boolean }) => {
     const events: AgentSessionSubscribeEvent[] = []
     subscribers.open({
@@ -50,7 +51,15 @@ async function chat() {
       journal,
       fence: 1,
       emit: (event) => events.push(event),
-      ...(viewer ? { liveTextViewer: 'connection:chat', liveTextShown: viewer.shown } : {})
+      ...(viewer
+        ? {
+            liveTextViewer: 'connection:chat',
+            liveTextShown: viewer.shown,
+            onLiveTextShown: (set: (shown: boolean) => void) => {
+              setShown = set
+            }
+          }
+        : {})
     })
     await vi.waitFor(() => expect(events.length).toBeGreaterThan(0))
     return events
@@ -60,7 +69,12 @@ async function chat() {
     subscribers.publishLiveText(SESSION, journal, 1, read)
     await new Promise<void>((resolve) => setImmediate(resolve))
   }
-  return { subscribers, open, publish, setText: (next: string) => (text = next) }
+  return {
+    open,
+    publish,
+    setText: (next: string) => (text = next),
+    setShown: (shown: boolean) => setShown(shown)
+  }
 }
 
 it('sends an older reader no live text, only the saves it got before', async () => {
@@ -72,20 +86,20 @@ it('sends an older reader no live text, only the saves it got before', async () 
 })
 
 it('sends a hidden viewer no live text, then its newest text once it says it is shown', async () => {
-  const { subscribers, open, publish, setText } = await chat()
+  const { open, publish, setText, setShown } = await chat()
   const events = await open({ shown: false })
   const opened = events.length
   await publish('The reply so far, and more')
   expect(events).toHaveLength(opened)
   // The newest text arrives with no publication at all while hidden.
   setText('The reply so far, and more that arrived while it was hidden')
-  subscribers.setLiveTextShown(SESSION, 'connection:chat', true)
+  setShown(true)
   await vi.waitFor(() => expect(events.length).toBe(opened + 1))
   expect(replyText(events.at(-1))).toBe(
     'The reply so far, and more that arrived while it was hidden'
   )
 
-  subscribers.setLiveTextShown(SESSION, 'connection:chat', false)
+  setShown(false)
   await publish('The reply so far, and more that arrived while it was hidden, and after')
   expect(events).toHaveLength(opened + 1)
 })
