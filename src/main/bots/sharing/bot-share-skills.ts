@@ -1,6 +1,7 @@
 // The skills a Share dialog offers: the bot's own skills/, then the folder its own agent loads, then
-// the other agent's. Every place a skill was found is checked on its own before precedence applies,
-// so a copy reached through another folder's link never hides the real one.
+// the other agent's, then its linked projects' (as Settings lists them). Every place a skill was found
+// is checked on its own before precedence applies, so a copy reached through another folder's link
+// never hides the real one.
 import { join, relative, sep } from 'node:path'
 import type { Bot } from '../../../shared/bot-types'
 import {
@@ -15,64 +16,112 @@ import {
   type ObservedSkillPackage
 } from '../../skills/package-archive/skill-package-identity'
 import { readBotOwnSkills } from '../bot-own-skills'
-import { admittedSkill, type ScannedSkill } from '../bot-skill-projects'
+import { admittedSkill, scanSkillProject, type ScannedSkill } from '../bot-skill-projects'
 import { ownPath, validPartName, within, type Home } from './bot-share-own-path'
 
 export type BotShareSkill = {
   name: string
   description: string
   directory: string
-  /** The skill's folder from the bot home, '/'-separated, for opening its files. */
-  homePath: string
+  /** The skill's folder from the bot home, '/'-separated, for opening its files; null for a linked
+   *  project's skill, which lives outside the home. */
+  homePath: string | null
 }
 
-export async function readShareSkills(
+/** A project the bot links for skills, on this host. */
+export type BotShareSkillProject = { name: string; path: string }
+
+type Source = {
+  skills: ScannedSkill[]
+  /** The folder every skill must really be in, since a link out of the home is the owner's, not the
+   *  bot's; null for a project, whose linked-in skills (a setup script's) the bot loads as its own. */
+  root: string | null
+  /** Where a skill shows as from: its home path, or its project's name. */
+  label: (folder: string) => string
+  /** null: outside the home, so no file to open there. */
+  homePath: (folder: string) => string | null
+}
+
+async function homeSources(
   bot: Pick<Bot, 'agent'>,
   home: Home,
   leftOut: BotShareLeftOut[]
-): Promise<BotShareSkill[]> {
+): Promise<Source[]> {
   const own = await readBotOwnSkills(home.path)
   const agentFirst: BotAgentSkillsFolder[] =
     bot.agent === 'claude' ? ['claude', 'agents'] : ['agents', 'claude']
-  const sources: { folder: string; skills: ScannedSkill[] }[] = [
+  const folders: { folder: string; skills: ScannedSkill[] }[] = [
     { folder: BOT_OWN_SKILLS_FOLDER, skills: own.skills },
     ...agentFirst.map((found) => ({
       folder: BOT_AGENT_SKILLS_FOLDERS[found],
       skills: own.agentFound.filter((skill) => skill.found === found)
     }))
   ]
-  const valid: ScannedSkill[] = []
+  const homePath = (folder: string) => relative(home.real, folder).split(sep).join('/')
+  const sources: Source[] = []
+  for (const { folder, skills } of folders) {
+    if (skills.length === 0) {
+      continue
+    }
+    const root = await ownPath(home, ...folder.split('/'))
+    if (root === null || root === 'linked') {
+      leftOut.push({ kind: 'skill', name: folder, why: 'linked' })
+      continue
+    }
+    sources.push({ skills, root: root.own, label: homePath, homePath })
+  }
+  return sources
+}
+
+/** Linked projects' skills, scanned the way a chat's launch and Settings scan them. */
+async function projectSources(projects: readonly BotShareSkillProject[]): Promise<Source[]> {
+  const sources = await Promise.all(
+    projects.map(async (project): Promise<Source | null> => {
+      const scanned = await scanSkillProject(project.path)
+      if (!scanned) {
+        return null
+      }
+      return {
+        skills: scanned.skills,
+        root: null,
+        label: () => project.name,
+        homePath: () => null
+      }
+    })
+  )
+  return sources.filter((source): source is Source => source !== null)
+}
+
+export async function readShareSkills(
+  bot: Pick<Bot, 'agent'>,
+  home: Home,
+  leftOut: BotShareLeftOut[],
+  projects: readonly BotShareSkillProject[] = []
+): Promise<BotShareSkill[]> {
+  const sources = [...(await homeSources(bot, home, leftOut)), ...(await projectSources(projects))]
+  const valid: { skill: ScannedSkill; source: Source }[] = []
   const refused: { folder: string; entry: BotShareLeftOut }[] = []
   for (const source of sources) {
-    if (source.skills.length === 0) {
-      continue
-    }
-    const root = await ownPath(home, ...source.folder.split('/'))
-    if (root === null || root === 'linked') {
-      leftOut.push({ kind: 'skill', name: source.folder, why: 'linked' })
-      continue
-    }
     for (const skill of source.skills) {
       if (!validPartName(skill.name)) {
         refused.push({
           folder: skill.folder,
           entry: { kind: 'skill', name: skill.name, why: 'name' }
         })
-      } else if (!within(root.own, skill.folder)) {
+      } else if (source.root !== null && !within(source.root, skill.folder)) {
         // Reached through a link out of this folder: the owner's, unless another folder holds it.
         refused.push({
           folder: skill.folder,
           entry: { kind: 'skill', name: skill.name, why: 'outside-home' }
         })
       } else {
-        valid.push(skill)
+        valid.push({ skill, source })
       }
     }
   }
-  const homePath = (folder: string) => relative(home.real, folder).split(sep).join('/')
   const seen = new Set<string>()
   const skills: BotShareSkill[] = []
-  for (const skill of valid) {
+  for (const { skill, source } of valid) {
     if (seen.has(skill.folder)) {
       continue
     }
@@ -82,14 +131,14 @@ export async function readShareSkills(
         kind: 'skill',
         name: skill.name,
         why: 'duplicate',
-        from: homePath(skill.folder)
+        from: source.label(skill.folder)
       })
     } else {
       skills.push({
         name: skill.name,
         description: skill.description,
         directory: skill.folder,
-        homePath: homePath(skill.folder)
+        homePath: source.homePath(skill.folder)
       })
     }
   }

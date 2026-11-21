@@ -21,6 +21,9 @@ import {
   type BotPackageV1,
   type BotShareLeftOut
 } from '../../../shared/bots/bot-package'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { botHomeFolder } from '../bot-home'
+import { localSkillProjects } from '../bot-skill-projects'
 import { ownPath, validPartName, type Home } from './bot-share-own-path'
 import { readShareSkills, type BotShareSkill } from './bot-share-skills'
 import { botToolCredentialHeaderNames } from '../bot-tool-credentials'
@@ -234,11 +237,18 @@ export function deriveConnectors(
 
 export async function readBotShareable(input: {
   bot: Bot
-  home: string
+  /** The bot's home folder; its own by default. */
+  home?: string
   automations: readonly Automation[]
+  /** The app's projects: the bot's linked ones on this host are skills its chats load too. */
+  repos?: readonly Repo[]
 }): Promise<BotShareable> {
   const leftOut: BotShareable['leftOut'] = []
-  const home: Home = { path: input.home, real: await realpath(input.home) }
+  const homePath = input.home ?? botHomeFolder(input.bot)
+  const home: Home = { path: homePath, real: await realpath(homePath) }
+  const skillProjects = localSkillProjects(input.bot.skillProjects ?? [], input.repos ?? []).map(
+    (repo) => ({ name: repo.displayName, path: repo.path })
+  )
   const soulPath = await ownPath(home, 'SOUL.md')
   if (soulPath === null || soulPath === 'linked') {
     throw new Error("SOUL.md is missing or is a link; Orca shares only the bot's own files.")
@@ -246,7 +256,7 @@ export async function readBotShareable(input: {
   const soul = await readFile(soulPath.own, 'utf8')
   const automationParts = readAutomations(input.bot, input.automations, leftOut)
   const [skills, servers, memory, avatar] = await Promise.all([
-    readShareSkills(input.bot, home, leftOut),
+    readShareSkills(input.bot, home, leftOut, skillProjects),
     readOwnToolServers(home, leftOut),
     readMemory(home, leftOut),
     readAvatar(input.bot, home, leftOut)
@@ -256,7 +266,7 @@ export async function readBotShareable(input: {
     purpose: landingLine(soulDescription(soul) ?? '', BOT_PACKAGE_PURPOSE_MAX),
     ...avatar,
     skills,
-    tools: readTools(servers, input.home, leftOut),
+    tools: readTools(servers, homePath, leftOut),
     ...automationParts,
     memory,
     leftOut,
