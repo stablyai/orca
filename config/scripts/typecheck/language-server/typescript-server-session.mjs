@@ -369,33 +369,12 @@ export function createServerSession({
     return true
   }
 
-  // Recorded once sent (a stop before the answer still withdraws them) and dropped again if the client refuses;
-  // a refused re-registration leaves the client holding the one it had accepted before.
+  // Everything sent stays recorded until the client confirms an unregister, so a stop withdraws all the client
+  // may hold; withdrawing one it refused is harmless, missing one it holds would leak it.
   const onRegister = (message) => {
-    const added = (message.params?.registrations ?? []).map(({ id, method }) => [
-      id,
-      { method, accepted: false }
-    ])
-    const replaced = new Map()
-    const sent = relayToClient(message, (answer) => {
-      for (const [id, entry] of added) {
-        entry.accepted = !answer.error
-        if (answer.error && clientRegistrations.get(id) === entry) {
-          const previous = replaced.get(id)
-          if (previous?.accepted) {
-            clientRegistrations.set(id, previous)
-          } else {
-            clientRegistrations.delete(id)
-          }
-        }
-      }
-    })
-    if (sent) {
-      for (const [id, entry] of added) {
-        if (clientRegistrations.has(id) && !replaced.has(id)) {
-          replaced.set(id, clientRegistrations.get(id))
-        }
-        clientRegistrations.set(id, entry)
+    if (relayToClient(message)) {
+      for (const { id, method } of message.params?.registrations ?? []) {
+        clientRegistrations.set(id, { method })
       }
     }
   }
