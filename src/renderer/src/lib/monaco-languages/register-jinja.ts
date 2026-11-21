@@ -11,8 +11,9 @@ const JINJA_OPEN_LINE = new RegExp(
   `\\{%-?\\s*(?:${JINJA_BLOCK_TAGS}|elif|else)\\b(?!.*\\{%-?\\s*end).*%\\}\\s*$`
 )
 const JINJA_CLOSE_LINE = /^\s*\{%-?\s*(?:end\w+|elif|else)\b/
+// Slashes are allowed only inside quoted attribute values, so <div/> stays self-closing.
 const HTML_OPEN_TAG_LINE =
-  /<(?!(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b)([\w:-]+)([^/>]*(?!\/)>)[^<]*$/i
+  /<(?!(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b)([\w:-]+)(?:"[^"]*"|'[^']*'|[^'">/])*>[^<]*$/i
 
 function mapJinjaScope(scope: string): string | undefined {
   const language = scope.slice(scope.lastIndexOf('.') + 1)
@@ -155,7 +156,10 @@ function jinjaConfiguration({
     ],
     folding: {
       markers: {
-        start: new RegExp(`^\\s*(?:\\{%-?\\s*(?:${JINJA_BLOCK_TAGS})\\b|<!--\\s*#region\\b)`),
+        // Inline-complete blocks like {% if x %}y{% endif %} must not open a fold.
+        start: new RegExp(
+          `^\\s*(?:\\{%-?\\s*(?:${JINJA_BLOCK_TAGS})\\b(?!.*\\{%-?\\s*end)|<!--\\s*#region\\b)`
+        ),
         end: /^\s*(?:\{%-?\s*end\w+\b|<!--\s*#endregion\b)/
       }
     }
