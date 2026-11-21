@@ -78,7 +78,7 @@ export async function fileKeptOutLines(
   today: string
 ): Promise<boolean> {
   const path = join(folder, 'memory', `${TIDY_UP_ARCHIVE}.md`)
-  const marked = lines.map((line) => `${line.trimEnd()} · kept out ${today}`)
+  const marked = lines.map((line) => `${line.trimEnd()} \u00b7 kept out ${today}`)
   await fs.makeDirectory?.(join(folder, 'memory'))
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const before = await fs.readText(path)

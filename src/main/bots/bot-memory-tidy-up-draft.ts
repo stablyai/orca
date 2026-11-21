@@ -240,11 +240,11 @@ export function tidyUpFileLines(
       return []
     }
     if (plan.merged?.has(key)) {
-      return [`${line.trimEnd()} · merged ${today}`]
+      return [`${line.trimEnd()} \u00b7 merged ${today}`]
     }
     const retired = plan.retired?.get(key)
     if (retired) {
-      return [`${line.trimEnd()} · retired (${retired}) ${today}`]
+      return [`${line.trimEnd()} \u00b7 retired (${retired}) ${today}`]
     }
     if (!plan.replaced.has(key)) {
       return [`${line.trimEnd()} · moved ${today}`]

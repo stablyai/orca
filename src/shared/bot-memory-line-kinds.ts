@@ -35,7 +35,7 @@ export function isOwnerKind(kind: BotMemoryKind | null): boolean {
 }
 
 const STANDING_WORDS =
-  /\b(always|never|from now on|don['’]?t|do not|stop|must|only|instead of|use \S+ instead)\b/i
+  /\b(always|never|from now on|don['\u2019]?t|do not|stop|must|only|instead of|use \S+ instead)\b/i
 
 /** Words that make an instruction standing rather than one-off. */
 export function hasStandingWords(text: string): boolean {
@@ -51,7 +51,7 @@ const OWNER_RULE_MARKS =
 // green") is not. "only" counts too: keeping a descriptive "only N are red" in MEMORY.md is the
 // safe side of the line.
 const RULE_OPENING =
-  /(?:^|[:;.!?,(\u2013\u2014]\s*|\s-\s+)[*_]{0,2}(?:please[*_]{0,2}\s+[*_]{0,2})?(?:always|never|don['’]?t|do not|must|only|stop|from now on)(?![a-z0-9])/i
+  /(?:^|[:;.!?,(\u2013\u2014]\s*|\s-\s+)[*_]{0,2}(?:please[*_]{0,2}\s+[*_]{0,2})?(?:always|never|don['\u2019]?t|do not|must|only|stop|from now on)(?![a-z0-9])/i
 
 /** A line a status cleanup must never move: typed as the owner's, marked as an owner rule, or
  *  opening with a standing word. */

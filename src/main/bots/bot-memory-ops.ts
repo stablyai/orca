@@ -150,7 +150,7 @@ export function checkTidyUpOps(
     if (op.op === 'demote') {
       const topic = op.topic.trim()
       if (topic === TIDY_UP_ARCHIVE || !TIDY_UP_TOPIC_NAME.test(topic)) {
-        return 'names a topic Orca can’t write'
+        return 'names a topic Orca can\u2019t write'
       }
       let lines: MemorySnapshotLine[]
       if (op.range) {
@@ -197,7 +197,7 @@ export function checkTidyUpOps(
     // A merge writes nothing new: the line it keeps stays word for word, the rest are archived.
     const kept = byRef.get(op.keep.trim())
     if (!kept || !op.lines.some((ref) => ref.trim() === kept.ref)) {
-      return 'keeps a line it doesn’t name'
+      return 'keeps a line it doesn\u2019t name'
     }
     const going = found.filter(({ raw }) => keyOf(raw) !== keyOf(kept.raw))
     if (going.length === 0) {

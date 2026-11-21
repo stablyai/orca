@@ -19,7 +19,7 @@ export function memoryFitsOps(memory: string): boolean {
 
 const PASTED = /<pasted_content\b[^>]*>[\s\S]*?<\/pasted_content\b[^>]*>/g
 /** Stands where a pasted block was, inside its line, so a quoted line stays quoted around it. */
-const CUT = '⁣'
+const CUT = '\u2063'
 
 /** One owner message's typed segments: its physical lines, each split where a paste was cut, with
  *  quoted lines (">", judged before the cut) left out. */

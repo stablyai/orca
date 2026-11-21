@@ -11,7 +11,7 @@ export function lineWords(text: string): string[] {
   return (
     text
       .toLowerCase()
-      .replace(/[’]/g, "'")
+      .replace(/\u2019/g, "'")
       .match(/[a-z0-9][a-z0-9'_-]*/g) ?? []
   )
 }
