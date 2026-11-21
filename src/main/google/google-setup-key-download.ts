@@ -2,7 +2,6 @@
 // made when the download starts, for the one run waiting on that page in that agent's workspace, and
 // the bytes go to host-private staging (never the workspace) until they are imported or dropped.
 import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../../shared/google/google-client-config'
@@ -95,7 +94,7 @@ export function googleSetupKeyDownloadClaim(
     if (!run) {
       return null
     }
-    mkdirSync(host.stagingDir, { recursive: true, mode: 0o700 })
+    // Chromium creates the folder when it saves there.
     const savePath = join(host.stagingDir, `${randomUUID()}.json`)
     const file: KeyFile = {
       read: async (maxBytes) =>

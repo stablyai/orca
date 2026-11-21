@@ -17,6 +17,7 @@ import {
   googleSetupWithholdsPageText,
   type GoogleSetupKeyDownloadDeps
 } from './google-setup-key-download'
+import { setOwnBrowserPageWorkspace } from './google-setup-page-binding'
 import { googleSetupRuns } from './google-setup-runs'
 
 export type GoogleSetupHostBrowser = {
@@ -57,11 +58,13 @@ export function installGoogleSetupHostWatch(
     })
   )
   setClientDownloadClaimant(googleSetupClientDownloadClaimant(deps))
+  setOwnBrowserPageWorkspace(browser ? (id) => browser.getWorktreeIdForTab(id) ?? null : null)
   // This host's own browser keeps Google's client page out of click effects.
   setPageTextWithheld((page) => googleSetupWithholdsPageText(googleSetupRuns().list(), page))
   return () => {
     browser?.setStandingDownloadClaim(null)
     setClientDownloadClaimant(null)
+    setOwnBrowserPageWorkspace(null)
     setPageTextWithheld(null)
   }
 }

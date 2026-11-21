@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { StandingDownloadClaim } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import type { GoogleSetupRun } from '../../shared/google/google-setup-run'
@@ -64,6 +64,8 @@ const KEY = {
 }
 
 async function download(taken: StandingDownloadClaim, text: string): Promise<void> {
+  // Chromium creates the staging folder as it saves.
+  await mkdir(dirname(taken.savePath), { recursive: true })
   await writeFile(taken.savePath, text)
   taken.finish({ downloadId: 'd', status: 'completed', savePath: taken.savePath, error: null })
 }

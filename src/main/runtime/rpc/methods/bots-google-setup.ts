@@ -290,7 +290,7 @@ export const GOOGLE_SETUP_METHODS = [
           throw error
         }
       }
-      await requireSetupPageInAgentWorkspace(context.runtime, botId, params.change)
+      requireSetupPageInAgentWorkspace(context.runtime, botId, params.change)
       const { prev, run } = applied(botId, actor, params.change)
       writeGoogleSetupCards(chatOf(context.runtime, botId), prev, run)
       return withBlocker(context, botId, run)

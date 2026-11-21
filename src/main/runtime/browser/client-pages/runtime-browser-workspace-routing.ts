@@ -27,7 +27,6 @@ import { hasPairedPageHost } from './browser-client-page-opening'
 import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { RpcContext } from '../../rpc/core'
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
-import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 
 export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
   async actOnClientPageInitialization(
@@ -57,15 +56,6 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
     })
     // This UI action acknowledges accepted intent; the command owns load completion.
     void completion.catch(() => {})
-  }
-
-  /** The workspace a browser page belongs to, whether a paired desktop or this host shows it. */
-  browserPageWorkspaceId(browserPageId: string): string | null {
-    return (
-      getRuntimeBrowserPageRegistry(this).getPage(browserPageId)?.workspaceId ??
-      browserManager.getWorktreeIdForTab(browserPageId) ??
-      null
-    )
   }
 
   /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */
