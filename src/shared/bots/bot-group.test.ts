@@ -6,6 +6,7 @@ import {
   botGroupContext,
   botGroupTurnItems,
   botGroupRoom,
+  botGroupTurnReplyText,
   findBotGroupRoom,
   type BotGroup,
   type BotGroupMessage
@@ -381,5 +382,13 @@ describe('group rooms', () => {
     )
     expect(findBotGroupRoom([group], 'gone')).toBeNull()
     expect(() => botGroupRoom(group, 'gone')).toThrow(/no longer/)
+  })
+})
+
+describe('a peer answer in the room history', () => {
+  it('adds the answer once, as whole words, and drops a quiet marker', () => {
+    expect(botGroupTurnReplyText('NO_REPLY', '42')).toBe('42')
+    expect(botGroupTurnReplyText('Result: 42.', '42')).toBe('Result: 42.')
+    expect(botGroupTurnReplyText('Processed 142 files.', '42')).toBe('Processed 142 files.\n\n42')
   })
 })

@@ -32,6 +32,7 @@ import { webhookCloudCalls, webhookSummary, type WebhookCloudCalls } from './web
 import { WebhookHooks } from './webhook-hooks'
 import { webhookNoticeText } from './webhook-notice-text'
 import { WebhookHostLedger } from './webhook-host-ledger'
+import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
 
 type TriggerDelivery = Extract<ConnectorDelivery, { kind: 'trigger' }>
 
@@ -150,7 +151,7 @@ export class WebhookHostService {
 
   /** Signed out of Orca, so no event or webhook call reaches this host's bots. */
   signedOut(): boolean {
-    return this.deps.cloud()?.status?.() === 'signed-out'
+    return orcaCloudNeedsSignIn(this.deps.cloud()?.status?.())
   }
 
   /** Whether this host's Orca Cloud takes webhooks; until a hello says, assume it does and let the mint decide. */

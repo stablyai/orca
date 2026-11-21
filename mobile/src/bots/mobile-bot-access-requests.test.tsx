@@ -15,7 +15,11 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Icon',
   ChevronRight: 'Icon',
   ChevronDown: 'Icon',
-  ChevronLeft: 'Icon'
+  ChevronLeft: 'Icon',
+  Laptop: 'Icon',
+  Mail: 'Icon',
+  ShieldAlert: 'Icon',
+  ShieldOff: 'Icon'
 }))
 vi.mock('../components/list/DisclosureChevron', () => ({
   DisclosureChevron: ({ children }: { children: ReactNode }) => children
@@ -25,6 +29,8 @@ vi.mock('../components/controls/MobileSwitch', () => ({ MobileSwitch: () => null
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../platform/media-picking/media-picker', () => ({ useMediaPicker: () => ({}) }))
+vi.mock('./MobileBotAvatar', () => ({ MobileBotAvatar: () => null }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -103,8 +109,9 @@ function tabContent(access: BotAccessRequests | null, options: TabOptions = {}) 
       showToast: () => {},
       online: true,
       hostName: 'Studio Mac',
+      home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
       accessRequests: access,
-      lookAround: null
+      upNext: { lookNow: () => {}, busy: false }
     })
   )
 }
@@ -112,7 +119,18 @@ function renderTab(access: BotAccessRequests | null, options: TabOptions = {}) {
   act(() => {
     tree = create(tabContent(access, options))
   })
+  openWhoCanAsk(tree!.root)
   return tree!
+}
+// Requests and people are on Settings' Who can ask page, as on the desktop.
+function openWhoCanAsk(root: ReactTestInstance) {
+  const row = root.find(
+    (node) =>
+      typeof node.props.accessibilityLabel === 'string' &&
+      node.props.accessibilityLabel.startsWith('Who can ask, ') &&
+      typeof node.props.onPress === 'function'
+  )
+  act(() => row.props.onPress())
 }
 function updateTab(access: BotAccessRequests, direct: RpcClient): ReactTestInstance {
   act(() => tree!.update(tabContent(access, { client: direct })))
@@ -134,7 +152,7 @@ const texts = (root: ReactTestInstance) =>
 describe('access requests in the bot sheet', () => {
   it('asks with the desktop’s confirm before Give access, and grants through the host', () => {
     const decide = vi.fn(async () => {})
-    const root = renderTab({ requests: [request], deciding: false, decide }).root
+    const root = renderTab({ requests: [request], reads: 1, deciding: false, decide }).root
 
     press(root, 'Review Dana Kim')
     expect(decide).not.toHaveBeenCalled()
@@ -145,7 +163,7 @@ describe('access requests in the bot sheet', () => {
 
   it('keeps an unverified route name out of the warning and grant confirmation', () => {
     const root = renderTab(
-      { requests: [request], deciding: false, decide: vi.fn(async () => {}) },
+      { requests: [request], reads: 1, deciding: false, decide: vi.fn(async () => {}) },
       { serverName: 'Atlas Server' }
     ).root
     expectNamedWarningAndConsent(root, 'the computer this agent runs on')
@@ -159,7 +177,7 @@ describe('access requests in the bot sheet', () => {
     }
     await readHostStatusReply(direct)
     const root = renderTab(
-      { requests: [request], deciding: false, decide: vi.fn(async () => {}) },
+      { requests: [request], reads: 1, deciding: false, decide: vi.fn(async () => {}) },
       { client: direct }
     ).root
     expectNamedWarningAndConsent(root, 'the computer this agent runs on')
@@ -174,7 +192,12 @@ describe('access requests in the bot sheet', () => {
       sendRequest: async () => machineStatus(generation === 1 ? 'Atlas Server' : 'Boreal Server')
     }
     await readHostStatusReply(direct)
-    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    const access = {
+      requests: [request],
+      reads: 1,
+      deciding: false,
+      decide: vi.fn(async () => {})
+    }
     expectNamedWarningAndConsent(renderTab(access, { client: direct }).root, 'Atlas Server')
     generation = 2
     expectNamedWarningAndConsent(updateTab(access, direct), 'the computer this agent runs on')
@@ -196,7 +219,12 @@ describe('access requests in the bot sheet', () => {
         generation === 1 ? oldReply : Promise.resolve(machineStatus('Boreal Server'))
     }
     const oldRead = readHostStatusReply(direct)
-    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    const access = {
+      requests: [request],
+      reads: 1,
+      deciding: false,
+      decide: vi.fn(async () => {})
+    }
     renderTab(access, { client: direct })
     generation = 2
     await readHostStatusReply(direct)
@@ -210,7 +238,7 @@ describe('access requests in the bot sheet', () => {
 
   it('declines without asking, as the desktop does', () => {
     const decide = vi.fn(async () => {})
-    const root = renderTab({ requests: [request], deciding: false, decide }).root
+    const root = renderTab({ requests: [request], reads: 1, deciding: false, decide }).root
 
     press(root, 'Decline Dana Kim')
 
@@ -228,7 +256,8 @@ function machineStatus(machineName: string): RpcResponse {
 function expectNamedWarningAndConsent(root: ReactTestInstance, name: string): void {
   expect(texts(root).some((text) => text.includes(name))).toBe(true)
   press(root, 'Review Dana Kim')
-  expect(root.findByProps({ confirmLabel: 'Give access' }).props.message).toContain(name)
+  root.findByProps({ confirmLabel: 'Give access' })
+  expect(texts(root)).toContain(`They’ll act as you on ${name}.`)
   press(root, 'Cancel')
 }
 
@@ -287,11 +316,13 @@ describe('who can ask in the bot sheet', () => {
           showToast,
           online: true,
           hostName: 'Studio Mac',
+          home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
           accessRequests: null,
-          lookAround: null
+          upNext: { lookNow: () => {}, busy: false }
         })
       )
     })
+    openWhoCanAsk(tree!.root)
     press(tree!.root, 'Keep only me')
     await act(async () => press(tree!.root, 'Keep only me'))
     expect(showToast).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Sam, Bea'), 2400)

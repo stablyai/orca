@@ -2,23 +2,30 @@ import { isDeepStrictEqual } from 'node:util'
 import {
   CrewRelevance,
   crewIdentityFingerprint,
+  crewShownBindings,
   type CrewFacet,
   type CrewInvalidation
 } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
+import { admitCrewWake, crewIdentityMoved, type CrewWakeSkips } from './crew-wake-admission'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
-import { readCrewAssignmentIds } from './crew-query'
 import {
-  createCrewHostDerivation,
   patchCrewAssignmentStages,
   refreshCrewStatuses,
   type CrewHostDerivation
 } from './crew-host-derivation'
+import {
+  crewRebuildTrigger,
+  crewHostBuilder,
+  type CrewRebuildTrigger
+} from './crew-host-rebuild-trace'
 
-/** One host derivation is shared by all mounted parties; the last subscriber releases its inputs. */
+/** One host derivation is shared by all mounted parties; it is released a grace period after the last subscriber leaves. */
 /** Past this many skipped Dispatches the next read rebuilds instead of tracking more. */
 const STALE_CAP = 4096
+/** How long the host outlives its last listener, so a hide/show or reconnect reuses it. */
+export const CREW_HOST_GRACE_MS = 30_000
 
 export class CrewReadModel {
   private host: CrewHostDerivation | undefined
@@ -42,89 +49,49 @@ export class CrewReadModel {
   private readonly dirty = new Set<CrewFacet>()
   private readonly trafficAddresses = new Set<string>()
   private broadTraffic = false
-  private unwatch: (() => void) | undefined
+  private unwatch: ((() => void) & { resume?: () => void }) | undefined
+  private release: ReturnType<typeof setTimeout> | undefined
+  /** Why a subscribe forced the next rebuild, for its trace. */
+  private forced: CrewRebuildTrigger | undefined
+  /** Parties whose last listener left since the last subscribe: their rows still filter wakes, so their return reads fresh. */
+  private readonly departed = new Set<string>()
+  /** A terminal record write while nobody listened, checked by the next read instead of on every notice. */
+  private identityDeferred = false
+  private readonly hosts = crewHostBuilder(() => this.listeners.size)
 
   constructor(
     private readonly readDependencies: (previous?: CrewReadDependencies) => CrewReadDependencies,
     private readonly watch: (
       wake: (facets: CrewInvalidation) => void,
-      relevance: () => CrewRelevance | null
-    ) => () => void
+      relevance: () => CrewRelevance | null,
+      /** Nobody listens: a source may note changes and compare them on `resume`, before the next read. */
+      idle: () => boolean
+    ) => (() => void) & { resume?: () => void }
   ) {}
 
   private readRelevance = (): CrewRelevance | null => (this.host && this.relevance) || null
 
-  /** Admit before any rebuild: a scoped wake about panes or dispatches no row shows changes no row. */
-  private admits(facets: CrewInvalidation): boolean {
-    const relevance = this.readRelevance()
-    if (!relevance) {
-      return true
-    }
-    const facetList = [...facets]
-    if (facetList.every((facet) => facet === 'identity')) {
-      return this.identityMoved()
-    }
-    if (
-      (facets.paneKeys || facets.sessionIds) &&
-      facetList.every((facet) => facet === 'status' || facet === 'names')
-    ) {
-      if (
-        [...(facets.paneKeys ?? [])].some((pane) => relevance.hasPane(pane)) ||
-        [...(facets.sessionIds ?? [])].some((session) => relevance.sessions.has(session))
-      ) {
-        return true
-      }
+  private readonly skips: CrewWakeSkips = {
+    deferIdentity: null,
+    identityMoved: () => this.identityMoved(),
+    status: () => {
       this.skipped ??= 'status'
-      return false
-    }
-    if (facetList.every((facet) => facet === 'traffic')) {
-      if (facets.trafficAddresses) {
-        return [...facets.trafficAddresses].some((address) => relevance.addresses.has(address))
-      }
-      if (facets.dispatchIds) {
-        return [...facets.dispatchIds].some(
-          (id) => relevance.dispatches.has(id) || relevance.addresses.has(`dispatch:${id}`)
-        )
-      }
-    }
-    if (
-      (facets.dispatchIds || facets.parties) &&
-      facetList.every((facet) => facet === 'topology' || facet === 'assignments')
-    ) {
-      // A new Dispatch or Run naming a shown party or Run changes who that crew shows.
-      let shown = Boolean(facets.parties && relevance.showsParty(facets.parties))
-      for (const id of facets.dispatchIds ?? []) {
-        if (relevance.dispatches.has(id)) {
-          shown = true
-          if (facets.has('assignments')) {
-            this.patches.add(id)
-          }
-        } else if (shown) {
-          continue
-        } else if (this.stale.size < STALE_CAP) {
-          this.stale.add(id)
-        } else {
-          this.dirty.add('topology')
-        }
-      }
-      return shown
-    }
-    return true
+    },
+    patch: (id) => this.patches.add(id),
+    stale: (id) => (this.stale.size < STALE_CAP ? this.stale.add(id) : this.dirty.add('topology'))
+  }
+
+  private admits(facets: CrewInvalidation): boolean {
+    this.skips.deferIdentity =
+      this.listeners.size === 0 ? () => (this.identityDeferred = true) : null
+    return admitCrewWake(facets, this.readRelevance(), this.skips)
   }
 
   /** A terminal record write changes a crew only if one of its panes or handles now resolves differently. */
   private identityMoved(): boolean {
-    if (!this.host || !this.relevance || this.identity === undefined) {
-      return true
-    }
-    try {
-      const moved = crewIdentityFingerprint(this.relevance, this.host.deps) !== this.identity
-      this.identitySkipped ||= !moved
-      return moved
-    } catch {
-      // An unreadable resolution is a change: rebuild rather than keep a stale row.
-      return true
-    }
+    const moved = crewIdentityMoved(this.relevance, this.host?.deps, this.identity)
+    this.identitySkipped ||= !moved
+    return moved
   }
 
   private invalidate = (facets: CrewInvalidation) => {
@@ -157,37 +124,94 @@ export class CrewReadModel {
 
   /** `party` routes wakes: a change no row of that party shows does not wake it. */
   subscribe = (listener: () => void, party?: string): (() => void) => {
-    this.listeners.set(listener, party)
-    this.unwatch ??= this.watch(this.invalidate, this.readRelevance)
-    // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
-    if (this.skipped === 'status') {
-      this.dirty.add('status').add('names')
+    // Kept past a hide only for the parties whose rows filtered wakes since: anyone else reads as after a release.
+    if (
+      this.listeners.size === 0 &&
+      this.host &&
+      (party === undefined || !this.departed.has(party))
+    ) {
+      this.dirty.add('topology')
+      this.forced = 'first-subscribe'
     }
-    this.skipped = undefined
+    for (const left of this.departed) {
+      if (left !== party) {
+        this.partyRelevance.delete(left)
+      }
+    }
+    this.departed.clear()
+    this.listeners.set(listener, party)
+    clearTimeout(this.release)
+    this.release = undefined
+    this.unwatch ??= this.watch(
+      this.invalidate,
+      this.readRelevance,
+      () => this.listeners.size === 0
+    )
+    // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
+    this.applySkippedStatus()
     return () => {
-      this.listeners.delete(listener)
+      if (!this.listeners.delete(listener)) {
+        return
+      }
       if (party !== undefined && ![...this.listeners.values()].includes(party)) {
-        this.partyRelevance.delete(party)
+        // Only the last party to leave is kept for: beside other listeners its rows stop filtering wakes.
+        if (this.listeners.size === 0) {
+          this.departed.add(party)
+        } else {
+          this.partyRelevance.delete(party)
+        }
       }
       if (this.listeners.size === 0) {
-        this.unwatch?.()
-        this.unwatch = undefined
-        this.host = undefined
-        this.relevance = undefined
-        this.partyRelevance.clear()
-        this.identity = undefined
-        this.skipped = undefined
-        this.stale.clear()
-        this.patches.clear()
-        this.dirty.clear()
-        this.trafficAddresses.clear()
-        this.broadTraffic = false
-        this.renamed.clear()
+        // The watch stays for the grace period, so the kept host sees every change; then nothing runs.
+        this.release = setTimeout(this.releaseHost, CREW_HOST_GRACE_MS)
+        this.release.unref?.()
       }
     }
   }
 
+  private applySkippedStatus(): void {
+    if (this.skipped === 'status') {
+      this.dirty.add('status').add('names')
+    }
+    this.skipped = undefined
+  }
+
+  private releaseHost = () => {
+    this.release = undefined
+    if (this.listeners.size > 0) {
+      return
+    }
+    this.unwatch?.()
+    this.unwatch = this.host = this.relevance = this.identity = this.skipped = undefined
+    this.broadTraffic = false
+    for (const kept of [this.partyRelevance, this.departed, this.stale, this.patches, this.dirty]) {
+      kept.clear()
+    }
+    this.identityDeferred = false
+    this.forced = undefined
+    this.trafficAddresses.clear()
+    this.renamed.clear()
+  }
+
   read = (address: string): OrchestrationCrewSnapshot => {
+    try {
+      // Unwatched, or kept for parties this one is not: a one-shot read has no watch keeping its rows current.
+      if (this.listeners.size === 0 && !this.departed.has(address)) {
+        const host = this.hosts.build('one-shot', this.readDependencies())
+        return buildCrewSnapshot(address, { ...host.deps, now: Date.now() }, host)
+      }
+      this.unwatch?.resume?.()
+      // A read kept for the party that left shows peers its rows did not: apply status wakes skipped since.
+      if (this.listeners.size === 0) {
+        this.applySkippedStatus()
+      }
+      return this.readFresh(address)
+    } finally {
+      this.hosts.settle()
+    }
+  }
+
+  private readFresh(address: string): OrchestrationCrewSnapshot {
     const snapshot = this.readOnce(address)
     // A row now showing a Dispatch whose write was skipped reads stale assignments: rebuild once.
     const shown = this.partyRelevance.get(address)
@@ -195,19 +219,31 @@ export class CrewReadModel {
       for (const id of shown.dispatches) {
         if (this.stale.has(id)) {
           this.dirty.add('topology')
-          return this.readOnce(address)
+          return this.readOnce(address, 'stale-dispatch')
         }
       }
     }
     return snapshot
   }
 
+  /** A fresh host: nothing skipped yet, and parties that left read as new when they return. */
   private rebuilt(host: CrewHostDerivation): CrewHostDerivation {
     this.stale.clear()
+    for (const party of this.departed) {
+      this.partyRelevance.delete(party)
+    }
+    this.departed.clear()
     return host
   }
 
-  private readOnce(address: string): OrchestrationCrewSnapshot {
+  private readOnce(address: string, cause?: CrewRebuildTrigger): OrchestrationCrewSnapshot {
+    if (this.identityDeferred) {
+      this.identityDeferred = false
+      if (this.identityMoved()) {
+        // The deferred notices' record ids were not kept: capture records fresh.
+        this.dirty.add('topology').add('records')
+      }
+    }
     const now = Date.now()
     const dirty = new Set(this.dirty)
     const renamed = new Set(this.renamed)
@@ -217,13 +253,7 @@ export class CrewReadModel {
     this.trafficAddresses.clear()
     this.broadTraffic = false
     if (this.host && this.patches.size > 0 && !dirty.has('topology') && !dirty.has('records')) {
-      const patched = this.host.deps.db
-        ? patchCrewAssignmentStages(
-            this.host,
-            readCrewAssignmentIds(this.host.deps.db, [...this.patches]),
-            this.patches
-          )
-        : this.host
+      const patched = patchCrewAssignmentStages(this.host, this.patches)
       if (patched) {
         this.host = patched
       } else {
@@ -242,15 +272,16 @@ export class CrewReadModel {
       this.host = undefined
       let deps = this.readDependencies()
       this.identitySkipped = false
-      if (previous && this.listeners.size && !dirty.has('records')) {
+      if (previous && this.listeners.size && !dirty.has('records') && !this.forced) {
         previous.registry.refreshRecordNames(deps.records, renamed)
         deps = { ...deps, records: previous.deps.records }
       }
       // A one-shot read has no watch to keep captured truth current.
-      const host = createCrewHostDerivation(deps, () => Math.max(32, this.listeners.size * 2))
-      if (this.listeners.size === 0) {
-        return buildCrewSnapshot(address, { ...host.deps, now }, host)
-      }
+      const host = this.hosts.build(
+        crewRebuildTrigger(previous, this.listeners.size > 0, dirty, now, cause ?? this.forced),
+        deps
+      )
+      this.forced = undefined
       this.host = this.rebuilt(host)
       this.skipped = undefined
     } else if (dirty.has('status') || dirty.has('names')) {
@@ -262,31 +293,18 @@ export class CrewReadModel {
       if (dirty.has('status')) {
         const { statuses, ...sources } = deps
         const relevance = this.relevance
-        // Only bindings a row can show: an unrelated pane's row appearing or leaving rebuilds nothing.
-        const identities = (rows: typeof statuses) => {
-          const shown = new Map<string, (typeof rows)[number]['binding']>()
-          for (const row of rows) {
-            const { binding } = row
-            if (
-              !relevance ||
-              relevance.panes.has(row.activity.paneKey) ||
-              (binding.kind !== 'unresolved' && relevance.handles.has(binding.terminalHandle)) ||
-              (binding.kind === 'worker' && relevance.dispatches.has(binding.dispatchId)) ||
-              relevance.hasPane(row.activity.paneKey)
-            ) {
-              shown.set(row.activity.paneKey, binding)
-            }
-          }
-          return shown
-        }
         previous.registry.refreshRecordNames(deps.records, renamed)
-        this.host = isDeepStrictEqual(identities(previous.deps.statuses), identities(statuses))
+        this.host = isDeepStrictEqual(
+          crewShownBindings(previous.deps.statuses, relevance),
+          crewShownBindings(statuses, relevance)
+        )
           ? refreshCrewStatuses(previous, statuses)
           : this.rebuilt(
-              createCrewHostDerivation(
-                { ...sources, records: previous.deps.records, statuses },
-                () => Math.max(32, this.listeners.size * 2)
-              )
+              this.hosts.build('status-identity', {
+                ...sources,
+                records: previous.deps.records,
+                statuses
+              })
             )
         if (this.skipped === 'status') {
           this.skipped = undefined

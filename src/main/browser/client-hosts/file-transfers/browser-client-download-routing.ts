@@ -20,8 +20,15 @@ export type BrowserClientDownloadRouteOutcome =
   /** The owning page has no usable channel; refuse the download. */
   | { kind: 'unavailable' }
 
+/** `filename` and `documentUrl` describe the download as it starts, for the page's host to claim it. */
+export type BrowserClientDownloadRouteInput = {
+  guestWebContentsId: number
+  filename?: string
+  documentUrl?: string
+}
+
 export type BrowserClientDownloadRouter = {
-  route(input: { guestWebContentsId: number }): BrowserClientDownloadRouteOutcome
+  route(input: BrowserClientDownloadRouteInput): BrowserClientDownloadRouteOutcome
 }
 
 export type BrowserClientDownloadDecision =
@@ -60,9 +67,9 @@ export function resetBrowserClientDownloadRouting(): void {
   isClientRouteWebContents = null
 }
 
-export function routeBrowserClientDownload(input: {
-  guestWebContentsId: number
-}): BrowserClientDownloadDecision {
+export function routeBrowserClientDownload(
+  input: BrowserClientDownloadRouteInput
+): BrowserClientDownloadDecision {
   for (const router of routersByEnvironmentId.values()) {
     let outcome: BrowserClientDownloadRouteOutcome
     try {

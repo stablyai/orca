@@ -18,6 +18,8 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
+import { MobileBotAvatar } from '../MobileBotAvatar'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 
 export function MobileBotItemRow({
   item,
@@ -28,7 +30,8 @@ export function MobileBotItemRow({
   now,
   disabled,
   onPress,
-  onLongPress
+  onLongPress,
+  owner
 }: {
   item: BotItem
   stale: boolean
@@ -41,6 +44,8 @@ export function MobileBotItemRow({
   disabled: boolean
   onPress: () => void
   onLongPress: () => void
+  /** In a group's list: the bot the item is from, named under its title. */
+  owner?: { name: string; avatar: MobileBotAvatarSource }
 }) {
   const t = useMobileTranslation()
   // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
@@ -51,8 +56,18 @@ export function MobileBotItemRow({
     <ListRow
       title={item.title}
       marker={formatBotItemNumber(item.number)}
-      subtitle={question}
+      subtitle={owner ? undefined : question}
       subtitleLines={1}
+      detail={
+        owner ? (
+          <View style={styles.owner}>
+            <MobileBotAvatar avatar={owner.avatar} size={14} />
+            <Text style={styles.ownerText} numberOfLines={1}>
+              {question ? `${owner.name} · ${question}` : owner.name}
+            </Text>
+          </View>
+        ) : undefined
+      }
       leading={
         checked === null ? (
           <MobileBotItemStatusIcon
@@ -132,6 +147,8 @@ export function MobileBotItemSelectionBar({
 
 const styles = themedStyleSheet(() => ({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  owner: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  ownerText: { flexShrink: 1, fontSize: typography.metaSize, color: colors.textSecondary },
   age: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   bar: {
     position: 'absolute',

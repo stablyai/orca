@@ -12,7 +12,13 @@ import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/
 import { describeApprovalClosed } from './worker-approval-text'
 import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 
-export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited' | 'lost'
+export type WorkerTurnStopReason =
+  | 'finished'
+  | 'errored'
+  | 'needs-input'
+  | 'exited'
+  | 'lost'
+  | 'start-unconfirmed'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -35,6 +41,8 @@ export type WorkerTurnStop = {
   leftover?: string
   /** A start that never got a terminal has no output to read. */
   neverStarted?: true
+  /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
+  startSurface?: 'terminal' | 'chat'
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
   settled?: 'failed' | 'circuit_broken'
   /** A chat request that failed, reported in the chat's own error words. */

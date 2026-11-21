@@ -1,6 +1,9 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotSkillProjectView } from '../../../../../shared/bots/bot-skill-projects'
+import type {
+  BotOwnSkillsView,
+  BotSkillProjectView
+} from '../../../../../shared/bots/bot-skill-projects'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { BotSkillsSection } from './BotSkillsSection'
@@ -33,6 +36,27 @@ const REPOS = [
   repo('api', { connectionId: 'gpu-box' }),
   repo('notes', { kind: 'folder' })
 ]
+
+/** A template bot's own skill, and one an older version left in Claude's folder. */
+const OWN: BotOwnSkillsView = {
+  skillsDir: '/Users/owner/.orca/bots/pr-review/skills',
+  skills: [
+    {
+      name: 'pr-review-checklist',
+      description: 'What to check on every pull request',
+      folder: '/Users/owner/.orca/bots/pr-review/skills/pr-review-checklist',
+      loadedBy: ['claude', 'agents']
+    }
+  ],
+  agentOnly: [
+    {
+      name: 'house-style',
+      description: 'Our review tone',
+      folder: '/Users/owner/.orca/bots/pr-review/.claude/skills/house-style',
+      loadedBy: ['claude']
+    }
+  ]
+}
 
 const VIEWS: Record<string, BotSkillProjectView> = {
   orca: {
@@ -96,7 +120,8 @@ function stubRuntime(): void {
     'bots.tools.problems': () => ({ problems: {} }),
     'bots.list': () => ({ bots: [] }),
     'bots.skillProjects.scan': (params) => ({
-      projects: Array.isArray(params.repoIds) ? params.repoIds.map((id) => VIEWS[String(id)]) : []
+      projects: Array.isArray(params.repoIds) ? params.repoIds.map((id) => VIEWS[String(id)]) : [],
+      ...(params.botId ? { own: OWN } : {})
     })
   }
   Reflect.set(window.api, 'runtime', {

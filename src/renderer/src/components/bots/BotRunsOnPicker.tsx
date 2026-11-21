@@ -22,6 +22,7 @@ import {
 } from './bot-create-hosts'
 import { BotComputerPicker } from './BotComputerPicker'
 import { botAgentLabel, botFolderDisplay } from './bot-presentation'
+import type { BotPermissionIntent } from './use-bot-agent-setup'
 import { nativeChatSessionChoiceShortLabel } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
 
@@ -52,6 +53,7 @@ export function BotRunsOnPicker({
   model,
   choices,
   onSetupChange,
+  keptPermission,
   onAddHost,
   name,
   variant = 'row'
@@ -64,7 +66,9 @@ export function BotRunsOnPicker({
   model: NewTabAgentMenuModel
   /** The agents that computer has. */
   choices: readonly BotAgent[]
-  onSetupChange: (setup: BotAgentSetup) => void
+  onSetupChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
+  /** A bot from a link: the owner's permission, kept apart from the agent (`useBotAgentSetup`). */
+  keptPermission?: BotPermissionIntent
   onAddHost?: (mode: 'ssh' | 'server') => void
   /** The bot's name, for its folder. */
   name?: string
@@ -155,6 +159,7 @@ export function BotRunsOnPicker({
             choices={choices.length ? choices : [chosen]}
             value={setup}
             onChange={onSetupChange}
+            keptPermission={keptPermission}
             showChatDefaultHint={!fields}
           />
         )}

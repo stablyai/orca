@@ -89,11 +89,34 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     skillSourceOwner: 'copilot',
     readsProjectSkillFoldersOf: ['claude']
   },
+  // Auggie, built on Pi, expands only `/skill:<name>` and reports no skills; it reads `.claude` too.
+  aug: {
+    skillPrefix: '/',
+    skillSourceOwner: 'aug',
+    skillNamePrefix: 'skill:',
+    readsSkillFoldersOf: ['claude']
+  },
   // Hermes' ACP sends an unregistered `/word` to the model as text, so a picked skill would not load.
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
-  omp: null
+  // Kiro's ACP pushes its own slash commands for each session.
+  kiro: null,
+  // Goose reports its skills as commands, at rest too.
+  goose: null,
+  // Orca knows no skill folders of theirs; their sessions report what they load as commands.
+  kilo: null,
+  'mimo-code': null,
+  omp: null,
+  // No folder scan until Gemini's ACP is checked to load a picked skill.
+  gemini: null,
+  // Droid reports skills only once a session starts, so resting chats rely on the scan.
+  droid: {
+    skillPrefix: '/',
+    skillSourceOwner: 'droid'
+  },
+  // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
+  'qwen-code': null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill

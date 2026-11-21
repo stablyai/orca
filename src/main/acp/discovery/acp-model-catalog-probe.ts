@@ -17,7 +17,6 @@ import {
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
-import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import {
@@ -26,13 +25,10 @@ import {
 } from '../process/acp-agent-connection'
 import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
-import {
-  acpListingDependsOnRelease,
-  acpListingNeedsChatFolder,
-  acpModelListingForRelease
-} from './acp-model-discovery-policy'
+import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { prepareAcpListingAccount } from './acp-listing-account'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
@@ -45,6 +41,8 @@ import {
   type AcpModelCatalogSessionConnection
 } from './acp-listing-session-models'
 import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import { acpAuthenticationRequired } from '../turns/acp-prompt-failure'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
@@ -76,16 +74,10 @@ export function createAcpModelCatalogProbe(
     if (discovery.kind === 'unavailable') {
       throw new Error(discovery.reason)
     }
-    // Reject folderless session discovery before spawning even a version probe.
-    if (!workspace && acpListingNeedsChatFolder(discovery)) {
-      throw folderlessListing(spec)
-    }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete, version } = await resolveAcpLaunchInvocation(
-      spec,
-      accountHome,
-      {
+    const { command, prefixArgs, env, envToDelete, version, antigravityChatAuth } =
+      await resolveAcpLaunchInvocation(spec, accountHome, {
         ...deps,
         ...(lookup !== 'recover'
           ? {
@@ -95,8 +87,7 @@ export function createAcpModelCatalogProbe(
           : {}),
         operation,
         resolveWorkingDirectory: () => cwd
-      }
-    )
+      })
     assertStructuredAgentResolutionCurrent(operation)
     return {
       answerSignIn: spec.signIn?.answered,
@@ -133,6 +124,9 @@ export function createAcpModelCatalogProbe(
         if (listing === null) {
           throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)
         }
+        await prepareAcpListingAccount(spec, env, antigravityChatAuth, () =>
+          assertStructuredAgentResolutionCurrent(operation)
+        )
         const launch = {
           command,
           args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],
@@ -155,7 +149,7 @@ export function createAcpModelCatalogProbe(
             {
               command,
               args: [...prefixArgs, ...listing.args],
-              cwd: workspace ?? cwd,
+              cwd: workspace || cwd,
               env,
               envToDelete
             },
@@ -163,17 +157,16 @@ export function createAcpModelCatalogProbe(
           )
           models = listing.parse(stdout)
         } else if (listing.kind === 'session') {
-          if (!workspace && !listing.inPrivateFolder) {
-            throw folderlessListing(spec)
-          }
           // Remove disposable session storage after the process closes.
           const folderArgs = listing.sessionFolderArgs
+          // Without a chat's folder, the account's models list in an empty private one.
+          const inPrivateFolder = listing.inPrivateFolder || !workspace
           const listInSession = async (model: string | undefined) => {
             const folder =
-              folderArgs || listing.inPrivateFolder
+              folderArgs || inPrivateFolder
                 ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
                 : null
-            const sessionCwd = listing.inPrivateFolder && folder ? folder.path : workspace
+            const sessionCwd = inPrivateFolder && folder ? folder.path : workspace
             const started: string[] = []
             try {
               assertStructuredAgentResolutionCurrent(operation)
@@ -288,7 +281,7 @@ export function createAcpModelCatalogProbe(
     resolve(home, options?.workspacePath ?? '', 'recover', options?.operation).then((resolved) =>
       resolved
         .run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
-        .catch(signedOutAsUnavailable(resolved.answerSignIn))
+        .catch(signedOutAsUnavailable(agentSpec.dialect, resolved.answerSignIn))
     )
   return Object.assign(probe, {
     resolve: async (...args: Parameters<typeof resolve>) => {
@@ -296,7 +289,7 @@ export function createAcpModelCatalogProbe(
       return {
         ...resolved,
         run: (...runArgs: Parameters<typeof resolved.run>) =>
-          resolved.run(...runArgs).catch(signedOutAsUnavailable(answerSignIn))
+          resolved.run(...runArgs).catch(signedOutAsUnavailable(agentSpec.dialect, answerSignIn))
       }
     }
   })
@@ -304,13 +297,16 @@ export function createAcpModelCatalogProbe(
 
 // A listing often reaches a signed-out server before any chat sends; telling the spec lets a chat
 // offer its sign-in choices without a failed send first.
-const signedOutAsUnavailable = (answerSignIn?: (signedIn: boolean) => void) => (error: unknown) => {
-  if (!(error instanceof AcpAgentError && error.code === -32000)) {
-    throw error
+const signedOutAsUnavailable =
+  (dialect: AcpDialect, answerSignIn?: (signedIn: boolean) => void) => (error: unknown) => {
+    if (
+      !(
+        error instanceof AcpAgentError &&
+        (error.code === -32000 || acpAuthenticationRequired(dialect, error))
+      )
+    ) {
+      throw error
+    }
+    answerSignIn?.(false)
+    throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
   }
-  answerSignIn?.(false)
-  throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-}
-
-const folderlessListing = (spec: AcpLaunchSpec) =>
-  new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)

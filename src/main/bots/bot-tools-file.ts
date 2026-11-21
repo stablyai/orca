@@ -182,6 +182,7 @@ async function writeServers(
       }
       created.push(id)
     }
+    // The async writer drops superseded copies that may still contain inline credentials.
     written = await writeFileAtomicallyIfUnchangedAsync(
       botToolsPath(folder),
       snapshot.text,

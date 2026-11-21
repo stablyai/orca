@@ -11,6 +11,8 @@ export abstract class SessionProcessInspection {
   readonly shellIsRootChild: boolean
 
   protected readonly repaintNudge = new SessionRepaintNudge()
+  /** PTY output chunks seen, so idle-shell proofs can tell whether the pane printed since. */
+  protected _outputChunks = 0
 
   abstract get isAlive(): boolean
   abstract getAppliedSize(): { cols: number; rows: number } | null
@@ -40,6 +42,15 @@ export abstract class SessionProcessInspection {
       this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached, jobMembershipOnly) ??
       'unverifiable'
     )
+  }
+
+  get outputChunks(): number {
+    return this._outputChunks
+  }
+
+  /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */
+  readForegroundGroup(): number | null | undefined {
+    return this.subprocess.readForegroundGroup?.()
   }
 
   observeForeground(): Promise<TerminalForegroundSample> {
