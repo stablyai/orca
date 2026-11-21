@@ -32,8 +32,8 @@ import {
   type ExternalConversationSeamDeps
 } from './external-conversation-host'
 import {
-  allLinks,
   findLink,
+  findLinkForSession,
   findConversationChat,
   type LinkedConversation
 } from './external-conversation-links'
@@ -134,7 +134,7 @@ export class ExternalConversationSeam {
   /** Whether the chat's running turn is its conversation's, so workers it starts report there too: a
    *  turn the owner typed that the Slack mirror posted to the thread is the thread's ask as well. */
   conversationTurn(chats: ConversationChatHost | undefined, sessionId: string): boolean {
-    const linked = [...allLinks(this.deps.store)].find(({ link }) => link.sessionId === sessionId)
+    const linked = findLinkForSession(this.deps.store, sessionId)
     return Boolean(
       linked &&
       (conversationOwnsTurn(linked.link, this.turnFacts(chats)) ||

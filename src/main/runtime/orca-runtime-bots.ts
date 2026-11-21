@@ -200,8 +200,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return this.agentOrchestrationProjection.buildByPaneKey()
   }
 
-  /** The paired servers' bots as an `@` pick of one last read them. */
-  private readonly pairedBotRosters = pairedBotRosterCache(this)
+  /** The paired servers' rosters as last read, for an `@` pick and a send that misses here. */
+  readonly pairedBotRosters = pairedBotRosterCache(this)
 
   /** What the work record reads: orchestration, worktrees and the conversation store. */
   private readonly botWorkRuntime: BotWorkRuntime & BotHomeLineage = {
@@ -278,7 +278,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
-        pairedBotRosters: this.pairedBotRosters,
+        pairedBotRosters: this.pairedBotRosters.read,
         scrubToolSecrets: (bot) => this.scrubBotToolSecrets(bot)
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>

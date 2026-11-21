@@ -20554,7 +20554,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Toutes les modifications non validées ou non suivies dans les espaces de travail Git seront définitivement supprimées.",
           "unavailable": "Impossible de vérifier les modifications",
           "checking": "Recherche de modifications…",
           "checkingDetails": "Vérification…",
@@ -20578,7 +20577,6 @@
           "line_other": "Les modifications non enregistrées dans {{count}} fichiers seront abandonnées : {{files}}",
           "line_many": "Les modifications non enregistrées dans {{count}} fichiers seront abandonnées : {{files}}"
         },
-        "ignoredFilesLost": "Les fichiers ignorés seront perdus : {{names}}",
         "ignoredFilesUnchecked": "Les fichiers ignorés n’ont pas pu être entièrement vérifiés"
       }
     },
@@ -22588,7 +22586,6 @@
         "withIgnored": "{{what}} et les fichiers ignorés seront perdus",
         "ignoredOnly": "Les fichiers ignorés seront perdus"
       },
-      "showChanges": "Afficher les modifications",
       "unsavedSuffix": "(non enregistré)",
       "onHost": "Sur {{host}}",
       "forceDeletingEllipsis": "Suppression forcée…",

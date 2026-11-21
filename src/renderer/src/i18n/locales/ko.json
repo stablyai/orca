@@ -19751,7 +19751,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
           "unavailable": "변경 사항을 확인할 수 없습니다",
           "checking": "변경 사항 확인 중…",
           "checkingDetails": "확인 중…",
@@ -19771,7 +19770,6 @@
           "line_one": "파일 {{count}}개의 저장하지 않은 편집 내용이 삭제됩니다: {{files}}",
           "line_other": "파일 {{count}}개의 저장하지 않은 편집 내용이 삭제됩니다: {{files}}"
         },
-        "ignoredFilesLost": "무시된 파일이 사라집니다: {{names}}",
         "ignoredFilesUnchecked": "무시된 파일을 모두 확인하지 못했습니다"
       }
     },
@@ -21837,7 +21835,6 @@
         "withIgnored": "{{what}} 및 무시된 파일이 사라집니다",
         "ignoredOnly": "무시된 파일이 사라집니다"
       },
-      "showChanges": "변경 사항 보기",
       "unsavedSuffix": "(저장 안 됨)",
       "onHost": "{{host}}에 있음",
       "forceDeletingEllipsis": "강제 삭제 중…",
