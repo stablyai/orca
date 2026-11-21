@@ -1,5 +1,6 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
+  structuredAgentSessionRuntimeFallbackModel,
   structuredAgentSessionRuntimePermission,
   structuredAgentSessionRuntimeModel
 } from '../options/structured-agent-session-ran-options'
@@ -24,8 +25,8 @@ import type {
 } from './structured-agent-session-status-feed-deps'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
-import { effectiveAgentSessionOptions } from '../../../../shared/agent-session-default-model'
 import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
+import { effectiveAgentSessionOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -66,7 +67,7 @@ export function structuredAgentSessionStatusSummary({
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(
-    record ? effectiveAgentSessionOptions(record)?.model : undefined,
+    record && effectiveAgentSessionOptions(record)?.model,
     AGENT_MODEL_MAX_LENGTH
   )
   const permissionMode = record?.permissionMode
@@ -75,6 +76,9 @@ export function structuredAgentSessionStatusSummary({
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
+  const fallbackModel = session.child
+    ? structuredAgentSessionRuntimeFallbackModel(session.child)
+    : undefined
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -106,6 +110,7 @@ export function structuredAgentSessionStatusSummary({
     session.child
       ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
       : {}),
+    ...(fallbackModel ? { fallbackModel } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(session.child?.permissionMode
       ? {
@@ -219,6 +224,7 @@ export function releasedStructuredStatusSummary(
     stopping: _stopping,
     restartResume: _restartResume,
     reportedModel: _reportedModel,
+    fallbackModel: _fallbackModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

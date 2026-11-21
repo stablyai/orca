@@ -2,6 +2,7 @@ import type { AgentSessionRecordAcceptance } from '../../../runtime/agent-sessio
 import type { JournalReceiptRowBinding } from '../../agent-session-journal/journal-writer-effects'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
+import { readNoChoiceOptionResult } from '../options/structured-agent-session-option-observation'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -14,6 +15,7 @@ import type { AgentSessionOperationOutcome } from '../../../../shared/agent-sess
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
+  AgentSessionOptionResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
@@ -266,4 +268,31 @@ export function cancelPlan(params: {
   }
 }
 
-export { setOptionPlan } from '../structured-agent-session-option-mutation-plan'
+/** A null value is the model's return to the agent default. */
+export function setOptionPlan({ key, value }: { key: string; value: string | null }) {
+  return {
+    method: 'agentSession.setOption',
+    fields: { key, value },
+    run: async (ctx) => {
+      const options = { ...ctx.persistedOptions, ...(value === null ? {} : { [key]: value }) }
+      await ctx.persistOptions(options)
+      ctx.publish()
+      return { ok: true, value: { key, value, options } }
+    },
+    // Reapply unsettled picks; only a settled success can be replayed directly.
+    replay: (ctx, outcome) => {
+      if (outcome.status !== 'succeeded') {
+        return null
+      }
+      if (value !== null && Object.hasOwn(outcome, 'optionResult')) {
+        return readNoChoiceOptionResult(outcome.optionResult, { key, value })
+      }
+      return {
+        key,
+        value,
+        ...(value === null ? { modelDefault: ctx.modelDefault === true } : {}),
+        ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
+      }
+    }
+  } satisfies MutationPlan<AgentSessionOptionResult>
+}

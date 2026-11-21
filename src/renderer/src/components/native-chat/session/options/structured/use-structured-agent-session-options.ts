@@ -2,9 +2,7 @@ import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { structuredAgentSessionDefaultModelChoice } from '../../../../../../../shared/structured-agent-session-default-model-choice'
-import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../../../../../../../shared/agent-session-default-model'
-import { useStructuredAgentSessionHostCapability } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { useStructuredAgentSessionModelDefault } from '../../../use-structured-agent-session-model-default'
+import { useStructuredAgentSessionModelDefaultWrite } from './use-structured-agent-session-model-default-write'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -22,6 +20,9 @@ import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
 import { useNativeChatCliUpdate } from '../../../host-access/native-chat-cli-update'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
+import { useStructuredAgentSessionModelDefault } from './use-structured-agent-session-model-default'
+import { AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { useStructuredAgentSessionHostCapability } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
@@ -32,7 +33,6 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const { agent, fence, launch, providerVisible, sessionId, transportEnabled, turnId } = args
   const environmentId = args.target.kind === 'environment' ? args.target.environmentId : null
   const target = useMemo(() => runtimeTargetForOwnerEnvironment(environmentId), [environmentId])
-  const mutate = args.mutate
   const capturePresentation = args.capturePresentation
   const providerStarting = args.providerStarting ?? false
   const newLaunch = launch?.kind === 'new'
@@ -75,34 +75,38 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   })
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
+  // Default needs a chat the host already holds; before that, a pick is held for the launch.
+  const offersDefault =
+    useStructuredAgentSessionHostCapability(
+      target,
+      AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY
+    ) &&
+    transportEnabled &&
+    fence !== null
 
-  const takesModelDefault = useStructuredAgentSessionHostCapability(
-    target,
-    AGENT_SESSION_DEFAULT_MODEL_CAPABILITY
-  )
+  // A host that takes no per-message options would apply a pick to the turn already running.
   const acceptsTurnPicks =
     acceptsPicks && (!(args.isWorking ?? turnId !== null) || takesSendOptions || takesSelection)
   const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
   )
-  const renderedView = optionView(optionState, launchSeedOptions, launch?.explicitOptions)
   const lockSnapshot = (
     snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>,
-    view: typeof renderedView
+    view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
   ) => {
-    const choices =
-      takesModelDefault && fence !== null
-        ? snapshot.map((descriptor) =>
-            descriptor.id === 'model'
-              ? {
-                  ...descriptor,
-                  settable: true,
-                  defaultChoice: structuredAgentSessionDefaultModelChoice(view)
-                }
-              : descriptor
-          )
-        : snapshot
+    // Default stays choosable even where the host lists no model to pick; locks still apply.
+    const choices = offersDefault
+      ? snapshot.map((descriptor) =>
+          descriptor.id === 'model'
+            ? {
+                ...descriptor,
+                settable: true,
+                defaultChoice: structuredAgentSessionDefaultModelChoice(view)
+              }
+            : descriptor
+        )
+      : snapshot
     return !acceptsPicks
       ? lockedStructuredAgentSessionOptionSnapshot(choices)
       : !acceptsTurnPicks
@@ -115,12 +119,9 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   }
   useLayoutEffect(() => {
     interactionReadyRef.current = acceptsPicks
-    lockSnapshotRef.current = (snapshot) =>
-      lockSnapshot(
-        snapshot,
-        optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
-      )
+    lockSnapshotRef.current = lockSnapshot
   })
+  const renderedView = optionView(optionState, launchSeedOptions, launch?.explicitOptions)
   const optionSnapshot = structuredAgentSessionOptionAvailability({
     controller,
     view: renderedView,
@@ -190,6 +191,15 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   )
   useNativeChatPaneLifetimeEffect(useCallback(() => () => writer.detach(), [writer]))
   const setStructuredOption = writer.setOption
+  const writeModelDefault = useStructuredAgentSessionModelDefaultWrite(args.mutate, {
+    controller,
+    activeOptionRecordRef,
+    isCurrentContext,
+    updateOptionState,
+    optionPicks,
+    writes,
+    beginOptionWrite
+  })
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
       await setStructuredOption(id, value)
@@ -203,25 +213,16 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
-  const resetOption = useStructuredAgentSessionModelDefault({
+  const resetModel = useStructuredAgentSessionModelDefault({
     agent,
     target,
-    mutate,
-    takesModelDefault,
-    acceptsPicks: acceptsTurnPicks,
-    fence,
-    launchSeedOptions,
-    lockSnapshotRef,
+    mutate: writeModelDefault,
     source: {
-      optionView,
-      optionStateRef,
-      activeOptionRecordRef,
       controller,
-      optionPicks,
-      writes,
-      beginOptionWrite,
+      activeOptionRecordRef,
       isCurrentContext,
-      updateOptionState
+      updateOptionState,
+      rereadOptions
     }
   })
   const { demandModelCatalog } = hostCatalog
@@ -235,7 +236,17 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const openCliUpdateFailure = cliUpdate?.openFailure
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
-      ...(takesModelDefault ? { resetOption } : {}),
+      ...(offersDefault
+        ? {
+            resetOption: async (id: string) => {
+              // A busy host that takes no per-message options would apply it to the running turn.
+              if (id === 'model' && acceptsTurnPicks) {
+                await resetModel()
+              }
+              return { snapshot: optionSnapshot }
+            }
+          }
+        : {}),
       getSnapshot: () => optionSnapshot,
       demandModelCatalog,
       ...(cliUpdateAgent && cliUpdateModels && startCliUpdate && openCliUpdateFailure
@@ -260,8 +271,9 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       optionSnapshot,
       demandModelCatalog,
       writer,
-      resetOption,
-      takesModelDefault,
+      offersDefault,
+      acceptsTurnPicks,
+      resetModel,
       cliUpdateAgent,
       cliUpdateModels,
       cliUpdateRunnable,

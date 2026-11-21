@@ -1,4 +1,3 @@
-export type { AgentSessionOptionResult } from './options/protocol/agent-session-options-result'
 import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
 import type { AgentSessionUnavailable } from './failures/agent-session-availability'
 import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
@@ -200,6 +199,9 @@ export type AgentSessionSubscribeEvent =
 /** An open async question: its row, which Skip names, and its text bounded like a status preview. */
 export type AgentSessionAwaitedQuestion = { itemId: string; text: string }
 
+/** An open approval: the tool it asks to run and its command's first line, bounded like a status preview. */
+export type AgentSessionAwaitedApproval = { tool: string; input?: string }
+
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
   usageLimitContinue?: AgentSessionUsageLimitContinue
@@ -222,9 +224,12 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
+  /** The chat follows the agent's default model, which `model` names once known. Absent from older hosts. */
   modelDefault?: boolean
   /** Current child's reported execution model, independent of the next-turn selection. */
   reportedModel?: string
+  /** The current child's provider fallback model; moving it makes clients re-read options. */
+  fallbackModel?: string
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
@@ -251,6 +256,9 @@ export type AgentSessionStatusSummary = {
   /** The newest async question row the person skipped: clients hide it and every earlier question.
    *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
   asyncQuestionsSkippedThrough?: string
+  /** The first prompt waiting on the person, when it is an approval; set only while `status` is
+   *  'attention'. Older hosts omit it. */
+  awaitsApproval?: AgentSessionAwaitedApproval
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -372,6 +380,15 @@ export type AgentSessionPromptResult = {
   itemId: string
   revision: number
   resolution: AgentJournalResolution
+}
+
+export type AgentSessionOptionResult = {
+  key: string
+  /** Null when the model went back to the agent's default. */
+  value: string | null
+  modelDefault?: boolean
+  /** Full effective next-turn values when the provider reconciled related options. */
+  options?: Record<string, string>
 }
 
 export type AgentSessionOptionChoice = {

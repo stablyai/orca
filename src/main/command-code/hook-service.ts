@@ -57,9 +57,8 @@ function getManagedCommand(scriptPath: string): string {
     : getPosixManagedCommand(scriptPath)
 }
 
-// Command Code scrubs hook env; its script recovers the pane from ancestor processes.
 function getPosixManagedCommand(scriptPath: string): string {
-  return wrapPosixHookCommand(scriptPath, {}, { skipPaneGuard: true })
+  return wrapPosixHookCommand(scriptPath)
 }
 
 function buildInstalledConfig(

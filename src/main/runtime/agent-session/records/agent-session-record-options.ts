@@ -1,8 +1,16 @@
-import { effectiveAgentSessionOptions } from '../../../../shared/agent-session-default-model'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+
+/** What the chat runs on: the agent default it follows, under the chat's own picks. */
+export function effectiveAgentSessionOptions(
+  record: Pick<AgentSessionRecord, 'options' | 'defaultModelOptions'>
+): Record<string, string> | undefined {
+  return record.defaultModelOptions === undefined
+    ? record.options
+    : { ...record.defaultModelOptions, ...record.options }
+}
 
 export function replaceAgentSessionRecordOptions(
   record: AgentSessionRecord,
@@ -14,16 +22,18 @@ export function replaceAgentSessionRecordOptions(
   if (lease.runtimeFence !== replacement.fence || (lease.claimStatus !== 'live' && !atRest)) {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
-  return 'options' in replacement
-    ? {
-        ...record,
-        options: { ...replacement.options },
-        ...('defaultModelOptions' in replacement
-          ? { defaultModelOptions: replacement.defaultModelOptions ?? undefined }
-          : {}),
-        updatedAt: replacement.now
-      }
-    : { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
+  if (!('options' in replacement)) {
+    return { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
+  }
+  const { defaultModelOptions: saved, ...rest } = record
+  const defaults =
+    replacement.defaultModelOptions === undefined ? saved : replacement.defaultModelOptions
+  return {
+    ...rest,
+    options: { ...replacement.options },
+    ...(defaults ? { defaultModelOptions: { ...defaults } } : {}),
+    updatedAt: replacement.now
+  }
 }
 
 /** Saved catalog only; missing model evidence permits options without starting discovery. */
@@ -38,17 +48,17 @@ export type AgentSessionOptionPick = {
   now: number
 }
 
+/** A model pick leaves the agent default; what the default resolved to stays the chat's own. */
 export function pickAgentSessionOption(
   record: AgentSessionRecord,
   { key, value, models: _models, ...at }: AgentSessionOptionPick
 ): AgentSessionRecord {
-  const options = {
-    ...(key === 'model' ? effectiveAgentSessionOptions(record) : record.options),
-    [key]: value
-  }
   return replaceAgentSessionRecordOptions(record, {
     ...at,
-    options,
+    options: {
+      ...(key === 'model' ? effectiveAgentSessionOptions(record) : record.options),
+      [key]: value
+    },
     ...(key === 'model' ? { defaultModelOptions: null } : {})
   })
 }
@@ -63,31 +73,31 @@ export type AgentSessionRanOptions = {
   now: number
 }
 
+/** A chat on the agent default learns what it ran into that default, never into its own picks. */
 export function recordAgentSessionRanOptions(
   record: AgentSessionRecord,
   { model, options, models: _models, ...at }: AgentSessionRanOptions
 ): AgentSessionRecord {
-  const defaultSelected = record.defaultModelOptions !== undefined
-  if (record.defaultModelOptions?.model !== undefined) {
+  const defaults = record.defaultModelOptions
+  if (defaults?.model !== undefined) {
     return record
   }
-  const saved = (defaultSelected ? record.defaultModelOptions : record.options) ?? {}
-  // Another model won meanwhile: none of this run's options belong to it.
+  const saved = defaults ?? record.options ?? {}
+  // These run options cannot follow a concurrent model change.
   if (saved.model !== undefined && saved.model !== model) {
     return record
   }
   const added = Object.entries({ ...options, model }).filter(
     ([key]) => key !== 'interactionMode' && saved[key] === undefined
   )
-  return added.length === 0
-    ? record
-    : replaceAgentSessionRecordOptions(record, {
-        ...at,
-        options: defaultSelected
-          ? (record.options ?? {})
-          : { ...Object.fromEntries(added), ...saved },
-        ...(defaultSelected
-          ? { defaultModelOptions: { ...Object.fromEntries(added), ...saved } }
-          : {})
-      })
+  if (added.length === 0) {
+    return record
+  }
+  const filled = { ...Object.fromEntries(added), ...saved }
+  return replaceAgentSessionRecordOptions(record, {
+    ...at,
+    ...(defaults
+      ? { options: record.options ?? {}, defaultModelOptions: filled }
+      : { options: filled })
+  })
 }

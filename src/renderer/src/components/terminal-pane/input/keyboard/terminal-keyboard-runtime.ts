@@ -26,6 +26,7 @@ import {
 } from '../paste/terminal-captured-input-dispatch'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
@@ -167,6 +168,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       resolveTerminalInputHostPlatform({
         clientPlatform: shortcutPlatform,
         state: useAppStore.getState(),
+        statuses: readRuntimeStatuses(),
         worktreeId,
         transport: pane ? (paneTransportsRef.current.get(pane.id) ?? null) : null
       }) === 'win32'

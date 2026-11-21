@@ -1,12 +1,12 @@
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import { effectiveAgentSessionOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
 import type {
   AgentSessionReplayContext,
   AgentSessionTurnContext
 } from './structured-agent-session-turns'
-import { effectiveAgentSessionOptions } from '../../../../shared/agent-session-default-model'
 
 export function mutationTurnContext<TValue>(
   request: Omit<AgentSessionMutationRequest<TValue>, 'plan'>,
@@ -15,8 +15,8 @@ export function mutationTurnContext<TValue>(
 ): AgentSessionTurnContext {
   const fence = record.lease.runtimeFence
   const { sessionId } = request.envelope
-  const current = request.store.getRecord(sessionId)
-  const persistedOptions = current ? effectiveAgentSessionOptions(current) : undefined
+  const saved = request.store.getRecord(sessionId)
+  const persistedOptions = saved && effectiveAgentSessionOptions(saved)
   return {
     sessionId,
     journal,
@@ -28,7 +28,7 @@ export function mutationTurnContext<TValue>(
     agent: record.provider,
     logger: request.logger,
     ...(persistedOptions ? { persistedOptions } : {}),
-    defaultModelSelected: current?.defaultModelOptions !== undefined,
+    modelDefault: saved?.defaultModelOptions !== undefined,
     persistOptions: (options) =>
       request.store
         .replaceSessionOptions({
@@ -54,10 +54,10 @@ export function mutationReplayContext<TValue>(
     sessionId: record.sessionId,
     journal,
     fence: record.currentFence,
-    defaultModelSelected: record.defaultModelOptions !== undefined,
     agent: record.provider,
     ...(request.currentWork ? { currentWork: request.currentWork } : {}),
     ...(persistedOptions ? { persistedOptions } : {}),
+    modelDefault: record.defaultModelOptions !== undefined,
     now: request.now
   }
 }

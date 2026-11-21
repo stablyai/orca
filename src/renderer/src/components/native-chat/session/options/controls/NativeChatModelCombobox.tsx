@@ -11,7 +11,6 @@ import {
 import { nativeChatModelDescription } from './native-chat-model-description'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
-  SessionOptionDescriptor,
   SessionOptionsCliUpdate,
   SessionOptionSelectChoice
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -33,11 +32,20 @@ type NativeChatModelComboboxProps = {
   busy: boolean
   /** Called for a model other than the current one; the list stays as it is. */
   onSelect: (value: string) => void
-  defaultChoice?: SessionOptionDescriptor['defaultChoice']
-  onReset?: () => void
+  /** Offered where the host can return the chat to the agent's own model. */
+  defaultChoice?: {
+    selected: boolean
+    modelLabel: string | undefined
+    /** The reported default model's own description, under its name. */
+    modelDescription?: string
+    onSelect: () => void
+  }
   /** The chat host's own CLI, too old for models on Orca's list. */
   cliUpdate?: SessionOptionsCliUpdate
 }
+
+// Outside any model id's namespace, so it can never select a listed model.
+const DEFAULT_MODEL_ROW = 'orca:agent-default-model'
 
 // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
 function modelChoiceFilter(value: string, search: string, keywords?: string[]): number {
@@ -54,7 +62,6 @@ export function NativeChatModelCombobox({
   busy,
   onSelect,
   defaultChoice,
-  onReset,
   cliUpdate
 }: NativeChatModelComboboxProps): React.JSX.Element {
   const t = useTranslate()
@@ -72,6 +79,10 @@ export function NativeChatModelCombobox({
     (choice) => searching || !choice.hidden || choice.value === currentValue
   )
   const legacyChoices = listed.filter(folded)
+  const defaultLabel = t('components.native-chat.composer.defaultModel', 'Default')
+  const defaultDescription =
+    defaultChoice?.modelLabel ??
+    t('components.native-chat.composer.defaultModelDescription', "Use the agent's configured model")
   // A model the CLI already lists is pickable, whatever the list says it needs.
   const needsUpdate = cliUpdate
     ? cliUpdate.models.filter((model) => !choices.some((choice) => choice.value === model.id))
@@ -110,7 +121,7 @@ export function NativeChatModelCombobox({
       density="menu"
       label={searchLabel}
       filter={modelChoiceFilter}
-      defaultValue={currentValue}
+      defaultValue={defaultChoice?.selected ? DEFAULT_MODEL_ROW : currentValue}
     >
       <CommandInput ref={search} placeholder={searchLabel} value={query} onValueChange={setQuery} />
       {readOnly && readOnlyReason ? (
@@ -132,33 +143,23 @@ export function NativeChatModelCombobox({
         </CommandEmpty>
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
-            {defaultChoice && onReset ? (
+            {defaultChoice ? (
               <CommandItem
-                value="provider-default-action"
-                keywords={[
-                  t('components.native-chat.composer.defaultModel', 'Default'),
-                  defaultChoice.model?.label ?? '',
-                  defaultChoice.model?.description ?? ''
-                ]}
+                value={DEFAULT_MODEL_ROW}
+                keywords={[defaultLabel, defaultDescription, defaultChoice.modelDescription ?? '']}
                 selection="palette"
                 disabled={readOnly}
                 aria-current={defaultChoice.selected || undefined}
                 onSelect={() => {
                   if (!defaultChoice.selected) {
-                    onReset()
+                    defaultChoice.onSelect()
                   }
                 }}
               >
                 <NativeChatSessionOptionChoiceBody
-                  label={t('components.native-chat.composer.defaultModel', 'Default')}
-                  description={
-                    defaultChoice.model?.label ??
-                    t(
-                      'components.native-chat.composer.defaultModelNotReported',
-                      'Default model not reported'
-                    )
-                  }
-                  detail={defaultChoice.model?.description}
+                  label={defaultLabel}
+                  description={defaultDescription}
+                  detail={defaultChoice.modelDescription}
                 />
                 <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
                   {defaultChoice.selected ? (

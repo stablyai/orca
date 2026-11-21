@@ -31,6 +31,7 @@ const childRuns = new WeakMap<
     reportedModel?: string
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
+    fallbackModel?: string
   }
 >()
 
@@ -43,6 +44,13 @@ export function structuredAgentSessionRuntimeModel(
   child: StructuredAgentSessionProviderChild
 ): string | undefined {
   return child.phase === 'ready' ? childRuns.get(child)?.reportedModel : undefined
+}
+
+/** Moves the option stamp; the options read decides whether the fallback still outranks the selection. */
+export function structuredAgentSessionRuntimeFallbackModel(
+  child: StructuredAgentSessionProviderChild
+): string | undefined {
+  return child.phase === 'ready' ? childRuns.get(child)?.fallbackModel : undefined
 }
 
 /** The current child's startup report or applied evidence; never saved intent or send authority. */
@@ -59,6 +67,9 @@ export function noteStructuredAgentSessionRuntimeOptions(
   initial = false
 ): void {
   const previous = childRuns.get(child)
+  if ('fallbackModel' in reported) {
+    childRuns.set(child, { ...previous, fallbackModel: reported.fallbackModel })
+  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)

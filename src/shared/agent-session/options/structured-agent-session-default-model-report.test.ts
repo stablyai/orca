@@ -5,8 +5,10 @@ import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
 } from './structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from './view/structured-agent-session-option-snapshot'
-import { structuredAgentSessionMessageSelection } from './view/structured-agent-session-option-view'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot
+} from './view/structured-agent-session-option-view'
 import {
   nativeChatModelPillLabel,
   sayNativeChatSessionOptionEnglish
@@ -26,11 +28,11 @@ it('shows the reported execution model while retaining the saved Default choice'
     }
   )
   const model = {
-    ...structuredAgentSessionOptionSnapshot(state).find((option) => option.id === 'model')!,
+    ...structuredAgentSessionShownSnapshot(state).find((option) => option.id === 'model')!,
     defaultChoice: structuredAgentSessionDefaultModelChoice(state)
   }
   expect(model.defaultChoice?.selected).toBe(true)
   expect(model.reportedModel).toBe('claude-opus-4-8')
-  expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Claude Opus 4.8')
+  expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Opus 4.8')
   expect(structuredAgentSessionMessageSelection(state)).toEqual({})
 })

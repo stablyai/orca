@@ -1,7 +1,8 @@
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { useCallback, type RefObject } from 'react'
 import { structuredAgentSessionDefaultModelChoice } from '../../../src/shared/structured-agent-session-default-model-choice'
 import {
+  STRUCTURED_MODEL_DEFAULT_PICK,
   beginStructuredOptionPick,
   settleStructuredOptionPick,
   structuredOptionPickCommit
@@ -19,8 +20,6 @@ import type { StructuredAgentSessionMutate } from './native-chat/agent-session/m
 import type { useMobileStructuredOptionState } from './native-chat/input/session-options/use-mobile-structured-option-state'
 import { nativeChatSessionOptionsWrite } from './native-chat/input/session-options/mobile-native-chat-options-operations'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-
-export const MOBILE_MODEL_DEFAULT_PICK = ''
 
 export function mobileStructuredModelDefaultSnapshot(
   snapshot: SessionOptionDescriptor[],
@@ -93,7 +92,7 @@ export function useMobileStructuredModelDefault(args: {
       const pick = beginStructuredOptionPick(
         optionPicks.current,
         id,
-        MOBILE_MODEL_DEFAULT_PICK,
+        STRUCTURED_MODEL_DEFAULT_PICK,
         false
       )
       const sameRecord = () => isCurrentContext() && activeOptionRecordRef.current === targetRecord
@@ -117,15 +116,16 @@ export function useMobileStructuredModelDefault(args: {
             result.value.modelDefault
               ? commitStructuredAgentSessionModelDefault(state, committed)
               : {
-                  ...commitStructuredAgentSessionOptionValues(state, committed, 'picked', id),
-                  modelDefault: false
+                  ...commitStructuredAgentSessionOptionValues(state, committed),
+                  modelDefault: undefined
                 }
           )
-          if (result.value.modelDefault && isTuiAgent(agent)) {
-            void nativeChatSessionOptionsWrite
-              .request(client, { type: 'clear-model', agent })
-              .catch(() => {})
-          }
+        }
+        // The host took the reset, so new chats follow it even after this view moved on.
+        if (result.status === 'accepted' && result.value.modelDefault && isTuiAgent(agent)) {
+          void nativeChatSessionOptionsWrite
+            .request(client, { type: 'clear-model', agent })
+            .catch(() => {})
         }
         readsBack = result.status !== 'rejected'
         return snapshot()

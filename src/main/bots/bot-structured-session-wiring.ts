@@ -23,6 +23,7 @@ import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structu
 import type { BotChatJournal } from './bot-turn-rows'
 import type { BotRecentChatsSection } from './bot-recent-chats'
 import { BOT_FIRST_RUN_RULES } from './bot-preamble'
+import { linkBotOwnSkills } from './bot-own-skills'
 import { botSessionInstructions } from './bot-session-instructions'
 import type { BotController } from './bot-controller'
 import type { BotWorkRecord } from './bot-work-record'
@@ -56,7 +57,7 @@ export function botStructuredSessionWiring(deps: {
   work: Pick<BotWorkRecord, 'turnNote' | 'handedOver' | 'turnEnded'>
   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
   /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
-  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
+  requestTurnEnded?: (sessionId: string, turnId: string, ended?: TurnEndedVerdict) => void
   /** The bots the host holds when this is installed; none when it has no store yet. */
   botsAtInstall?: readonly Bot[]
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
@@ -202,6 +203,9 @@ export function botStructuredSessionWiring(deps: {
       const bot = botOfRecord(record)
       if (bot) {
         await deps.scrubToolSecrets?.(bot)
+        await linkBotOwnSkills(botHomeFolder(bot)).catch((error: unknown) => {
+          console.warn("[bots] the bot's own skills could not be linked", bot.id, error)
+        })
       }
     },
     resolveSessionToolServers: async (record, launchDirectory) => {
@@ -296,7 +300,7 @@ export function botStructuredSessionWiring(deps: {
       },
       turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
         deps.work.turnEnded(sessionId)
-        deps.requestTurnEnded?.(sessionId, ended)
+        deps.requestTurnEnded?.(sessionId, turnId, ended)
         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
       }
     },

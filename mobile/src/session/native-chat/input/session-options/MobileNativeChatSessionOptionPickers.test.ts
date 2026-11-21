@@ -77,9 +77,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     snapshot: SessionOptionDescriptor[],
     isWorking = false,
     requestedPage: string | null = null,
-    busy: { pendingId?: string; sendInFlight?: boolean } = {}
+    busy: { pendingId?: string; sendInFlight?: boolean } = {},
+    optionSurface?: MobileNativeChatSessionOptionsController['optionSurface']
   ) => {
     const controller: MobileNativeChatSessionOptionsController = {
+      ...(optionSurface ? { optionSurface } : {}),
       snapshot,
       pendingId: busy.pendingId ?? null,
       setOption,
@@ -167,6 +169,31 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => rowByText('Permissions').props.onPress())
     await act(async () => rowByText('Full access').props.onPress())
     expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+  })
+
+  it('names Default as unreported until the host reports its model', async () => {
+    const resetOption = vi.fn(async () => ({ snapshot: [] }))
+    const surface = {
+      getSnapshot: () => [],
+      subscribe: () => () => {},
+      setOption: async () => ({ snapshot: [] }),
+      invokeAction: async () => ({ snapshot: [] }),
+      resetOption
+    }
+    mount(
+      [{ ...MODEL_DESCRIPTOR, defaultChoice: { selected: false } }],
+      false,
+      'model',
+      {},
+      surface
+    )
+    await act(async () => rowByText('Default').props.onPress())
+    expect(resetOption).toHaveBeenCalledExactlyOnceWith('model')
+    expect(
+      findAllByHostType(renderer!.root, 'Text').some(
+        (node) => node.props.children === 'Default model not reported'
+      )
+    ).toBe(true)
   })
 
   it('selects an effort from the /effort page', async () => {

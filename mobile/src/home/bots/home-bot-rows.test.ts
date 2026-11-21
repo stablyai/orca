@@ -80,12 +80,16 @@ const on = (...answers: BotComputerAnswer[]): HomeComputerBots => ({
 })
 
 function input(overrides: Partial<HomeBotRowsInput>): HomeBotRowsInput {
+  const hostStates = overrides.hostStates ?? { studio: 'connected', air: 'connected' }
   return {
     hosts: [
       { id: 'studio', name: 'Studio Mac' },
       { id: 'air', name: 'MacBook Air' }
     ],
-    hostStates: { studio: 'connected', air: 'connected' },
+    hostStates,
+    unreachableHosts: new Set(
+      Object.keys(hostStates).filter((id) => hostStates[id] === 'disconnected')
+    ),
     botsByHost: {},
     freshHosts: new Set(['studio', 'air']),
     kept: {},
@@ -151,9 +155,9 @@ describe('Home bots', () => {
       })
     )
     expect(result.rows.map((row) => [row.title, row.hostLabel, row.needsYou, row.dot])).toEqual([
-      ['Bot builder', 'Studio Mac', 2, 'inactive'],
+      ['Bot builder', 'Studio Mac', 2, 'active'],
       ['Atlas', 'MacBook Air', 0, 'working'],
-      ['ux-designer', 'Studio Mac', 0, 'inactive']
+      ['ux-designer', 'Studio Mac', 0, 'active']
     ])
     expect(result.needsYou).toBe(2)
     expect(result.rows.map((row) => row.preview)).toEqual([
@@ -336,6 +340,7 @@ describe('Home bots', () => {
       })
     )
     expect(result.rows).toEqual([])
+    expect(result.computers.map((entry) => entry.executionHost)).not.toContain('runtime:build-box')
     expect(result.listable).toBe(false)
     expect(result.unavailable.map((entry) => [entry.label, entry.reason])).toEqual([
       ['Linux box', 'unreachable'],
@@ -396,29 +401,6 @@ describe('Home bots', () => {
       ['Nightly CI', 'air', undefined]
     ])
     expect(result.needsYou).toBe(2)
-  })
-
-  it('offers no server behind a computer whose Bots switch is off', () => {
-    const result = homeBotRows(
-      input({
-        hosts: [{ id: 'studio', name: 'Studio Mac' }],
-        botsByHost: {
-          studio: on(
-            computer('studio', 'local', listed('studio', [], { enabled: false })),
-            computer('studio', 'runtime:build-box', listed('studio', [bot('ci', 'CI')]), {
-              serverLabel: 'build-box'
-            })
-          )
-        }
-      })
-    )
-    const offered = pairedNewBotComputers(
-      result.computers,
-      (entry) => result.labels.get(entry.key) ?? ''
-    )
-    expect(offered.map((entry) => [entry.label, entry.refusal])).toEqual([
-      ['Studio Mac', 'Bots are off on Studio Mac']
-    ])
   })
 
   it('leaves out a computer that isn’t connected', () => {

@@ -153,7 +153,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     tab: RuntimeMobileSessionBrowserTab
   ): boolean {
     // A closed window's webviews are gone, so its rows need live pages like any other.
-    if (tab.placement?.kind === 'client' || !this.getAvailableAuthoritativeWindow()) {
+    if (tab.placement?.kind === 'client' || !this.hasAuthoritativeWindow()) {
       return false
     }
     return !this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)

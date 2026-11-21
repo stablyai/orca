@@ -71,6 +71,9 @@ export function admitsStructuredAgentSessionOption(
   return !(
     !context.isCurrentContext() ||
     !context.ready ||
+    context.snapshot.some(
+      (descriptor) => descriptor.id === id && descriptor.disabledReason === 'host-update-required'
+    ) ||
     (!view.catalog && id !== 'interactionMode') ||
     encoded === null ||
     (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
@@ -180,8 +183,7 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       const pick = structuredAgentSessionOptionPicks(
         view,
         { [id]: encoded },
-        context.existingChat,
-        id
+        context.existingChat
       )[0]
       const operation = controller.issue(
         id,

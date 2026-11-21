@@ -44,25 +44,3 @@ export type StructuredSessionConversationSupport = {
   /** The fence the read answered for; rewind support is only that runtime's. */
   fence: number | null
 }
-
-import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
-
-export type StructuredAgentSessionOptionStateArgs = {
-  agent: AgentType
-  optionCatalog: AgentSessionOptionCatalog | null
-  identity: string
-  fence: number | null
-  sessionId: string
-  target: RuntimeClientTarget
-  /** Launch context used to read the host’s saved model listing. */
-  newLaunch: boolean
-  worktree?: string
-  seedsModel: boolean
-  providerVisible: boolean
-  providerStarting: boolean
-  /** The option values the host's status carries: a pick made on another device moves it. */
-  hostOptionStamp: string
-  readsBeforeStart: boolean
-  turnId: string | null
-  unloadedTurnRevisions: number | undefined
-}

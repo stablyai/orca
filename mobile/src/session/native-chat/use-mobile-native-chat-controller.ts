@@ -293,7 +293,7 @@ export function useMobileNativeChatController(
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
-    nativeChatSessionCommands: nativeChatLane.sessionCommands,
+    ...nativeChatLane.controllerFields,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
     nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
     nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null,

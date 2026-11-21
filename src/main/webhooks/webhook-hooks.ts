@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   automationWebhookTrigger,
-  hasAutomationSchedule,
+  webhookIsOnlyStart,
   isWebhookTrigger,
   type AutomationEventTrigger,
   type AutomationWebhookTrigger
@@ -63,10 +63,12 @@ export function dropWebhookRule<T>(
     remove: (id: string) => T
   }
 ): T {
-  const rest = (automation.on ?? []).filter((trigger) => !isWebhookTrigger(trigger))
-  return rest.length === 0 && !hasAutomationSchedule(automation)
+  return webhookIsOnlyStart(automation)
     ? writes.remove(automation.id)
-    : writes.setTriggers(automation.id, rest)
+    : writes.setTriggers(
+        automation.id,
+        (automation.on ?? []).filter((trigger) => !isWebhookTrigger(trigger))
+      )
 }
 
 export type WebhookHooksDeps = {

@@ -1,4 +1,4 @@
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { act } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
 
@@ -11,6 +11,7 @@ import {
   deferred,
   descriptorFor,
   mountOptions,
+  OPTIONS,
   optionsClient,
   recordingMutate
 } from './native-chat/input/session-options/use-mobile-structured-agent-options.test-fixture'
@@ -19,8 +20,6 @@ import {
   resolveStructuredLaunchSeedOptions
 } from '../../../src/shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { NativeChatSessionOptionsMutation } from '../../../src/shared/rpc-contract/client-ui/client-settings-params'
-
-import { OPTIONS } from './mobile-structured-agent-option-test-data'
 
 describe('useMobileStructuredAgentOptions Default model', () => {
   it.each([false, true])(
@@ -152,6 +151,47 @@ describe('useMobileStructuredAgentOptions Default model', () => {
       await mounted.unmount()
     }
   )
+  it('clears the new-chat model for an accepted reset after the view moved on', async () => {
+    const client = optionsClient(async () => OPTIONS)
+    const inFlight = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const mounted = await mountOptions({
+      ...BASE,
+      client: client.client,
+      mutate: recordingMutate(() => inFlight.promise).mutate,
+      supportsDefault: true
+    })
+    let reset: Promise<unknown> | undefined
+    await act(async () => {
+      reset = mounted.current().optionSurface.resetOption?.('model')
+    })
+    await mounted.rerender({ sessionId: 'session-2' })
+    await act(async () => {
+      inFlight.resolve(
+        accepted(
+          { key: 'model', value: null, modelDefault: true, options: { model: 'gpt-fast' } },
+          true
+        )
+      )
+      await reset
+    })
+    expect(
+      client.methods('settings.mutateNativeChatSessionOptions').map((call) => call.params)
+    ).toEqual([expect.objectContaining({ type: 'clear-model', agent: 'codex' })])
+    await mounted.unmount()
+  })
+  it('keeps Default choosable where the host lists no model to pick', async () => {
+    const client = optionsClient(async () => ({ models: [], current: {} }))
+    const mounted = await mountOptions({
+      ...BASE,
+      client: client.client,
+      mutate: recordingMutate(async () => accepted({ key: 'model', value: null }, true)).mutate,
+      supportsDefault: true
+    })
+    const model = descriptorFor(mounted.current().optionSnapshot, 'model')
+    expect(model?.defaultChoice).toEqual({ selected: false })
+    expect(model?.settable).toBe(true)
+    await mounted.unmount()
+  })
   it('carries the host Default preview without replacing the explicit selected model', async () => {
     let reported = true
     const client = optionsClient(async () => ({

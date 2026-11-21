@@ -172,7 +172,8 @@ export function Footer({
       {error?.message ?? state.error}
     </span>
   ) : (
-    <span className="min-w-0 flex-1 text-xs leading-4 text-muted-foreground">
+    // Its whole width or a line of its own: the hint never cuts off beside the buttons.
+    <span className="min-w-0 grow basis-[max-content] text-xs leading-4 text-muted-foreground">
       {link || read.kind === 'loading'
         ? null
         : t('bots.share.description', 'Anyone with the link can make a copy.')}
@@ -242,7 +243,7 @@ export function Footer({
     )
   }
   return (
-    <div className={foot}>
+    <div className={cn(FOOT, 'flex-wrap')}>
       {signInNotice}
       {link && !error ? (
         <Button
@@ -256,8 +257,10 @@ export function Footer({
         </Button>
       ) : null}
       {message}
-      {second}
-      {primary}
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {second}
+        {primary}
+      </div>
     </div>
   )
 }

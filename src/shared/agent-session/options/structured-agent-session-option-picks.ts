@@ -19,8 +19,7 @@ export type StructuredSessionOptionPick = {
 export function structuredAgentSessionOptionPicks(
   state: StructuredAgentSessionOptionState,
   committed: Readonly<Record<string, string>>,
-  existingChat = false,
-  pickedOptionId?: string
+  existingChat = false
 ): StructuredSessionOptionPick[] {
   if (!state.catalog) {
     return []
@@ -39,15 +38,6 @@ export function structuredAgentSessionOptionPicks(
       (typeof decoded === 'string' && !decoded.trim()) ||
       encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
       ? []
-      : [
-          {
-            ...remembered,
-            optionId,
-            value: decoded,
-            ...(state.modelDefault && pickedOptionId !== 'model'
-              ? { adoptModelAsLaunchDefault: false }
-              : {})
-          }
-        ]
+      : [{ ...remembered, optionId, value: decoded }]
   })
 }

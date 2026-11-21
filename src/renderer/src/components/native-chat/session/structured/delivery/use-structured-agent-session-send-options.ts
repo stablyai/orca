@@ -16,20 +16,10 @@ export function useStructuredAgentSessionSendOptions(
   source: Pick<
     ReturnType<typeof useStructuredAgentSessionOptionState>,
     'optionStateRef' | 'optionView' | 'takesSendOptions' | 'takesSelection'
-  > &
-    Partial<
-      Pick<ReturnType<typeof useStructuredAgentSessionOptionState>, 'optionPicks' | 'controller'>
-    >
-): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> | undefined {
-  const { optionStateRef, optionPicks, optionView, controller, takesSendOptions, takesSelection } =
-    source
+  >
+): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> {
+  const { optionStateRef, optionView, takesSendOptions, takesSelection } = source
   return useCallback(() => {
-    if (
-      (optionPicks && structuredOptionPickIsPending(optionPicks.current, 'model')) ||
-      (!takesSelection && controller?.isPending('model'))
-    ) {
-      return undefined
-    }
     if (!takesSendOptions && !takesSelection) {
       return {}
     }
@@ -44,14 +34,21 @@ export function useStructuredAgentSessionSendOptions(
     return takesSelection
       ? { selection: structuredAgentSessionMessageSelection(view) }
       : { options: structuredAgentSessionSendSelection(view) }
-  }, [
-    controller,
-    launch,
-    optionPicks,
-    optionStateRef,
-    optionView,
-    sessionId,
-    takesSendOptions,
-    takesSelection
-  ])
+  }, [launch, optionStateRef, optionView, sessionId, takesSendOptions, takesSelection])
+}
+
+/** A model write on its way decides what the next message runs on, so sends wait for it. */
+export function useStructuredAgentSessionModelWritePending(
+  source: Pick<
+    ReturnType<typeof useStructuredAgentSessionOptionState>,
+    'optionPicks' | 'controller' | 'takesSelection'
+  >
+): () => boolean {
+  const { optionPicks, controller, takesSelection } = source
+  return useCallback(
+    () =>
+      structuredOptionPickIsPending(optionPicks.current, 'model') ||
+      (!takesSelection && controller.isPending('model')),
+    [controller, optionPicks, takesSelection]
+  )
 }

@@ -193,23 +193,11 @@ export function applyNativeChatSessionOptionSettingsMutation(
     })
   }
   if (mutation.type === 'clear-model') {
-    return clearNativeChatSessionOptionModel(persisted, mutation.agent)
+    const { model: _cleared, ...kept } = persisted?.[mutation.agent] ?? {}
+    return { ...persisted, [mutation.agent]: kept }
   }
-  // Catalog observations cannot clear a saved pick.
+  // Older clients still send catalog-based clearing; observations cannot change a saved pick.
   return null
-}
-
-/** Clear ids proven retired: stale launch flags pass through verbatim and Grok exits fatally. Retain model-scoped options for reselect. */
-export function clearNativeChatSessionOptionModel(
-  persisted: PersistedNativeChatSessionOptions | null | undefined,
-  agent: AgentType
-): PersistedNativeChatSessionOptions {
-  const currentAgent = persisted?.[agent]
-  if (!currentAgent?.model) {
-    return { ...persisted }
-  }
-  const { model: _dropped, ...rest } = currentAgent
-  return { ...persisted, [agent]: rest }
 }
 
 export function updateNativeChatSessionOptionDefaults(args: {

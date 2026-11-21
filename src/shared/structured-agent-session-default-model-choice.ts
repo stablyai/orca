@@ -32,7 +32,20 @@ export function structuredAgentSessionReportedModelChoice(
     return undefined
   }
   const model = withTrackedNativeChatModel(catalog, catalog.models, {
+    agent: state.record.agent,
     model: { value: id, source: 'reported' }
   }).find((model) => model.id === id)
   return { value: id, label: model?.label ?? id }
+}
+
+/** A Default chat's pill names what its child reports running; the selection stays Default. */
+export function withStructuredAgentSessionReportedModel(
+  option: SessionOptionDescriptor,
+  state: StructuredAgentSessionOptionState
+): SessionOptionDescriptor {
+  const reported =
+    option.id === 'model' ? structuredAgentSessionReportedModelChoice(state) : undefined
+  return reported
+    ? { ...option, reportedModel: reported.value, reportedModelLabel: reported.label }
+    : option
 }

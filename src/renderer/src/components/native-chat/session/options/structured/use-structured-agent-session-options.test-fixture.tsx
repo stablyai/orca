@@ -29,6 +29,7 @@ type OptionsFixtureMocks = {
   effortDiscovery: boolean
   coherentCatalog: boolean
   sendSelection: boolean
+  defaultModel: boolean
 }
 
 const mocks: OptionsFixtureMocks = vi.hoisted(() => {
@@ -57,7 +58,8 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
     supportsRemote: vi.fn(),
     effortDiscovery: false,
     coherentCatalog: false,
-    sendSelection: false
+    sendSelection: false,
+    defaultModel: false
   }
 })
 
@@ -93,6 +95,7 @@ vi.mock(
         return (
           (mocks.coherentCatalog && capability === 'agent-session.coherent-model-catalog.v1') ||
           (mocks.sendSelection && capability === 'agent-session.send-selection.v1') ||
+          (mocks.defaultModel && capability === 'agent-session.default-model.v1') ||
           supported
         )
       }

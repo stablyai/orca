@@ -1,4 +1,3 @@
-import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../../agent-session-default-model'
 import { AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES } from '../view/agent-session-attention-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../background-tasks/agent-session-background-task-child-views-capability'
 import {
@@ -147,10 +146,13 @@ export const AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY =
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
+// The host takes a null model pick that returns a chat to the agent's default; older hosts refuse null.
+export const AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY =
+  'agent-session.default-model.v1' as const
+
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
-    AGENT_SESSION_DEFAULT_MODEL_CAPABILITY,
     AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY,
     ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
@@ -202,6 +204,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
     AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_DEFAULT_MODEL_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,

@@ -1,8 +1,7 @@
 import { structuredAgentSessionRuntimeModel } from './structured-agent-session-ran-options'
+import { readStructuredAgentSessionDefaultModel } from './structured-agent-session-default-model-preview'
 import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
 import { supportsSessionAccountUsage } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
-import { effectiveAgentSessionOptions } from '../../../../shared/agent-session-default-model'
-import { readStructuredAgentSessionDefaultModel } from '../structured-agent-session-model-default'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
@@ -33,6 +32,7 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
+import { effectiveAgentSessionOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
@@ -166,7 +166,7 @@ export async function readStructuredAgentSessionOptions(
           (row) => row.isDefault
         )?.id
       : undefined
-  const saved = record ? (effectiveAgentSessionOptions(record) ?? {}) : {}
+  const saved = (record && effectiveAgentSessionOptions(record)) ?? {}
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
@@ -218,6 +218,7 @@ export async function readStructuredAgentSessionOptions(
         )?.id ?? current.model
     }
     const { listedServiceTiers: _tiers, ...view } = structuredAgentSessionCapabilityView(
+      agent,
       inventory,
       current.model,
       fallback,

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
@@ -123,7 +124,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
 
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
 
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 

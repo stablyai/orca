@@ -54,9 +54,12 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
+    /** The chat follows the agent's default model, which `model` names once known. Absent from older hosts. */
     modelDefault?: boolean
-    /** Current child reports this model for display; it is never a next-turn selection. */
+    /** Legacy hosts may include an answer model; clients ignore it when presenting selection. */
     reportedModel?: string
+    /** The current child runs this provider fallback in place of `model`; display only, never sent. */
+    fallbackModel?: string
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */
     reportedEffort?: string
@@ -77,12 +80,4 @@ export type AgentSessionOptionsResult = {
     /** Catalog-supplied values, outside chat intent/provider reports; absent from older hosts, whose answers retain their prior interpretation. */
     defaulted?: readonly ('model' | 'effort')[]
   }
-}
-
-export type AgentSessionOptionResult = {
-  key: string
-  value: string | null
-  modelDefault?: boolean
-  /** Full effective next-turn values when the provider reconciled related options. */
-  options?: Record<string, string>
 }

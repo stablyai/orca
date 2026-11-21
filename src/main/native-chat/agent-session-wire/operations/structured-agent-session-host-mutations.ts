@@ -1,4 +1,3 @@
-import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -10,6 +9,7 @@ import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
+  AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
@@ -32,12 +32,17 @@ import {
   sendPreparation,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
-import { cancelPlan, sendPlan, setOptionPlan } from './structured-agent-session-mutation-plans'
+import {
+  cancelPlan,
+  sendPlan,
+  setOptionPlan,
+  type MutationPlan
+} from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
-import { resetStructuredAgentSessionModel } from '../structured-agent-session-model-default'
+import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { admitStructuredAgentSessionSend } from '../delivery/structured-agent-session-send-admission'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
-import { mutateWithChatStop, abortProviderWaitForStop } from './structured-agent-session-chat-stop'
+import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 import {
   runWithReadyStructuredAgentSessionOperation,
   runAfterRewindStart
@@ -48,6 +53,7 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
 import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
+import { resetStructuredAgentSessionModel } from '../options/structured-agent-session-model-default'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 import { applyStructuredAgentSessionPermissionPick } from '../options/structured-agent-session-live-permission'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
@@ -184,6 +190,28 @@ export function cancelStructuredAgentSessionTurn(
   )
 }
 
+/** Abort unnamed Stop’s startup waits immediately; named stale turns must leave newer starts alone. */
+function abortProviderWaitForStop(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope,
+  plan: MutationPlan<AgentSessionCancelResult>
+): { reached: boolean; handedOver: boolean } | null {
+  const { store } = context.deps
+  if (
+    !agentSessionMutationAdmitsNow({
+      store,
+      callerKey: caller.callerKey,
+      envelope,
+      plan,
+      now: context.now
+    })
+  ) {
+    return null
+  }
+  return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
+}
+
 export function respondToStructuredAgentSessionPrompt(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -204,6 +232,7 @@ export async function setStructuredAgentSessionOption(
   params: { envelope: AgentSessionMutationEnvelope; key: string; value: string | null }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
   const plan = setOptionPlan(params)
+  const { key, value } = params
   const noChoice =
     caller.readsOptionsWithoutModel === false && params.key === 'model' && params.value === ''
   return mutateStructuredAgentSession(
@@ -214,20 +243,18 @@ export async function setStructuredAgentSessionOption(
       ...plan,
       conversationWrite: true,
       run: async (ctx) => {
-        if (params.value === null) {
-          const reset = await resetStructuredAgentSessionModel(
-            context.deps,
-            ctx,
-            Boolean((await context.conversation(ctx.sessionId)).child),
-            params.key
-          )
-          return reset
+        if (value === null) {
+          const hasChild = Boolean(context.sessions.get(ctx.sessionId)?.child)
+          return resetStructuredAgentSessionModel(context.deps, ctx, hasChild)
         }
-        const input = { key: params.key, value: params.value }
+        const input = { key, value }
         const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, input, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
-        if (picked.ok && input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+        if (picked.ok && key === 'model' && value) {
+          context.deps.adapter.noteModelPick?.({ sessionId: ctx.sessionId, fence: ctx.fence })
+        }
+        if (picked.ok && key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
           applyStructuredAgentSessionPermissionPick(context, ctx)
         } else if (picked.ok) {
           const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, input)

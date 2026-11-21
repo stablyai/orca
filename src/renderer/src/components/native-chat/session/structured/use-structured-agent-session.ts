@@ -2,7 +2,10 @@ import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-me
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
-import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-agent-session-send-options'
+import {
+  useStructuredAgentSessionModelWritePending,
+  useStructuredAgentSessionSendOptions
+} from './delivery/use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
 import { structuredAgentSessionSendQueues } from '../../queue/structured-agent-session-queue-request'
@@ -119,6 +122,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ...(launch ? { launch } : {})
   })
   const sendOptions = useStructuredAgentSessionSendOptions(sessionId, launch, sendSource)
+  const isModelWritePending = useStructuredAgentSessionModelWritePending(sendSource)
   // Only a capable host may see `delivery`; a card any host publishes shows, with its actions.
   const queueCapability = useStructuredAgentSessionHostQueuesMessagesState(target)
   const queuedMessageIds = useMemo(
@@ -150,7 +154,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     historyLoaded: transportEnabled && state.status === 'ready',
     isWorking: transportState.isWorking,
     stopping: stopControl.stopping,
-    sendSelection: sendOptions
+    sendSelection: sendOptions,
+    isModelWritePending
   })
 
   const usage = useStructuredAgentSessionContextUsage(journalItems, usageSupport, state.epoch)

@@ -103,8 +103,7 @@ export function holdStructuredAgentSessionLaunchOption(
     ? structuredAgentSessionOptionPicks(
         picker,
         { [id]: encoded },
-        state.intent.params.resumeFrom !== undefined,
-        id
+        state.intent.params.resumeFrom !== undefined
       )[0]
     : undefined
   const model = picker ? (pick?.modelId ?? null) : (state.selection.seed?.model ?? null)

@@ -7,7 +7,11 @@ import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session
 import { readRemoteServerInstallFailure } from './remote-server-install-failure-probe'
 
 type RestartWaitTransport = {
-  getRuntimeStatus: (environmentId: string, timeoutMs?: number) => Promise<RuntimeStatus>
+  getRuntimeStatus: (
+    environmentId: string,
+    timeoutMs?: number,
+    options?: { force?: true }
+  ) => Promise<RuntimeStatus>
   getUpdaterStatus: (
     environmentId: string,
     timeoutMs?: number
@@ -40,7 +44,8 @@ export async function waitForReplacementRuntime(
     const rpcTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
     let installFailure: string | null = null
     try {
-      const status = await transport.getRuntimeStatus(environmentId, rpcTimeoutMs)
+      // A restart the user started must notice the new server now, not after a failure backoff.
+      const status = await transport.getRuntimeStatus(environmentId, rpcTimeoutMs, { force: true })
       const version = status.appVersion?.trim() ?? ''
       const reachedTarget = hasReachedAppVersion(version, install.targetVersion)
       if (status.runtimeId !== install.runtimeId && reachedTarget) {
