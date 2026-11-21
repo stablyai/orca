@@ -1,5 +1,5 @@
 import { startSpan } from '../../../observability/tracer'
-import type { JournalCheckpointOutage } from './journal-checkpoint-owner'
+import type { JournalCheckpointOutage } from './journal-checkpoint-outages'
 
 /** One span per stretch the chat journal's writer checkpointed without its worker. */
 export function reportJournalCheckpointOutage(outage: JournalCheckpointOutage): void {

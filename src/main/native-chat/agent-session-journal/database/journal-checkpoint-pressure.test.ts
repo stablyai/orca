@@ -6,7 +6,8 @@ import { Worker } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import { JournalSqlBatch } from '../journal-sql-batch'
-import { JournalCheckpointOwner, type JournalCheckpointOutage } from './journal-checkpoint-owner'
+import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import type { JournalCheckpointOutage } from './journal-checkpoint-outages'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 
 const cleanup: (() => void | Promise<void>)[] = []
@@ -230,6 +231,7 @@ it('admits a sending chat past WAL pressure while bulk waits, but never past a t
   expect(ids()).toEqual([{ id: 3 }, { id: 4 }])
 })
 
+// Two real worker threads start and the WAL drains after a restart backoff, beyond the default.
 it('restarts a crashed checkpoint worker within the launch and shrinks the WAL it left behind', async () => {
   const { filename, writer } = fixture()
   const reader = new Database(filename, { readonly: true })
@@ -340,7 +342,9 @@ it('keeps a busy checkpoint worker until it is stuck, and replaces one that stay
   workers[0]!.busy(false)
   workers[0]!.answer()
   expect(autocheckpoint()).toBe(0)
-  expect(outages).toEqual([expect.objectContaining({ cause: 'slow', recovered: true, restarts: 0 })])
+  expect(outages).toEqual([
+    expect.objectContaining({ cause: 'slow', recovered: true, restarts: 0 })
+  ])
 
   // Its next check goes unanswered while it sits idle: dead after two silent deadlines, then replaced.
   await vi.waitFor(() => expect(workers.at(-1)).not.toBe(workers[0]))
