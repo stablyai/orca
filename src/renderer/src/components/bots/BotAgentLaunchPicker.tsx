@@ -150,7 +150,8 @@ export function BotAgentLaunchPicker({
   /** A bot from a link: the owner's permission, which another agent opens with in place of the one
    *  shown (the shown one may be this agent's fallback for it). */
   keptPermission?: BotPermissionIntent
-  onChange: (setup: BotAgentSetup) => void
+  /** `permissionPicked` when the owner chose its permission (or cleared it), not only kept the shown one. */
+  onChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const carried =
@@ -177,12 +178,12 @@ export function BotAgentLaunchPicker({
   // A kept setup reseeds the panel's drafts from what the bot now has.
   const scope = useAgentPickerDraftScope(JSON.stringify(value))
   const onPick = useCallback<ComponentProps<typeof AgentLaunchPicker>['onPick']>(
-    (agent, draft) => {
+    (agent, draft, _entry, _surface, permissionPicked) => {
       if (!isBotAgent(agent)) {
         return
       }
       if (draft) {
-        onChange(botAgentSetupFromDraft(agent, draft))
+        onChange(botAgentSetupFromDraft(agent, draft), permissionPicked)
       } else if (agent !== value.agent) {
         // Another agent's row: its own defaults, and the bot's permission where it offers it.
         const permissionMode = permissionOn(agent, carried)
@@ -194,10 +195,13 @@ export function BotAgentLaunchPicker({
   const resetLabel = t('bots.new.useChatDefaults', 'Use chat defaults')
   const canReset = !inherit && Boolean(value.launch || (withPermission && value.permissionMode))
   const reset = () => {
-    onChange({
-      agent: value.agent,
-      ...(!withPermission && value.permissionMode ? { permissionMode: value.permissionMode } : {})
-    })
+    onChange(
+      {
+        agent: value.agent,
+        ...(!withPermission && value.permissionMode ? { permissionMode: value.permissionMode } : {})
+      },
+      withPermission
+    )
   }
   const extraChoice = inherit
     ? {

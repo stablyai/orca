@@ -62,6 +62,23 @@ describe('useBotAgentSetup with a kept permission', () => {
     expect(result.current.setup).toEqual({ agent: 'codex' })
   })
 
+  it('takes the shown fallback when the owner chooses it, so Claude no longer revives the kept mode', () => {
+    const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'accept-edits'))
+    act(() => result.current.setSetup({ agent: 'codex' }))
+    expect(result.current.setup).toEqual({ agent: 'codex', permissionMode: 'ask' })
+    act(() => result.current.setSetup({ agent: 'codex', permissionMode: 'ask' }, true))
+    expect(result.current.intent).toBe('ask')
+    act(() => result.current.setSetup({ agent: 'claude', permissionMode: 'ask' }))
+    expect(result.current.setup).toEqual({ agent: 'claude', permissionMode: 'ask' })
+  })
+
+  it('takes Same as chats chosen on another agent’s pane as the chats’ own', () => {
+    const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'ask'))
+    act(() => result.current.setSetup({ agent: 'codex' }, true))
+    expect(result.current.intent).toBe('inherit')
+    expect(result.current.setup).toEqual({ agent: 'codex' })
+  })
+
   it('takes another mode picked on another agent’s pane', () => {
     const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'ask'))
     act(() => result.current.setSetup({ agent: 'codex', permissionMode: 'auto' }))

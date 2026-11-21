@@ -66,7 +66,7 @@ export function BotRunsOnPicker({
   model: NewTabAgentMenuModel
   /** The agents that computer has. */
   choices: readonly BotAgent[]
-  onSetupChange: (setup: BotAgentSetup) => void
+  onSetupChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
   /** A bot from a link: the owner's permission, kept apart from the agent (`useBotAgentSetup`). */
   keptPermission?: BotPermissionIntent
   onAddHost?: (mode: 'ssh' | 'server') => void

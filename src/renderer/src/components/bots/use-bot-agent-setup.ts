@@ -35,17 +35,21 @@ function withIntent(setup: BotAgentSetup, intent: BotPermissionIntent): BotAgent
   return mode ? { ...rest, permissionMode: mode } : rest
 }
 
-/** What a pick says about the owner's permission. An agent with no permissions says nothing, and
- *  neither does a move to another agent that only dropped it, nor an edit (a model, an effort) that
- *  keeps the mode shown. Clearing the shown mode on the same agent (Same as chats, Use chat defaults)
- *  chooses the chats' own. */
+/** What a pick says about the owner's permission. A permission the owner chose is theirs, even the
+ *  one already shown, and none chosen is the chats' own. Otherwise an agent with no permissions says
+ *  nothing, and neither does a move to another agent that only dropped it, nor an edit (a model, an
+ *  effort) that keeps the mode shown. Clearing the shown mode on the same agent chooses the chats' own. */
 function nextIntent(
   intent: BotPermissionIntent,
   current: BotAgentSetup,
-  next: BotAgentSetup
+  next: BotAgentSetup,
+  permissionPicked: boolean
 ): BotPermissionIntent {
   if (!offersPermissions(next.agent)) {
     return intent
+  }
+  if (permissionPicked) {
+    return next.permissionMode ?? 'inherit'
   }
   if (next.agent !== current.agent) {
     return next.permissionMode && next.permissionMode !== effectiveMode(next.agent, intent)
@@ -82,9 +86,10 @@ export function useBotAgentSetup(
     setup,
     /** The permission Create writes for a kept one, even on an agent that can't offer it yet. */
     intent,
-    setSetup: (next: BotAgentSetup) => {
+    /** `permissionPicked` when the owner chose the permission, even the one already shown. */
+    setSetup: (next: BotAgentSetup, permissionPicked = false) => {
       if (intent !== undefined) {
-        setIntent(nextIntent(intent, setup, next))
+        setIntent(nextIntent(intent, setup, next, permissionPicked))
       }
       setPicked({ hostId, setup: next })
     },
