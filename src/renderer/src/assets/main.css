@@ -1326,7 +1326,8 @@ html.native-shell .app-layout {
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 3px;
+  /* Follows Settings' divider thickness; a line wider than its gap would cover the panes. */
+  width: min(var(--split-divider-thickness, 3px), 100%);
   transform: translateX(-50%);
 }
 
@@ -1334,7 +1335,7 @@ html.native-shell .app-layout {
   left: 0;
   right: 0;
   top: 50%;
-  height: 3px;
+  height: min(var(--split-divider-thickness, 3px), 100%);
   transform: translateY(-50%);
 }
 

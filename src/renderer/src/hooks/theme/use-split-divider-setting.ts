@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import {
+  clampNumber,
   DEFAULT_TERMINAL_DIVIDER_DARK,
   DEFAULT_TERMINAL_DIVIDER_LIGHT
 } from '@/lib/terminal/appearance/terminal-theme'
@@ -9,7 +10,8 @@ import { selectTerminalTheme } from '../../../../shared/terminal-themes/terminal
 
 /**
  * A divider color changed from its default also paints tab-group splits, above any theme token;
- * the default stays unset so the built-in 3:1 split color (or the theme's) shows.
+ * the default stays unset so the built-in 3:1 split color (or the theme's) shows. The divider thickness
+ * sizes tab-group split lines too, so both kinds of split read alike.
  */
 export function useSplitDividerSetting(): void {
   const systemPrefersDark = useSystemPrefersDark()
@@ -30,4 +32,13 @@ export function useSplitDividerSetting(): void {
       style.removeProperty('--split-divider-setting')
     }
   }, [color, light])
+  const thickness = useAppStore((s) => s.settings?.terminalDividerThicknessPx)
+  useEffect(() => {
+    const style = document.documentElement.style
+    if (typeof thickness === 'number' && Number.isFinite(thickness)) {
+      style.setProperty('--split-divider-thickness', `${clampNumber(thickness, 1, 32)}px`)
+    } else {
+      style.removeProperty('--split-divider-thickness')
+    }
+  }, [thickness])
 }
