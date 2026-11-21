@@ -62,6 +62,111 @@ describe('repos-project-groups-delete', () => {
   })
 
   describe('project group deletion store routing', () => {
+    it('removes an unstamped local group member rather than its focused same-ID sibling', async () => {
+      const localMember: Repo = {
+        ...remoteRepo,
+        id: 'dup-repo',
+        executionHostId: 'local',
+        projectGroupId: projectGroup.id
+      }
+      const remoteSibling: Repo = {
+        ...remoteRepo,
+        id: 'dup-repo',
+        executionHostId: 'runtime:env-1',
+        projectGroupId: null
+      }
+      projectGroupsDelete.mockResolvedValue(true)
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+        projectGroups: [projectGroup],
+        repos: [remoteSibling, localMember]
+      })
+
+      await expect(
+        store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+          removeContainedProjects: true
+        })
+      ).resolves.toEqual({
+        status: 'deleted-group',
+        groupId: projectGroup.id,
+        requestedProjectIds: ['dup-repo'],
+        removedProjectIds: ['dup-repo'],
+        failedProjectRemovals: []
+      })
+      expect(store.getState().repos).toEqual([remoteSibling])
+    })
+
+    it('does not cascade through a sibling-host child into unrelated local rows', async () => {
+      const remoteChild: ProjectGroup = {
+        ...projectGroup,
+        id: 'child',
+        parentGroupId: projectGroup.id,
+        executionHostId: 'runtime:env-1'
+      }
+      const unrelatedLocalChild: ProjectGroup = {
+        ...projectGroup,
+        id: 'child',
+        parentGroupId: 'another-local-root',
+        executionHostId: 'local'
+      }
+      const remoteMember: Repo = {
+        ...remoteRepo,
+        id: 'dup-repo',
+        executionHostId: 'runtime:env-1',
+        projectGroupId: remoteChild.id
+      }
+      const unrelatedLocalRepo: Repo = {
+        ...remoteRepo,
+        id: 'dup-repo',
+        executionHostId: 'local',
+        projectGroupId: null
+      }
+      projectGroupsDelete.mockResolvedValue(true)
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+        projectGroups: [projectGroup, remoteChild, unrelatedLocalChild],
+        repos: [remoteMember, unrelatedLocalRepo]
+      })
+
+      await expect(
+        store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+          removeContainedProjects: true
+        })
+      ).resolves.toEqual({
+        status: 'deleted-group',
+        groupId: projectGroup.id,
+        requestedProjectIds: [],
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      })
+      expect(store.getState().projectGroups).toEqual([remoteChild, unrelatedLocalChild])
+      expect(store.getState().repos).toEqual([remoteMember, unrelatedLocalRepo])
+    })
+
+    it('refuses a stale explicit owner before selecting or deleting contained projects', async () => {
+      const member = { ...remoteRepo, projectGroupId: projectGroup.id }
+      projectGroupsDelete.mockResolvedValue(true)
+      const store = createTestStore()
+      store.setState({ projectGroups: [projectGroup], repos: [member] })
+
+      await expect(
+        store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+          hostId: 'runtime:missing',
+          removeContainedProjects: true
+        })
+      ).resolves.toEqual({
+        status: 'missing-group',
+        groupId: projectGroup.id,
+        requestedProjectIds: [],
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      })
+      expect(store.getState().projectGroups).toEqual([projectGroup])
+      expect(store.getState().repos).toEqual([member])
+    })
+
     it('uses the remote delete response shape before mutating local state', async () => {
       runtimeEnvironmentCall.mockResolvedValue({
         id: 'rpc-delete-group',

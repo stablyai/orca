@@ -70,6 +70,59 @@ describe('repos-project-groups-owner-routing', () => {
   })
 
   describe('project group mutations route to the owning host', () => {
+    it('keeps an unstamped rename on its captured local owner when a sibling arrives in flight', async () => {
+      const remoteGroup = {
+        ...folderScanGroup,
+        name: 'Remote',
+        executionHostId: 'runtime:env-1'
+      }
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+        projectGroups: [folderScanGroup]
+      })
+      projectGroupsUpdate.mockImplementation(async () => {
+        store.setState({ projectGroups: [folderScanGroup, remoteGroup] })
+        return { ...folderScanGroup, name: 'Renamed' }
+      })
+
+      await expect(
+        store.getState().updateProjectGroup(folderScanGroup.id, { name: 'Renamed' })
+      ).resolves.toBe(true)
+
+      expect(
+        store.getState().projectGroups.map((group) => [group.executionHostId, group.name])
+      ).toEqual([
+        ['local', 'Renamed'],
+        ['runtime:env-1', 'Remote']
+      ])
+    })
+
+    it('keeps a colliding ssh row unchanged when the local group is updated', async () => {
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: null } as never,
+        projectGroups: [
+          { ...folderScanGroup, executionHostId: 'local' },
+          { ...folderScanGroup, name: 'Ssh', executionHostId: 'ssh:box' }
+        ]
+      })
+      projectGroupsUpdate.mockResolvedValue({ ...folderScanGroup, name: 'Renamed' })
+
+      await expect(
+        store
+          .getState()
+          .updateProjectGroup(folderScanGroup.id, { name: 'Renamed' }, { hostId: 'local' })
+      ).resolves.toBe(true)
+
+      expect(
+        store.getState().projectGroups.map((group) => [group.executionHostId, group.name])
+      ).toEqual([
+        ['local', 'Renamed'],
+        ['ssh:box', 'Ssh']
+      ])
+    })
+
     it('refuses, rather than following focus, when a colliding id has no unambiguous owner', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()
