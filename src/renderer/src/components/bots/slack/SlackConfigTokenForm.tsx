@@ -216,14 +216,11 @@ export function SlackConfigTokenForm({
         <Label htmlFor={inputId} className={compact ? 'sr-only' : undefined}>
           {t('bots.slack.token.label', 'Configuration refresh token')}
         </Label>
-        {inlineSubmit ? (
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">{field}</div>
-            {submit}
-          </div>
-        ) : (
-          field
-        )}
+        {/* The same wrappers either way: switching to an inline submit keeps the field, and its focus. */}
+        <div className={inlineSubmit ? 'flex items-center gap-2' : undefined}>
+          <div className={inlineSubmit ? 'min-w-0 flex-1' : undefined}>{field}</div>
+          {inlineSubmit ? submit : null}
+        </div>
         {accessPasted ? (
           <p className="text-xs text-destructive">
             {t(

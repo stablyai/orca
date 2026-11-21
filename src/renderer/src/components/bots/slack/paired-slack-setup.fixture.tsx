@@ -2,6 +2,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { publishBots, stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -56,6 +57,8 @@ type Scene = {
   handOffPending?: boolean
   /** The longest bot, computer and account names, to check they end in an ellipsis. */
   long?: boolean
+  /** This desktop's own account is read only after the step shows, so its offer arrives late. */
+  signedInLate?: boolean
 }
 
 const LONG_EMAIL = 'alexandra.konstantinopoulou-whitfield@engineering.example.com'
@@ -176,6 +179,12 @@ const longStore = {
   }
 }
 
+// Signed in, with the account not read yet: nothing to offer until it is.
+const lateStore = {
+  ...store,
+  orcaProfileAuthStatus: { ...store.orcaProfileAuthStatus, cloud: undefined }
+}
+
 const dialog = (bot: Bot) => () => (
   <ConfirmationDialogProvider>
     <BotSlackSetupDialog bot={bot} open onOpenChange={() => {}} />
@@ -186,7 +195,7 @@ const dialog = (bot: Bot) => () => (
 function scene(fields: Scene, interact: () => Promise<void>, width?: number) {
   return defineFixture({
     width: 720,
-    store: fields.long ? longStore : store,
+    store: fields.long ? longStore : fields.signedInLate ? lateStore : store,
     setup: () => stub(fields),
     render: dialog(fields.long ? longBot : serverBot),
     interact: async () => {
@@ -300,6 +309,24 @@ export const reconnectUsePaste480 = scene(
   },
   480
 )
+// A token typed into the paste-only step, then this desktop's account is read: the offer arrives
+// with the typed token still in view and focused.
+const lapsedLate: Scene = { ...lapsed, signedInLate: true }
+async function typeThenSignIn(): Promise<void> {
+  await whenShown('Paste a new token')
+  const field = document.querySelector<HTMLInputElement>('input[type="password"]')
+  if (field) {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+      field,
+      'xoxe-1-made-up-example-token'
+    )
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  useAppStore.setState({ orcaProfileAuthStatus: store.orcaProfileAuthStatus })
+  await whenShown('Use it')
+}
+export const reconnectLateOffer340 = scene(lapsedLate, typeThenSignIn, 340)
+
 export const reconnectPaste = scene(lapsedNone, () => whenShown('Paste a new token'), 480)
 export const reconnectPaste340 = scene(lapsedNone, () => whenShown('Paste a new token'), 340)
 export const reconnectPasteLong340 = scene(

@@ -290,13 +290,16 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
     openDialog()
 
-    fireEvent.change(await screen.findByLabelText('Configuration refresh token'), {
-      target: { value: 'xoxe-typed' }
-    })
+    const typing = await screen.findByLabelText('Configuration refresh token')
+    expect(document.activeElement).toBe(typing)
+    fireEvent.change(typing, { target: { value: 'xoxe-typed' } })
     act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
 
     await screen.findByRole('button', { name: 'Use it' })
     const field = screen.getByLabelText('Configuration refresh token')
+    // The same field, still focused: typing goes on where it was.
+    expect(field).toBe(typing)
+    expect(document.activeElement).toBe(field)
     expect(field).toHaveProperty('value', 'xoxe-typed')
     expect(field.closest('[hidden]')).toBeNull()
     expect(
