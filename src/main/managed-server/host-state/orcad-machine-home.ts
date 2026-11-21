@@ -7,6 +7,11 @@ import {
   ORCAD_MACHINE_NAME_PROBE,
   parseOrcadMachineNameProbe
 } from './orcad-machine-name-home'
+import {
+  ORCAD_REMOTE_HOME_PROBE,
+  ORCAD_REMOTE_ROOT_SHELL,
+  refuseUnusableOrcadRemoteHome
+} from './orcad-remote-home-override'
 import { ORCAD_ACTIVATION_FILENAME } from '../activation/orcad-activation-record'
 import { parseDarwinPlatformUuid } from '../../persistence/profile-state/access/profile-state-access-identity'
 import {
@@ -62,6 +67,7 @@ type OrcadMachineClaimRead =
   | { state: 'unreadable'; reason: string }
 
 export type OrcadMachineHomeProbe = {
+  /** Login home, or ORCA_REMOTE_HOME when the host sets one. */
   loginHome: string
   identity: OrcadMachineIdentity | null
   claim: OrcadMachineClaimRead
@@ -89,19 +95,20 @@ type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattributed-ow
 
 /** Probe home ownership once, using the same machine identity sources as profile-state access. */
 export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
-  const claim = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
-  const access = `"$HOME"/${quotePosixShell(ACCESS_ROOT)}`
-  const homes = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}`)}`
-  const activation = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_ACTIVATION_FILENAME}`)}`
+  const root = ORCAD_REMOTE_ROOT_SHELL
+  const claim = `${root}/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
+  const access = `${root}/${quotePosixShell(ACCESS_ROOT)}`
+  const homes = `${root}/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}`)}`
+  const activation = `${root}/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_ACTIVATION_FILENAME}`)}`
   return [
-    `printf '%s\\n' "$HOME"; echo ${SECTION};`,
+    `printf '%s\\n' ${root}; echo ${SECTION};`,
     host.os === 'darwin'
       ? // Try PATH first for relocated host tools before the standard macOS location.
         '{ ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null ||' +
         ' /usr/sbin/ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null; } | grep IOPlatformUUID;'
       : 'cat /etc/machine-id 2>/dev/null;',
     `echo; echo ${SECTION}; uname -n 2>/dev/null; echo;`,
-    `${ORCAD_MACHINE_NAME_PROBE} echo ${SECTION};`,
+    `${ORCAD_MACHINE_NAME_PROBE} ${ORCAD_REMOTE_HOME_PROBE} echo ${SECTION};`,
     // Full disks can leave an empty claim; publication can replace it.
     `if { [ ! -e ${claim} ] && [ ! -L ${claim} ]; } || { [ -f ${claim} ] && [ ! -s ${claim} ]; };`,
     `then echo ${CLAIM_ABSENT};`,
@@ -112,8 +119,8 @@ export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
     `ls -1 ${homes} 2>/dev/null; echo ${SECTION};`,
     `[ -e ${activation} ] && echo ${INSTALLED}; echo ${SECTION};`,
     // BSD stat -f has different semantics; macOS uses df device source instead.
-    host.os === 'darwin' ? '' : `stat -f -c %T "$HOME" 2>/dev/null; echo ${SECTION};`,
-    `df -P "$HOME" 2>/dev/null | tail -n 1; true`
+    host.os === 'darwin' ? '' : `stat -f -c %T ${root} 2>/dev/null; echo ${SECTION};`,
+    `df -P ${root} 2>/dev/null | tail -n 1; true`
   ].join(' ')
 }
 
@@ -129,6 +136,8 @@ export function parseOrcadMachineHomeProbe(
   const filesystemType = host.os === 'darwin' ? '' : sections[7].trim()
   const dfSource = sections.at(-1)?.trim().split(/\s+/u)[0] ?? ''
   const hostnameLines = hostnameRaw.split('\n').map((line) => line.trim())
+  // Name an unusable override before the generic home check.
+  refuseUnusableOrcadRemoteHome(hostnameLines, host)
   const loginHome = normalizeRemoteHome(homeRaw, host)
   if (!validateRemoteHome(loginHome, host)) {
     throw new Error(`Remote home is not a valid path: ${loginHome.slice(0, 100)}`)

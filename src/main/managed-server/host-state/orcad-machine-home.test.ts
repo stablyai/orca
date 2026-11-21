@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -82,6 +82,7 @@ type MachineOptions = {
   /** Simulate stderr merged into stdout by an SSH gateway. */
   catStderrNoise?: string
   machineName?: string
+  remoteHome?: string
 }
 
 /** Model macOS machines sharing one NFS home. */
@@ -143,7 +144,8 @@ function machine(name: string, hostname = name, options: MachineOptions = {}) {
     HOME: home,
     PATH: `${bin}:${process.env.PATH ?? ''}`,
     ORCA_TEST_MERGE_STDERR: options.catStderrNoise === undefined ? '0' : '1',
-    ORCA_MACHINE_NAME: options.machineName ?? ''
+    ORCA_MACHINE_NAME: options.machineName ?? '',
+    ORCA_REMOTE_HOME: options.remoteHome ?? ''
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked execCommand reads only env.
   const conn = {
@@ -193,6 +195,31 @@ describe.runIf(POSIX)('resolveOrcadMachineHome on a home several machines share'
     await expect(resolveOrcadMachineHome(machine('node-a'), true)).rejects.toThrow(
       /cannot tell which machine owns/
     )
+  })
+
+  it('roots the server and its data in ORCA_REMOTE_HOME instead of the login home', async () => {
+    const root = mkdirp(scratch, 'volume')
+    expect(
+      await resolveOrcadMachineHome(machine('node-a', 'node-a', { remoteHome: root }), true)
+    ).toEqual({
+      loginHome: root,
+      orcadHome: root,
+      userDataDir: join(root, '.orca')
+    })
+    expect(existsSync(join(root, '.orca-remote', ORCAD_MACHINE_CLAIM_FILENAME))).toBe(true)
+    expect(existsSync(claimPath())).toBe(false)
+    const named = machine('node-b', 'node-b', { remoteHome: root, machineName: 'devpod' })
+    expect(await resolveOrcadMachineHome(named, true)).toEqual({
+      loginHome: root,
+      orcadHome: join(root, '.orca-remote', 'hosts', '822f727dd254f954'),
+      userDataDir: join(root, '.orca-822f727d')
+    })
+  })
+
+  it('refuses an ORCA_REMOTE_HOME that is not an absolute path', async () => {
+    await expect(
+      resolveOrcadMachineHome(machine('node-a', 'node-a', { remoteHome: 'volume/orca' }), true)
+    ).rejects.toThrow('ORCA_REMOTE_HOME is set to "volume/orca", which Orca can\'t use.')
   })
 
   it('claims a stopped pre-claim install on a local disk, which no other machine can share', async () => {
