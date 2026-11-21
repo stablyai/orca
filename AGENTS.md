@@ -19,6 +19,7 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 # Electron UI Validation
 
 - Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
+- Keep validation dev runners in a persistent command session and stop them when validation finishes. If launching from a transient shell, set `ORCA_DEV_OWNER_PID` to the live owning agent/session PID; background dev apps stop when their owner exits.
 - Never steal monitor focus or reveal test windows: no `show()`, `showInactive()`, `bringToFront()`, `app.focus()`, or OS activation. Use CDP screenshots of hidden renderers.
 - Keep native-focus and visible-window tests paused on the user's desktop; run them on an isolated display or CI.
 - Rebuild modified launch-policy code before running an app (stale build wrappers are not safe).

@@ -18,6 +18,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { watchDevLaunchOwner } from './dev-launch-owner.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
   getDevBundleProcessTable,
@@ -585,15 +586,20 @@ if (!isHelpOrVersion) {
   announceDevInstance({ repoRoot, profile: devProfile, ...ports })
 }
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
-const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
-  stdio: 'inherit',
+const supervisedCli =
+  process.platform === 'win32' ? [] : [path.join(import.meta.dirname, 'dev-process-supervisor.mjs')]
+const child = spawn(process.execPath, [...supervisedCli, electronViteCli, ...forwardedArgs], {
+  stdio: process.platform === 'win32' ? 'inherit' : ['inherit', 'inherit', 'inherit', 'ipc'],
   env: withDevRolldownRuntimeEnv(process.env),
-  // Own process group so Ctrl+C terminates electron-vite’s Electron descendants on macOS too.
+  // Supervision must survive cancellation of the launching terminal/agent's process group.
   detached: process.platform !== 'win32'
 })
 
 let webClientBuild = null
 let isShuttingDown = false
+let shutdownSignal = null
+const stopWatchingOwner = watchDevLaunchOwner(() => beginShutdown('SIGTERM'))
+process.once('exit', stopWatchingOwner)
 
 child.once('spawn', () => {
   if (!isHelpOrVersion) {
@@ -601,18 +607,6 @@ child.once('spawn', () => {
   }
   prepareDevWebClient()
 })
-
-let forcedKillTimer = null
-
-function signalExitCode(signal) {
-  if (signal === 'SIGINT') {
-    return 130
-  }
-  if (signal === 'SIGTERM') {
-    return 143
-  }
-  return 1
-}
 
 function terminateChild(signal) {
   if (!child.pid) {
@@ -643,44 +637,32 @@ function beginShutdown(signal) {
     return
   }
   isShuttingDown = true
+  shutdownSignal = signal
 
   webClientBuild?.kill()
-  terminateChild(signal)
-  forcedKillTimer = setTimeout(() => {
-    terminateChild('SIGKILL')
-  }, 5000)
+  terminateChild(signal === 'SIGHUP' ? 'SIGTERM' : signal)
 }
 
-process.on('SIGINT', () => {
-  beginShutdown('SIGINT')
-})
-
-process.on('SIGTERM', () => {
-  beginShutdown('SIGTERM')
-})
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => beginShutdown(signal))
+}
 
 child.on('error', (error) => {
-  if (forcedKillTimer) {
-    clearTimeout(forcedKillTimer)
-  }
   console.error(error)
   process.exit(1)
 })
 
 child.on('exit', (code, signal) => {
-  if (forcedKillTimer) {
-    clearTimeout(forcedKillTimer)
-  }
   // A half-written out/web must not outlive the session that started it.
   webClientBuild?.kill()
 
   if (isShuttingDown) {
-    process.exit(signalExitCode(signal ?? 'SIGINT'))
+    process.exit(128 + os.constants.signals[shutdownSignal])
     return
   }
 
   if (signal) {
-    process.exit(signalExitCode(signal))
+    process.exit(128 + os.constants.signals[signal])
     return
   }
 

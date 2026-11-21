@@ -7,6 +7,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { quitAndStopAllSessionsMenuText } from '../menu/app-menu-quit-item'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 import { stampTrayDevBadge } from './tray-dev-badge'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
@@ -198,6 +199,9 @@ function safeMenuAction(action: () => void): () => void {
 
 /** Create at most one Windows/macOS tray; Linux has none. */
 export function createSystemTray(opts: SystemTrayOptions): Tray | null {
+  if (isBackgroundLaunch()) {
+    return null
+  }
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return null
   }
