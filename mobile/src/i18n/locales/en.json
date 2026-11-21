@@ -5345,7 +5345,8 @@
       "newAutomation": "New automation",
       "runQueued": "Automation run queued.",
       "runFailed": "Couldn’t start the run",
-      "emptyTitle": "No automations yet"
+      "emptyTitle": "No automations yet",
+      "viewRuns": "View runs"
     },
     "settings": {
       "remove": "Remove",
@@ -6578,6 +6579,50 @@
         "unsupported": "The selected automation host does not support this project."
       },
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs."
+    },
+    "botTarget": {
+      "fieldLabel": "Bot or project",
+      "option": "Bot · {{name}}",
+      "deletedBot": "Deleted bot",
+      "prompt": "What should it do?",
+      "promptMissing": "Enter what it should do.",
+      "when": "When",
+      "noSchedule": "Only on events",
+      "never": "Never",
+      "onEvents": "When something happens…",
+      "runsIn": "Runs in",
+      "runsInNew": "A new conversation each time",
+      "chat": "{{name}}'s Chat",
+      "runsInUntitledChat": "An untitled chat",
+      "agent": "Agent",
+      "agentSameAsBot": "Same as {{name}}",
+      "agentInChat": "This chat's agent",
+      "agentInChatHelp": "A run in a chat continues on that chat's agent.",
+      "resultsTo": "Send results to",
+      "resultsToThread": "The event's thread",
+      "resultsToChannel": "A channel",
+      "resultsToLinear": "A Linear issue",
+      "resultsToNone": "Nowhere",
+      "channelPlaceholder": "#channel or a Slack link",
+      "channelLabel": "Channel",
+      "linearIssuePlaceholder": "Issue key (e.g. ENG-123) or a Linear link",
+      "linearIssueLabel": "Linear issue",
+      "channelMissing": "Enter the channel to send results to.",
+      "linearIssueInvalid": "Enter the Linear issue to send results to, like ENG-123.",
+      "letBotReact": "Let {{name}} react",
+      "letBotReactHelp": "Each result starts a turn so {{name}} can act on it.",
+      "threadNeedsEvents": "Only events, new conversation",
+      "threadUnsupported": "Orca Cloud doesn't support this yet",
+      "channelNeedsSlack": "Connect Slack first",
+      "linearNeedsLinear": "Connect Linear first",
+      "time": "Time",
+      "minute": "Minute"
+    },
+    "botEvents": {
+      "label": "Events",
+      "editInChat": "Edit in chat",
+      "editDraft": "Change the automation “{{name}}”: ",
+      "addDraft": "Change the automation “{{name}}” so it also runs when "
     }
   },
   "auto": {
