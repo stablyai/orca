@@ -40,7 +40,8 @@ function routeBot(reads: number): RouteBot {
     applyBot: () => {},
     refresh: () => {},
     reads,
-    itemReads: reads
+    itemReads: reads,
+    hostKey: 'host'
   }
 }
 

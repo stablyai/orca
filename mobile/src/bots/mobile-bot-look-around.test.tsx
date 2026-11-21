@@ -111,7 +111,8 @@ const routeBot: RouteBot = {
   applyBot: () => {},
   refresh: () => {},
   reads: 0,
-  itemReads: 0
+  itemReads: 0,
+  hostKey: 'host'
 }
 
 const suggestion = (id: string, title: string) => ({

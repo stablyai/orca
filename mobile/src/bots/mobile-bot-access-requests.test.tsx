@@ -78,7 +78,8 @@ const routeBot: RouteBot = {
   applyBot: () => {},
   refresh: () => {},
   reads: 0,
-  itemReads: 0
+  itemReads: 0,
+  hostKey: 'host'
 }
 
 let tree: ReactTestRenderer | null = null
