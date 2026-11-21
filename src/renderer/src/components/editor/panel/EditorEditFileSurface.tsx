@@ -243,10 +243,10 @@ export function EditorEditFileSurface({
     if (!externalChangeBanner) {
       return changesView
     }
+    // ChangesModeView sizes itself with flex-1, which a block parent ignores.
     return (
       <div className="flex flex-1 min-h-0 flex-col">
         {externalChangeBanner}
-        {/* ChangesModeView sizes itself with flex-1, which a block parent ignores. */}
         <div className="flex min-h-0 flex-1 flex-col">{changesView}</div>
       </div>
     )
