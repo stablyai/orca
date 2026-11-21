@@ -28,5 +28,6 @@ export const styles = themedStyleSheet(() => ({
   showAll: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
   link: { color: colors.textSecondary, textDecorationLine: 'underline' },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs }
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  sendAgainError: { color: colors.statusRed, marginTop: spacing.xs }
 }))

@@ -76,6 +76,7 @@ export function agentLaunchExistingParams(args: {
   placement?: AgentLaunchPlacement
   sessionOptions?: Readonly<Record<string, string>>
   chatOptions?: Readonly<Record<string, string>>
+  cwd?: string
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
@@ -90,7 +91,8 @@ export function agentLaunchExistingParams(args: {
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.paneKey ? { paneKey: args.paneKey } : {}),
     ...(args.sessionId ? { sessionId: args.sessionId } : {}),
-    ...(args.placement ? { placement: args.placement } : {})
+    ...(args.placement ? { placement: args.placement } : {}),
+    ...(args.cwd ? { cwd: args.cwd } : {})
   }
 }
 

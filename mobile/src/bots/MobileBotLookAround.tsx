@@ -27,7 +27,7 @@ export type LookAroundPage = 'every' | 'focus'
 /** Saves only the changed field, so quick edits and the bot's own chat edits never undo each other. */
 type SaveLookAround = (change: Partial<BotLookAround>) => void
 
-/** The desktop's Look around settings, for a bot whose host runs looks. */
+/** The desktop's Look around page, for a bot whose host runs looks. */
 export function MobileLookAroundSection(props: {
   bot: SheetBot
   upNext: BotUpNext | undefined
@@ -43,7 +43,7 @@ export function MobileLookAroundSection(props: {
   const lastLookedAt = state?.lastLookedAt
   return (
     <SettingsSection
-      title={t('bots.lookAround.title', 'Look around')}
+      first
       footer={t(
         'bots.lookAround.detail',
         'Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.',
@@ -137,7 +137,7 @@ function FocusField(props: {
   )
 }
 
-/** How often or Look for, drilled into from the section, like the workspace options' pages. */
+/** How often or Look for, drilled into from Look around, like the workspace options' pages. */
 export function MobileLookAroundPage(props: {
   page: LookAroundPage
   bot: SheetBot
@@ -175,7 +175,10 @@ export function MobileLookAroundPage(props: {
     <>
       <SheetHeader
         title={title}
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.lookAround.backToLookAround', 'Back to Look around'),
+          onPress: props.onBack
+        }}
         {...(props.page === 'focus'
           ? {
               trailing: {

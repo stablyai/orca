@@ -34,6 +34,8 @@ import {
 } from '../../../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
+  assertCheckoutNotReplaced,
+  assertLeftoverIsRecordedCheckout,
   assertUnregisteredLeftoverRemovable,
   isLeftoverStillRemovable,
   isRecordedCheckout,
@@ -175,6 +177,10 @@ async function finishInterruptedLocalWorktreeRemoval(
     throw differentCheckoutAtPathError(record.worktreePath)
   }
   const native = usesNativeWindowsRemoval(record.worktreePath, localOptions)
+  // Branch and head match a checkout moved and recreated at this path; only its marker tells them apart.
+  if (deletable || native) {
+    await assertCheckoutNotReplaced(record)
+  }
   const removalOptions = {
     ...localOptions,
     deleteBranch: false,
@@ -182,7 +188,8 @@ async function finishInterruptedLocalWorktreeRemoval(
       branch: record.branch ? `refs/heads/${record.branch}` : '',
       head: record.head
     },
-    checkoutDeleteSignal: args.stopSignal
+    checkoutDeleteSignal: args.stopSignal,
+    beforeCheckoutDelete: () => assertCheckoutNotReplaced(record)
   }
   if (
     !native &&
@@ -211,6 +218,9 @@ async function finishInterruptedLocalWorktreeRemoval(
   if (leftover && !record.force) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
+  if (leftover) {
+    await assertLeftoverIsRecordedCheckout(record)
+  }
   if (native) {
     await authorizeWindowsCheckout(
       repo.path,
@@ -226,12 +236,18 @@ async function finishInterruptedLocalWorktreeRemoval(
     throwIfSignalAborted(args.stopSignal)
     await args.stopPtys?.()
     throwIfSignalAborted(args.stopSignal)
+    // Teardown awaited: the folder may have been swapped for another checkout since the first check.
+    if (deletable || native) {
+      await assertCheckoutNotReplaced(record)
+    }
   } catch (error) {
     await gate.finish(false)
     throw error
   }
   if (deletable) {
-    return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal)
+    return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal, () =>
+      assertCheckoutNotReplaced(record)
+    )
   }
   let result: RemoveWorktreeResult
   let removed = false

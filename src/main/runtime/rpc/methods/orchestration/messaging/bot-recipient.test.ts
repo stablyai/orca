@@ -217,10 +217,48 @@ describe('mail to a bot', () => {
     expect(JSON.parse(receipt.message.payload).botRequest.from).toBe('Ranger')
   })
 
-  it('refuses an unknown name with the bots there are', async () => {
+  it('refuses an unknown name with the ones there are, and how to reach a paired computer', async () => {
     journals[RANGER_THREAD] = [message('ask')]
     await expect(send(RANGER_THREAD, { to: 'bot:Doc', type: 'handoff' })).rejects.toThrow(
-      'There is no bot named Doc on this computer (its bots: bot:Ranger, bot:Docs)'
+      'There is no bot named Doc on this computer (its bots: bot:Ranger, bot:Docs), so pick one of those or do the work yourself. One on a paired computer needs --on <computer> before --to.'
+    )
+  })
+
+  function pairedRoster(environmentId: string, name: string, on: string, names: string[]) {
+    const server = { name, on }
+    const entries = names.map((entryName, index) => ({
+      id: `${environmentId}-${index}`,
+      name: entryName,
+      agent: 'codex' as const,
+      paused: false,
+      specialty: null,
+      linked: [],
+      server
+    }))
+    return { environmentId, server, bots: entries }
+  }
+
+  it('names the paired computer last read to have the name, with the exact --on send', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    runtime.pairedBotRosters.remember([
+      pairedRoster('env-m4', 'M4', 'M4', ['Team Eng Reviewer']),
+      pairedRoster('env-box', 'Build Box', 'Build Box', ['Other'])
+    ])
+    await expect(
+      send(RANGER_THREAD, { to: 'bot:team eng reviewer', type: 'question' })
+    ).rejects.toThrow(
+      'There is no bot named team eng reviewer on this computer. Team Eng Reviewer is on M4: use --on M4 --to "bot:Team Eng Reviewer".'
+    )
+  })
+
+  it('lists each paired computer that has the name', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    runtime.pairedBotRosters.remember([
+      pairedRoster('env-m4', 'M4', 'M4', ['Reviewer']),
+      pairedRoster('env-box', "Jo's Box", "Jo's Box", ['Reviewer'])
+    ])
+    await expect(send(RANGER_THREAD, { to: 'bot:Reviewer', type: 'question' })).rejects.toThrow(
+      "There is no bot named Reviewer on this computer. Reviewer is on M4: use --on M4 --to bot:Reviewer; Reviewer is on Jo's Box: use --on 'Jo'\\''s Box' --to bot:Reviewer."
     )
   })
 

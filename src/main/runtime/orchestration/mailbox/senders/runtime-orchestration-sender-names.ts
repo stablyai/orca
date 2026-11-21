@@ -33,6 +33,9 @@ import {
 import { terminalHostConnectionMatches } from '../../workers/transcripts/worker-provider-session'
 import type { RuntimeWorktreeAgentSource } from '../../../workspaces/process-listing/runtime-worktree-agent-source'
 import type { CrewNamingAssignment } from '../../crew/crew-read-dependencies'
+import { savedChatTabFinder } from '../../../session-tabs/chat/structured-conversation-tab-namer'
+
+type SavedChatTab = NonNullable<MirroredTabs['unifiedTabs']>[string][number]
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null
@@ -230,13 +233,18 @@ export class RuntimeOrchestrationSenderNames {
     session: SessionLookup = this.deps.getWorkspaceSession,
     records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
   ): Pick<SenderNamingSources, 'records' | 'chatTab' | 'store'> {
+    const finders = new Map<string, ReturnType<typeof savedChatTabFinder<SavedChatTab>>>()
     return {
       records,
       store: this.deps.getStore(),
-      chatTab: (worktreeId, sessionId) =>
-        session(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-          (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
-        ) ?? null
+      chatTab: (worktreeId, sessionId) => {
+        let find = finders.get(worktreeId)
+        if (!find) {
+          find = savedChatTabFinder(() => session(worktreeId)?.unifiedTabs?.[worktreeId])
+          finders.set(worktreeId, find)
+        }
+        return find(sessionId) ?? null
+      }
     }
   }
 

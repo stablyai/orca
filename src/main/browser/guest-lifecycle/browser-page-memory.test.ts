@@ -1,4 +1,8 @@
 import { EventEmitter } from 'node:events'
+import {
+  GET_PAGE_STATE,
+  POST_PAGE_STATE
+} from './manager/registration/browser-page-state-form-data.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   prepareBrowserPageAttach,
@@ -15,9 +19,10 @@ import {
   browserMemoryGeneration
 } from './browser-page-memory'
 
-const { caller, throttle } = vi.hoisted(() => ({
+const { caller, throttle, markFormPost } = vi.hoisted(() => ({
   caller: { agent: false },
-  throttle: vi.fn(() => vi.fn())
+  throttle: vi.fn(() => vi.fn()),
+  markFormPost: vi.fn()
 }))
 vi.mock('../../runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: caller.agent ? 'local-cli' : 'desktop' })
@@ -26,7 +31,8 @@ vi.mock('../../window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: throttle }
 }))
 vi.mock('./manager/registration/browser-guest-discard-protection', () => ({
-  readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
+  readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' }),
+  noteBrowserGuestFormData: markFormPost
 }))
 function startNavigation(guest: Electron.WebContents, url = 'https://example.test/b'): void {
   guest.emit('did-start-navigation', { url, isSameDocument: false, isMainFrame: true })
@@ -61,10 +67,11 @@ function attach(id: number, partition = 'persist:profile') {
     loadURL: vi.fn(() => load),
     navigationHistory: {
       getAllEntries: () => [
-        { url: 'https://example.test/a', title: 'A', pageState: 'fixture-opaque-state' },
-        { url: 'https://example.test/b', title: 'B', pageState: 'fixture-opaque-state' }
+        { url: 'https://example.test/a', title: 'A', pageState: GET_PAGE_STATE },
+        { url: 'https://example.test/b', title: 'B', pageState: GET_PAGE_STATE }
       ],
       getActiveIndex: () => 1,
+      getEntryAtIndex: (_index: number) => ({ pageState: GET_PAGE_STATE }),
       restore: vi.fn(() => load)
     },
     close: () => {
@@ -103,8 +110,8 @@ it('keeps the cold identity/history, gates every consumer on load and fences ret
   expect(action).not.toHaveBeenCalled()
   expect(second.guest.navigationHistory.restore).toHaveBeenCalledWith({
     entries: [
-      { url: 'https://example.test/a', title: 'A', pageState: 'fixture-opaque-state' },
-      { url: 'https://example.test/b', title: 'B', pageState: 'fixture-opaque-state' }
+      { url: 'https://example.test/a', title: 'A', pageState: GET_PAGE_STATE },
+      { url: 'https://example.test/b', title: 'B', pageState: GET_PAGE_STATE }
     ],
     index: 1
   })
@@ -296,4 +303,17 @@ it('admits a loaded page while only a subframe loads, and still waits on a main-
   guest.emit('did-finish-load')
   await pending
   expect(action).toHaveBeenCalledOnce()
+})
+
+it('keeps a page Chromium recorded as a form POST result, and remembers it', async () => {
+  const page = attach(1)
+  page.finishLoad()
+  await waitForBrowserPageReady(pageId, page.guest)
+  vi.spyOn(page.guest.navigationHistory, 'getEntryAtIndex').mockReturnValue({
+    url: 'https://example.test/b',
+    title: 'B',
+    pageState: POST_PAGE_STATE
+  })
+  expect(reserveBrowserPageDiscard(pageId, page.guest)).toBe(false)
+  expect(markFormPost).toHaveBeenCalledWith(page.guest, 'form-data')
 })
