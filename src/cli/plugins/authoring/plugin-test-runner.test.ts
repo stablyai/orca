@@ -62,12 +62,18 @@ describe('orca plugin test', () => {
     60_000
   )
 
-  it(
+  // The fixture links a real node_modules/vitest into the plugin folder, and a directory link
+  // needs the symlink privilege on Windows.
+  it.skipIf(process.platform === 'win32')(
     "uses the plugin's own vitest when it has one",
     async () => {
       const dir = await componentsPlugin()
       await mkdir(join(dir, 'node_modules'), { recursive: true })
-      await symlink(resolve('node_modules', 'vitest'), join(dir, 'node_modules', 'vitest'), 'dir')
+      await symlink(
+        resolve('node_modules', 'vitest'),
+        join(dir, 'node_modules', 'vitest'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
       await writeFile(
         join(dir, 'src', 'panel.test.tsx'),
         [

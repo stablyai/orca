@@ -20,9 +20,18 @@ describe('bot import read', () => {
     await writeFile(join(root, 'credentials', 'service.json'), '{"noiseKey":"canary-symlink"}')
     await mkdir(join(root, 'export'))
     await writeFile(join(root, 'export', 'notes.md'), 'Deploy freeze is Thursdays.')
-    await symlink(join(root, 'export', 'notes.md'), join(root, 'export', 'USER.md'))
-    await symlink(join(root, 'credentials', 'service.json'), join(root, 'export', 'MEMORY.md'))
-    await symlink(join(root, 'credentials'), join(root, 'export', 'memory'))
+    // A file link needs the symlink privilege on Windows, so the file-linked fixtures are made
+    // only where they can be. The directory link below covers the same never-read rule there.
+    if (process.platform !== 'win32') {
+      await symlink(join(root, 'export', 'notes.md'), join(root, 'export', 'USER.md'))
+      await symlink(join(root, 'credentials', 'service.json'), join(root, 'export', 'MEMORY.md'))
+    }
+    // 'junction' creates a directory link without the symlink privilege Windows otherwise needs.
+    await symlink(
+      join(root, 'credentials'),
+      join(root, 'export', 'memory'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
   })
 
   afterEach(async () => {
@@ -40,18 +49,25 @@ describe('bot import read', () => {
     })
   }
 
-  it('refuses a link whose target is on the never-read list, and reads a benign one', async () => {
-    await expect(read('export/MEMORY.md')).rejects.toThrow(/Not read/)
-    await expect(read('export/memory/service.json')).rejects.toThrow(/Not read/)
-    await read('export/USER.md')
-    expect(out).toBe('Deploy freeze is Thursdays.\n')
-  })
+  // The two file links this case reads cannot be made on Windows; the directory-link case below
+  // still exercises the never-read rule there.
+  it.skipIf(process.platform === 'win32')(
+    'refuses a link whose target is on the never-read list, and reads a benign one',
+    async () => {
+      await expect(read('export/MEMORY.md')).rejects.toThrow(/Not read/)
+      await expect(read('export/memory/service.json')).rejects.toThrow(/Not read/)
+      await read('export/USER.md')
+      expect(out).toBe('Deploy freeze is Thursdays.\n')
+    }
+  )
 
   it('marks links to never-read targets in a folder listing', async () => {
     await read('export')
-    expect(out).toMatch(/^MEMORY\.md {2}\(never read/m)
     expect(out).toMatch(/^memory {2}\(never read/m)
-    expect(out).toMatch(/^USER\.md$/m)
+    if (process.platform !== 'win32') {
+      expect(out).toMatch(/^MEMORY\.md {2}\(never read/m)
+      expect(out).toMatch(/^USER\.md$/m)
+    }
   })
 })
 

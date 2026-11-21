@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { selectEnclosingWorktreeSelectionOnHost } from './caller-host-worktree-selection'
 import type { CatalogRow } from './workspace-catalog-row'
 import { readEnclosingWorkspaceCatalog } from './enclosing-workspace-catalog'
@@ -18,14 +18,25 @@ function clientAnswering(answer: (method: string) => ReturnType<typeof okFixture
   return client
 }
 
-// Symlinks need privileges on Windows.
+// Symlinks need privileges on Windows. skipIf stops the cases, not this body, so the fixture is
+// built in beforeAll: work at module scope ran on every host and made the whole file fail with
+// EPERM there, before any case could be skipped.
 describe.skipIf(process.platform === 'win32')('symlink aliases on the caller filesystem', () => {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-enclosing-alias-')))
-  const real = join(root, 'real')
-  const alias = join(root, 'alias')
-  mkdirSync(join(real, 'hub', 'app', 'src'), { recursive: true })
-  symlinkSync(real, alias)
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  let root = ''
+  let real = ''
+  let alias = ''
+  beforeAll(() => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-enclosing-alias-')))
+    real = join(root, 'real')
+    alias = join(root, 'alias')
+    mkdirSync(join(real, 'hub', 'app', 'src'), { recursive: true })
+    symlinkSync(real, alias)
+  })
+  afterAll(() => {
+    if (root) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 
   const outer = (base: string) => ({
     id: 'folder:outer',
