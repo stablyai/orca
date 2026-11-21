@@ -1,6 +1,8 @@
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { hookAuthority } from '../../agent-state-rules/agent-state-rules-engine'
 import {
   admitRestoredTerminalReport,
   hasCommandBoundarySinceReattach,
@@ -20,6 +22,7 @@ export type ReattachedAgentStatusRestoreHost = {
   isRetainedFrameProven(ptyId: string, agent: TerminalAgent): Promise<boolean>
   readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
   readOutputClockAt(ptyId: string): number | null
+  readLastInputAt(ptyId: string): number | null
   requestRepaint(ptyId: string): void
   applyStatus(ptyId: string, status: AgentStatus, options?: { restoredAtRestAt?: number }): void
 }
@@ -35,7 +38,6 @@ export function runReattachedAgentStatusRestore(
   }
   const { incarnationId } = pty
   const generation = host.getLifecycleGeneration(ptyId)
-  const restoreStartedAt = Date.now()
   const isCurrent = (): boolean =>
     host.getPty(ptyId) === pty &&
     pty.incarnationId === incarnationId &&
@@ -62,8 +64,21 @@ export function runReattachedAgentStatusRestore(
       pty.commandPaint?.vouchRetainedPaint()
     }
     if (turn) {
+      const trustsRestoredDone =
+        !!agent && isTuiAgent(agent) && hookAuthority(agent) !== 'identity-only'
+      const receivedAt = report?.receivedAt
+      if (turn === 'done') {
+        const lastInputAt = host.readLastInputAt(ptyId)
+        if (
+          lastInputAt !== null &&
+          (receivedAt !== undefined ? receivedAt < lastInputAt : trustsRestoredDone)
+        ) {
+          return
+        }
+      }
       host.applyStatus(ptyId, turn === 'done' ? 'idle' : turn, {
-        restoredAtRestAt: turn === 'done' ? restoreStartedAt : undefined
+        restoredAtRestAt:
+          turn === 'done' && trustsRestoredDone && receivedAt !== undefined ? receivedAt : undefined
       })
     } else if (agent) {
       restoreFromReattachedReadyScreen({

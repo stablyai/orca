@@ -256,6 +256,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       isRetainedFrameProven: (id, agent) => this.isRetainedFrameProven(id, agent),
       readCaughtUpRuledScreen: (id) => this.readCaughtUpRuledScreen(id),
       readOutputClockAt: (id) => this.readOutputClockAt(id),
+      readLastInputAt: (id) => this.terminalRunFacts.readLastInputAt(id),
       requestRepaint: (id) => this.requestReattachedRepaint(id),
       applyStatus: (id, status, options) => this.applyReattachedAgentStatus(id, status, options)
     })

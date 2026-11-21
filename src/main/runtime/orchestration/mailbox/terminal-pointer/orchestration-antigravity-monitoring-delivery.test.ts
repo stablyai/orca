@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from '../../../../agent-hooks/server/server-types'
 import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
+import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
@@ -60,6 +61,27 @@ function insertWorkerDone(db: OrchestrationDb, runId: string, subject: string) {
     runId,
     deliveryContract: 'current_delivery'
   })
+}
+
+function installInputRecordingController(
+  runtime: Awaited<ReturnType<typeof createRuntime>>['runtime'],
+  foregroundProcess: string | null = null
+) {
+  const write = vi.fn((_id: string, _data: string) => true)
+  const settled = settledWriteStub(write)
+  runtime.setPtyController({
+    write: (id: string, data: string, inputKind: TerminalInputKind) => {
+      runtime.terminalRunFacts.recordInput(id, inputKind, data)
+      return write(id, data)
+    },
+    writeWithSettlement: (id: string, data: string, inputKind: TerminalInputKind) => {
+      runtime.terminalRunFacts.recordInput(id, inputKind, data)
+      return settled(id, data)
+    },
+    kill: vi.fn(),
+    getForegroundProcess: async () => foregroundProcess
+  })
+  return write
 }
 
 describe('orchestration mail delivery for Antigravity coordinators in monitoring mode', () => {
@@ -173,13 +195,7 @@ describe('orchestration mail delivery for Antigravity coordinators in monitoring
     const restoredAt = Date.now() - 60_000
     const db = new OrchestrationDb(':memory:')
     const harness = await createRuntime(db, { launchAgent: null })
-    const write = vi.fn((_id: string, _data: string) => true)
-    harness.runtime.setPtyController({
-      write,
-      writeWithSettlement: settledWriteStub(write),
-      kill: vi.fn(),
-      getForegroundProcess: async () => 'agy'
-    })
+    const write = installInputRecordingController(harness.runtime, 'agy')
     harness.runtime.startReattachedOutputClock(PTY_ID, {
       pid: 4242,
       incarnationId: 'mailbox-incarnation'
@@ -190,7 +206,8 @@ describe('orchestration mail delivery for Antigravity coordinators in monitoring
       write.mock.calls.filter(([, payload]) => payload === '\r').length
     vi.spyOn(agentHookServer, 'readRestoredAgentStatus').mockResolvedValue({
       state: 'working',
-      mainAgent: { state: 'done', stateStartedAt: restoredAt }
+      mainAgent: { state: 'done', stateStartedAt: restoredAt },
+      receivedAt: restoredAt
     })
 
     harness.runtime.restoreReattachedAgentStatus(PTY_ID)
@@ -198,8 +215,103 @@ describe('orchestration mail delivery for Antigravity coordinators in monitoring
 
     expect(pointerCount(write)).toBe(1)
     expect(enterCount()).toBe(1)
+    expect(harness.runtime.idleEvidenceSource.getFirstPartyAgentStatus(PTY_ID)).toMatchObject({
+      state: 'done',
+      updatedAt: restoredAt,
+      restoredAtRest: true
+    })
     expect(db.getMessageById(message.id)).toMatchObject({
       delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    db.close()
+  })
+
+  it('keeps the Enter gate valid after recording the pointer text write and rejects older done after Enter', async () => {
+    vi.useFakeTimers()
+    const turnEndedAt = Date.now()
+    const db = new OrchestrationDb(':memory:')
+    const harness = await createRuntime(db, {
+      launchAgent: 'antigravity',
+      getAgentStatusSnapshot: () => [monitoringDoneRow(turnEndedAt)]
+    })
+    const write = installInputRecordingController(harness.runtime)
+    const run = createBoundRun(db, 'Antigravity input-recorded pointer delivery')
+    const enterCount = (): number =>
+      write.mock.calls.filter(([, payload]) => payload === '\r').length
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+    const message = insertWorkerDone(db, run.id, 'Worker finished')
+    harness.runtime.deliverPendingMessagesForHandle(`run:${run.id}`)
+    expect(pointerCount(write)).toBe(1)
+    expect(enterCount()).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(enterCount()).toBe(1)
+    expect(harness.runtime.idleEvidenceSource.getHookTurn?.(PTY_ID, 'antigravity')).toBeNull()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: expect.any(String),
+      pointer_enter_pending: 0
+    })
+    db.close()
+  })
+
+  it('rejects a stale monitoring-done hook when unrelated input arrives between pointer text and Enter', async () => {
+    vi.useFakeTimers()
+    const turnEndedAt = Date.now()
+    const db = new OrchestrationDb(':memory:')
+    const harness = await createRuntime(db, {
+      launchAgent: 'antigravity',
+      getAgentStatusSnapshot: () => [monitoringDoneRow(turnEndedAt)]
+    })
+    const write = installInputRecordingController(harness.runtime)
+    const run = createBoundRun(db, 'Antigravity unrelated input before Enter')
+    const enterCount = (): number =>
+      write.mock.calls.filter(([, payload]) => payload === '\r').length
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+    insertWorkerDone(db, run.id, 'Worker finished')
+    harness.runtime.deliverPendingMessagesForHandle(`run:${run.id}`)
+    expect(pointerCount(write)).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(100)
+    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'x')
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(enterCount()).toBe(0)
+    db.close()
+  })
+
+  it('skips applying a restored done report superseded by input sent after the persisted report', async () => {
+    vi.useFakeTimers()
+    const restoredAt = Date.now() - 60_000
+    const db = new OrchestrationDb(':memory:')
+    const harness = await createRuntime(db, { launchAgent: null })
+    const write = installInputRecordingController(harness.runtime, 'agy')
+    harness.runtime.startReattachedOutputClock(PTY_ID, {
+      pid: 4242,
+      incarnationId: 'mailbox-incarnation'
+    })
+    const run = createBoundRun(db, 'Antigravity superseded restore Run')
+    const message = insertWorkerDone(db, run.id, 'Unread before restart')
+    const enterCount = (): number =>
+      write.mock.calls.filter(([, payload]) => payload === '\r').length
+    vi.spyOn(agentHookServer, 'readRestoredAgentStatus').mockResolvedValue({
+      state: 'working',
+      mainAgent: { state: 'done', stateStartedAt: restoredAt },
+      receivedAt: restoredAt
+    })
+
+    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'continue\r')
+    harness.runtime.restoreReattachedAgentStatus(PTY_ID)
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(pointerCount(write)).toBe(0)
+    expect(enterCount()).toBe(0)
+    expect(harness.runtime.idleEvidenceSource.getFirstPartyAgentStatus(PTY_ID)).toBeNull()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
       pointer_enter_pending: 0
     })
     db.close()

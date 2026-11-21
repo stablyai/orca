@@ -109,7 +109,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.settle(ptyId, flight)
   }
   try {
-    const writeResult = args.deps.writePty(ptyId, pointer)
+    const writeResult = args.deps.writePty(ptyId, pointer, { stagePointerText: true })
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return

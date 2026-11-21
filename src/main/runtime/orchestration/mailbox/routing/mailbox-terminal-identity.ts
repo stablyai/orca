@@ -13,11 +13,14 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
   }
 
   /** The terminal orchestration points at its mail, whether or not a window pane shows it. */
-  protected getOrchestrationMailboxTerminal(ptyId: string): OrchestrationMailboxTerminal | null {
+  protected getOrchestrationMailboxTerminal(
+    ptyId: string,
+    options?: { ignoreStagedPointerWrite?: boolean }
+  ): OrchestrationMailboxTerminal | null {
     const pty = this.ptysById.get(ptyId)
     // Never issue here: a PTY awaiting its handle inventory gets mail once the exported handle is adopted.
     const handle = pty?.connected ? this.getTerminalHandleForPty(ptyId) : undefined
-    return pty && handle ? this.buildOrchestrationMailboxTerminal(handle, pty) : null
+    return pty && handle ? this.buildOrchestrationMailboxTerminal(handle, pty, options) : null
   }
 
   protected getOrchestrationMailboxTerminalForHandle(
@@ -33,7 +36,8 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
 
   private buildOrchestrationMailboxTerminal(
     handle: string,
-    pty: RuntimePtyWorktreeRecord
+    pty: RuntimePtyWorktreeRecord,
+    options?: { ignoreStagedPointerWrite?: boolean }
   ): OrchestrationMailboxTerminal | null {
     const paneKeys = this.getMailboxPaneKeysForPty(pty)
     if (paneKeys.length === 0) {
@@ -44,9 +48,12 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
     // A live turn-end hook (including monitoring with mainAgent done) proves rest without OSC titles.
     if (!isMailboxTerminalTakingInput({ lastAgentStatus, lastAgentStatusObservedLive })) {
       const agent = this.getPaneAgentForTuiIdle(ptyId)
+      const lastInputAt = options?.ignoreStagedPointerWrite
+        ? this.terminalRunFacts.readLastInputAtExcludingStagedPointer(ptyId)
+        : this.terminalRunFacts.readLastInputAt(ptyId)
       const turn =
         agent && hookAuthority(agent) !== 'identity-only'
-          ? this.readTuiIdleHookTurnForPty(ptyId, agent)
+          ? this.readTuiIdleHookTurnForPty(ptyId, agent, lastInputAt)
           : null
       if (turn?.state === 'done' && !turn.blockedReason) {
         lastAgentStatus = 'idle'

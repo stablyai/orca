@@ -33,8 +33,21 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
   protected orchestrationPointerPty(): OrchestrationPointerPty {
     return {
-      writePty: (ptyId, data) =>
-        writeOrchestrationPointerWithSettlement({ ptyId, data, controller: this.ptyController }),
+      writePty: (ptyId, data, options) => {
+        const priorLastInputAt = this.terminalRunFacts.readLastInputAt(ptyId)
+        const priorSeq = this.terminalRunFacts.readLastInputSeq(ptyId)
+        const result = writeOrchestrationPointerWithSettlement({
+          ptyId,
+          data,
+          controller: this.ptyController
+        })
+        if (options?.stagePointerText) {
+          this.terminalRunFacts.markStagedPointerWrite(ptyId, priorLastInputAt, priorSeq)
+        } else {
+          this.terminalRunFacts.clearStagedPointerWrite(ptyId)
+        }
+        return result
+      },
       getWindowsPointerEnterDelayMs: (ptyId, pointer) =>
         this.getWindowsPointerEnterDelayMs(ptyId, pointer)
     }
@@ -56,9 +69,10 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
   /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */
   protected resolveOrchestrationPointerSubmitTarget(
-    ptyId: string
+    ptyId: string,
+    options?: { ignoreStagedPointerWrite?: boolean }
   ): OrchestrationMailboxPointerSubmitTarget | null {
-    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId, options)
     const processIncarnation = terminal && this.getTerminalProcessIncarnation(terminal.handle)
     return processIncarnation ? { terminal, processIncarnation } : null
   }
