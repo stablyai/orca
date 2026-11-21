@@ -5,9 +5,11 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  collectLocalizationReferences,
   LOCALIZATION_SOURCE_ROOTS,
   main as verifyLocalizationCatalog
 } from './verify-localization-catalog.mjs'
+import { collectRuntimeRequiredKeys } from './generate-runtime-required-english-catalog.mjs'
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
@@ -42,6 +44,59 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 }
 
 describe('verify-localization-catalog', () => {
+  it('reuses imported readonly string defaults without shipping duplicate boot entries', async () => {
+    const { root } = makeProject({
+      sourceText: `import { COPY as defaults } from './copy'
+translate('test.literal', defaults.literal)
+translate('test.dynamic', defaults.dynamic)
+function shadow(defaults) { return translate('test.shadow', defaults.literal) }
+`
+    })
+    const componentDir = path.join(root, 'src/renderer/src/components')
+    writeFileSync(
+      path.join(componentDir, 'copy.ts'),
+      `export const COPY = {
+  literal: 'Literal default', dynamic: computeDefault()
+} as const`
+    )
+    // A nested binding makes the import ambiguous; keep all such defaults in the boot catalog.
+    let references = await collectLocalizationReferences(root)
+    expect(
+      references
+        .filter((reference) => reference.key.startsWith('test.'))
+        .map(({ key, fallback }) => [key, fallback])
+    ).toStrictEqual([
+      ['test.literal', undefined],
+      ['test.dynamic', undefined],
+      ['test.shadow', undefined]
+    ])
+    writeFileSync(
+      path.join(componentDir, 'Example.tsx'),
+      `import { COPY as defaults } from './copy'
+translate('test.literal', defaults.literal)
+translate('test.dynamic', defaults.dynamic)
+`
+    )
+    references = await collectLocalizationReferences(root)
+    expect(
+      collectRuntimeRequiredKeys(
+        new Map([
+          ['test.literal', 'Literal default'],
+          ['test.dynamic', 'Runtime default']
+        ]),
+        references
+      )
+    ).toEqual(new Set(['test.dynamic']))
+    writeFileSync(
+      path.join(componentDir, 'copy.ts'),
+      `export const COPY = { literal: 'Changed default' } as const`
+    )
+    references = await collectLocalizationReferences(root)
+    expect(
+      collectRuntimeRequiredKeys(new Map([['test.literal', 'Literal default']]), references)
+    ).toEqual(new Set(['test.literal']))
+  })
+
   it('bootstraps English entries without fabricating target translations', async () => {
     const { root, localesDir } = makeProject({
       sourceText:
