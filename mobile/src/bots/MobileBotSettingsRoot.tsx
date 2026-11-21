@@ -106,6 +106,8 @@ export function MobileBotSettingsRoot(props: {
   connectorsRow: ReactNode
   /** Rows under Who can ask in Access, such as Tools. */
   accessRows?: ReactNode
+  /** The Sharing group, after Access as on the desktop. */
+  sharing?: ReactNode
 }) {
   const t = useMobileTranslation()
   const { bot } = props
@@ -207,6 +209,7 @@ export function MobileBotSettingsRoot(props: {
           />
           {props.accessRows}
         </Section>
+        {props.sharing}
         <Section title={t('bots.settings.notifications', 'Notifications')}>
           {notification(
             'needsPermission',

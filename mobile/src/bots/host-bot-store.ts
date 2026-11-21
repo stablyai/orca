@@ -103,6 +103,26 @@ export function useHostBotById(botId: string): PhoneBot | null {
   )
 }
 
+const NO_BOTS: readonly PhoneBot[] = []
+
+function botsListing(botId: string): readonly PhoneBot[] {
+  for (const entry of entries.values()) {
+    if (entry.bots.some((candidate) => candidate.id === botId)) {
+      return entry.bots
+    }
+  }
+  return NO_BOTS
+}
+
+/** Every bot on the computer that lists this one; empty until a list holding it has been read. */
+export function useHostBotsListing(botId: string): readonly PhoneBot[] {
+  return useSyncExternalStore(
+    subscribe,
+    () => botsListing(botId),
+    () => NO_BOTS
+  )
+}
+
 function statusOf(botId: string): BotRowStatus | null {
   for (const entry of entries.values()) {
     const status = entry.statusByBotId.get(botId)

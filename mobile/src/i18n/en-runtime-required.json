@@ -183,6 +183,10 @@
         "workingCount_other": "{{count}} working"
       }
     },
+    "import": {
+      "folderItems_one": "{{count}} item",
+      "folderItems_other": "{{count}} items"
+    },
     "items": {
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
@@ -218,10 +222,6 @@
         "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
         "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled."
       }
-    },
-    "import": {
-      "folderItems_one": "{{count}} item",
-      "folderItems_other": "{{count}} items"
     }
   },
   "chat": {
