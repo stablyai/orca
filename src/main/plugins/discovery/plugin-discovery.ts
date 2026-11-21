@@ -127,6 +127,9 @@ async function readManifestDir(
     installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
   )
   const pluginKey = qualifiedPluginKey(manifest)
+  for (const warning of parsed.warnings ?? []) {
+    console.warn(`[plugins] ${pluginKey}: ${warning}`)
+  }
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
       pluginKey,
