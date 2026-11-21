@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { UiLanguage } from '../../../../../../shared/i18n/ui-language'
@@ -13,32 +12,44 @@ const noop = (): void => {}
 const paint = (): Promise<void> =>
   new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
-function permissionFixture({
-  language = 'en',
-  reported,
-  current = 'own',
-  active,
-  width = 767,
-  tooltip = false,
-  chatTextPx,
-  agent = 'claude'
-}: {
-  language?: UiLanguage
+type PermissionState = {
+  current: string
   reported?: string
-  agent?: string
-  current?: string
-  active?: string
-  /** Opens the pill's tooltip by keyboard focus and checks it is fully on screen. */
-  tooltip?: boolean
+  reportedUnnamed?: true
+  /** The English name the tooltip and accessible name must carry. */
+  name: string
+}
+
+const STATES = {
+  ask: { current: 'ask', name: 'Ask for approval' },
+  acceptEdits: { current: 'accept-edits', name: 'Accept edits' },
+  auto: { current: 'auto', name: 'Approve for me' },
+  fullAccess: { current: 'full-access', name: 'Full access' },
+  // Own settings before the agent reports a mode.
+  fallback: { current: 'own', name: 'Claude Code settings' },
+  // Own settings with a reported mode Orca has no name for.
+  unnamed: {
+    current: 'own',
+    reported: 'read-only',
+    reportedUnnamed: true,
+    name: 'Claude Code settings'
+  },
+  // A saved value this build doesn't recognize.
+  unknown: { current: 'legacy-mode', name: 'Permissions' }
+} satisfies Record<string, PermissionState>
+
+function permissionFixture({
+  state,
+  language = 'en',
+  width = 720,
+  focus
+}: {
+  state: PermissionState
+  language?: UiLanguage
   width?: number
-  /** Chat text size setting; controls and spacing scale with it. */
-  chatTextPx?: number
-} = {}) {
-  const chatScale:
-    | (CSSProperties & Record<'--chat-font-size' | '--chat-ui-font-size', string>)
-    | undefined = chatTextPx
-    ? { '--chat-font-size': `${chatTextPx}px`, '--chat-ui-font-size': `${chatTextPx}px` }
-    : undefined
+  /** Opens the pill's tooltip by keyboard focus or pointer hover. */
+  focus?: 'keyboard' | 'hover'
+}) {
   let sent = false
   const snapshot: SessionOptionDescriptor[] = [
     {
@@ -46,17 +57,18 @@ function permissionFixture({
       label: 'Permissions',
       category: 'mode',
       transport: 'agent-session',
-      valueSource: active ? 'dispatched' : 'applied',
-      activeValue: active,
+      valueSource: 'applied',
       settable: true,
       kind: {
         type: 'select',
-        currentValue: current,
-        reportedValue: reported,
-        settingsAgent: agent,
+        currentValue: state.current,
+        reportedValue: state.reported,
+        reportedUnnamed: state.reportedUnnamed,
+        settingsAgent: 'claude',
         choices: [
           { value: 'ask', label: 'Ask for approval' },
           { value: 'accept-edits', label: 'Accept edits' },
+          { value: 'auto', label: 'Approve for me' },
           { value: 'full-access', label: 'Full access' }
         ]
       }
@@ -83,11 +95,15 @@ function permissionFixture({
   }
   return defineFixture({
     width,
-    store: { settings: { ...getDefaultSettings('/home/fixture'), uiLanguage: language } },
+    store: {
+      settings: {
+        ...getDefaultSettings('/home/fixture'),
+        uiLanguage: language
+      }
+    },
     render: () => (
       <div
         data-composer-field
-        style={chatScale}
         className="native-chat-appearance rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5"
       >
         <NativeChatComposerActions
@@ -106,7 +122,7 @@ function permissionFixture({
           }}
           sessionOptionsSurface={surface}
           sessionOptionsSnapshot={snapshot}
-          agent={agent}
+          agent="claude"
         />
       </div>
     ),
@@ -115,122 +131,178 @@ function permissionFixture({
       await setRendererUiLanguage(language)
       await paint()
       const host = frame.querySelector<HTMLElement>('[data-composer-field]')!
-      const label = host.querySelector<HTMLElement>(
-        '[data-composer-control="permissions"] [data-composer-label]'
-      )!
-      const labelShown = getComputedStyle(label).visibility === 'visible'
-      if (width >= 767 && !labelShown) {
-        throw new Error('The permission text must be fully visible when the composer has room')
+      const pill = host.querySelector<HTMLButtonElement>(
+        '[data-composer-control="permissions"] button'
+      )
+      if (!pill) {
+        throw new Error('The composer must show the permission pill')
       }
-      if (!active && labelShown && label.scrollWidth > label.clientWidth + 1) {
-        throw new Error(
-          'A permission name must show in full or compact to its icon, never truncate'
-        )
+      // The closed pill is the mode's icon and a chevron at every width; the name lives in its
+      // accessible name and tooltip.
+      const glyphs = Array.from(pill.querySelectorAll('svg'))
+      if (
+        pill.innerText.trim() !== '' ||
+        glyphs.length !== 2 ||
+        glyphs.some((glyph) => getComputedStyle(glyph).visibility !== 'visible')
+      ) {
+        throw new Error('The permission pill must show only its icon and chevron')
       }
-      const originalWidth = frame.style.width
-      frame.style.width = '292px'
-      await paint()
-      const bounds = host.getBoundingClientRect()
+      const accessibleName = pill.getAttribute('aria-label') ?? ''
+      if (language === 'en' ? !accessibleName.includes(state.name) : accessibleName === '') {
+        throw new Error(`The permission pill must be named "${state.name}" for assistive tech`)
+      }
+      const model = host.querySelector<HTMLElement>('[data-composer-control="model"] button')
+      const pillBox = pill.getBoundingClientRect()
+      if (model && Math.abs(model.getBoundingClientRect().height - pillBox.height) > 0.5) {
+        throw new Error('The permission pill must match the model picker height')
+      }
+      const [icon, chevron] = glyphs.map((glyph) => glyph.getBoundingClientRect())
+      if (Math.abs(icon.left - pillBox.left - (pillBox.right - chevron.right)) > 1) {
+        throw new Error('The permission pill must pad its icon and chevron evenly')
+      }
+      const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).at(-1)!
       const controls = Array.from(host.querySelectorAll<HTMLElement>('[data-composer-control]'))
         .filter((control) => getComputedStyle(control).visibility === 'visible')
         .map((control) => control.getBoundingClientRect())
-      if (
-        controls.some((control) => control.left < bounds.left || control.right > bounds.right + 1)
-      ) {
-        throw new Error('A narrow composer must keep its controls within its bounds')
-      }
-      const narrowLabel = host.querySelector<HTMLElement>(
-        '[data-composer-control="permissions"] [data-composer-label]'
-      )!
-      if (
-        getComputedStyle(narrowLabel).visibility === 'visible' &&
-        narrowLabel.scrollWidth > narrowLabel.clientWidth + 1 &&
-        narrowLabel.clientWidth < 96
-      ) {
-        throw new Error(
-          'A narrow composer must compact the permission pill, not clip it to a sliver'
-        )
-      }
-      const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).at(-1)!
+      const bounds = host.getBoundingClientRect()
       const sendBounds = send.getBoundingClientRect()
-      if (controls.some((control) => control.right > sendBounds.left)) {
-        throw new Error('Permission controls must not cover Send in a narrow composer')
+      if (
+        controls.some(
+          (control) =>
+            control.left < bounds.left ||
+            control.right > bounds.right + 1 ||
+            control.right > sendBounds.left
+        )
+      ) {
+        throw new Error('Composer controls must stay in bounds and clear of Send')
       }
       send.click()
       if (!sent) {
-        throw new Error('Send must remain available in a narrow composer')
+        throw new Error('Send must remain available')
       }
-      frame.style.width = originalWidth
-      await paint()
-      if (tooltip) {
+      if (!focus) {
+        return
+      }
+      if (focus === 'keyboard') {
         // Tooltips open on keyboard focus only, so record a key press before focusing the pill.
         document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
-        host
-          .querySelector<HTMLButtonElement>('[data-composer-control="permissions"] button')!
-          .focus()
-        let content: HTMLElement | null = null
-        for (let attempt = 0; attempt < 60 && !content; attempt += 1) {
-          await paint()
-          content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
-        }
-        if (!content) {
-          throw new Error('The permission tooltip must open on keyboard focus')
-        }
-        await Promise.allSettled(content.getAnimations().map((animation) => animation.finished))
-        const box = content.getBoundingClientRect()
-        const text = content.firstElementChild
-        if (
-          !(text instanceof HTMLElement) ||
-          box.left < 0 ||
-          box.top < 0 ||
-          box.right > window.innerWidth ||
-          box.bottom > window.innerHeight ||
-          text.scrollWidth > text.clientWidth + 1 ||
-          text.scrollHeight > text.clientHeight + 1
-        ) {
-          throw new Error('The permission tooltip must be fully visible')
-        }
+        pill.focus()
+      } else {
+        pill.dispatchEvent(
+          new PointerEvent('pointermove', {
+            bubbles: true,
+            pointerType: 'mouse'
+          })
+        )
+      }
+      let content: HTMLElement | null = null
+      for (let attempt = 0; attempt < 60 && !content; attempt += 1) {
+        await paint()
+        content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
+      }
+      if (!content) {
+        throw new Error('The permission tooltip must open on focus and hover')
+      }
+      await Promise.allSettled(content.getAnimations().map((animation) => animation.finished))
+      const box = content.getBoundingClientRect()
+      if (
+        box.left < 0 ||
+        box.top < 0 ||
+        box.right > window.innerWidth ||
+        box.bottom > window.innerHeight
+      ) {
+        throw new Error('The permission tooltip must be fully visible')
+      }
+      if (language === 'en' && !content.innerText.includes(state.name)) {
+        throw new Error(`The permission tooltip must name "${state.name}"`)
       }
     }
   })
 }
 
-export const unknown = permissionFixture()
-// With no report, the tooltip names the settings and promises no mode.
-export const unknownTooltip = permissionFixture({ tooltip: true })
-export const unknownTooltipNarrow = permissionFixture({ width: 292, tooltip: true })
-// Codex in read-only reports a mode Orca has no name for.
-export const unnamedTooltip = permissionFixture({
-  language: 'pt',
-  agent: 'codex',
-  reported: 'read-only',
-  tooltip: true
+// Every state at the wide and narrowest composer, in English and Simplified Chinese.
+export const ask = permissionFixture({ state: STATES.ask })
+export const acceptEdits = permissionFixture({ state: STATES.acceptEdits })
+export const auto = permissionFixture({ state: STATES.auto })
+export const fullAccess = permissionFixture({ state: STATES.fullAccess })
+export const fallback = permissionFixture({ state: STATES.fallback })
+export const unnamed = permissionFixture({ state: STATES.unnamed })
+export const unknown = permissionFixture({ state: STATES.unknown })
+export const askNarrow = permissionFixture({ state: STATES.ask, width: 300 })
+export const acceptEditsNarrow = permissionFixture({
+  state: STATES.acceptEdits,
+  width: 300
 })
-export const reportedTooltip = permissionFixture({ reported: 'full-access', tooltip: true })
-export const reported = permissionFixture({ reported: 'full-access' })
-export const longFallback = permissionFixture({ language: 'pt' })
-export const longFallbackEs = permissionFixture({ language: 'es' })
-// Split panes leave the composer between the wide and narrow layouts.
-export const longFallback420 = permissionFixture({ language: 'pt', width: 420 })
-export const longFallback480 = permissionFixture({ language: 'pt', width: 480 })
-export const longFallback520 = permissionFixture({ language: 'pt', width: 520 })
-export const longFallbackEs420 = permissionFixture({ language: 'es', width: 420 })
-export const longFallbackEs480 = permissionFixture({ language: 'es', width: 480 })
-export const longFallbackEs520 = permissionFixture({ language: 'es', width: 520 })
-export const longFallbackTooltip = permissionFixture({ language: 'pt', tooltip: true })
-// The largest chat text setting scales the pill and the toolbar's measurement together.
-export const longFallbackScaled = permissionFixture({ language: 'pt', chatTextPx: 20 })
-export const longFallbackScaled460 = permissionFixture({
-  language: 'pt',
-  width: 460,
-  chatTextPx: 20
+export const autoNarrow = permissionFixture({ state: STATES.auto, width: 300 })
+export const fullAccessNarrow = permissionFixture({
+  state: STATES.fullAccess,
+  width: 300
 })
-export const longFallbackScaled520 = permissionFixture({
-  language: 'pt',
-  width: 520,
-  chatTextPx: 20
+export const fallbackNarrow = permissionFixture({
+  state: STATES.fallback,
+  width: 300
 })
-export const longMode = permissionFixture({ language: 'fr', reported: 'accept-edits' })
-export const longModeRu = permissionFixture({ language: 'ru', reported: 'ask' })
-export const narrow = permissionFixture({ width: 292 })
-export const deferred = permissionFixture({ language: 'fr', current: 'full-access', active: 'own' })
+export const unnamedNarrow = permissionFixture({
+  state: STATES.unnamed,
+  width: 300
+})
+export const unknownNarrow = permissionFixture({
+  state: STATES.unknown,
+  width: 300
+})
+export const zhAsk = permissionFixture({ state: STATES.ask, language: 'zh' })
+export const zhAcceptEdits = permissionFixture({
+  state: STATES.acceptEdits,
+  language: 'zh'
+})
+export const zhAuto = permissionFixture({ state: STATES.auto, language: 'zh' })
+export const zhFullAccess = permissionFixture({
+  state: STATES.fullAccess,
+  language: 'zh'
+})
+export const zhFallback = permissionFixture({
+  state: STATES.fallback,
+  language: 'zh'
+})
+export const zhUnnamed = permissionFixture({
+  state: STATES.unnamed,
+  language: 'zh'
+})
+export const zhUnknown = permissionFixture({
+  state: STATES.unknown,
+  language: 'zh'
+})
+export const zhFullAccessNarrow = permissionFixture({
+  state: STATES.fullAccess,
+  language: 'zh',
+  width: 300
+})
+export const zhFallbackNarrow = permissionFixture({
+  state: STATES.fallback,
+  language: 'zh',
+  width: 300
+})
+// The tooltip names the mode by hover and by keyboard focus, which also shows the focus ring.
+export const fullAccessHover = permissionFixture({
+  state: STATES.fullAccess,
+  focus: 'hover'
+})
+export const fullAccessKeyboard = permissionFixture({
+  state: STATES.fullAccess,
+  focus: 'keyboard'
+})
+export const fallbackKeyboard = permissionFixture({
+  state: STATES.fallback,
+  focus: 'keyboard'
+})
+export const zhFullAccessHover = permissionFixture({
+  state: STATES.fullAccess,
+  language: 'zh',
+  focus: 'hover'
+})
+export const zhFallbackKeyboardNarrow = permissionFixture({
+  state: STATES.fallback,
+  language: 'zh',
+  width: 300,
+  focus: 'keyboard'
+})
