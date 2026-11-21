@@ -246,7 +246,13 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
           })
           const response = await replies.next(id)
           if (worktreeHostId === 'runtime:other') {
-            expect(response).toMatchObject({ ok: false, error: { code: 'selector_not_found' } })
+            expect(response).toMatchObject({
+              ok: false,
+              error:
+                worktreeId === 'folder:hub' && method !== 'preflight.installedAgents'
+                  ? { code: 'runtime_error', message: 'worktree_execution_host_unresolved' }
+                  : { code: 'selector_not_found' }
+            })
           } else {
             expect(response).toMatchObject({
               ok: true,
