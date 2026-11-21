@@ -18937,6 +18937,7 @@
         "reason": "이유",
         "needsAccess": "접근이 필요한 경로",
         "plan": {
+          "expand": "계획 확대",
           "file": "계획 파일",
           "reviewTitle": "제안된 계획 검토",
           "refineHint": "계획 다듬기를 선택하면 검토가 닫히고 변경할 내용을 보낼 수 있습니다."

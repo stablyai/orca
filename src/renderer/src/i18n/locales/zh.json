@@ -20199,6 +20199,7 @@
         "reason": "原因",
         "needsAccess": "需要访问的路径",
         "plan": {
+          "expand": "展开计划",
           "file": "计划文件",
           "reviewTitle": "审阅建议的计划",
           "refineHint": "优化计划会关闭审阅，以便你发送要更改的内容"

@@ -19799,6 +19799,7 @@
         "needsAccess": "Benötigt Zugriff auf",
         "needsNewerOrca": "Diese Anfrage erfordert eine neuere Version von Orca.",
         "plan": {
+          "expand": "Plan vergrößern",
           "file": "Plandatei",
           "reviewTitle": "Vorgeschlagenen Plan prüfen",
           "refineHint": "„Plan verfeinern“ schließt das Review, damit Änderungswünsche gesendet werden können."

@@ -19980,6 +19980,7 @@
         "reasonSentAsMessage": "理由（メッセージとして送信）",
         "needsAccess": "アクセスが必要なパス",
         "plan": {
+          "expand": "プランを拡大",
           "file": "計画ファイル",
           "reviewTitle": "提案されたプランをレビュー",
           "refineHint": "プランを調整するとレビューが閉じ、変更内容を送信できます。"

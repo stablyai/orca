@@ -21567,6 +21567,7 @@
           "title": "{{value0}} is waiting for a choice in the terminal"
         },
         "plan": {
+          "expand": "Expand plan",
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
           "refineHint": "Refine plan closes the review so you can send what to change."

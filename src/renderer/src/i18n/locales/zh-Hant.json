@@ -19500,6 +19500,7 @@
         "needsAccess": "需要存取",
         "needsNewerOrca": "此請求需要更新版本的 Orca。",
         "plan": {
+          "expand": "展開計畫",
           "file": "計畫檔案",
           "reviewTitle": "審查建議的計畫",
           "refineHint": "「調整計畫」會關閉審查畫面，以便傳送要變更的內容。"

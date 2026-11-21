@@ -1113,6 +1113,7 @@
     "components.native-chat.approval.needsAccess",
     "components.native-chat.approval.needsNewerOrca",
     "components.native-chat.approval.openWorker",
+    "components.native-chat.approval.plan.expand",
     "components.native-chat.approval.plan.file",
     "components.native-chat.approval.plan.refineHint",
     "components.native-chat.approval.plan.reviewTitle",

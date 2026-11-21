@@ -5,7 +5,7 @@ import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
+import { NativeChatPlanBody, NativeChatPlanReader } from './NativeChatPlanReader'
 import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
 import {
   isNewerApprovalSubject,
@@ -15,7 +15,6 @@ import {
   URL_APPROVAL_DECLINE_OPTION_ID,
   URL_APPROVAL_OPEN_OPTION_ID
 } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
-import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
@@ -206,6 +205,9 @@ export function NativeChatApprovalCard({
                     </p>
                   ) : null}
                 </div>
+                {isPlanApprovalSubject(approval.subject) ? (
+                  <NativeChatPlanReader plan={approval.subject} title={title} />
+                ) : null}
                 {onCancel ? (
                   <button
                     type="button"
@@ -272,23 +274,7 @@ export function NativeChatApprovalCard({
                     </p>
                   ) : null}
                   {isPlanApprovalSubject(approval.subject) ? (
-                    <div data-native-chat-approval-plan="true">
-                      <NativeChatMarkdown
-                        content={approval.subject.text}
-                        variant="document"
-                        className="text-sm text-chat-foreground"
-                        renderCodeBlock={NativeChatCodeBlock}
-                        linkifyFilePaths
-                      />
-                      {approval.subject.filePath ? (
-                        <p className="mt-2 break-all">
-                          <span className="font-medium text-foreground">
-                            {t('components.native-chat.approval.plan.file', 'Plan file')}:{' '}
-                          </span>
-                          <span className="font-mono">{approval.subject.filePath}</span>
-                        </p>
-                      ) : null}
-                    </div>
+                    <NativeChatPlanBody plan={approval.subject} />
                   ) : url !== null ? (
                     <NativeChatUrlTarget url={url} />
                   ) : quietDetail !== null ? (

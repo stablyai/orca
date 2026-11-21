@@ -19400,6 +19400,7 @@
         "reason": "Motivo",
         "needsAccess": "Necesita acceso a",
         "plan": {
+          "expand": "Ampliar el plan",
           "file": "Archivo de plan",
           "reviewTitle": "Revisar el plan propuesto",
           "refineHint": "Refinar el plan cierra la revisión para que puedas enviar lo que debe cambiarse."
