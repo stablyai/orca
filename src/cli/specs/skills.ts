@@ -47,21 +47,23 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     path: ['skills', 'get'],
     aliases: [['skills', 'show']],
     summary: 'Print a version-matched skill guide as Markdown',
-    usage: 'orca skills get <topic> [--full | --reference <name>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full', 'reference', 'references'],
+    usage: 'orca skills get <topic> [--full | --reference <name>] [--platform <name|all>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full', 'reference', 'references', 'platform'],
     positionalArgs: ['topic'],
     notes: [
       'Reads bundled guide content locally without contacting the Orca runtime.',
       'Prints the compact guide by default. Use --full to print the full guide with bundled references when provided.',
       'Use --reference <name> to print one bundled reference alone, which is what an action gate in the compact guide needs; --references lists the available names.',
       'A reference name may be given bare (recovery-and-cleanup) or as the guide spells it (references/recovery-and-cleanup.md).',
+      'Guides with platform-specific notes print only the notes for the platform this machine runs (all of them for a remote runtime or WSL). Use --platform macos|linux|windows to pick one, or --platform all for every platform.',
       'Use --json for a deterministic object containing canonical topic metadata and content.'
     ],
     examples: [
       'orca skills get orca-cli',
       'orca skills get orchestration --full',
       'orca skills get orchestration --references',
-      'orca skills get orchestration --reference recovery-and-cleanup'
+      'orca skills get orchestration --reference recovery-and-cleanup',
+      'orca skills get orca-computer-use --platform all'
     ]
   },
   {
