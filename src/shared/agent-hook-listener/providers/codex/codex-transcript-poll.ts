@@ -1,5 +1,6 @@
 import { RolloutReadBatch } from './codex-rollout-async-reads'
 import { record, type JsonlCursor } from './codex-rollout-jsonl-format'
+import { childTranscriptDirectories } from './codex-rollout-paths'
 import {
   createPrefetchedRolloutReads,
   withPrefetchedRolloutReads
@@ -45,6 +46,30 @@ export function codexTranscriptPollOwner(
     state.codexSubagentRosterByPaneKey.get(paneKey) ??
     'codex'
   )
+}
+
+export function* codexTranscriptPollResources(
+  state: HookListenerState,
+  paneKey: string
+): Iterable<string> {
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  if (transcript?.parent.filePath) {
+    const parentPath = transcript.parent.filePath
+    yield parentPath
+    for (const child of transcript.subagents.values()) {
+      if (child.filePath) {
+        yield child.filePath
+      } else {
+        yield* childTranscriptDirectories(parentPath, child.startedAt)
+      }
+    }
+  }
+  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+  for (const child of roster?.values() ?? []) {
+    if (child.identityPendingPath) {
+      yield child.identityPendingPath
+    }
+  }
 }
 
 /** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */

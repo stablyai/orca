@@ -1,7 +1,9 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { CodexHookRolloutPrefetcher } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
 import { retainTmuxHookWriterTopology } from './cli-writer-observation'
 import {
   codexTranscriptPollOwner,
+  codexTranscriptPollResources,
   pollCodexTranscriptStatus,
   type CodexTranscriptPollReads,
   withCodexTranscriptPoll
@@ -22,7 +24,11 @@ import {
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
-import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
+import type {
+  EnrichedAgentHookEventPayload,
+  IncomingAgentHookEvent,
+  TranscriptPoll
+} from './server-types'
 import { codexReplayLeftTranscriptWork } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -31,14 +37,10 @@ import {
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
-type TranscriptPoll = {
-  source: AgentHookSource
-  body: unknown
-  original: EnrichedAgentHookEventPayload
-  delayMs?: number
-}
+type ReplayTranscriptPoll = Pick<TranscriptPoll, 'body' | 'original'>
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
+  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
   private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
     current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
@@ -51,13 +53,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
-    (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal)
+    (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal),
+    (paneKey) => codexTranscriptPollResources(this.state, paneKey)
   )
 
-  protected readonly replayTranscriptPolls = new Map<
-    string,
-    { body: unknown; original: EnrichedAgentHookEventPayload }
-  >()
+  protected readonly replayTranscriptPolls = new Map<string, ReplayTranscriptPoll>()
 
   protected applyObservedLocalHook(
     incoming: IncomingAgentHookEvent,
@@ -102,6 +102,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearAllTranscriptPolls(): void {
     this.replayTranscriptPolls.clear()
+    this.codexRolloutPrefetcher.clearAll()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
   }
@@ -112,6 +113,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected clearTranscriptPoll(paneKey: string): void {
+    this.codexRolloutPrefetcher.clear(paneKey)
     this.transcriptPollScheduler.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
   }

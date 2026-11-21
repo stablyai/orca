@@ -20,15 +20,9 @@ export { RolloutReadBatch } from './codex-rollout-read-slots'
 
 export function rolloutFileSizeAsync(
   filePath: string,
-  batch: RolloutReadBatch,
-  releasePrefetchPath?: () => void
+  batch: RolloutReadBatch
 ): Promise<number | null> {
-  return withRolloutReadSlot(
-    () => rolloutFileSizeAsyncUnslotted(filePath),
-    batch,
-    null,
-    releasePrefetchPath
-  )
+  return withRolloutReadSlot(filePath, () => rolloutFileSizeAsyncUnslotted(filePath), batch, null)
 }
 
 async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number | null> {
@@ -42,14 +36,13 @@ async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number |
 /** Off-thread twin of readJsonlFirstRecord for main-process polls. */
 export function readJsonlFirstRecordAsync(
   filePath: string,
-  batch: RolloutReadBatch,
-  releasePrefetchPath?: () => void
+  batch: RolloutReadBatch
 ): Promise<JsonlFirstRecord> {
   return withRolloutReadSlot(
+    filePath,
     (read) => readJsonlFirstRecordAsyncUnslotted(filePath, read),
     batch,
-    'unreadable',
-    releasePrefetchPath
+    'unreadable'
   )
 }
 
@@ -86,25 +79,25 @@ async function readJsonlFirstRecordAsyncUnslotted(
 /** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished, 'deferred' when the batch should retry next time. */
 export function readJsonlCursorBytes(
   cursor: JsonlCursor,
-  batch: RolloutReadBatch,
-  releasePrefetchPath?: () => void
+  batch: RolloutReadBatch
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
+  const filePath = cursor.filePath
+  if (!filePath) {
+    return Promise.resolve(undefined)
+  }
+  const snapshot = { filePath, offset: cursor.offset, carry: cursor.carry }
   return withRolloutReadSlot(
-    (read) => readJsonlCursorBytesUnslotted(cursor, read),
+    filePath,
+    (read) => readJsonlCursorBytesUnslotted(snapshot, read),
     batch,
-    'deferred',
-    releasePrefetchPath
+    'deferred'
   )
 }
 
 async function readJsonlCursorBytesUnslotted(
-  cursor: JsonlCursor,
+  snapshot: JsonlCursor & { filePath: string },
   read: RolloutRead
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
-  if (!cursor.filePath) {
-    return undefined
-  }
-  const snapshot = { ...cursor, filePath: cursor.filePath }
   let size: number
   try {
     const stats = await stat(snapshot.filePath)
@@ -147,6 +140,7 @@ export function readTranscriptDirectoryAsync(
   batch: RolloutReadBatch
 ): Promise<string[]> {
   return withRolloutReadSlot(
+    directory,
     (read) => readTranscriptDirectoryAsyncUnslotted(directory, read),
     batch,
     []

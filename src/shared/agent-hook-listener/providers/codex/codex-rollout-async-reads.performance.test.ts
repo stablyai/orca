@@ -48,7 +48,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 function stallEveryReadSlot(): Promise<unknown>[] {
   fs.stats = 0
   fs.started.length = 0
-  return [0, 1, 2].map(() => rolloutFileSizeAsync('/stalled', new RolloutReadBatch()))
+  return [0, 1, 2].map((index) => rolloutFileSizeAsync(`/stalled-${index}`, new RolloutReadBatch()))
 }
 
 async function drain(reads: Promise<unknown>[]): Promise<void> {
@@ -137,7 +137,7 @@ it.each([100, 1000])(
 
     fs.stalled.shift()!()
     await vi.advanceTimersByTimeAsync(0)
-    expect(fs.started).toEqual(['/stalled', '/stalled', '/stalled', '/next'])
+    expect(fs.started).toEqual(['/stalled-0', '/stalled-1', '/stalled-2', '/next'])
     fs.stalled.pop()!()
     await vi.advanceTimersByTimeAsync(0)
     expect(fs.started.at(-1)).toBe('/following')
@@ -223,9 +223,9 @@ it.each([100, 1000])(
   async (waiters) => {
     const stalled = stallEveryReadSlot()
     let checks = 0
-    const queued = Array.from({ length: waiters }, () =>
+    const queued = Array.from({ length: waiters }, (_, index) =>
       rolloutFileSizeAsync(
-        '/queued',
+        `/queued-${index}`,
         new RolloutReadBatch(() => {
           checks++
           return true
@@ -294,7 +294,7 @@ it.each([100, 1000])(
 
       expect(checks).toBe(0)
       expect(settled).toEqual(names.filter((_, index) => index % 2 === 0))
-      expect(fs.started).toEqual(['/stalled', '/stalled', '/stalled'])
+      expect(fs.started).toEqual(['/stalled-0', '/stalled-1', '/stalled-2'])
       await drain(stalled)
       expect(fs.started.slice(3)).toEqual(names.filter((_, index) => index % 2 === 1))
     } finally {

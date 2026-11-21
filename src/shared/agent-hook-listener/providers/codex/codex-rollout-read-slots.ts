@@ -5,7 +5,9 @@ const MAX_CONCURRENT_ROLLOUT_READS = 3
 const MAX_QUEUED_ROLLOUT_READS = 4096
 const ROLLOUT_READ_TIMEOUT_MS = 20_000
 
-const nativeReads = new Set<{ stalledAt: number }>()
+type NativeRead = { stalledAt: number; parked?: Set<() => void> }
+
+const nativeReads = new Map<string, NativeRead>()
 const parkedPolls = new Set<() => void>()
 let reportedStall = false
 
@@ -13,7 +15,7 @@ function allReadSlotsStalled(now: number): boolean {
   if (nativeReads.size < MAX_CONCURRENT_ROLLOUT_READS) {
     return false
   }
-  for (const read of nativeReads) {
+  for (const read of nativeReads.values()) {
     if (read.stalledAt > now) {
       return false
     }
@@ -25,12 +27,45 @@ function allReadSlotsStalled(now: number): boolean {
   return true
 }
 
-export function parkRolloutPollIfStalled(resume: () => void): (() => void) | undefined {
-  if (!allReadSlotsStalled(monotonicNow())) {
-    return undefined
+export function parkRolloutPollIfStalled(
+  resume: () => void,
+  resources?: Iterable<string>
+): (() => void) | undefined {
+  const allStalled = allReadSlotsStalled(monotonicNow())
+  let occupied: Set<NativeRead> | undefined
+  if (nativeReads.size > 0 && resources) {
+    for (const resource of resources) {
+      const read = nativeReads.get(resource)
+      if (!read) {
+        occupied = undefined
+        break
+      }
+      occupied ??= new Set()
+      occupied.add(read)
+    }
   }
-  parkedPolls.add(resume)
-  return () => parkedPolls.delete(resume)
+  if (!occupied) {
+    if (!allStalled) {
+      return undefined
+    }
+    parkedPolls.add(resume)
+    return () => parkedPolls.delete(resume)
+  }
+  const waiting = occupied
+  const cancel = (): void => {
+    for (const read of waiting) {
+      read.parked?.delete(recover)
+    }
+  }
+  const recover = (): void => {
+    cancel()
+    resume()
+  }
+  for (const read of waiting) {
+    read.parked ??= new Set()
+    read.parked.add(recover)
+  }
+  return cancel
 }
 
 type RolloutReadWaiter = {
@@ -78,6 +113,7 @@ let heldRolloutBytes = 0
 /** One poll's or hook's reads: whether they are still wanted, and the buffer bytes they hold until released. */
 export class RolloutReadBatch {
   readonly budget = { held: 0, retained: 0 }
+  readonly deferrals = new Map<string, 'resource' | 'capacity'>()
   private released = false
 
   constructor(
@@ -105,20 +141,28 @@ export type RolloutRead = {
 }
 
 export function withRolloutReadSlot<T>(
+  resource: string,
   run: (read: RolloutRead) => Promise<T>,
   batch: RolloutReadBatch,
-  unwanted: T,
-  releasePrefetchPath?: () => void
+  unwanted: T
 ): Promise<T> {
   const now = monotonicNow()
   const delay = Math.min(ROLLOUT_READ_TIMEOUT_MS, (batch.expiresAt?.() ?? Infinity) - Date.now())
-  if (
-    delay <= 0 ||
-    !batch.wanted() ||
-    allReadSlotsStalled(now) ||
-    queuedReads >= MAX_QUEUED_ROLLOUT_READS
-  ) {
-    releasePrefetchPath?.()
+  batch.deferrals.delete(resource)
+  if (!batch.wanted()) {
+    return Promise.resolve(unwanted)
+  }
+  if (delay <= 0) {
+    batch.deferrals.set(resource, 'capacity')
+    return Promise.resolve(unwanted)
+  }
+  const allStalled = allReadSlotsStalled(now)
+  if (nativeReads.has(resource)) {
+    batch.deferrals.set(resource, 'resource')
+    return Promise.resolve(unwanted)
+  }
+  if (allStalled || queuedReads >= MAX_QUEUED_ROLLOUT_READS) {
+    batch.deferrals.set(resource, 'capacity')
     return Promise.resolve(unwanted)
   }
   const deadline = now + delay
@@ -131,7 +175,6 @@ export function withRolloutReadSlot<T>(
     request = { batch, resolve, reject }
   })
   let waiter: RolloutReadWaiter | undefined
-  let started = false
   const complete = (outcome: Settled<T>): void => {
     const caller = request
     if (!caller) {
@@ -144,9 +187,6 @@ export function withRolloutReadSlot<T>(
       unlinkWaiter(waiter)
       waiter = undefined
     }
-    if (!started) {
-      releasePrefetchPath?.()
-    }
     if (outcome.ok) {
       caller.resolve(outcome.value)
     } else {
@@ -154,12 +194,14 @@ export function withRolloutReadSlot<T>(
     }
   }
   const abandon = (): void => {
+    request?.batch.deferrals.set(resource, nativeReads.has(resource) ? 'resource' : 'capacity')
     complete({ ok: true, value: unwanted })
     allReadSlotsStalled(monotonicNow())
   }
   const wanted = (): boolean => monotonicNow() < deadline && request?.batch.wanted() === true
   const start = (): void => {
-    if (!wanted()) {
+    // Another waiter can claim this resource while this request is still queued.
+    if (!wanted() || nativeReads.has(resource)) {
       abandon()
       return
     }
@@ -168,9 +210,8 @@ export function withRolloutReadSlot<T>(
       waiter = undefined
     }
     // A short lease or a long queue wait can end a caller before its native operation stalls.
-    const native = { stalledAt: monotonicNow() + ROLLOUT_READ_TIMEOUT_MS }
-    started = true
-    nativeReads.add(native)
+    const running: NativeRead = { stalledAt: monotonicNow() + ROLLOUT_READ_TIMEOUT_MS }
+    nativeReads.set(resource, running)
     let held = 0
     let retained = 0
     const reserve: RolloutRead['reserve'] = (bytes, lifetime) => {
@@ -195,16 +236,19 @@ export function withRolloutReadSlot<T>(
       budget.held -= held - keep
       heldRolloutBytes -= held - keep
       budget.retained += keep
-      complete(accepted ? outcome : { ok: true, value: unwanted })
+      if (accepted) {
+        complete(outcome)
+      } else {
+        abandon()
+      }
       // A caller may leave early. Only native settlement (including close) frees capacity.
-      nativeReads.delete(native)
-      releasePrefetchPath?.()
+      nativeReads.delete(resource)
       reportedStall = false
       while (firstWaiter && nativeReads.size < MAX_CONCURRENT_ROLLOUT_READS) {
         firstWaiter.start()
       }
-      if (parkedPolls.size > 0) {
-        const ready = [...parkedPolls]
+      if (parkedPolls.size > 0 || running.parked?.size) {
+        const ready = [...parkedPolls, ...(running.parked ?? [])]
         parkedPolls.clear()
         for (const resume of ready) {
           resume()

@@ -110,19 +110,26 @@ export async function prefetchCodexHookRolloutReads(
 const HOOK_PREFETCH_MAX_MS = 20_000
 
 /** Prefetches within a time bound; reads still pending afterwards are deferred to the poll and start nothing further. */
-export async function prefetchCodexHookRolloutReadsWithin(
+async function prefetchCodexHookRolloutReadsWithin(
   state: HookListenerState,
-  body: unknown
+  body: unknown,
+  owner: AbortSignal
 ): Promise<PrefetchedRolloutReads> {
   const controller = new AbortController()
-  const reads = createPrefetchedRolloutReads(controller.signal)
+  const reads = createPrefetchedRolloutReads(AbortSignal.any([controller.signal, owner]))
+  if (owner.aborted) {
+    reads.closed = true
+    return reads
+  }
   await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, HOOK_PREFETCH_MAX_MS)
-    timer.unref?.()
     const done = (): void => {
       clearTimeout(timer)
+      owner.removeEventListener('abort', done)
       resolve()
     }
+    const timer = setTimeout(done, HOOK_PREFETCH_MAX_MS)
+    timer.unref?.()
+    owner.addEventListener('abort', done, { once: true })
     prefetchCodexHookRolloutReads(state, body, reads).then(done, done)
   })
   reads.closed = true
@@ -132,30 +139,44 @@ export async function prefetchCodexHookRolloutReadsWithin(
 
 /** Prefetches Codex hooks per pane in arrival order, so a slow read cannot let a later hook's status overtake an earlier one. */
 export class CodexHookRolloutPrefetcher {
-  private readonly tails = new Map<string, Promise<void>>()
+  private readonly tails = new Map<string, { turn: Promise<void>; owner: AbortController }>()
+
+  clear(paneKey: string): void {
+    const tail = this.tails.get(paneKey)
+    this.tails.delete(paneKey)
+    tail?.owner.abort()
+  }
+
+  clearAll(): void {
+    for (const paneKey of this.tails.keys()) {
+      this.clear(paneKey)
+    }
+  }
 
   /** Call `release` once the hook is normalized and applied. */
   async prefetch(
     state: HookListenerState,
     body: unknown
-  ): Promise<{ reads: PrefetchedRolloutReads; release: () => void }> {
+  ): Promise<{ reads: PrefetchedRolloutReads; signal: AbortSignal; release: () => void }> {
     const key = hookPaneKey(body) ?? ''
     const previous = this.tails.get(key)
+    const owner = previous?.owner ?? new AbortController()
     let release!: () => void
     const turn = new Promise<void>((resolve) => {
       release = () => {
-        if (this.tails.get(key) === turn) {
+        if (this.tails.get(key)?.turn === turn) {
           this.tails.delete(key)
         }
         resolve()
       }
     })
-    this.tails.set(key, turn)
+    this.tails.set(key, { turn, owner })
     // Every turn's prefetch is time-bounded and its release follows synchronously, so the wait for `previous` is bounded too.
-    await previous
-    const reads = await prefetchCodexHookRolloutReadsWithin(state, body)
+    await previous?.turn
+    const reads = await prefetchCodexHookRolloutReadsWithin(state, body, owner.signal)
     return {
       reads,
+      signal: owner.signal,
       release: () => {
         reads.batch.release()
         release()

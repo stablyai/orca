@@ -36,7 +36,8 @@ export class AgentTranscriptPollScheduler<T> {
 
   constructor(
     private readonly delayMs: number,
-    private readonly onDue: (key: string, value: T, signal: AbortSignal) => void | Promise<void>
+    private readonly onDue: (key: string, value: T, signal: AbortSignal) => void | Promise<void>,
+    private readonly rolloutResources?: (key: string) => Iterable<string>
   ) {
     this.deadlines = new CodexSubagentPollScheduler(delayMs, (key, entry) => {
       if (this.entries.get(key) !== entry) {
@@ -84,7 +85,7 @@ export class AgentTranscriptPollScheduler<T> {
       if (this.entries.get(key) === entry) {
         this.arm(key, entry, entry.delayMs)
       }
-    })
+    }, this.rolloutResources?.(key))
     if (!entry.cancelRecovery) {
       return false
     }
@@ -177,11 +178,16 @@ export class AgentTranscriptPollScheduler<T> {
       }
     }
     entry.value = value
+    // A hook for the same parent can introduce a child with a different rollout.
+    if (entry.cancelRecovery) {
+      entry.cancelRecovery()
+      entry.cancelRecovery = undefined
+      if (this.parkIfStalled(key, entry)) {
+        return
+      }
+    }
     // The pending callback reads this entry's latest hook, so repeated hooks need neither a new watch nor a new timer.
-    if (
-      entry.cancelRecovery ||
-      (entry.scheduled && !(delayMs !== undefined && delayMs < entry.delayMs))
-    ) {
+    if (entry.scheduled && !(delayMs !== undefined && delayMs < entry.delayMs)) {
       return
     }
     const now = performance.now()

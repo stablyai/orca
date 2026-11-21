@@ -65,6 +65,13 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   acceptedReply?: { text: string; leadTurnKey: number }
 }
 
+export type TranscriptPoll = {
+  source: AgentHookSource
+  body: unknown
+  original: EnrichedAgentHookEventPayload
+  delayMs?: number
+}
+
 // Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,

@@ -31,14 +31,8 @@ import {
   type PrefetchedRolloutReads,
   withPrefetchedRolloutReads
 } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
-import {
-  CodexHookRolloutPrefetcher,
-  prefetchCodexHookRolloutReadsWithin
-} from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
-  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
-
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
    *  owner's exit neither answers for the pane nor is forgotten. */
@@ -259,27 +253,34 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     const token = this.token
     const statusHookGeneration = this.statusHookGeneration
-    const apply = (reads?: PrefetchedRolloutReads) => {
-      try {
-        if (
-          !this.statusHooksEnabled ||
-          this.token !== token ||
-          this.statusHookGeneration !== statusHookGeneration
-        ) {
-          throw new Error('Status hook spool replay interrupted')
-        }
+    const assertCurrent = (): void => {
+      if (
+        !this.statusHooksEnabled ||
+        this.token !== token ||
+        this.statusHookGeneration !== statusHookGeneration
+      ) {
+        throw new Error('Status hook spool replay interrupted')
+      }
+    }
+    const apply = (reads?: PrefetchedRolloutReads, cancelled?: boolean): void => {
+      assertCurrent()
+      if (!cancelled) {
         withPrefetchedRolloutReads(reads, () => this.applySpoolHook(record, body))
-      } finally {
-        reads?.batch.release()
       }
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
     const pending = this.checkHookOwner(record.source, body, answerBy)
     if (record.source === 'codex') {
       // Replayed Codex hooks read live rollouts too; keep those opens off the main thread (#43539).
-      return Promise.resolve(pending)
-        .then(() => prefetchCodexHookRolloutReadsWithin(this.state, body))
-        .then(apply)
+      return Promise.resolve(pending).then(async () => {
+        assertCurrent()
+        const prefetch = await this.codexRolloutPrefetcher.prefetch(this.state, body)
+        try {
+          apply(prefetch.reads, prefetch.signal.aborted)
+        } finally {
+          prefetch.release()
+        }
+      })
     }
     return pending ? pending.then(() => apply()) : apply()
   }

@@ -1,6 +1,7 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
 import {
   codexTranscriptPollOwner,
+  codexTranscriptPollResources,
   pollCodexTranscriptStatus,
   type CodexTranscriptPollReads,
   withCodexTranscriptPoll
@@ -74,7 +75,8 @@ export class AgentHookResultRetryScheduler {
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
-      (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal)
+      (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal),
+      (paneKey) => codexTranscriptPollResources(this.host.state, paneKey)
     )
   }
 

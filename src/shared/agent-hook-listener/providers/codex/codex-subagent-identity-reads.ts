@@ -54,18 +54,21 @@ export async function readPendingCodexSubagentIdentities(
     if (!child || !transcriptPath) {
       continue
     }
-    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath, batch)}`
+    const size = await rolloutFileSizeAsync(transcriptPath, batch)
     if (!batch.wanted()) {
       break
     }
-    if (child.identityMissKey === missKey) {
+    const missKey = `${transcriptPath}:${size}`
+    if (batch.deferrals.has(transcriptPath) || child.identityMissKey === missKey) {
       continue
     }
     const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim(), batch)
     if (!batch.wanted()) {
       break
     }
-    reads.push({ id, child, transcriptPath, missKey, identity })
+    if (!batch.deferrals.has(transcriptPath)) {
+      reads.push({ id, child, transcriptPath, missKey, identity })
+    }
   }
   return reads
 }
