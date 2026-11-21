@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -62,5 +62,15 @@ it('refuses a registered checkout with a marker when its record predates marker 
 
   await expect(assertCheckoutNotReplaced({ worktreePath, gitdir: undefined })).rejects.toThrow(
     'cannot confirm'
+  )
+})
+
+it('refuses a standalone repository whose .git is a directory instead of treating it as stripped', async () => {
+  const gitdir = await acceptCheckout('feature')
+  await rm(join(worktreePath, '.git'))
+  await mkdir(join(worktreePath, '.git'))
+
+  await expect(assertCheckoutNotReplaced({ worktreePath, gitdir })).rejects.toThrow(
+    'A different checkout is now at'
   )
 })

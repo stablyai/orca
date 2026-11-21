@@ -1,7 +1,11 @@
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import { pruneGitWorktrees } from '../../git/worktrees/removal/worktree-prune-guard'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal/removal'
+import {
+  assertWorktreeUnlockedForRemoval,
+  CheckoutIdentityRefusal,
+  differentCheckoutAtPathError
+} from '../../../shared/worktree/removal/removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import {
   formatWorktreeRemovalError,
@@ -13,8 +17,18 @@ import {
   type GitWorktreeExecOptions
 } from '../../git/worktrees/worktree-operation-options'
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
-import { removeLocalWorktreePath } from './local-worktree-filesystem'
-import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
+import {
+  getLocalWorktreePathAccess,
+  removeLocalWorktreePath,
+  toLocalWorktreeRuntimePaths
+} from './local-worktree-filesystem'
+import { CLIENT_REMOVAL_HOME, getPathOps } from './worktree-removal-home-guard'
+import {
+  assertWorktreeDoesNotContainRegisteredWorktree,
+  canSafelyRemoveOrphanedWorktreeDirectory,
+  isDangerousWorktreeRemovalPath,
+  isWorktreePathMissing
+} from './worktree-removal-safety'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
@@ -29,11 +43,12 @@ type LocalPartialRemovalRecoveryArgs = {
   signal?: AbortSignal
   /** Rechecks the folder is still the accepted checkout immediately before its files are deleted. */
   beforeLeftoverDelete?: () => Promise<void>
+  expectedMarker?: string
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
   LocalPartialRemovalRecoveryArgs,
-  'error' | 'force' | 'closeWatcher' | 'signal' | 'beforeLeftoverDelete'
+  'error' | 'force' | 'closeWatcher' | 'signal' | 'beforeLeftoverDelete' | 'expectedMarker'
 >
 
 function preservedBranchResult(
@@ -127,15 +142,21 @@ export async function recoverPartialLocalWorktreeRemoval(
   await args.closeWatcher(args.canonicalWorktreePath)
   throwIfSignalAborted(args.signal)
   await args.beforeLeftoverDelete?.()
+  if (!args.beforeLeftoverDelete && args.expectedMarker === undefined) {
+    await assertRemainingMarkerBelongsToRepoWorktree(args)
+  }
   try {
     await removeLocalWorktreePath(
       args.canonicalWorktreePath,
       args.localWorktreeGitOptions,
       args.signal,
-      { markerLast: true }
+      { markerLast: true, expectedMarker: args.expectedMarker }
     )
   } catch (error) {
     throwIfSignalAborted(args.signal)
+    if (error instanceof CheckoutIdentityRefusal) {
+      throw error
+    }
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
   const { branch, head } = args.registeredWorktree
@@ -146,6 +167,35 @@ export async function recoverPartialLocalWorktreeRemoval(
     args.deleteBranch && branch ? { name: normalizeLocalBranchRef(branch), head } : null,
     args.localWorktreeGitOptions
   )
+}
+
+async function assertRemainingMarkerBelongsToRepoWorktree(
+  args: LocalPartialRemovalRecoveryArgs
+): Promise<void> {
+  const access = getLocalWorktreePathAccess(args.localWorktreeGitOptions)
+  const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
+    [args.canonicalWorktreePath, args.repoPath],
+    args.localWorktreeGitOptions,
+    args.signal
+  )
+  throwIfSignalAborted(args.signal)
+  if (isDangerousWorktreeRemovalPath(runtimePath, runtimeRepoPath, CLIENT_REMOVAL_HOME)) {
+    throw new Error(`Refusing to delete protected worktree path: ${args.canonicalWorktreePath}`)
+  }
+  const markerPath = getPathOps(runtimePath).join(runtimePath, '.git')
+  if (await isWorktreePathMissing(markerPath, access.statPath)) {
+    return
+  }
+  const safe = await canSafelyRemoveOrphanedWorktreeDirectory(
+    runtimePath,
+    runtimeRepoPath,
+    CLIENT_REMOVAL_HOME,
+    access
+  )
+  throwIfSignalAborted(args.signal)
+  if (!safe) {
+    throw differentCheckoutAtPathError(args.canonicalWorktreePath)
+  }
 }
 
 async function isRecoverablePartialRemovalFailure(

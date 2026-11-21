@@ -7,6 +7,15 @@ export function unregisteredFolderRefusal(worktreePath: string): Error {
   )
 }
 
+/** The folder at the path is not provably the accepted checkout; nothing there was deleted. */
+export class CheckoutIdentityRefusal extends Error {}
+
+export function differentCheckoutAtPathError(worktreePath: string): Error {
+  return new CheckoutIdentityRefusal(
+    `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
+  )
+}
+
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
 export const UNSTOPPED_PTY_REMOVAL_PREFIX = 'Failed to physically stop every PTY for worktree:'

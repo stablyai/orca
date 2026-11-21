@@ -25,3 +25,5 @@ export const readdir = (path: string): Promise<string[]> => nativeFs().readdir(p
 export const unlink = (path: string): Promise<void> => nativeFs().unlink(path)
 export const rmdir = (path: string): Promise<void> => nativeFs().rmdir(path)
 export const lstat = (path: string) => nativeFs().lstat(path)
+export const lstatBigInt = (path: string) => nativeFs().lstat(path, { bigint: true })
+export const readUtf8File = (path: string): Promise<string> => nativeFs().readFile(path, 'utf8')

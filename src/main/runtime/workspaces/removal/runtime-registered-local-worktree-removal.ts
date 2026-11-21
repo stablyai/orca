@@ -1,6 +1,9 @@
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
-import { readCheckoutMarkerIdentity } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
-import { CheckoutIdentityRefusal } from '../../../workspaces/removal/worktree-removal-leftover'
+import { readCheckoutMarkerState } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
+import {
+  assertCheckoutNotReplaced,
+  CheckoutIdentityRefusal
+} from '../../../workspaces/removal/worktree-removal-leftover'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   authorizeWindowsCheckout,
@@ -182,8 +185,19 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const prepare = async (): Promise<RemoveWorktreeResult> => {
     const gate = await args.acquireWatcherRemoval(canonicalPath)
     let accepted = false
+    let gitdir: string | undefined
+    let verifyAcceptedCheckout: (() => Promise<void>) | undefined
     try {
+      const initialMarker = await readCheckoutMarkerState(canonicalPath, localOptions).catch(
+        () => undefined
+      )
+      gitdir = initialMarker?.kind === 'file' ? initialMarker.identity : undefined
+      verifyAcceptedCheckout =
+        initialMarker && initialMarker.kind !== 'other'
+          ? () => assertCheckoutNotReplaced({ worktreePath: canonicalPath, gitdir }, localOptions)
+          : undefined
       await args.stopPtys()
+      await verifyAcceptedCheckout?.()
       await args.beforeCheckoutDelete?.(refreshed)
       if (!markerMissing && linkedPaths.length > 0) {
         await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
@@ -199,7 +213,14 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       ...(warning ? { warning } : {})
     }
     if (!background) {
-      const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate)
+      const result = await finishRuntimeLocalWorktreeRemoval(
+        args,
+        refreshed,
+        gate,
+        undefined,
+        verifyAcceptedCheckout,
+        gitdir
+      )
       args.publish()
       return { ...result, ...acceptedFields }
     }
@@ -210,12 +231,19 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
         repoId: repo.id,
         repoPath: repo.path,
         worktree: refreshed,
-        gitdir: await readCheckoutMarkerIdentity(refreshed.path),
+        gitdir,
         deleteBranch: args.deleteBranch,
         force: args.force
       },
       run: async (stopSignal) => {
-        const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate, stopSignal)
+        const result = await finishRuntimeLocalWorktreeRemoval(
+          args,
+          refreshed,
+          gate,
+          stopSignal,
+          verifyAcceptedCheckout,
+          gitdir
+        )
         args.onRemoved()
         return result
       },
@@ -247,7 +275,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
   refreshed: GitWorktreeInfo,
   gate: { finish: (removed: boolean) => Promise<void> },
   checkoutDeleteSignal?: AbortSignal,
-  beforeCheckoutDelete?: () => Promise<void>
+  beforeCheckoutDelete?: () => Promise<void>,
+  expectedMarker?: string
 ): Promise<RemoveWorktreeResult> {
   const { repo, localOptions } = args
   const canonicalPath = refreshed.path
@@ -281,7 +310,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         deleteBranch: args.deleteBranch,
         closeWatcher: args.closeWatchers,
         signal: checkoutDeleteSignal,
-        ...(beforeCheckoutDelete ? { beforeLeftoverDelete: beforeCheckoutDelete } : {})
+        ...(beforeCheckoutDelete ? { beforeLeftoverDelete: beforeCheckoutDelete } : {}),
+        ...(expectedMarker !== undefined ? { expectedMarker } : {})
       })
       if (recovered) {
         removalResult = recovered

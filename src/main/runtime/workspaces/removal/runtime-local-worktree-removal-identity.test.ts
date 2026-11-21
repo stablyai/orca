@@ -112,7 +112,36 @@ it('rechecks identity right before recovery deletes a leftover', async () => {
       closeWatcher: async () => {},
       beforeLeftoverDelete: () => assertCheckoutNotReplaced(record)
     })
-  ).rejects.toThrow()
+  ).rejects.toThrow('A different checkout is now at')
 
   expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+})
+
+it('refuses a checkout restored during watcher teardown even without a pre-recorded marker', async () => {
+  const repoPath = join(scratchDir, 'repo')
+  const otherRepoPath = join(scratchDir, 'other')
+  const worktreePath = join(scratchDir, 'checkout')
+  await initRepo(repoPath)
+  await initRepo(otherRepoPath)
+  await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'], repoPath)
+  await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+
+  await expect(
+    recoverPartialLocalWorktreeRemoval({
+      error: new Error('git worktree remove failed'),
+      force: true,
+      canonicalWorktreePath: worktreePath,
+      repoPath,
+      localWorktreeGitOptions: {},
+      registeredWorktree: { branch: 'refs/heads/feature', head: '' },
+      deleteBranch: false,
+      closeWatcher: async () => {
+        await git(['worktree', 'add', '-q', worktreePath, '-b', 'other'], otherRepoPath)
+        await writeFile(join(worktreePath, 'work.txt'), 'unsaved\n')
+      }
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+  expect(existsSync(join(worktreePath, '.git'))).toBe(true)
 })

@@ -1,9 +1,13 @@
 // Host deletion needs bounded Windows lock retries and unpatched fs for Electron’s .asar handling.
 
 import { getErrorCode } from '../git/worktrees/worktree-operation-options'
-import { unregisteredFolderRefusal } from '../../shared/worktree/removal/removal'
+import { parseGitdirMarkerPayload } from '../../shared/git/metadata/gitdir-marker-payload'
+import {
+  differentCheckoutAtPathError,
+  unregisteredFolderRefusal
+} from '../../shared/worktree/removal/removal'
 import { join, win32 } from 'node:path'
-import { lstat, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
+import { lstat, lstatBigInt, readUtf8File, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
 import { isWindowsAbsolutePathLike } from '../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { stripWin32LongPathPrefix } from '../../shared/file-access/windows-path-access'
@@ -36,6 +40,19 @@ export async function removeHostTree(
   }
 }
 
+async function deleteHostChildren(root: string, names: readonly string[]): Promise<void> {
+  const results = await Promise.allSettled(
+    names.map((name) => rm(join(root, name), { recursive: true, force: true }))
+  )
+  const failures = results.filter((result) => result.status === 'rejected')
+  const failure =
+    failures.find(({ reason }) => !['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(reason?.code)) ??
+    failures[0]
+  if (failure) {
+    throw failure.reason
+  }
+}
+
 /** Keep checkout proof out of recursive walks; one shared budget covers children and the final rmdir. */
 export async function removeHostCheckout(
   targetPath: string,
@@ -54,17 +71,7 @@ export async function removeHostCheckout(
           markerGone = !(await authorize(true))
           if (!markerGone) {
             const names = await namesExceptCheckoutMarker(root)
-            const results = await Promise.allSettled(
-              names.map((name) => rm(join(root, name), { recursive: true, force: true }))
-            )
-            const failures = results.filter((result) => result.status === 'rejected')
-            const failure =
-              failures.find(
-                ({ reason }) => !['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(reason?.code)
-              ) ?? failures[0]
-            if (failure) {
-              throw failure.reason
-            }
+            await deleteHostChildren(root, names)
             // Child promises settled; their internal Node sibling walks may still be running.
             markerGone = !(await authorize(false))
             if (!markerGone) {
@@ -111,14 +118,48 @@ async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
   return kept
 }
 
+async function inspectHostCheckoutMarker(
+  markerPath: string,
+  targetPath: string
+): Promise<{ identity: string; dev: bigint; ino: bigint } | null> {
+  let entry
+  try {
+    entry = await lstatBigInt(markerPath)
+  } catch (error) {
+    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
+      return null
+    }
+    throw error
+  }
+  if (!entry.isFile()) {
+    throw differentCheckoutAtPathError(targetPath)
+  }
+  let contents: string
+  try {
+    contents = await readUtf8File(markerPath)
+  } catch (error) {
+    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
+      return null
+    }
+    throw error
+  }
+  const gitdir = parseGitdirMarkerPayload(contents)
+  if (!gitdir) {
+    throw differentCheckoutAtPathError(targetPath)
+  }
+  return { identity: `${gitdir}#${entry.ino}`, dev: entry.dev, ino: entry.ino }
+}
+
 /** Delete a checkout Git no longer registers, `.git` last, so a failure keeps the link that proves whose folder it is. */
 export async function removeUnregisteredHostCheckout(
   targetPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  expectedMarkerIdentity?: string
 ): Promise<void> {
+  const root = toHostRemovalPath(targetPath)
   let entry
   try {
-    entry = await lstat(toHostRemovalPath(targetPath))
+    entry = await lstat(root)
   } catch (error) {
     // Like rm -rf, an already-missing folder is done.
     if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
@@ -130,7 +171,70 @@ export async function removeUnregisteredHostCheckout(
   if (!entry.isDirectory()) {
     throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
   }
-  await removeHostCheckout(targetPath, async () => true, signal)
+
+  const markerPath = join(root, '.git')
+  const initial = await inspectHostCheckoutMarker(markerPath, targetPath)
+  if (initial && expectedMarkerIdentity !== undefined && initial.identity !== expectedMarkerIdentity) {
+    throw differentCheckoutAtPathError(targetPath)
+  }
+  if (initial) {
+    await removeHostCheckout(
+      targetPath,
+      async (beforeSweep) => {
+        if (beforeSweep) {
+          const current = await inspectHostCheckoutMarker(markerPath, targetPath)
+          if (!current) {
+            return false
+          }
+          if (current.dev !== initial.dev || current.ino !== initial.ino) {
+            throw differentCheckoutAtPathError(targetPath)
+          }
+          return true
+        }
+        let stat
+        try {
+          stat = await lstatBigInt(markerPath)
+        } catch (error) {
+          if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
+            return false
+          }
+          throw error
+        }
+        if (!stat.isFile() || stat.dev !== initial.dev || stat.ino !== initial.ino) {
+          throw differentCheckoutAtPathError(targetPath)
+        }
+        return true
+      },
+      signal
+    )
+    return
+  }
+
+  let swept = false
+  try {
+    await removeTree(root, {
+      signal,
+      rm: async () => {
+        if ((await inspectHostCheckoutMarker(markerPath, targetPath)) !== null) {
+          throw differentCheckoutAtPathError(targetPath)
+        }
+        if (!swept) {
+          const names = (await readdir(root)).filter((name) => name.toLowerCase() !== '.git')
+          await deleteHostChildren(root, names)
+          swept = true
+          if ((await inspectHostCheckoutMarker(markerPath, targetPath)) !== null) {
+            throw differentCheckoutAtPathError(targetPath)
+          }
+        }
+        await removeHostEmptyDirectory(root)
+      }
+    })
+  } catch (error) {
+    if (swept && getErrorCode(error) === 'ENOTEMPTY') {
+      throw unregisteredFolderRefusal(targetPath)
+    }
+    throw describeRemovalFailure(error)
+  }
 }
 
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {

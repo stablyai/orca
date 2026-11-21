@@ -1,4 +1,9 @@
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
+import { readCheckoutMarkerState } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
+import {
+  assertCheckoutNotReplaced,
+  CheckoutIdentityRefusal
+} from '../../../workspaces/removal/worktree-removal-leftover'
 import { assertRegisteredLocalWorktreePreflight } from './registered-local-worktree-preflight'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
@@ -106,13 +111,29 @@ export async function removeRegisteredLocalWorktree(
       context.runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
     )
     let accepted = false
+    let gitdir: string | undefined
+    let verifyAcceptedCheckout: (() => Promise<void>) | undefined
     try {
+      const initialMarker = await readCheckoutMarkerState(
+        canonicalWorktreePath,
+        localWorktreeGitOptions
+      ).catch(() => undefined)
+      gitdir = initialMarker?.kind === 'file' ? initialMarker.identity : undefined
+      verifyAcceptedCheckout =
+        initialMarker && initialMarker.kind !== 'other'
+          ? () =>
+              assertCheckoutNotReplaced(
+                { worktreePath: canonicalWorktreePath, gitdir },
+                localWorktreeGitOptions
+              )
+          : undefined
       // Fence watcher/spawn installs through linked-path cleanup, Git removal and recursive fallback; PTYs must release handles first.
       await withWorktreeRemoveStageSpan('pty_sweep', 'local', async () => {
         await stopPtysForDestructiveWorktreeRemoval(context.runtime, args.worktreeId, {
           allowUnverifiedStop: args.allowUnverifiedPtyStop
         })
       })
+      await verifyAcceptedCheckout?.()
 
       if (!markerMissing && linkedPaths.length > 0) {
         await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
@@ -148,7 +169,9 @@ export async function removeRegisteredLocalWorktree(
         refreshedRegisteredWorktree,
         removalGate,
         checkoutDeleteSignal,
-        cleanupPushTarget
+        cleanupPushTarget,
+        verifyAcceptedCheckout,
+        expectedMarker: gitdir
       })
     if (!background) {
       const result = await finish()
@@ -162,7 +185,7 @@ export async function removeRegisteredLocalWorktree(
         repoId,
         repoPath: repo.path,
         worktree: refreshedRegisteredWorktree,
-        gitdir: await backgroundRemoval.markerIdentity(refreshedRegisteredWorktree.path),
+        gitdir,
         deleteBranch,
         force: args.force ?? false
       },
@@ -198,7 +221,9 @@ async function finishLocalWorktreeRemoval({
   refreshedRegisteredWorktree,
   removalGate,
   checkoutDeleteSignal,
-  cleanupPushTarget
+  cleanupPushTarget,
+  verifyAcceptedCheckout,
+  expectedMarker
 }: {
   context: WorktreeIpcContext
   args: RemoveWorktreeArgs
@@ -213,6 +238,8 @@ async function finishLocalWorktreeRemoval({
   removalGate: { finish: (removed: boolean) => Promise<void> }
   checkoutDeleteSignal?: AbortSignal
   cleanupPushTarget: () => Promise<void>
+  verifyAcceptedCheckout?: () => Promise<void>
+  expectedMarker?: string
 }): Promise<RemoveWorktreeResult> {
   let removalResult: RemoveWorktreeResult | undefined
   let removalCompleted = false
@@ -223,7 +250,8 @@ async function finishLocalWorktreeRemoval({
         // Reuse the authoritative listing instead of rescanning siblings during deletion.
         knownRemovedWorktree: refreshedRegisteredWorktree,
         ...localWorktreeGitOptions,
-        checkoutDeleteSignal
+        checkoutDeleteSignal,
+        ...(verifyAcceptedCheckout ? { beforeCheckoutDelete: verifyAcceptedCheckout } : {})
       }
       removalResult = preserveBranchHeadFallback(
         await withWorktreeRemoveStageSpan('git_remove', 'local', async () =>
@@ -232,7 +260,10 @@ async function finishLocalWorktreeRemoval({
         refreshedRegisteredWorktree.head
       )
     } catch (error) {
-      if (usesNativeWindowsRemoval(canonicalWorktreePath, localWorktreeGitOptions)) {
+      if (
+        error instanceof CheckoutIdentityRefusal ||
+        usesNativeWindowsRemoval(canonicalWorktreePath, localWorktreeGitOptions)
+      ) {
         throw error
       }
       // Git deregisters even when its recursive filesystem deletion fails partway.
@@ -245,12 +276,15 @@ async function finishLocalWorktreeRemoval({
         registeredWorktree: refreshedRegisteredWorktree,
         deleteBranch,
         closeWatcher: (worktreePath) => context.runtime.closeFileWatchersForRemoval(worktreePath),
-        signal: checkoutDeleteSignal
+        signal: checkoutDeleteSignal,
+        ...(verifyAcceptedCheckout ? { beforeLeftoverDelete: verifyAcceptedCheckout } : {}),
+        ...(expectedMarker !== undefined ? { expectedMarker } : {})
       })
       if (recoveredRemovalResult) {
         removalResult = recoveredRemovalResult
         removalCompleted = true
       } else if (isOrphanedWorktreeError(error)) {
+        await verifyAcceptedCheckout?.()
         console.warn(
           `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
         )

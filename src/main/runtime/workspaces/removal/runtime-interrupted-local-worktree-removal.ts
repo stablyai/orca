@@ -179,7 +179,7 @@ async function finishInterruptedLocalWorktreeRemoval(
   const native = usesNativeWindowsRemoval(record.worktreePath, localOptions)
   // Branch and head match a checkout moved and recreated at this path; only its marker tells them apart.
   if (deletable || native) {
-    await assertCheckoutNotReplaced(record)
+    await assertCheckoutNotReplaced(record, localOptions)
   }
   const removalOptions = {
     ...localOptions,
@@ -189,7 +189,7 @@ async function finishInterruptedLocalWorktreeRemoval(
       head: record.head
     },
     checkoutDeleteSignal: args.stopSignal,
-    beforeCheckoutDelete: () => assertCheckoutNotReplaced(record)
+    beforeCheckoutDelete: () => assertCheckoutNotReplaced(record, localOptions)
   }
   if (
     !native &&
@@ -219,7 +219,7 @@ async function finishInterruptedLocalWorktreeRemoval(
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
   if (leftover) {
-    await assertLeftoverIsRecordedCheckout(record)
+    await assertLeftoverIsRecordedCheckout(record, localOptions)
   }
   if (native) {
     await authorizeWindowsCheckout(
@@ -238,15 +238,20 @@ async function finishInterruptedLocalWorktreeRemoval(
     throwIfSignalAborted(args.stopSignal)
     // Teardown awaited: the folder may have been swapped for another checkout since the first check.
     if (deletable || native) {
-      await assertCheckoutNotReplaced(record)
+      await assertCheckoutNotReplaced(record, localOptions)
     }
   } catch (error) {
     await gate.finish(false)
     throw error
   }
   if (deletable) {
-    return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal, () =>
-      assertCheckoutNotReplaced(record)
+    return finishRuntimeLocalWorktreeRemoval(
+      finishArgs,
+      deletable,
+      gate,
+      args.stopSignal,
+      () => assertCheckoutNotReplaced(record, localOptions),
+      record.gitdir
     )
   }
   let result: RemoveWorktreeResult
@@ -271,7 +276,7 @@ async function finishInterruptedLocalWorktreeRemoval(
         leftover &&
         (await isLeftoverStillRemovable(repo.path, record, localOptions, args.stopSignal))
       ) {
-        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal)
+        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal, record.gitdir)
       }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,
