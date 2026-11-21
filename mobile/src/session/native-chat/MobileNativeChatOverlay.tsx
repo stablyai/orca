@@ -362,7 +362,9 @@ function MobileNativeChatOverlayContent({
                               )
                             : sendErrorMessage
                         }
-                        onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
+                        onDismissSendError={
+                          continueFailed ? continuation?.dismissFailure : undefined
+                        }
                         onClearSendError={onClearSendError}
                         filePaths={controller.nativeChatFilePaths}
                         onNeedFiles={controller.loadNativeChatFiles}
