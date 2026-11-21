@@ -25,6 +25,7 @@ import {
   type TidyUpMemoryFile
 } from './bot-memory-tidy-up'
 import { hostSalvageStore } from './bot-memory-salvage-store'
+import { hostOwnerNames } from './bot-owner-names'
 import { BotTidyUpRunner } from './bot-memory-tidy-up-runner'
 import { watchBotTurnEnds } from './bot-run-turn-watch'
 
@@ -130,6 +131,7 @@ export function runtimeTidyUpRunner(runtime: OrcaRuntimeService): BotTidyUpRunne
     memory: runtime.bots.memory,
     fs: localBotHomeFilesystem,
     salvage: hostSalvageStore(),
+    ownerNames: hostOwnerNames,
     memoryFiles,
     homeFolder: (bot) => botHomeFolder(bot),
     sessions: runtimeBotAutomationSessions(runtime),

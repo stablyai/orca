@@ -78,7 +78,9 @@ const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) 
  */
 export function checkTidyUpOps(
   memory: string,
-  ops: readonly unknown[]
+  ops: readonly unknown[],
+  /** Lines that read as the owner deciding: no op touches them, as with owner rules. */
+  exempt: (text: string) => boolean = () => false
 ): { plan: TidyUpPlan; skipped: string[] } {
   const snapshot = memorySnapshot(memory)
   const byRef = new Map(snapshot.map((line) => [line.ref, line]))
@@ -94,7 +96,7 @@ export function checkTidyUpOps(
   const groupOf = (line: MemorySnapshotLine): MemorySnapshotLine[] =>
     groups.get(keyOf(line.raw)) ?? [line]
   const guarded = (line: MemorySnapshotLine): boolean =>
-    line.fact.date === null || isProtectedBotMemoryLine(line.fact.text)
+    line.fact.date === null || isProtectedBotMemoryLine(line.fact.text) || exempt(line.fact.text)
   const fixed = (line: MemorySnapshotLine): boolean => groupOf(line).some(guarded)
   const used = new Set<string>()
   const removed: MemorySnapshotLine[] = []

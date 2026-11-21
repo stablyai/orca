@@ -53,10 +53,11 @@ export async function applyTidyUpOps(
     reply: string
     today: string
     migration: TidyUpPlan | null
+    exempt?: (text: string) => boolean
   }
 ): Promise<Applied> {
   const ops = parseTidyUpOps(run.reply)
-  const checked = ops ? checkTidyUpOps(run.memory, ops) : null
+  const checked = ops ? checkTidyUpOps(run.memory, ops, run.exempt) : null
   const asked = checked?.plan.change
   // No readable reply, or every op skipped: the ops failed, with their first reason, so the run
   // keeps its chats for the next time even when the status move still applies.

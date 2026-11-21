@@ -26,29 +26,60 @@ export function salvageLineHash(month: string, line: string): string {
   return createHash('sha256').update(`${month}\n${line.trimEnd()}`).digest('hex')
 }
 
-const VERBS = ['picked', 'decided', 'prefers', 'chose', 'approved', 'wants']
+/** What the owner deciding sounds like. Wide on purpose: a line that matches stays in MEMORY.md,
+ *  so a false match only costs its bytes, while a miss moves a decision out. */
+const VERBS = [
+  'picked',
+  'decided',
+  'prefers',
+  'preferred',
+  'chose',
+  'approved',
+  'okayed',
+  'rejected',
+  'declined',
+  'agreed',
+  'ruled',
+  'wants',
+  'wanted',
+  'said',
+  'told',
+  'asked',
+  'signed off'
+]
 /** Not inside a word: a name or verb counts only as a whole word ("co-owner" is not "owner"). */
 const EDGE = '\\p{L}\\p{N}_-'
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const word = (pattern: string): string => `(?<![${EDGE}])(?:${pattern})(?![${EDGE}])`
 
 /**
- * Whether a line reads as the owner deciding: the owner named ("owner" or one of `ownerNames`),
- * then a decision verb within 20 characters of the same clause; the owner quoted ("Dana: '...'");
- * or an owner rule. "decided" with no owner named is anyone's, so never enough.
+ * Whether a line reads as the owner deciding, so the status move leaves it in MEMORY.md:
+ * - the owner named ("owner" or one of `ownerNames`), then a decision verb in the same clause
+ *   within 20 characters ("Dana picked", "owner decided to");
+ * - a decision verb, then "by" or "from" the owner ("approved by Dana", "go-ahead from owner"),
+ *   or "per" the owner;
+ * - the owner quoted ("Dana: '...'"), or an owner rule stated ("owner rule: ...").
+ * "decided" with no owner named is anyone's, so never enough; "code owner" is a role.
  */
 export function salvageCandidateTest(ownerNames: readonly string[]): (text: string) => boolean {
   const names = ['owner', ...ownerNames.map((name) => name.trim()).filter(Boolean)]
-  const who = `(?:${names.map(escaped).join('|')})`
-  const named = new RegExp(
-    // "code owner" is a role, not the owner. The words between stay in one clause: no stop,
-    // semicolon, comma, colon or "|", so "asked Dana, reviewer picked" is the reviewer's.
-    `(?<![${EDGE}])(?<!code )${who}(?![${EDGE}])[^.;,:|\\n]{0,20}?(?<![${EDGE}])(?:${VERBS.join('|')})(?![${EDGE}])`,
-    'iu'
-  )
-  const quoted = new RegExp(`(?<![${EDGE}])${who}\\s*:\\s*["'\\u2018\\u201c]`, 'iu')
-  // A rule stated, not one merely mentioned ("no owner rule yet").
-  const rule = /\bowner rule\s*:/i
-  return (text) => named.test(text) || quoted.test(text) || rule.test(text)
+  const who = `(?<!code )${word(names.map(escaped).join('|'))}`
+  const verb = word(VERBS.join('|'))
+  // The words between stay in one clause: no stop, semicolon, comma, colon or "|", so "asked Dana,
+  // reviewer picked" is the reviewer's.
+  const gap = '[^.;,:|\\n]{0,20}?'
+  const tests = [
+    new RegExp(`${who}${gap}${verb}`, 'iu'),
+    new RegExp(
+      `(?:${verb}|${word('go-ahead|ok|sign-off')})\\s+(?:by|from)\\s+(?:the\\s+)?${who}`,
+      'iu'
+    ),
+    new RegExp(`${word('per')}\\s+(?:the\\s+)?${who}`, 'iu'),
+    new RegExp(`${who}\\s*:\\s*["'\\u2018\\u201c]`, 'iu'),
+    // A rule stated, not one merely mentioned ("no owner rule yet").
+    /\bowner rule\s*:/i
+  ]
+  return (text) => tests.some((test) => test.test(text))
 }
 
 const REVERSAL = /\b(?:reverted|dropped|no longer|instead|canceled|cancelled|superseded)\b/i

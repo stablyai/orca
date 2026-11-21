@@ -15,6 +15,8 @@ export function tidyUpFormat(input: {
   chats: readonly TidyUpChat[]
   today: string
   pilot: boolean
+  /** Lines that read as the owner deciding: the status move and the ops leave them. */
+  exempt?: (text: string) => boolean
 }): {
   prompt: string
   apply: (
@@ -30,7 +32,7 @@ export function tidyUpFormat(input: {
     }
   }
   // The status move needs no model: the ops see MEMORY.md as it will be after it.
-  const migration = statusMigrationPlan(memory, today)
+  const migration = statusMigrationPlan(memory, today, input.exempt)
   const shown = migration ? applyBotMemoryChange(memory, migration.change) : memory
   return {
     prompt: tidyUpOpsPrompt({ snapshot: memorySnapshot(shown), files, chats }),
@@ -39,7 +41,8 @@ export function tidyUpFormat(input: {
         ...run,
         memory: shown,
         today,
-        migration
+        migration,
+        exempt: input.exempt
       })
   }
 }
