@@ -91,7 +91,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     return `${tabId}::${leafId}`
   }
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
-  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
@@ -354,7 +353,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
-    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
+    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId),
+    readScreenClearingBlockedTail: (ptyId) => this.readScreenClearingBlockedTailForPty(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

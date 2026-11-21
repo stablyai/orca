@@ -114,7 +114,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): TuiIdleHookTurn | null
   protected abstract readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
-  protected abstract clearWaitBlockedStamp(ptyId: string): void
+  protected abstract readScreenClearingBlockedTailForPty(ptyId: string): string | null
+  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
   protected abstract requestReattachedRepaint(ptyId: string): void

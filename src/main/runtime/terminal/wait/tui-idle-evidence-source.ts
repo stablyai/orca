@@ -51,6 +51,8 @@ export type TuiIdleEvidenceSource = {
   /** The foreground process a poll read during the pane's current quiet stretch; absent before any
    *  such read, and once output has moved on. Only the idle polls supply it. */
   getQuietForegroundProcess?(ptyId: string | null | undefined): string | null
+  /** The settled screen when it proves the tail's blocked text a dialog erased in place; null keeps the tail. */
+  readScreenClearingBlockedTail?(ptyId: string): string | null
 }
 
 /** One clock per terminal, read by ptyId. */
@@ -168,7 +170,10 @@ export function ptyTuiIdleEvidence(
   pty: RuntimePtyWorktreeRecord,
   readWaitText: () => string
 ): TuiIdleEvaluationInput {
-  const waitText = lazyWaitText(readWaitText)
+  const tailText = lazyWaitText(readWaitText)
+  // Why only after a tail block: the screen may clear one (#24187), and a clear tail never pays the read.
+  let clearingScreenText: string | null = null
+  const waitText = () => clearingScreenText ?? tailText()
   const agent = source.getPaneAgent(pty.ptyId)
   const readScreen = screenReader(source, agent, pty.ptyId)
   // Why: an agent's own ready report (explicit idle title, adopted idle, first-party done) from a
@@ -197,7 +202,14 @@ export function ptyTuiIdleEvidence(
   const readScreenPainted = () => !isShellInFront(pty) && readCommandPainted()
   return {
     record,
-    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readTailBlockedReason: () => {
+      const reason = detectTerminalWaitBlockedReason(tailText())
+      if (reason === null) {
+        return null
+      }
+      clearingScreenText = source.readScreenClearingBlockedTail?.(pty.ptyId) ?? null
+      return clearingScreenText === null ? reason : null
+    },
     // Why the paint fence on screens: a reused pane still shows the previous agent's ready screen
     // until the command now running paints its own.
     readPositiveBodyEvidence: () =>
