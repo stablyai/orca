@@ -1,4 +1,4 @@
-import { RateLimitServiceResultPolicy } from './service-result-policy'
+import { RateLimitServiceProviderAvailability } from './service-provider-availability'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
 import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
@@ -49,12 +49,27 @@ function codexResetUsageVisible(
   return sessionImproved || weeklyImproved
 }
 
-export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
-  protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
+export abstract class RateLimitServiceFetchTargets extends RateLimitServiceProviderAvailability {
+  protected async resolveClaudeAuthPreparation(
+    target: NormalizedClaudeAccountSelectionTarget,
+    signal: AbortSignal
+  ): Promise<ClaudeRuntimeAuthPreparation | undefined> {
+    return (await this.usageProviderAllowed('claude', signal))
+      ? this.claudeAuthPreparationResolver?.(target)
+      : undefined
+  }
+
+  protected async resolveCodexHome(
+    target?: CodexAccountSelectionTarget,
+    signal?: AbortSignal
+  ): Promise<{
     skip: boolean
     homePath: string | null
     readingAccount?: UsageReadingAccount
   }> {
+    if (signal && !(await this.usageProviderAllowed('codex', signal))) {
+      return { skip: true, homePath: null }
+    }
     const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
       return { skip: false, homePath: null }
@@ -69,11 +84,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   }
 
   // WSL home resolution probes wsl.exe; chain it so other providers start immediately.
-  protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
+  protected fetchKimiWithResolvedHome(signal: AbortSignal): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
-      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
-      : fetchKimiRateLimits({ home: undefined })
+      ? pendingHome.then((home) => fetchKimiRateLimits({ home, signal }))
+      : fetchKimiRateLimits({ home: undefined, signal })
   }
 
   protected isSameCodexTarget(

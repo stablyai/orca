@@ -3,6 +3,7 @@ import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-u
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFullCycleApplication {
@@ -12,14 +13,14 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     }
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
-    const codexHome = await this.resolveCodexHome(codexTarget)
+    const codexHome = await this.resolveCodexHome(codexTarget, signal)
     // Why: return before the "fetching" mark — a skipped cycle never settles it (#STA-4422).
     if (codexHome.skip) {
       if (
         codexGeneration === this.codexFetchGeneration &&
         this.state.codex?.status === 'fetching'
       ) {
-        this.updateState({ ...this.state, codex: null })
+        this.updateState({ ...this.state, codex: disabledUsageSnapshot('codex') })
       }
       return
     }
@@ -57,7 +58,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
 
-    const latestCodexHome = await this.resolveCodexHome(codexTarget)
+    const latestCodexHome = await this.resolveCodexHome(codexTarget, signal)
     if (latestCodexHome.skip && codexGeneration === this.codexFetchGeneration) {
       this.updateState({
         ...this.state,
@@ -91,11 +92,16 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (!options?.force && this.shouldSkipAutomatedFetch('claude', this.state.claude)) {
       return
     }
-    const oauthEnabled = this.isClaudeOAuthUsageEnabled()
     const claudeTarget = this.claudeFetchTarget
-    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const oauthEnabled = this.isClaudeOAuthUsageEnabled()
+    if (!(await this.usageProviderAllowed('claude', signal))) {
+      if (!signal.aborted && claudeGeneration === this.claudeFetchGeneration) {
+        this.updateState({ ...this.state, claude: disabledUsageSnapshot('claude') })
+      }
+      return
+    }
+    const claudeAuthPreparation = await this.resolveClaudeAuthPreparation(claudeTarget, signal)
     if (signal.aborted || claudeGeneration !== this.claudeFetchGeneration) {
       return
     }
@@ -132,7 +138,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
 
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestClaudeAuthPreparation = await this.resolveClaudeAuthPreparation(
+      claudeTarget,
+      signal
+    )
     if (signal.aborted) {
       return
     }
@@ -156,7 +165,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
   }
 
   protected async runFetchGrokOnlyCycle(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) {
+    if (!(await this.usageProviderAllowed('grok', signal))) {
+      if (!signal.aborted) {
+        this.updateState({ ...this.state, grok: disabledUsageSnapshot('grok') })
+      }
       return
     }
     const previousState = this.state

@@ -1,4 +1,5 @@
 import type { LocalAccountRuntimeTarget } from '../../../shared/agent-accounts/local-account-runtime'
+import type { UsageProviderAvailabilityResolver } from '../usage-provider-availability'
 import type { BrowserWindow } from 'electron'
 import type {
   AntigravityAccountUsage,
@@ -118,6 +119,7 @@ export abstract class RateLimitServiceState {
     wslDistro: null
   }
   // Runtime policy may change between cycles.
+  protected usageProviderAvailabilityResolver: UsageProviderAvailabilityResolver | null = null
   protected kimiHomeResolver: KimiHomeResolver | null = null
   protected claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   protected claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {

@@ -10,6 +10,6 @@ export function disabledUsageSnapshot(
     weekly: null,
     updatedAt: now,
     error: null,
-    status: 'idle'
+    status: 'unavailable'
   }
 }

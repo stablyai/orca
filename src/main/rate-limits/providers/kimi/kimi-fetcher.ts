@@ -155,6 +155,7 @@ function result(
  * Use GET /usages, never the completion endpoint. */
 export async function fetchKimiRateLimits(options?: {
   home?: KimiHomeResolution
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
   const home: KimiHomeResolution = options?.home ?? {
     runtime: 'host',
@@ -187,7 +188,10 @@ export async function fetchKimiRateLimits(options?: {
     const res = await getMainHttpClient().fetch(readResult.usageUrl, {
       // Match CLI fetchManagedUsage headers; this token-authenticated endpoint needs no custom User-Agent.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: AbortSignal.any([
+        AbortSignal.timeout(API_TIMEOUT_MS),
+        ...(options?.signal ? [options.signal] : [])
+      ])
     })
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)

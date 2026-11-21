@@ -1,3 +1,4 @@
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
@@ -58,7 +59,15 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
       resolveAgentCommandSettings: () => this.requireStore().getSettings(),
       resolveCodexAccountKind: (home) =>
         resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
-      resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent, 'catalog'),
+      resolveAgentAccountHome: (agent) => {
+        if (
+          isTuiAgent(agent) &&
+          !isTuiAgentEnabled(agent, this.requireStore().getSettings().disabledTuiAgents)
+        ) {
+          throw new Error('Agent is disabled')
+        }
+        return this.resolveStructuredAgentAccountHome(agent, 'catalog')
+      },
       ...(this.prepareCodexCatalogProbeHomeFn
         ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
         : {})

@@ -133,7 +133,8 @@ function settledView(
       agent
     })
     // Reinstalling a current copy checks it and repairs what's missing, so it needs the pin.
-    const label = !state.installedCurrent
+    const behind = !state.installedCurrent && state.version !== null
+    const label = behind
       ? t('components.managed-runtime.update', 'Update')
       : state.available
         ? reinstall
@@ -145,9 +146,7 @@ function settledView(
         version: state.installedVersion
       }
     )
-    return state.installedCurrent
-      ? view(status, null, null, label)
-      : { ...view(status, label), prominent: true }
+    return behind ? { ...view(status, label), prominent: true } : view(status, null, null, label)
   }
   if (!state.available) {
     return view(

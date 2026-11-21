@@ -1,6 +1,7 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
+import { createUsageProviderAvailabilityResolver } from '../../rate-limits/usage-provider-availability'
 import { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import { CodexRuntimeHomeService } from '../../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../../codex-accounts/service'
@@ -44,6 +45,9 @@ export function createProviderAccountServices(
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
+  rateLimits.setUsageProviderAvailabilityResolver(
+    createUsageProviderAvailabilityResolver(() => store.getSettings())
+  )
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
     store,
@@ -69,6 +73,9 @@ export function createProviderAccountServices(
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    if ('disabledTuiAgents' in updates || 'agentCmdOverrides' in updates) {
+      rateLimits.agentAvailabilityChanged()
+    }
     void agentView.reconcile(settings)
     if (updates.claudeOAuthUsageEnabled === false) {
       rateLimits.discardClaudeOAuthUsage()

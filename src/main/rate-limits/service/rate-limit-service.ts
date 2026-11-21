@@ -3,6 +3,7 @@ import {
   type LocalAccountRuntimeTarget
 } from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
+import type { UsageProviderAvailabilityResolver } from '../usage-provider-availability'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
@@ -34,6 +35,20 @@ import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rat
 import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
+  setUsageProviderAvailabilityResolver(resolver: UsageProviderAvailabilityResolver): void {
+    this.usageProviderAvailabilityResolver = resolver
+  }
+
+  agentAvailabilityChanged(): void {
+    this.abortActiveFetchCycle()
+    this.clearQueuedFetches()
+    if (!this.publicationStopped) {
+      void this.fetchAll({ force: true }).catch((error: unknown) => {
+        console.warn('[rate-limits] Failed to refresh agent availability:', error)
+      })
+    }
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }

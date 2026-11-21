@@ -36,7 +36,10 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     try {
       for (const account of accounts) {
         if (
-          signal.aborted ||
+          !(await this.usageProviderAllowed('claude', signal, {
+            runtime: account.managedAuthRuntime === 'wsl' ? 'wsl' : 'host',
+            wslDistro: account.wslDistro ?? null
+          })) ||
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
           !this.isCurrentInactiveClaudeAccount(account.id)
         ) {
@@ -55,7 +58,10 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             signal
           })
           if (
-            signal.aborted ||
+            !(await this.usageProviderAllowed('claude', signal, {
+              runtime: account.managedAuthRuntime === 'wsl' ? 'wsl' : 'host',
+              wslDistro: account.wslDistro ?? null
+            })) ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
@@ -112,7 +118,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     try {
       for (const account of accounts) {
         if (
-          signal.aborted ||
+          !(await this.usageProviderAllowed(
+            'codex',
+            signal,
+            account.readingAccount ?? { runtime: 'host', wslDistro: null }
+          )) ||
           fetchGeneration !== this.inactiveCodexAccountsGeneration ||
           !this.isCurrentInactiveCodexAccount(account.id)
         ) {
@@ -126,7 +136,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         if (staggerNextProbe) {
           await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
           if (
-            signal.aborted ||
+            !(await this.usageProviderAllowed(
+              'codex',
+              signal,
+              account.readingAccount ?? { runtime: 'host', wslDistro: null }
+            )) ||
             fetchGeneration !== this.inactiveCodexAccountsGeneration ||
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {
@@ -154,7 +168,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             signal
           })
           if (
-            signal.aborted ||
+            !(await this.usageProviderAllowed(
+              'codex',
+              signal,
+              account.readingAccount ?? { runtime: 'host', wslDistro: null }
+            )) ||
             fetchGeneration !== this.inactiveCodexAccountsGeneration ||
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {
