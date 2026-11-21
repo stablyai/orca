@@ -67,6 +67,8 @@ type TerminalSpawnGateOptions = {
   hostTerminals?: HostTerminalLedger
   /** Retain refused restores for clients that already discarded their own resume records. */
   legacyRestores?: LegacyRestoreRecords
+  /** Pending until the first host-pressure reading is in; admission waits for it. */
+  pressureReading?: () => Promise<void> | null
 }
 
 /** Observe skips pacing, never the host cap; only declared callers can defer into sleeping panes. */
@@ -104,12 +106,17 @@ export class TerminalSpawnGate {
     )
   }
 
-  /** Only pacing adds an async boundary; callers recheck shutdown after await. */
+  /** Pacing, and at startup the bounded wait for the first pressure reading, add an async
+   *  boundary for any intent; callers recheck shutdown after await. */
   admit(
     facts: SpawnRequestFacts,
     cancel?: { signal: AbortSignal; error: () => Error },
     restore?: LegacyRestoreDetails
   ): TerminalSpawnLease | Promise<TerminalSpawnLease> {
+    const reading = this.options.pressureReading?.()
+    if (reading) {
+      return reading.then(() => this.admit(facts, cancel, restore))
+    }
     return admitRecordingLegacyRestore(
       () => {
         const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
