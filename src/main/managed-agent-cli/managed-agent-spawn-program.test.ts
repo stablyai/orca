@@ -5,7 +5,7 @@ import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/data/orca'
 }))
-const host = vi.hoisted(() => ({ paths: {} as Record<string, string> }))
+const host = vi.hoisted((): { paths: Record<string, string> } => ({ paths: {} }))
 vi.mock('../runtime/rpc/methods/host-management/managed-copy-detection', () => ({
   readHostManagedAgentCommands: async () => host.paths
 }))
