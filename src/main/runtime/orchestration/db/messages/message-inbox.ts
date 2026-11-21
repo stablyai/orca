@@ -194,11 +194,12 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
 export function getInbox(this: OrchestrationDb, limit = 20, runId?: string): MessageRow[] {
   return exposeMessageListTimestamps(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
-    this.db
-      .prepare(
-        'SELECT * FROM messages WHERE (?1 IS NULL OR run_id = ?1) ORDER BY sequence DESC LIMIT ?2'
-      )
-      .all(runId ?? null, limit) as MessageRow[]
+    (runId === undefined
+      ? this.db.prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?').all(limit)
+      : // Why: an `(? IS NULL OR run_id = ?)` predicate hides idx_messages_run_sequence and scans the table.
+        this.db
+          .prepare('SELECT * FROM messages WHERE run_id = ? ORDER BY sequence DESC LIMIT ?')
+          .all(runId, limit)) as MessageRow[]
   )
 }
 
