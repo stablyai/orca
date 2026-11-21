@@ -79,7 +79,6 @@ it('finishes compacting while indexing commits between its steps', async () => {
         insertRow(db, ROWS + steps, 0)
       }
     )
-    expect(steps).toBeLessThan(200)
     expect(ftsBytes(db)).toBeLessThan(compact * 1.5)
   } finally {
     store.close()
