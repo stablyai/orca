@@ -9,7 +9,8 @@ import {
 
 type QuestionForm = { index: number; selections: number[][]; otherText: string[] }
 
-// Answered forms are never told they're done; keeping only the newest few bounds them per chat.
+// Answered or cancelled forms are never told they're done (a Cancel the host refuses keeps the card); keeping only
+// the newest few bounds them per chat.
 const QUESTION_FORMS = 'question-form:'
 const MAX_KEPT_QUESTION_FORMS = 4
 
@@ -49,8 +50,6 @@ export function useNativeChatQuestionForm({
     selections,
     setSelections,
     otherText,
-    setOtherText,
-    /** A dismissed prompt's form isn't coming back. */
-    forget: () => write(undefined)
+    setOtherText
   }
 }

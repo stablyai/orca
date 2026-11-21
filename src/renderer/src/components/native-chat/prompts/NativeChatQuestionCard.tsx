@@ -83,7 +83,7 @@ export function NativeChatQuestionCard({
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
-  const { index, setIndex, selections, setSelections, otherText, setOtherText, forget } =
+  const { index, setIndex, selections, setSelections, otherText, setOtherText } =
     useNativeChatQuestionForm({ prompt, freeTextInputs, draft, memoryKey })
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
 
@@ -212,7 +212,6 @@ export function NativeChatQuestionCard({
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
-      forget()
       onCancel?.()
     }
   }
@@ -239,7 +238,6 @@ export function NativeChatQuestionCard({
   const cancel = onCancel
     ? (): void => {
         autoAdvance.cancel()
-        forget()
         onCancel()
       }
     : undefined
