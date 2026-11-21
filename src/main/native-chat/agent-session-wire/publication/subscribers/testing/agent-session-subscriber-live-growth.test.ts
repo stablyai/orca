@@ -5,7 +5,10 @@ import { sendingTextAppends } from '../../../../../../shared/agent-session/view/
 import type { SqlAgentSessionJournal } from '../../../../agent-session-journal/journal-sql-store'
 import type { Subscriber } from '../agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from '../agent-session-subscriber-catch-up'
-import { publishSubscriberLiveText } from '../agent-session-subscriber-live-text'
+import {
+  publishSubscriberLiveText,
+  withSubscriberLiveText
+} from '../agent-session-subscriber-live-text'
 import type * as WireForm from '../../history/agent-session-item-wire-form'
 import { StructuredAgentSessionLiveTextRows } from '../../../journal-ingress/structured-agent-session-live-text-rows'
 
@@ -132,4 +135,12 @@ describe('a live reply that only grows', () => {
     const delta = JSON.stringify(wire.at(-1)).length
     expect(delta).toBeLessThan(1024)
   })
+})
+
+it('keeps a saved row whose live text would take a page past its reply limit', () => {
+  const saved = reply('a few words')
+  // 2 MiB of text: the page already holds up to half the 4 MiB reply limit.
+  const live = reply('x'.repeat(2 * 1024 * 1024))
+  const form = (item: AgentJournalRenderItem) => ({ item, bytes: JSON.stringify(item).length })
+  expect(withSubscriberLiveText([saved], () => [live], form)).toEqual([saved])
 })

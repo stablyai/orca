@@ -27,6 +27,7 @@ import {
 } from '../../../agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../../agent-session/failures/structured-agent-session-start-failure-row-key'
 import { hostStatesTurnScopes } from './native-chat-turn-membership'
+import { rowsBesideStreamedText } from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 
@@ -183,11 +184,15 @@ function cutTurnNotice(
   return notice
 }
 
-/** Add one provider-exit-worded notice after each unexplained cut root turn’s last row. Return the same items reference when unchanged. */
-export function withNativeChatCutTurnNotices(
+const placedNotices = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  { agentName: string | undefined; after: ReadonlyMap<number, AgentJournalRenderItem[]> }
+>()
+
+function cutTurnNoticesAfter(
   items: readonly AgentJournalRenderItem[],
-  context: CutTurnNoticeContext = {}
-): readonly AgentJournalRenderItem[] {
+  context: CutTurnNoticeContext
+): Map<number, AgentJournalRenderItem[]> {
   const explained = explainedCutTurns(items)
   const statesScopes = hostStatesTurnScopes(items)
   const noticesAfter = new Map<number, AgentJournalRenderItem[]>()
@@ -198,6 +203,22 @@ export function withNativeChatCutTurnNotices(
       noticesAfter.set(last, [...(noticesAfter.get(last) ?? []), notice])
     }
   })
+  return noticesAfter
+}
+
+/** Add one provider-exit-worded notice after each unexplained cut root turn’s last row. Return the same items reference when unchanged. */
+export function withNativeChatCutTurnNotices(
+  items: readonly AgentJournalRenderItem[],
+  context: CutTurnNoticeContext = {}
+): readonly AgentJournalRenderItem[] {
+  // Notices read no reply text, so a streaming reply's windows reuse its rows' placement.
+  const rows = rowsBesideStreamedText(items)
+  let placed = placedNotices.get(rows)
+  if (placed?.agentName !== context.agentName) {
+    placed = { agentName: context.agentName, after: cutTurnNoticesAfter(rows, context) }
+    placedNotices.set(rows, placed)
+  }
+  const noticesAfter = placed.after
   if (noticesAfter.size === 0) {
     return items
   }

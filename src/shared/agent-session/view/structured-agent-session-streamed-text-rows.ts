@@ -1,7 +1,10 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 
 // A row list maps to the earlier list it differs from only by streamed message text.
-const textOnlyBases = new WeakMap<readonly AgentJournalRenderItem[], AgentJournalRenderItem[]>()
+const textOnlyBases = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  readonly AgentJournalRenderItem[]
+>()
 
 /** Everything but the text of a message's blocks, which streaming alone changes. */
 function shape(item: AgentJournalRenderItem): string | null {
@@ -22,8 +25,8 @@ export function onlyStreamedTextChanged(
 }
 
 export function noteStreamedTextRevision(
-  next: AgentJournalRenderItem[],
-  base: AgentJournalRenderItem[]
+  next: readonly AgentJournalRenderItem[],
+  base: readonly AgentJournalRenderItem[]
 ): void {
   textOnlyBases.set(next, textOnlyBases.get(base) ?? base)
 }

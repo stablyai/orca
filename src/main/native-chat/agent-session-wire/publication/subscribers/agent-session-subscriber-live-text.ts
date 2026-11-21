@@ -131,14 +131,21 @@ export function withSubscriberLiveText(
   }
   const newer = new Map(live.map((item) => [item.itemId, item]))
   let changed = false
+  // A page is sized to half the reply limit; newer text may take the other half, never more.
+  let growth = 0
   const next = items.map((item) => {
     const shown = newer.get(item.itemId)
     if (!shown || shown.revision !== item.revision) {
       return item
     }
-    changed = true
     // The live row shares this revision's placement, and its object keeps one cached wire form.
     const { item: sent, bytes } = form(shown)
+    const grown = growth + bytes - jsonBytes(item)
+    if (grown > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
+      return item
+    }
+    growth = grown
+    changed = true
     applied?.(shown, sent, bytes)
     return sent
   })
