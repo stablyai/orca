@@ -14,6 +14,7 @@ import { agentSessionAttachmentReferences } from '../native-chat/agent-session-a
 import type { AgentSessionAttachmentClaimer } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import {
   admitStoredAttachmentImages,
+  assertLocalImagesFit,
   claimAttachmentBody,
   copyLocalAttachmentToStore,
   hasAttachmentStoreReference,
@@ -65,6 +66,9 @@ export async function admitBotItemCommentAttachments(
     throw refused(`Comments take up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
   }
   const local = deps.local ? [...paths, ...files.filter(isAgentInlineImagePath)] : paths
+  if (deps.local) {
+    await assertLocalImagesFit(store, local, COMMENT_IMAGE_LABELS, refused)
+  }
   const [stored, storedFiles] = await Promise.all([
     deps.local
       ? Promise.all(local.map((path) => copyLocalAttachmentToStore(store, path, refused)))

@@ -117,7 +117,7 @@ function writeAndTake(ctx: ReturnType<typeof setup>) {
     subject: 'Keep going',
     runId: ctx.run.id
   })
-  ctx.db.markAsRead([mail.id])
+  ctx.db.markAsRead([mail.id], { kind: 'orca' })
 }
 
 describe('terminal worker turn stops', () => {
@@ -204,7 +204,7 @@ describe('terminal worker turn stops', () => {
         subject: 'Start',
         runId: ctx.run.id
       })
-      ctx.db.markAsRead([mail.id])
+      ctx.db.markAsRead([mail.id], { kind: 'orca' })
     }
     const report = (type: 'worker_done' | 'heartbeat') => {
       const sent = ctx.db.insertMessage({
@@ -378,6 +378,84 @@ describe('terminal worker turn stops', () => {
       'Worker is waiting for permission'
     ])
     expect(reported).toEqual(['apr_open', 'apr_open'])
+  })
+})
+
+describe('terminal worker turn failures', () => {
+  const failed = (message: string, error?: string) =>
+    hookRow({
+      agentType: 'claude',
+      stateStartedAt: 300,
+      mainAgent: {
+        state: 'done',
+        outcome: 'failure',
+        stateStartedAt: 300,
+        ...(error ? { failure: { error, message } } : {})
+      }
+    })
+  // Claude's menu after a usage limit is a numbered dialog, painted after its StopFailure.
+  const menu = screen([
+    "You've hit your session limit · resets 3pm (America/New_York)",
+    ' What do you want to do?',
+    ' ❯ 1. Stop and wait for limit to reset',
+    '   2. Upgrade your plan',
+    ' Enter to select · Esc to cancel'
+  ])
+
+  it('reports a usage limit in the words chat workers use, not the menu Claude opens after it', async () => {
+    const ctx = setup()
+    const current = {
+      row: failed("You've hit your session limit · resets 3pm (America/New_York)", 'rate_limit')
+    }
+    await terminal(ctx, current, { readScreen: async () => menu }).reportRestingPane(PANE)
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker hit its usage limit')
+    expect(report?.body).toContain('Error: Claude hit its session limit.')
+    expect(report?.body).toContain(
+      "Details from the agent: You've hit your session limit · resets 3pm (America/New_York)"
+    )
+    expect(report?.body).toContain(
+      `orchestration worker-start --task ${ctx.dispatch.task_id} --retry-of ${ctx.dispatch.id} --agent <other>`
+    )
+    expect(report?.body).not.toContain('What do you want to do?')
+    expect(report?.body).not.toContain('needs a person')
+  })
+
+  it('holds back a usage limit while the worker waits for mail, as any terminal rest', async () => {
+    const ctx = setup()
+    ctx.waiting.add(`dispatch:${ctx.dispatch.id}`)
+    const current = {
+      row: failed("You've hit your session limit · resets 3pm (America/New_York)", 'rate_limit')
+    }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('reports a rate limit with no limit line as a failed response', async () => {
+    const ctx = setup()
+    const current = {
+      row: failed('API Error: Request rejected (429) · Please try again later.', 'rate_limit')
+    }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker stopped on an error without reporting')
+    expect(report?.body).toContain(
+      "Error: Claude couldn't finish this response: API Error: Request rejected (429) · Please try again later."
+    )
+    expect(report?.body).not.toContain('--retry-of')
+    expect(report?.body).not.toContain('Details from the agent')
+  })
+
+  it('keeps the screen report for a failure that names no error', async () => {
+    const ctx = setup()
+    const current = { row: failed("You've hit your session limit · resets 3pm") }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker stopped on an error without reporting')
+    expect(report?.body).toContain(
+      `Worker ${HANDLE} ended its turn on an error without sending worker_done`
+    )
+    expect(report?.body).toContain('Selected model is at capacity')
   })
 })
 

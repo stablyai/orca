@@ -1,7 +1,6 @@
 import { useCallback, useRef, type SetStateAction } from 'react'
 import {
   clearMobileNativeChatDraftForSend,
-  closeMobileNativeChatTabDraft,
   editMobileNativeChatDraft,
   readMobileNativeChatDraftEditGeneration,
   setMobileNativeChatDraftText,
@@ -9,9 +8,14 @@ import {
 } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/drafts/returned-draft-text'
 
+/** A room's draft key: the group's id for its original room, a thread's id for that thread. */
+export function mobileBotGroupDraftKey(hostId: string, roomId: string): string {
+  return `group:${hostId}:${roomId}`
+}
+
 /** A group room's composer text, kept in native chat's draft store so it outlives leaving the room. */
-export function useMobileBotGroupDraft(hostId: string, groupId: string) {
-  const key = `group:${hostId}:${groupId}`
+export function useMobileBotGroupDraft(hostId: string, roomId: string) {
+  const key = mobileBotGroupDraftKey(hostId, roomId)
   const text = useMobileNativeChatDraft(key)
   const editGenerationRef = useRef(0)
   const edit = useCallback(
@@ -30,7 +34,6 @@ export function useMobileBotGroupDraft(hostId: string, groupId: string) {
     clearForSend: (sent: string) =>
       clearMobileNativeChatDraftForSend(key, readMobileNativeChatDraftEditGeneration(key), sent),
     restoreRefused: (sent: string) =>
-      setMobileNativeChatDraftText(key, (current) => appendReturnedDraftText(current, sent)),
-    retire: () => closeMobileNativeChatTabDraft(key)
+      setMobileNativeChatDraftText(key, (current) => appendReturnedDraftText(current, sent))
   }
 }

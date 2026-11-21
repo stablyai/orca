@@ -2,7 +2,8 @@
 // receiving bot, whatever address named it. Each refusal is one sentence that says what to do instead.
 // Whom the request is for travels with it as information and never refuses it: every bot runs as the owner.
 import type { Bot } from '../../shared/bot-types'
-import { botAddressArgument } from '../../shared/bot-roster'
+import { botAddressArgument, botOfAddress, botSendTarget } from '../../shared/bot-roster'
+import type { CachedPairedBotRoster } from './paired-bot-rosters'
 
 /** A bot takes these kinds of mail from outside itself; status is information, with no job in it. */
 export const BOT_REQUEST_PURPOSES = ['status', 'handoff', 'question'] as const
@@ -29,15 +30,41 @@ export function isBotRequestPurpose(type: string | undefined): type is BotReques
   return BOT_REQUEST_PURPOSES.some((purpose) => purpose === type)
 }
 
-/** The bot an address names, or why none: an unknown name lists the bots there are. */
-export function botNotFound(name: string, bots: readonly Pick<Bot, 'name'>[]): BotRequestRefusal {
+/** Why an address names no one here, listing who is. Given `paired`, a send's miss also names the
+ *  paired computers last read to have that name, with the `--on` that reaches each. */
+export function botNotFound(
+  name: string,
+  bots: readonly Pick<Bot, 'name'>[],
+  paired?: readonly CachedPairedBotRoster[]
+): BotRequestRefusal {
+  const elsewhere = paired ? pairedSendsTo(name, paired) : null
+  if (elsewhere) {
+    return { code: 'bot_not_found', message: elsewhere }
+  }
+  const here =
+    bots.length === 0
+      ? `There is no bot named ${name} and no other bot on this computer, so do the work yourself or tell the asker who could.`
+      : `There is no bot named ${name} on this computer (its bots: ${bots.map((bot) => botAddressArgument(bot.name)).join(', ')}), so pick one of those or do the work yourself.`
   return {
     code: 'bot_not_found',
-    message:
-      bots.length === 0
-        ? `There is no bot named ${name} and no other bot on this computer, so do the work yourself or tell the asker who could.`
-        : `There is no bot named ${name} on this computer (its bots: ${bots.map((bot) => botAddressArgument(bot.name)).join(', ')}), so pick one of those or do the work yourself.`
+    message: paired ? `${here} One on a paired computer needs --on <computer> before --to.` : here
   }
+}
+
+// Read from the cache only: a send never waits on a paired computer to refuse.
+function pairedSendsTo(name: string, paired: readonly CachedPairedBotRoster[]): string | null {
+  const matches = paired.flatMap(({ server, bots }) => {
+    const match = botOfAddress(bots, name)
+    return match ? [{ name: match.name, server }] : []
+  })
+  if (matches.length === 0) {
+    return null
+  }
+  const sends = matches.map(
+    (match) =>
+      `${match.name} is on ${match.server.name}: use ${botSendTarget(botAddressArgument(match.name), match.server)}`
+  )
+  return `There is no bot named ${name} on this computer. ${sends.join('; ')}.`
 }
 
 export const BOT_REQUEST_TYPE_REFUSAL: BotRequestRefusal = {

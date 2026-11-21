@@ -6,10 +6,17 @@ import {
   readDroidTurnVerdictAsync,
   type DroidTurnVerdict
 } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
-import { readLastAssistantFromTranscriptAsync } from '../../../shared/agent-hook-listener/transcript-reader'
+import {
+  readLastAssistantFromTranscriptAsync,
+  type AssistantTranscriptFormat
+} from '../../../shared/agent-hook-listener/transcript-reader'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { ASSISTANT_MESSAGE_RETRY_ATTEMPTS, ASSISTANT_MESSAGE_RETRY_MS } from './server-constants'
+import {
+  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
+  ASSISTANT_MESSAGE_RETRY_MS,
+  COPILOT_STOP_REPLY_RETRY_ATTEMPTS
+} from './server-constants'
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 
@@ -38,18 +45,27 @@ type StopTranscriptRead = {
   readonly retryDelayMs: (attempt: number) => number | undefined
 }
 
-const replyRead = (transcriptPath: string): StopTranscriptRead => ({
+const REPLY_RETRY_ATTEMPTS: Record<AssistantTranscriptFormat, number> = {
+  copilot: COPILOT_STOP_REPLY_RETRY_ATTEMPTS,
+  shared: ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+}
+
+const replyRead = (
+  transcriptPath: string,
+  format: AssistantTranscriptFormat
+): StopTranscriptRead => ({
   scan: async (keepReading, scannedSize, onError) => {
     const text = await readLastAssistantFromTranscriptAsync(
       transcriptPath,
       keepReading,
       scannedSize,
-      onError
+      onError,
+      format
     )
     return text ? { text } : undefined
   },
   retryDelayMs: (attempt) =>
-    attempt < ASSISTANT_MESSAGE_RETRY_ATTEMPTS ? ASSISTANT_MESSAGE_RETRY_MS : undefined
+    attempt < REPLY_RETRY_ATTEMPTS[format] ? ASSISTANT_MESSAGE_RETRY_MS : undefined
 })
 
 const verdictRead = (transcriptPath: string): StopTranscriptRead => ({
@@ -140,7 +156,8 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     }
     const reads: [string, StopTranscriptRead][] = []
     if (stopTranscriptPath) {
-      reads.push([stopTranscriptPath, replyRead(stopTranscriptPath)])
+      const format = enriched.payload.agentType === 'copilot' ? 'copilot' : 'shared'
+      reads.push([stopTranscriptPath, replyRead(stopTranscriptPath, format)])
     }
     if (droidVerdictTranscriptPath) {
       reads.push([droidVerdictTranscriptPath, verdictRead(droidVerdictTranscriptPath)])

@@ -19,6 +19,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { BOT_ITEMS_METHODS } from './bots-items'
+import { BotItemsListReadSchema } from '../../../../shared/bots/bot-item-schema'
 import { checkedWorkerOrigin } from './bots-items-worker-origin'
 
 const paths = vi.hoisted(() => ({ userData: '' }))
@@ -305,6 +306,49 @@ describe('bot items over RPC', () => {
       { chatId: RANGER_CHAT, eventId: 2, kind: 'commented' },
       { chatId: RANGER_CHAT, eventId: 3, kind: 'status' }
     ])
+  })
+
+  it('answers a summary list, a Closed page without the open items, and named items alone', async () => {
+    const { dispatcher } = itemsRuntime()
+    for (const title of ['Share dialog', 'Old fix']) {
+      await dispatcher.dispatch(
+        request('bots.items.add', {
+          callerSessionId: RANGER_CHAT,
+          title,
+          description: 'Long text',
+          doneMeans: 'Shipped'
+        })
+      )
+    }
+    const desktop = { caller: DESKTOP_RPC_CALLER }
+    await dispatcher.dispatch(
+      request('bots.items.owner.status', { items: ['2'], status: 'done' }),
+      desktop
+    )
+    const list = async (params: Record<string, unknown>) => {
+      const answer = await dispatcher.dispatch(
+        request('bots.items.owner.list', { botId: 'ranger', summary: true, ...params }),
+        desktop
+      )
+      if (!answer.ok) {
+        throw new Error('list failed')
+      }
+      return BotItemsListReadSchema.parse(answer.result)
+    }
+
+    const whole = await list({})
+    expect(whole.items.map((item) => [item.number, item.description, item.doneMeans])).toEqual([
+      [1, null, null],
+      [2, null, null]
+    ])
+    const closedPage = await list({
+      closedCursor: `${Number.MAX_SAFE_INTEGER}:1000`,
+      closedOnly: true
+    })
+    expect(closedPage.items.map((item) => item.number)).toEqual([2])
+    const named = await list({ uids: [whole.items[0]!.uid] })
+    expect(named.items.map((item) => item.number)).toEqual([1])
+    expect(named.counts).toEqual({ planned: 1, done: 1 })
   })
 
   it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {

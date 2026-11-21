@@ -14,6 +14,8 @@ import {
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
 import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
+import { basename } from '@/lib/path'
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -191,6 +193,31 @@ export async function loadLocalImageSrc(
   return loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext, access)
 }
 
+const loggedReadFailures = new Set<string>()
+
+/** Why an image read found nothing, once per image, in the main trace log; names the file, never its bytes. */
+function logLocalImageReadFailure(
+  cacheKey: string,
+  absolutePath: string,
+  reason: 'not-an-image' | 'read-error',
+  error?: unknown
+): void {
+  if (loggedReadFailures.has(cacheKey)) {
+    return
+  }
+  if (loggedReadFailures.size >= 500) {
+    loggedReadFailures.clear()
+  }
+  loggedReadFailures.add(cacheKey)
+  const message = error instanceof Error ? error.message : error === undefined ? '' : String(error)
+  const file = basename(absolutePath)
+  recordRendererCrashBreadcrumb('local_image_read_failed', {
+    file,
+    reason,
+    ...(message ? { error: message.split(absolutePath).join(file).slice(0, 300) } : {})
+  })
+}
+
 export function loadLocalImageAbsolutePath(
   absolutePath: string,
   connectionId?: string | null,
@@ -222,11 +249,11 @@ export function loadLocalImageAbsolutePath(
   const readGeneration = getLocalImageCacheGeneration()
   const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext, access)
     .then((result) => {
-      if (
-        !result.isBinary ||
-        !result.content ||
-        getLocalImageCacheGeneration() !== readGeneration
-      ) {
+      if (getLocalImageCacheGeneration() !== readGeneration) {
+        return null
+      }
+      if (!result.isBinary || !result.content) {
+        logLocalImageReadFailure(cacheKey, absolutePath, 'not-an-image')
         return null
       }
       const { url, byteLength } = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
@@ -236,7 +263,10 @@ export function loadLocalImageAbsolutePath(
       }
       return cacheLocalImageBlob(cacheKey, url, byteLength) ? url : null
     })
-    .catch(() => null)
+    .catch((error: unknown) => {
+      logLocalImageReadFailure(cacheKey, absolutePath, 'read-error', error)
+      return null
+    })
     .finally(() => {
       if (inFlightBlobUrlLoads.get(cacheKey) === loadPromise) {
         inFlightBlobUrlLoads.delete(cacheKey)

@@ -1,4 +1,5 @@
 import { guestNavigationMethods } from '../browser-manager-test-harness'
+import { GET_PAGE_STATE } from './browser-page-state-form-data.test-fixture'
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import { invokeGuestDiscard } from './browser-guest-sync-reply-test-fixture'
@@ -65,7 +66,8 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
     ...guestNavigationMethods().navigationHistory,
     length: () => 1,
     getActiveIndex: () => 0,
-    getAllEntries: () => [{ url: this.getURL(), title: 'Clean' }],
+    getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
+    getAllEntries: () => [{ url: this.getURL(), title: 'Clean', pageState: GET_PAGE_STATE }],
     restore: () => this.load
   }
   readonly executeJavaScript = vi.fn(() => new Promise<unknown>(() => {}))

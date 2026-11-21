@@ -17,7 +17,8 @@ import type {
 // Sync calls on purpose: this file runs only on its worker thread, and per-file async stats would
 // cost ~50x more and occupy the libuv pool Electron main shares.
 
-const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst)?$/
+// `.orca-legacy-copy.<attempt>`: an old session copy's own bytes, kept once its name points at the source.
+const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst|\.orca-legacy-copy\.\d+)?$/
 // Live, archived, twins set aside when history was shared, and `<folder>[.<ms>].orca-profile-merge` conflicts.
 const HISTORY_FOLDERS = ['sessions', 'archived_sessions', '.orca-set-aside-rollouts']
 const MERGE_PENDING_FOLDER = /\.orca-profile-merge$/

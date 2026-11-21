@@ -20,6 +20,8 @@ import {
   worktree
 } from '../sidebar/worktree-list/grouping/worktree-list-groups-test-fixtures'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { setRendererUiLanguage } from '@/i18n/i18n'
+import type { SupportedUiLocale } from '../../../../shared/i18n/ui-locale'
 
 function bot(id: string, name: string, mascot: BotMascotId, order: number, paused = false): Bot {
   return {
@@ -176,6 +178,38 @@ export const noChildren = defineFixture({
 
 /** The field just opened: the list shows as it was, with no drag handles. */
 export const openEmpty = defineFixture({ width: 300, ...searching('') })
+
+function localizedSearch(locale: SupportedUiLocale, width = 252) {
+  return defineFixture({
+    width,
+    ...searching(''),
+    interact: async (frame) => {
+      await setRendererUiLanguage(locale)
+      await openSearch(frame)
+    }
+  })
+}
+
+export const chineseMinimumWidthSearch = localizedSearch('zh')
+export const traditionalChineseSearch = localizedSearch('zh-Hant')
+export const germanSearch = localizedSearch('de')
+export const spanishSearch = localizedSearch('es')
+export const frenchSearch = localizedSearch('fr')
+export const japaneseSearch = localizedSearch('ja')
+export const koreanSearch = localizedSearch('ko')
+export const portugueseSearch = localizedSearch('pt')
+export const russianSearch = localizedSearch('ru')
+export const turkishSearch = localizedSearch('tr')
+export const chineseNormalSearch = localizedSearch('zh', 352)
+export const traditionalChineseNormalSearch = localizedSearch('zh-Hant', 352)
+export const germanNormalSearch = localizedSearch('de', 352)
+export const spanishNormalSearch = localizedSearch('es', 352)
+export const frenchNormalSearch = localizedSearch('fr', 352)
+export const japaneseNormalSearch = localizedSearch('ja', 352)
+export const koreanNormalSearch = localizedSearch('ko', 352)
+export const portugueseNormalSearch = localizedSearch('pt', 352)
+export const russianNormalSearch = localizedSearch('ru', 352)
+export const turkishNormalSearch = localizedSearch('tr', 352)
 
 /** Name matches, then a purpose match with its snippet. */
 export const results = defineFixture({ width: 300, ...searching('review') })
