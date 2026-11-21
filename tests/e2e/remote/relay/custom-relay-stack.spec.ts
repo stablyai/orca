@@ -2,7 +2,7 @@ import { request } from 'node:https'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import WebSocket from 'ws'
-import { expect } from '@stablyai/playwright-test'
+import { expect, type Page } from '@stablyai/playwright-test'
 import { test as base } from '../../desktop/electron-fixtures/orca-app'
 import { startCustomRelayStack } from './custom-relay-stack'
 import { decodePairingOffer } from '../../../../src/shared/remote-runtime/pairing/pairing'
@@ -32,6 +32,36 @@ const test = base.extend<{ stack: Stack; envOverride: boolean }>({
     })
   }
 })
+
+// Set to capture the Connection choice in both themes for PR screenshots; masks the machine name, network address and QR codes.
+const connectionShotDir = process.env.ORCA_E2E_CONNECTION_SHOTS_DIR
+
+async function shootConnection(page: Page, name: string, wholePage = false): Promise<void> {
+  if (!connectionShotDir) {
+    return
+  }
+  mkdirSync(connectionShotDir, { recursive: true })
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+      .toBe(scheme === 'dark')
+    const file = path.join(connectionShotDir, `${name}.${scheme}.png`)
+    await (wholePage
+      ? page.screenshot({
+          path: file,
+          mask: [
+            page
+              .locator('[data-settings-row]')
+              .filter({ has: page.locator('#mobile-machine-name') }),
+            page.locator('#mobile-network-interface'),
+            page.locator('img[alt="Pairing QR"]')
+          ]
+        })
+      : page.locator('#mobile-connection').screenshot({ path: file }))
+  }
+  await page.emulateMedia({ colorScheme: null })
+}
 
 function http(
   url: string,
@@ -191,8 +221,13 @@ test('custom relay authenticates, pairs and retires its session', async ({
     state.openSettingsTarget({ pane: 'mobile', repoId: null })
     state.openSettingsPage()
   })
-  await expect(orcaPage.getByText('Custom relay server', { exact: true })).toBeVisible()
-  await orcaPage.getByRole('switch', { name: 'Use custom server' }).click()
+  // Searching for the old standalone group must still land on the Connection choice.
+  await orcaPage.getByRole('combobox', { name: 'Search settings' }).fill('custom relay')
+  await orcaPage.getByRole('option', { name: /Custom relay server/ }).click()
+  await expect(orcaPage.locator('#mobile-connection')).toHaveClass(/settings-target-highlight/)
+  const ownRelay = orcaPage.getByRole('radio', { name: /Your own relay/ })
+  await ownRelay.click()
+  await expect(ownRelay).toHaveAttribute('aria-checked', 'true')
   await orcaPage.getByLabel('Auth server URL').fill('https://127.0.0.1:1')
   await orcaPage.getByLabel('Client ID').fill('orca-desktop')
   await orcaPage.getByLabel('Relay director URL').fill(stack.relayUrl)
@@ -209,10 +244,18 @@ test('custom relay authenticates, pairs and retires its session', async ({
   await orcaPage.screenshot({
     path: path.join(process.cwd(), '.cache', 'relay-e2e', 'settings-connected.png')
   })
-  await orcaPage.getByRole('button', { name: 'Apply changes' }).click()
+  await shootConnection(orcaPage, 'own-relay-tested')
+  await orcaPage.getByRole('button', { name: 'Use this server' }).click()
+  await shootConnection(orcaPage, 'switch-dialog', true)
   await orcaPage.getByRole('dialog').getByRole('button', { name: 'Switch servers' }).click()
   await expect(orcaPage.getByRole('dialog')).toBeHidden()
-  await orcaPage.getByRole('radio', { name: /Orca Relay/ }).click()
+  // Applying the server must leave the own-relay choice selected and ready for sign-in.
+  await expect(ownRelay).toHaveAttribute('aria-checked', 'true')
+  await expect(orcaPage.getByRole('radio', { name: /Orca Relay/ })).toHaveAttribute(
+    'aria-checked',
+    'false'
+  )
+  await shootConnection(orcaPage, 'own-relay-sign-in')
   await orcaPage.getByRole('button', { name: 'Sign in for Relay' }).click()
   let link = ''
   await expect
@@ -248,6 +291,7 @@ test('custom relay authenticates, pairs and retires its session', async ({
   try {
     await expect(simulated.rpc).resolves.toMatchObject({ id: 'status', ok: true })
     await expect(orcaPage.getByText('Ready', { exact: true })).toBeVisible({ timeout: 30_000 })
+    await shootConnection(orcaPage, 'own-relay-ready')
     await stack.stopRelay()
     await expect(orcaPage.getByText('Unavailable', { exact: true })).toBeVisible({
       timeout: 60_000
@@ -277,6 +321,18 @@ test('custom relay authenticates, pairs and retires its session', async ({
     await expect(activePhone.closed).resolves.toBeGreaterThan(0)
     await expect.poll(() => stack.relayObservations.liveControls).toBe(0)
     activePhone.ws.terminate()
+    // Signing out for the switch keeps the own-relay choice instead of falling back to LAN.
+    await expect(ownRelay).toHaveAttribute('aria-checked', 'true')
+    await expect(orcaPage.getByRole('button', { name: 'Sign in for Relay' })).toBeVisible()
+    // Leaving the custom server needs the same confirmation; this build has no hosted relay, so LAN is selected.
+    await orcaPage.getByRole('radio', { name: /Orca Relay/ }).click()
+    await orcaPage.getByRole('dialog').getByRole('button', { name: 'Switch servers' }).click()
+    await expect(orcaPage.getByRole('dialog')).toBeHidden()
+    await expect(orcaPage.getByRole('radio', { name: /^LAN/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await expect(orcaPage.getByLabel('Auth server URL')).toBeHidden()
   } finally {
     simulated.ws.terminate()
   }
@@ -334,7 +390,10 @@ test.describe('environment override', () => {
         { timeout: 30_000 }
       )
       .toBe('connected')
-    await orcaPage.getByRole('switch', { name: 'Use custom server' }).click()
+    const relayOption = orcaPage.getByRole('radio', { name: /Orca Relay/ })
+    await expect(relayOption).toHaveAttribute('aria-checked', 'true')
+    // Environment variables win, so the UI offers no way to change the server; a saved change must not end the session.
+    await orcaPage.getByRole('radio', { name: /Your own relay/ }).click()
     await orcaPage.getByLabel('Auth server URL').fill('https://127.0.0.1:1')
     await orcaPage.getByLabel('Client ID').fill('different-client')
     await orcaPage.getByLabel('Relay director URL').fill('https://127.0.0.1:1')
@@ -343,15 +402,23 @@ test.describe('environment override', () => {
         'Environment variables override saved settings. Test connection checks the URLs entered here.'
       )
     ).toBeVisible()
-    await orcaPage.getByRole('button', { name: 'Apply changes' }).click()
-    await orcaPage.getByRole('dialog').getByRole('button', { name: 'Switch servers' }).click()
-    await expect(orcaPage.getByRole('dialog')).toBeHidden()
+    await expect(orcaPage.getByRole('button', { name: 'Use this server' })).toBeDisabled()
+    await shootConnection(orcaPage, 'environment-override')
+    await orcaPage.evaluate(() =>
+      window.api.orcaProfiles.switchCloudServer({
+        enabled: true,
+        authServerUrl: 'https://127.0.0.1:1',
+        clientId: 'different-client',
+        relayDirectorUrl: 'https://127.0.0.1:1'
+      })
+    )
     expect((await orcaPage.evaluate(() => window.api.orcaProfiles.authStatus())).state).toBe(
       'connected'
     )
-    const relayOption = orcaPage.getByRole('radio', { name: /Orca Relay/ })
+    await relayOption.click()
     await expect(relayOption).toHaveAttribute('aria-checked', 'true')
     await expect(relayOption).toHaveAttribute('aria-disabled', 'false')
+    await expect(orcaPage.getByRole('dialog')).toBeHidden()
     await expect(orcaPage.getByRole('button', { name: /Sign in/ })).toBeHidden()
     await expect(
       orcaPage.getByRole('button', { name: /^(Generate|Regenerate) QR code$/ })
@@ -364,5 +431,6 @@ test.describe('environment override', () => {
     }
     expect(decodePairingOffer(pairing.pairingUrl).relay?.directorUrl).toBe(stack.relayUrl)
     await expect(orcaPage.getByText('Ready', { exact: true })).toBeVisible({ timeout: 30_000 })
+    await shootConnection(orcaPage, 'orca-relay-ready')
   })
 })

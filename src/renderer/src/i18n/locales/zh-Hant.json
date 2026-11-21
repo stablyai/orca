@@ -1052,7 +1052,6 @@
     "customRelay": {
       "title": "自訂中繼伺服器",
       "description": "選擇此桌面端使用的雲端驗證和中繼伺服器。套用變更後請登入。",
-      "enabled": "使用自訂伺服器",
       "authUrl": "驗證伺服器 URL",
       "clientId": "用戶端 ID",
       "relayUrl": "中繼調度器 URL",
@@ -1061,7 +1060,6 @@
       "testing": "正在測試連線…",
       "test": "測試連線",
       "apply": "套用變更",
-      "reset": "還原預設值",
       "authSuccess": "驗證伺服器：已連線",
       "authFailure": "驗證伺服器：連線失敗",
       "relaySuccess": "中繼調度器：已連線",

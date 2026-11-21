@@ -841,7 +841,6 @@
     "customRelay": {
       "title": "Serveur relais personnalisé",
       "description": "Choisissez les serveurs cloud d’authentification et de relais de cet ordinateur. Connectez-vous après toute modification.",
-      "enabled": "Utiliser un serveur personnalisé",
       "authUrl": "URL du serveur d’authentification",
       "clientId": "ID client",
       "relayUrl": "URL du directeur de relais",
@@ -850,7 +849,6 @@
       "testing": "Test de connexion…",
       "test": "Tester la connexion",
       "apply": "Appliquer les modifications",
-      "reset": "Rétablir les valeurs par défaut",
       "authSuccess": "Serveur d’authentification : connecté",
       "authFailure": "Serveur d’authentification : échec de connexion",
       "relaySuccess": "Directeur de relais : connecté",

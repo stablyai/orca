@@ -1,4 +1,3 @@
-import { CustomRelayServerSettings } from './CustomRelayServerSettings'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -86,8 +85,6 @@ export function MobileSettingsPane(): React.JSX.Element {
           />
         </SearchableSetting>
       </SettingsGroup>
-
-      <CustomRelayServerSettings />
 
       <SettingsGroup>
         <MobilePane />

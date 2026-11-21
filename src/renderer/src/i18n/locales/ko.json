@@ -584,7 +584,6 @@
     "customRelay": {
       "title": "사용자 지정 릴레이 서버",
       "description": "이 데스크톱에서 사용할 클라우드 인증 및 릴레이 서버를 선택하세요. 변경 사항을 적용한 후 로그인하세요.",
-      "enabled": "사용자 지정 서버 사용",
       "authUrl": "인증 서버 URL",
       "clientId": "클라이언트 ID",
       "relayUrl": "릴레이 디렉터 URL",
@@ -593,7 +592,6 @@
       "testing": "연결 테스트 중…",
       "test": "연결 테스트",
       "apply": "변경 사항 적용",
-      "reset": "기본값으로 재설정",
       "authSuccess": "인증 서버: 연결됨",
       "authFailure": "인증 서버: 연결 실패",
       "relaySuccess": "릴레이 디렉터: 연결됨",

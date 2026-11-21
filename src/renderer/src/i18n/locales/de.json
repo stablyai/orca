@@ -1102,7 +1102,6 @@
     "customRelay": {
       "title": "Eigener Relay-Server",
       "description": "Wählen Sie die Cloud-Authentifizierungs- und Relay-Server für diesen Desktop. Melden Sie sich nach einer Änderung erneut an.",
-      "enabled": "Eigenen Server verwenden",
       "authUrl": "URL des Authentifizierungsservers",
       "clientId": "Client-ID",
       "relayUrl": "URL des Relay-Directors",
@@ -1111,7 +1110,6 @@
       "testing": "Verbindung wird geprüft…",
       "test": "Verbindung testen",
       "apply": "Änderungen anwenden",
-      "reset": "Auf Standard zurücksetzen",
       "authSuccess": "Authentifizierungsserver: verbunden",
       "authFailure": "Authentifizierungsserver: Verbindung fehlgeschlagen",
       "relaySuccess": "Relay-Director: verbunden",
