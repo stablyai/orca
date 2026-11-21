@@ -6,7 +6,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import { botItemsNamedSince } from '../../../../../shared/bots/bot-item-merge'
+import {
+  botItemCursorPlace,
+  botItemReaches,
+  botItemsNamedSince
+} from '../../../../../shared/bots/bot-item-merge'
 import { readMoreClosedItems, useStableBotItemChats, type BotItemsRead } from './use-bot-items'
 
 type Pages = {
@@ -36,20 +40,6 @@ const NONE: readonly BotItem[] = []
 
 const isClosed = (item: BotItem): boolean => item.status === 'done' || item.status === 'canceled'
 
-/** A cursor's place: `at:number` of the last row before it. */
-function cursorPlace(cursor: string | null | undefined): { at: number; number: number } | null {
-  const [at, number] = (cursor ?? '').split(':').map(Number)
-  return Number.isFinite(at) && Number.isFinite(number) ? { at: at!, number: number! } : null
-}
-
-/** At or above the place in Closed order (newest activity first, then highest number). */
-function reaches(item: BotItem, place: { at: number; number: number }): boolean {
-  return (
-    item.lastActivityAt > place.at ||
-    (item.lastActivityAt === place.at && item.number >= place.number)
-  )
-}
-
 /** The read's items and the loaded pages', each uid once. A named read can hold a Closed item from a
  *  page not loaded yet: it waits for its page. A page's copy stands unless the read's is a newer
  *  version. */
@@ -61,7 +51,7 @@ function loadedItems(
   if (!read) {
     return NONE
   }
-  const place = cursorPlace(end)
+  const place = botItemCursorPlace(end)
   const paged = new Map(pages.map((item) => [item.uid, item]))
   const items = read.items.flatMap((item) => {
     const page = paged.get(item.uid)
@@ -69,7 +59,7 @@ function loadedItems(
     if (page) {
       return [item.version > page.version ? item : page]
     }
-    return isClosed(item) && place && !reaches(item, place) ? [] : [item]
+    return isClosed(item) && place && !botItemReaches(item, place) ? [] : [item]
   })
   return paged.size > 0 ? [...items, ...paged.values()] : items
 }
@@ -86,6 +76,13 @@ function carriedPages(
       held.set(item.uid, item)
     }
   }
+  // A named item newly Closed above the pages' end that the read's first page has no room for.
+  const end = botItemCursorPlace(pages.cursor)
+  named.forEach((copy, uid) => {
+    if (copy && isClosed(copy) && !held.has(uid) && (!end || botItemReaches(copy, end))) {
+      held.set(uid, copy)
+    }
+  })
   return [...held.values()].flatMap((item) => {
     if (inRead.has(item.uid)) {
       return []
@@ -165,8 +162,16 @@ export function useBotItemsClosedPages(
     const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
     if (generation.current === mine) {
       // Items a named read refreshed while this page was out: the read's copies are the newer ones.
-      const since = latest.current ? botItemsNamedSince(latest.current, read) : null
-      const fresh = since ? next.items.filter((item) => !since.has(item.uid)) : next.items
+      const now = latest.current
+      const since = now ? botItemsNamedSince(now, read) : null
+      const inNow = new Set(now?.items.map((item) => item.uid))
+      const fresh = next.items.flatMap((item) => {
+        if (!since?.has(item.uid)) {
+          return [item]
+        }
+        const copy = since.get(item.uid)
+        return copy && isClosed(copy) && !inNow.has(item.uid) ? [copy] : []
+      })
       setPages((prev) => {
         // Still the pages this one continues (a named read since kept them): it joins them.
         const same = prev !== null && prev.chats === chats && prev.cursor === cursor
@@ -186,6 +191,6 @@ export function useBotItemsClosedPages(
     items,
     loadMore: cursor ? loadMore : null,
     ended: read !== null && cursor === null && (current || depth === 0 || allShown),
-    endAt: cursor ? (cursorPlace(cursor)?.at ?? null) : null
+    endAt: cursor ? (botItemCursorPlace(cursor)?.at ?? null) : null
   }
 }

@@ -80,3 +80,21 @@ it('takes a named read’s copies into loaded pages, a deleted item dropped, wit
   expect(uids).not.toContain('c70')
   expect(view.result.current.loadMore).toBeNull()
 })
+
+it('keeps every item a bulk close names when the first page has no room for them', async () => {
+  host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
+  const first = listRead()
+  const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
+    initialProps: { read: first }
+  })
+  await act(() => view.result.current.loadMore!())
+
+  const uids = Array.from({ length: 60 }, (_, index) => `n${index + 1}`)
+  const closedNow = uids.map((uid) =>
+    makeTestBotItem(2, { uid, status: 'done', lastActivityAt: 5 })
+  )
+  const named = { items: closedNow, counts: { done: 160 }, seenEventId: 'e0' }
+  view.rerender({ read: mergeNamedBotItems(first, named, uids) })
+
+  expect(new Set(view.result.current.items.map((item) => item.uid)).size).toBe(160)
+})

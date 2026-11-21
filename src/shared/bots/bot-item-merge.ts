@@ -48,7 +48,12 @@ export function mergeNamedBotItems(
     same &&= kept === item
     return kept ? [kept] : []
   })
-  const added = [...fresh.values()]
+  // A Closed item new to the read joins it only above where its first page ends: one below belongs to
+  // a later page (its copy reaches loaded pages through this step).
+  const firstPageEnd = botItemCursorPlace(previous.nextClosedCursor)
+  const added = [...fresh.values()].filter(
+    (item) => !isClosedItem(item) || !firstPageEnd || botItemReaches(item, firstPageEnd)
+  )
   const counts = reuseEqualJson(previous.counts, named.counts)
   // A named item this read didn't hold may sit in a loaded Closed page: its step still tells them.
   const elsewhere = uids.some((uid) => !previous.items.some((item) => item.uid === uid))
@@ -85,6 +90,22 @@ export function mergeNamedBotItems(
     seenEventId: named.seenEventId,
     ...cursor
   })
+}
+
+/** A Closed cursor's place: `at:number` of the last row before it. */
+export function botItemCursorPlace(
+  cursor: string | null | undefined
+): { at: number; number: number } | null {
+  const [at, number] = (cursor ?? '').split(':').map(Number)
+  return Number.isFinite(at) && Number.isFinite(number) ? { at: at!, number: number! } : null
+}
+
+/** At or above the place in Closed order (newest activity first, then highest number). */
+export function botItemReaches(item: BotItem, place: { at: number; number: number }): boolean {
+  return (
+    item.lastActivityAt > place.at ||
+    (item.lastActivityAt === place.at && item.number >= place.number)
+  )
 }
 
 function isClosedItem(item: BotItem): boolean {
