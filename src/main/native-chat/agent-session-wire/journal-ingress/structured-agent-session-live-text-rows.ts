@@ -6,6 +6,12 @@ import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemCommitted
 } from './structured-agent-session-event-sink'
+import { CHAT_LIVE_TEXT_SUBSCRIBER_BYTES } from '../../retention/subscriber-live-text-cap'
+
+/** Characters of live text one stream offers. Two snapshots (one sending, one waiting) at two bytes
+ *  a character stay well inside a viewer's cap, so a long reply never ends its viewers' streams;
+ *  rows past it update on their saves alone. */
+const LIVE_TEXT_STREAM_MAX_CHARS = CHAT_LIVE_TEXT_SUBSCRIBER_BYTES / 8
 
 type Placement = { epoch: string; row: Omit<AgentJournalRenderItem, 'body'> }
 
@@ -62,11 +68,13 @@ export class StructuredAgentSessionLiveTextRows {
 
   private read(epoch: string): AgentJournalRenderItem[] {
     const items: AgentJournalRenderItem[] = []
+    let budget = LIVE_TEXT_STREAM_MAX_CHARS
     for (const [key, placement] of this.placements) {
       const text = placement?.epoch === epoch ? this.text(key) : undefined
-      if (!placement || text === undefined) {
+      if (!placement || text === undefined || text.length > budget) {
         continue
       }
+      budget -= text.length
       const shown = this.shown.get(key)
       if (shown?.placement === placement && shown.length === text.length) {
         items.push(shown.item)

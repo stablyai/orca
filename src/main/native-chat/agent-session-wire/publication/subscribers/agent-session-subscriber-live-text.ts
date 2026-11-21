@@ -142,8 +142,26 @@ export function batchWithSubscriberLiveText(
   items: AgentJournalRenderItem[],
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
-  const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+  const live = (): readonly AgentJournalRenderItem[] => {
+    const rows = port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+    forgetEndedLiveRows(subscriber, rows)
+    return rows
+  }
   return withSubscriberLiveText(items, live, reader.form, noteSubscriberLiveRow(subscriber))
+}
+
+/** A row whose stream ended is saved whole, so what was last sent of it is let go. */
+function forgetEndedLiveRows(subscriber: Subscriber, live: readonly AgentJournalRenderItem[]) {
+  const sent = subscriber.liveSent
+  if (!sent || sent.size === 0) {
+    return
+  }
+  const streaming = new Set(live.map((item) => item.itemId))
+  for (const itemId of sent.keys()) {
+    if (!streaming.has(itemId)) {
+      sent.delete(itemId)
+    }
+  }
 }
 
 /** A phone page is already sized to its frame and never re-split, so its live rows follow as a batch. */
@@ -199,6 +217,7 @@ export async function publishSubscriberLiveText(
 ): Promise<void> {
   const { sessionId, journal, fence, items, subscribers, hostNow } = input
   if (items.length === 0) {
+    subscribers.forEach((subscriber) => forgetEndedLiveRows(subscriber, items))
     return
   }
   const cursor = journal.cursor()

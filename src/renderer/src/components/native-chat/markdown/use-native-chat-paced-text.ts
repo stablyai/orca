@@ -123,8 +123,21 @@ export function useNativeChatPacedText(
       setLingering(true)
       return
     }
-    const timer = setTimeout(() => setLingering(false), WORD_FADE_MS)
-    return () => clearTimeout(timer)
+    // Dropping the word spans while text is selected would take the selection's nodes with them.
+    const settle = (): void => {
+      if (!isDocumentRangeSelected()) {
+        document.removeEventListener('selectionchange', settle)
+        setLingering(false)
+      }
+    }
+    const timer = setTimeout(() => {
+      document.addEventListener('selectionchange', settle)
+      settle()
+    }, WORD_FADE_MS)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('selectionchange', settle)
+    }
   }, [revealing])
 
   const fading = !reducedMotion && (revealing || lingering)
