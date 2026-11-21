@@ -216,7 +216,7 @@ importers:
         version: 97.0.0(graphql@16.14.2)
       '@mermaid-js/layout-elk':
         specifier: 0.2.3
-        version: 0.2.3(@types/d3-selection@3.0.11)(mermaid@11.17.2)
+        version: 0.2.3(@types/d3-selection@3.0.11)(mermaid@11.17.2(patch_hash=eca98bdc7624d4074bc520d90046001ab0fd9e2446da76893b2a91b651430c8c))
       '@orca/process-host':
         specifier: workspace:*
         version: link:src/packages/process-host
@@ -9225,11 +9225,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mermaid-js/layout-elk@0.2.3(@types/d3-selection@3.0.11)(mermaid@11.17.2)':
+  '@mermaid-js/layout-elk@0.2.3(@types/d3-selection@3.0.11)(mermaid@11.17.2(patch_hash=eca98bdc7624d4074bc520d90046001ab0fd9e2446da76893b2a91b651430c8c))':
     dependencies:
       d3: 7.9.0(@types/d3-selection@3.0.11)
       elkjs: 0.9.3
-      mermaid: 11.17.2
+      mermaid: 11.17.2(patch_hash=eca98bdc7624d4074bc520d90046001ab0fd9e2446da76893b2a91b651430c8c)
     transitivePeerDependencies:
       - '@types/d3-selection'
 
