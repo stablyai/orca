@@ -12,9 +12,19 @@ function readDocumentRange(): void {
     selection && !selection.isCollapsed && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
 }
 
-/** Whether a selected range reaches into `root`; current while watched. */
-export function isDocumentRangeSelectedIn(root: Node | null): boolean {
-  return root !== null && selectedRange?.intersectsNode(root) === true
+/** Whether a selected range reaches the fading words in `root`, whose nodes it would lose if they
+ *  merged into plain text; current while watched. */
+export function isDocumentRangeInFadingWords(root: Element | null): boolean {
+  const range = selectedRange
+  if (root === null || range?.intersectsNode(root) !== true) {
+    return false
+  }
+  for (const group of root.querySelectorAll('[data-word-group]')) {
+    if (range.intersectsNode(group)) {
+      return true
+    }
+  }
+  return false
 }
 
 export function watchDocumentRange(): () => void {

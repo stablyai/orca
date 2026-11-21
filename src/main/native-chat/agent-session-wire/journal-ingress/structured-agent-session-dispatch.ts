@@ -9,7 +9,8 @@ import type {
   StructuredAgentSessionEventTarget,
   StructuredAgentSessionSinkAdmission,
   StructuredAgentSessionAppendOptions,
-  LiveTextRead
+  LiveTextRead,
+  LiveTextReaders
 } from './structured-agent-session-event-sink'
 
 export type StructuredAgentSessionPublishOptions = Pick<
@@ -32,8 +33,10 @@ export function createLiveTextPublication(
   read: LiveTextRead
 ): () => StructuredAgentSessionSinkAdmission {
   // Asked each window, so a viewer who arrives mid-stream gets the next one.
+  const nobodyTakes = (readers: LiveTextReaders | null | undefined): boolean =>
+    readers === null || (readers?.appends === false && read(readers).length === 0)
   return () =>
-    target()?.hasLiveTextSubscribers?.() === false
+    nobodyTakes(target()?.liveTextReaders?.())
       ? { accepted: true }
       : submit({
           bytes: 1,

@@ -170,8 +170,8 @@ export type StructuredAgentSessionEventTarget = {
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
   publishPromptSuggestion?: (suggestion: AgentSessionPromptSuggestion | null) => void
-  /** `read` runs only when someone is subscribed. */
-  hasLiveTextSubscribers?: () => boolean
+  /** Who is subscribed; `read` runs only when one of them can take what it reads. Null for nobody. */
+  liveTextReaders?: () => LiveTextReaders | null
   publishLiveText?: (read: LiveTextRead) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void

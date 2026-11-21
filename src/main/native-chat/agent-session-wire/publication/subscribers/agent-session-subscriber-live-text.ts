@@ -6,7 +6,10 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { textExtends } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
-import type { LiveTextRead } from '../../journal-ingress/structured-agent-session-event-sink'
+import type {
+  LiveTextRead,
+  LiveTextReaders
+} from '../../journal-ingress/structured-agent-session-event-sink'
 import {
   markBoundedBatchFits,
   subscriberHistoryReader
@@ -247,9 +250,23 @@ export function liveTextFor(
   read: SubscriberLiveTextSource,
   subscribers: readonly Subscriber[]
 ): readonly AgentJournalRenderItem[] {
-  return typeof read === 'function'
-    ? read({ appends: subscribers.some((subscriber) => subscriber.holdsTextBase !== undefined) })
-    : read
+  return typeof read === 'function' ? read(liveTextReadersOf(subscribers)) : read
+}
+
+/** Who would read a session's live text; null while nobody is subscribed. */
+export function sessionLiveTextReaders(
+  subscribers: ReadonlyMap<string, Subscriber> | undefined
+): LiveTextReaders | null {
+  return subscribers?.size ? liveTextReadersOf(subscribers.values()) : null
+}
+
+function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {
+  for (const subscriber of subscribers) {
+    if (subscriber.holdsTextBase !== undefined) {
+      return { appends: true }
+    }
+  }
+  return { appends: false }
 }
 
 /** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */

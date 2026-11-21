@@ -247,7 +247,8 @@ export class AgentSessionSubscribers {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
   }
 
-  hasSubscribers = (sessionId: string): boolean => (this.bySession.get(sessionId)?.size ?? 0) > 0
+  liveTextReaders = (sessionId: string) =>
+    liveText.sessionLiveTextReaders(this.bySession.get(sessionId))
   /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
   private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []

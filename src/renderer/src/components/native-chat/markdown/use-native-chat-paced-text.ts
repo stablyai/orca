@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
-  isDocumentRangeSelectedIn,
+  isDocumentRangeInFadingWords,
   watchDocumentRange
 } from '@/components/comment-markdown/CommentMarkdownWords'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
@@ -38,7 +38,7 @@ export function useNativeChatPacedText(
   rowKey: string,
   text: string,
   streaming: boolean,
-  /** The reply's element; only a selection inside it holds its words still. */
+  /** The reply's element; only a selection of its fading words holds them still. */
   root: React.RefObject<HTMLElement | null>
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
@@ -60,7 +60,7 @@ export function useNativeChatPacedText(
     fadeFrom: initial.shown
   })
   // Recorded as text is shown, so only words shown in the last fade window are elements. Holds
-  // still while a range is selected, so the selection keeps its nodes.
+  // still while its fading words are selected, so the selection keeps its nodes.
   const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
   const setShown = useCallback(
     (length: number, plain = false): void => {
@@ -78,7 +78,7 @@ export function useNativeChatPacedText(
           ? previous
           : {
               length,
-              fadeFrom: isDocumentRangeSelectedIn(root.current)
+              fadeFrom: isDocumentRangeInFadingWords(root.current)
                 ? previous.fadeFrom
                 : Math.min(history[0]!.length, length)
             }
@@ -142,7 +142,7 @@ export function useNativeChatPacedText(
     let due = false
     // Dropping the word spans while text is selected would take the selection's nodes with them.
     const settle = (): void => {
-      if (due && !isDocumentRangeSelectedIn(root.current)) {
+      if (due && !isDocumentRangeInFadingWords(root.current)) {
         document.removeEventListener('selectionchange', settle)
         setLingering(false)
       }

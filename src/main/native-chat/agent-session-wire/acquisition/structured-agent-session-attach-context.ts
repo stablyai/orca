@@ -28,7 +28,7 @@ export type StructuredAgentSessionAttachContext = {
     Pick<StructuredAgentSessionConversations, 'observeSettledTurns' | 'snapshotSource'>
   subscribers: Pick<
     AgentSessionSubscribers,
-    'publishLiveText' | 'promptSuggestions' | 'hasSubscribers'
+    'publishLiveText' | 'promptSuggestions' | 'liveTextReaders'
   > & {
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (
