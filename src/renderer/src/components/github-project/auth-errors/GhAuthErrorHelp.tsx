@@ -5,6 +5,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { GitHubProjectViewError } from '../../../../../shared/github/projects/project-result-types'
 import type { GhAuthDiagnostic } from '../../../../../shared/github/accounts/auth-types'
+import {
+  ghAuthLoginCommand,
+  ghAuthRefreshCommand
+} from '../../../../../shared/github/projects/project-gh-auth-commands'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { projectViewErrorMessage } from './project-view-error-copy'
@@ -12,20 +16,17 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
-const REFRESH_CMD = 'gh auth refresh -s project -s read:org -s repo'
-const LOGIN_CMD = 'gh auth login'
+// Scope commands to the Enterprise host; signing in to github.com cannot repair GHES credentials.
+function enterpriseHost(host: string | null | undefined): string | undefined {
+  return host && host.toLowerCase() !== 'github.com' ? host : undefined
+}
 
-// Scope login to the Enterprise host; signing in to github.com cannot repair GHES credentials.
 function loginCommandForHost(host: string | null | undefined): string {
-  return host && host.toLowerCase() !== 'github.com'
-    ? `gh auth login --hostname ${host}`
-    : LOGIN_CMD
+  return ghAuthLoginCommand(enterpriseHost(host))
 }
 
 function refreshCommandForHost(host: string | null | undefined): string {
-  return host && host.toLowerCase() !== 'github.com'
-    ? `gh auth refresh --hostname ${host} -s project -s read:org -s repo`
-    : REFRESH_CMD
+  return ghAuthRefreshCommand(enterpriseHost(host))
 }
 
 // Environment cleanup commands differ between PowerShell on Windows and bash/zsh on macOS/Linux.

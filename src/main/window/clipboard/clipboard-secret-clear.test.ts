@@ -35,16 +35,6 @@ afterEach(() => {
 })
 
 describe('createSecretClipboardClearer', () => {
-  it('clears the secret after a minute when the clipboard still holds it', () => {
-    vi.useFakeTimers()
-    const { clearer, clear, read } = setup('orcawh_secret')
-    clearer('orcawh_secret')
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS - 1)
-    expect(clear).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(1)
-    expect(read()).toBe('')
-  })
-
   it('leaves whatever the owner copied afterwards', () => {
     vi.useFakeTimers()
     const { clearer, clear, set, read } = setup('orcawh_secret')
@@ -55,17 +45,18 @@ describe('createSecretClipboardClearer', () => {
     expect(read()).toBe('something else')
   })
 
-  it('times a second secret from its own copy', () => {
+  it('clears a second secret at its own one-minute deadline', () => {
     vi.useFakeTimers()
-    const { clearer, clear, set } = setup('first')
+    const { clearer, set, read } = setup('first')
     clearer('first')
     vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS / 2)
     set('second')
     clearer('second')
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS / 2)
-    expect(clear).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS / 2)
-    expect(clear).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS - 1)
+    expect(read()).toBe('second')
+    vi.advanceTimersByTime(1)
+    expect(read()).toBe('')
   })
 })
 

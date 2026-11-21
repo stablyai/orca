@@ -24,10 +24,11 @@ import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-
 export function botTurnEnded(
   runtime: OrcaRuntimeService,
   sessionId: string,
+  turnId: string,
   ended?: TurnEndedVerdict
 ): void {
   markBotGroupRoomUnread(runtime, sessionId)
-  void noteBotGroupMemberReply(runtime, sessionId).catch((error: unknown) =>
+  void noteBotGroupMemberReply(runtime, sessionId, turnId).catch((error: unknown) =>
     console.warn('[bot-groups] could not note a reply for the sidebar', error)
   )
   void settleBotRequestTurn(runtime, sessionId, ended).catch((error: unknown) =>
@@ -37,7 +38,7 @@ export function botTurnEnded(
 
 /** Bot session work the runtime base needs but only the whole runtime can do. */
 export type BotSessionHooks = {
-  turnEnded: (sessionId: string, ended?: TurnEndedVerdict) => void
+  turnEnded: (sessionId: string, turnId: string, ended?: TurnEndedVerdict) => void
   /** A chat's request failed; only a bot's tells its senders why. */
   requestFailed: (failure: StructuredAgentSessionRequestFailure) => void
   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
@@ -68,7 +69,7 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
   })
   return {
-    turnEnded: (sessionId, ended) => botTurnEnded(runtime, sessionId, ended),
+    turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
     requestFailed: (failure) =>
       void settleBotRequestFailure(runtime, failure).catch((error: unknown) =>
         console.warn('[bots] could not settle a failed bot request', error)

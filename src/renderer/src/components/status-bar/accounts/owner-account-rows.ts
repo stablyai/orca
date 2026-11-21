@@ -24,6 +24,8 @@ export function getOwnerAccountRows<P extends AccountProvider>(
   emptyRoster: ProviderAccountsSnapshot[P]
 ): {
   roster: ProviderAccountsSnapshot[P]
+  /** False until a remote owner lists this provider; an empty roster would read as "System default". */
+  rosterKnown: boolean
   inactiveAccounts: InactiveAccountUsage[]
   usageTarget: RateLimitRuntimeTarget
 } {
@@ -33,6 +35,9 @@ export function getOwnerAccountRows<P extends AccountProvider>(
   return {
     // Why: a remote roster comes from the snapshot that carries its readings, so names and numbers move together.
     roster: ownerUsage.remoteOwner ? (ownerUsage.accounts?.[provider] ?? emptyRoster) : localRoster,
+    rosterKnown:
+      !ownerUsage.remoteOwner ||
+      (ownerUsage.accounts !== null && !ownerUsage.accounts.failedProviders?.includes(provider)),
     // Why: an unreachable host cannot vouch for its old per-account readings.
     inactiveAccounts: owner[provider]?.usageMetadata?.unverifiableOwner ? [] : inactive,
     usageTarget: provider === 'claude' ? owner.claudeTarget : owner.codexTarget

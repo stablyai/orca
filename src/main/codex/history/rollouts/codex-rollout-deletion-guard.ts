@@ -11,6 +11,14 @@ function rolloutKey(path: string): string {
   return name.endsWith('.zst') ? name.slice(0, -'.zst'.length) : name
 }
 
+// Deletion holds taken this run, so work spanning an await can tell a deletion came and went.
+let deletionHoldsTaken = 0
+
+/** Changes whenever a deletion hold is taken for any rollout. */
+export function codexRolloutDeletionEpoch(): number {
+  return deletionHoldsTaken
+}
+
 export function isCodexRolloutHeldForDeletion(path: string): boolean {
   return heldRollouts.size > 0 && heldRollouts.has(rolloutKey(path))
 }
@@ -45,6 +53,7 @@ export async function linkCodexRolloutUnlessHeld<T>(
 export async function holdCodexRolloutForDeletion(path: string): Promise<() => void> {
   const key = rolloutKey(path)
   heldRollouts.set(key, (heldRollouts.get(key) ?? 0) + 1)
+  deletionHoldsTaken += 1
   let released = false
   const release = (): void => {
     if (released) {

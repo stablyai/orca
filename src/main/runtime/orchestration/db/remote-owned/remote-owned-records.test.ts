@@ -433,10 +433,11 @@ describe('remote-owned records on the coordinating Orca', () => {
         mailboxHandle: `run:${run.id}`,
         dispatchId: null,
         batch: [db.getMessageById('msg_b1')!],
-        senderSnapshot: (party, reported) => observeSenderSnapshot(party, sources, reported)
+        senderSnapshot: (party, reported, recorded) =>
+          observeSenderSnapshot(party, sources, reported, recorded)
       }).senders[0]
 
-      expect(sender).toMatchObject({ name: 'do task_t', agent: 'claude' })
+      expect(sender).toMatchObject({ name: 'do task_t', agent: 'claude', host: 'devB' })
     })
   })
 })

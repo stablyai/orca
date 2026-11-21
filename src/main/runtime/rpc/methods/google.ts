@@ -45,12 +45,12 @@ function refuseFromBot(botToken: string | undefined, context: RpcContext): void 
   }
 }
 
-function statusView(
+async function statusView(
   runtime: OrcaRuntimeService,
   connect: GoogleConnect
-): Omit<GoogleStatusView, 'accounts'> {
+): Promise<Omit<GoogleStatusView, 'accounts'>> {
   return {
-    client: connect.client(),
+    client: await connect.client(),
     bots: runtime.bots.enabled()
       ? runtime.bots
           .list()
@@ -60,11 +60,11 @@ function statusView(
   }
 }
 
-function pickAccount(connect: GoogleConnect, wanted: string | undefined): string {
+async function pickAccount(connect: GoogleConnect, wanted: string | undefined): Promise<string> {
   if (wanted) {
     return wanted
   }
-  const accounts = connect.accounts()
+  const accounts = await connect.accounts()
   if (accounts.length === 1 && accounts[0]) {
     return accounts[0].email
   }
@@ -85,8 +85,12 @@ export const GOOGLE_METHODS = [
       const connect = google()
       const [accounts, clientKey] = check
         ? await Promise.all([connect.checkAccounts(), connect.checkClient()])
-        : [connect.accounts(), connect.clientCheck()]
-      return { ...statusView(runtime, connect), accounts, ...(clientKey ? { clientKey } : {}) }
+        : [await connect.accounts(), await connect.clientCheck()]
+      return {
+        ...(await statusView(runtime, connect)),
+        accounts,
+        ...(clientKey ? { clientKey } : {})
+      }
     }
   }),
   defineMethod({
@@ -95,7 +99,7 @@ export const GOOGLE_METHODS = [
     params: GoogleClientImportParams,
     handler: async ({ botToken, file }, ctx) => {
       refuseFromBot(botToken, ctx)
-      return { client: google().importClient(file) }
+      return { client: await google().importClient(file) }
     }
   }),
   defineMethod({
@@ -104,7 +108,7 @@ export const GOOGLE_METHODS = [
     params: GoogleClientExportParams,
     handler: async ({ botToken }, ctx) => {
       refuseFromBot(botToken, ctx)
-      return { file: google().exportClient() }
+      return { file: await google().exportClient() }
     }
   }),
   defineMethod({
@@ -150,7 +154,7 @@ export const GOOGLE_METHODS = [
     handler: async ({ botToken, account, revoke }, ctx) => {
       refuseFromBot(botToken, ctx)
       const connect = google()
-      return connect.disconnect(pickAccount(connect, account), revoke === true)
+      return connect.disconnect(await pickAccount(connect, account), revoke === true)
     }
   }),
   defineMethod({

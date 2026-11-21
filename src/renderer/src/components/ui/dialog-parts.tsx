@@ -53,7 +53,7 @@ function DialogError({
       {onRetry ? (
         <button
           type="button"
-          className="rounded-sm font-medium underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-sm font-medium underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={onRetry}
         >
           {retryLabel ?? t('components.ui.dialog.tryAgain', 'Try again')}
@@ -96,7 +96,7 @@ function DialogDisclosure({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <ChevronRight
           aria-hidden="true"

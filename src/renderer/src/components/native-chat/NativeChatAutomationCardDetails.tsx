@@ -8,7 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
 import { botAgentLabel, botErrorMessage } from '@/components/bots/bot-presentation'
-import { botResultsPlace } from '@/components/automations/authoring/automation-bot-results-to'
+import { botResultsPlace } from '../../../../shared/automation-bot-target'
 import { botTargetChatTitle } from '@/components/automations/authoring/automation-bot-runs-in-chat'
 import { eventTriggerLine } from '@/components/automations/authoring/AutomationBotEventsField'
 import { formatUiAutomationScheduleDescriptor } from '@/components/automations/details/automation-schedule-label'
@@ -261,7 +261,7 @@ export function NativeChatAutomationCardDetails({
           className="mt-3"
           onClick={() => openBotAutomation(automationId, null)}
         >
-          {t('components.native-chat.automationSaved.openFullPage', 'Open full page')}
+          {t('components.native-chat.automationSaved.openFullPage', 'Open page')}
         </Button>
       )}
     </div>

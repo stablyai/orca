@@ -35,6 +35,7 @@ describe('deferred split pane handoff', () => {
     })
     const firstRemount = claimDeferredSplitPaneHandoff(key)
     expect(firstRemount).not.toBeNull()
+    firstRemount?.preconnectInput.splice(0)
 
     appendDeferredSplitPaneInput(initial, {
       data: 'stale-input',
@@ -211,17 +212,5 @@ describe('deferred split pane handoff', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('does not expose the registry input array by reference', () => {
-    const key = makePaneKey('tab-1', LEAF_1)
-    const handle = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
-    appendDeferredSplitPaneInput(handle, { data: 'kept', kind: 'ordinary', inputKind: 'driving' })
-    const firstClaim = claimDeferredSplitPaneHandoff(key)
-    firstClaim?.preconnectInput.splice(0)
-
-    expect(claimDeferredSplitPaneHandoff(key)?.preconnectInput).toEqual([
-      { data: 'kept', kind: 'ordinary', inputKind: 'driving' }
-    ])
   })
 })

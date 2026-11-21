@@ -25,7 +25,7 @@ function setupWith(
   const told: string[] = []
   const setup = new ComposioSetup(
     {
-      keyState: () => key,
+      keyState: async () => key,
       connections: async () => ({ connections, pending: [] }),
       app: async (slug) => ({ slug, name: slug, description: '', logo: null, signIn }),
       ensureTool: async () => 'trs_a'
@@ -90,24 +90,6 @@ describe('Composio setup in chat', () => {
     expect(again.message).toContain('already in the chat')
   })
 
-  it('shows the connected line and Ready when a card’s sign-in finishes', async () => {
-    const { setup, written, told } = setupWith('ok')
-    await setup.connectEnded('bot-1', OUTLOOK, {
-      id: 'ca_1',
-      app: 'outlook',
-      name: 'Outlook',
-      status: 'active',
-      label: 'dana@acme.com'
-    })
-    expect(written).toEqual([
-      'Outlook connected as dana@acme.com',
-      { botId: 'bot-1', card: 'ready', app: OUTLOOK }
-    ])
-    expect(told).toEqual([
-      'Card composio-setup/connect answered: outlook connected as dana@acme.com'
-    ])
-  })
-
   it('shows an expired sign-in on its own card, starting no bot turn', () => {
     const { setup, written, told } = setupWith('ok')
     setup.signInExpired('bot-1', OUTLOOK)
@@ -137,6 +119,10 @@ describe('Composio setup in chat', () => {
     expect(asked.message).not.toContain('already in the chat')
     expect(written.at(-1)).toEqual({ botId: 'bot-1', card: 'connect', app: OUTLOOK })
     await setup.connectEnded('bot-1', OUTLOOK, DANA)
+    expect(written.slice(-2)).toEqual([
+      'Outlook connected as dana@acme.com',
+      { botId: 'bot-1', card: 'ready', app: OUTLOOK }
+    ])
     expect(told).toEqual([
       'Card composio-setup/connect answered: outlook connected as dana@acme.com'
     ])

@@ -3,7 +3,7 @@ import { BOT_MCP_APPS } from '../../../../../shared/bots/bot-mcp-apps'
 import { COMPOSIO_CURATED_APPS } from '../../../../../shared/composio/composio-curated-apps'
 import { ComposioAppLogo } from '../composio/ComposioAppLogo'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
-import { BotAppLogo } from './BotAppRow'
+import { BotAppLogo, BotLogoBare } from './BotAppRow'
 
 const BRAND_IDS = [
   'slack',
@@ -22,7 +22,8 @@ const COMPOSIO_SLUGS = [
   'vercel',
   'context7',
   'netlify',
-  'playwright'
+  'playwright',
+  'github'
 ]
 
 const Cell = ({ name, children }: { name: string; children: React.ReactNode }) => (
@@ -57,5 +58,33 @@ export const allLogos = defineFixture({
         ))}
       </div>
     </div>
+  )
+})
+
+// The same logos in a connector list's row: each one bare mark in one 20 px box, the full squares at 20 px.
+export const bareLogos = defineFixture({
+  width: 980,
+  render: () => (
+    <BotLogoBare.Provider value={true}>
+      <div className="flex flex-col gap-3 bg-card p-3">
+        <h3 className="text-xs font-semibold">Bundled brands, bare</h3>
+        <div className="flex flex-wrap">
+          {BRAND_IDS.map((id) => (
+            <Cell key={id} name={id}>
+              <BotAppBrandLogo app={{ id }} />
+            </Cell>
+          ))}
+        </div>
+        <h3 className="text-xs font-semibold">Composio logos, bare</h3>
+        <div className="flex flex-wrap">
+          {COMPOSIO_SLUGS.map((slug) => (
+            <Cell key={slug} name={slug}>
+              <BotAppLogo slug={slug} />
+              <ComposioAppLogo slug={slug} />
+            </Cell>
+          ))}
+        </div>
+      </div>
+    </BotLogoBare.Provider>
   )
 })

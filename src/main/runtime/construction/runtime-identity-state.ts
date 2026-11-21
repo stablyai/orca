@@ -392,6 +392,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     this.terminalIdlePolls
   )
 
+  protected ptyControllerGeneration = 0
   protected ptyController: RuntimePtyController | null = null
 
   protected readonly ptyLivenessVerdictByPtyId = new Map<

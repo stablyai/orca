@@ -47,4 +47,17 @@ describe('externalConversationTitle', () => {
       )
     ).toBe('Investigate the failing endpoint')
   })
+
+  it('reads a Slack message as Slack shows it: people and channels by name, a link by its text', () => {
+    expect(
+      externalConversationTitle(
+        'slack',
+        '<@U0ANN|Ann Park> and <@U0BOB> check <https://github.com/o/r/pull/1|the release PR> in <#C1|releases> if a &lt; b'
+      )
+    ).toBe('@Ann Park and @user check the release PR in #releases if a < b')
+    // Another source's angle brackets are its own.
+    expect(externalConversationTitle('github', 'Fix <@U0ANN|Ann Park> parsing')).toBe(
+      'Fix <@U0ANN|Ann Park> parsing'
+    )
+  })
 })

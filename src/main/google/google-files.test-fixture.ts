@@ -32,7 +32,7 @@ export async function filesApi(routes: FakeRoute[]) {
     ...routes
   ])
   return {
-    api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
     sent,
     writes: () => sent.filter((request) => request.method !== 'GET'),
     cleanup: google.cleanup

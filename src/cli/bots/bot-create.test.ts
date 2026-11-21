@@ -55,7 +55,7 @@ describe('orca bot create --offer', () => {
           name: 'Cutter',
           purpose: 'Tracks what’s blocking the 1.5 release.',
           watches: 'Pull requests, checks and workspaces',
-          does: 'Keep a short readiness list: failing checks, pull requests waiting for review, open blockers.',
+          does: 'Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.',
           reports: 'Here, weekday mornings',
           templateId: 'release',
           worktrees: [

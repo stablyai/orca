@@ -15,7 +15,11 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Icon',
   ChevronRight: 'Icon',
   ChevronDown: 'Icon',
-  ChevronLeft: 'Icon'
+  ChevronLeft: 'Icon',
+  Laptop: 'Icon',
+  Mail: 'Icon',
+  ShieldAlert: 'Icon',
+  ShieldOff: 'Icon'
 }))
 vi.mock('../components/list/DisclosureChevron', () => ({
   DisclosureChevron: ({ children }: { children: ReactNode }) => children
@@ -25,6 +29,9 @@ vi.mock('../components/controls/MobileSwitch', () => ({ MobileSwitch: () => null
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
+}))
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
@@ -98,6 +105,8 @@ function tabContent(access: BotAccessRequests | null, options: TabOptions = {}) 
       routeBot: { ...routeBot, bot: options.bot ?? routeBot.bot },
       client: options.client ?? null,
       showToast: () => {},
+      online: true,
+      hostName: 'Studio Mac',
       accessRequests: access,
       lookAround: null
     })
@@ -223,7 +232,8 @@ function machineStatus(machineName: string): RpcResponse {
 function expectNamedWarningAndConsent(root: ReactTestInstance, name: string): void {
   expect(texts(root).some((text) => text.includes(name))).toBe(true)
   press(root, 'Review Dana Kim')
-  expect(root.findByProps({ confirmLabel: 'Give access' }).props.message).toContain(name)
+  root.findByProps({ confirmLabel: 'Give access' })
+  expect(texts(root)).toContain(`They’ll act as you on ${name}.`)
   press(root, 'Cancel')
 }
 
@@ -280,6 +290,8 @@ describe('who can ask in the bot sheet', () => {
           routeBot: { ...routeBot, bot: shared },
           client: client(new Error('closed')),
           showToast,
+          online: true,
+          hostName: 'Studio Mac',
           accessRequests: null,
           lookAround: null
         })

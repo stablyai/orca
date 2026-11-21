@@ -5,8 +5,11 @@ import { translate } from '@/i18n/i18n'
 
 type PdfLoadingTask = ReturnType<typeof pdfjsLib.getDocument>
 
-/** Bytes as base64, or an orca-media URL (with its size) pdf.js reads by range. */
-export type PdfDocumentSource = { base64: string } | { url: string; length?: number }
+/** Bytes (raw or base64), or an orca-media URL (with its size) pdf.js reads by range. */
+export type PdfDocumentSource =
+  | { bytes: Uint8Array }
+  | { base64: string }
+  | { url: string; length?: number }
 
 export type PdfDocumentLoader = {
   load: (source: PdfDocumentSource) => void
@@ -17,17 +20,21 @@ export function createPdfDocumentLoader({
   display,
   onError
 }: {
-  display: (doc: pdfjsLib.PDFDocumentProxy) => () => void
+  /** Its detach may return a promise; the document stays alive until it settles. */
+  display: (doc: pdfjsLib.PDFDocumentProxy) => () => Promise<void> | void
   onError: (message: string | null) => void
 }): PdfDocumentLoader {
   const tasks = new Set<PdfLoadingTask>()
   let pending: PdfLoadingTask | null = null
-  let displayed: { task: PdfLoadingTask; detach: () => void } | null = null
+  let displayed: { task: PdfLoadingTask; detach: () => Promise<void> | void } | null = null
   let disposed = false
 
-  const destroy = (task: PdfLoadingTask): void => {
+  const destroy = (task: PdfLoadingTask, after?: Promise<void> | void): void => {
     if (tasks.delete(task)) {
-      void task.destroy().catch(() => {})
+      void Promise.resolve(after)
+        .catch(() => {})
+        .then(() => task.destroy())
+        .catch(() => {})
     }
   }
   const fail = (error: unknown): void => {
@@ -52,12 +59,13 @@ export function createPdfDocumentLoader({
       }
       const previous = displayed
       displayed = null
+      let detached: Promise<void> | void = undefined
       try {
         // Why: flush the reader's position before the replacement restores it.
-        previous?.detach()
+        detached = previous?.detach()
       } finally {
         if (previous) {
-          destroy(previous.task)
+          destroy(previous.task, detached)
         }
       }
       onError(null)
@@ -73,7 +81,10 @@ export function createPdfDocumentLoader({
               }
             : // orca-media refuses fetch, so a URL is only readable through its sized range transport.
               pdfLoadFailedMessage()
-          : decodePdfBase64(source.base64)
+          : 'bytes' in source
+            ? // pdf.js transfers the buffer to its worker; the caller keeps its own copy.
+              { data: source.bytes.slice() }
+            : decodePdfBase64(source.base64)
       if (typeof documentSource === 'string') {
         onError(documentSource)
         return
@@ -96,7 +107,8 @@ export function createPdfDocumentLoader({
         }
         const shown = displayed?.task === task ? displayed : null
         try {
-          shown?.detach()
+          // Why: the failed read also fails the detach's flush; nothing awaits that rejection.
+          void Promise.resolve(shown?.detach()).catch(() => {})
         } finally {
           if (shown) {
             displayed = null
@@ -135,12 +147,14 @@ export function createPdfDocumentLoader({
       }
       disposed = true
       pending = null
+      const shown = displayed
+      let detached: Promise<void> | void = undefined
       try {
-        displayed?.detach()
+        detached = shown?.detach()
       } finally {
         displayed = null
         for (const task of tasks) {
-          destroy(task)
+          destroy(task, task === shown?.task ? detached : undefined)
         }
       }
     }

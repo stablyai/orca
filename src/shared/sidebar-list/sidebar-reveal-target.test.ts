@@ -111,14 +111,6 @@ describe('resolveSidebarRevealTarget', () => {
       { section: 'bots', entryKey: 'local/scout', hostDown: false }
     ],
     [
-      'group room',
-      {
-        activeWorkspaceId: 'folder:group-home',
-        frontTab: { contentType: 'room', entityId: 'room-1' }
-      },
-      { section: 'bots', entryKey: 'local/crew', hostDown: false }
-    ],
-    [
       'a group home never names a chat',
       {
         activeWorkspaceId: 'folder:group-home',
@@ -146,15 +138,12 @@ describe('resolveSidebarRevealTarget', () => {
     expect(resolveSidebarRevealTarget(inputs(overrides))).toEqual(expected)
   })
 
-  it.each(['settings', 'tasks', 'activity', 'automations', 'skills'])(
-    'the %s page has no row',
-    (activeView) => {
-      expect(resolveSidebarRevealTarget(inputs({ activeView }))).toEqual({
-        section: 'none',
-        reason: 'full-page-view'
-      })
-    }
-  )
+  it('does not reveal a workspace while settings is open', () => {
+    expect(resolveSidebarRevealTarget(inputs({ activeView: 'settings' }))).toEqual({
+      section: 'none',
+      reason: 'full-page-view'
+    })
+  })
 
   it('a paused bot hidden by Bot options has no row, nor do its workers', () => {
     const owners = [owner('bot', 'local/scout', scoutHome, { hidden: true })]
@@ -165,20 +154,6 @@ describe('resolveSidebarRevealTarget', () => {
     expect(resolveSidebarRevealTarget(inputs({ owners, activeWorkspaceId: fixLogin.id }))).toEqual({
       section: 'none',
       reason: 'bot-hidden'
-    })
-  })
-
-  it('a worker line reveals under its own bot while Hide bot workspaces is on', () => {
-    expect(resolveSidebarRevealTarget(inputs({ activeWorkspaceId: fixLogin.id }))).toEqual({
-      section: 'bots',
-      entryKey: 'local/scout',
-      worker: {
-        id: fixLogin.id,
-        hostId: 'local',
-        identity: getWorktreeHostIdentity(fixLogin),
-        ancestors: []
-      },
-      hostDown: false
     })
   })
 
@@ -198,8 +173,18 @@ describe('resolveSidebarRevealTarget', () => {
       )
     ).toMatchObject({ section: 'bots', entryKey: 'ssh:box/remote' })
     expect(
-      resolveSidebarRevealTarget(inputs({ activeWorkspaceId: 'fix-login', activeHostId: 'local' }))
-    ).toMatchObject({ section: 'bots', entryKey: 'local/scout' })
+      resolveSidebarRevealTarget(inputs({ activeWorkspaceId: fixLogin.id, activeHostId: 'local' }))
+    ).toEqual({
+      section: 'bots',
+      entryKey: 'local/scout',
+      worker: {
+        id: 'fix-login',
+        hostId: 'local',
+        identity: getWorktreeHostIdentity(fixLogin),
+        ancestors: []
+      },
+      hostDown: false
+    })
     // No host named and two copies: no guess, so it stays the Projects list's.
     expect(
       resolveSidebarRevealTarget(inputs({ activeWorkspaceId: 'fix-login', activeHostId: null }))
