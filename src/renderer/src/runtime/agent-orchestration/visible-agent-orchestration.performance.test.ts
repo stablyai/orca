@@ -9,6 +9,7 @@ import {
   selectVisibleAgentOrchestration,
   visibleOrchestrationWorkForTest
 } from './visible-agent-orchestration'
+import { rowIdentities } from './orchestration-row-identities'
 
 // Perf contract: one workspace's chat tab write re-encoded every live chat's pane ID (364k encodes in
 // 40 s at 2,634 chats, all thrashing a 2,048-entry memo). It must read only that workspace's chats
@@ -87,4 +88,21 @@ it('keeps rows equal to a full rebuild across adds, moves and closes', () => {
   }
   expect(rows().filter(([, worktreeId]) => !worktreeId.startsWith('wt-'))).toEqual([])
   expect(new Set(rows().map(([, worktreeId]) => worktreeId)).has('wt-b')).toBe(false)
+})
+
+it('re-picks the alias winner when tabs sharing one chat swap order', () => {
+  const first = { ...chatTab('wt-d', 'd1'), id: 'tab-d1-first' }
+  const second = { ...chatTab('wt-d', 'd1'), id: 'tab-d1-second' }
+  let source: AppState['unifiedTabsByWorktree'] = {
+    'wt-d': [first, second],
+    'wt-e': [chatTab('wt-e', 'e1')]
+  }
+  const aliases = (tabs: AppState['unifiedTabsByWorktree']) => [
+    ...rowIdentities(stateWith(tabs)).aliases.values()
+  ]
+  const initial = aliases(source)
+  source = replaceTabBuckets(source, [['wt-d', [second, first]]])
+  const swapped = aliases(source)
+  expect(swapped).not.toEqual(initial)
+  expect(swapped).toEqual(aliases({ ...source }))
 })

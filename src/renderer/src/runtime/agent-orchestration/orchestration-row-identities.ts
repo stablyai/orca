@@ -183,7 +183,15 @@ function applyRowChanges(
       const count = counts.get(key) ?? 0
       return count <= 1 && count + delta <= 1
     })
-  if (!unique(ledger.actualCounts, actualDelta) || !unique(ledger.aliasCounts, aliasDelta)) {
+  // A kept row that shares a key can still change winner when its workspace reorders.
+  const shared = (entry: RowEntry) =>
+    (ledger.actualCounts.get(entry.actual) ?? 0) > 1 ||
+    (!!entry.host && (ledger.aliasCounts.get(aliasKey(entry.host, entry.key)) ?? 0) > 1)
+  if (
+    before.some(shared) ||
+    !unique(ledger.actualCounts, actualDelta) ||
+    !unique(ledger.aliasCounts, aliasDelta)
+  ) {
     return false
   }
   const { aliases, canonical, worktrees } = ledger.rows
