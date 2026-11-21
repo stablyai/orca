@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import type * as FsPromises from 'node:fs/promises'
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -19,7 +19,7 @@ const refOpens = vi.hoisted(() => ({ count: 0 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   const open: typeof actual.open = (path, ...rest) => {
-    if (String(path).replaceAll('\\', '/').includes('/refs/heads/')) {
+    if (/\/refs\/(?:heads|worktree)\//.test(String(path).replaceAll('\\', '/'))) {
       refOpens.count += 1
     }
     return actual.open(path, ...rest)
@@ -93,7 +93,12 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  // A detached follow-up's Git child can still hold the directory on Windows.
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }))
+  )
 })
 
 it.each([3, 30])('moves an unchecked-out main without listing %i worktrees', async (linked) => {
@@ -244,6 +249,38 @@ it.each([3, 30])(
     await suggest()
 
     // main itself plus the two-ref loop.
+    expect(refOpens.count).toBeLessThanOrEqual(3)
+  }
+)
+
+it.each([3, 30])(
+  'remembers which checkout a looping per-worktree alias lives in among %i branch worktrees',
+  async (linked) => {
+    const { repoPath } = await createRepo(linked)
+    for (let index = 0; index < linked; index += 1) {
+      git(join(dirname(repoPath), `wt-${index}`), ['checkout', '--quiet', '-b', `topic-${index}`])
+    }
+    // The same alias name resolves in the first checkout and loops in the last.
+    const aliasIn = async (name: string, target: string) => {
+      const gitDir = join(repoPath, '.git', 'worktrees', name)
+      await mkdir(join(gitDir, 'refs', 'worktree'), { recursive: true })
+      await writeFile(join(gitDir, 'refs', 'worktree', 'alias'), `ref: ${target}\n`)
+      await writeFile(join(gitDir, 'HEAD'), 'ref: refs/worktree/alias\n')
+    }
+    await aliasIn('wt-0', 'refs/heads/topic-0')
+    await aliasIn(`wt-${linked - 1}`, 'refs/worktree/alias')
+    const suggest = () =>
+      getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+        repoPath,
+        'origin/main',
+        'refs/remotes/origin/main'
+      )
+    await suggest()
+    refOpens.count = 0
+
+    await suggest()
+
+    // main itself plus the looping alias.
     expect(refOpens.count).toBeLessThanOrEqual(3)
   }
 )

@@ -1,5 +1,6 @@
 import { constants as bufferConstants } from 'node:buffer'
 import { constants } from 'node:fs'
+import { StringDecoder } from 'node:string_decoder'
 import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { join } from 'node:path'
@@ -95,6 +96,7 @@ async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
 }
 
 const READ_CHUNK_BYTES = 512 * 1024
+const MIN_GROWTH_CHUNK_BYTES = 4096
 const { MAX_STRING_LENGTH } = bufferConstants
 
 /** A regular file's content, opened without blocking on a FIFO; null for a directory, undefined when not regular or over `maxBytes`. */
@@ -112,11 +114,12 @@ async function readBoundedFile(
     if (!info.isFile() || (maxBytes !== undefined && info.size > maxBytes)) {
       return undefined
     }
-    // Chunked from this descriptor; a file that grows past the limit is refused.
+    // Chunked from this descriptor, sized to the stat and growing if the file did; a file past the limit is refused.
     const limit = maxBytes ?? MAX_STRING_LENGTH
-    const chunkSize = Math.min(info.size + 1, READ_CHUNK_BYTES)
-    const chunks: Buffer[] = []
+    const decoder = new StringDecoder('utf8')
+    let text = ''
     let total = 0
+    let chunkSize = Math.min(info.size + 1, READ_CHUNK_BYTES)
     for (;;) {
       const chunk = Buffer.allocUnsafe(chunkSize)
       const { bytesRead } = await handle.read(chunk, 0, chunkSize, null)
@@ -124,11 +127,12 @@ async function readBoundedFile(
       if (total > limit) {
         return undefined
       }
-      chunks.push(chunk.subarray(0, bytesRead))
+      text += decoder.write(chunk.subarray(0, bytesRead))
       // A short read of a regular file is its end.
       if (bytesRead < chunkSize) {
-        return Buffer.concat(chunks, total).toString('utf8')
+        return text + decoder.end()
       }
+      chunkSize = Math.min(Math.max(chunkSize * 2, MIN_GROWTH_CHUNK_BYTES), READ_CHUNK_BYTES)
     }
   } finally {
     await handle.close()

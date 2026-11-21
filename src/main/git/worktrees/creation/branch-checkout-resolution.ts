@@ -28,8 +28,9 @@ type ResolveOptions = {
 }
 
 const MAX_SYMREF_HOPS = 5
-// Per common dir, the branch whose alias chain last could not be followed: an odd ref tends to stay.
-const lastUnresolved = new Map<string, string>()
+// Per common dir, the checkout and ref whose alias chain last could not be followed: an odd ref tends to stay.
+const lastUnresolved = new Map<string, readonly [gitDir: string, ref: string]>()
+const MAX_UNRESOLVED_HINTS = 64
 const PER_WORKTREE_REF = /^refs\/(?:worktree|bisect|rewritten)\//
 
 /** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
@@ -139,13 +140,13 @@ export async function resolveBranchCheckouts(
       }
     }
     if (!unknown) {
-      lastUnresolved.set(commonDir, start)
+      rememberUnresolved(commonDir, gitDir, start)
     }
     unknown = true
   }
   // Try that branch first so a lasting odd ref costs one chain, not a pass over every checkout.
   const odd = lastUnresolved.get(commonDir)
-  const first = odd === undefined ? undefined : branches.find(([, ref]) => ref === odd)
+  const first = odd && branches.find(([gitDir, ref]) => gitDir === odd[0] && ref === odd[1])
   if (first) {
     await resolve(first)
     if (unknown && !settled()) {
@@ -166,6 +167,18 @@ export async function resolveBranchCheckouts(
   }
   lastUnresolved.delete(commonDir)
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
+}
+
+function rememberUnresolved(commonDir: string, gitDir: string, ref: string): void {
+  lastUnresolved.delete(commonDir)
+  lastUnresolved.set(commonDir, [gitDir, ref])
+  // Oldest first: a removed repo's hint ages out.
+  for (const stale of lastUnresolved.keys()) {
+    if (lastUnresolved.size <= MAX_UNRESOLVED_HINTS) {
+      break
+    }
+    lastUnresolved.delete(stale)
+  }
 }
 
 // Git cannot follow a ref it cannot read either, so that ref aliases nothing.
