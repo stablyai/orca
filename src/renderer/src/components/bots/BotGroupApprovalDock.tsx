@@ -37,9 +37,10 @@ export function BotGroupApprovalDock({
     return null
   }
   return (
-    <div>
+    // Gives way to the composer like the chat's own prompt slot, so the card scrolls rather than leaving the pane.
+    <div className="flex min-h-0 shrink flex-col">
       {waiting.length > 1 ? (
-        <div className="mx-auto max-w-3xl px-4">
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-4">
           <Select value={member.botId} onValueChange={setSelected}>
             <SelectTrigger className="h-8 w-fit">
               <SelectValue />
@@ -54,7 +55,7 @@ export function BotGroupApprovalDock({
           </Select>
         </div>
       ) : (
-        <div className="mx-auto max-w-3xl px-4 text-xs text-chat-foreground-faint">
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-4 text-xs text-chat-foreground-faint">
           {memberName(member.botId)} {t('bots.groups.needsYou', '· Needs you')}
         </div>
       )}

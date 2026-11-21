@@ -239,11 +239,12 @@ export function NativeChatApprovalCard({
                   data-native-chat-approval-content="true"
                   tabIndex={0}
                   className={cn(
-                    'min-h-0 max-h-72 shrink overflow-auto text-sm scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    // Quiet: under the title, as a folded row's lines sit under its own.
+                    'min-h-0 max-h-72 overflow-auto text-sm scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    // Quiet: under the title, as a folded row's lines sit under its own. Its clamped
+                    // command never shrinks away in a short pane; the card scrolls to the answers instead.
                     quiet
-                      ? 'space-y-1.5 pl-5 text-chat-foreground-faint'
-                      : 'space-y-2 text-muted-foreground'
+                      ? 'shrink-0 space-y-1.5 pl-5 text-chat-foreground-faint'
+                      : 'shrink space-y-2 text-muted-foreground'
                   )}
                 >
                   {countdown ? <p className="tabular-nums">{countdown}</p> : null}
@@ -383,7 +384,7 @@ export function NativeChatApprovalCard({
                     type="button"
                     aria-expanded={detailOpen}
                     onClick={() => setDetailOpen(!detailOpen)}
-                    className="inline-flex h-8 items-center gap-0.5 rounded-md px-2 text-sm font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-8 max-w-full items-center gap-0.5 rounded-md px-2 text-sm font-medium [overflow-wrap:anywhere] text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t('components.native-chat.notices.details', 'Details')}
                     <ChevronDown
