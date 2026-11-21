@@ -28,6 +28,9 @@ import { remoteAsksFor } from './bot-group-remote-question'
 /** Turns members' @Name replies may wake per person's post: the Slack connector's agent-to-agent cap. */
 export const BOT_GROUP_HANDOFF_LIMIT = 6
 
+/** A send at a stale revision: the room's members or settings changed since it was read. */
+export const BOT_GROUP_CHANGED = 'The group changed. Review the current members before sending.'
+
 export type SendBotGroupMessageOptions = {
   /** This host's own window sent: local dropped images are copied into the store. */
   local?: boolean
@@ -59,7 +62,7 @@ export async function sendBotGroupMessage(
     }
     const group = groups.store.room(input.groupId, input.threadId)
     if (group.revision !== input.revision) {
-      throw new Error('The group changed. Review the current members before sending.')
+      throw new Error(BOT_GROUP_CHANGED)
     }
     if (group.members.length === 0) {
       throw new Error('Every bot has left this group. Add a bot before sending.')
