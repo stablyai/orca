@@ -2,9 +2,15 @@ import { readFile } from 'node:fs/promises'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Plugin } from 'rolldown'
+import { precomputeEnglishLanguagePackBaseline } from '../../src/shared/plugins/languages/plugin-language-pack-coverage'
 
 // Main only localizes menus, dialogs and notifications; whole renderer catalogs cost ~1 MB per locale.
 const LOCALES_DIR = resolve('src/renderer/src/i18n/locales')
+const ENGLISH_CATALOG = join(LOCALES_DIR, 'en.json')
+const LANGUAGE_PACK_BASELINE_ASSET = 'plugin-english-language-pack-baseline.jsonl'
+const LANGUAGE_PACK_BASELINE = resolve(
+  'src/main/plugins/contributions/plugin-english-language-pack-baseline.ts'
+)
 const KEY_SOURCE_ROOTS = ['src/main', 'src/shared']
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const PLURAL_SUFFIX_RE = /_(?:zero|one|two|few|many|other)$/
@@ -62,6 +68,7 @@ function stripPluralLiterals(evidence: KeyEvidence): KeyEvidence {
 export function createMainLocaleSubsetPlugin(): Plugin {
   let evidence: KeyEvidence | undefined
   let collectKeyLiterals: ExtractionScript['collectKeyLiterals'] | undefined
+  let baselineAsset: string | undefined
 
   return {
     name: 'orca-main-locale-subset',
@@ -90,11 +97,42 @@ export function createMainLocaleSubsetPlugin(): Plugin {
       evidence = stripPluralLiterals(collected)
     },
     async load(id) {
+      if (evidence && isAbsolute(id) && relative(LANGUAGE_PACK_BASELINE, id) === '') {
+        const english: Catalog = JSON.parse(await readFile(ENGLISH_CATALOG, 'utf8'))
+        const { partitions, translatableCount } = precomputeEnglishLanguagePackBaseline(english)
+        baselineAsset = this.emitFile({
+          type: 'asset',
+          name: LANGUAGE_PACK_BASELINE_ASSET,
+          source: partitions.map((partition) => JSON.stringify(partition)).join('\n')
+        })
+        // Yield between partitions so first use doesn't parse the entire index in one tick.
+        return `import { readFile } from 'node:fs/promises';
+          import { setImmediate } from 'node:timers/promises';
+          export default async function loadBaseline() {
+            const lines = (await readFile(import.meta.ROLLUP_FILE_URL_${baselineAsset}, 'utf8')).split('\\n');
+            const partitions = [];
+            for (const line of lines) {
+              await setImmediate();
+              partitions.push(JSON.parse(line));
+            }
+            return { partitions, translatableCount: ${translatableCount} };
+          }`
+      }
       if (!evidence || !isLocaleCatalog(id)) {
         return null
       }
       const catalog: Catalog = JSON.parse(await readFile(id, 'utf8'))
       return JSON.stringify(pickNamedEntries(catalog, evidence))
+    },
+    resolveFileUrl: {
+      order: 'pre',
+      handler({ referenceId, relativePath }) {
+        if (referenceId !== baselineAsset) {
+          return null
+        }
+        // The CommonJS main bundle needs a local path, not Vite's public asset URL.
+        return `require('node:path').resolve(__dirname, ${JSON.stringify(relativePath)})`
+      }
     },
     async buildEnd(error) {
       if (error || !evidence || !collectKeyLiterals) {
@@ -114,7 +152,7 @@ export function createMainLocaleSubsetPlugin(): Plugin {
           collectKeyLiterals(await readFile(id, 'utf8'), outside)
         }
       }
-      const english: Catalog = JSON.parse(await readFile(join(LOCALES_DIR, 'en.json'), 'utf8'))
+      const english: Catalog = JSON.parse(await readFile(ENGLISH_CATALOG, 'utf8'))
       const outsideNames = stripPluralLiterals(outside)
       const shipped = evidence
       const dropped = catalogKeys(english).filter(
