@@ -8,7 +8,6 @@ import type { Automation } from '../../../../../../shared/automations/automation
 import type { AutomationRun } from '../../../../../../shared/automations/history/automation-run'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { replyFollowUp } from './reply-follow-up'
 import { sendToBot } from './bot-request-send'
 import type * as RecipientRouting from './recipient-routing'
@@ -702,17 +701,16 @@ describe('mail to a bot', () => {
   it('gives a --chat new chat a tab in the bot home, without focus, so it lists under the bot', async () => {
     journals[RANGER_CHAT] = [message('ask')]
     await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
-    const docs = bots.find((bot) => bot.id === 'docs')!
     expect(publishTab).toHaveBeenCalledTimes(1)
     expect(publishTab).toHaveBeenCalledWith({
-      workspaceId: folderWorkspaceKey(docs.folderWorkspaceId),
+      workspaceId: 'folder:w1',
       sessionId: DOCS_REQUEST,
-      agent: docs.agent,
+      agent: 'codex',
       activate: false
     })
   })
 
-  it("keeps a teammate's request conversation out of the tab bar", async () => {
+  it("keeps a teammate's request out of the tab bar when Orca, not the sender, made its chat", async () => {
     journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
     await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
     expect(publishTab).not.toHaveBeenCalled()
@@ -732,7 +730,7 @@ describe('mail to a bot', () => {
       journals[RANGER_CHAT] = [message('ask')]
       const receipt = await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
       expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
-      expect(warn).toHaveBeenCalledWith('[bots] could not show a new chat tab', expect.any(Error))
+      expect(publishTab).toHaveBeenCalledTimes(1)
     } finally {
       warn.mockRestore()
     }

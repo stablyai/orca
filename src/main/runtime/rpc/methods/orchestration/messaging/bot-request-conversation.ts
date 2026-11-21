@@ -11,12 +11,12 @@ import {
   startBotSession
 } from '../../../../../bots/bot-chat-session'
 import { noteInChat } from '../../../../../bots/bot-chat-status-line'
+import { showBotSessionTab } from '../../../../../bots/bot-session-tab-show'
 import {
   botRequestElsewhereNote,
   botRequestSenderName,
   type BotRequestRecord
 } from '../../../../../bots/bot-request-view'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
@@ -50,7 +50,8 @@ async function requestConversation(
  *  is closed again and the reservation given back. `home`: the owner's Chat, told it went elsewhere
  *  (`chat` is null while the bot has none); null tells none. `tab`: the conversation is a chat the
  *  sender asked for (`--chat new`), so it gets a tab in the bot's home and lists under the bot like a
- *  chat opened from the tab bar; a teammate's waits in the bot's Chats. */
+ *  chat opened from the tab bar, whoever it acts for: the owner's Orca holds it either way. A
+ *  teammate's request Orca routed out of the Chat on its own waits in the bot's Chats, like a thread. */
 export async function admitInOwnConversation(
   runtime: OrcaRuntimeService,
   bot: Bot,
@@ -97,21 +98,16 @@ export async function admitInOwnConversation(
   return admitted.receipt
 }
 
-/** A tab for the new chat in the bot's home, without taking focus. The request is already delivered,
- *  so a tab that can't be shown only leaves the chat in the bot's Chats, where it was before. */
+/** The request is already delivered, so a tab that can't be shown only leaves the chat in the bot's
+ *  Chats, where it was before; reopening it from there publishes the same tab. */
 async function showConversationTab(
   runtime: OrcaRuntimeService,
   bot: Bot,
   sessionId: string
 ): Promise<void> {
-  await runtime
-    .publishStructuredAgentSessionTab({
-      workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
-      sessionId,
-      agent: bot.agent,
-      activate: false
-    })
-    .catch((error: unknown) => console.warn('[bots] could not show a new chat tab', error))
+  await showBotSessionTab(runtime, bot, sessionId).catch((error: unknown) =>
+    console.warn('[bots] could not show a new chat tab', error)
+  )
 }
 
 export function sessionAddress(sessionId: string): string {
