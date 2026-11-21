@@ -11,6 +11,8 @@ type Waiter = {
 export class PrioritySemaphore {
   private available: number
   private waiters: Waiter[] = []
+  // Why: one shared numeric priority means plain FIFO, so a release need not rank every waiter.
+  private uniformPriority = true
 
   constructor(concurrency: number) {
     this.available = concurrency
@@ -45,6 +47,10 @@ export class PrioritySemaphore {
         }
         signal.addEventListener('abort', waiter.onAbort, { once: true })
       }
+      this.uniformPriority =
+        typeof priority === 'number' &&
+        (this.waiters.length === 0 ||
+          (this.uniformPriority && this.waiters[0].priority === priority))
       this.waiters.push(waiter)
     })
   }
@@ -55,17 +61,11 @@ export class PrioritySemaphore {
       return
     }
 
-    // Lower numeric priority wins; equal priorities stay FIFO.
-    const rank = (waiter: Waiter): number =>
-      typeof waiter.priority === 'function' ? waiter.priority() : waiter.priority
-    let bestIdx = 0
-    for (let i = 1; i < this.waiters.length; i++) {
-      if (rank(this.waiters[i]) < rank(this.waiters[bestIdx])) {
-        bestIdx = i
-      }
+    const waiter = this.uniformPriority ? this.waiters.shift() : this.takeHighestPriority()
+    if (!waiter) {
+      this.available++
+      return
     }
-
-    const waiter = this.waiters.splice(bestIdx, 1)[0]
     if (waiter.signal && waiter.onAbort) {
       waiter.signal.removeEventListener('abort', waiter.onAbort)
     }
@@ -77,5 +77,19 @@ export class PrioritySemaphore {
       released = true
       this.release()
     })
+  }
+
+  private takeHighestPriority(): Waiter | undefined {
+    // Lower numeric priority wins; equal priorities stay FIFO.
+    const rank = (waiter: Waiter): number =>
+      typeof waiter.priority === 'function' ? waiter.priority() : waiter.priority
+    let bestIdx = 0
+    for (let i = 1; i < this.waiters.length; i++) {
+      if (rank(this.waiters[i]) < rank(this.waiters[bestIdx])) {
+        bestIdx = i
+      }
+    }
+
+    return this.waiters.splice(bestIdx, 1)[0]
   }
 }

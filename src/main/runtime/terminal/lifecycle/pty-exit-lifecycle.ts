@@ -224,8 +224,14 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitWorkerObser
       this.cancelPendingDriverMutations(ptyId)
       // Cold restore can reuse ids during delayed Enter; revoke it before it injects into a replacement.
       this.orchestrationMailboxNotifications.retirePty(ptyId)
+      // Why the recorded pane too: a headless terminal has no leaf, yet its pane held cached Run mail.
+      const recordedPane = this.paneOfPty(pty).paneKey
+      if (recordedPane) {
+        this.orchestrationMailboxOwner.forgetPane(recordedPane)
+      }
       // Repoint retained handle/pane mailbox pointers away from the retired session.
       for (const leaf of this.getLeavesForPty(ptyId)) {
+        this.orchestrationMailboxOwner.forgetPane(`${leaf.tabId}:${leaf.leafId}`)
         const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
         if (mailboxHandle) {
           this.mailPointerRepointScheduler.schedule(mailboxHandle)

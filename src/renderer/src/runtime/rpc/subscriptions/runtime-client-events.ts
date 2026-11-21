@@ -2,6 +2,7 @@ import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
 } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { RetainedAgentAttention } from '../../../../../shared/notifications/notification-settings-types'
 import { isNotificationAttentionAcknowledgement } from '../../../../../shared/notifications/notification-settings-types'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
@@ -22,7 +23,11 @@ export async function subscribeRuntimeClientEvents(
   // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
   onReplayedAfterReconnect?: () => void,
   // Managed SSH hosts reach this desktop's browser through the desktop browser bridge instead.
-  options: { hostsBrowserPages: boolean; onClose?: () => void } = { hostsBrowserPages: false }
+  options: {
+    hostsBrowserPages: boolean
+    onClose?: () => void
+    onAgentAttentionSnapshot?: (notices: RetainedAgentAttention[]) => void
+  } = { hostsBrowserPages: false }
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await subscribeRuntimeEnvironment(
     {
@@ -40,7 +45,8 @@ export async function subscribeRuntimeClientEvents(
           response,
           onEvent,
           onError,
-          onReplayedAfterReconnect
+          onReplayedAfterReconnect,
+          options.onAgentAttentionSnapshot
         )
       },
       onError,
@@ -55,7 +61,8 @@ function handleRuntimeClientEventResponse(
   response: RuntimeRpcResponse<unknown>,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void,
-  onReplayedAfterReconnect?: () => void
+  onReplayedAfterReconnect?: () => void,
+  onAgentAttentionSnapshot?: (notices: RetainedAgentAttention[]) => void
 ): void {
   if (response.ok === false) {
     onError(response.error)
@@ -66,6 +73,9 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    if (message.snapshot?.agentAttention) {
+      onAgentAttentionSnapshot?.(message.snapshot.agentAttention)
+    }
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {
@@ -108,6 +118,7 @@ function isRuntimeClientEvent(
   message: RuntimeClientEventStreamMessage
 ): message is RuntimeClientEvent {
   return (
+    message.type === 'agentAttentionChanged' ||
     (message.type === 'notificationAttentionAcknowledged' &&
       isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||

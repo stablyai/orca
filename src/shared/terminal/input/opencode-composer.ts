@@ -8,15 +8,8 @@ const OPENCODE_BOX_GUTTER = '┃'
 // A stock prompt, then a quoted example that a narrow box may cut short.
 const OPENCODE_PLACEHOLDER = /^(?:Ask anything\u2026|Run a command\u2026)(?: "[^"]*"?)?$/
 
-/** Whether OpenCode's composer shows a typed draft, so mail must wait. False when the cursor is not
- *  in a box laid out as OpenCode's. Callers check that OpenCode is the pane's agent. */
-export function openCodeComposerHoldsDraft(context: TerminalCursorContext): boolean {
-  return readOpenCodeComposerDraft(context) !== null
-}
-
-/** The draft OpenCode's composer shows, its rows joined by spaces; null for an empty box, its
- *  placeholder, or a cursor outside a box laid out as OpenCode's. */
-export function readOpenCodeComposerDraft(context: TerminalCursorContext): string | null {
+/** Typed textarea, empty placeholder, or null when the cursor is outside OpenCode's composer. */
+export function readOpenCodeComposerTypedText(context: TerminalCursorContext): string | null {
   const cursorIndex = context.rows.length - 1
   const column = (context.rows[cursorIndex] ?? '').indexOf(OPENCODE_BOX_GUTTER)
   const inBox = (row: string | undefined): boolean =>
@@ -54,5 +47,17 @@ export function readOpenCodeComposerDraft(context: TerminalCursorContext): strin
     textarea.every(Boolean) &&
     !context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length).trim() &&
     OPENCODE_PLACEHOLDER.test(shown)
-  return shown && !placeholder ? shown : null
+  return placeholder ? '' : textarea.join('\n').trim()
+}
+
+/** Whether OpenCode's composer shows a typed draft, so mail must wait. False when the cursor is not
+ *  in a box laid out as OpenCode's. Callers check that OpenCode is the pane's agent. */
+export function openCodeComposerHoldsDraft(context: TerminalCursorContext): boolean {
+  return !!readOpenCodeComposerTypedText(context)
+}
+
+/** The draft OpenCode's composer shows, its rows joined by spaces; null for an empty box, its
+ *  placeholder, or a cursor outside a box laid out as OpenCode's. */
+export function readOpenCodeComposerDraft(context: TerminalCursorContext): string | null {
+  return readOpenCodeComposerTypedText(context)?.replaceAll('\n', ' ') || null
 }

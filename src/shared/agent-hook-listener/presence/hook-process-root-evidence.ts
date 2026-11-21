@@ -1,3 +1,4 @@
+import { filterHeadlessOneShotAgentCommand } from '../../agent-status/process/agent-headless-command'
 import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
@@ -83,16 +84,16 @@ const MAX_TERMINAL_ROWS = 256
 
 type Role = 'agent' | 'launcher' | 'other' | 'unknown'
 
-function agentOf(command: string): string | undefined {
-  const recognized = recognizeAgentProcessFromCommandLine(command, { includeHeadlessOneShot: true })
+export function agentOf(command: string, includeHeadlessOneShot = true): string | undefined {
+  const recognized = recognizeAgentProcessFromCommandLine(command, { includeHeadlessOneShot })
   if (recognized) {
     return recognized.agent
   }
   // Native installs exec a versioned binary (`…/claude/versions/2.1.0`); its directory names the agent.
-  const versioned = /(?:^|\/)([^/]+)\/versions\/\d[^/]*$/.exec(
-    tokenizeCommandLine(command)[0] ?? ''
-  )
-  return versioned ? recognizeAgentProcess(versioned[1])?.agent : undefined
+  const tokens = tokenizeCommandLine(command)
+  const versioned = /(?:^|\/)([^/]+)\/versions\/\d[^/]*$/.exec(tokens[0] ?? '')
+  const agent = versioned ? recognizeAgentProcess(versioned[1]) : null
+  return (includeHeadlessOneShot ? agent : filterHeadlessOneShotAgentCommand(agent, tokens))?.agent
 }
 
 function firstToken(command: string): string {

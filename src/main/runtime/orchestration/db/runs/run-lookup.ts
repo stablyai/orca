@@ -18,6 +18,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { workerSeatGrabSql } from './run-coordinator-mail-routing'
+import { pointerWorkExistsSql } from '../messages/mailbox-pointer-enter-state'
 
 export type LegacyAdoptedMailboxOwner = {
   runId: string
@@ -29,6 +30,12 @@ const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
 const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid DESC`
+// Only Runs with pointer work come back, so a pane's empty Run history costs no row materialization.
+const RUN_MAILBOXES_WITH_POINTER_WORK_FOR_PANE_SQL = `SELECT id, coordinator_pane_key FROM runs
+         WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
+           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+           AND ${pointerWorkExistsSql("'run:' || runs.id")}
          ORDER BY rowid DESC`
 // Predicates match the partial indexes idx_runs_current_pane_exact/_leaf (created on every open).
 const CURRENT_RUN_FOR_EXACT_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
@@ -149,6 +156,23 @@ export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[
   )
 }
 
+/** The `run:` mailboxes of Runs bound to this pane that still owe pointer work. */
+export function runMailboxesWithPointerWorkForPane(
+  this: OrchestrationDb,
+  paneKey: string
+): string[] {
+  return this.db
+    .prepare(RUN_MAILBOXES_WITH_POINTER_WORK_FOR_PANE_SQL)
+    .all(paneKeyMatchSuffix(paneKey))
+    .flatMap((run) =>
+      typeof run?.id === 'string' &&
+      typeof run.coordinator_pane_key === 'string' &&
+      isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
+        ? [`run:${run.id}`]
+        : []
+    )
+}
+
 export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined {
   return this.db.prepare(RUN_BY_ID_SQL).get(id) as RunRow | undefined
 }
@@ -227,6 +251,7 @@ export type RunLookupMethods = {
   listRuns: typeof listRuns
   getCurrentRunForPane: typeof getCurrentRunForPane
   runsBoundToPane: typeof runsBoundToPane
+  runMailboxesWithPointerWorkForPane: typeof runMailboxesWithPointerWorkForPane
   getCurrentRunForCoordinator: typeof getCurrentRunForCoordinator
   getCoordinatedRun: typeof getCoordinatedRun
   runsBoundToCoordinator: typeof runsBoundToCoordinator
@@ -243,6 +268,7 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     listRuns,
     getCurrentRunForPane,
     runsBoundToPane,
+    runMailboxesWithPointerWorkForPane,
     getCurrentRunForCoordinator,
     getCoordinatedRun,
     runsBoundToCoordinator,

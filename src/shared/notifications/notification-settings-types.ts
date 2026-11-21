@@ -82,6 +82,8 @@ export function isNotificationAttentionAcknowledgement(
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  /** Producer-owned attention copy; delivery still applies agent notification policy. */
+  content?: { title: string; body: string }
   notificationId?: string
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
@@ -184,4 +186,14 @@ export type NotificationDeliveryProbeResult = {
   state: 'delivered' | 'blocked' | 'awaiting-decision' | 'unsupported'
   /** True when the state comes from the native authorization readout (vs. the delivery-probe fallback). */
   authoritative: boolean
+}
+
+export type RetainedAgentAttention = {
+  notificationId: string
+  title: string
+  body: string
+  worktreeId?: string
+  paneKey?: string
+  /** The host's notification settings or workspace mute silence this notice's banner and sound. */
+  desktopAllowed?: false
 }

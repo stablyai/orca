@@ -5,32 +5,9 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 import { runOwnsDirectMessageSql } from '../runs/run-coordinator-mail-routing'
 
-const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
-const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
+import { runBatchedMessageMutation } from './message-batch-mutation'
 
-function runBatchedMessageMutation(
-  db: OrchestrationDb,
-  ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string,
-  leadingBindings: string[] = []
-): void {
-  if (ids.length === 0) {
-    return
-  }
-  db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
-  try {
-    for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
-      const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
-      const placeholders = batch.map(() => '?').join(',')
-      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingBindings, ...batch)
-    }
-    db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
-  } catch (error) {
-    db.db.exec(`ROLLBACK TO ${MESSAGE_MUTATION_SAVEPOINT}`)
-    db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
-    throw error
-  }
-}
+const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 
 export function getUnreadMessages(
   this: OrchestrationDb,
@@ -92,6 +69,7 @@ export function getUndeliveredUnreadMessages(
     excludeTypes?: readonly string[]
     excludeIds?: readonly string[]
     excludeRunOwnedDirect?: boolean
+    onlyRunOwnedDirect?: boolean
     limit?: number
   }
 ): MessageRow[] {
@@ -101,7 +79,8 @@ export function getUndeliveredUnreadMessages(
     'delivered_at IS NULL',
     'pointer_enter_pending = 0',
     "delivery_contract = 'current_delivery'",
-    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : [])
+    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : []),
+    ...(options?.onlyRunOwnedDirect ? [runOwnsDirectMessageSql('messages')] : [])
   ]
   const params: (string | number)[] = [toHandle]
   if (types?.length) {
@@ -121,9 +100,11 @@ export function getUndeliveredUnreadMessages(
     params.push(Math.max(1, Math.floor(options.limit)))
   }
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
     this.db
       .prepare(
-        `SELECT * FROM messages
+        // Why INDEXED BY: retained uncertain claims share the inbox; this index leaves them out.
+        `SELECT * FROM messages INDEXED BY idx_messages_eligible_pointer_inbox
          WHERE ${conditions.join(' AND ')}
          ORDER BY sequence${limitSql}`
       )
@@ -168,7 +149,9 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
       `UPDATE messages
        SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    true
   )
 }
 
@@ -225,7 +208,9 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
        SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')),
            pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    true
   )
 }
 

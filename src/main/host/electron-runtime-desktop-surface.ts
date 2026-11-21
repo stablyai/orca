@@ -1,22 +1,49 @@
 import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron'
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
-import { showDesktopNotification } from '../notifications/desktop-notification'
+import {
+  closeDesktopNotification,
+  showDesktopNotification
+} from '../notifications/desktop-notification'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { electronRendererWindows } from './electron-renderer-windows'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
 
+const mailboxAnnouncements = new Map<string, Notification>()
+
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
-  showNotification: ({ title, body }) => {
+  showNotification: ({ title, body, notificationId }) => {
     if (!Notification.isSupported()) {
       return false
     }
-    showDesktopNotification(new Notification({ title, body }))
+    const notification = new Notification({ title, body })
+    if (notificationId) {
+      const previous = mailboxAnnouncements.get(notificationId)
+      if (previous) {
+        closeDesktopNotification(previous)
+      }
+      mailboxAnnouncements.set(notificationId, notification)
+      const forget = () => {
+        if (mailboxAnnouncements.get(notificationId) === notification) {
+          mailboxAnnouncements.delete(notificationId)
+        }
+      }
+      notification.once('close', forget)
+      notification.once('failed', forget)
+    }
+    showDesktopNotification(notification)
     return true
+  },
+  dismissNotification: (id) => {
+    const notification = mailboxAnnouncements.get(id)
+    mailboxAnnouncements.delete(id)
+    if (notification) {
+      closeDesktopNotification(notification)
+    }
   },
   sendToRenderers: (channel, payload) => {
     for (const window of BrowserWindow.getAllWindows()) {

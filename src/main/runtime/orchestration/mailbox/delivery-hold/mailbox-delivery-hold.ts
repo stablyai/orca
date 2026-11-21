@@ -7,6 +7,8 @@ import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
 export type MailboxDeliveryHold =
+  | { kind: 'not-foreground'; agentName: string }
+  | { kind: 'not-live'; agentName: string }
   /** A terminal dialog only a person can answer. */
   | { kind: 'prompt' }
   /** Typed text in the worker's terminal that delivery would submit with the mail. */
@@ -64,7 +66,9 @@ export type MailboxDeliveryHoldReaders = {
   chatSessionFor: (mailbox: string) => string | null
   readChatAdmit: (sessionId: string) => Promise<ChatMailAdmitFacts | null>
   /** The hold of the terminal a mailbox's pointer is typed into; null when none holds it or none would. */
-  readTerminalHold: (mailbox: string) => MailboxDeliveryHold | null
+  readTerminalHold: (
+    mailbox: string
+  ) => MailboxDeliveryHold | null | Promise<MailboxDeliveryHold | null>
 }
 
 /** The chat pointer's own admission order: no fence or no attachment parks, a refusal parks, and an
@@ -101,6 +105,10 @@ export function describeMailboxDeliveryHold(
   receiverCli: OrchestrationCliCommand = 'orca'
 ): string {
   switch (hold.kind) {
+    case 'not-foreground':
+      return `Queued. ${hold.agentName} isn't in the foreground of that terminal; the message will be delivered when it's back.`
+    case 'not-live':
+      return `Queued. The message will arrive once ${hold.agentName === 'The agent' ? 'the agent' : hold.agentName} is ready.`
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
     case 'draft':

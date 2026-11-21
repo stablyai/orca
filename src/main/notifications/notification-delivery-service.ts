@@ -1,9 +1,11 @@
 // Set tray attention before gates and fan out to phones before desktop early returns.
 import type { BrowserWindow } from 'electron'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  NotificationSettings
+  NotificationSettings,
+  RetainedAgentAttention
 } from '../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notifications/notification-options'
@@ -227,4 +229,63 @@ export function createNotificationDeliveryService(
       }
     }
   }
+}
+
+/** Reconnection restores retained news by id without repeating its external alert. */
+export function createRetainedAgentAttentionReceiver(deps: {
+  dispatch: NotificationDeliveryService['dispatch']
+  dismiss: (id: string) => void
+  readWorkspaceSession: () => Pick<
+    WorkspaceSessionState,
+    'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
+  >
+  /** Notices the runtime already holds, presented as the receiver starts. */
+  retained?: readonly RetainedAgentAttention[]
+  /** Why: a custom sound plays in the renderer, which this main-side delivery bypasses. */
+  onDelivered?: (notificationId: string) => void
+  onRetired?: (notificationId: string) => void
+}) {
+  const presented = new Map<string, string>()
+  const receive = (notificationId: string, notice: RetainedAgentAttention | null): void => {
+    if (!notice) {
+      presented.delete(notificationId)
+      deps.onRetired?.(notificationId)
+      deps.dismiss(notificationId)
+      return
+    }
+    const content = { title: notice.title, body: notice.body }
+    const signature = JSON.stringify(content)
+    if (presented.get(notificationId) === signature) {
+      return
+    }
+    presented.set(notificationId, signature)
+    if (notice.desktopAllowed === false) {
+      return
+    }
+    const session = deps.readWorkspaceSession()
+    const delivery = deps.dispatch({
+      source: 'agent-task-complete',
+      agentState: 'waiting',
+      content,
+      notificationId,
+      attentionKey: JSON.stringify([notificationId, content]),
+      notificationSourceId: 'local',
+      worktreeId: notice.worktreeId,
+      paneKey: notice.paneKey,
+      workspaceExecutionHostId: null,
+      mobileDeliveredByHost: true,
+      isActiveWorktree:
+        session.activeWorktreeId === notice.worktreeId &&
+        !session.activeWorkspaceExecutionHostId?.startsWith('runtime:')
+    })
+    void Promise.resolve(delivery).then((result) => {
+      if (result.delivered && presented.get(notificationId) === signature) {
+        deps.onDelivered?.(notificationId)
+      }
+    })
+  }
+  for (const notice of deps.retained ?? []) {
+    receive(notice.notificationId, notice)
+  }
+  return receive
 }

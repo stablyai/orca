@@ -1,4 +1,4 @@
-import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
+import { RuntimeMailboxDeliveryServices } from './runtime-mailbox-delivery-services'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
 
@@ -38,7 +38,6 @@ import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/tra
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
-import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
@@ -48,7 +47,7 @@ import type { RuntimeClientEventBus } from '../client/events/runtime-client-even
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
-export abstract class RuntimeConstructionServices extends RuntimeAgentStatusReadContract {
+export abstract class RuntimeConstructionServices extends RuntimeMailboxDeliveryServices {
   abstract getOrchestrationDb(): OrchestrationDb
   abstract getExistingOrchestrationDb(): OrchestrationDb | null
   abstract listRepos(): Repo[]
@@ -255,14 +254,10 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract getTerminalProcessIncarnation(handle: string, context?: IdentityRead): string | null
   protected abstract controllerKnowsPtyIsLive(ptyId: string): boolean
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
-  protected abstract checkDeliverySettledAndArmRecheck(ptyId: string): boolean
   protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
   abstract getTerminalOrchestrationCliCommand(
     handle: string
   ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>
-  protected abstract resolveOrchestrationPointerSubmitTarget(
-    ptyId: string
-  ): OrchestrationMailboxPointerSubmitTarget | null
   abstract deliverPendingMessagesForHandle(
     handle: string,
     reservedTypes?: ReadonlySet<string>

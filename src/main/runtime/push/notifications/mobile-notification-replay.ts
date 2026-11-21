@@ -13,6 +13,8 @@ const DEFAULT_CAPACITY = 256
 
 export class MobileNotificationReplayBuffer {
   private readonly capacity: number
+  private readonly retained = new Map<string, ReplayableMobileNotification>()
+  private readonly acknowledgedNotices = new Map<string, string>()
   private seq = 0
   private readonly buffer: ReplayableMobileNotification[] = []
   // Persisted client watermarks can exceed a restarted counter; an epoch invalidates that stale position.
@@ -28,7 +30,15 @@ export class MobileNotificationReplayBuffer {
 
   record(event: MobileNotificationEvent): number {
     const seq = ++this.seq
-    this.buffer.push({ ...event, notificationSeq: seq, notificationEpoch: this.epochId })
+    const entry = { ...event, notificationSeq: seq, notificationEpoch: this.epochId }
+    this.buffer.push(entry)
+    if (event.notificationId) {
+      if (event.type === 'notification' && event.notificationId.startsWith('orchestration-mail:')) {
+        this.retained.set(event.notificationId, entry)
+      } else if (event.type === 'dismiss') {
+        this.retained.delete(event.notificationId)
+      }
+    }
     if (this.buffer.length > this.capacity) {
       this.buffer.splice(0, this.buffer.length - this.capacity)
     }
@@ -38,16 +48,54 @@ export class MobileNotificationReplayBuffer {
   // Return retained events above the watermark; a different epoch invalidates it and returns the whole buffer.
   // Missing epochs preserve the seq-only cut for older clients; eviction can shorten repeated results.
   getMissedSince(lastSeenSeq: number, epoch?: string): ReplayableMobileNotification[] {
-    if (epoch !== undefined && epoch !== this.epochId) {
-      return [...this.buffer]
+    const missed = this.buffer.filter(
+      (entry) =>
+        (epoch !== undefined && epoch !== this.epochId) || entry.notificationSeq > lastSeenSeq
+    )
+    const current = missed.filter(
+      (entry) =>
+        entry.type !== 'notification' ||
+        !entry.notificationId?.startsWith('orchestration-mail:') ||
+        this.retained.get(entry.notificationId ?? '')?.notificationSeq === entry.notificationSeq
+    )
+    const sequences = new Set(current.map((entry) => entry.notificationSeq))
+    return [
+      ...current,
+      ...[...this.retained.values()].filter(
+        (entry) =>
+          !sequences.has(entry.notificationSeq) &&
+          ((epoch !== undefined && epoch !== this.epochId) || entry.notificationSeq > lastSeenSeq)
+      )
+    ].sort((a, b) => a.notificationSeq - b.notificationSeq)
+  }
+
+  retainedNotifications(): ReplayableMobileNotification[] {
+    return [...this.retained.values()]
+  }
+
+  retainedNotification(id: string): ReplayableMobileNotification | undefined {
+    return this.retained.get(id)
+  }
+
+  /** The user saw this mail notice: stop replaying it, while its mail stays pending. */
+  acknowledge(notice: ReplayableMobileNotification & { type: 'notification' }): void {
+    this.acknowledgedNotices.set(notice.notificationId ?? '', noticeContent(notice))
+  }
+
+  /** Whether a reconciled notice is the one already dismissed; a changed or cleared notice forgets it. */
+  acknowledged(id: string, notice: { title: string; body?: string } | null): boolean {
+    const same = notice !== null && this.acknowledgedNotices.get(id) === noticeContent(notice)
+    if (!same) {
+      this.acknowledgedNotices.delete(id)
     }
-    if (lastSeenSeq >= this.seq) {
-      return []
-    }
-    return this.buffer.filter((entry) => entry.notificationSeq > lastSeenSeq)
+    return same
   }
 
   get size(): number {
     return this.buffer.length
   }
+}
+
+function noticeContent(notice: { title: string; body?: string }): string {
+  return JSON.stringify([notice.title, notice.body ?? ''])
 }

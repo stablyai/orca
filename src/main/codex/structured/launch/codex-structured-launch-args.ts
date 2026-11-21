@@ -1,56 +1,14 @@
 import { CODEX_PERMISSION_CONFIG_ROOTS } from '../../../../shared/agent-launch/permissions/agent-permission-args'
 import { parseTomlKeyPath } from '../../configuration/toml/config-toml-key-path'
+import {
+  CODEX_DROPPED_SWITCHES as DROPPED_SWITCHES,
+  CODEX_DROPPED_VALUE_OPTIONS as DROPPED_VALUE_OPTIONS,
+  CODEX_PASSTHROUGH_SWITCHES as PASSTHROUGH_SWITCHES,
+  CODEX_REMOTE_OPTIONS,
+  CODEX_VALUE_OPTIONS as VALUE_OPTIONS,
+  codexOptionName as optionName
+} from '../../../../shared/agent-launch/catalog/codex-cli-value-options'
 import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
-
-const VALUE_OPTIONS = new Set([
-  '-c',
-  '--config',
-  '--enable',
-  '--disable',
-  '-m',
-  '--model',
-  '--local-provider'
-])
-
-const DROPPED_VALUE_OPTIONS = new Set([
-  '-a',
-  '--ask-for-approval',
-  '-s',
-  '--sandbox',
-  '-p',
-  '--profile',
-  '-C',
-  '--cd',
-  '--add-dir',
-  '-i',
-  '--image'
-])
-
-const DROPPED_SWITCHES = new Set([
-  '--dangerously-bypass-approvals-and-sandbox',
-  '--yolo',
-  '--approve-for-me',
-  '--not-so-yolo',
-  '--dangerously-bypass-hook-trust',
-  '--worktree',
-  '--strict-config',
-  '--help',
-  '-h',
-  '--version',
-  '-V'
-])
-
-const PASSTHROUGH_SWITCHES = new Set(['--search', '--oss', '--no-alt-screen', '--no-daemon'])
-
-function optionName(token: string): string {
-  if (token.startsWith('--')) {
-    return token.split('=', 1)[0]
-  }
-  if (/^-[acmspiC].+/.test(token)) {
-    return token.slice(0, 2)
-  }
-  return token
-}
 
 function inlineValue(token: string, option: string): string | undefined {
   if (token === option) {
@@ -73,7 +31,7 @@ export function codexStructuredLaunchArgs(tokens: readonly string[]): string[] {
       break
     }
     const option = optionName(token)
-    if (option === '--remote' || option === '--remote-auth-token-env') {
+    if (CODEX_REMOTE_OPTIONS.has(option)) {
       throw new StructuredAgentArgumentsError('Codex', option, 'unsupportedOption')
     }
     if (DROPPED_SWITCHES.has(option)) {

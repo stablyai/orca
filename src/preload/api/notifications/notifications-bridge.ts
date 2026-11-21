@@ -29,6 +29,68 @@ function disposeCachedNotificationSound(): void {
   }
 }
 
+async function playNotificationSound(
+  options?: { force?: boolean; volume?: number },
+  shouldPlay?: () => Promise<boolean>
+): Promise<NotificationSoundResult> {
+  try {
+    const resolved: NotificationSoundPathResult = await ipcRenderer.invoke(
+      'notifications:resolveSoundPath',
+      { force: options?.force === true }
+    )
+    if (!resolved.ok) {
+      // System Focus suppression is transient; keep the decoded sound for later plays.
+      if (resolved.reason !== 'focus-active' && cachedNotificationSound) {
+        disposeCachedNotificationSound()
+      }
+      return { played: false, reason: resolved.reason }
+    }
+
+    let entry = cachedNotificationSound
+    if (!entry || entry.path !== resolved.path) {
+      const sound = (await ipcRenderer.invoke(
+        'notifications:loadSound'
+      )) as NotificationSoundDataResult
+      if (!sound.ok) {
+        disposeCachedNotificationSound()
+        return { played: false, reason: sound.reason }
+      }
+      // Another playSound may have populated the cache during this load.
+      const latestEntry = cachedNotificationSound
+      if (latestEntry?.path === sound.path) {
+        entry = latestEntry
+      } else {
+        const arrayBuffer = new ArrayBuffer(sound.data.byteLength)
+        new Uint8Array(arrayBuffer).set(sound.data)
+        const blob = new Blob([arrayBuffer], { type: sound.mimeType })
+        disposeCachedNotificationSound()
+        const blobUrl = URL.createObjectURL(blob)
+        entry = { path: sound.path, blobUrl, audio: new Audio(blobUrl) }
+        cachedNotificationSound = entry
+      }
+    }
+
+    const audio = entry.audio
+    // Replay from the start so bursts do not stack copies.
+    audio.currentTime = 0
+    if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
+      audio.volume = Math.min(1, Math.max(0, options.volume / 100))
+    }
+    // Why: a caller whose reason to sound lapsed during the cold load stops here.
+    if (shouldPlay && !(await shouldPlay())) {
+      return { played: false, reason: 'deduped' }
+    }
+    try {
+      await audio.play()
+    } catch {
+      return { played: false, reason: 'playback-failed' }
+    }
+    return { played: true }
+  } catch {
+    return { played: false, reason: 'playback-failed' }
+  }
+}
+
 export const notificationsApi = {
   getDesktopAwayState: (): Promise<boolean | undefined> =>
     ipcRenderer.invoke('notifications:getDesktopAwayState'),
@@ -58,61 +120,21 @@ export const notificationsApi = {
     ipcRenderer.invoke('notifications:getPermissionStatus'),
   probeDelivery: (args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> =>
     ipcRenderer.invoke('notifications:probeDelivery', args),
-  playSound: async (options?: {
-    force?: boolean
-    volume?: number
-  }): Promise<NotificationSoundResult> => {
-    try {
-      const resolved: NotificationSoundPathResult = await ipcRenderer.invoke(
-        'notifications:resolveSoundPath',
-        { force: options?.force === true }
-      )
-      if (!resolved.ok) {
-        // System Focus suppression is transient; keep the decoded sound for later plays.
-        if (resolved.reason !== 'focus-active' && cachedNotificationSound) {
-          disposeCachedNotificationSound()
-        }
-        return { played: false, reason: resolved.reason }
-      }
-
-      let entry = cachedNotificationSound
-      if (!entry || entry.path !== resolved.path) {
-        const sound = (await ipcRenderer.invoke(
-          'notifications:loadSound'
-        )) as NotificationSoundDataResult
-        if (!sound.ok) {
-          disposeCachedNotificationSound()
-          return { played: false, reason: sound.reason }
-        }
-        // Another playSound may have populated the cache during this load.
-        const latestEntry = cachedNotificationSound
-        if (latestEntry?.path === sound.path) {
-          entry = latestEntry
-        } else {
-          const arrayBuffer = new ArrayBuffer(sound.data.byteLength)
-          new Uint8Array(arrayBuffer).set(sound.data)
-          const blob = new Blob([arrayBuffer], { type: sound.mimeType })
-          disposeCachedNotificationSound()
-          const blobUrl = URL.createObjectURL(blob)
-          entry = { path: sound.path, blobUrl, audio: new Audio(blobUrl) }
-          cachedNotificationSound = entry
-        }
-      }
-
-      const audio = entry.audio
-      // Replay from the start so bursts do not stack copies.
-      audio.currentTime = 0
-      if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
-        audio.volume = Math.min(1, Math.max(0, options.volume / 100))
-      }
-      try {
-        await audio.play()
-      } catch {
-        return { played: false, reason: 'playback-failed' }
-      }
-      return { played: true }
-    } catch {
-      return { played: false, reason: 'playback-failed' }
-    }
-  }
+  playSound: (options?: { force?: boolean; volume?: number }): Promise<NotificationSoundResult> =>
+    playNotificationSound(options)
 } satisfies PreloadApi['notifications']
+
+// Why: main delivers retained agent alerts itself, and a custom sound can only play in this page.
+// One at a time: a burst would otherwise load the same cold sound file once per alert.
+let deliveredSoundPlaying = false
+ipcRenderer.on('notifications:playDeliveredSound', (_event, volume: unknown) => {
+  if (deliveredSoundPlaying) {
+    return
+  }
+  deliveredSoundPlaying = true
+  void playNotificationSound(typeof volume === 'number' ? { volume } : undefined, () =>
+    ipcRenderer.invoke('notifications:claimDeliveredSound')
+  ).finally(() => {
+    deliveredSoundPlaying = false
+  })
+})

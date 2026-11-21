@@ -1,5 +1,8 @@
 import type { BotChangeScope } from '../../bots/bot-change-scope'
-import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
+import type {
+  NotificationAttentionAcknowledgement,
+  RetainedAgentAttention
+} from '../../notifications/notification-settings-types'
 import type { CreateWorktreeResult } from '../../worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -17,6 +20,7 @@ import type { BrowserClientHostRequestEvent } from '../../browser/client-hosting
 import type { WorkspaceCleanupRunFinishedEvent } from '../../workspace-cleanup/workspace-cleanup-run'
 
 export type RuntimeClientEvent =
+  | { type: 'agentAttentionChanged'; notificationId: string; notice: RetainedAgentAttention | null }
   | {
       type: 'notificationAttentionAcknowledged'
       acknowledgement: NotificationAttentionAcknowledgement
@@ -101,6 +105,7 @@ export type RuntimeClientEventStreamMessage =
         nativeChatQueueFollowUps?: boolean
         nativeChatCiResultLines?: boolean
         repos?: unknown[]
+        agentAttention?: RetainedAgentAttention[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
       }
     })

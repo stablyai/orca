@@ -1,3 +1,6 @@
+/** More than every agent kind Orca recognizes, so a full stopped list always fits. */
+export const MAX_STOPPED_AGENT_KINDS = 64
+
 /** Fresh recipient observation, never child-census or destructive-action evidence. */
 export type TerminalForegroundObservation = {
   ptyId: string
@@ -15,6 +18,10 @@ export type TerminalForegroundSample =
       processName: string | null
       tty?: string
       foregroundPgid?: number
+      /** The recognized agent's own process, which a wrapper leading the job does not stand in for. */
+      agentPid?: number
+      /** Agents job control stopped on this terminal, so another program in front stands in for one, not relays to it. */
+      stoppedAgents?: string[]
     }
   | {
       verdict: 'unverifiable'
@@ -66,6 +73,11 @@ export function isTerminalForegroundObservation(
     'processName' in value &&
     (value.processName === null || text(value.processName)) &&
     (!('tty' in value) || text(value.tty)) &&
-    (!('foregroundPgid' in value) || (integer(value.foregroundPgid) && value.foregroundPgid > 0))
+    (!('foregroundPgid' in value) || (integer(value.foregroundPgid) && value.foregroundPgid > 0)) &&
+    (!('agentPid' in value) || (integer(value.agentPid) && value.agentPid > 0)) &&
+    (!('stoppedAgents' in value) ||
+      (Array.isArray(value.stoppedAgents) &&
+        value.stoppedAgents.length <= MAX_STOPPED_AGENT_KINDS &&
+        value.stoppedAgents.every(text)))
   )
 }

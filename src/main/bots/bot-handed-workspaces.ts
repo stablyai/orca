@@ -2,6 +2,7 @@
 // for the bot, so their approvals are in its Needs you.
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import {
+  folderWorkspaceKey,
   parseWorkspaceKey,
   type WorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
@@ -23,4 +24,25 @@ export function worktreesUnderHomes(
     under.set(record.parentWorkspaceKey, ids)
   }
   return under
+}
+
+/** The bot whose home a worktree is, or whose home it sits under (its agents work for that bot). */
+export function botOfWorkspace(
+  bots: readonly { id: string; folderWorkspaceId: string }[],
+  lineage: Readonly<Record<WorkspaceKey, WorkspaceLineage>>,
+  worktreeId: string
+): string | null {
+  const homes = new Map<string, string>(
+    bots.map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot.id])
+  )
+  const home = homes.get(worktreeId)
+  if (home) {
+    return home
+  }
+  for (const [homeKey, ids] of worktreesUnderHomes(lineage, [...homes.keys()])) {
+    if (ids.has(worktreeId)) {
+      return homes.get(homeKey) ?? null
+    }
+  }
+  return null
 }

@@ -54,6 +54,8 @@ export type AnnouncedNotificationRegistry = {
   isBounded: (notificationId: string) => boolean
   /** Take unpositioned announcements and those covered by this read. */
   take: (paneKey: string, read?: StructuredNotificationRead) => readonly AnnouncedNotification[]
+  /** Take every announcement, pending or shown, of this notification; an unrecorded one still names its id. */
+  takeNotification: (notificationId: string) => readonly AnnouncedNotification[]
 }
 
 export function createAnnouncedNotificationRegistry(limits?: {
@@ -147,6 +149,12 @@ export function createAnnouncedNotificationRegistry(limits?: {
       [...idsBySubject.values()].some((entries) =>
         entries.some((entry) => entry.id === notificationId && entry.origin !== undefined)
       ),
+    takeNotification: (notificationId) => {
+      const taken = [...idsBySubject.keys()].flatMap((paneKey) =>
+        takeSelected(paneKey, (entry) => entry.id === notificationId)
+      )
+      return taken.length > 0 ? taken : [{ id: notificationId }]
+    },
     take: (paneKey, read) => {
       if (read) {
         frontiers.accept({ reads: [read] }, read.executionHost)

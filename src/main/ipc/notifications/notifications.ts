@@ -20,12 +20,16 @@ import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
-import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
+import {
+  createNotificationDeliveryService,
+  createRetainedAgentAttentionReceiver
+} from '../../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
   type AnnouncedNotification
 } from '../../notifications/announced-notification-registry'
-import { registerNotificationSoundHandlers } from './notification-sound-ipc'
+import { deliveredSoundHooks, registerNotificationSoundHandlers } from './notification-sound-ipc'
+import { subscribeRuntimeAttention } from './runtime-attention-events'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../../shared/agent-session/view/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -159,15 +163,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
     return { dismissed: retireAnnouncements(retired) }
   }
-  stopRuntimeAttentionEvents?.()
-  stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
-    (event) => {
-      if (event.type === 'notificationAttentionAcknowledged') {
-        acknowledge(event.acknowledgement)
-      }
-    },
-    { consumesTerminalSideEffects: false }
-  )
 
   ipcMain.removeHandler('notifications:acknowledgeAttention')
   ipcMain.handle(
@@ -276,6 +271,16 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
     }
   })
+
+  const receiveAttention = createRetainedAgentAttentionReceiver({
+    dispatch: deliveryService.dispatch,
+    dismiss: (id) => retireAnnouncements(announced.takeNotification(id)),
+    readWorkspaceSession: () => store.getWorkspaceSession(),
+    retained: runtime?.getRetainedAgentAttention?.(),
+    ...deliveredSoundHooks(store)
+  })
+  stopRuntimeAttentionEvents?.()
+  stopRuntimeAttentionEvents = subscribeRuntimeAttention(runtime, acknowledge, receiveAttention)
 
   // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')

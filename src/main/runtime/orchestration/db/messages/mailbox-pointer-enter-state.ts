@@ -7,23 +7,43 @@ export const MAILBOX_POINTER_WRITE_ATTEMPTED = 2
 export const MAILBOX_POINTER_ENTER_ATTEMPTED = 3
 const POINTER_WORK_HANDLE_BATCH = 500
 
+type MailboxPointerClaim = Pick<
+  MessageRow,
+  'id' | 'to_handle' | 'pointer_enter_pending' | 'pointer_process_incarnation'
+>
+
 export type MailboxPointerReservationTarget = {
   ptyId: string
   processIncarnation: string
 }
 
+const RESERVED_POINTER_SQL = `SELECT * FROM messages INDEXED BY idx_messages_reserved_pointer_enter
+       WHERE to_handle = ? AND read = 0 AND pointer_enter_pending = ${MAILBOX_POINTER_RESERVED}
+         AND delivery_contract = 'current_delivery'
+       ORDER BY sequence LIMIT ?`
+const PENDING_POINTER_SQL = `SELECT * FROM messages INDEXED BY idx_messages_pending_pointer_enter
+       WHERE to_handle = ? AND read = 0 AND pointer_enter_pending > 0
+         AND delivery_contract = 'current_delivery'
+       ORDER BY sequence LIMIT ?`
+
+/** Reservations first, then the oldest other pending rows, so a crash-left reservation is never
+ * starved behind a full batch of uncertain ones. Each read walks only its partial index, not the inbox. */
 export function getPendingMailboxPointerMessages(
   this: OrchestrationDb,
   mailboxHandle: string
 ): MessageRow[] {
-  return this.db
-    .prepare(
-      `SELECT * FROM messages
-       WHERE to_handle = ? AND read = 0 AND pointer_enter_pending > 0
-         AND delivery_contract = 'current_delivery'
-       ORDER BY sequence LIMIT ?`
-    )
-    .all(mailboxHandle, ORCHESTRATION_DELIVERY_BATCH_LIMIT) as MessageRow[]
+  const read = (sql: string): MessageRow[] => {
+    const rows = this.db.prepare(sql).all(mailboxHandle, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
+    return rows as MessageRow[]
+  }
+  const reserved = read(RESERVED_POINTER_SQL)
+  const ids = new Set(reserved.map((row) => row.id))
+  const others = read(PENDING_POINTER_SQL).filter((row) => !ids.has(row.id))
+  return [
+    ...reserved,
+    ...others.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT - reserved.length)
+  ].sort((a, b) => a.sequence - b.sequence)
 }
 
 export function getPendingMailboxPointerHandles(this: OrchestrationDb): string[] {
@@ -38,6 +58,17 @@ export function getPendingMailboxPointerHandles(this: OrchestrationDb): string[]
   ).map((row) => row.to_handle)
 }
 
+/** Whether the mailbox `handleSql` names owes pointer work: unread mail that is undelivered or held
+ * by a reservation. Why two indexed probes: one OR over the inbox walks delivered-unread history. */
+export function pointerWorkExistsSql(handleSql: string): string {
+  return `(EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_eligible_pointer_inbox
+      WHERE to_handle = ${handleSql} AND read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
+        AND delivery_contract = 'current_delivery')
+    OR EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_pending_pointer_enter
+      WHERE to_handle = ${handleSql} AND read = 0 AND pointer_enter_pending > 0
+        AND delivery_contract = 'current_delivery'))`
+}
+
 /** The mailboxes among `toHandles` with unread mail that is undelivered or held by a pointer reservation. */
 export function getMailboxesWithPointerWork(
   this: OrchestrationDb,
@@ -48,15 +79,13 @@ export function getMailboxesWithPointerWork(
     const batch = toHandles.slice(offset, offset + POINTER_WORK_HANDLE_BATCH)
     const rows = this.db
       .prepare(
-        `SELECT DISTINCT to_handle FROM messages
-         WHERE read = 0 AND delivery_contract = 'current_delivery'
-           AND (delivered_at IS NULL OR pointer_enter_pending > 0)
-           AND to_handle IN (${batch.map(() => '?').join(',')})`
+        `WITH asked(handle) AS (VALUES ${batch.map(() => '(?)').join(',')})
+         SELECT handle FROM asked WHERE ${pointerWorkExistsSql('asked.handle')}`
       )
       .all(...batch)
     for (const row of rows) {
-      if (typeof row?.to_handle === 'string') {
-        found.add(row.to_handle)
+      if (typeof row?.handle === 'string') {
+        found.add(row.handle)
       }
     }
   }
@@ -88,7 +117,8 @@ export function stageMailboxPointerEnter(
 export function markMailboxPointerWriteAttempted(
   this: OrchestrationDb,
   ids: string[],
-  target: MailboxPointerReservationTarget
+  target: MailboxPointerReservationTarget,
+  expectedPhase = MAILBOX_POINTER_RESERVED
 ): boolean {
   return (
     mutatePointerMessages(
@@ -102,7 +132,7 @@ export function markMailboxPointerWriteAttempted(
             AND id IN (${placeholders})`,
         leadingParams: [
           MAILBOX_POINTER_WRITE_ATTEMPTED,
-          MAILBOX_POINTER_RESERVED,
+          expectedPhase,
           target.ptyId,
           target.processIncarnation
         ]
@@ -182,20 +212,37 @@ export function releaseMailboxPointerEnter(
   }))
 }
 
+export function getPendingMailboxPointerMessagesForPty(
+  this: OrchestrationDb,
+  ptyId: string
+): MailboxPointerClaim[] {
+  return this.db
+    .prepare(`SELECT id, to_handle, pointer_enter_pending, pointer_process_incarnation FROM messages
+    WHERE pointer_enter_pending > 0 AND pointer_pty_id = ? AND read = 0
+      AND delivery_contract = 'current_delivery'`)
+    .all(ptyId)
+    .map((row) => ({
+      id: String(row.id),
+      to_handle: String(row.to_handle),
+      pointer_enter_pending: Number(row.pointer_enter_pending),
+      pointer_process_incarnation:
+        row.pointer_process_incarnation === null ? null : String(row.pointer_process_incarnation)
+    }))
+}
+
+/** Why two indexed updates: retained uncertain claims share the PTY, and a working-title frame must not walk them. */
 export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
   this.db
-    .prepare(
-      `UPDATE messages
-       SET delivered_at = CASE
-             WHEN read = 0 AND pointer_enter_pending = ? THEN NULL
-             WHEN read = 0 THEN COALESCE(delivered_at, datetime('now'))
-             ELSE delivered_at
-           END,
-           pointer_enter_pending = 0, pointer_pty_id = NULL,
-           pointer_process_incarnation = NULL
-       WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
-    )
-    .run(MAILBOX_POINTER_RESERVED, ptyId)
+    .prepare(`UPDATE messages INDEXED BY idx_messages_reserved_pointer_pty
+    SET delivered_at = CASE WHEN read = 0 THEN NULL ELSE delivered_at END,
+        pointer_enter_pending = 0, pointer_pty_id = NULL, pointer_process_incarnation = NULL
+    WHERE pointer_pty_id = ? AND pointer_enter_pending = ${MAILBOX_POINTER_RESERVED}`)
+    .run(ptyId)
+  this.db
+    .prepare(`UPDATE messages INDEXED BY idx_messages_read_pointer_pty
+    SET pointer_enter_pending = 0, pointer_pty_id = NULL, pointer_process_incarnation = NULL
+    WHERE pointer_pty_id = ? AND read = 1 AND pointer_enter_pending > 0`)
+    .run(ptyId)
 }
 
 function mutatePointerMessages(
@@ -233,6 +280,7 @@ function mutatePointerMessages(
 
 export type MailboxPointerEnterStateMethods = {
   getPendingMailboxPointerMessages: typeof getPendingMailboxPointerMessages
+  getPendingMailboxPointerMessagesForPty: typeof getPendingMailboxPointerMessagesForPty
   getPendingMailboxPointerHandles: typeof getPendingMailboxPointerHandles
   getMailboxesWithPointerWork: typeof getMailboxesWithPointerWork
   stageMailboxPointerEnter: typeof stageMailboxPointerEnter
@@ -247,6 +295,7 @@ export function attachMailboxPointerEnterState(ctor: { prototype: object }): voi
   Object.assign(ctor.prototype, {
     getPendingMailboxPointerMessages,
     getPendingMailboxPointerHandles,
+    getPendingMailboxPointerMessagesForPty,
     getMailboxesWithPointerWork,
     stageMailboxPointerEnter,
     markMailboxPointerWriteAttempted,
