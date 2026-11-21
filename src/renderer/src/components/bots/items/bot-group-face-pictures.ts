@@ -14,7 +14,7 @@ import {
   getWindowParkVisible,
   subscribeWindowParkVisibility
 } from '@/lib/window-activity/window-park-visibility'
-import { readBotUploadSrc } from '../bot-avatar-image'
+import { peekBotUploadSrc as readCachedBotUploadSrc, readBotUploadSrc } from '../bot-avatar-image'
 
 type Picture = {
   bot: BotRef
@@ -40,8 +40,9 @@ export type BotGroupFacePictures = {
   open: () => void
   /** The panel closed: stop watching. */
   close: () => void
-  /** The group's members now (by botRefKey): pictures of others with no face drawn are let go. */
-  retain: (members: ReadonlySet<string>) => void
+  /** The group's members now (botRefKey to upload version, null for none): pictures of others, or of
+   *  a version since replaced, with no face drawn are let go. */
+  retain: (members: ReadonlyMap<string, string | null>) => void
 }
 
 export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | null>(null)
@@ -88,6 +89,15 @@ function createFacePictures(): BotGroupFacePictures {
       if (!picture.failed) {
         waiting.delete(picture)
       }
+      return
+    }
+    // A picture the shared cache already holds shows even while the host can't be asked.
+    const cached = readCachedBotUploadSrc(picture.bot, picture.version)
+    if (cached !== undefined) {
+      waiting.delete(picture)
+      picture.src = cached
+      picture.failed = false
+      picture.faces.forEach((notify) => notify())
       return
     }
     if (hostOffline(picture) || !getWindowParkVisible()) {
@@ -177,7 +187,7 @@ function createFacePictures(): BotGroupFacePictures {
     },
     retain: (members) => {
       for (const [key, picture] of pictures) {
-        if (!members.has(key) && picture.faces.size === 0) {
+        if (members.get(key) !== picture.version && picture.faces.size === 0) {
           pictures.delete(key)
           handles.delete(key)
           waiting.delete(picture)
