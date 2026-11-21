@@ -1,4 +1,5 @@
 import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
+import { getPiPersonOpenedPromptSourceLines } from '../pi-person-opened-prompt-source'
 
 /** Mirrors the titlebar extension's dialog tracking so both agree on when the wait ends. */
 export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): string[] {
@@ -7,9 +8,10 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
   }
 
   return [
-    "  onStatus('ui_prompt_start', () => {",
+    ...getPiPersonOpenedPromptSourceLines('onStatus'),
+    "  onStatus('ui_prompt_start', (event) => {",
     '    // Idle utility dialogs are not agent work; do not create a completion boundary for them.',
-    '    if (isOmpRuntime() || !piTurnInFlight) return',
+    '    if (isOmpRuntime() || !piTurnInFlight || isPersonOpenedPiPrompt(event)) return',
     '    piUiPromptDepth++',
     '    if (piUiPromptDepth > 1) return',
     "    post('ui_prompt_start')",
