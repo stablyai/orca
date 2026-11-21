@@ -5,7 +5,9 @@ import {
   launch,
   launchFailure,
   paneKey,
-  setupAntigravityChildLifecycle
+  setupAntigravityChildLifecycle,
+  swarmAdd,
+  swarmDuplicateError
 } from './antigravity-child-lifecycle.test-fixture'
 
 const fixture = setupAntigravityChildLifecycle()
@@ -17,12 +19,12 @@ it.each([
   ['PreToolUse', 'PostToolUse', false],
   ['PostToolUse', 'PreToolUse', false]
 ] as const)(
-  'settles two cached ERROR replays before polling after %s then %s (result before pairing: %s)',
+  'settles cached Swarm and invoke rejections before polling after %s then %s (result before pairing: %s)',
   async (first, late, resultBeforePair) => {
-    const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
+    const oldLaunch = { ...swarmAdd(5), prompt: 'Earlier task', modelName: 'model-a' }
     const parallelLaunch = { ...launch(6), prompt: 'Earlier task', modelName: 'model-a' }
     expect(hook('root', first, oldLaunch)?.payload).toMatchObject({
-      toolName: 'invoke_subagent',
+      toolName: 'swarm',
       antigravitySpawnPending: true
     })
     expect(hook('root', first, oldLaunch)).toBeNull()
@@ -30,7 +32,7 @@ it.each([
     hook('root', late, parallelLaunch)
     launchResult(6, launchFailure, 'ERROR')
     if (resultBeforePair) {
-      launchResult(5, launchFailure, 'ERROR')
+      launchResult(5, swarmDuplicateError(), 'ERROR')
       expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
       expect(hook('root', first, oldLaunch)).toBeNull()
     }
@@ -52,7 +54,7 @@ it.each([
     expect(fixture.row.payload).toMatchObject(waiting)
     if (!resultBeforePair) {
       expect(hook('root', late, oldLaunch)).toBeNull()
-      launchResult(5, launchFailure, 'ERROR')
+      launchResult(5, swarmDuplicateError(), 'ERROR')
       expect((await poll())?.payload).toMatchObject(waiting)
       expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
     }
@@ -162,26 +164,38 @@ it.each([
   }
 )
 
-it('requires the hook transcript to match before settling a cached replay at admission', async () => {
-  hook('root', 'PreToolUse', launch(5))
-  hook('root', 'PostToolUse', launch(5))
-  launchResult(5, launchFailure, 'ERROR')
-  await poll()
-  hook('root', 'PreToolUse', {
-    stepIdx: 6,
-    toolCall: { name: 'ask_question', args: { question: 'Continue?' } }
-  })
-  expect(hook('root', 'PostToolUse', launch(5))).toBeNull()
-  expect(hook('root', 'PreToolUse', launch(5))).toBeNull()
+it.each([
+  ['invoke', launch(5), launchFailure, undefined],
+  ['Swarm', swarmAdd(5), swarmDuplicateError(), true]
+] as const)(
+  'holds a cached %s rejection on a different hook transcript at admission',
+  async (_, rejected, error, pendingAfterPoll) => {
+    hook('root', 'PreToolUse', rejected)
+    hook('root', 'PostToolUse', rejected)
+    launchResult(5, error, 'ERROR')
+    expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+    hook('root', 'PreToolUse', {
+      stepIdx: 6,
+      toolCall: { name: 'ask_question', args: { question: 'Continue?' } }
+    })
+    expect(hook('root', 'PostToolUse', rejected)).toBeNull()
+    expect(hook('root', 'PreToolUse', rejected)).toBeNull()
 
-  const otherPath = join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript_full.jsonl')
-  const waiting = { state: 'waiting', toolName: 'ask_question', toolInput: 'Continue?' }
-  expect(
-    hook('root', 'PostToolUse', { ...launch(5), transcriptPath: otherPath })?.payload
-  ).toMatchObject({ ...waiting, antigravitySpawnPending: true })
-  expect((await poll())?.payload).toMatchObject(waiting)
-  expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
-})
+    const otherPath = join(
+      fixture.dir,
+      'root',
+      '.system_generated',
+      'logs',
+      'transcript_full.jsonl'
+    )
+    const waiting = { state: 'waiting', toolName: 'ask_question', toolInput: 'Continue?' }
+    expect(
+      hook('root', 'PostToolUse', { ...rejected, transcriptPath: otherPath })?.payload
+    ).toMatchObject({ ...waiting, antigravitySpawnPending: true })
+    expect((await poll())?.payload).toMatchObject(waiting)
+    expect(fixture.row.payload.antigravitySpawnPending).toBe(pendingAfterPoll)
+  }
+)
 
 it.each([
   ['root named as a child', 'root'],

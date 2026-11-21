@@ -182,7 +182,7 @@ export function normalizeAntigravityEvent(
       toolCallId,
       toolName,
       toolInputSource,
-      transcriptPath,
+      origin === 'child' ? undefined : transcriptPath,
       completedBookkeepingOnly
     )
     if (disposition === 'stale') {

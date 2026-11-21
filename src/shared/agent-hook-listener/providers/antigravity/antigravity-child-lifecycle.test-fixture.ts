@@ -18,6 +18,21 @@ export function launch(stepIdx = 5): Record<string, unknown> {
   return { stepIdx, toolCall: { id: `invoke-${stepIdx}`, name: 'invoke_subagent', args: {} } }
 }
 
+export function swarmAdd(stepIdx: number, name = 'qa16worker') {
+  return {
+    stepIdx,
+    toolCall: {
+      id: `swarm-${stepIdx}`,
+      name: 'swarm',
+      args: { action: 'add', name, tasks: ['First task', 'Second task'] }
+    }
+  }
+}
+
+export function swarmDuplicateError(name = 'qa16worker-1'): string {
+  return `Encountered error in step execution: the swarm already has a member named "${name}"`
+}
+
 export function setupAntigravityChildLifecycle() {
   let dir: string
   let state: ReturnType<typeof createHookListenerState>

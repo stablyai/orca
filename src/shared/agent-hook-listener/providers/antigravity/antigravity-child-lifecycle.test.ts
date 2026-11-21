@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import { clearPaneCacheState } from '../../listener-state'
 import {
   pollAntigravityTranscriptStatus,
   readAntigravityTranscriptPoll
@@ -9,7 +10,9 @@ import { ANTIGRAVITY_PARENT_WAKE_GRACE_MS } from './antigravity-event-rules'
 import {
   launch,
   paneKey,
-  setupAntigravityChildLifecycle
+  setupAntigravityChildLifecycle,
+  swarmAdd,
+  swarmDuplicateError
 } from './antigravity-child-lifecycle.test-fixture'
 
 const fixture = setupAntigravityChildLifecycle()
@@ -543,50 +546,171 @@ it('counts only a swarm add as a spawn that holds the parent', async () => {
   expect(swarm('add')?.antigravitySpawnPending).toBe(true)
 })
 
-it('holds the root for every worker named by one Swarm result, including workers whose hooks have not arrived', async () => {
+it('settles a rejected Swarm batch and holds the root for every worker from the unique retry', async () => {
   const swarm = join(fixture.dir, 'root', '.system_generated', 'swarm')
   mkdirSync(swarm, { recursive: true })
-  hook('root', 'PostToolUse', {
-    stepIdx: 8,
-    toolCall: {
-      id: 'call-swarm',
-      name: 'swarm',
-      args: { action: 'add', tasks: ['first', 'second'] }
-    }
-  })
+  // The first generated name is free, but the second already belongs to the roster.
+  const members = join(swarm, 'members.json')
+  const occupied = { conversation_id: 'previous-worker', phase: 'KILLED' }
+  writeFileSync(members, JSON.stringify({ members: { 'qa16worker-2': occupied } }))
+  const rejected = swarmAdd(5)
+  hook('root', 'PreToolUse', rejected)
+  expect(
+    hook('root', 'PostToolUse', {
+      ...rejected,
+      error: 'the swarm already has a member named "qa16worker-2"'
+    })?.payload.antigravitySpawnPending
+  ).toBe(true)
+  launchResult(
+    5,
+    `Created At: 2026-11-21T06:16:24-08:00\nCompleted At: 2026-11-21T06:16:24-08:00\n${swarmDuplicateError('qa16worker-2')}`,
+    'ERROR'
+  )
+  hook('root', 'PreInvocation', { lastUserInput: 'Retry with unique names' })
+  hook('root', 'PostToolUse', swarmAdd(8, 'retry'))
   launchResult(
     8,
     JSON.stringify({
       status: 'added',
-      names: ['victim-1', 'victim-2'],
+      names: ['retry-1', 'retry-2'],
       conversation_ids: ['killed', 'running']
     })
   )
   hook('root', 'Stop', { fullyIdle: true })
-  await poll()
-  expect(fixture.row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
-  writeFileSync(
-    join(swarm, 'members.json'),
-    JSON.stringify({
-      members: { 'victim-1': { conversation_id: 'killed', phase: 'KILLED' } }
-    })
-  )
-  transcript('foreign')
-  hook('foreign', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
-  await poll()
   await poll()
   expect(fixture.row.payload).toMatchObject({
     state: 'working',
     antigravitySpawnPending: true,
     subagents: undefined
   })
+  writeFileSync(
+    members,
+    JSON.stringify({
+      members: {
+        'qa16worker-2': occupied,
+        'retry-1': { conversation_id: 'killed', phase: 'RUNNING' }
+      }
+    })
+  )
+  transcript('foreign')
+  hook('foreign', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
+  await poll()
+  expect(fixture.row.payload).toMatchObject({
+    state: 'working',
+    antigravitySpawnPending: true,
+    subagents: [{ id: 'killed' }]
+  })
   descriptor('running')
   transcript('running')
   hook('running', 'PreInvocation')
   await poll()
-  expect(fixture.row.payload.subagents?.map(({ id }) => id)).toEqual(['running'])
+  expect(fixture.row.payload.subagents?.map(({ id }) => id)).toEqual(['killed', 'running'])
   expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
+
+  hook('root', 'PreInvocation', { lastUserInput: 'Kill the first worker' })
+  const kill = {
+    stepIdx: 9,
+    toolCall: { id: 'swarm-9', name: 'swarm', args: { action: 'kill', name: 'retry-1' } }
+  }
+  hook('root', 'PreToolUse', kill)
+  hook('root', 'PostToolUse', kill)
+  launchResult(9, JSON.stringify({ status: 'killed', name: 'retry-1' }))
+  descriptor('killed', true)
+  await poll()
+  expect(fixture.row.payload.state).toBe('working')
+  expect(fixture.row.payload.subagents?.map(({ id }) => id)).toEqual(['running'])
+  hook('running', 'Stop', { fullyIdle: true })
+  expect((await poll())?.payload).toMatchObject({ state: 'working', subagents: undefined })
+  expect(hook('root', 'Stop', { fullyIdle: true })?.payload.state).toBe('done')
 })
+
+it.each([
+  {
+    evidence: 'an unknown error after partial creation',
+    records: [{ content: 'Encountered error in step execution: failed to create the next worker' }]
+  },
+  {
+    evidence: 'changed error wording',
+    records: [{ content: `${swarmDuplicateError()}. Batch aborted` }]
+  },
+  { evidence: 'a non-model error', records: [{ source: 'SYSTEM' }] },
+  { evidence: 'a non-generic error', records: [{ type: 'SYSTEM_MESSAGE' }] },
+  { evidence: 'a non-error status', records: [{ status: 'DONE' }] },
+  { evidence: 'a missing result at the owned step', records: [{ step_index: 6 }] },
+  {
+    evidence: 'a result for another tool',
+    records: [
+      {
+        content:
+          'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+      }
+    ]
+  },
+  {
+    evidence: 'conflicting success and rejection results',
+    records: [
+      {
+        status: 'DONE',
+        content: '{"status":"added","name":"qa16worker-1","conversation_id":"partial"}'
+      },
+      {}
+    ]
+  },
+  {
+    evidence: 'conflicting rejected names',
+    records: [{}, { content: swarmDuplicateError('qa16worker-2') }]
+  },
+  {
+    evidence: 'conflicting call IDs',
+    conflictingCall: true,
+    records: [{}]
+  }
+])(
+  'keeps a Swarm launch held for $evidence until root teardown',
+  async ({ records, conflictingCall }) => {
+    const add = swarmAdd(5)
+    hook('root', 'PreToolUse', add)
+    hook(
+      'root',
+      'PostToolUse',
+      conflictingCall ? { ...add, toolCall: { ...add.toolCall, id: 'other-call' } } : add
+    )
+    const path = join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+    for (const record of records) {
+      appendFileSync(
+        path,
+        `${JSON.stringify({
+          step_index: 5,
+          source: 'MODEL',
+          type: 'GENERIC',
+          status: 'ERROR',
+          content: swarmDuplicateError(),
+          ...record
+        })}\n`
+      )
+    }
+    transcript('partial')
+    descriptor('partial')
+    hook('partial', 'PreInvocation')
+    expect((await poll())?.payload).toMatchObject({
+      antigravitySpawnPending: true,
+      subagents: [{ id: 'partial' }]
+    })
+    hook('partial', 'Stop', { fullyIdle: true })
+    hook('root', 'Stop', { fullyIdle: true })
+    expect((await poll())?.payload).toMatchObject({
+      state: 'working',
+      antigravitySpawnPending: true,
+      subagents: undefined
+    })
+
+    clearPaneCacheState(fixture.state, paneKey)
+    hook('root', 'PreInvocation', { lastUserInput: 'A new root process' })
+    const stopped = hook('root', 'Stop', { fullyIdle: true })?.payload
+    expect(stopped?.state).toBe('done')
+    expect(stopped?.antigravitySpawnPending).toBeUndefined()
+  }
+)
 
 it('keeps an ambiguous step held even when a root result names a child at that step', async () => {
   spawn(undefined, 5)

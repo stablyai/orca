@@ -109,9 +109,13 @@ function mergeLaunchResult(
   if (earlier === undefined) {
     return result
   }
-  return earlier &&
-    earlier.tool === result.tool &&
-    earlier.children.length === result.children.length &&
+  if (!earlier || earlier.tool !== result.tool || earlier.outcome !== result.outcome) {
+    return null
+  }
+  if (earlier.outcome === 'rejected' && result.outcome === 'rejected') {
+    return earlier.duplicateName === result.duplicateName ? earlier : null
+  }
+  return earlier.children.length === result.children.length &&
     earlier.children.every((id, i) => id === result.children[i])
     ? earlier
     : null

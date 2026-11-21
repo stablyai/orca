@@ -5,7 +5,11 @@ import type { AntigravityLaunchResult } from './antigravity-launch-results'
 import { applyAntigravityLaunchResults } from './antigravity-launch-state'
 import { getOrCreateAntigravityPaneState, verifyAntigravityChild } from './antigravity-pane-state'
 
-const failedInvoke: AntigravityLaunchResult = { tool: 'invoke_subagent', children: [] }
+const failedInvoke: AntigravityLaunchResult = {
+  tool: 'invoke_subagent',
+  outcome: 'rejected',
+  children: []
+}
 
 function rootLaunchFixture(transcriptPath?: string) {
   const state = createHookListenerState()
@@ -141,6 +145,7 @@ it('retains unpaired results and keeps ambiguous launches held independently of 
   const { pane, hook } = rootLaunchFixture()
   const resultWithChild: AntigravityLaunchResult = {
     tool: 'invoke_subagent',
+    outcome: 'success',
     children: ['child']
   }
 
@@ -198,8 +203,8 @@ it('evicts the oldest on the 257th completion without releasing parallel Swarm o
   applyAntigravityLaunchResults(
     pane,
     new Map<number, AntigravityLaunchResult>([
-      [1, { tool: 'swarm', children: ['verified', 'expected'] }],
-      [2, { tool: 'swarm', children: ['ambiguous-a', 'ambiguous-b'] }]
+      [1, { tool: 'swarm', outcome: 'success', children: ['verified', 'expected'] }],
+      [2, { tool: 'swarm', outcome: 'success', children: ['ambiguous-a', 'ambiguous-b'] }]
     ]),
     1
   )

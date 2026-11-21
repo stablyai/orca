@@ -49,9 +49,17 @@ function matchesLaunchResult(
   launch: AntigravityLaunch,
   result: AntigravityLaunchResult | null | undefined
 ): result is AntigravityLaunchResult {
+  if (!result || launch.toolName !== result.tool) {
+    return false
+  }
+  if (result.outcome === 'rejected') {
+    return (
+      result.tool === 'invoke_subagent' ||
+      (launch.swarmTranscriptPath !== undefined &&
+        launch.swarmTranscriptPath === antigravityRootTranscriptPath(pane))
+    )
+  }
   return (
-    !!result &&
-    launch.toolName === result.tool &&
     (launch.swarmSize === undefined || result.children.length === launch.swarmSize) &&
     !result.children.includes(pane.rootConversationId ?? '')
   )
@@ -107,19 +115,24 @@ export function trackAntigravityLaunch(
     }
     pane.pendingLaunches.set(priorStep, null)
   }
+  const swarmTranscriptPath =
+    toolName === 'swarm' &&
+    (pane.rootTranscriptPath === undefined || pane.rootTranscriptPath === transcriptPath)
+      ? transcriptPath
+      : undefined
   const launch =
     key !== undefined &&
     callId &&
     prior === undefined &&
     (priorStep === undefined || priorStep === key)
-      ? { callId, toolName, swarmSize, phases: phase }
+      ? { callId, toolName, swarmSize, swarmTranscriptPath, phases: phase }
       : null
 
   let cachedSuccessPending = false
   if (older && launch && transcriptPath && transcriptPath === antigravityRootTranscriptPath(pane)) {
     const result = pane.brainCache.transcripts.get(transcriptPath)?.launchResults?.get(key)
     if (matchesLaunchResult(pane, launch, result)) {
-      if (result.children.length === 0 || result.applied) {
+      if (result.outcome === 'rejected' || result.applied) {
         pane.launchStepsByCall.set(launch.callId, key)
         retainUnpairedLaunch(pane, key, launch)
         return 'stale'
@@ -186,7 +199,7 @@ export function applyAntigravityLaunchResults(
         }
       }
     }
-    if (result.children.length > 0) {
+    if (result.outcome === 'success') {
       result.applied = true
     }
     pane.pendingLaunches.delete(step)
@@ -198,7 +211,7 @@ export function applyAntigravityLaunchResults(
     } else {
       retainUnpairedLaunch(pane, step, launch)
     }
-    settled ||= result.children.length > 0 || pane.leadState === 'done'
+    settled ||= result.outcome === 'success' || pane.leadState === 'done'
   }
   if (settled) {
     recordAntigravityHelpersDrain(pane)

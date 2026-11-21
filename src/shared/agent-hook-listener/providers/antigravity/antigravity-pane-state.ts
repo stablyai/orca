@@ -21,6 +21,7 @@ export type AntigravityLaunch = {
   callId: string
   toolName: string
   swarmSize?: number
+  swarmTranscriptPath?: string
   phases: number
 }
 
