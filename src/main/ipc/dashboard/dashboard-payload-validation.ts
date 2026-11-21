@@ -20,6 +20,7 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+import { admitDashboardBotAsks } from './dashboard-bot-ask-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
 const MAX_DASHBOARD_REPO_ICONS = 500
@@ -116,7 +117,9 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
   }
   const snapshot = value as Record<string, unknown>
   const workspaces = admitDashboardWorkspaces(snapshot.workspaces)
+  const botAsks = admitDashboardBotAsks(snapshot.botAsks)
   if (
+    botAsks === null ||
     !isFiniteNumber(snapshot.generatedAt) ||
     !Array.isArray(snapshot.cards) ||
     snapshot.cards.length > MAX_DASHBOARD_CARDS ||
@@ -133,7 +136,8 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
     snapshot: {
       ...(snapshot as unknown as DashboardSnapshot),
       cards,
-      ...(workspaces ? { workspaces } : {})
+      ...(workspaces ? { workspaces } : {}),
+      ...(botAsks ? { botAsks } : {})
     },
     droppedCardCount: snapshot.cards.length - cards.length
   }

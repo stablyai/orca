@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -16,6 +16,7 @@ import {
 } from '../../app-shell/chrome/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
+import { DashboardBotAsks, useDashboardBotAskCount } from './bot-asks/DashboardBotAsks'
 import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
 import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
@@ -67,9 +68,16 @@ function AgentDashboardDrawerBody({
     void window.api.dashboard.openPopout?.()
   }, [onFocusHandoff])
 
+  const botAskCount = useDashboardBotAskCount()
+  const needsYouExtra = useMemo(
+    () => ({ count: botAskCount, content: <DashboardBotAsks onOpened={onFocusHandoff} /> }),
+    [botAskCount, onFocusHandoff]
+  )
+
   return (
     <AgentKanbanBoard
       snapshot={snapshot}
+      needsYouExtra={needsYouExtra}
       // Let the companion sheet’s sidebar surface show through.
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}

@@ -64,13 +64,17 @@ function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, Dashboar
   return grouped
 }
 
+/** Cards a host adds to Needs You below the agents' (bot items asking the owner). */
+export type DashboardNeedsYouExtra = { count: number; content: React.ReactNode }
+
 function KanbanColumn({
   bucket,
   cards,
   repoIconsByRepoId,
   now,
   dialogPaneKey,
-  onOpenTerminal
+  onOpenTerminal,
+  extra
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
@@ -78,9 +82,11 @@ function KanbanColumn({
   now: number
   dialogPaneKey: string | null
   onOpenTerminal: (card: DashboardCard) => void
+  extra?: DashboardNeedsYouExtra
 }): React.JSX.Element {
   const t = useTranslate()
   const label = bucketLabel(bucket, t)
+  const extraCount = extra?.count ?? 0
   // State, not a ref: the list's virtualizer must re-render once the parent scroller attaches.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
 
@@ -95,18 +101,18 @@ function KanbanColumn({
           {label}
         </span>
         <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
-          {cards.length}
+          {cards.length + extraCount}
         </span>
       </header>
       <div
         ref={setScrollElement}
         className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-2 pb-2"
       >
-        {cards.length === 0 ? (
+        {cards.length === 0 && extraCount === 0 ? (
           <p className="px-1 py-2 text-[11px] text-muted-foreground">
             {t('dashboardPopout.bucket.empty', 'None')}
           </p>
-        ) : (
+        ) : cards.length > 0 ? (
           <AgentKanbanLaneCardList
             cards={cards}
             scrollElement={scrollElement}
@@ -115,7 +121,9 @@ function KanbanColumn({
             dialogPaneKey={dialogPaneKey}
             onOpenTerminal={onOpenTerminal}
           />
-        )}
+        ) : null}
+        {/* After the virtualized list, which measures its rows from the scroller's top. */}
+        {extraCount > 0 ? extra?.content : null}
       </div>
     </section>
   )
@@ -134,6 +142,8 @@ type AgentKanbanBoardProps = {
   onBrowserForeground?: () => void
   /** In-window settings controls; the pop-out renderer has no store to drive them. */
   headerActions?: React.ReactNode
+  /** In-window reads the bots itself; the pop-out gets their items in its snapshot. */
+  needsYouExtra?: DashboardNeedsYouExtra
 }
 
 /** Share snapshot-fed status columns across pop-out and in-window hosts with injected routing and sizing. */
@@ -144,7 +154,8 @@ export function AgentKanbanBoard({
   onRevealAgent = revealAgentViaPopoutRelay,
   onClose,
   onBrowserForeground,
-  headerActions
+  headerActions,
+  needsYouExtra
 }: AgentKanbanBoardProps): React.JSX.Element {
   const t = useTranslate()
   const visibleBuckets = useMemo(
@@ -296,6 +307,7 @@ export function AgentKanbanBoard({
                 now={now}
                 dialogPaneKey={openedCard?.paneKey ?? null}
                 onOpenTerminal={handleOpenTerminal}
+                extra={bucket === 'attention' ? needsYouExtra : undefined}
               />
             ))}
           </div>
