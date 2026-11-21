@@ -254,4 +254,30 @@ describe('retiring a pty mid-delivery', () => {
       vi.useRealTimers()
     }
   })
+
+  it('prompts the bound session instead of typing into a shared terminal', async () => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const message = db.insertMessage({ from: 'term_worker', to: 'run:run-1', subject: 'mail' })
+      const prompt = vi.fn(async (_text: string) => true)
+      const writePty = vi.fn(() => WRITE_ACCEPTED)
+      const args = stageArgs(db, new OrchestrationMailboxPointerState())
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps staging reads.
+      stageOrchestrationMailboxPointer({
+        ...args,
+        deps: {
+          ...args.deps,
+          writePty,
+          getRunSessionPrompt: (runId) => (runId === 'run-1' ? prompt : null)
+        },
+        messages: [{ id: message.id, type: 'status', sequence: 1 }]
+      } as never)
+
+      await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce())
+      expect(prompt.mock.calls[0]?.[0]).toContain('orchestration check --run run-1')
+      expect(writePty).not.toHaveBeenCalled()
+    } finally {
+      db.close()
+    }
+  })
 })

@@ -39,6 +39,29 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   args: StagePointerArgs<TWaiter>
 ): void {
   const { ptyId } = args.terminal
+  const runId = args.mailboxHandle.startsWith('run:')
+    ? args.mailboxHandle.slice('run:'.length)
+    : null
+  const sessionPrompt = runId ? args.deps.getRunSessionPrompt?.(runId) : null
+  if (sessionPrompt) {
+    void sessionPrompt(
+      formatMessagePointer(
+        args.messages.length,
+        args.mailboxHandle,
+        args.deps.getCliCommand(args.terminal.handle),
+        args.heldDeliveryId,
+        args.terminal.handle
+      )
+    ).then((sent) => {
+      if (sent) {
+        args.deps.getDb()?.markAsDelivered(
+          args.messages.map((message) => message.id),
+          args.mailboxHandle
+        )
+      }
+    })
+    return
+  }
   const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
   if (!expectedTarget) {
     return
