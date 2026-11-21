@@ -10,7 +10,12 @@ describe('orcaRebaseMarkerIsRetired', () => {
     expect(orcaRebaseMarkerIsRetired(marker, 'feature', noUpstreamOid)).toBe(false)
   })
 
-  it('retires it on a detached HEAD, so it cannot match again on return', () => {
-    expect(orcaRebaseMarkerIsRetired(marker, '', noUpstreamOid)).toBe(true)
+  it('keeps a done marker through the paused rebase detached-HEAD reading Continue leaves behind', () => {
+    expect(orcaRebaseMarkerIsRetired(marker, '', noUpstreamOid)).toBe(false)
+    expect(orcaRebaseMarkerIsRetired(marker, '', undefined)).toBe(false)
+  })
+
+  it('retires an active marker on a detached HEAD, so it cannot match again on return', () => {
+    expect(orcaRebaseMarkerIsRetired({ ...marker, state: 'active' }, '', noUpstreamOid)).toBe(true)
   })
 })

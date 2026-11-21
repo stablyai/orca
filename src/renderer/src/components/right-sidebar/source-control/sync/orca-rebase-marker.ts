@@ -61,7 +61,12 @@ export function orcaRebaseMarkerIsRetired(
   branchName: string,
   remoteStatus: GitUpstreamStatus | undefined
 ): boolean {
-  // Another branch, or a detached HEAD (empty name), retires it before upstream status catches up.
+  // A detached HEAD (empty name) can be the paused rebase's reading from before Continue finished,
+  // so it retires only a marker whose refreshed match was already seen.
+  if (branchName === '') {
+    return marker.state === 'active'
+  }
+  // Another branch retires it before upstream status catches up.
   if (branchName !== marker.branch) {
     return true
   }
