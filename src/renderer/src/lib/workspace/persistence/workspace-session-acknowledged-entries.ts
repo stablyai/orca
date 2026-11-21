@@ -86,6 +86,27 @@ export class AcknowledgedWorkspaceSessionEntries {
     }
   }
 
+  /** Only these keys of a keyed field go again; main keeps its copy of the rest. */
+  forgetEntries(
+    hostId: ExecutionHostId,
+    entries: Readonly<Record<string, readonly string[]>>
+  ): void {
+    const host = this.byHost.get(hostId)
+    for (const [field, keys] of Object.entries(entries)) {
+      const previous = host?.get(field)
+      if (!isWorkspaceSessionRecord(previous)) {
+        host?.delete(field)
+        continue
+      }
+      // A copy: the acknowledged record is the window's own state object.
+      const kept = { ...previous }
+      for (const key of keys) {
+        delete kept[key]
+      }
+      host?.set(field, kept)
+    }
+  }
+
   /** Drop hosts this window no longer routes to; forgetting a live one only makes its next write whole. */
   retainHosts(hostIds: ReadonlySet<ExecutionHostId>): void {
     for (const hostId of this.byHost.keys()) {

@@ -2,14 +2,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import type { WorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../../../shared/workspace-session/workspace-session-state-types'
+import {
+  applyWorkspaceSessionEntriesPatch,
+  storedDifferently,
+  type WorkspaceSessionEntriesPatch
+} from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import * as launchPersistence from '../../agent-session/launch/structured-agent-session-launch-persistence'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
 
 // Perf contract (#43932): one tab switch re-sent every workspace's tab, group and layout maps to main.
+// After main stored entries of its own, every save went whole again until the window reloaded.
 
 const FLEET_WORKTREES = 100
 const DEBOUNCE_MS = 150
@@ -102,6 +110,77 @@ it('one tab switch sends only that workspace’s session entries to main', async
     // Worktree 7's active tab, tab session and group focus, plus the window's active tab.
     expect(sent).toEqual({ writes: before.writes + 1, entries: before.entries + 4 })
     expect(sessionsBuilt.mock.calls.length - sessionsBefore).toBe(1)
+  } finally {
+    stop()
+  }
+})
+
+const LARGE_FLEET_WORKTREES = 1_900
+const MAIN_OWNED_KEY = 'main-owned-workspace'
+
+/** A main that stores each save and keeps an entry of its own in every keyed field, as its sleep
+ *  records and layout ownership do, then reports what it stored differently. */
+function normalizingMainSessionApi() {
+  const sent = { writes: 0, entries: 0, bytes: 0 }
+  let stored: WorkspaceSessionState = {} as WorkspaceSessionState
+  const api: SessionApi = {
+    get: async () => stored,
+    patch: async () => {
+      throw new Error('entries path only')
+    },
+    patchEntries: async (patch: WorkspaceSessionEntriesPatch) => {
+      sent.writes += 1
+      sent.bytes += JSON.stringify(patch).length
+      sent.entries += fieldEntries(patch.fields)
+      for (const change of Object.values(patch.entries)) {
+        sent.entries += Object.keys(change?.set ?? {}).length + (change?.remove.length ?? 0)
+      }
+      const next: Record<string, unknown> = {
+        ...stored,
+        ...applyWorkspaceSessionEntriesPatch(stored, patch)
+      }
+      for (const [field, value] of Object.entries(next)) {
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+          next[field] = { ...value, [MAIN_OWNED_KEY]: { kept: 'by main' } }
+        }
+      }
+      stored = next as WorkspaceSessionState
+      const differ = storedDifferently(stored, patch)
+      return {
+        status: 'applied',
+        ...(differ.fields.length > 0 ? { normalizedFields: differ.fields } : {}),
+        ...(Object.keys(differ.entries).length > 0 ? { normalizedEntries: differ.entries } : {})
+      }
+    }
+  }
+  return { api, sent }
+}
+
+it('after main keeps entries of its own, one tab switch still sends only that workspace', async () => {
+  const store = createTestStore()
+  const { api, sent } = normalizingMainSessionApi()
+  const acknowledged = new AcknowledgedWorkspaceSessionEntries()
+  const stop = createSessionWriteSubscriber({
+    store,
+    debounceMs: DEBOUNCE_MS,
+    persist: ({ patch }) =>
+      patchWorkspaceSessionByHost(api, patch, store.getState(), acknowledged).written
+  })
+  try {
+    // The first save goes whole, and main answers that it kept entries the window doesn't have.
+    seedFleet(store, LARGE_FLEET_WORKTREES)
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    store.getState().setActiveTab('tab-7-b')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    const before = { ...sent }
+
+    store.getState().setActiveTab('tab-7-a')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+    expect(sent.writes - before.writes).toBe(1)
+    expect(sent.entries - before.entries).toBe(4)
+    // Every workspace's tabs resent would be hundreds of kilobytes.
+    expect(sent.bytes - before.bytes).toBeLessThan(4_000)
   } finally {
     stop()
   }
