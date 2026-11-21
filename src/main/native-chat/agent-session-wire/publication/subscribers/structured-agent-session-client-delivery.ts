@@ -110,7 +110,6 @@ export class StructuredAgentSessionClientDelivery {
     this.subscribers = new AgentSessionSubscribers({
       ...(readLiveText ? { readLiveText } : {}),
       readForkJournal: (id) => this.sessions.get(id)?.journal,
-      readSessionJournal: (id) => this.sessions.get(id)?.journal,
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),

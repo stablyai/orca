@@ -12,6 +12,7 @@ import { omitNativeChatThreadGoalRows } from '../../../../../../src/shared/nativ
 import { createStructuredQuestionProjection } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 import {
+  noteStreamedTextProjection,
   rowsBesideStreamedText,
   streamedRowsFromFloor
 } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
@@ -80,8 +81,15 @@ export function useMobileStructuredTranscript(
   const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
   const messages = useMemo(
     () =>
-      // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(projectMessages(transcriptItems, optimistic, state.submissions)),
+      // Linked to the last messages when only a reply's text moved, so turn structure holds.
+      noteStreamedTextProjection(
+        transcriptItems,
+        [optimistic, state.submissions],
+        // The goal strip on the composer shows goal state, as on desktop.
+        omitNativeChatThreadGoalRows(
+          projectMessages(transcriptItems, optimistic, state.submissions)
+        )
+      ),
     [transcriptItems, optimistic, state.submissions, projectMessages]
   )
   return {

@@ -37,32 +37,7 @@ export function liveTextFor(
 export function sessionLiveTextReaders(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): LiveTextReaders | null {
-  const shown = [...(subscribers?.values() ?? [])].filter(viewerShown)
-  return shown.length > 0 ? liveTextReadersOf(shown) : null
-}
-
-/** Whether a subscriber's window shows; a host that can't see it treats it as shown. */
-export const viewerShown = (subscriber: Subscriber): boolean => subscriber.viewer?.hidden() !== true
-
-/** Watches each subscriber's window, to send it what it skipped while hidden once it shows. */
-export class ShownViewerWatches {
-  private readonly watches = new WeakMap<Subscriber, () => void>()
-
-  /** Watches a new subscriber's window, and stops watching the one it replaced. */
-  watch(subscriber: Subscriber, replaced: Subscriber | undefined, shown: () => void): void {
-    if (replaced) {
-      this.unwatch(replaced)
-    }
-    const stop = subscriber.viewer?.subscribeShown(shown)
-    if (stop) {
-      this.watches.set(subscriber, stop)
-    }
-  }
-
-  unwatch(subscriber: Subscriber): void {
-    this.watches.get(subscriber)?.()
-    this.watches.delete(subscriber)
-  }
+  return subscribers?.size ? liveTextReadersOf(subscribers.values()) : null
 }
 
 function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {

@@ -9,8 +9,6 @@ import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-sess
 import { noteShortenedRow } from './agent-session-subscriber-live-text-readers'
 export {
   liveTextFor,
-  ShownViewerWatches,
-  viewerShown,
   sessionLiveTextReaders,
   type SubscriberLiveTextSource
 } from './agent-session-subscriber-live-text-readers'

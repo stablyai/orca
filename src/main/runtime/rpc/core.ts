@@ -1,5 +1,4 @@
 import type { DeclareOrcaAccountParams } from '../../../shared/remote-runtime/pairing/paired-desktop-account-contract'
-import type { StructuredAgentSessionViewerVisibility } from '../../../shared/agent-session/view/live-read/structured-agent-session-coalescer'
 import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
@@ -149,8 +148,6 @@ export type RpcContext = {
   plugin?: { key: string; name: string; assertActive?: () => void }
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
-  // A local window's shown state, so its streams can skip work while it is minimized or hidden.
-  viewerVisibility?: StructuredAgentSessionViewerVisibility
   /** What the transport proved this caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.
