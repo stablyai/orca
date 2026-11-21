@@ -234,6 +234,11 @@ describe('rich Markdown GFM footnotes', () => {
     const deeplyNestedCrafted = `${'[^n]: '.repeat(24_000)}tail\n`
     expect(deeplyNestedCrafted.length).toBeGreaterThan(50_000)
     expect(getMarkdownRichModeUnsupportedReason(deeplyNestedCrafted)).toBe('reference-links')
+
+    const repeatedUnclosedQuotedComments = `${'> <!--\n'.repeat(20_000)}\n-->\n\nText[^big].\n\n[^big]: Large note.\n`
+    expect(repeatedUnclosedQuotedComments.length).toBeGreaterThan(50_000)
+    expect(hasFootnoteCandidate(repeatedUnclosedQuotedComments)).toBe(true)
+    expect(getMarkdownRichModeUnsupportedReason(repeatedUnclosedQuotedComments)).toBe('html-or-jsx')
   })
 
   it('falls back to code mode for unroundtrippable footnote syntax and preserves reference-link blocking', () => {
@@ -266,6 +271,24 @@ describe('rich Markdown GFM footnotes', () => {
     )
     expect(getMarkdownRichModeUnsupportedReason('-     ~~~\n  [^n]:no-space\n')).toBe('footnotes')
     expect(getMarkdownRichModeUnsupportedReason('- ~~~\n  [^n]:no-space\n')).toBeNull()
+    expect(getMarkdownRichModeUnsupportedReason('- - -\n    ~~~\n  [^n]:no-space\n')).toBe(
+      'footnotes'
+    )
+    expect(getMarkdownRichModeUnsupportedReason('* * *\n    ~~~\n  [^n]:no-space\n')).toBe(
+      'footnotes'
+    )
+    expect(
+      getMarkdownRichModeUnsupportedReason('> ~~~\n> code\n>\t~~~\n>\n> [^n]:no-space\n')
+    ).toBe('footnotes')
+    expect(
+      getMarkdownRichModeUnsupportedReason('> > ~~~\n> > code\n>\t>\t~~~\n> >\n> > [^n]:no-space\n')
+    ).toBe('footnotes')
+    expect(
+      getMarkdownRichModeUnsupportedReason('> ~~~\n> code\n>\t\t~~~\n> [^n]:no-space\n')
+    ).toBeNull()
+    expect(hasFootnoteCandidate(stripMarkdownCode('> <!--\n>\t[^ghost]:no-space\n>\t-->\n'))).toBe(
+      false
+    )
     expect(stripMarkdownCode('-     ~~~\n  <!-- keep -->\n')).toBe('-     ~~~\n  <!-- keep -->\n')
     expect(stripMarkdownCode('- ~~~\n  <!-- keep -->\n')).toBe('\n\n')
     expect(
@@ -287,6 +310,14 @@ describe('rich Markdown GFM footnotes', () => {
       )
     ).toBe('footnotes')
     expect(hasFootnoteCandidate('> <!--\n> [^ghost]:no-space\n> -->\n')).toBe(false)
+    expect(hasFootnoteCandidate('> <!--\n> <!--\n\n> <!--\n> [^ghost]:no-space\n> -->\n')).toBe(
+      false
+    )
+    expect(
+      getMarkdownRichModeUnsupportedReason(
+        '> <!--\n> <!--\n\n[^n]:no-space\n\n> <!--\n> [^ghost]:no-space\n> -->\n'
+      )
+    ).toBe('footnotes')
     expect(
       hasFootnoteCandidate(
         stripMarkdownCode('> <!--\n\n```md\n[^n]:no-space\n```\n\n<!-- tail -->\n')
