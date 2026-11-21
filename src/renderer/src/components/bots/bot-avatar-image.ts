@@ -10,65 +10,65 @@ type Upload = {
   version: string
   /** The finished read: a data URL, or null for none. */
   read?: string | null
-  /** The read failed: the next face to mount reads again, except a row drawn as its list scrolls. */
-  failed?: true
-  /** Faces waiting on the read in flight; each leaves as it unmounts. */
-  waiting: Set<(src: string | null) => void>
+  /** Faces waiting on the read in flight; each leaves as it unmounts. `failed`: the read failed. */
+  waiting: Set<(src: string | null, failed: boolean) => void>
 }
 
-/** `paused`: don't read now (the host is offline). `keepFailure`: a failed read shows the fallback until
- *  the host comes back or another face reads it, instead of reading again on mount (rows drawn as a long
- *  list scrolls, which would each read it again). */
-export type BotAvatarRead = { paused: boolean; keepFailure: boolean }
+/** `paused`: don't read now (the host is offline). `failures`: reads that failed, by `botAvatarReadKey`;
+ *  one listed there isn't read again, and a failed read is added. */
+export type BotAvatarRead = { paused: boolean; failures: Set<string> | null }
 
-// Each bot's latest two picture versions (by botRefKey): a chat turn from before a picture changed asks
-// for the old one without dropping the current one. A finished read is kept, so a face drawn again (a
-// row scrolled back into view) shows it at once.
-const uploads = new Map<string, Upload[]>()
-const KEPT_VERSIONS = 2
+// Each bot's current upload only (by botRefKey), so a replaced picture is let go. A finished read is
+// kept, so a face drawn again (a row scrolled back into view) shows it at once; a failed read is
+// dropped, so the next face reads again.
+const uploads = new Map<string, Upload>()
+
+export function botAvatarReadKey(bot: BotRef, version: string): string {
+  return `${botRefKey(bot)}\n${version}`
+}
 
 function uploadOf(key: string, version: string): Upload | undefined {
-  return uploads.get(key)?.find((upload) => upload.version === version)
+  const cached = uploads.get(key)
+  return cached?.version === version ? cached : undefined
 }
 
 function startUpload(bot: BotRef, key: string, version: string): Upload {
   const started: Upload = { version, waiting: new Set() }
-  const kept = (uploads.get(key) ?? []).filter((upload) => upload.version !== version)
-  uploads.set(key, [started, ...kept].slice(0, KEPT_VERSIONS))
+  uploads.set(key, started)
   void readBotAvatarPng(bot).then(
     (png) => {
       started.read = png ? `data:image/png;base64,${png}` : null
-      settle(started, started.read)
+      settle(started, started.read, false)
     },
     () => {
-      started.failed = true
-      settle(started, null)
+      if (uploads.get(key) === started) {
+        uploads.delete(key)
+      }
+      settle(started, null, true)
     }
   )
   return started
 }
 
-function settle(entry: Upload, src: string | null): void {
+function settle(entry: Upload, src: string | null, failed: boolean): void {
   const waiting = [...entry.waiting]
   entry.waiting.clear()
-  waiting.forEach((onRead) => onRead(src))
+  waiting.forEach((onRead) => onRead(src, failed))
 }
 
 function readUpload(
   bot: BotRef,
   version: string,
-  keepFailure: boolean,
-  onRead: (src: string | null) => void
+  onRead: (src: string | null, failed: boolean) => void
 ): () => void {
   const key = botRefKey(bot)
-  const cached = uploadOf(key, version)
-  const entry = cached && (!cached.failed || keepFailure) ? cached : startUpload(bot, key, version)
-  if (entry.read !== undefined || entry.failed) {
-    const read = entry.read ?? null
+  const entry = uploadOf(key, version) ?? startUpload(bot, key, version)
+  if (entry.read !== undefined) {
+    const read = entry.read
     let live = true
     queueMicrotask(() => {
       if (live) {
-        onRead(read)
+        onRead(read, false)
       }
     })
     return () => {
@@ -78,17 +78,6 @@ function readUpload(
   entry.waiting.add(onRead)
   return () => {
     entry.waiting.delete(onRead)
-  }
-}
-
-/** The host went away: a failed read of its bot's picture is tried again once the host is back. */
-export function forgetBotAvatarFailure(bot: BotRef): void {
-  const key = botRefKey(bot)
-  const kept = uploads.get(key)?.filter((upload) => !upload.failed)
-  if (kept?.length) {
-    uploads.set(key, kept)
-  } else {
-    uploads.delete(key)
   }
 }
 
@@ -106,22 +95,25 @@ export function useBotAvatarSrc(
   read?: BotAvatarRead
 ): string | null {
   const paused = read?.paused === true
-  const keepFailure = read?.keepFailure === true
+  const failures = read?.failures ?? null
   const parsed = parseBotAvatar(bot.avatar)
   const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
   const { hostId, id } = bot
   const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey))
   useEffect(() => {
-    if (!uploadKey || paused) {
+    if (!uploadKey || paused || failures?.has(botAvatarReadKey({ hostId, id }, uploadKey))) {
       return
     }
-    return readUpload({ hostId, id }, uploadKey, keepFailure, (src) =>
+    return readUpload({ hostId, id }, uploadKey, (src, failed) => {
+      if (failed) {
+        failures?.add(botAvatarReadKey({ hostId, id }, uploadKey))
+      }
       setUpload((shown) =>
         shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
       )
-    )
-  }, [hostId, id, uploadKey, paused, keepFailure])
+    })
+  }, [hostId, id, uploadKey, paused, failures])
   if (mascotSrc) {
     return mascotSrc
   }
