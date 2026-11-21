@@ -29,7 +29,12 @@ vi.mock('./use-bot-host-label', () => ({
 }))
 
 // A paired server's bot is stamped with its server's host id, as the catalog lists it.
-function bot(id: string, name: string, hostId: ExecutionHostId = 'local'): Bot {
+function bot(
+  id: string,
+  name: string,
+  hostId: ExecutionHostId = 'local',
+  chatSessionId: string | null = null
+): Bot {
   return stampBotHost(hostId, {
     id,
     name,
@@ -42,7 +47,7 @@ function bot(id: string, name: string, hostId: ExecutionHostId = 'local'): Bot {
     notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
     members: [],
     slack: null,
-    chatSessionId: null,
+    chatSessionId,
     linear: null,
     github: null,
     createdAt: 1,
@@ -139,32 +144,79 @@ describe('BotGroupMembersDialog', () => {
     })
   })
 
-  it("keeps another computer's bots listed but unpickable once a member is picked", () => {
-    mocks.bots = [bot('a', 'Fern'), bot('w', 'Willow', 'runtime:ws'), bot('b', 'Moss')]
+  it("adds a paired computer's bot to a room on this computer", async () => {
+    mocks.bots = [bot('a', 'Fern'), bot('w', 'Willow', 'runtime:ws', 'chat-w'), bot('b', 'Moss')]
     render(<BotGroupMembersDialog onClose={() => {}} />)
-    fireEvent.click(row('Willow'))
-    expect(row('Fern').hasAttribute('disabled')).toBe(true)
-    expect(row('Moss').hasAttribute('disabled')).toBe(true)
-    fireEvent.click(row('Willow'))
-    expect(row('Fern').hasAttribute('disabled')).toBe(false)
     fireEvent.click(row('Fern'))
-    fireEvent.click(row('Moss'))
-    expect(row('Willow').hasAttribute('disabled')).toBe(true)
+    fireEvent.click(row('Willow'))
+    expect(row('Willow').getAttribute('aria-checked')).toBe('true')
+    fireEvent.change(screen.getByPlaceholderText('Name your group'), {
+      target: { value: 'Crew' }
+    })
+    fireEvent.click(button('Create'))
+    expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.groups.create', {
+      name: 'Crew',
+      botIds: ['a'],
+      remoteBots: [
+        {
+          environmentId: 'ws',
+          botId: 'w',
+          chatSessionId: 'chat-w',
+          name: 'Willow',
+          avatar: null,
+          agent: 'claude'
+        }
+      ]
+    })
+    await waitFor(() => expect(mocks.openBotGroup).toHaveBeenCalled())
+    expect(mocks.openBotGroup.mock.calls[0][0].hostId).toBe('local')
   })
 
-  it("keeps another computer's bots unpickable while managing a group", () => {
-    mocks.bots = [...sameHost, bot('w', 'Willow', 'runtime:ws')]
+  it('needs a bot on this computer for a group across computers', () => {
+    mocks.bots = [
+      bot('w', 'Willow', 'runtime:ws', 'chat-w'),
+      bot('x', 'Hazel', 'runtime:xs', 'chat-x')
+    ]
+    render(<BotGroupMembersDialog onClose={() => {}} />)
+    fireEvent.click(row('Willow'))
+    fireEvent.click(row('Hazel'))
+    fireEvent.change(screen.getByPlaceholderText('Name your group'), {
+      target: { value: 'Crew' }
+    })
+    expect(screen.getByText('This group needs at least one bot on this computer.')).toBeTruthy()
+    expect(button('Create').disabled).toBe(true)
+  })
+
+  it("adds a paired computer's bot while managing a room here, and keeps a server's room to that server", () => {
+    mocks.bots = [...sameHost, bot('w', 'Willow', 'runtime:ws', 'chat-w')]
     render(<BotGroupMembersDialog group={group} onClose={() => {}} />)
-    expect(row('Willow').hasAttribute('disabled')).toBe(true)
-    expect(row('Willow').getAttribute('aria-describedby')).toBe('bot-group-same-computer')
-    fireEvent.click(row('Ivy'))
+    fireEvent.click(row('Willow'))
     fireEvent.click(button('Save'))
     expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.groups.update', {
       groupId: 'group-1',
       revision: 1,
       name: 'Crew',
-      botIds: ['a', 'b', 'c']
+      botIds: ['a', 'b'],
+      remoteBots: [
+        {
+          environmentId: 'ws',
+          botId: 'w',
+          chatSessionId: 'chat-w',
+          name: 'Willow',
+          avatar: null,
+          agent: 'claude'
+        }
+      ]
     })
+    cleanup()
+    render(
+      <BotGroupMembersDialog
+        group={{ ...group, hostId: 'runtime:ws', members: [] }}
+        onClose={() => {}}
+      />
+    )
+    expect(row('Fern').hasAttribute('disabled')).toBe(true)
+    expect(row('Fern').getAttribute('aria-describedby')).toBe('bot-group-same-computer')
   })
 
   it("creates a paired server's group on that server and opens it there", async () => {

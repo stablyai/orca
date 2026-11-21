@@ -13,6 +13,7 @@ import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-seri
 import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { requireStructuredHost, startBotSession } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { resolveRemoteMembers } from './bot-group-remote'
 
 /** The bots behind these ids, refusing duplicates and bots this host cannot run in a room. */
 export function requireGroupBots(groups: BotGroupRuntime, ids: readonly string[]): Bot[] {
@@ -37,6 +38,7 @@ export async function createBotGroup(
   input: z.infer<typeof BotGroupCreate>
 ): Promise<BotGroup> {
   const bots = requireGroupBots(groups, input.botIds)
+  const remoteMembers = await resolveRemoteMembers(groups, bots, input.remoteBots)
   const id = randomUUID()
   const members = await startMembers(groups, bots)
   let home: Awaited<ReturnType<typeof groups.runtime.bots.createGroupHome>> | null = null
@@ -49,6 +51,7 @@ export async function createBotGroup(
       revision: 1,
       ...home,
       members,
+      ...(remoteMembers.length > 0 ? { remoteMembers } : {}),
       replyMode: { kind: 'bot', botId: bots[0].id },
       createdAt: Date.now()
     }
@@ -77,6 +80,7 @@ export function updateBotGroup(
       groups,
       input.botIds ?? previous.members.map((member) => member.botId)
     )
+    const remoteMembers = await resolveRemoteMembers(groups, bots, input.remoteBots, previous)
     const joiningBots = bots.filter(
       (bot) => !previous.members.some((member) => member.botId === bot.id)
     )
@@ -101,12 +105,14 @@ export function updateBotGroup(
         input.replyMode &&
         !bots.some((bot) => bot.id === replyMode.botId)
       ) {
+        // A remote member answers when mentioned or in "all"; the default stays on this computer.
         throw new Error('Choose a current member in Room replies.')
       }
       return await retireMembers(groups, {
         ...previous,
         name: input.name ?? previous.name,
         members: roster(previous.members, joining[0] ?? []),
+        remoteMembers: remoteMembers.length > 0 ? remoteMembers : undefined,
         ...(previous.threads && {
           threads: previous.threads.map((thread, index) => ({
             ...thread,
