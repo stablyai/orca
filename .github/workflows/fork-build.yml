@@ -2,10 +2,13 @@ name: Fork build
 
 # orca-fork: builds the custom desktop (macOS arm64, ad-hoc signed, not notarized) and the matching
 # orca-server linux-arm64 tarball from one commit, and publishes both as one GitHub Release, so the
-# Mac and the VPS always run the same version. Runs on every push to main (a merged phase or sync).
+# Mac and the VPS always run the same version. Runs once Fork CI passes on main (a merged phase or
+# sync). Not on `push`: upstream's template workflow would then qualify only what the push changed.
 
 on:
-  push:
+  workflow_run:
+    workflows: [Fork CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -23,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: fork-build-${{ inputs.ref || github.ref }}
+  group: fork-build-${{ inputs.ref || 'main' }}
   cancel-in-progress: true
 
 env:
@@ -31,7 +34,7 @@ env:
 
 jobs:
   resolve:
-    if: github.repository == 'rodrillet/orca'
+    if: github.repository == 'rodrillet/orca' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 5
     outputs:
@@ -41,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ inputs.ref || github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - id: resolve
         run: |
@@ -52,7 +55,7 @@ jobs:
 
   # A merge can bring new upstream workflows; they stay off in the fork, as the ones before them.
   upstream-workflows-off:
-    if: github.repository == 'rodrillet/orca'
+    if: github.repository == 'rodrillet/orca' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 5
     permissions:
