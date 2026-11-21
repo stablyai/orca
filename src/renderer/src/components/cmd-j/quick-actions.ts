@@ -4,6 +4,7 @@ import {
   FileText,
   FolderPlus,
   Globe,
+  Kanban,
   PanelRightClose,
   Play,
   SquareTerminal,
@@ -51,6 +52,14 @@ function currentWorkspaceActionAvailability(
   ctx: CmdJQuickActionContext
 ): CmdJQuickActionAvailability {
   return getCurrentWorkspaceActionAvailability(ctx)
+}
+
+function moveToStatusAvailability(ctx: CmdJQuickActionContext): CmdJQuickActionAvailability {
+  const availability = currentWorkspaceActionAvailability(ctx)
+  // Why: the picker writes to the resolved workspace, so a stale active id must not open it empty.
+  return availability.available && !ctx.activeWorktree
+    ? { available: false, reason: 'no-active-workspace' }
+    : availability
 }
 
 export async function runWorkspaceAction(
@@ -222,6 +231,31 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
         return { status: 'unavailable', reason: availability.reason }
       }
       ctx.deleteActiveWorkspace()
+      return { status: 'ok' }
+    }
+  },
+  {
+    id: 'move-to-status',
+    kind: 'action',
+    title: translate('auto.components.cmd.j.quick.actions.moveToStatus', 'Move to Status'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.moveToStatusDescription',
+      'Set the status of the current workspace.'
+    ),
+    icon: Kanban,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.moveToStatus', 'move to status'),
+      translate('auto.components.cmd.j.quick.actions.verbs.setStatus', 'set status'),
+      translate('auto.components.cmd.j.quick.actions.verbs.changeStatus', 'change status'),
+      translate('auto.components.cmd.j.quick.actions.verbs.workspaceStatus', 'workspace status')
+    ],
+    isAvailable: moveToStatusAvailability,
+    run: async (ctx) => {
+      const availability = moveToStatusAvailability(ctx)
+      if (!availability.available) {
+        return { status: 'unavailable', reason: availability.reason }
+      }
+      ctx.openWorkspaceStatusPicker()
       return { status: 'ok' }
     }
   },

@@ -1,5 +1,14 @@
 import { translate } from '@/i18n/i18n'
-import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  getSshTargetIdForExecutionHost
+} from '../../../../shared/execution-host/execution-host'
+import {
+  selectRuntimeAwareSshStatus,
+  type RuntimeAwareSshStatusState
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import {
   canRunNativeChatSplitTarget,
@@ -8,6 +17,7 @@ import {
 } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
@@ -46,6 +56,7 @@ export type CmdJQuickActionContext = {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  openWorkspaceStatusPicker: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
 }
@@ -91,18 +102,36 @@ export function captureCmdJActiveGroupSnapshot(
 }
 
 export function getActiveWorktreeSshStatus(
-  state: Pick<AppState, 'repos' | 'sshConnectionStates' | 'worktreesByRepo'>,
+  state: RuntimeAwareSshStatusState &
+    Pick<AppState, 'repos' | 'worktreesByRepo'> &
+    Partial<Pick<AppState, 'activeWorkspaceExecutionHostId'>>,
+  statuses: RuntimeStatuses,
   activeWorktree: Worktree | null
 ): SshConnectionStatus | null {
   if (!activeWorktree) {
     return null
   }
-  const repo = state.repos.find((entry) => entry.id === activeWorktree.repoId)
-  const connectionId = repo?.connectionId ?? null
+  // Why: repo ids repeat across hosts; with no host to tell the rows apart, don't guess one.
+  const hostId = activeWorktree.hostId ?? state.activeWorkspaceExecutionHostId
+  const sameIdRepos = state.repos.filter((entry) => entry.id === activeWorktree.repoId)
+  const repo =
+    sameIdRepos.length === 1
+      ? sameIdRepos[0]
+      : sameIdRepos.find((entry) => getRepoExecutionHostId(entry) === hostId)
+  // Why: folder workspaces have no repo row, and SSH-only repos have no connectionId; the host id covers both.
+  const connectionId =
+    getSshTargetIdForExecutionHost(activeWorktree.hostId) ??
+    (repo ? getRepoRoutingConnectionId(repo) : null)
   if (!connectionId) {
     return null
   }
-  return state.sshConnectionStates.get(connectionId)?.status ?? 'disconnected'
+  // Why: a paired server owns its workspaces' SSH state, and unknown state must not hide the action.
+  return selectRuntimeAwareSshStatus(
+    state,
+    statuses,
+    activeWorktree.runtimeOwnerEnvironmentId ?? null,
+    connectionId
+  )
 }
 
 export function getWorkspaceScopedActionAvailability(
@@ -152,6 +181,7 @@ export function getCurrentWorkspaceActionAvailability(
 
 export function buildCmdJQuickActionContext(args: {
   state: AppState
+  statuses: RuntimeStatuses
   activeGroupSnapshot: CmdJActiveGroupSnapshot | null
   openNewBrowserTab: (groupId: string, splitDirection?: TabSplitDirection) => Promise<void>
   openBrowserUrl: (groupId: string, url: string) => Promise<void>
@@ -160,10 +190,15 @@ export function buildCmdJQuickActionContext(args: {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  openWorkspaceStatusPicker: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
   const activeWorktree = activeWorktreeId
-    ? (findFirstIndexedWorktree(selectWorktreesByRepo(args.state), activeWorktreeId) ?? null)
+    ? (findKnownWorktreeById(
+        args.state,
+        activeWorktreeId,
+        args.state.activeWorkspaceExecutionHostId ?? undefined
+      ) ?? null)
     : null
   const activeGroupId = resolveCmdJActiveGroupId(
     args.state,
@@ -190,7 +225,7 @@ export function buildCmdJQuickActionContext(args: {
     activeWorktreeId,
     activeWorktree,
     isLoading,
-    sshStatus: getActiveWorktreeSshStatus(args.state, activeWorktree),
+    sshStatus: getActiveWorktreeSshStatus(args.state, args.statuses, activeWorktree),
     runtimeMode,
     managedBrowserCreationEnabled,
     activeGroupId,
@@ -201,6 +236,7 @@ export function buildCmdJQuickActionContext(args: {
     openCreateWorkspace: args.openCreateWorkspace,
     deleteActiveWorkspace: args.deleteActiveWorkspace,
     openAddQuickCommand: args.openAddQuickCommand,
+    openWorkspaceStatusPicker: args.openWorkspaceStatusPicker,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
       runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)

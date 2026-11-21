@@ -61,6 +61,7 @@ export type UISliceContextual = {
     | 'agent-session-history'
     | 'chat-account-usage'
     | 'node-dist-mirror'
+    | 'workspace-status-picker'
     | 'agent-cli-update-failed'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
