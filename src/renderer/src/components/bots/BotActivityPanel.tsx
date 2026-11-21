@@ -182,6 +182,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   return (
     <div
       ref={scroll}
+      data-bot-items-scroller=""
       tabIndex={-1}
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""

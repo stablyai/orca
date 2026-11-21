@@ -211,13 +211,14 @@ export function BotItemRowsWindow({
   // without the panel scrolling or the list changing height, which no notice would report. A content
   // change leaves the positions, so it reads nothing. A hidden window measures as it shows again. A short
   // group's range is every row, kept current so it starts from there if it grows long.
-  const drawAll = useLatestHandler((): void =>
+  const drawAll = useLatestHandler((): void => {
+    const band = bandOf(items, 0, count)
     setRange((was) =>
-      was.start === 0 && was.end === count
+      was.start === 0 && was.end === count && sameBand(was.band, band)
         ? was
-        : { start: 0, end: count, band: bandOf(items, 0, count) }
+        : { start: 0, end: count, band }
     )
-  )
+  })
   useLayoutEffect(() => {
     if (all) {
       drawAll()
@@ -237,7 +238,7 @@ export function BotItemRowsWindow({
   useLayoutEffect(() => {
     if (carried.length > 0 && !document.hidden) {
       measure()
-    } else if (drifted) {
+    } else if (drifted && carried.length === 0) {
       rebase()
     }
   }, [carried, drifted, measure, rebase])
@@ -256,11 +257,23 @@ export function BotItemRowsWindow({
   const backIndex = useMemo(() => indexOf(backPick), [indexOf, backPick])
   // A row that moved is found at its new place from now on, and one that left is let go, so later
   // updates find each pick at once. A pick set since this render (focus as a row mounts) is kept.
+  // The row holding focus leaving (marked Done, say) drops focus to the page: the row now in its place
+  // takes it, so the owner carries on from there.
+  const refocus = useLatestHandler((at: number): void => {
+    const next = items[Math.min(at, count - 1)]
+    const active = document.activeElement
+    if (next && (active === null || active === document.body)) {
+      setTarget({ uid: next.uid, at: Math.min(at, count - 1) })
+    }
+  })
   useLayoutEffect(() => {
+    if (focused !== null && focusedIndex < 0) {
+      refocus(focused.at)
+    }
     setStop((prev) => (prev === stop ? relocated(prev, stopIndex) : prev))
     setFocused((prev) => (prev === focused ? relocated(prev, focusedIndex) : prev))
     setTarget((prev) => (prev === target ? relocated(prev, targetIndex) : prev))
-  }, [stop, stopIndex, focused, focusedIndex, target, targetIndex])
+  }, [stop, stopIndex, focused, focusedIndex, target, targetIndex, refocus])
   const tabStop = stopIndex >= 0 ? stopIndex : 0
   const pinned = useMemo(
     () =>
@@ -363,7 +376,13 @@ export function BotItemRowsWindow({
                 setStop((prev) => (samePick(prev, pick) ? prev : pick))
               }}
               onBlur={(event) => {
-                if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
+                // Focus going nowhere (the row removed, or a click on no control) keeps the row as the
+                // one holding focus, so a row leaving hands focus to the next.
+                if (
+                  document.hasFocus() &&
+                  event.relatedTarget !== null &&
+                  !event.currentTarget.contains(event.relatedTarget)
+                ) {
                   setFocused(null)
                 }
               }}

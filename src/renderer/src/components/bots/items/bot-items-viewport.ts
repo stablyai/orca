@@ -3,6 +3,9 @@
 // so groups add no scroll listeners or observers of their own, and with no group reading it nothing listens.
 import { useMemo } from 'react'
 
+/** Marks the scroller an Items list windows against, so the list finds it as it mounts. */
+export const BOT_ITEMS_SCROLLER_ATTR = 'data-bot-items-scroller'
+
 export type BotItemsViewportBox = { top: number; bottom: number }
 
 export type BotItemsViewport = {

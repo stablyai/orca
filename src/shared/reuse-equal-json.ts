@@ -55,18 +55,24 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
   if (Array.isArray(previous) && Array.isArray(next)) {
     let same = previous.length === next.length
     let byUid: Map<string, unknown> | null | undefined
-    // Only a list of records led by one with a `uid` (items) pairs by it; any other array pays one check.
-    const keyed = uidOf(next[0]) !== null
+    // Only a list of records led by one with a `uid` (items) pairs by it, checked at its first difference,
+    // so an equal array (an item's links) checks nothing.
+    let keyed: boolean | undefined
     // Records pair by place until one is found whose `uid` moved; from there each pairs with the previous
     // record carrying its `uid`, so it keeps its identity and is compared once, with itself. An answer in
     // the same order reads no `uid` past the records that changed.
     let moved = false
+    let unplaced = 0
     const pairByUid = (item: unknown, index: number, uid: string): unknown => {
-      // A record moved a few places (others added, removed or swapped near it) is found close by; past
-      // that, every previous record is indexed once.
+      // A record moved a few places (others added, removed or swapped near it) is found close by. One
+      // found nowhere near is new, or moved to the front for new activity, so changed anyway: it's taken
+      // as new. Past one such, every previous record is indexed once.
       const near = byUid === undefined ? nearbyByUid(previous, index, uid) : undefined
       if (near !== undefined) {
         return near
+      }
+      if (byUid === undefined && unplaced++ === 0) {
+        return undefined
       }
       byUid = byUid === undefined ? indexByUid(previous) : byUid
       return byUid ? byUid.get(uid) : previous[index]
@@ -81,7 +87,9 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
       } else {
         // Past the previous end, in the same order, a record is new.
         kept = atIndex === undefined ? item : reuseEqualJson(atIndex, item)
-        const uid = keyed && kept !== atIndex && atIndex !== undefined ? uidOf(item) : null
+        const differs = kept !== atIndex && atIndex !== undefined
+        keyed ??= differs ? uidOf(next[0]) !== null : undefined
+        const uid = differs && keyed ? uidOf(item) : null
         if (uid !== null && uidOf(atIndex) !== uid) {
           moved = true
           const match = pairByUid(item, index, uid)

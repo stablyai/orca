@@ -32,7 +32,11 @@ import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-nam
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 import { BotItemRowsWindow, focusBotItemBackRow } from './BotItemRowsWindow'
-import { useBotItemsViewport, type BotItemsViewport } from './bot-items-viewport'
+import {
+  BOT_ITEMS_SCROLLER_ATTR,
+  useBotItemsViewport,
+  type BotItemsViewport
+} from './bot-items-viewport'
 import { listOwner, type BotItemsListMembers, type ListOwner } from './bot-items-list-owner'
 
 export type { BotItemsListMembers }
@@ -90,16 +94,17 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     [ordered, selected]
   )
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
-  // The scroller and this list, read once both are attached (after every ref of the mount), so the
-  // panel around them doesn't render again for it, as it would holding them as state.
+  // The scroller and this list, read as the list mounts (before it's painted): the scroller by its mark,
+  // since its own ref is set only after this list's effects, so the panel around them needn't render again.
   const listRef = useRef<HTMLDivElement | null>(null)
   const scrollerRef = props.scroller
   const [boxes, setBoxes] = useState<{ scroller: HTMLElement | null; list: HTMLElement | null }>(
     NO_BOXES
   )
-  useEffect(() => {
-    const scroller = scrollerRef?.current ?? null
+  useLayoutEffect(() => {
     const list = listRef.current
+    const scroller =
+      scrollerRef?.current ?? list?.closest<HTMLElement>(`[${BOT_ITEMS_SCROLLER_ATTR}]`) ?? null
     setBoxes((was) => (was.scroller === scroller && was.list === list ? was : { scroller, list }))
   }, [scrollerRef])
   const viewport = useBotItemsViewport(boxes.scroller, boxes.list)

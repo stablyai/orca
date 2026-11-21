@@ -217,6 +217,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
       ) : (
         <div
           ref={scroll}
+          data-bot-items-scroller=""
           tabIndex={-1}
           className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
         >

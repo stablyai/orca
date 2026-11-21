@@ -59,7 +59,12 @@ function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
   const scroller = useRef<HTMLDivElement | null>(null)
   const groups = useMemo(() => groupBotItems(items, null, NOW, 'e10'), [items])
   return (
-    <div ref={scroller} data-testid="scroller" style={{ height: PANEL_PX, overflowY: 'auto' }}>
+    <div
+      ref={scroller}
+      data-testid="scroller"
+      data-bot-items-scroller=""
+      style={{ height: PANEL_PX, overflowY: 'auto' }}
+    >
       <BotItemsList
         bot={BOT}
         groups={groups}
@@ -125,20 +130,21 @@ it('mounts about what the panel shows of a 600-row group, not every row', async 
   expect(mounted).toBeLessThanOrEqual(40)
 })
 
-// A long group renders windowed, a short one in full: both keep each row on its item.
+// A long group renders windowed, a short one in full: both keep each row on its item. A long group's one
+// Tab stop is its first row until a row is focused, so the row it passes from renders too.
 it.each([
-  { count: OPEN, changed: 300 },
-  { count: 20, changed: 15 }
+  { count: OPEN, changed: 300, renders: [NOW, NOW - 1000] },
+  { count: 20, changed: 15, renders: [NOW] }
 ])(
   're-renders only the changed row when an update moves it to the top ($count rows)',
-  async ({ count, changed }) => {
+  async ({ count, changed, renders }) => {
     const first = hostAnswer(null, count)
     const view = await showWholePlannedGroup(first)
     rowRenders.at = []
     // The item gets a comment: the host's next answer is all-new objects, and it now sorts first.
     const next = reuseEqualJson(first, hostAnswer({ number: changed, title: 'Updated' }, count))
     view.rerender(<Panel items={next} />)
-    // Only the changed item, whose activity is now, renders.
-    expect(rowRenders.at).toEqual([NOW])
+    // Only the changed item, whose activity is now, renders (and the row that was first, a second ago).
+    expect(rowRenders.at).toEqual(renders)
   }
 )
