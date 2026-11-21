@@ -7,7 +7,6 @@ export {
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
-import { readBrowserGuestActiveEntryFormData } from './browser-page-state-form-data'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -210,13 +209,12 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
-    owner.currentPost = readBrowserGuestActiveEntryFormData(guest) === 'form-data'
+    // Set when a discard finds Chromium recorded a form body; read only then, not on every load.
+    owner.currentPost = false
     owner.mediaGranted = false
     publish()
   }
   const settled = (): void => {
-    // Chromium may record the page's form body after the commit event.
-    owner.currentPost ||= readBrowserGuestActiveEntryFormData(guest) === 'form-data'
     owner.navigating = false
     owner.unavailable = false
     snapshot()
@@ -277,5 +275,13 @@ export function protectBrowserGuestMedia(guest: Electron.WebContents): void {
   const owner = owners.get(guest)
   if (owner) {
     owner.mediaGranted = true
+  }
+}
+
+/** A discard found the current page is a form POST result; keep it from further attempts. */
+export function markBrowserGuestFormPostResult(guest: Electron.WebContents): void {
+  const owner = owners.get(guest)
+  if (owner) {
+    owner.currentPost = true
   }
 }

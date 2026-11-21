@@ -3,7 +3,10 @@ import { readBrowserPageStateFormData } from './manager/registration/browser-pag
 import { BrowserError } from '../browser-error'
 import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
-import { readBrowserGuestDiscardProtection } from './manager/registration/browser-guest-discard-protection'
+import {
+  markBrowserGuestFormPostResult,
+  readBrowserGuestDiscardProtection
+} from './manager/registration/browser-guest-discard-protection'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
   claims,
@@ -198,6 +201,10 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
       .getAllEntries()
       .map((entry) => ({ url: entry.url, title: entry.title, pageState: entry.pageState }))
     const index = guest.navigationHistory.getActiveIndex()
+    const formData = readBrowserPageStateFormData(entries[index]?.pageState)
+    if (formData === 'form-data') {
+      markBrowserGuestFormPostResult(guest)
+    }
     if (
       !entries.length ||
       !Number.isInteger(index) ||
@@ -205,7 +212,7 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
       index >= entries.length ||
       entries.some((entry) => !entry.url) ||
       // A restore reloads with GET; only a page Chromium records as no form POST is discarded.
-      readBrowserPageStateFormData(entries[index]?.pageState) !== 'none'
+      formData !== 'none'
     ) {
       return false
     }

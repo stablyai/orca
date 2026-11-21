@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { createServer } from 'node:http'
 import { applyBackgroundActivationPolicy } from '../../../../window/activation/foreground-activation-policy'
-import { readBrowserGuestActiveEntryFormData } from './browser-page-state-form-data'
+import { readBrowserPageStateFormData } from './browser-page-state-form-data'
 
 const form = (action: string): string =>
   `<form id="f" method="post" action="${action}"><input name="q" value="1"></form>`
@@ -30,7 +30,7 @@ async function load(win: BrowserWindow, run: () => Promise<unknown>): Promise<st
   const history = win.webContents.navigationHistory
   const state = history.getEntryAtIndex(history.getActiveIndex())?.pageState ?? ''
   process.stderr.write(`${win.webContents.getURL()} ${Buffer.from(state, 'base64').subarray(0, 16).toString('hex')}\n`)
-  return readBrowserGuestActiveEntryFormData(win.webContents)
+  return readBrowserPageStateFormData(state)
 }
 
 async function run(): Promise<void> {
