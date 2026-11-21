@@ -267,9 +267,9 @@ export function NativeChatQueuedMessageCard({
             <span
               className={cn(
                 'flex items-center can-hover:pointer-events-none group-hover/queued:pointer-events-auto group-focus-within/queued:pointer-events-auto has-[[data-state=open]]:pointer-events-auto',
-                // A shortcut can start a send without bringing focus or the pointer into the row.
+                // Keep visibility out of the buttons' transitions so only the pending indicator can show.
                 actionPending
-                  ? 'can-hover:group-[&:not(:hover,:focus-within)]/queued:not-has-[[data-state=open]]:invisible'
+                  ? '[&>button]:transition-colors can-hover:group-[&:not(:hover,:focus-within)]/queued:not-has-[[data-state=open]]:[&>button]:invisible'
                   : 'can-hover:opacity-0 group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 has-[[data-state=open]]:opacity-100'
               )}
             >
