@@ -80,6 +80,11 @@ export function isMirroredAgentPaneKeyForTabs(
   return parsed !== null && tabIds.has(parsed.tabId)
 }
 
+/** A genuine pending question or blocker must survive a host omission (#22445). */
+export function isUnresolvedAgentStatus(entry: AgentStatusEntry | undefined): boolean {
+  return entry?.state === 'waiting' || entry?.state === 'blocked'
+}
+
 /** HTTP-hook permission/question states never reach PTY bytes and must pierce client ownership. */
 export function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): boolean {
   // Why: a row restored across a host restart is unverifiable, so it never outranks live bytes.

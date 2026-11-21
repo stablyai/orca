@@ -25,6 +25,7 @@ import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../share
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,
+  isUnresolvedAgentStatus,
   clientAgentStatusFencesHost,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
@@ -204,6 +205,12 @@ export function buildMirroredAgentStatusPatch(
     }
     // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
     if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey.get(paneKey))) {
+      continue
+    }
+    // #22445: an unresolved question/blocker is live work, not stale host
+    // data. dispose() drops renderer ownership, so a mirrored snapshot with
+    // no row for that pane must not silently delete the pending blocker.
+    if (isUnresolvedAgentStatus(existing)) {
       continue
     }
     nextAgentStatusByPaneKey = nextAgentStatusByPaneKey.replace([[paneKey, null]])
