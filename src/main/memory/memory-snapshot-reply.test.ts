@@ -61,4 +61,50 @@ describe('the memory snapshot sent over RPC', () => {
     expect(reply.worktrees).toHaveLength(4_000)
     expect(reply.worktrees[3_999]?.sessions).toHaveLength(1)
   })
+
+  it('leaves out chat-only rows before terminal rows when even those would not fit', () => {
+    const id = (prefix: string, i: number): string =>
+      `${prefix}-${i}-${'"'.repeat(160)}${'x'.repeat(90)}`
+    const terminal = Array.from({ length: 3_500 }, (_, i) => ({
+      worktreeId: id('w', i),
+      worktreeName: 'main',
+      repoId: 'repo',
+      repoName: 'repo',
+      cpu: 1,
+      memory: 123_456_789,
+      sessions: [
+        { sessionId: id('pty', i), paneKey: null, pid: 1_000 + i, cpu: 1, memory: 123_456_789 }
+      ],
+      history: [123_456_789]
+    }))
+    const chatOnly = Array.from({ length: 1_400 }, (_, i) => ({
+      worktreeId: id('chat-w', i),
+      worktreeName: 'main',
+      repoId: 'repo',
+      repoName: 'repo',
+      cpu: 1,
+      memory: 123_456_789,
+      sessions: [],
+      chats: [
+        {
+          agentSessionId: '2015f7a9-8b8c-4018-8466-92a245c1f0fb',
+          agent: 'claude',
+          name: null,
+          cpu: 1,
+          memory: 123_456_789
+        }
+      ],
+      history: [123_456_789]
+    }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply reads only app and worktrees.
+    const snapshot = {
+      app: { cpu: 0, memory: 0, main: {}, renderer: {}, other: {}, history: [] },
+      worktrees: [...terminal, ...chatOnly]
+    } as unknown as MemorySnapshot
+
+    const reply = toMemorySnapshotReply(snapshot)
+
+    expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(4 * 1024 * 1024)
+    expect(reply.worktrees).toHaveLength(3_500)
+  })
 })
