@@ -13,6 +13,7 @@ import type {
 } from '../../../../../shared/keybindings/types'
 
 export type WebKeybindingDocument = {
+  copyMode?: unknown
   version: 1
   keybindings: KeybindingOverrides
   platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>

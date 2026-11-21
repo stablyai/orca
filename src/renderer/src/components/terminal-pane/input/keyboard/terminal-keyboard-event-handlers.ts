@@ -22,6 +22,10 @@ import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-cha
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
+import {
+  isCopyModeAllowedTerminalShortcutAction,
+  isInsideTerminalCopyMode
+} from '../../copy-mode/terminal-copy-mode-pane'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 
@@ -49,29 +53,13 @@ type EventContext = KeyboardHandlersDeps & {
 
 export function createTerminalKeyboardEventHandlers(context: EventContext) {
   const {
-    tabId,
-    worktreeId,
     isMac,
     isWindows,
     shortcutPlatform,
     keyboardScopeRef,
     managerRef,
-    paneTransportsRef,
-    paneCwdRef,
-    fallbackCwd,
-    expandedPaneIdRef,
-    setExpandedPane,
-    restoreExpandedLayout,
-    refreshPaneSizes,
-    persistLayoutSnapshot,
-    toggleExpandPane,
-    setSearchOpen,
     focusSearchInput,
     onSearchSelectedText,
-    onRequestClosePane,
-    onClearPaneScrollback,
-    onSetTitle,
-    onClearPaneTitle,
     searchOpenRef,
     searchStateRef,
     paneKittyKeyboardModesRef,
@@ -87,8 +75,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     deferredNewlineSender,
     deferredChordSender,
     modifiedEnterChordOwner,
-    observedEnterKeydownTimeStamps,
-    getKeyboardSplitTelemetrySource
+    observedEnterKeydownTimeStamps
   } = context
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -119,9 +106,11 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
 
     // Repair activePaneId from the focused helper before policies read pane-specific host/agent state.
     const keyboardPane = synchronizeTerminalKeyboardPane(manager, e.target)
+    const inCopyMode = isInsideTerminalCopyMode(e.target)
 
     const modifiedEnterChord = isWindows ? getModifiedEnterChord(e) : null
     if (
+      !inCopyMode &&
       e.key === 'Enter' &&
       e.keyCode === 13 &&
       !e.isComposing &&
@@ -137,9 +126,8 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     const terminalPaneForImeShortcut = keyboardPane
-    const hasPendingImeComposition = hasPendingTerminalImeComposition(
-      terminalPaneForImeShortcut?.terminal.element
-    )
+    const hasPendingImeComposition =
+      !inCopyMode && hasPendingTerminalImeComposition(terminalPaneForImeShortcut?.terminal.element)
     const imeProcessEnter = isWindows && hasPendingImeComposition && isTerminalImeProcessEnter(e)
     if (isWindows && hasPendingImeComposition && !imeProcessEnter && isTerminalImeConsumedKey(e)) {
       // Process has no logical key, so shortcut matching would fall back to its physical code.
@@ -147,7 +135,10 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       return
     }
 
-    if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
+    if (
+      !inCopyMode &&
+      matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)
+    ) {
       const pane = keyboardPane
       const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
       if (selectedText) {
@@ -159,7 +150,9 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     // Handle terminal search navigation before editable-target bypass so search-input focus still works.
-    const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
+    const direction = inCopyMode
+      ? null
+      : matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
     if (direction !== null) {
       if (e.repeat) {
         return
@@ -192,6 +185,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     if (
+      !inCopyMode &&
       handleEmptyFloatingWorkspacePanelCloseShortcut(
         useAppStore.getState(),
         e,
@@ -216,6 +210,9 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
     const action = resolveShortcutEvent(shortcutEvent)
     if (!action) {
+      return
+    }
+    if (inCopyMode && !isCopyModeAllowedTerminalShortcutAction(action.type)) {
       return
     }
     // Covering chat owns find and selection; the hidden terminal buffer is not the visible surface.
@@ -290,26 +287,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     dispatchTerminalShortcutAction(action, e, manager, {
-      tabId,
-      worktreeId,
-      fallbackCwd,
-      expandedPaneIdRef,
-      setExpandedPane,
-      restoreExpandedLayout,
-      refreshPaneSizes,
-      persistLayoutSnapshot,
-      toggleExpandPane,
-      setSearchOpen,
-      focusSearchInput,
-      searchOpenRef,
-      onRequestClosePane,
-      onClearPaneScrollback,
-      onSetTitle,
-      onClearPaneTitle,
-      paneTransportsRef,
-      paneCwdRef,
-      managerRef,
-      getKeyboardSplitTelemetrySource,
+      ...context,
       armNativeOnlyShortcut: (event) => nativeOnlyShortcutTracker.armKeyDown(event)
     })
   }
