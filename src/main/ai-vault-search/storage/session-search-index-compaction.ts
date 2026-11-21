@@ -24,7 +24,7 @@ END;
 const MIN_DELETED_ROWS = 50_000
 const MERGE_PAGES_PER_STEP = 64
 const RECLAIM_PAGES_PER_STEP = 2000
-// About 20 ms of page moves, so a long reclaim after a first compaction rests like the merge.
+// Small steps, so a long reclaim after a first compaction rests like the merge does.
 const PACED_RECLAIM_PAGES_PER_STEP = 512
 
 function metaInteger(db: SyncDatabase, key: string): number {
