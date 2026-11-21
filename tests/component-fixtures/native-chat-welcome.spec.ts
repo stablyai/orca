@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+// The first fixture load can include a cold Vite dependency scan.
+test.describe.configure({ timeout: 120_000 })
+
 async function open(page: Page, fixture: string, theme = 'dark'): Promise<void> {
   await page.goto(
     `/fixtures.html?id=native-chat/host-access/NativeChatEmptyState:${fixture}&theme=${theme}`
