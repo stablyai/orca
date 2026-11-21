@@ -221,7 +221,7 @@ export class Session extends SessionProcessInspection {
 
   getVisibleProjection() {
     this.startupIngress.snapshotBarrier()
-    return this.output.getVisibleProjection(this.incarnationId)
+    return this.output.getVisibleProjection()
   }
 
   getPartialEscapeTailAnsi(): string {

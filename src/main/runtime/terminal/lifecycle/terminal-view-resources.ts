@@ -117,7 +117,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerBufferAcquisitionsByPtyId = new Map<
     string,
-    { ansi?: ProviderBufferAcquisition; visible?: ProviderBufferAcquisition }
+    { ansi?: ProviderBufferAcquisition; visible?: ProviderBufferAcquisition; ansiOnly?: true }
   >()
 
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()

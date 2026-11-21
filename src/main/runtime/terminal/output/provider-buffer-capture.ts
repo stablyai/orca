@@ -242,15 +242,16 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
+      snapshotOptions.visibleScreenOnly
+        ? { scrollbackRows: 0, visibleProjection: true }
+        : { scrollbackRows: lineLimit },
       snapshotOptions
     )
     if (!snapshot) {
       return { lines: [] }
     }
-    // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
     if (snapshotOptions.visibleScreenOnly) {
-      const projection = await this.parseVisibleSnapshot(snapshot)
+      const projection = snapshot.visibleProjection ?? (await this.parseVisibleSnapshot(snapshot))
       // Live bytes ordered after the provider frame make that frame stale.
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq

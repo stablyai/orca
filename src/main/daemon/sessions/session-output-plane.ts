@@ -170,7 +170,7 @@ export class SessionOutputPlane {
     }
   }
 
-  getVisibleProjection(incarnationId: string): TerminalVisibleProjectionSnapshot | null {
+  getVisibleProjection(): TerminalVisibleProjectionSnapshot | null {
     if (this.disposed) {
       return null
     }
@@ -179,8 +179,7 @@ export class SessionOutputPlane {
       ...this.emulator.getSnapshotMetadata(),
       visibleProjection: projectTerminalVisibleLines(this.emulator),
       ...(terminalOwner ? { terminalOwner } : {}),
-      outputSequence: this._outputSequence,
-      incarnationId
+      outputSequence: this._outputSequence
     }
   }
 

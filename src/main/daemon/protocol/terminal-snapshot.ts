@@ -36,5 +36,4 @@ export type TerminalVisibleProjectionSnapshot = Pick<
 > & {
   visibleProjection: RuntimeTerminalProjection
   outputSequence: number
-  incarnationId: string
 }

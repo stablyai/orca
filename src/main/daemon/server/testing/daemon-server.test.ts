@@ -92,7 +92,7 @@ describe('DaemonServer', () => {
       await server.start()
       const c = await connectClient()
       const sessionId = 'visible-snapshot'
-      const { incarnationId } = await c.request<{ incarnationId: string }>('createOrAttach', {
+      await c.request('createOrAttach', {
         sessionId,
         cols: 80,
         rows: 24
@@ -110,7 +110,6 @@ describe('DaemonServer', () => {
         modes: { alternateScreen: true },
         lastTitle: 'Build',
         outputSequence: 37,
-        incarnationId,
         visibleProjection: {
           lines: ['Build passed', 'Ready'],
           tailRows: [
