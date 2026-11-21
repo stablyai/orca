@@ -137,10 +137,12 @@ export async function removeFolderContextBlock(
   if (!span) {
     return
   }
-  const remaining = (existing.text.slice(0, span.at) + existing.text.slice(span.until)).trim()
-  if (!remaining) {
+  // Only the end is tidied: the user's own first line may open an indented code block, and its
+  // indentation is theirs to keep.
+  const remaining = existing.text.slice(0, span.at) + existing.text.slice(span.until)
+  if (!remaining.trim()) {
     await rm(target, { force: true })
     return
   }
-  await writeFolderContextText(target, `${remaining}\n`, existing.mode)
+  await writeFolderContextText(target, `${remaining.replace(/\s+$/, '')}\n`, existing.mode)
 }

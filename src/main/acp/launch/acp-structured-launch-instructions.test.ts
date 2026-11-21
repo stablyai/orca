@@ -382,6 +382,22 @@ describe('ACP launch: standing instructions', () => {
     }
   })
 
+  it("keeps the indentation the user's AGENTS.md opens with when the block goes", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-indent-'))
+    try {
+      const agentsPath = join(home, 'AGENTS.md')
+      const userText = '    indented first line\n\nrest of the notes'
+      await writeFile(agentsPath, userText)
+
+      await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+      await launch('dsh', { workspacePath: home })
+
+      expect(await readFile(agentsPath, 'utf8')).toBe(`${userText}\n`)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
   it("leaves no AGENTS.md holding only Orca's markers", async () => {
     for (const existing of [null, '']) {
       const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-empty-'))
