@@ -374,4 +374,16 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     })
     expect(dispatched).toEqual([])
   })
+
+  it('keeps unread state but sends no notification for a tab the user muted', () => {
+    store.setState({ notificationsMutedByTabId: { [CHAT_TAB]: true } })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators()).toEqual({
+      workspaceBold: true,
+      paneDot: 'agent-completion',
+      tabDot: 'agent-completion',
+      surfaceDot: 'agent-completion'
+    })
+    expect(dispatched).toEqual([])
+  })
 })

@@ -38,7 +38,10 @@ import {
   parseWorkspaceKey
 } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { isBotAttentionSilenced } from '../../../../../../shared/bot-notifications'
-import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
+import {
+  isTabNotificationDeliveryMuted,
+  isWorktreeNotificationDeliveryMuted
+} from '@/attention/worktree-notification-mute'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
@@ -119,8 +122,12 @@ function dispatchStructuredAttention(
       if (promptWasRead()) {
         return
       }
-      // Per-worktree mute keeps the unread writes above but drops the interruption.
-      if (isWorktreeNotificationDeliveryMuted(useAppStore.getState(), request.workspaceId)) {
+      // Per-worktree and per-tab mute keep the unread writes above but drop the interruption.
+      const currentState = useAppStore.getState()
+      if (
+        isWorktreeNotificationDeliveryMuted(currentState, request.workspaceId) ||
+        isTabNotificationDeliveryMuted(currentState, tab.id)
+      ) {
         return
       }
       // The receiving subscription identifies the paired source even when tab ownership is ambiguous.

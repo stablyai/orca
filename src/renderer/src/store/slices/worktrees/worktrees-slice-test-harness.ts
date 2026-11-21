@@ -188,6 +188,7 @@ export function createTestStore() {
           explorerDisplayRootByWorktree: {},
           showDotfilesByWorktree: {},
           notificationsMutedByWorktree: {},
+          notificationsMutedByTabId: {},
           expandedDirs: {},
           gitStatusByWorktree: {},
           gitStatusHeadByWorktree: {},

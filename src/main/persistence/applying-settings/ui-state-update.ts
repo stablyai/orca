@@ -35,6 +35,7 @@ import {
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByTabId,
   normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
@@ -216,6 +217,10 @@ export function updatePersistedUI(
       sanitizedUpdates.notificationsMutedByWorktree !== undefined
         ? normalizeNotificationsMutedByWorktree(sanitizedUpdates.notificationsMutedByWorktree)
         : normalizeNotificationsMutedByWorktree(operations.state.ui?.notificationsMutedByWorktree),
+    notificationsMutedByTabId:
+      sanitizedUpdates.notificationsMutedByTabId !== undefined
+        ? normalizeNotificationsMutedByTabId(sanitizedUpdates.notificationsMutedByTabId)
+        : normalizeNotificationsMutedByTabId(operations.state.ui?.notificationsMutedByTabId),
     // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
