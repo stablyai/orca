@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemQuestionStep } from './BotItemQuestionStep'
@@ -25,7 +25,7 @@ const shape: BotItemQuestionShape = {
   ]
 }
 
-function renderLine(held: string | null): void {
+function renderLine(held: string | null, heldCount = held ? 1 : 0): BotItemQuestionSteps {
   const steps: BotItemQuestionSteps = {
     askId: 'q1',
     shape,
@@ -33,7 +33,9 @@ function renderLine(held: string | null): void {
     current: 0,
     lines: [0, 1],
     go: vi.fn(),
-    answer: vi.fn()
+    answer: vi.fn(),
+    heldCount,
+    sendHeld: vi.fn()
   }
   const actions = {
     send: vi.fn(),
@@ -44,6 +46,7 @@ function renderLine(held: string | null): void {
   render(
     <BotItemQuestionStep shape={shape} answered={[null, null]} steps={steps} actions={actions} />
   )
+  return steps
 }
 
 // The test DOM pads inline boundaries with a space; a browser reads "…transcript, Recommended".
@@ -67,3 +70,16 @@ it.each([null, 'I rotated it; purge the transcript', 'Not yet'])(
     expect(other.textContent).not.toContain('★')
   }
 )
+
+// The box below is the one place to type: the card has no typing spot of its own.
+it('offers no Type your answer chip of its own and no Send now with nothing held', () => {
+  renderLine(null)
+  expect(screen.queryByRole('button', { name: /Type your answer/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /Send now/ })).toBeNull()
+})
+
+it('sends held picks on Send now', () => {
+  const steps = renderLine('Not yet')
+  fireEvent.click(screen.getByRole('button', { name: /Send now/ }))
+  expect(steps.sendHeld).toHaveBeenCalledOnce()
+})

@@ -377,7 +377,8 @@ const severalView = {
   ]
 }
 
-// An ask of four questions, two answered: one line at a time, the answers held above until the last.
+// An ask of four questions, two picked: one line at a time, the picks held above until the last or
+// Send now.
 export const severalQuestions = defineFixture({
   width: 900,
   render: () => (
@@ -392,10 +393,43 @@ export const severalQuestions = defineFixture({
   interact: async (frame) => {
     for (const label of ['P1 top strip', 'No, one row per agent']) {
       const chip = [...frame.querySelectorAll('button')].find((button) =>
-        button.textContent?.startsWith(label)
+        // The recommended chip leads with its star.
+        button.textContent?.replace('★', '').startsWith(label)
       )
       chip?.click()
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
+  }
+})
+
+const typedItem = makeTestBotItem(232, {
+  ...severalItem,
+  uid: 'fixture-several-typed'
+})
+const typedView = { ...severalView, item: typedItem }
+
+// Words typed for the first of several questions, sent from the box: they post at once as one
+// comment answering that line, instead of waiting on this device for the other lines.
+export const severalQuestionsTypedAnswer = defineFixture({
+  width: 900,
+  setup: () =>
+    updateNativeChatComposerDraft(
+      `bot-item-comment:${botRefKey(fixtureCos)}:${typedItem.uid}`,
+      { text: 'Top strip, but ask a second opinion before landing it.' },
+      'immediate'
+    ),
+  render: () => (
+    <div className="flex h-[640px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Layouts helper' }}
+        item={typedItem}
+        view={typedView}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    frame.querySelector<HTMLButtonElement>('button[aria-label="Comment"]')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 400))
   }
 })

@@ -39,26 +39,72 @@ const events: BotItemEvent[] = [
   { id: 'e2', kind: 'status', actor: asker, data: { from: 'working', to: 'needs_you' }, at: 1 }
 ]
 
-it('posts a typed answer held for one line with the next answer that carries an image', () => {
+it('sends an answer typed in the box at once, without waiting for the other lines', () => {
   const send = vi.fn()
   const item = makeTestBotItem(6, {
-    uid: 'uid-held-image',
+    uid: 'uid-typed-sends',
     status: 'needs_you',
     question: { eventId: 'e1', text: 'Audit done.' }
   })
   const { result } = renderHook(() => useBotItemQuestionSteps(BOT, item, events, send, []))
 
   act(() => result.current.fromBox('what do other products do', [], 'e1:0'))
+
+  expect(send).toHaveBeenCalledExactlyOnceWith(
+    'Fix Datadog with a site picker? → what do other products do',
+    [],
+    'e1',
+    undefined,
+    undefined
+  )
+  expect(result.current.steps?.held).toEqual([null, null, null])
+})
+
+it('sends picks held on earlier lines with the answer typed in the box', () => {
+  const send = vi.fn()
+  const item = makeTestBotItem(9, {
+    uid: 'uid-picked-then-typed',
+    status: 'needs_you',
+    question: { eventId: 'e1', text: 'Audit done.' }
+  })
+  const { result } = renderHook(() => useBotItemQuestionSteps(BOT, item, events, send, []))
+
+  act(() => result.current.steps!.answer(0, 'Yes'))
   expect(send).not.toHaveBeenCalled()
+  expect(result.current.steps?.current).toBe(1)
   act(() => result.current.fromBox('[Image #1] vercel sign in works', ['/shot.png'], 'e1:1'))
 
   expect(send).toHaveBeenCalledExactlyOnceWith(
-    'Fix Datadog with a site picker? → what do other products do\nVercel: test it or hide it? → [Image #1] vercel sign in works',
+    'Fix Datadog with a site picker? → Yes\nVercel: test it or hide it? → [Image #1] vercel sign in works',
     ['/shot.png'],
     'e1',
     undefined,
-    []
+    undefined
   )
+})
+
+it('sends held picks on Send now', () => {
+  const send = vi.fn()
+  const item = makeTestBotItem(10, {
+    uid: 'uid-send-now',
+    status: 'needs_you',
+    question: { eventId: 'e1', text: 'Audit done.' }
+  })
+  const { result } = renderHook(() => useBotItemQuestionSteps(BOT, item, events, send, []))
+
+  expect(result.current.steps?.heldCount).toBe(0)
+  act(() => result.current.steps!.answer(0, 'Yes'))
+  expect(result.current.steps?.heldCount).toBe(1)
+  act(() => result.current.steps!.sendHeld())
+
+  expect(send).toHaveBeenCalledExactlyOnceWith(
+    'Fix Datadog with a site picker? → Yes',
+    [],
+    'e1',
+    undefined,
+    undefined
+  )
+  expect(result.current.steps?.heldCount).toBe(0)
 })
 
 it('sends a comment whose reply mark was closed as plain, and a named one as the answer', () => {
