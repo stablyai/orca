@@ -9,7 +9,10 @@ import { continueRebase, readRebaseStopToken } from '../source-control/mutations
 import { takeOrcaRebaseProvenance } from '../source-control/mutations/orca-rebase-provenance'
 
 // Lets a case act as another Git that replaces the paused run right after the reflog proof passed.
-const afterReflogProof = vi.hoisted(() => ({ run: null as (() => void) | null }))
+const afterReflogProof = vi.hoisted(() => {
+  const state: { run: (() => void) | null } = { run: null }
+  return state
+})
 vi.mock('./orca-rebase-reflog', async (importOriginal) => {
   const actual = await importOriginal<typeof OrcaRebaseReflog>()
   return {

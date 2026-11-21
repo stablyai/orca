@@ -23,6 +23,7 @@ function renderRunner(
   operationStore.setState({ orcaRebase: MARKER })
   const noop = vi.fn(async () => {})
   const { result } = renderHook(() =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; every field is stubbed, but vi.fn stubs are looser than the store action signatures.
     useSourceControlRemoteActionRunner({
       activeRepoTarget: { kind: 'local' },
       activeWorktree: null,
