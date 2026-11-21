@@ -43,6 +43,7 @@ export async function inspectTerminalHostProcess(args: {
   currentSession?: () => Session | undefined
   expectedIncarnationId?: string
   foregroundOnly?: boolean
+  scanChildProcesses?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
@@ -129,7 +130,8 @@ export async function inspectTerminalHostProcess(args: {
 
   const windowsDecision = process.platform === 'win32' && args.steadyState !== true
   let foregroundProcess = windowsDecision ? null : session.getForegroundProcess()
-  let childProcessEvidence: PtyChildProcessVerdict | undefined = session.processNameIsSpawnFile
+  const scanChildProcesses = session.processNameIsSpawnFile || args.scanChildProcesses === true
+  let childProcessEvidence: PtyChildProcessVerdict | undefined = scanChildProcesses
     ? 'unverifiable'
     : undefined
   let evidence: RemoteForegroundEvidence
@@ -156,7 +158,7 @@ export async function inspectTerminalHostProcess(args: {
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
         rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
       }
-      if (session.processNameIsSpawnFile) {
+      if (scanChildProcesses) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
         childProcessEvidence = inspectSpawnFileChildProcessesFromRows(

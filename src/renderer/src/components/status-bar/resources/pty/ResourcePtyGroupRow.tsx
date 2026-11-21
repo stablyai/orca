@@ -4,26 +4,25 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { ResourcePtyGroup, ResourcePtyRow } from './resource-pty-view-model'
+import { resourcePtyRowLabel, type ResourcePtyGroup } from './resource-pty-view-model'
 import { ResourcePtyProcessIcon } from './ResourcePtyProcessIcon'
 
 const STRIP_LIMIT = 6
-
-function ptyHoverName(row: ResourcePtyRow): string {
-  const process = row.session.foregroundProcess?.trim()
-  return process ? `${row.label} · ${process}` : row.label
-}
 
 export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
   group,
   open,
   canEndAll,
+  checking,
+  runtimePaneTitlesByTabId,
   onToggle,
   onEndAll
 }: {
   group: ResourcePtyGroup
   open: boolean
   canEndAll: boolean
+  checking: boolean
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   onToggle: (key: string) => void
   onEndAll: (group: ResourcePtyGroup, source: Element) => void
 }) {
@@ -59,32 +58,45 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
           })}
         </span>
         <span aria-hidden className="ml-auto flex shrink-0 items-center gap-1">
-          {group.rows.slice(0, STRIP_LIMIT).map((row) => (
-            <Tooltip key={row.identity}>
-              <TooltipTrigger asChild>
-                <span className="inline-flex size-3.5 items-center justify-center">
-                  <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {ptyHoverName(row)}
-              </TooltipContent>
-            </Tooltip>
-          ))}
+          {group.rows.slice(0, STRIP_LIMIT).map((row) => {
+            const title = resourcePtyRowLabel(row, runtimePaneTitlesByTabId)
+            const process = row.session.foregroundProcess?.trim()
+            return (
+              <Tooltip key={row.identity}>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex size-3.5 items-center justify-center">
+                    <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {process ? `${title} · ${process}` : title}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
           {hidden > 0 && (
             <span className="text-2xs text-muted-foreground tabular-nums">+{hidden}</span>
           )}
         </span>
       </button>
+      {checking && (
+        <span role="status" className="text-2xs text-muted-foreground">
+          {t('resourceManager.pty.checkingProcesses', 'Checking processes…')}
+        </span>
+      )}
       <Button
         variant="ghost"
         size="xs"
         disabled={!canEndAll}
+        hidden={checking}
         onClick={(event) => onEndAll(group, event.currentTarget)}
         aria-label={t('resourceManager.pty.endAllNamed', 'End all PTYs in {{group}}', {
           group: name
         })}
-        className="hidden h-[22px] px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15 group-has-[:focus-visible]/line:inline-flex group-hover/line:inline-flex"
+        className={cn(
+          'hidden h-[22px] px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15',
+          !checking && 'group-has-[:focus-visible]/line:inline-flex group-hover/line:inline-flex'
+        )}
       >
         {t('resourceManager.pty.endAll', 'End all')}
       </Button>

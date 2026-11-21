@@ -260,14 +260,30 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
               {t('resourceManager.pty.endAllConfirmTitle', 'End all terminals?')}
             </DialogTitle>
             <DialogDescription>
-              {t(
-                'resourceManager.pty.endAllRunningCount',
-                '{{count}} sessions are running agents or other programs.',
-                {
-                  count: endAllConfirmation?.runningCount ?? 0,
-                  defaultValue_one: '{{count}} session is running an agent or another program.'
-                }
-              )}{' '}
+              {!!endAllConfirmation?.runningCount && (
+                <>
+                  {t(
+                    'resourceManager.pty.endAllRunningCount',
+                    '{{count}} sessions are running agents or other programs.',
+                    {
+                      count: endAllConfirmation.runningCount,
+                      defaultValue_one: '{{count}} session is running an agent or another program.'
+                    }
+                  )}{' '}
+                </>
+              )}
+              {!!endAllConfirmation?.unverifiableCount && (
+                <>
+                  {t(
+                    'resourceManager.pty.endAllUnverifiableCount',
+                    "Couldn't check for running work in {{count}} terminals.",
+                    {
+                      count: endAllConfirmation.unverifiableCount,
+                      defaultValue_one: "Couldn't check for running work in {{count}} terminal."
+                    }
+                  )}{' '}
+                </>
+              )}
               {t(
                 'resourceManager.pty.endAllConfirmWarning',
                 'Ending these terminals stops their processes and can lose unsaved work.'

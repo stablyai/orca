@@ -27,8 +27,10 @@ export function updateSelection(params: {
   previousAnchorId: string | null
   targetId: string
   intent: SelectionIntent
+  additiveRange?: boolean
 }): SelectionResult {
-  const { visibleIds, previousSelectedIds, previousAnchorId, targetId, intent } = params
+  const { visibleIds, previousSelectedIds, previousAnchorId, targetId, intent, additiveRange } =
+    params
 
   if (intent === 'replace') {
     return { selectedIds: new Set([targetId]), anchorId: targetId }
@@ -45,21 +47,24 @@ export function updateSelection(params: {
   }
 
   const anchorId = previousAnchorId
+  const selectedIds = new Set(additiveRange ? previousSelectedIds : undefined)
   if (!anchorId) {
-    return { selectedIds: new Set([targetId]), anchorId: targetId }
+    selectedIds.add(targetId)
+    return { selectedIds, anchorId: targetId }
   }
   const targetIndex = visibleIds.indexOf(targetId)
   const anchorIndex = visibleIds.indexOf(anchorId)
   if (targetIndex === -1 || anchorIndex === -1) {
-    return { selectedIds: new Set([targetId]), anchorId: targetId }
+    selectedIds.add(targetId)
+    return { selectedIds, anchorId: targetId }
   }
 
   const start = Math.min(anchorIndex, targetIndex)
   const end = Math.max(anchorIndex, targetIndex)
-  return {
-    selectedIds: new Set(visibleIds.slice(start, end + 1)),
-    anchorId
+  for (let index = start; index <= end; index += 1) {
+    selectedIds.add(visibleIds[index]!)
   }
+  return { selectedIds, anchorId }
 }
 
 export function pruneSelection(

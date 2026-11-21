@@ -1,9 +1,13 @@
 import type React from 'react'
 import { VirtualizedList } from '@/components/ui/virtualized-list'
-import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
+import {
+  resourcePtyRowLabel,
+  type ResourcePtyGroup,
+  type ResourcePtyRow as PtyRow
+} from './resource-pty-view-model'
 import { ResourcePtyGroupRow } from './ResourcePtyGroupRow'
 import { ResourcePtyRow } from './ResourcePtyRow'
-import { canEndResourcePty } from './use-resource-pty-actions'
+import type { ResourcePtyEndError } from './use-resource-pty-actions'
 
 export type ResourcePtyListItem =
   | { kind: 'group'; key: string; group: ResourcePtyGroup; open: boolean }
@@ -17,6 +21,9 @@ export function ResourcePtyList({
   observedAt,
   unverifiable,
   ending,
+  endableGroups,
+  checkingGroup,
+  runtimePaneTitlesByTabId,
   errors,
   selected,
   openDetails,
@@ -31,7 +38,10 @@ export function ResourcePtyList({
   observedAt: number | null
   unverifiable: boolean
   ending: ReadonlySet<string>
-  errors: ReadonlyMap<string, string>
+  endableGroups: ReadonlySet<string>
+  checkingGroup: string | null
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  errors: ReadonlyMap<string, ResourcePtyEndError>
   selected: ReadonlySet<string>
   openDetails: ReadonlySet<string>
   onToggleGroup: (key: string) => void
@@ -55,8 +65,11 @@ export function ResourcePtyList({
             open={item.open}
             canEndAll={
               !unverifiable &&
-              item.group.rows.some((row) => canEndResourcePty(row) && !ending.has(row.identity))
+              (checkingGroup === null || item.group.kind === 'unbound') &&
+              endableGroups.has(item.key)
             }
+            checking={checkingGroup === item.key}
+            runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
             onToggle={onToggleGroup}
             onEndAll={onEndAll}
           />
@@ -64,6 +77,7 @@ export function ResourcePtyList({
           <ResourcePtyRow
             key={item.key}
             row={item.row}
+            title={resourcePtyRowLabel(item.row, runtimePaneTitlesByTabId)}
             showWorkspace={item.showWorkspace}
             observedAt={observedAt}
             unverifiable={unverifiable}

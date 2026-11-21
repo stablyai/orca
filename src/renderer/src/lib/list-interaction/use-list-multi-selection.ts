@@ -31,7 +31,8 @@ export function useListMultiSelection<T>({
   items,
   getKey,
   getScope,
-  getRetainedItem
+  getRetainedItem,
+  additiveRange = false
 }: {
   items: readonly T[]
   getKey: (item: T) => string
@@ -39,6 +40,7 @@ export function useListMultiSelection<T>({
   getScope: () => Element | null
   /** Keeps already selected items when folded away. Ranges still use visible order. */
   getRetainedItem?: (key: string) => T | undefined
+  additiveRange?: boolean
 }): ListMultiSelection<T> {
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
   const entryByKey = useMemo(() => {
@@ -132,14 +134,15 @@ export function useListMultiSelection<T>({
         previousSelectedIds: latest.selectedKeys,
         previousAnchorId: latest.selectionAnchorKey,
         targetId: getKey(item),
-        intent
+        intent,
+        additiveRange
       })
       setSelectedKeys(result.selectedIds)
       setSelectionAnchorKey(result.anchorId)
       // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
       return intent !== 'replace'
     },
-    [getKey]
+    [additiveRange, getKey]
   )
 
   const selectForContextMenu = useCallback(

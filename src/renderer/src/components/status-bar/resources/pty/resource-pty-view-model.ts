@@ -15,7 +15,6 @@ import {
   isTerminalLeafId
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { recentStamp } from '../../../../../../shared/sidebar-list/sorting/stamp-order'
-import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import {
   buildResourceSessionBindingIndex,
   type ResourceSessionBindingInputs
@@ -29,6 +28,7 @@ export type ResourcePtyRow = {
   session: PtyListedSession
   identity: string
   label: string
+  usesRuntimeTitle: boolean
   sortName: string
   lastActivityAt: number
   workspace: string | null
@@ -58,14 +58,12 @@ export function resourcePtyProcessBaseName(process: string | undefined): string 
   )
 }
 
-export function countResourcePtysRunningWork(rows: readonly ResourcePtyRow[]): number {
-  return rows.filter(({ session }) => {
-    const process = session.foregroundProcess?.trim()
-    return (
-      !session.exiting &&
-      (session.agentOwnership === 'present' || (!!process && !isShellProcess(process)))
-    )
-  }).length
+export function resourcePtyRowLabel(
+  row: ResourcePtyRow,
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+): string {
+  const titles = row.usesRuntimeTitle && row.tabId ? runtimePaneTitlesByTabId[row.tabId] : null
+  return (titles && Object.values(titles).find((title) => title?.trim())) || row.label
 }
 
 export function buildResourcePtyRows(args: {
@@ -74,7 +72,6 @@ export function buildResourcePtyRows(args: {
   worktrees: readonly Worktree[]
   repos: readonly Repo[]
   projectGroups: readonly ProjectGroup[]
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
 }): ResourcePtyRow[] {
   const repoById = new Map(args.repos.map((repo) => [repo.id, repo]))
   const localRepos = new Map(
@@ -177,11 +174,12 @@ export function buildResourcePtyRows(args: {
     const label =
       !tabId && session.title.trim()
         ? session.title.trim()
-        : resolveDaemonSessionLabel(session, workspaceId, tabId, args, bindings)
+        : resolveDaemonSessionLabel(session, workspaceId, tabId, NO_RUNTIME_TITLES, bindings)
     return {
       session,
       identity: ptySessionIdentity(session),
       label,
+      usesRuntimeTitle: !!tab && !tab.customTitle?.trim(),
       sortName: tab?.customTitle?.trim() || tab?.defaultTitle?.trim() || session.id,
       lastActivityAt: recentStamp(workspace ?? {}),
       workspace: workspaceName,
@@ -198,6 +196,8 @@ export function buildResourcePtyRows(args: {
     }
   })
 }
+
+const NO_RUNTIME_TITLES = { runtimePaneTitlesByTabId: {} }
 
 export const UNBOUND_RESOURCE_PTY_GROUP_KEY = 'unbound'
 

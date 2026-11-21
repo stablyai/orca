@@ -19,6 +19,7 @@ export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & 
   payload: GetForegroundProcessRequest['payload'] & {
     foregroundOnly?: boolean
     expectedIncarnationId?: string
+    scanChildProcesses?: boolean
     /** Older daemons ignore this and return a full capture. */
     steadyState?: boolean
     /** Older daemons ignore this and do their full child inspection. */

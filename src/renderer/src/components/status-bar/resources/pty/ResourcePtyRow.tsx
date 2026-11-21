@@ -12,16 +12,17 @@ import {
 } from './resource-pty-view-model'
 import { ResourcePtyDetails } from './ResourcePtyDetails'
 import { ResourcePtyProcessIcon } from './ResourcePtyProcessIcon'
-import { ptyTerminationReason } from './use-resource-pty-actions'
+import { ptyTerminationReason, type ResourcePtyEndError } from './use-resource-pty-actions'
 
 // An unbound PTY's title is often just its process name, which the icon already shows.
-function titleRepeatsProcess(row: PtyRow): boolean {
-  const process = resourcePtyProcessBaseName(row.session.foregroundProcess)
-  return !!process && resourcePtyProcessBaseName(row.label.trim().split(' ')[0]) === process
+function titleRepeatsProcess(title: string, foreground: string | undefined): boolean {
+  const process = resourcePtyProcessBaseName(foreground)
+  return !!process && resourcePtyProcessBaseName(title.trim().split(' ')[0]) === process
 }
 
 export const ResourcePtyRow = memo(function ResourcePtyRow({
   row,
+  title,
   showWorkspace,
   observedAt,
   unverifiable,
@@ -34,11 +35,12 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   onNavigate
 }: {
   row: PtyRow
+  title: string
   showWorkspace: boolean
   observedAt: number | null
   unverifiable: boolean
   ending: boolean
-  error?: string
+  error?: ResourcePtyEndError
   selected: boolean
   detailsOpen: boolean
   onActivate: (row: PtyRow, event: React.MouseEvent, canSelect: boolean) => void
@@ -53,9 +55,11 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
       ? ptyTerminationReason('unsupported', t)
       : null
   const process = row.session.foregroundProcess?.trim()
-  const swapForWorkspace = showWorkspace && !!row.workspace && titleRepeatsProcess(row)
-  const label = swapForWorkspace ? row.workspace : row.label
+  const swapForWorkspace = showWorkspace && !!row.workspace && titleRepeatsProcess(title, process)
+  const label = swapForWorkspace ? row.workspace : title
   const workspace = showWorkspace && !swapForWorkspace ? row.workspace : null
+  const errorReason = error ? ptyTerminationReason(error, t) : null
+  const showAgentRunning = error === 'agent_running'
   return (
     <div data-resource-pty-row={row.identity} data-selected={selected}>
       <div
@@ -95,7 +99,12 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
             <span className="sr-only">{t('resourceManager.pty.selected', 'Selected')}</span>
           )}
         </button>
-        <div className="flex w-[72px] shrink-0 items-center justify-end gap-0.5">
+        <div
+          className={cn(
+            'flex shrink-0 items-center justify-end gap-0.5',
+            showAgentRunning ? 'w-[94px]' : 'w-[72px]'
+          )}
+        >
           {ending ? (
             <span className="flex items-center gap-1 text-2xs text-muted-foreground">
               <Loader2
@@ -106,7 +115,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
             </span>
           ) : (
             <>
-              {error && (
+              {errorReason && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
@@ -115,13 +124,15 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                     >
                       <AlertCircle aria-hidden className="size-3 shrink-0" />
                       <span className="truncate group-has-[:focus-visible]/row:sr-only group-hover/row:sr-only">
-                        {t('resourceManager.pty.notEnded', 'Not ended')}
+                        {showAgentRunning
+                          ? errorReason
+                          : t('resourceManager.pty.notEnded', 'Not ended')}
                       </span>
-                      <span className="sr-only">{error}</span>
+                      {!showAgentRunning && <span className="sr-only">{errorReason}</span>}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={4}>
-                    {error}
+                    {errorReason}
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -134,7 +145,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                         size="icon-xs"
                         className="size-5"
                         aria-label={t('resourceManager.pty.openNamed', 'Open {{terminal}}', {
-                          terminal: row.label
+                          terminal: title
                         })}
                         onClick={() => {
                           if (row.tabId) {
@@ -159,7 +170,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                         className="h-5 px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15"
                         disabled={!!endUnavailable}
                         aria-label={t('resourceManager.pty.endNamed', 'End {{terminal}}', {
-                          terminal: row.label
+                          terminal: title
                         })}
                         onClick={() => onEnd(row)}
                       >

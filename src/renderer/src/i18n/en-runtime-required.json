@@ -2899,7 +2899,9 @@
       "count_one": "{{count}} PTY",
       "count_other": "{{count}} PTYs",
       "endAllRunningCount_one": "{{count}} session is running an agent or another program.",
-      "endAllRunningCount_other": "{{count}} sessions are running agents or other programs."
+      "endAllRunningCount_other": "{{count}} sessions are running agents or other programs.",
+      "endAllUnverifiableCount_one": "Couldn't check for running work in {{count}} terminal.",
+      "endAllUnverifiableCount_other": "Couldn't check for running work in {{count}} terminals."
     }
   },
   "runtime": {
