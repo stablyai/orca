@@ -76,6 +76,8 @@ describe('OrchestrationDbCompaction', () => {
 
     expect(result.kind).toBe('compacted')
     expect(statSync(file).size).toBeLessThan(before / 4)
+    expect(existsSync(`${file}-wal`)).toBe(false)
+    expect(existsSync(`${file}-shm`)).toBe(false)
     expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok', tasks: 1 })
     expect(existsSync(`${file}-replaced`)).toBe(false)
   })

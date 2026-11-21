@@ -336,8 +336,13 @@ export class OrchestrationDbCompaction {
       await renameFileWithWindowsRetryAsync(this.copyPath, this.filename)
       this.ready = undefined
       closeLock()
+      // The old file's WAL (emptied above) and index: SQLite leaves them, since the path names the copy now.
+      await Promise.all([
+        removeQuietly(`${this.filename}-wal`),
+        removeQuietly(`${this.filename}-shm`),
+        removeQuietly(this.attemptsPath)
+      ])
       await syncDirectory(dirname(this.filename))
-      await removeQuietly(this.attemptsPath)
       if (kept) {
         await settleWithinMs(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
       }
