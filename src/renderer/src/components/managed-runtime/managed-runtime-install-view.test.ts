@@ -55,7 +55,8 @@ function installing(phase: ManagedRuntimeOperation['phase']): ManagedRuntimeInst
 describe('managedRuntimeInstallView with a host copy that runs', () => {
   it('says the host copy runs and offers no Install while Orca has no copy', () => {
     const view = managedRuntimeInstallView({ kind: 'known', state: external(null) }, 'Antigravity')
-    expect(view.status).toBe('Uses your own Antigravity')
+    expect(view.status).toBe('Uses your own copy')
+    expect(view.spokenStatus).toBe('Uses your own Antigravity')
     expect(view.action).toBeNull()
     expect(view.menuAction).toBeNull()
     expect(view.removable).toBe(false)
@@ -66,7 +67,7 @@ describe('managedRuntimeInstallView with a host copy that runs', () => {
       { kind: 'known', state: external('1.5.0') },
       'Antigravity'
     )
-    expect(view.status).toBe('Uses your own Antigravity')
+    expect(view.status).toBe('Uses your own copy')
     expect(view.action).toBeNull()
     expect(view.menuAction).toBeNull()
     expect(view.removable).toBe(true)
@@ -86,14 +87,15 @@ describe('managedRuntimeInstallView while installing', () => {
   })
 
   it.each([
-    ['extracting', 'Unpacking…'],
-    ['verifying', 'Verifying Antigravity…']
-  ] as const)('shows a spinner and Cancel while %s', (phase, status) => {
+    ['extracting', 'Unpacking…', null],
+    ['verifying', 'Verifying…', 'Verifying Antigravity…']
+  ] as const)('shows a spinner and Cancel while %s', (phase, status, spokenStatus) => {
     const view = managedRuntimeInstallView(
       { kind: 'known', state: installing(phase) },
       'Antigravity'
     )
     expect(view.status).toBe(status)
+    expect(view.spokenStatus).toBe(spokenStatus)
     expect(view.progress).toBeNull()
     expect(view.busy).toBe(true)
     expect(view.action?.kind).toBe('cancel')

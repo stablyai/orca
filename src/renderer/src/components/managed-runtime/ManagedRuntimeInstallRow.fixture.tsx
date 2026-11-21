@@ -87,9 +87,6 @@ export const installedByOrca = row({
   updatesAutomatically: true,
   canRemove: true
 })
-const LONG_NAME = 'GitHub Copilot CLI'
-export const verifyingLongName = row(installing('verifying'), LONG_NAME)
-export const externalLongName = row({ ...base, source: 'external' }, LONG_NAME)
 export const notInstalled = row(base)
 export const failed = row({
   ...base,
@@ -106,14 +103,16 @@ export const failed = row({
 // Fixture pages share one i18n instance; run these shots last, then restart the server.
 function localized(state: ManagedRuntimeInstallState, language: string) {
   return defineFixture({
-    ...row(state, LONG_NAME),
+    ...row(state),
     interact: async () => {
       await i18n.changeLanguage(language)
       await new Promise((resolve) => setTimeout(resolve, 300))
     }
   })
 }
-export const germanExternalLongName = localized({ ...base, source: 'external' }, 'de')
-export const germanVerifyingLongName = localized(installing('verifying'), 'de')
-export const russianExternalLongName = localized({ ...base, source: 'external' }, 'ru')
-export const russianVerifyingLongName = localized(installing('verifying'), 'ru')
+export const germanExternal = localized({ ...base, source: 'external' }, 'de')
+export const germanVerifying = localized(installing('verifying'), 'de')
+export const japaneseExternal = localized({ ...base, source: 'external' }, 'ja')
+export const japaneseVerifying = localized(installing('verifying'), 'ja')
+export const russianExternal = localized({ ...base, source: 'external' }, 'ru')
+export const russianVerifying = localized(installing('verifying'), 'ru')

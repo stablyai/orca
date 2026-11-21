@@ -79,6 +79,8 @@ export function ManagedRuntimeInstallRow(props: {
   const trailing = Boolean(alert || action || view.note)
   if (view.status !== null) {
     const status = said(view.status, !trailing)
+    // The row sits under its agent, so short copy leaves the name out; a screen reader still hears it.
+    const spoken = view.spokenStatus === null ? null : said(view.spokenStatus, !trailing)
     parts.push({
       key: 'status',
       fixed: false,
@@ -86,7 +88,14 @@ export function ManagedRuntimeInstallRow(props: {
         <span className="flex min-w-0 items-center gap-1.5">
           {view.busy ? <LoadingSpinner className="size-3" /> : null}
           <span className={cn('min-w-0', !wraps && 'truncate')} title={status}>
-            {status}
+            {spoken === null ? (
+              status
+            ) : (
+              <>
+                <span aria-hidden="true">{status}</span>
+                <span className="sr-only">{spoken}</span>
+              </>
+            )}
           </span>
         </span>
       )

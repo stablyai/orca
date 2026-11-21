@@ -9,6 +9,8 @@ export type ManagedRuntimeInstallAction =
 
 export type ManagedRuntimeInstallView = {
   status: string | null
+  /** What a screen reader hears for the status, when the visible text leaves out the agent the row sits under. */
+  spokenStatus: string | null
   /** Percent downloaded, while a download of known size runs. */
   progress: number | null
   error: string | null
@@ -28,6 +30,7 @@ export const megabytes = (bytes: number): string => (bytes / 1_000_000).toFixed(
 
 const EMPTY: ManagedRuntimeInstallView = {
   status: null,
+  spokenStatus: null,
   progress: null,
   error: null,
   action: null,
@@ -53,12 +56,13 @@ function runningView(
   if (phase !== 'downloading' && phase !== 'extracting' && phase !== 'verifying') {
     return null
   }
+  const verifying = !cancelling && phase === 'verifying'
   const status = cancelling
     ? t('components.managed-runtime.cancelling', 'Cancelling…')
     : phase === 'extracting'
       ? t('components.managed-runtime.extracting', 'Unpacking…')
-      : phase === 'verifying'
-        ? t('components.managed-runtime.verifying', 'Verifying {{agent}}…', { agent })
+      : verifying
+        ? t('components.managed-runtime.verifying', 'Verifying…')
         : total === null
           ? t('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
               done: megabytes(done)
@@ -72,6 +76,9 @@ function runningView(
   return {
     ...EMPTY,
     status,
+    spokenStatus: verifying
+      ? t('components.managed-runtime.verifyingAgent', 'Verifying {{agent}}…', { agent })
+      : null,
     progress: phase === 'downloading' && total ? Math.min(100, (done / total) * 100) : null,
     busy: phase !== 'downloading',
     action: { kind: 'cancel', label, operationId: operation.id }
@@ -111,10 +118,12 @@ function settledView(
   // The host's own copy always runs while it exists, so installing Orca's would change nothing.
   // If that copy goes away, the row falls through to Not installed · Install.
   if (state.source === 'external') {
-    return view(
-      t('components.managed-runtime.external', 'Uses your own {{agent}}', { agent }),
-      null
-    )
+    return {
+      ...view(t('components.managed-runtime.external', 'Uses your own copy'), null),
+      spokenStatus: t('components.managed-runtime.externalAgent', 'Uses your own {{agent}}', {
+        agent
+      })
+    }
   }
   if (state.installedVersion !== null && state.updatesAutomatically) {
     // Behind, the menu's install is an update to the newer release, so it says so.
