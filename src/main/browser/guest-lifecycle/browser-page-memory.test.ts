@@ -310,6 +310,8 @@ it('keeps a page Chromium recorded as a form POST result, and remembers it', asy
   page.finishLoad()
   await waitForBrowserPageReady(pageId, page.guest)
   vi.spyOn(page.guest.navigationHistory, 'getEntryAtIndex').mockReturnValue({
+    url: 'https://example.test/b',
+    title: 'B',
     pageState: POST_PAGE_STATE
   })
   expect(reserveBrowserPageDiscard(pageId, page.guest)).toBe(false)
