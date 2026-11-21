@@ -5,6 +5,8 @@ import { delimiter, join } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { importAccountHome } from './account-home-import'
+import { assertAccountImportSupported } from './account-import-capability'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import {
@@ -19,11 +21,6 @@ import {
   withCliRuntimeOnPath
 } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { stdioForWindowsInteractiveChild } from './windows-console-input'
-import {
-  ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
-} from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
@@ -227,21 +224,6 @@ function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string)
   )
 }
 
-async function assertAccountImportSupported(
-  { client }: HandlerContext,
-  agent: 'claude' | 'codex'
-): Promise<void> {
-  const status = await client.call<RuntimeStatus>('status.get')
-  const capability =
-    agent === 'claude' ? CLAUDE_SIGN_IN_RUNTIME_CAPABILITY : ACCOUNT_IMPORT_RUNTIME_CAPABILITY
-  if (!status.result.capabilities?.includes(capability)) {
-    throw new RuntimeClientError(
-      'incompatible_runtime',
-      'The running Orca runtime is too old to add accounts from the CLI. Update or restart Orca and try again.'
-    )
-  }
-}
-
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
@@ -261,6 +243,9 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     }
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     rejectOpenCodeLoginFlagsForAgent(ctx, agent)
+    if (await importAccountHome(ctx, agent)) {
+      return
+    }
     if (agent === 'opencode' || agent === 'devin') {
       await addDataAccount(ctx, agent, runAgentLoginInTerminal)
       return

@@ -39,7 +39,7 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       'Optional account switching for Codex and live rate limit fetching.'
     ),
     keywords: [
-      ...translateSearchKeyword('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
+      ...translateSearchKeyword('accounts.codex.import.searchKeywords', 'codex import home'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',

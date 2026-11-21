@@ -86,6 +86,7 @@ export function createCodexAccountActionRunner(
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
       const shouldPromptRestart =
         action === 'adding' ||
+        action === 'importing' ||
         (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
         (action.startsWith('reauth:') &&
           nextActiveAccountId !== null &&
@@ -94,7 +95,7 @@ export function createCodexAccountActionRunner(
       if (shouldPromptRestart) {
         // Find the newly created account’s concrete distro from the roster diff; the row may say WSL default and active-ID lookup becomes ambiguous across distro slots.
         const newAccounts =
-          action === 'adding'
+          action === 'adding' || action === 'importing'
             ? next.accounts.filter(
                 (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
               )
