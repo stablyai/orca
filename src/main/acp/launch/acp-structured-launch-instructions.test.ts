@@ -45,6 +45,7 @@ const SPECS = {
   cursor: acpLaunchSpecFor('cursor')!,
   hermes: acpLaunchSpecFor('hermes')!,
   copilot: acpLaunchSpecFor('copilot')!,
+  kimi: acpLaunchSpecFor('kimi')!,
   kiro: acpLaunchSpecFor('kiro')!
 }
 
@@ -56,6 +57,7 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
   copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
+  kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
   kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
 }
 
@@ -64,6 +66,7 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   cursor: '2026.11.19-f005e9d',
   hermes: '0.23.3',
   copilot: '1.0.114',
+  kimi: '2.7.2',
   kiro: '3.1.0'
 }
 
@@ -284,6 +287,19 @@ describe('ACP launch: standing instructions', () => {
       if (process.platform !== 'win32') {
         expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
       }
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))
+    try {
+      await writeFile(join(home, 'AGENTS.md'), 'Workspace instructions')
+      await launch('kimi', { instructions: PREAMBLE, workspacePath: home })
+      const written = await readFile(join(home, '.kimi-code', 'AGENTS.md'), 'utf8')
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
+      expect(await readFile(join(home, 'AGENTS.md'), 'utf8')).toBe('Workspace instructions')
     } finally {
       await rm(home, { recursive: true, force: true })
     }

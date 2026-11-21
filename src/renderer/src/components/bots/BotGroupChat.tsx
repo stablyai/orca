@@ -24,6 +24,7 @@ import { useBotGroupComposerRoom } from './use-bot-group-composer-room'
 import { useBotGroupComposerTransport } from './use-bot-group-composer-transport'
 import { useBotTranscriptFollow } from './use-bot-transcript-follow'
 import { NativeChatMentionNamesContext } from '../native-chat/native-chat-markdown-mentions'
+import { botGroupRoomOrder } from '../../../../shared/bots/bot-group-room-order'
 import { BotGroupPeerRequestLine } from './BotGroupPeerRequestLine'
 import { NativeChatTranscriptColumn } from '../native-chat/NativeChatTranscriptColumn'
 import { NativeChatTranscriptViewport } from '../native-chat/NativeChatTranscriptViewport'
@@ -95,7 +96,8 @@ export function BotGroupChat({
   const fileContexts = useBotGroupFileContexts(bots, group, tabId)
   const roomContext = (group && fileContexts.get(group.id)) ?? null
   useBotGroupRoomRead(group?.folderWorkspaceId, isVisible)
-  const messages = data?.messages ?? EMPTY_MESSAGES
+  const loaded = data?.messages ?? EMPTY_MESSAGES
+  const messages = useMemo(() => botGroupRoomOrder(loaded), [loaded])
   const readers = useMemo(() => {
     if (!group) {
       return []
