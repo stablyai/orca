@@ -31,7 +31,7 @@ export function useBotItemCommentStacked(
     return () => observer.disconnect()
   }, [stacked])
   const height = tall
-    ? 'max-h-[min(232px,25cqh)] min-h-[min(92px,12cqh)]'
+    ? 'max-h-[min(232px,25cqh)] min-h-[min(92px,15cqh)]'
     : 'max-h-[min(132px,25cqh)] min-h-8'
   return { field, stacked, height }
 }
