@@ -68,7 +68,8 @@ function readsForOneStep(agents: number): number {
   }
   const tracker = createAgentListVerdictTracker()
   const sources = () => ({
-    threads: [...threads.values()],
+    // Newest first, as the thread builder lists them.
+    threads: [...threads.values()].sort((a, b) => b.latestTimestamp - a.latestTimestamp),
     thread: (paneKey: string) => threads.get(paneKey),
     statuses,
     acknowledgedAt: {}
