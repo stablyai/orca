@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useHostSetting } from '../settings/host-scope/use-host-setting'
@@ -10,6 +10,20 @@ import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
  *  answered) and whom it tells after a pick, so that answer is read again. */
 export type AntigravityGoogleSignInState = { inUse: 'agy' | 'orca'; changed: () => void }
 
+/** What a pick stores, if anything. Only an exact choice counts (a form's hidden select can report
+ *  ''), and re-picking what shows while the host follows its default stores nothing, so a later
+ *  server install or Orca login can still take chats back. */
+export function antigravityGoogleSignInPick(
+  stored: 'auto' | 'agy' | 'orca',
+  inUse: 'agy' | 'orca',
+  value: string
+): 'agy' | 'orca' | null {
+  if (value !== 'agy' && value !== 'orca') {
+    return null
+  }
+  return stored === 'auto' && value === inUse ? null : value
+}
+
 /** Whose sign-in chats on the Google account method use on this host: agy's own login (agy is
  *  installed for it), or Orca's built-in browser sign-in on Orca's server. Absent on hosts too old
  *  to honor the choice. */
@@ -17,20 +31,25 @@ export function AntigravityGoogleSignInChoice({
   owner,
   inUse,
   changed,
+  disabled = false,
   standalone = false
 }: AntigravityGoogleSignInState & {
   owner: RuntimeClientTarget
+  /** While the sign-in form saves or signs in, a pick would move new chats mid-way. */
+  disabled?: boolean
   /** A row of its own in the Chat group, rather than one of the sign-in form's fields. */
   standalone?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const id = useId()
-  const settings = useAppStore((state) => state.settings)
+  // Only this setting, so other settings changes don't re-render the row.
+  const stored = useAppStore((state) => state.settings?.antigravityGoogleSignIn)
+  const localSettings = useMemo(() => ({ antigravityGoogleSignIn: stored }), [stored])
   const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
   const { setting, update } = useHostSetting({
     owner,
     settingKey: 'antigravityGoogleSignIn',
-    localSettings: settings ?? {},
+    localSettings,
     updateLocalSettings: updateSettingsOrThrow,
     updateFailedMessage: t(
       'accounts.antigravity.googleSignInUpdateFailed',
@@ -51,7 +70,13 @@ export function AntigravityGoogleSignInChoice({
         // Keyed on what is stored, so any pick that differs from it is saved, even one matching
         // what shows (an explicit agy can't apply where Orca's agy is off and agy signed out).
         value={setting.value}
-        onValueChange={(value) => void update(value === 'orca' ? 'orca' : 'agy').then(changed)}
+        disabled={disabled}
+        onValueChange={(value) => {
+          const pick = antigravityGoogleSignInPick(setting.value, inUse, value)
+          if (pick) {
+            void update(pick).then(changed)
+          }
+        }}
       >
         <SelectTrigger id={id} className="w-full">
           {/* The label is the sign-in in use, whatever is stored. */}
