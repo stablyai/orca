@@ -1,5 +1,5 @@
 // The picture carousel: the current face large, its wrapped neighbours dimmed beside it.
-import React, { useEffect, useState } from 'react'
+import React, { useLayoutEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -104,8 +104,9 @@ export function BotPictureCarousel({
     const left = faces.filter((_, i) => Math.abs(faceOffset(i, seenIndex, count)) <= 1)
     setDressed((was) => (sliding ? new Set([...was, ...left.map((face) => face.key)]) : new Set()))
   }
-  // The slide lasts a little past the 300 ms move from the latest change of face, however it moved.
-  useEffect(() => {
+  // The slide lasts a little past the 300 ms move from the latest change of face, however it moved;
+  // a layout effect, so the previous timer is cleared in the same commit and can't end the new slide.
+  useLayoutEffect(() => {
     if (!sliding) {
       return
     }
