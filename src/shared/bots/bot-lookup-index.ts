@@ -74,8 +74,11 @@ function sameEntries<B extends Pick<Bot, 'id' | 'folderWorkspaceId'>>(
 export type BotLookupIndex<B extends Pick<Bot, 'id' | 'folderWorkspaceId'>> = {
   byId: (botId: string) => B | undefined
   byHome: (workspaceId: string | null | undefined) => B | null
+  byHomeList: (workspaceId: string | null | undefined) => readonly B[]
   hasId: (botId: string) => boolean
 }
+
+const EMPTY_BOTS: readonly never[] = []
 
 /** O(1) bot lookup by id and `folder:<id>` home; re-validates unbranded caller arrays for test seams. */
 export function createBotLookupIndex<B extends Pick<Bot, 'id' | 'folderWorkspaceId'>>(
@@ -113,12 +116,18 @@ export function createBotLookupIndex<B extends Pick<Bot, 'id' | 'folderWorkspace
     return cached
   }
 
+  const byHome = (workspaceId: string | null | undefined): B | null =>
+    workspaceId && parseWorkspaceKey(workspaceId)?.type === 'folder'
+      ? (currentIndex().byHome.get(workspaceId) ?? null)
+      : null
+
   return {
     byId: (botId) => currentIndex().byId.get(botId),
-    byHome: (workspaceId) =>
-      workspaceId && parseWorkspaceKey(workspaceId)?.type === 'folder'
-        ? (currentIndex().byHome.get(workspaceId) ?? null)
-        : null,
+    byHome,
+    byHomeList: (workspaceId) => {
+      const bot = byHome(workspaceId)
+      return bot ? [bot] : EMPTY_BOTS
+    },
     hasId: (botId) => currentIndex().byId.has(botId)
   }
 }

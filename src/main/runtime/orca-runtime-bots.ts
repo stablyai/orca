@@ -22,8 +22,13 @@ import type { BotShareClient } from '../bots/sharing/bot-share-client'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
-import { botHomeWorktreeOnBranch, runtimeBotWork } from '../bots/bot-work-runtime'
-import type { BotHomeLineage, BotWorkRuntime } from '../bots/bot-work-runtime'
+import {
+  botHomeWorktreeOnBranch,
+  runtimeBotWork,
+  workerGitHubRepo,
+  type BotHomeLineage,
+  type BotWorkRuntime
+} from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
@@ -230,8 +235,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Whether a bot's work on this host opened this pull request as its owner: a live worker's, or a
    *  workspace under a bot's home with its head branch checked out. */
   async isBotWorkPullRequest(pr: OwnPullRequest): Promise<boolean> {
-    const rows = botWorkRowsForRuntime(this.botWork, this.botWorkRuntime, (botId) =>
-      this.listedBotLookup.hasId(botId)
+    const rows = botWorkRowsForRuntime(
+      this.botWork,
+      (botId) => this.listedBotLookup.hasId(botId),
+      (worker, branch) => workerGitHubRepo(this.botWorkRuntime, worker, branch)
     )
     return (
       (await botWorkHasPrBranch(rows, pr)) ||
@@ -287,15 +294,11 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A chat's phone attention: muted by its workspace's filters or its bot's switches, with its group room. */
   protected botAttentionDeliveryDeps() {
     const isWorkspaceMuted = (id: string) => this.isWorkspaceNotificationMuted(id)
-    const homeBots = (id: string) => {
-      const bot = this.wiredBotLookup.byHome(id)
-      return bot ? [bot] : []
-    }
     type Muted = Parameters<typeof isStructuredAttentionMuted>
     return {
       isMuted: (scope: Muted[1], news: Muted[2]) =>
         isStructuredAttentionMuted(
-          { isWorkspaceMuted, bots: () => homeBots(scope.workspaceId) },
+          { isWorkspaceMuted, bots: () => this.wiredBotLookup.byHomeList(scope.workspaceId) },
           scope,
           news
         ),

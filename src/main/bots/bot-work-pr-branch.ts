@@ -1,8 +1,8 @@
 // Whether a pull request is a bot's own work, by its head branch: a from=me rule starts on a pull
 // request its owner opened, never on one a bot's worker opened as them (own-pr-trigger-guard.ts).
 import { normalizeLocalBranchName } from '../runtime/workspaces/catalog/runtime-worktree-selection'
+import type { BotWorkRecord, BotWorkWorker } from './bot-work-record'
 import type { BotWorkRow } from './bot-work-store'
-import { workerGitHubRepo, type BotWorkRuntime, type runtimeBotWork } from './bot-work-runtime'
 
 /** A GitHub pull request's repository, as its webhook names it. */
 export type BotPrRepo = {
@@ -86,9 +86,9 @@ export async function botWorkHasPrBranch(work: BotWorkRows, pr: BotWorkPrHead): 
 }
 
 export function botWorkRowsForRuntime(
-  botWork: ReturnType<typeof runtimeBotWork>,
-  runtime: BotWorkRuntime,
-  hasBotId: (botId: string) => boolean
+  botWork: Pick<BotWorkRecord, 'store' | 'check'>,
+  hasBotId: (botId: string) => boolean,
+  githubRepo: (worker: BotWorkWorker, branch: string) => Promise<BotGitHubRepo | null>
 ): BotWorkRows {
   return {
     rows: () =>
@@ -100,9 +100,7 @@ export function botWorkRowsForRuntime(
       const checked = await botWork.check(row)
       const worker = checked?.worker
       const branch = checked?.workspace?.branch
-      return worker && branch
-        ? { branch, githubRepo: () => workerGitHubRepo(runtime, worker, branch) }
-        : null
+      return worker && branch ? { branch, githubRepo: () => githubRepo(worker, branch) } : null
     }
   }
 }
