@@ -15,10 +15,12 @@ export type BotShareCandidateState = {
   building: boolean
   error: string | null
   /** Builds the candidate again with these picks; the shown one stays until the new one is ready.
-   *  Resolves to the new candidate, or null when the build failed or a later pick replaced it. */
+   *  A pick lists the skills this dialog last listed; `fresh` (a publish retry) reads them again,
+   *  with its note. Resolves to the new candidate, or null when the build failed or a later pick
+   *  replaced it. */
   select: (
     change: Partial<BotShareSelection>,
-    setupNote?: string
+    fresh?: { setupNote: string }
   ) => Promise<BotShareCandidateSummary | null>
   /** Builds again from the bot as it is now, after the owner fixed a source file. */
   rebuild: () => void
@@ -54,7 +56,8 @@ export function useBotShareCandidate(
     async (
       next: BotShareSelection,
       source: CandidateSource,
-      setupNote?: string
+      setupNote?: string,
+      reuseSkills = false
     ): Promise<BotShareCandidateSummary | null> => {
       const current = ++generation.current
       setBuilding(true)
@@ -67,7 +70,8 @@ export function useBotShareCandidate(
             ? { last: true }
             : {
                 setupNote: setupNote ?? noteRef.current,
-                ...(source === 'local' ? { localOnly: true } : {})
+                ...(source === 'local' ? { localOnly: true } : {}),
+                ...(reuseSkills ? { reuseSkills: true } : {})
               }
         )
       )
@@ -113,11 +117,11 @@ export function useBotShareCandidate(
   const source = startFrom === 'local' ? 'local' : 'defaults'
   const select = (
     change: Partial<BotShareSelection>,
-    setupNote?: string
+    fresh?: { setupNote: string }
   ): Promise<BotShareCandidateSummary | null> => {
     const next = { ...selection, ...change }
     setSelection(next)
-    return build(next, source, setupNote)
+    return fresh ? build(next, source, fresh.setupNote) : build(next, source, undefined, true)
   }
 
   return {

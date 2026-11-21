@@ -149,11 +149,12 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       download,
       candidates: new BotShareCandidates(join(getProfileUserDataPath(), 'bot-share-candidates')),
       picks: this.botSharePicks(),
-      readShareable: (bot) =>
+      readShareable: (bot, skills) =>
         readBotShareable({
           bot,
           automations: this.store?.listAutomations?.() ?? [],
-          repos: this.listRepos()
+          repos: this.listRepos(),
+          ...skills
         })
     })
     return this.botShareService

@@ -40,10 +40,13 @@ export const BOT_SHARE_METHODS = [
     name: 'bots.share.prepare',
     permission: 'workspace',
     params: BotSharePrepare,
-    handler: async ({ botId, setupNote, last, localOnly, ...selection }, context) =>
-      context.runtime
-        .botShares()
-        .prepare(authorizedBot(context, botId), selection, { setupNote, last, localOnly })
+    handler: async ({ botId, setupNote, last, localOnly, reuseSkills, ...selection }, context) =>
+      context.runtime.botShares().prepare(authorizedBot(context, botId), selection, {
+        setupNote,
+        last,
+        localOnly,
+        reuseSkills
+      })
   }),
   defineMethod({
     name: 'bots.share.publish',

@@ -26,6 +26,7 @@ import { botHomeFolder } from '../bot-home'
 import { localSkillProjects } from '../bot-skill-projects'
 import { ownPath, validPartName, type Home } from './bot-share-own-path'
 import { readShareSkills, type BotShareSkill } from './bot-share-skills'
+import type { BotShareSkillListing, BotShareSkillsRead } from './bot-share-skill-reads'
 import { botToolCredentialHeaderNames } from '../bot-tool-credentials'
 import { botToolsPath, readBotToolServers } from '../bot-tools-file'
 import { landingLine } from './bot-package-transport'
@@ -235,14 +236,16 @@ export function deriveConnectors(
   return [...kinds].sort()
 }
 
-export async function readBotShareable(input: {
-  bot: Bot
-  /** The bot's home folder; its own by default. */
-  home?: string
-  automations: readonly Automation[]
-  /** The app's projects: the bot's linked ones on this host are skills its chats load too. */
-  repos?: readonly Repo[]
-}): Promise<BotShareable> {
+export async function readBotShareable(
+  input: {
+    bot: Bot
+    /** The bot's home folder; its own by default. */
+    home?: string
+    automations: readonly Automation[]
+    /** The app's projects: the bot's linked ones on this host are skills its chats load too. */
+    repos?: readonly Repo[]
+  } & BotShareSkillsRead
+): Promise<BotShareable> {
   const leftOut: BotShareable['leftOut'] = []
   const homePath = input.home ?? botHomeFolder(input.bot)
   const home: Home = { path: homePath, real: await realpath(homePath) }
@@ -258,8 +261,24 @@ export async function readBotShareable(input: {
   }
   const soul = await readFile(soulPath.own, 'utf8')
   const automationParts = readAutomations(input.bot, input.automations, leftOut)
+  const listSkills = async (signal?: AbortSignal): Promise<BotShareSkillListing> => {
+    const skillsLeftOut: BotShareLeftOut[] = []
+    const skills = await readShareSkills(input.bot, home, skillsLeftOut, skillProjects, signal)
+    return { skills, leftOut: skillsLeftOut }
+  }
+  const sources = JSON.stringify([input.bot.agent, home.path, home.real, skillProjects])
+  const readSkills = async (): Promise<BotShareSkill[]> => {
+    const listing = await (input.skillReads?.read(
+      input.bot.id,
+      sources,
+      input.reuseSkills === true,
+      listSkills
+    ) ?? listSkills())
+    leftOut.push(...listing.leftOut)
+    return [...listing.skills]
+  }
   const [skills, servers, memory, avatar] = await Promise.all([
-    readShareSkills(input.bot, home, leftOut, skillProjects),
+    readSkills(),
     readOwnToolServers(home, leftOut),
     readMemory(home, leftOut),
     readAvatar(input.bot, home, leftOut)

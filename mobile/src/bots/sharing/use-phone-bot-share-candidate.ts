@@ -19,10 +19,11 @@ export type PhoneShareCandidateState = {
   committed: boolean
   building: boolean
   error: string | null
-  /** Builds again with these picks; resolves to the new candidate, or null when it failed or was replaced. */
+  /** Builds again with these picks; resolves to the new candidate, or null when it failed or was replaced.
+   *  A pick lists the skills this sheet last listed; `fresh` (a publish retry) reads them again, with its note. */
   select: (
     change: Partial<PhoneShareSelection>,
-    setupNote?: string
+    fresh?: { setupNote: string }
   ) => Promise<PhoneShareCandidate | null>
   rebuild: () => void
 }
@@ -57,7 +58,8 @@ export function usePhoneBotShareCandidate(
     async (
       next: PhoneShareSelection,
       source: PhoneShareCandidateSource,
-      setupNote?: string
+      setupNote?: string,
+      reuseSkills = false
     ): Promise<PhoneShareCandidate | null> => {
       if (!client) {
         return null
@@ -75,7 +77,8 @@ export function usePhoneBotShareCandidate(
               ? { last: true }
               : {
                   setupNote: setupNote ?? noteRef.current,
-                  ...(source === 'local' ? { localOnly: true } : {})
+                  ...(source === 'local' ? { localOnly: true } : {}),
+                  ...(reuseSkills ? { reuseSkills: true } : {})
                 })
           })
         )
@@ -132,10 +135,10 @@ export function usePhoneBotShareCandidate(
       JSON.stringify(built.selection) === JSON.stringify(selection),
     building,
     error,
-    select: (change, setupNote) => {
+    select: (change, fresh) => {
       const next = { ...selection, ...change }
       setSelection(next)
-      return build(next, source, setupNote)
+      return fresh ? build(next, source, fresh.setupNote) : build(next, source, undefined, true)
     },
     rebuild: () => void build(selection, !built && begin === 'last' ? 'last' : source)
   }

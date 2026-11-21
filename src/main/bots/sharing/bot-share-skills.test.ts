@@ -7,6 +7,7 @@ import { makeTestBot } from '../bot.test-fixture'
 import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { BotShareCandidates } from './bot-package-export'
 import { botSharePartFiles } from './bot-share-part-view'
+import { BotShareSkillReads } from './bot-share-skill-reads'
 import { readBotShareable } from './bot-share-sources'
 
 let root: string
@@ -273,6 +274,40 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
       name: 'triage',
       why: 'duplicate',
       from: 'team-skills'
+    })
+  })
+})
+
+// STA-16989: every pick on an open Share dialog walked every linked skill folder again.
+describe('the skills a Share dialog lists across its picks', () => {
+  const duplicate = { kind: 'skill', name: 'triage', why: 'duplicate', from: 'team-skills' }
+
+  it('reuses the listing on a pick, and reads again on a rebuild or changed links', async () => {
+    await write(home, 'skills/triage/SKILL.md', skillText('triage', 'Own copy'))
+    await write(project, '.agents/skills/triage/SKILL.md', skillText('triage', 'Project copy'))
+    const skillReads = new BotShareSkillReads()
+    const build = async (reuseSkills: boolean, of = bot) => {
+      const shareable = await readBotShareable({
+        bot: of,
+        home,
+        automations: [],
+        repos: repos(),
+        skillReads,
+        reuseSkills
+      })
+      return { skills: shareable.skills.map((skill) => skill.name), leftOut: shareable.leftOut }
+    }
+
+    expect(await build(false)).toEqual({ skills: ['triage'], leftOut: [duplicate] })
+    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+
+    // A pick lists what the dialog listed, left-out reasons included, without walking the folders.
+    expect(await build(true)).toEqual({ skills: ['triage'], leftOut: [duplicate] })
+    expect(await build(false)).toEqual({ skills: ['deploy', 'triage'], leftOut: [duplicate] })
+    // Unlinking the project changes what is listed, so even a pick reads again.
+    expect(await build(true, { ...bot, skillProjects: [] })).toEqual({
+      skills: ['triage'],
+      leftOut: []
     })
   })
 })
