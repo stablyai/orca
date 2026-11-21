@@ -25,7 +25,7 @@ function noConversationsHost(): StructuredAgentSessionHost {
 }
 
 describe('chat tab titles on a workspace with many chats', () => {
-  // Guards #<PR>: each chat's title scanned every saved tab, ~500k reads per frame at 1,000 chats.
+  // Guards #46247: each chat's title scanned every saved tab, ~500k reads per frame at 1,000 chats.
   it('reads each saved tab once per projection', async () => {
     setStructuredAgentSessionHost(noConversationsHost())
     let savedTabReads = 0
