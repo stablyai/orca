@@ -22,6 +22,7 @@ import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-
 import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/editor/launch/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
+import { normalizePerforceSettings } from '../../../shared/perforce/perforce-settings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
@@ -198,6 +199,11 @@ export function updateSettings(
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
       updates.sourceControlGroupOrder
     )
+  }
+  if ('perforce' in updates) {
+    // Why merge: settings:set takes a partial, and normalizing it alone resets every omitted field.
+    const perforce = { ...operations.state.settings.perforce, ...updates.perforce }
+    sanitizedUpdates.perforce = normalizePerforceSettings(perforce)
   }
   if ('appIcon' in updates) {
     sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)

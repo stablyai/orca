@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
@@ -14,6 +15,9 @@ import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getPerforceCopyDeleteTarget } from '../../../perforce-copies/perforce-copy-target'
+import { requestPerforceCopyDelete } from '../../../perforce-copies/perforce-copy-delete-request'
+import { translate } from '@/i18n/i18n'
 import {
   resolveWorktreeBatchDeleteTargets,
   toWorktreeDeleteIdentities,
@@ -51,6 +55,12 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       displayName: repo?.displayName ?? target.displayName,
       hostId: getWorktreeExecutionHostId(target, repo ?? undefined)
     })
+    return
+  }
+  const perforceCopy = getPerforceCopyDeleteTarget(state, target)
+  if (perforceCopy) {
+    // Why: deleting a copy also deletes its Perforce client and maybe shelves, so it always confirms with the full list.
+    requestPerforceCopyDelete(target, perforceCopy)
     return
   }
   if (target.hostId) {
@@ -133,6 +143,27 @@ export function runWorktreeBatchDelete(
 
   if (targets.length === 0) {
     showNoDeletableWorkspacesToast()
+    return false
+  }
+
+  const perforceCopies = targets.flatMap((target) => {
+    const copy = getPerforceCopyDeleteTarget(state, target)
+    return copy ? [copy] : []
+  })
+  if (perforceCopies.length > 0) {
+    // Why: each copy's deletion reaches the Perforce server, so it is reviewed on its own.
+    if (targets.length === 1) {
+      return requestPerforceCopyDelete(targets[0], perforceCopies[0])
+    }
+    toast.error(
+      translate('perforce.copies.deleteOneAtATime', 'Delete Perforce copies one at a time'),
+      {
+        description: translate(
+          'perforce.copies.deleteOneAtATimeDescription',
+          'Each one shows what it removes from this computer and from Perforce first.'
+        )
+      }
+    )
     return false
   }
 

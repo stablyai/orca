@@ -4,10 +4,10 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useAppStore } from '@/store/index'
 import {
   getRuntimeGitBranchDiff,
-  getRuntimeGitCommitDiff,
-  getRuntimeGitDiff
+  getRuntimeGitCommitDiff
 } from '@/runtime/source-control/git/runtime-git-diff-client'
 import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
+import { getRuntimeWorktreeFileDiff } from '@/runtime/runtime-worktree-file-diff'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from '../view-mode/editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from '../external-changes/useEditorPanelExternalContentEvents'
@@ -136,7 +136,7 @@ export function useEditorPanelDiffContentLoader({
                     },
                     wake
                   )
-                : getRuntimeGitDiff(
+                : getRuntimeWorktreeFileDiff(
                     {
                       target: fileTarget,
                       worktreeId: file.worktreeId,

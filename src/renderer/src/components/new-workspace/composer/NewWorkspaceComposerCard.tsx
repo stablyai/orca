@@ -40,6 +40,7 @@ import type { NeedsSetupProjectHostOption } from '../../../lib/workspace/creatio
 import { getSshStatusLabel } from './new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './use-composer-file-drag-over'
+import { PerforceCopyComposerOption } from '../../perforce-copies/PerforceCopyComposerOption'
 import { buildDefaultAgentSettingsUpdate } from '../../../../../shared/agent-launch/choices/default-agent-settings'
 
 // Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
@@ -335,6 +336,7 @@ export default function NewWorkspaceComposerCard(
           selectedProjectName={selectedProjectName}
         />
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+        <PerforceCopyComposerOption repoId={props.repoId} hostId={selectedRepoExecutionHostId} />
         <NewWorkspaceComposerAgentSection
           {...props}
           createDisabled={props.createDisabled || sparseEditing}

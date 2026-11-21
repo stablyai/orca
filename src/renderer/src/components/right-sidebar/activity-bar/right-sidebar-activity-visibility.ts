@@ -11,6 +11,7 @@ type RightSidebarActivityVisibilityState = {
   isGroupHome?: boolean
   /** The focused native chat has started orchestration workers, which the Activity panel lists. */
   hasChatWorkers?: boolean
+  isPerforce?: boolean
 }
 
 export function getVisibleRightSidebarActivityItems(
@@ -21,7 +22,8 @@ export function getVisibleRightSidebarActivityItems(
     hasSshHost,
     isBot,
     isGroupHome = false,
-    hasChatWorkers = false
+    hasChatWorkers = false,
+    isPerforce = false
   }: RightSidebarActivityVisibilityState
 ): ActivityBarItem[] {
   if (isGroupHome) {
@@ -42,6 +44,7 @@ export function getVisibleRightSidebarActivityItems(
         ? hasChatWorkers
         : (!item.gitOnly ||
             !isFolder ||
+            (item.perforceCapable === true && isPerforce) ||
             (isFolderWorkspace && !isGroupHome && item.id === 'source-control')) &&
           (!item.folderOnly || (isFolderWorkspace && !isGroupHome)) &&
           (!item.sshOnly || hasSshHost))

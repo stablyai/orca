@@ -6,6 +6,7 @@ import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-re
 import type { RuntimeReviewCommandSurface } from './runtime-review-command-surface'
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
 import type { RuntimeSkillCommandSurface } from '../integrations/skill/runtime-skill-command-contract'
+import type { RuntimePerforceCommandSurface } from '../runtime-perforce-commands'
 
 type RuntimeInstalledCommandSurfaces = RuntimeEdgeCommandSurface &
   RuntimeLinearCommandSurface &
@@ -14,6 +15,7 @@ type RuntimeInstalledCommandSurfaces = RuntimeEdgeCommandSurface &
   RuntimeRepositoryCommandSurface &
   RuntimeReviewCommandSurface &
   RuntimeServiceCommandSurface &
-  RuntimeSkillCommandSurface
+  RuntimeSkillCommandSurface &
+  RuntimePerforceCommandSurface
 
 export type RuntimeCommandSurfaceHost<T> = T & RuntimeInstalledCommandSurfaces

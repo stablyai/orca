@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
@@ -13,14 +15,13 @@ import {
 } from '../../../runtime/workspaces/creation/runtime-folder-worktree-setup'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 
-export async function createFolderWorkspace(
+/** Metadata a new folder-project workspace gets, shared by folder workspaces and Perforce copies. */
+export function folderWorkspaceCreateMeta(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
-  store: Store
-): Promise<CreateWorktreeResult> {
-  const now = Date.now()
-  const instanceId = randomUUID()
-  const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  store: Store,
+  now: number
+): Partial<WorktreeMeta> {
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,
@@ -28,8 +29,7 @@ export async function createFolderWorkspace(
     args.cliProvenance?.kind === 'created-by-cli',
     args.nameWasGenerated === true
   )
-  const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
-    instanceId,
+  return {
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
@@ -68,9 +68,32 @@ export async function createFolderWorkspace(
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {})
+  }
+}
+
+export async function createFolderWorkspace(
+  args: CreateWorktreeArgsWithSystemProvenance,
+  repo: Repo,
+  store: Store
+): Promise<CreateWorktreeResult> {
+  const now = Date.now()
+  const instanceId = randomUUID()
+  const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
+    instanceId,
+    ...folderWorkspaceCreateMeta(args, repo, store, now)
   })
   const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
-  // The window opens the Setup tab from `setup`, as for a new worktree.
+  return { worktree, ...(await prepareFolderWorkspaceCreateSetup(args, repo, store, worktree)) }
+}
+
+/** Setup for a new folder-project workspace; the window opens the Setup tab from `setup`, as for a new worktree. */
+export async function prepareFolderWorkspaceCreateSetup(
+  args: CreateWorktreeArgsWithSystemProvenance,
+  repo: Repo,
+  store: Store,
+  worktree: Pick<Worktree, 'id' | 'path' | 'displayName'>
+): Promise<Pick<CreateWorktreeResult, 'setup' | 'setupTrustMismatch' | 'warning'>> {
   const prepared = await prepareFolderWorktreeSetup({
     // A desktop create is the user's act, as for a new worktree.
     request: { ...args, wslUserAct: true },
@@ -82,7 +105,6 @@ export async function createFolderWorkspace(
   })
   const setup = isPreparedFolderSetup(prepared) ? prepared : undefined
   return {
-    worktree,
     ...(setup?.setup ? { setup: setup.setup } : {}),
     ...(setup?.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
     ...(prepared?.warning ? { warning: prepared.warning } : {})

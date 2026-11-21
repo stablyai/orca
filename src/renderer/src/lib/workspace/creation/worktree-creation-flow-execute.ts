@@ -97,6 +97,7 @@ export async function executeWorktreeCreation(
           ...worktreeCreationAgentLaunchOptions(preparedRequest),
           executionHostId: creationHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
+          ...(preparedRequest.perforceCopy ? { perforceCopy: preparedRequest.perforceCopy } : {}),
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }
             : {}),

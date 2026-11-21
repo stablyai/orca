@@ -14,6 +14,8 @@ import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { usePerforceWorkspace } from '../perforce/use-perforce-workspace'
+import { usePerforceWorkspaceTarget } from '@/lib/perforce-workspace-target'
 import { getPluginPanelActivityItems } from '../plugin-panels/plugin-panel-activity-items'
 import {
   getPortsPanelOwnerKey,
@@ -54,6 +56,8 @@ export type RightSidebarActivityItems = {
   pluginFetchStatus: PluginPanelsFetchStatus
   installedPluginTabKeys: Set<string>
   isBotPage: boolean
+  /** Set only for folder projects not yet detected as Perforce. */
+  redetectPerforce?: () => void
 }
 
 export function useRightSidebarActivityItems({
@@ -76,6 +80,15 @@ export function useRightSidebarActivityItems({
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
+  const perforceTarget = usePerforceWorkspaceTarget(
+    activeWorktreeId,
+    activeWorktree?.path,
+    activeRepo?.connectionId
+  )
+  const { isPerforce, redetect: redetectPerforce } = usePerforceWorkspace(
+    perforceTarget,
+    isFolder && !isFolderWorkspace
+  )
   const bot = useBotForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
   const isBot = bot !== null
   const group = useBotGroupForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
@@ -193,7 +206,8 @@ export function useRightSidebarActivityItems({
         icon: GitBranch,
         title: t('auto.components.right.sidebar.index.0314901467', 'Source Control'),
         shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
+        gitOnly: true,
+        perforceCapable: true
       },
       {
         id: 'checks',
@@ -240,9 +254,19 @@ export function useRightSidebarActivityItems({
         hasSshHost,
         isBot,
         isGroupHome,
-        hasChatWorkers
+        hasChatWorkers,
+        isPerforce
       }),
-    [activityItems, isFolder, isFolderWorkspace, hasSshHost, isBot, isGroupHome, hasChatWorkers]
+    [
+      activityItems,
+      isFolder,
+      isFolderWorkspace,
+      hasSshHost,
+      isBot,
+      isGroupHome,
+      hasChatWorkers,
+      isPerforce
+    ]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
@@ -253,6 +277,7 @@ export function useRightSidebarActivityItems({
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys,
-    isBotPage: isBot
+    isBotPage: isBot,
+    redetectPerforce: isFolder && !isFolderWorkspace && !isPerforce ? redetectPerforce : undefined
   }
 }

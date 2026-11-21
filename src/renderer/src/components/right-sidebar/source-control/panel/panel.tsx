@@ -1,6 +1,10 @@
 import { memo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { PerforcePanel } from '../../perforce/perforce-panel'
+import { usePerforceWorkspace } from '../../perforce/use-perforce-workspace'
+import { usePerforceWorkspaceTarget } from '@/lib/perforce-workspace-target'
+import { perforceWorkspaceKey } from '../../../../runtime/runtime-perforce-client'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
@@ -8,7 +12,13 @@ export const SourceControlPanel = memo(function SourceControlPanel() {
   const t = useTranslate()
   useUiLanguageRevision()
   const model = useSourceControlPanelModel()
-  const { activeRepo, activeWorktree, isFolder, worktreePath } = model
+  const { activeRepo, activeWorktree, activeConnectionId, isFolder, worktreePath } = model
+  const perforceTarget = usePerforceWorkspaceTarget(
+    activeWorktree?.id,
+    worktreePath,
+    activeConnectionId
+  )
+  const { isPerforce } = usePerforceWorkspace(perforceTarget, isFolder)
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
@@ -18,6 +28,17 @@ export const SourceControlPanel = memo(function SourceControlPanel() {
           'Select a workspace to view changes'
         )}
       </div>
+    )
+  }
+  if (isPerforce && perforceTarget) {
+    return (
+      // Why key: the sidebar keeps panels alive across workspaces, and one workspace's files must
+      // never sit under another's actions while the new status loads.
+      <PerforcePanel
+        key={perforceWorkspaceKey(perforceTarget)}
+        worktreeId={activeWorktree.id}
+        target={perforceTarget}
+      />
     )
   }
   if (isFolder) {

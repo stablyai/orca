@@ -3,6 +3,7 @@ import { rename } from 'node:fs/promises'
 import { setTimeout } from 'node:timers/promises'
 
 // Windows AV/CLI file handles transiently cause EPERM/EACCES/EBUSY during replacement. Bound retries (~750ms) cover typical scans without hiding persistent permission errors (#1507).
+const DEFAULT_MAX_ATTEMPTS = 6
 export function renameFileWithWindowsRetry(
   source: string,
   target: string,
@@ -16,7 +17,7 @@ export function renameFileWithWindowsRetry(
       renameSync(source, target)
       return true
     } catch (error) {
-      if (!shouldRetryFileOperation(error, attempt)) {
+      if (!shouldRetryFileOperation(error, attempt, DEFAULT_MAX_ATTEMPTS)) {
         throw error
       }
       sleepSync(attempt * 50)
@@ -24,10 +25,12 @@ export function renameFileWithWindowsRetry(
   }
 }
 
+/** `maxAttempts` raises the budget (attempt n waits n × 50 ms), e.g. for a just-killed process tree. */
 export async function renameFileWithWindowsRetryAsync(
   source: string,
   target: string,
-  isCurrent: () => boolean = () => true
+  isCurrent: () => boolean = () => true,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS
 ): Promise<boolean> {
   for (let attempt = 1; ; attempt++) {
     if (!isCurrent()) {
@@ -37,7 +40,7 @@ export async function renameFileWithWindowsRetryAsync(
       await rename(source, target)
       return true
     } catch (error) {
-      if (!shouldRetryFileOperation(error, attempt)) {
+      if (!shouldRetryFileOperation(error, attempt, maxAttempts)) {
         throw error
       }
       await setTimeout(attempt * 50)
@@ -60,7 +63,7 @@ function runFileOperationWithWindowsRetry(operation: () => void): void {
       operation()
       return
     } catch (error) {
-      if (shouldRetryFileOperation(error, attempt)) {
+      if (shouldRetryFileOperation(error, attempt, DEFAULT_MAX_ATTEMPTS)) {
         sleepSync(attempt * 50)
         continue
       }
@@ -69,10 +72,10 @@ function runFileOperationWithWindowsRetry(operation: () => void): void {
   }
 }
 
-function shouldRetryFileOperation(error: unknown, attempt: number): boolean {
+function shouldRetryFileOperation(error: unknown, attempt: number, maxAttempts: number): boolean {
   return (
     process.platform === 'win32' &&
-    attempt < 6 &&
+    attempt < maxAttempts &&
     error instanceof Error &&
     'code' in error &&
     (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY')
