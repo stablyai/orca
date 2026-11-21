@@ -15,11 +15,12 @@ export type AgentStatusParentInput = {
 
 export type AgentStatusParentRecord = AgentStatusParentInput & { revision: number }
 
-declare const storedParentRecord: unique symbol
-/** A parsed, deep-frozen row the store hands to readers without copying. */
-export type StoredAgentStatusParentRecord = AgentStatusParentRecord & {
-  readonly [storedParentRecord]: true
+// A private member, unlike a symbol key, is dropped by object spread, so `{ ...row }` can't pass as stored.
+declare class StoredParentRowBrand {
+  private readonly storedParentRow: true
 }
+/** A deep-frozen row the store hands to readers without copying. */
+export type StoredAgentStatusParentRecord = AgentStatusParentRecord & StoredParentRowBrand
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
