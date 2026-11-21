@@ -42,5 +42,6 @@ export type TuiAgent =
   | 'muse' // Muse (Meta `muse` CLI)
   | 'zcode' // ZCode (Z.ai `zcode` CLI)
   | 'prime-agent' // Prime Agent (Prime Intellect)
+  | 'gentle-shell' // gentle-shell (Pi wrapper)
   | 'dsh' // DeepSeek Harness (`dsh`, launched through its `dsh-tui` terminal profile)
   | 'jcode'
