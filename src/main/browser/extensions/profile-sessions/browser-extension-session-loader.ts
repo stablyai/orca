@@ -1,4 +1,5 @@
 import { session } from 'electron'
+import { holdBrowserSessionRequestGate } from '../../sessions/requests/browser-session-request-gate'
 import { forgetBrowserExtensionActionProfile } from '../actions/browser-extension-action-registry'
 import {
   registerBrowserSessionFramePreload,
@@ -143,9 +144,13 @@ export function attachBrowserExtensionsToProfileSession(
     loadingExtensions: enabledExtensionIds.length > 0,
     loads
   }
+  // The request gate listens only for loaded extensions; requests made while they load must still
+  // reach their startup holds (rules, webRequest listeners).
+  const releaseRequestGate = state.loadingExtensions ? holdBrowserSessionRequestGate(sess) : null
   void loading
     .catch(() => {})
     .finally(() => {
+      releaseRequestGate?.()
       state.loadingExtensions = false
       idleKeptState.dropUnclaimedBrowserExtensionIdleState(profile.id)
     })
