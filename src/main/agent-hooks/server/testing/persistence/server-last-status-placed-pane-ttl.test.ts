@@ -7,6 +7,9 @@ import { buildBody, OLD_PANE, PANE, postHookEvent } from '../server.test-fixture
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+vi.mock('../../../../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: async () => 'unverifiable'
+}))
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const servers: AgentHookServer[] = []
@@ -74,4 +77,41 @@ it("keeps a placed pane's Claude session through a restart after a week without 
     })
   ])
   expect(restarted.getStatusRowsForPaneOrHandle(OLD_PANE)).toEqual([])
+})
+
+it("keeps a placed pane's week-old agent exit, so its kept row does not read as live", async () => {
+  let now = 1_800_000_000_000
+  vi.spyOn(Date, 'now').mockImplementation(() => now)
+  userDataPath = mkdtempSync(join(tmpdir(), 'orca-placed-pane-exit-'))
+  const first = new AgentHookServer()
+  servers.push(first)
+  await first.start({ env: 'production', userDataPath })
+  bindPlacement(first)
+  const attachedAt = now - 1
+  const agentProcess = JSON.stringify({ pid: 4001, platform: process.platform, startTime: 'b' })
+  for (const [hook_event_name, reason] of [
+    ['SessionStart', undefined],
+    ['SessionEnd', 'prompt_input_exit']
+  ] as const) {
+    const response = await postHookEvent(
+      first,
+      buildBody(
+        { hook_event_name, session_id: 'quit-session', source: 'startup', reason },
+        { agentProcess }
+      )
+    )
+    expect(response.status).toBe(204)
+  }
+  first.flushStatusPersistSync()
+
+  now += 8 * DAY_MS
+  first.flushStatusPersistSync()
+  first.stop()
+
+  const restarted = new AgentHookServer()
+  servers.push(restarted)
+  await restarted.start({ env: 'production', userDataPath })
+  bindPlacement(restarted)
+  expect(restarted.getStatusRowsForPaneOrHandle(PANE)[0]?.providerSession?.id).toBe('quit-session')
+  expect(await restarted.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
 })
