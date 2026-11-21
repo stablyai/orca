@@ -4,11 +4,20 @@ import {
   isOrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
+import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { observeWorker } from './worker-presence-report'
+import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 /** One fence per Dispatch: a start is unconfirmed once, whichever runtime sees it. */
 const START_UNCONFIRMED_FENCE = 'start-unconfirmed'
+
+/** Stages from which the worker may hold the brief: delivery began, or its turn went unseen. */
+const BRIEF_HANDED_OVER_STAGES: ReadonlySet<string> = new Set([
+  'dispatch_input',
+  'turn_observation',
+  'turn_start_unobserved'
+])
 
 export type UnconfirmedWorkerStart =
   | {
@@ -25,18 +34,33 @@ export function observeUnconfirmedWorkerStart(
   deps: WorkerTurnStopReportDeps
 ): void {
   const dispatch = db.getDispatchContextById(dispatchId)
-  if (
-    !dispatch ||
-    (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
-    db.getWorkerDispatch(dispatchId)?.state !== 'start_unknown'
-  ) {
-    return
-  }
-  const chat = dispatch.assignee_orca_session_id
+  const worker = db.getWorkerDispatch(dispatchId)
+  const chat = dispatch?.assignee_orca_session_id
   const from =
     chat && isOrcaSessionId(chat)
       ? formatOrcaSessionAddress(canonicalOrcaSessionId(chat))
-      : (dispatch.assignee_handle ?? `dispatch:${dispatchId}`)
+      : dispatch?.assignee_handle
+  // Only a start that handed its brief to a worker it placed here can hold it unsent; a paired
+  // server decides its own workers.
+  if (
+    !dispatch ||
+    !from ||
+    (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
+    worker?.state !== 'start_unknown' ||
+    !BRIEF_HANDED_OVER_STAGES.has(worker.stage) ||
+    db.getFederatedDispatch(dispatchId)
+  ) {
+    return
+  }
+  const seen = readWorkerPresence(db, dispatchId)
+  if (seen?.presence === 'working') {
+    confirmUnknownWorkerStart(db, dispatchId)
+    return
+  }
+  // A rest or exit already seen is its own news, and this start's alert is never sent twice.
+  if (seen && seen.fence !== START_UNCONFIRMED_FENCE) {
+    return
+  }
   observeWorker(
     db,
     { kind: 'local', dispatch },

@@ -1,7 +1,10 @@
 import type { WorkerDispatchRow } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import { reconcileTaskAfterDispatchInterruption } from '../db/dispatch-context/task-dispatch-reconciliation'
+import {
+  reconcileTaskAfterDispatchInterruption,
+  resumeTaskBlockedByUnknownStart
+} from '../db/dispatch-context/task-dispatch-reconciliation'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -65,16 +68,7 @@ export function reconcileFederatedWorkerStart(
           to: 'dispatched'
         })
       }
-      const task = this.getTask(dispatch.task_id)
-      if (task?.status === 'blocked') {
-        transitionLifecycleWithDb(this.db, {
-          entity: 'task',
-          id: dispatch.task_id,
-          from: 'blocked',
-          to: 'dispatched',
-          projection: { completed_at: null }
-        })
-      }
+      resumeTaskBlockedByUnknownStart(this, dispatch.task_id)
     } else if (params.state === 'start_unknown') {
       const reason = params.lastError ?? worker.last_error ?? 'The remote start outcome is unknown.'
       if (worker.state === 'starting') {

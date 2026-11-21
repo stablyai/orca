@@ -139,8 +139,12 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
    *  restart; a terminal's screen shows whether its brief still waits in the prompt. */
   async reportUnconfirmedWorkerStart(dispatchId: string): Promise<void> {
     const db = this.getExistingOrchestrationDb()
-    const worker = db && settleRestartCutWorkerStart(db, dispatchId, this.getRuntimeId())
-    if (!db || worker?.state !== 'start_unknown') {
+    // A paired server's start is settled by federation reconcile, not here.
+    if (!db || db.getFederatedDispatch(dispatchId)) {
+      return
+    }
+    const worker = settleRestartCutWorkerStart(db, dispatchId, this.getRuntimeId())
+    if (worker?.state !== 'start_unknown') {
       return
     }
     const dispatch = db.getDispatchContextById(dispatchId)

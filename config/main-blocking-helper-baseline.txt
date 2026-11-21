@@ -1183,7 +1183,7 @@
 8 src/main/runtime/orchestration/db/dispatch-context/attempt-task-settlement.ts
 19 src/main/runtime/orchestration/db/dispatch-context/dispatch-completion.ts
 3 src/main/runtime/orchestration/db/dispatch-context/dispatch-context-store.ts
-2 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts
+3 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts # one Task unblock shared by a federated start and a local start seen only late, inside orchestration DB writes that were already synchronous
 10 src/main/runtime/orchestration/db/dispatch-context/worker-report-settlement.ts
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts

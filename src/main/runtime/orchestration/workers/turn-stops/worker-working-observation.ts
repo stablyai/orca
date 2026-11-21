@@ -20,7 +20,17 @@ export function observeWorkerWorking(
   if (next.changed) {
     writeWorkerPresence(db, dispatchId, next)
   }
-  if (target.kind !== 'local' || db.getWorkerDispatch(dispatchId)?.state !== 'start_unknown') {
+  if (target.kind === 'local') {
+    confirmUnknownWorkerStart(db, dispatchId)
+  }
+}
+
+/** A turn seen begin proves a start left unknown ran: its worker is ready. */
+export function confirmUnknownWorkerStart(db: OrchestrationDb, dispatchId: string): void {
+  if (
+    db.getWorkerDispatch(dispatchId)?.state !== 'start_unknown' ||
+    db.getDispatchContextById(dispatchId)?.status !== 'pending'
+  ) {
     return
   }
   try {

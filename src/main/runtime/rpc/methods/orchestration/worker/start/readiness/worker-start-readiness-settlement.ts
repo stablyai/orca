@@ -53,6 +53,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
+  // Recorded, so a start a restart cuts from here on is known to have handed its brief over.
+  db.recordWorkerStage({ dispatchId: args.dispatchId, stage: 'dispatch_input' })
   const deliveryStartedAt = Date.now()
   const delivery = await deliverWorkerDispatchPreamble({
     runtime,

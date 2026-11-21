@@ -6,6 +6,7 @@ import { recordFailedStartDispatchIdentity } from '../worker-terminal/failed-sta
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import { mergeWorkerLaunchObservation } from '../../workers/launch/worker-launch-observation'
 import { WORKER_DISPATCH_COLUMN_LIST } from '../row-column-lists'
+import { resumeTaskBlockedByUnknownStart } from '../dispatch-context/task-dispatch-reconciliation'
 
 export function retainWorkerLaunchObservation(
   this: OrchestrationDb,
@@ -59,13 +60,8 @@ export function markWorkerDispatchReady(
         effects: effects ? JSON.stringify(effects) : worker.effects
       }
     })
-    if (from === 'start_unknown' && this.getTask(dispatch.task_id)?.status === 'blocked') {
-      transitionLifecycleWithDb(this.db, {
-        entity: 'task',
-        id: dispatch.task_id,
-        from: 'blocked',
-        to: 'dispatched'
-      })
+    if (from === 'start_unknown') {
+      resumeTaskBlockedByUnknownStart(this, dispatch.task_id)
     }
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
