@@ -11,6 +11,13 @@ export type AgentJournalConnectorDelivery = {
   carried?: string[]
 }
 
+/** The interrupted work a restart continuation resumes: a turn by its lifecycle turn id or its row's
+ *  item key, or a send that had not become a turn by its client message id. */
+export type AgentJournalRestartOf = {
+  kind: 'turn' | 'turn-item' | 'submission'
+  id: string
+}
+
 /** What Orca writes on a message it delivers to a bot. */
 export type AgentJournalBotMessageFields = {
   /** Present on a message Orca delivered to a bot from Slack, GitHub or Linear: only then does the
@@ -34,6 +41,10 @@ export type AgentJournalBotMessageFields = {
    *  answer or a truthful outcome through the reply outbox. Kept across a queued edit. Host-written,
    *  never sent to the agent. */
   connectorDelivery?: AgentJournalConnectorDelivery
+  /** On a restart continuation: the work it resumes, so the requests that work answered are answered
+   *  by the continuation instead (design: slack-reply-lost-restart). Host-written, never sent to the
+   *  agent; a client's send can't carry it (SendBody is strict). */
+  restartOf?: AgentJournalRestartOf
   /** Present on a message Orca sent for a bot's automation run: where what the bot learns in its
    *  turn came from, as its memory says it ("Webhook deploys"). Host-written, like `from`. */
   memorySource?: string

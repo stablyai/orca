@@ -193,7 +193,7 @@ export type StartedStructuredAgentSessionContinuation =
 export async function startStructuredAgentSessionContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: Parameters<typeof restartContinuationEnvelope>[2],
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   let started: StartedStructuredAgentSessionContinuation
@@ -279,7 +279,7 @@ async function noteNotContinued(
 async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: Parameters<typeof restartContinuationEnvelope>[2],
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   const fence = deps.currentFence(sessionId)

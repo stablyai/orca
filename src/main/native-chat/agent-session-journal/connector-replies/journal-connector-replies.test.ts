@@ -181,3 +181,38 @@ it('keeps how long the answered turn ran, in a table an earlier build made too',
   expect(first?.fill?.tookMs).toBe(98_000)
   expect(second?.fill).not.toHaveProperty('tookMs')
 })
+
+it('dates each admission, keeps why a row closed quietly, and upgrades a table an earlier build made', async () => {
+  const f = fixture()
+  // A row as an earlier build left it: no admitted_at or expired_reason columns, so no age.
+  await f.send('old', stamped('from before', { deliveryId: 'd-old' }))
+  f.db.exec('ALTER TABLE journal_connector_replies DROP COLUMN admitted_at')
+  f.db.exec('ALTER TABLE journal_connector_replies DROP COLUMN expired_reason')
+  ensureJournalConnectorRepliesSchema(f.db)
+  ensureJournalConnectorRepliesSchema(f.db)
+  const before = Date.now()
+  await f.send('new', stamped('after', { deliveryId: 'd-new' }))
+  fillJournalConnectorReplies(
+    f.db,
+    [
+      {
+        account: 'account-a',
+        deliveryId: 'd-old',
+        outcome: 'quiet',
+        answerDeliveryId: 'd-old',
+        expiredReason: 'stale_answer: interruption resolved at 2026-11-20T19:39:06.310Z'
+      }
+    ],
+    10
+  )
+  const rows = readJournalConnectorReplies(f.db)
+  const old = rows.find((candidate) => candidate.deliveryId === 'd-old')
+  const fresh = rows.find((candidate) => candidate.deliveryId === 'd-new')
+  expect(old).not.toHaveProperty('admittedAt')
+  expect(old?.fill).toMatchObject({
+    outcome: 'quiet',
+    expiredReason: 'stale_answer: interruption resolved at 2026-11-20T19:39:06.310Z'
+  })
+  expect(fresh?.admittedAt).toBeGreaterThanOrEqual(before)
+  expect(fresh?.fill).toBeUndefined()
+})

@@ -35,7 +35,8 @@ type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
 /** Durable, per-session restart offers. Listing never spends an offer. */
 export class AgentSessionRecoveryCapsule {
-  private readonly filePath: string
+  /** The offers file; reply recovery reads standing offers and their publications by it. */
+  readonly filePath: string
 
   constructor(stateDirectory: string) {
     this.filePath = join(stateDirectory, AGENT_SESSION_RECOVERY_CAPSULE_FILE)
