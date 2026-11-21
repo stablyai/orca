@@ -31,7 +31,6 @@ describe('unchanged bot edits', () => {
       const notify = vi.fn()
       const store = {
         getBots: () => records,
-        getRepos: () => [],
         saveBot,
         removeBot: vi.fn(),
         getProjectGroups: () => [],
@@ -54,7 +53,7 @@ describe('unchanged bot edits', () => {
       }
       const bots = new BotController({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: update reads only the bot-store methods above.
-        getStore: () => store as RuntimeStore,
+        getStore: () => store as unknown as RuntimeStore,
         filesystem,
         botsRoot: () => 'bots',
         notifyBotsWritten: notify,
