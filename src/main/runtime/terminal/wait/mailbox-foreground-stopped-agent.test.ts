@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { readMailboxForeground } from './launched-agent-foreground'
+import { readMailboxForeground } from './mailbox-foreground-read'
 
 const confirmations = { count: 0 }
 const read = (

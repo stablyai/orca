@@ -2,6 +2,7 @@ import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import { isTransientGitProbeError, readRemoteUrl } from '../../git/remotes/remote-url-probe'
+import { UNSIGNED_REMOTE_NAME_LISTING_TTL_MS } from '../../git/remotes/remote-name-listing'
 import { NEGATIVE_ENTRY_TTL_MS } from '../../git/remotes/remote-ref-probe-cache'
 import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
@@ -48,7 +49,9 @@ function rememberProjectRefCacheEntry(
   // Git config signatures omit global Git, SSH and auth configuration, so signed hits also expire.
   projectRefCache.set(cacheKey, {
     value,
-    expiresAt: Date.now() + NEGATIVE_ENTRY_TTL_MS,
+    expiresAt:
+      Date.now() +
+      (configSignature === undefined ? UNSIGNED_REMOTE_NAME_LISTING_TTL_MS : NEGATIVE_ENTRY_TTL_MS),
     ...(configSignature !== undefined ? { configSignature } : {})
   })
   while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
@@ -93,7 +96,7 @@ export async function getProjectRefForRemoteWithSignature(
   if (cached) {
     if (
       cached.expiresAt > Date.now() &&
-      configSignature !== undefined &&
+      (configSignature !== undefined || (!connectionId && !localGitOptions.wslDistro)) &&
       cached.configSignature === configSignature
     ) {
       return cached.value

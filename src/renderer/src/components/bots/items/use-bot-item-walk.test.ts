@@ -4,8 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
-import type { BotItemsClosedPage } from './use-bot-items-closed-pages'
-import type { BotItemsShownList } from './use-bot-items-shown-list'
+import type { BotItemsClosedPage, BotItemsShownList } from './use-bot-items-shown-list'
 import { useBotItemWalk } from './use-bot-item-walk'
 
 const open = (uid: string) => makeTestBotItem(1, { uid, status: 'working' })
@@ -16,13 +15,19 @@ function list(
   loadMoreClosed: (() => Promise<BotItemsClosedPage>) | null,
   closedRows: BotItem[] = [closed('c1')]
 ): BotItemsShownList {
-  const working: BotItem[] = [open('a'), open('b')]
   return {
     read: null,
-    chatRead: { read: null, failed: false, retry: () => {} },
+    chatRead: { read: null, failed: false, retry: () => {}, readMore: async () => null },
     items: [],
     shown: [],
-    groups: { needs_you: [], working, planned: [], snoozed: [], stale: [], closed: closedRows },
+    groups: {
+      needs_you: [open('a')],
+      working: [open('b')],
+      planned: [],
+      snoozed: [],
+      stale: [],
+      closed: closedRows
+    },
     staleDays: null,
     closedTotal: 3,
     loadMoreClosed,
@@ -56,6 +61,9 @@ it('steps in order, holds the current item while paging, and stops at the ends',
   act(() => view.result.current.step(1))
   expect(view.result.current.uid).toBe('b')
   expect(view.result.current.place).toEqual({ index: 2, total: 5 })
+  act(() => view.result.current.step(-1))
+  expect(view.result.current.uid).toBe('a')
+  act(() => view.result.current.step(1))
   act(() => view.result.current.step(1))
   expect(view.result.current.uid).toBe('c1')
 
@@ -122,7 +130,10 @@ it('has no walk for an item outside the list, and Back reports what it left', ()
 })
 
 it('keeps an item closed after opening out of the walk; the next step still pages to the original', async () => {
-  const loadMore = vi.fn(async () => ({ items: [closed('c2')], more: true }))
+  const loadMore = vi.fn(async () => ({
+    items: [closed('c2'), closed('c3'), closed('closed-since')],
+    more: false
+  }))
   const view = renderHook(({ rows }) => useBotItemWalk(list(loadMore, rows), 'bot-6'), {
     initialProps: { rows: [closed('c1')] }
   })
@@ -133,6 +144,9 @@ it('keeps an item closed after opening out of the walk; the next step still page
   expect(loadMore).toHaveBeenCalledOnce()
   expect(view.result.current.uid).toBe('c2')
   expect(view.result.current.place).toEqual({ index: 4, total: 5 })
+  act(() => view.result.current.step(1))
+  expect(view.result.current.uid).toBe('c3')
+  expect(view.result.current.canStep(1)).toBe(false)
 })
 
 it('reopens the open item after the panel unmounts and mounts again, per bot', () => {

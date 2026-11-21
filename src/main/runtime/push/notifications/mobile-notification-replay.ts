@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
+import type { RetainedAgentAttention } from '../../../../shared/notifications/notification-settings-types'
 
 // Buffer missed mobile notifications; notificationSeq must match live fan-out for client watermarks/dedup.
 export type ReplayableMobileNotification = MobileNotificationEvent & {
@@ -69,8 +70,21 @@ export class MobileNotificationReplayBuffer {
     ].sort((a, b) => a.notificationSeq - b.notificationSeq)
   }
 
-  retainedNotifications(): ReplayableMobileNotification[] {
-    return [...this.retained.values()]
+  /** Agent notices still retained, as a newly subscribed desktop presents them. */
+  retainedAgentAttention(): RetainedAgentAttention[] {
+    return [...this.retained.values()].flatMap((event) =>
+      event.type === 'notification' && event.notificationId
+        ? [
+            {
+              notificationId: event.notificationId,
+              title: event.title,
+              body: event.body,
+              worktreeId: event.worktreeId,
+              paneKey: event.paneKey
+            }
+          ]
+        : []
+    )
   }
 
   retainedNotification(id: string): ReplayableMobileNotification | undefined {

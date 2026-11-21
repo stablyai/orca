@@ -13,7 +13,7 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { readRuntimeFixture } from '../../../terminal/wait/agent-transcript-replay-test-harness'
-import { readMailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
+import { readMailboxForeground } from '../../../terminal/wait/mailbox-foreground-read'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 vi.mock('electron', () => ({

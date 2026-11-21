@@ -20,6 +20,8 @@ export type AgentDefaultSurface = 'chat' | 'terminal'
 export type NativeChatGlobalSettings = {
   /** Unlisted agents follow this default; absent means terminal. */
   agentDefaultSurface?: AgentDefaultSurface
+  /** A paired client saved agentDefaultSurface here, so a headless host's Terminal is a choice, not its untouched default. */
+  agentDefaultSurfaceChosen?: boolean
   nativeChatAppearance?: NativeChatAppearanceSettings
   /** Off keeps chats unnamed without running a naming agent. Absent means on. */
   nativeChatAutoName?: boolean
@@ -35,6 +37,9 @@ export type NativeChatGlobalSettings = {
   nativeChatMarkNewMessages?: boolean
   /** The agent's suggested next prompt in an empty composer. Absent means on. */
   nativeChatPromptSuggestions?: boolean
+  /** One-shot guard for the usage-limit auto-continue default-on rollout: a saved false from the old
+   *  default turns on once; a later explicit false sticks. */
+  nativeChatAutoContinueAfterUsageLimitDefaultedOn?: boolean
 }
 
 /** Not written into default settings, so flipping this reaches everyone who never chose. */

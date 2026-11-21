@@ -325,16 +325,11 @@ async function choose(itemId: string): Promise<void> {
   await flushEffects()
 }
 
-function hasItem(itemId: string): boolean {
-  return testContainer.querySelector(`[data-command-item="${itemId}"]`) !== null
-}
-
 function scopeChipShown(): boolean {
   return testContainer.querySelector('[data-command-leading] button') !== null
 }
 
 const SHOW_EVERYTHING = '__bot_scope_show_everything__'
-const SEARCH_BOTS = '__bot_scope_search_bots__'
 
 describe('Cmd+K @ shows only bots', () => {
   beforeEach(() => {
@@ -363,6 +358,26 @@ describe('Cmd+K @ shows only bots', () => {
     botState([{ id: 'b1', name: 'Triage' }], {
       worktreesByRepo: { 'repo-1': [makeWorktree('wt-notes', 'Triage notes')] }
     })
+
+  it('keeps bots searchable when a host filter hides local workspaces', async () => {
+    await renderPalette({ ...triageState(), visibleWorkspaceHostIds: ['runtime:other'] })
+    await typeQuery('triage')
+    expect(rowIds()).toEqual([botRowId('b1')])
+  })
+
+  it('selects a matching bot when the workspace filter excludes every workspace', async () => {
+    await renderPalette({ ...triageState(), filterRepoIds: ['repo-2'] })
+    await typeQuery('triage')
+    expect(rowIds()).toEqual(['5:extra4:bots12:bot:local/b1'])
+    expect(testContainer.querySelector('[data-command-empty]')).toBeNull()
+    expect(
+      testContainer.querySelector('[data-command-dialog]')?.getAttribute('data-command-value')
+    ).toBe('5:extra4:bots12:bot:local/b1')
+    await choose('5:extra4:bots12:bot:local/b1')
+    expect(mocks.openBotHomeTab).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'b1', name: 'Triage' })
+    )
+  })
 
   it('lists only bots after @ is typed into the empty field', async () => {
     await renderPalette(triageState())
@@ -414,19 +429,20 @@ describe('Cmd+K @ shows only bots', () => {
     expect(input().value).toBe(link)
   })
 
-  it('offers bots a filter hides, keeps the filter while scoped, and applies it again after', async () => {
+  it('keeps bots searchable before and after leaving their scope with a workspace filter', async () => {
     await renderPalette({ ...triageState(), filterRepoIds: ['repo-1'] })
     await typeQuery('triage')
-    expect(rowIds().some((id) => id.startsWith(BOT_PREFIX))).toBe(false)
-    await choose(SEARCH_BOTS)
-    expect(rowIds()).toEqual([botRowId('b1')])
+    expect(rowIds()).toContain('5:extra4:bots12:bot:local/b1')
+    await typeQuery('')
+    await typeScopeKey()
+    await typeQuery('triage')
+    expect(rowIds()).toEqual(['5:extra4:bots12:bot:local/b1'])
     expect(input().value).toBe('triage')
     await pressBackspace(false) // field not empty: stays
     await typeQuery('')
     await pressBackspace(false)
     await typeQuery('triage')
-    expect(rowIds().some((id) => id.startsWith(BOT_PREFIX))).toBe(false)
-    expect(hasItem(SEARCH_BOTS)).toBe(true)
+    expect(rowIds()).toContain('5:extra4:bots12:bot:local/b1')
   })
 
   it('shows which part of the purpose matched alongside a name match', async () => {
@@ -606,7 +622,7 @@ describe('Cmd+K opening a bot or group from the palette', () => {
     }
   })
 
-  it('drops a pending task search when showing only bots', async () => {
+  it('keeps task search idle after clearing into bot scope', async () => {
     openMocks.taskRequests.mockImplementation(() => [
       {
         id: 'github',
@@ -623,8 +639,10 @@ describe('Cmd+K opening a bot or group from the palette', () => {
         filterRepoIds: ['repo-1']
       })
       await typeQuery('triage')
-      // Within the search's debounce, switch to bots for the same text.
-      await choose(SEARCH_BOTS)
+      // Within the search's debounce, clear the field, enter bot scope, and retype.
+      await typeQuery('')
+      await typeScopeKey()
+      await typeQuery('triage')
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000)
       })

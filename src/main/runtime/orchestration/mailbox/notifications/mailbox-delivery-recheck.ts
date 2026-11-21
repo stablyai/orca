@@ -19,6 +19,7 @@ type RecheckReaders = {
   hasMail(terminal: OrchestrationMailboxTerminal): boolean
   settle(ptyId: string): boolean
   readinessDelay(terminal: OrchestrationMailboxTerminal): number | null
+  repaint(ptyId: string): void
   deliver(ptyId: string): void
 }
 
@@ -77,6 +78,8 @@ export class MailboxDeliveryRecheck {
         this.retire(ptyId)
         return
       }
+      // As a tui-idle wait does: a reattached idle agent prints nothing, so ask for the paint that settles it.
+      this.read.repaint(ptyId)
       const backoff = this.delays.get(ptyId) ?? 5000
       const stagger = [...ptyId].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 1000, 0)
       const delay = backoffRequired ? backoff + stagger : readinessDelay!

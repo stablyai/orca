@@ -271,11 +271,16 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       // Why: the ready-screen read needs the seeded snapshot applied.
       this.headlessTerminals.get(ptyId)?.writeChain,
       ...paneKeys.map((paneKey) => agentHookServer.readRestoredAgentStatus(paneKey))
-    ]).then(([agent, , ...reports]) => {
+    ]).then(async ([agent, , ...reports]) => {
       const report = reports.find((candidate) => candidate !== null)
       const turn = agent && report ? hookLeadTurnState(report) : null
+      // A host that cannot repaint (Windows ConPTY, older daemons) still restores a proven frame.
+      const proven = !turn && !!agent && (await this.isRetainedFrameProven(ptyId, agent))
       if (!isCurrent()) {
         return
+      }
+      if (proven) {
+        pty.commandPaint?.vouchRetainedPaint()
       }
       if (turn) {
         this.applyReattachedAgentStatus(ptyId, turn === 'done' ? 'idle' : turn)

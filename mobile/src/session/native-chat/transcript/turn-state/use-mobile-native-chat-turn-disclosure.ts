@@ -50,7 +50,8 @@ export function useMobileNativeChatTurnDisclosure({
   stopping = false,
   lineYields = false,
   receipts,
-  scopeKey
+  scopeKey,
+  showsTurnDiffs = true
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
@@ -64,6 +65,8 @@ export function useMobileNativeChatTurnDisclosure({
   lineYields?: boolean
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   scopeKey: string
+  /** Off in a bot's chat, whose own edits are scratch files: its workers do the code work. */
+  showsTurnDiffs?: boolean
 }): {
   active: NativeChatTurnStatus | null
   presentation: MobileNativeChatRunPresentation
@@ -120,7 +123,13 @@ export function useMobileNativeChatTurnDisclosure({
     turnKeys,
     completedByTurn
   )
-  const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
+  const summaries = useMobileNativeChatTurnDiffs(
+    rows,
+    enabled,
+    showsTurnDiffs,
+    turnKeys,
+    partialTurnKey
+  )
   const quiet = useMemo(
     () => (enabled ? mobileNativeChatQuietTurns(rows, turnKeys, completedByTurn, summaries) : null),
     [completedByTurn, enabled, rows, summaries, turnKeys]

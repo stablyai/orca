@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { slackMarkupSegments, slackMarkupShownText } from './slack-message-markup'
+import {
+  slackMarkupSegments,
+  slackMarkupShownText,
+  slackMentionsPlainText
+} from './slack-message-markup'
 
 describe('slackMarkupSegments', () => {
   it('reads every token kind', () => {
@@ -106,5 +110,17 @@ describe('slackMarkupShownText', () => {
 
   it('leaves text with no token alone', () => {
     expect(slackMarkupShownText('typed &lt;@U1|Ann&gt; &amp; *bold*')).toBeNull()
+  })
+})
+
+describe('slackMentionsPlainText', () => {
+  it('names the Slack mentions in an agent’s words and leaves its other angle brackets alone', () => {
+    expect(
+      slackMentionsPlainText(
+        'Done <@U0ANN|Ann Park>, ask <@U0BOB> in <#C0REL|releases> <!here>. Map<string, number>, <@types/node>, <div>, a < b'
+      )
+    ).toBe(
+      'Done @Ann Park, ask @user in #releases @here. Map<string, number>, <@types/node>, <div>, a < b'
+    )
   })
 })

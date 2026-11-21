@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import {
   recoverInterruptedGuardedFileOperation,
-  writeFileAtomically,
   writeFileAtomicallyIfUnchanged
 } from '../../../filesystem/atomic-file-publication'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
@@ -76,6 +75,10 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
       getCodexConfigSyncStatus(homes),
       mirrorResult.error
     )
+    return { ran: false, complete: false }
+  }
+  if (mirrorResult.status === 'superseded') {
+    // Keep the baseline: it must describe a config this pass published. The guard is still owed.
     return { ran: false, complete: false }
   }
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
@@ -207,6 +210,7 @@ function readLegacySharedHomeMcpOwnership(
 
 type CodexConfigMirrorResult =
   | { status: 'skipped-missing-source' }
+  | { status: 'superseded' }
   | { status: 'refused-indeterminate'; error: unknown }
   | {
       status: 'mirrored'
@@ -258,7 +262,16 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
       null
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
-    writeFileAtomically(runtimeConfigPath, freshRuntimeConfig, RUNTIME_CONFIG_WRITE)
+    if (
+      !writeFileAtomicallyIfUnchanged(
+        runtimeConfigPath,
+        null,
+        freshRuntimeConfig,
+        RUNTIME_CONFIG_WRITE
+      )
+    ) {
+      return { status: 'superseded' }
+    }
     return {
       status: 'mirrored',
       preservedConflictKeys: new Set(),
@@ -293,8 +306,18 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     runtimeConfig,
     daemonGuarded
   )
-  if (nextRuntimeConfig !== runtimeConfig) {
-    writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
+  // Why: hook passes on the trust worker write this file too; a save made since this read wins,
+  // and the next pass merges again.
+  if (
+    nextRuntimeConfig !== runtimeConfig &&
+    !writeFileAtomicallyIfUnchanged(
+      runtimeConfigPath,
+      runtimeConfig,
+      nextRuntimeConfig,
+      RUNTIME_CONFIG_WRITE
+    )
+  ) {
+    return { status: 'superseded' }
   }
   return {
     status: 'mirrored',

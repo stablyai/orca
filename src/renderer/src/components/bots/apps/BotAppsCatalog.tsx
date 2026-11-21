@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
-import { botToolsSupported } from '../../../../../shared/bot-tools'
 import { COMPOSIO_PAGES } from '../../../../../shared/composio/composio-apps'
 import { composioAppName } from '../../../../../shared/composio/composio-curated-apps'
 import { type BotConnector, useBotConnectorState } from '../bot-connectors'
@@ -50,6 +49,7 @@ import {
   type BotAppsRailProps,
   type BotAppsView
 } from './BotAppsRail'
+import { botMcpAppUrlTag } from '../../../../../shared/bots/bot-mcp-apps'
 import { BotAppsMineList, BotAppsNoMatch, DirectAppRow, type DirectRow } from './BotAppsRows'
 import { botToolApps } from './bot-tool-apps'
 
@@ -88,16 +88,15 @@ export function BotAppsCatalog({
   const searchRef = useRef<HTMLInputElement>(null)
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const manage = onManage
-  const toolsOn = botToolsSupported(bot.agent)
   const webhooks = state.catalog.find((connector) => connector.id === 'webhooks')
   // Which apps the bot has, from its tools alone: no check starts its servers.
-  const toolApps = botToolApps(useBotTools(toolsOn ? bot : null, 'none').view)
-  // A connector shows once it can be added, or once the bot has it; an MCP app wherever tools work.
+  const toolApps = botToolApps(useBotTools(bot, 'none').view)
+  // A connector shows once it can be added, or once the bot has it; an MCP app always.
   const direct: DirectRow[] = DIRECT_APPS.flatMap((app): DirectRow[] => {
     if (app.route === 'mcp') {
-      return toolsOn
-        ? [{ app, name: app.name, added: toolApps.some((entry) => entry.app?.id === app.id) }]
-        : []
+      const tool = toolApps.find((entry) => entry.app?.id === app.id)?.tool
+      const tag = tool && botMcpAppUrlTag(app, tool.detail)
+      return [{ app, name: app.name, added: tool !== undefined, tag: tag ?? undefined }]
     }
     const connector = state.catalog.find((entry) => entry.id === app.connector)
     if (!connector) {
@@ -179,16 +178,19 @@ export function BotAppsCatalog({
         preset={{
           name: app.id,
           title: app.name,
+          line: app.line,
           url: app.url,
+          variable: app.variable,
           logo: <BotAppBrandLogo app={app} size="lg" />
         }}
         onBack={back}
         onClose={close}
+        onManage={manage}
       />
     )
   }
   if (step?.kind === 'custom') {
-    return <CustomAppStep bot={bot} onBack={back} onClose={close} />
+    return <CustomAppStep bot={bot} onBack={back} onClose={close} onManage={manage} />
   }
   if (step?.kind === 'composio-account') {
     const { app } = step
@@ -264,7 +266,7 @@ export function BotAppsCatalog({
         searchRef.current?.focus()
       }}
       onSearchAll={searchAll}
-      onAddByUrl={toolsOn ? () => setStep({ kind: 'custom' }) : null}
+      onAddByUrl={() => setStep({ kind: 'custom' })}
     />
   )
 
@@ -313,7 +315,7 @@ export function BotAppsCatalog({
                 matchesAppQuery(query, row.name, directAppLine(row.app))
             )
       const where = view === 'all' || view === 'composio' ? 'all' : view
-      const composioGroup = toolsOn ? (
+      const composioGroup = (
         <ComposioSearchGroup
           bot={bot}
           query={query}
@@ -322,10 +324,7 @@ export function BotAppsCatalog({
           divided={hits.length > 0}
           empty={noMatch(where)}
         />
-      ) : null
-      if (hits.length === 0 && !composioGroup) {
-        return noMatch(where)
-      }
+      )
       return (
         <>
           {hits.length > 0 ? (
@@ -355,7 +354,7 @@ export function BotAppsCatalog({
             </ul>
           </section>
         ))}
-        {view === 'all' && toolsOn ? composioSection(shown.length === 0) : null}
+        {view === 'all' ? composioSection(shown.length === 0) : null}
       </>
     )
   }
@@ -369,8 +368,8 @@ export function BotAppsCatalog({
     },
     mineCount,
     categories,
-    composio: toolsOn,
-    onAddByUrl: toolsOn ? () => setStep({ kind: 'custom' }) : null,
+    composio: true,
+    onAddByUrl: () => setStep({ kind: 'custom' }),
     onWebhooks: webhooks && state.available(webhooks) ? () => setStep({ kind: 'webhooks' }) : null
   }
   const searchLabel =

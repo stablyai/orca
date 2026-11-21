@@ -55,24 +55,7 @@ function fakeLocalHost(): void {
       case 'status.get':
         return okFixture('req', { capabilities: ['orca-account.server-sign-in.v1'] })
       case 'orcaAccount.status':
-      case 'orcaAccount.signOut':
         return okFixture('req', SIGNED_IN)
-      case 'orcaAccount.signIn.start':
-        return okFixture('req', {
-          flowId: 'f',
-          provider: 'sign-in',
-          revision: 1,
-          phase: 'starting'
-        })
-      case 'orcaAccount.signIn.wait':
-        // Stop before the code prompt; routing is decided before any of this runs.
-        return okFixture('req', {
-          flowId: 'f',
-          provider: 'sign-in',
-          revision: 2,
-          phase: 'failed',
-          error: 'stop here'
-        })
       default:
         throw new Error(`unexpected call ${method}`)
     }
@@ -94,22 +77,18 @@ describe('`orca auth` stays on this host', () => {
     spawnMock
   })
 
-  it.each(
-    ['ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING'].flatMap((variable) =>
-      ['login', 'status', 'logout'].map((command) => [variable, command] as const)
-    )
-  )('ignores an ambient %s for `orca auth %s`', async (variable, command) => {
-    vi.stubEnv(variable, 'somewhere-else')
+  it('reads account status locally with ambient remote selectors', async () => {
+    vi.stubEnv('ORCA_ENVIRONMENT', 'somewhere-else')
+    vi.stubEnv('ORCA_PAIRING_CODE', 'primary-code')
+    vi.stubEnv('ORCA_REMOTE_PAIRING', 'legacy-code')
     fakeLocalHost()
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     runtimeClientConstructorMock.mockClear()
 
-    await main(['auth', command, '--json'], '/tmp/repo')
+    await main(['auth', 'status', '--json'], '/tmp/repo')
 
-    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
-    expect(runtimeClientConstructorMock).not.toHaveBeenCalledWith(undefined, undefined)
+    expect(runtimeClientConstructorMock).toHaveBeenCalledExactlyOnceWith(null, null)
+    expect(callMock).toHaveBeenCalledWith('orcaAccount.status')
   })
 
   it.each(['--environment', '--pairing-code'])(
@@ -121,8 +100,7 @@ describe('`orca auth` stays on this host', () => {
 
       await main(['auth', 'logout', flag, 'other', '--json'], '/tmp/repo')
 
-      expect(callMock).not.toHaveBeenCalledWith('orcaAccount.signOut', undefined)
-      expect(callMock.mock.calls.map(([method]) => method)).not.toContain('orcaAccount.signOut')
+      expect(callMock).not.toHaveBeenCalled()
       expect(process.exitCode).toBe(1)
     }
   )

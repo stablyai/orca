@@ -215,13 +215,15 @@ export function unbindOtherRunsForCoordinator(
   this: OrchestrationDb,
   caller: OrchestrationCoordinatorKey,
   exceptRunId: string
-): void {
+): string[] {
+  const changed: string[] = []
   for (const run of this.runsBoundToCoordinator(caller)) {
     if (run.id !== exceptRunId) {
       const address = mailboxAddressOf(runCoordinatorKey(run))
-      if (address !== null) {
-        this.routeAllUnreadDirectMessagesToRunMailbox(run.id, address)
+      if (address !== null && this.routeAllUnreadDirectMessagesToRunMailbox(run.id, address) > 0) {
+        changed.push(address)
       }
+      changed.push(`run:${run.id}`)
       this.db
         .prepare(
           `UPDATE runs
@@ -235,6 +237,7 @@ export function unbindOtherRunsForCoordinator(
       this.fenceUnacknowledgedMailboxDeliveries(`run:${run.id}`)
     }
   }
+  return changed
 }
 
 export function requireRun(this: OrchestrationDb, runId: string): void {

@@ -133,25 +133,29 @@ describe("mail sent to a coordinating chat's own address, outside its Run", () =
   const to = `orca_session_id:${COORDINATOR}`
   /** Mail to the chat itself, tagged with no Run, as bot item mail and peers send it. */
   const directMail = (id: string, from: string) =>
-    db.insertMessage({ id, from, to, type: 'status', subject: 'commented', body: 'how about it?' })
+    db.insertMessage({
+      id,
+      from,
+      to,
+      type: 'status',
+      subject: 'commented',
+      body: 'how about it?',
+      ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {})
+    })
 
-  it.each([
-    ['msg_item_e6', 'orca:items'],
-    ['msg_peer_1', 'term_peer']
-  ])('%s from %s reaches the agent whole and is read by its delivery', async (id, from) => {
+  it('delivers direct mail to the chat and exposes undelivered messages through the unbound check', async () => {
     const chat = await openChat(COORDINATOR)
     await coordinatorRunAndTask()
-    directMail(id, from)
-    runtime.notifyMessageArrived(to, 'status')
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    expect(turnText(chat.turns[0]!)).toContain('how about it?')
-    await settleTurn(COORDINATOR, 0)
-    await vi.waitFor(() => expect(unread(to)).toEqual([]), WAIT)
-  })
 
-  it('is returned by check --run run_unbound, the Run id it is shown with', async () => {
-    await openChat(COORDINATOR)
-    await coordinatorRunAndTask()
+    for (const [index, from] of ['orca:items', 'term_peer'].entries()) {
+      directMail(`msg_direct_${index}`, from)
+      runtime.notifyMessageArrived(to, 'status')
+      await vi.waitFor(() => expect(chat.turns).toHaveLength(index + 1), WAIT)
+      expect(turnText(chat.turns[index]!)).toContain('how about it?')
+      await settleTurn(COORDINATOR, index)
+      await vi.waitFor(() => expect(unread(to)).toEqual([]), WAIT)
+    }
+
     directMail('msg_peer_2', 'term_peer')
 
     const checked = await call(

@@ -1,7 +1,8 @@
 import type { ComponentProps, JSX, ReactNode } from 'react'
+import { Lightbulb } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { Badge } from '@/components/ui/badge'
 import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/class-names'
 
@@ -77,14 +78,14 @@ export function FeatureTipDialogFrame({
   )
 }
 
-export function FeatureTipEyebrow({ label }: { label: string }): JSX.Element {
+/** A quiet "Tip" label above the title of tips that teach a habit rather than announce a feature. */
+export function FeatureTipLabel(): JSX.Element {
+  const t = useTranslate()
   return (
-    <Badge
-      variant="outline"
-      className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-    >
-      {label.toUpperCase()}
-    </Badge>
+    <div className="mb-2 flex h-5 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <Lightbulb className="size-4" aria-hidden />
+      {t('featureTips.eyebrowTip', 'Tip')}
+    </div>
   )
 }
 

@@ -9,6 +9,7 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { readClaudeRunningSessionsPolicy } from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
@@ -231,7 +232,8 @@ export async function selectClaudeProviderAccount(
     return callRuntimeRpc<ClaudeAccountSelectResult>(
       target,
       'accounts.selectClaude',
-      { accountId: selection.accountId },
+      // Why the policy: the server's own setting is not the one this app's Settings edits.
+      { accountId: selection.accountId, runningSessions: readClaudeRunningSessionsPolicy() },
       { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
     )
   }

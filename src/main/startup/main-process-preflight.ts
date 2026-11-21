@@ -1,4 +1,3 @@
-import { configureDevKeychain } from './chromium-policy/configure-dev-keychain'
 import { installElectronNativeServices } from '../host/electron-native-services'
 import { captureBackendBootstrap } from '../backend-desktop/backend-supervisor'
 import { antigravityHookService } from '../antigravity/hook-service'
@@ -193,7 +192,6 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Register before spawning so CLI/relay-shared tree killing can reach main's gate and breadcrumbs.
   installMainProcessTreeKillGate()
   configureDevUserDataPath(isDev)
-  configureDevKeychain()
   configureOrcaUserDataPathEnv()
   // #16761: install the lazy environment accessor immediately after userData selection or early resolves can throw/memoize the wrong profile.
   setAppEnvironment(new ElectronAppEnvironment())

@@ -1,4 +1,5 @@
 import { takeMailWakeLaunchToken } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
@@ -105,9 +106,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         session.transport.getRuntimeEnvironmentId?.() ?? null,
         connectionId
       ),
-      runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, session.executionHostId),
+      runtimeHostPlatform: resolveRuntimeHostReportedPlatform(
+        readRuntimeStatuses(),
+        session.executionHostId
+      ),
       runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
-        state,
+        readRuntimeStatuses(),
         session.executionHostId
       )
     })

@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getRuntimeEnvironmentRevision,
@@ -34,12 +35,9 @@ function useFileLinkHostEpoch(
     const state = connectionId ? s.sshConnectionStates.get(connectionId) : undefined
     return state?.status === 'connected' ? String(state.connectionGeneration ?? 0) : null
   })
-  const runtimeStatus = useAppStore((s) => {
-    const status = runtimeEnvironmentId
-      ? s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
-      : undefined
-    return status ? `${status.connectionGeneration ?? 0}:${status.hostContactEpoch ?? 0}` : ''
-  })
+  const runtimeStatus = useRuntimeHostStatusSelector(runtimeEnvironmentId, (status) =>
+    status ? `${status.connectionGeneration ?? 0}:${status.hostContactEpoch ?? 0}` : ''
+  )
   const pairing = useSyncExternalStore(onRuntimeEnvironmentRevisionsChanged, () =>
     runtimeEnvironmentId ? getRuntimeEnvironmentRevision(runtimeEnvironmentId) : undefined
   )

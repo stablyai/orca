@@ -91,6 +91,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithM
           outputAt: () => this.readOutputClockAt(terminal.ptyId),
           held: () => this.ptyDeliveryHold(terminal.ptyId) !== null
         }),
+      repaint: (ptyId) => this.requestReattachedRepaint(ptyId),
       deliver: (ptyId) => this.deliverPendingMessagesForPty(ptyId)
     }
   )

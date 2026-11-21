@@ -81,6 +81,23 @@ describe('ConversationTurnActivity', () => {
     expect(told).toEqual(['Running one', 'Running one'])
   })
 
+  it('leaves a plan step that looks like it holds a secret out of what the thread is told', async () => {
+    const { plans, tool, writes } = harness()
+    writes([
+      { content: 'Set API_KEY=sk-ant-abcdefgh12345678 in .env', status: 'in_progress' },
+      { content: 'Open https://x.dev/cb?token=abc123def456', status: 'pending' },
+      { content: 'Run the tests', status: 'pending' }
+    ])
+    tool('TodoWrite', 'plan')
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    expect(plans.at(-1)).toEqual([
+      { title: 'Step left out: it looked like it held a secret', status: 'in_progress' },
+      { title: 'Open https://x.dev/cb?…', status: 'pending' },
+      { title: 'Run the tests', status: 'pending' }
+    ])
+  })
+
   it('reports the plan with activity until the agent clears it', async () => {
     const { told, plans, tool, writes } = harness()
     writes([

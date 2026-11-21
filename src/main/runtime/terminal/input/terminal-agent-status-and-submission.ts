@@ -115,8 +115,8 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       if (verdict === 'unverifiable' && suspended()) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       } else if (verdict === null || verdict === 'unverifiable') {
-        const silent = verdict === 'unverifiable'
-        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, silent, recordExit)
+        // Here non-null is unverifiable: keep the agent if the foreground read is silent too.
+        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict !== null, recordExit)
       } else if (verdict === 'exited' && !recoverCompletedHook) {
         recordExit()
       } else if (verdict === 'live') {

@@ -3,6 +3,10 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import { formatUsageLimitResetClock } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { NotificationDispatchRequest } from '../../../shared/notifications/notification-settings-types'
+import {
+  hasSlackMentionMarkup,
+  slackMentionsPlainText
+} from '../../../shared/connectors/slack-message-markup'
 
 type NotificationTranslator = (key: string, fallback: string) => string
 
@@ -47,6 +51,18 @@ export function buildNotificationOptions(
   }
 
   return buildAgentTaskCompleteFallbackNotificationOptions(args, translate)
+}
+
+/** True only when `buildNotificationOptions` can rewrite Slack mention tokens in `agentLastAssistantMessage`. */
+export function notificationNeedsSlackReplyCheck(args: NotificationDispatchRequest): boolean {
+  return (
+    args.source === 'agent-task-complete' &&
+    !args.agentRepliesInSlack &&
+    Boolean(
+      args.agentLastAssistantMessage && hasSlackMentionMarkup(args.agentLastAssistantMessage)
+    ) &&
+    agentFailureSentence(args) === null
+  )
 }
 
 function translateWorkspace(translate: NotificationTranslator): string {
@@ -146,8 +162,12 @@ function buildAgentTaskCompleteRichBody(
   if (failure) {
     return failure
   }
+  // A reply written for Slack names people as Slack does; the notification shows names.
   const assistantMessage = normalizeNotificationText(
-    args.agentLastAssistantMessage,
+    args.agentLastAssistantMessage &&
+      (args.agentRepliesInSlack
+        ? slackMentionsPlainText(args.agentLastAssistantMessage)
+        : args.agentLastAssistantMessage),
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
   if (assistantMessage) {

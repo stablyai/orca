@@ -10,6 +10,32 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
+vi.mock('./updater-release-api-token', () => ({
+  resolveReleaseApiToken: () => Promise.resolve(null),
+  rejectReleaseApiToken: vi.fn()
+}))
+
+function respondWithReleasesApi(...pages: { tag: string; publishedAt: string }[][]): void {
+  const atomImplementation = netFetchMock.getMockImplementation()
+  netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+    if (url.startsWith('https://api.github.com/repos/stablyai/orca/releases')) {
+      const page = Number(new URL(url).searchParams.get('page') ?? '1')
+      const payload = (pages[page - 1] ?? []).map(({ tag, publishedAt }) => ({
+        tag_name: tag,
+        published_at: publishedAt,
+        assets: ['latest.yml', 'latest-mac.yml', 'latest-linux.yml'].map((name) => ({ name }))
+      }))
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve(payload)
+      })
+    }
+    return atomImplementation?.(url, init)
+  })
+}
+
 function buildAtomFeed(tags: string[], updatedAt: Record<string, string> = {}): string {
   const entries = tags
     .map(
@@ -109,6 +135,46 @@ describe('fetchNewerReleaseTagsWithReadiness update delay', () => {
       version: '1.4.3',
       releasedAt: NOW - DAY_MS
     })
+  })
+
+  it('offers an aged-out release despite a recent older-line release in the Atom feed', async () => {
+    const atomTags = ['v1.4.266', 'v1.4.265', 'v1.3.99']
+    const publishedAt: Record<string, string> = {
+      'v1.4.266': daysAgo(0),
+      'v1.4.265': daysAgo(1),
+      'v1.3.99': daysAgo(1)
+    }
+    respondWithAtom(atomTags, [], [], [], publishedAt)
+    respondWithReleasesApi([
+      ...atomTags.map((tag) => ({ tag, publishedAt: publishedAt[tag] })),
+      { tag: 'v1.4.250', publishedAt: daysAgo(8) },
+      { tag: 'v1.4.249', publishedAt: daysAgo(9) }
+    ])
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.248', 1, delay)
+    expect(result.tags).toEqual(['v1.4.250'])
+    expect(result.releaseDelay?.heldRelease?.tag).toBe('v1.4.266')
+  })
+
+  it('keeps paging when only REST, not the Atom feed, dates a release past the delay', async () => {
+    respondWithAtom(['v1.4.276', 'v1.4.257'], [], [], [], {
+      'v1.4.276': daysAgo(0),
+      'v1.4.257': daysAgo(1)
+    })
+    const youngReleases = Array.from({ length: 19 }, (_, index) => ({
+      tag: `v1.4.${276 - index}`,
+      publishedAt: daysAgo(0)
+    }))
+    respondWithReleasesApi(
+      [...youngReleases, { tag: 'v1.4.257', publishedAt: daysAgo(8) }],
+      [
+        { tag: 'v1.4.250', publishedAt: daysAgo(9) },
+        { tag: 'v1.4.249', publishedAt: daysAgo(10) }
+      ]
+    )
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.248', 1, delay)
+    expect(result.tags).toEqual(['v1.4.250'])
   })
 
   it('fails closed for releases without a feed timestamp', async () => {

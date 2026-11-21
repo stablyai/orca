@@ -1,3 +1,4 @@
+import { BOT_NAME_MAX_LENGTH } from '../bot-types'
 import {
   BOT_CONNECTOR_NAMES,
   BOT_TEMPLATE_CATEGORIES,
@@ -82,7 +83,8 @@ export function freeBotName(name: string, taken: readonly string[]): string {
     return name
   }
   for (let index = 2; ; index++) {
-    const candidate = `${name} ${index}`
+    // Kept within the name limit, so a long name still makes a bot.
+    const candidate = `${name.slice(0, BOT_NAME_MAX_LENGTH - ` ${index}`.length)} ${index}`
     if (!used.has(candidate.toLowerCase())) {
       return candidate
     }

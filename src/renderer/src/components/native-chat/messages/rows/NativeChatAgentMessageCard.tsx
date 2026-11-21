@@ -20,10 +20,7 @@ import {
   sessionWorkerIsRunning,
   type OrchestrationSessionWorker
 } from '../../../../../../shared/orchestration-session-workers'
-import {
-  NativeChatAgentMessageSenderNames,
-  NativeChatAgentMessageSenderOpen
-} from '../agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatAgentMessageSenderNames } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
 import {
   unnamedSenderLabel,
@@ -36,7 +33,6 @@ import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
-import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
@@ -93,14 +89,9 @@ export function NativeChatAgentMessageCard({
   const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
   const { shown, more } = agentMessageSendersShown(from)
   const canCopy = agentMessageCanCopy(text)
-  // Mail from several senders opens each from its details.
-  const several = shown.length > 1
   const merged = message.mergedEvents ?? []
   const expandable =
-    canCopy ||
-    several ||
-    merged.length > 0 ||
-    message.blocks.some((block) => block.type === 'image-ref')
+    canCopy || merged.length > 0 || message.blocks.some((block) => block.type === 'image-ref')
   const words = lead(from, message, t)
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
@@ -125,39 +116,9 @@ export function NativeChatAgentMessageCard({
           requestAnimationFrame(onRefolded)
         }
       }}
-      action={
-        sender || canCopy ? (
-          <span className="flex items-center gap-0.5">
-            {sender && !several ? (
-              <NativeChatAgentMessageSenderOpen
-                from={from}
-                sender={sender}
-                dispatchId={dispatchId}
-                chatWorktreeId={worktreeId}
-                target={target}
-              />
-            ) : null}
-            {canCopy ? <NativeChatCopyButton text={text} /> : null}
-          </span>
-        ) : null
-      }
       details={
         expandable ? (
           <>
-            {several ? (
-              <span className="-ml-1.5 flex flex-wrap gap-1">
-                {shown.map((each) => (
-                  <NativeChatAgentMessageSenderOpen
-                    key={each.party.address}
-                    from={from}
-                    sender={each}
-                    chatWorktreeId={worktreeId}
-                    target={target}
-                    named
-                  />
-                ))}
-              </span>
-            ) : null}
             <NativeChatImageAttachments
               blocks={message.blocks}
               runtimeContext={runtimeContext}
@@ -184,18 +145,24 @@ export function NativeChatAgentMessageCard({
         ) : null
       }
     >
-      {words}{' '}
-      {shown.length === 0 ? (
-        unnamedSenderLabel(t)
-      ) : (
-        <NativeChatAgentMessageSenderNames
-          shown={shown}
-          chatWorktreeId={worktreeId}
-          target={target}
-          dispatchId={dispatchId}
-        />
-      )}
-      {more > 0 ? ` +${more}` : null}
+      {/* One sender cuts short in its chip on one line; several may wrap to a second line. */}
+      <span
+        className={`flex min-w-0 items-center gap-x-1 whitespace-nowrap ${shown.length > 1 ? 'flex-wrap' : ''}`}
+      >
+        <span className="shrink-0">{words}</span>
+        {shown.length === 0 ? (
+          <span className="min-w-0 truncate">{unnamedSenderLabel(t)}</span>
+        ) : (
+          <NativeChatAgentMessageSenderNames
+            from={from}
+            shown={shown}
+            chatWorktreeId={worktreeId}
+            target={target}
+            dispatchId={dispatchId}
+          />
+        )}
+        {more > 0 ? <span className="shrink-0">+{more}</span> : null}
+      </span>
     </NativeChatEventRow>
   )
 }

@@ -103,7 +103,7 @@ const moved = (repoId: string) => isWslMoveProjectBlocked(undefined, { repoId })
 
 // Flag-on checklist "Partial undo of an older move (P then Q)": undo P alone, with Q moved after it.
 describe('undo of an older move while a newer one stands', () => {
-  it('refuses P, naming Q, and leaves both moves, their host copies and automations as they were', async () => {
+  it('refuses an older move until the newer move is undone, then restores each project on its own', async () => {
     expect(await useHere('repo-1')).toEqual({
       released: false,
       reason: 'superseded',
@@ -116,9 +116,7 @@ describe('undo of an older move while a newer one stands', () => {
       ['renderer-a']
     ])
     expect([moved('repo-1'), moved('repo-q')]).toEqual([true, true])
-  })
 
-  it('brings Q back alone, then P, each touching only its own move on the host', async () => {
     expect(await useHere('repo-q')).toMatchObject({ released: true, repoIds: ['repo-q'] })
     expect(touched).toEqual([
       'automations:move-q',

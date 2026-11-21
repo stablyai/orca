@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../../notifications/desktop-away-state'
+import { closeDesktopNotification } from '../../notifications/desktop-notification'
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   NotificationAttentionAcknowledgement,
@@ -18,10 +19,9 @@ import { isMainWindowVisible } from '../../window/visibility/main-window-visibil
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
-import {
-  createNotificationDeliveryService,
-  createRetainedAgentAttentionReceiver
-} from '../../notifications/notification-delivery-service'
+import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
+import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
+import { createRetainedAgentAttentionReceiver } from '../../notifications/retained-agent-attention-receiver'
 import {
   createAnnouncedNotificationRegistry,
   type AnnouncedNotification
@@ -107,7 +107,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     for (const entry of entries) {
       const native = activeNotificationsById.get(entry.id)
       if (native) {
-        native.notification.close()
+        closeDesktopNotification(native.notification)
         native.release()
         dismissed += 1
       }
@@ -231,6 +231,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     platform: process.platform,
     now: () => Date.now(),
     wasRead: announced.wasRead,
+    repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
     reserveNative: (request) => {
       if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
         return undefined
@@ -271,7 +272,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   const receiveAttention = createRetainedAgentAttentionReceiver({
     dispatch: deliveryService.dispatch,
     dismiss: (id) => retireAnnouncements([{ id }]),
-    readWorkspaceSession: () => store.getWorkspaceSession()
+    readWorkspaceSession: () => store.getWorkspaceSession(),
+    retained: runtime?.getRetainedAgentAttention?.()
   })
   stopRuntimeAttentionEvents?.()
   stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
@@ -284,9 +286,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     },
     { consumesTerminalSideEffects: false }
   )
-  for (const notice of runtime?.getRetainedAgentAttention?.() ?? []) {
-    receiveAttention(notice.notificationId, notice)
-  }
 
   // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')

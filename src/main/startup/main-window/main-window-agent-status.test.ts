@@ -8,7 +8,7 @@ vi.mock('../../agent-hooks/server/agent-hook-server', () => ({
 vi.mock('../../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
 vi.mock('./synthetic-title-runtime', () => ({ stopSyntheticTitleSpinnerTimer: () => {} }))
 vi.mock('../main-process-state', () => ({
-  mainProcessState: { mainWindow: { isDestroyed: () => false, webContents: { send } } }
+  mainProcessState: { core: {}, mainWindow: { isDestroyed: () => false, webContents: { send } } }
 }))
 
 const { installMainWindowAgentStatusListeners } = await import('./main-window-agent-status')

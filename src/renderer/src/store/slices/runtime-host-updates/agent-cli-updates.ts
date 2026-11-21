@@ -1,6 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
 import {
+  AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
   type AgentCliUpdate,
   type AgentCliUpdateAgent,
@@ -72,7 +74,8 @@ export type AgentCliUpdatesSlice = {
 
 export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCliUpdatesSlice> = (
   set,
-  get
+  get,
+  store
 ) => {
   const writeHost = (key: string, write: (host: AgentCliUpdateHost) => AgentCliUpdateHost) =>
     set((state) => {
@@ -85,7 +88,7 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
   const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
-      get().runtimeStatusByEnvironmentId.get(target.environmentId)
+      runtimeStatusSubscriptionsFor(store).readStatuses().get(target.environmentId)
     )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
 
   return {
@@ -100,7 +103,9 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       let check = checks.get(key)
       if (!check) {
         checkedAt.set(key, Date.now())
-        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check')
+        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check', {
+          agents: AGENT_CLI_UPDATE_AGENTS
+        })
           .then(({ updates }) => {
             // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
             if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {

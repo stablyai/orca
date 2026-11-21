@@ -400,7 +400,7 @@ describe('BotLinearSetupDialog', () => {
     expect(screen.queryByText(/Signed in as Dana/)).toBeNull()
   })
 
-  it('keeps Copy link for an admin whole, whatever the workspace is called', async () => {
+  it('copies the admin install link for a workspace with a long name', async () => {
     const long = workspace({
       installed: false,
       name: 'A workspace with a very long name that once pushed the buttons off the dialog',
@@ -409,7 +409,7 @@ describe('BotLinearSetupDialog', () => {
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([long]) })
     renderDialog()
 
-    const copy = await screen.findByRole('button', { name: 'Copy link for an admin' })
+    const copy = await screen.findByRole('button', { name: 'Copy admin link' })
     // The workspace is named in the text, never inside a button.
     expect(
       screen.getByText(/Orca is not installed in A workspace with a very long name/)

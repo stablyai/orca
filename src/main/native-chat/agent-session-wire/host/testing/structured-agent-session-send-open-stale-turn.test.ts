@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
+  closeTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -53,6 +54,7 @@ async function relaunchAfterCrashMidTurn(
   await dying.host.flushStreamedEvents(SESSION)
   // Empty renewal drains preceding record writes before copying crash state.
   await dying.store.renewLeases([])
+  await closeTestAgentSessionDatabase(dying.root)
   const relaunched = `${dying.root}-relaunched`
   relaunchedRoots.push(relaunched)
   await cp(dying.root, relaunched, {

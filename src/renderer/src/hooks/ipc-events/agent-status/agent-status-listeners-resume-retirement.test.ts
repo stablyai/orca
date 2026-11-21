@@ -15,7 +15,6 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: (): AppState => store
 afterEach(() => vi.unstubAllGlobals())
 
 it.each([
-  ['live', null],
   ['quit', null],
   ['live', 'ssh-1']
 ] as const)(

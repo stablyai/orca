@@ -1,6 +1,6 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow, WorkerDispatchRow } from '../../db/orchestration-records'
-import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import { observeWorker } from './worker-presence-report'
 
 /** What a failed start left behind, as its residual resources name it. */
 function describeLeftover(residualResources: string): string | undefined {
@@ -68,17 +68,22 @@ export function reportFailedWorkerStart(
     dispatch.status === 'failed' || dispatch.status === 'circuit_broken'
       ? dispatch.status
       : undefined
-  reportWorkerTurnStop(
+  observeWorker(
     db,
     { kind: 'local', dispatch },
     {
-      from: `dispatch:${dispatch.id}`,
-      reason: 'lost',
-      cause: `it never started: ${worker.last_error ?? 'its start failed'}`,
-      lastOutput: undefined,
-      leftover: describeLeftover(worker.residual_resources),
-      ...(failedWorkerStartHasOutput(db, worker, dispatch) ? {} : { neverStarted: true }),
-      ...(settled ? { settled } : {})
+      presence: 'gone',
+      fence: 'start',
+      legacyStopKey: 'gone',
+      gone: {
+        from: `dispatch:${dispatch.id}`,
+        reason: 'lost',
+        cause: `it never started: ${worker.last_error ?? 'its start failed'}`,
+        lastOutput: undefined,
+        leftover: describeLeftover(worker.residual_resources),
+        ...(failedWorkerStartHasOutput(db, worker, dispatch) ? {} : { neverStarted: true })
+      },
+      settle: () => settled
     },
     { getDb: () => db, isWaitingForMail: () => false, notify }
   )

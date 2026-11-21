@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type * as BotCatalog from '@/lib/bot-catalog'
@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     groups,
     rpc: vi.fn(async (_target: unknown, _method: string, _params?: unknown) => ({})),
     activate: vi.fn(),
+    openHomeTab: vi.fn(async (_bot: Bot) => true),
     onOpenBot: vi.fn(),
     updateBot: vi.fn(async (_bot: { id: string }, _updates: unknown) => ({}))
   }
@@ -31,6 +32,7 @@ vi.mock('@/lib/bot-catalog', async (importOriginal) => ({
   createBot: vi.fn(),
   updateBot: (bot: { id: string }, updates: unknown) => mocks.updateBot(bot, updates),
   deleteBot: vi.fn(),
+  openBotHomeTab: (bot: Bot) => mocks.openHomeTab(bot),
   openBotHome: (...args: unknown[]) => {
     mocks.activate(...args)
     return true
@@ -164,6 +166,7 @@ beforeEach(() => {
   mocks.groups = []
   mocks.rpc.mockClear()
   mocks.activate.mockReset()
+  mocks.openHomeTab.mockClear()
   mocks.onOpenBot.mockReset()
   mocks.updateBot.mockClear()
 })
@@ -200,7 +203,7 @@ describe('SidebarBotsSection', () => {
     expect(screen.getByText('Reviewer')).toBeTruthy()
   })
 
-  it('opens a bot from its face and unfolds the section; the rest of the header only folds', () => {
+  it('opens the selected chat from its face while only the header expands the section', async () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     // Room for all three faces.
     vi.stubGlobal(
@@ -222,18 +225,16 @@ describe('SidebarBotsSection', () => {
     useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     renderSection()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Scout · Idle' }))
-    // Opened as its row would be, with the section unfolded so that row shows.
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-2' }))
-    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(false)
-    expect(screen.getByText('Scout')).toBeTruthy()
+    const face = screen.getByRole('button', { name: /^Scout\b/ })
+    const header = screen.getByRole('button', { name: /^Expand Bots,/ })
+    fireEvent.click(face)
+    await waitFor(() => expect(mocks.onOpenBot).toHaveBeenCalledOnce())
+    expect(mocks.openHomeTab).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-2' }))
+    expect(header.getAttribute('aria-expanded')).toBe('false')
 
-    fireEvent.click(screen.getByRole('button', { name: /^Collapse Bots,/ }))
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(false)
-    expect(mocks.activate).toHaveBeenCalledOnce()
+    fireEvent.click(header)
+    expect(header.getAttribute('aria-expanded')).toBe('true')
+    expect(mocks.openHomeTab).toHaveBeenCalledOnce()
   })
 
   it('folds open from the "+N" circle', () => {
@@ -243,12 +244,13 @@ describe('SidebarBotsSection', () => {
     renderSection()
     fireEvent.click(screen.getByRole('button', { name: 'Show 3 more bots' }))
     expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(false)
-    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(mocks.openHomeTab).not.toHaveBeenCalled()
   })
 
   it('leaves the folded header without its controls, so Tab cannot reach them', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
-    threeUnplacedBots()
+    mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-2' })]
+    useAppStore.setState({ folderWorkspaces: [home(), home({ id: 'fw-2' })] })
     useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     renderSection()
     const controls = (): (HTMLElement | null)[] => [
@@ -257,9 +259,10 @@ describe('SidebarBotsSection', () => {
       screen.queryByRole('button', { name: 'New bot or group' })
     ]
     expect(controls()).toEqual([null, null, null])
+    expect(screen.queryByRole('button', { name: 'Templates' })).toBeNull()
     // The fold button and the faces stay; the folded summary still counts the rest.
     expect(screen.getByRole('button', { name: /^Expand Bots,/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Show 3 more bots' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Show 2 more bots' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
     expect(controls().every(Boolean)).toBe(true)
@@ -285,16 +288,16 @@ describe('SidebarBotsSection', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
     expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create a bot' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New bot' })).toBeTruthy()
     // No count beside the title while there is nothing to count.
     expect(screen.queryByText('0')).toBeNull()
     const emptyHeader = screen.getByRole('button', { name: /^Collapse Bots, 0 bots/ })
     expect(emptyHeader.hasAttribute('disabled')).toBe(false)
     fireEvent.click(emptyHeader)
     expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
+    expect(screen.queryByText('Your AI teammate')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^Expand Bots, 0 bots/ }))
-    expect(screen.getByText('Meet your AI teammate')).toBeTruthy()
+    expect(screen.getByText('Your AI teammate')).toBeTruthy()
     fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
     expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
     // A group needs two bots.
@@ -350,7 +353,7 @@ describe('SidebarBotsSection', () => {
     mocks.groups = [group({ members: [] })]
     useAppStore.setState({ folderWorkspaces: [home({ id: 'fw-g' })] })
     renderSection()
-    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
+    expect(screen.queryByText('Your AI teammate')).toBeNull()
     expect(screen.getByText('Crew')).toBeTruthy()
   })
 

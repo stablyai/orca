@@ -7,6 +7,7 @@ import type {
   MobilePushRegisterResult
 } from '../../../../shared/notifications/mobile-push-contract'
 import type { DeliveredNotificationIdentity } from '../../../../shared/notifications/mobile-notification-identity'
+import type { NotificationPushCoverageRequest as PushCoverageRequest } from '../../../../shared/rpc-contract/notifications/notifications-params'
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
@@ -50,6 +51,7 @@ export type MobilePushRegistrar = {
   test(deviceId: string): Promise<MobilePushTestResult>
   register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
+  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]>
 }
 
 /** Host news for its owner with no agent turn behind it; `id` keys its cooldown and its phone notice. */

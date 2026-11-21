@@ -196,6 +196,7 @@ export const UiUpdateFields = z
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
     sidebarBotsHeight: z.number().finite().nullable().optional(),
+    sidebarProjectsFirst: z.boolean().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),

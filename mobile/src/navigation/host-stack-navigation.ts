@@ -185,7 +185,13 @@ export function navigateToHostStackRoute(
       type: 'SET_PARAMS',
       target: hostState.key,
       source: focused.key,
-      payload: { params: target.params }
+      // A pane request names its whole item intent: without an item it ends an earlier one.
+      payload: {
+        params:
+          isSessionRoute(target) && target.params.paneKey
+            ? { botItem: '', ...target.params }
+            : target.params
+      }
     })
     return SETTLED_NAVIGATION
   }

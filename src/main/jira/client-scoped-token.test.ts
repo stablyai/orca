@@ -70,7 +70,7 @@ describe('scoped Jira Cloud tokens over HTTP', () => {
         method: 'GET'
       }
     ])
-    const client = jira.getClients()[0]
+    const client = (await jira.getClients())[0]
     if (!client) {
       throw new Error('Expected connected scoped Jira client')
     }
@@ -93,5 +93,41 @@ describe('scoped Jira Cloud tokens over HTTP', () => {
       )
     }
     expect(fixture.requests).toHaveLength(4)
+  })
+
+  it('never pairs a reconnected token with the site record it replaces', async () => {
+    fixture = await startJiraAuthFixture((request, response) => {
+      if (request.url === `${SITE}/rest/api/3/myself`) {
+        jiraFixtureJson(response, 200, VIEWER)
+      } else {
+        jiraFixtureJson(response, 401, {})
+      }
+    })
+    const jira = await loadClient()
+    await expect(
+      jira.connect({ ...CREDENTIAL, apiToken: 'unscoped-token' })
+    ).resolves.toMatchObject({
+      ok: true
+    })
+    const store = await import('./site-credential-store')
+    const file = await store.getSiteFile()
+    const site = file.sites[0]
+    if (!site) {
+      throw new Error('Expected the connected Jira site')
+    }
+
+    // Same steps as connect(): token first, then the site record, under the registry queue.
+    let reader: ReturnType<typeof jira.getClients> = Promise.resolve([])
+    await store.inSiteRegistryOrder(async () => {
+      await store.saveToken(site.id, 'scoped-token')
+      reader = jira.getClients()
+      await store.writeSiteFile({ ...file, sites: [{ ...site, apiBaseUrl: GATEWAY }] })
+    })
+
+    const [client] = await reader
+    expect(client?.site.apiBaseUrl).toBe(GATEWAY)
+    expect(client?.authorization).toBe(
+      `Basic ${Buffer.from(`${CREDENTIAL.email}:scoped-token`).toString('base64')}`
+    )
   })
 })

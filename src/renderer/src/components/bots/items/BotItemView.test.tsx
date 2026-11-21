@@ -17,17 +17,10 @@ import type { BotItemViewRead } from './use-bot-item-view'
 const read = vi.hoisted((): { current: BotItemViewRead | null } => ({ current: null }))
 const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('./use-bot-item-view', () => ({ useBotItemView: () => read.current }))
-const answered = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve('answered')))
 const statusSet = vi.hoisted(() => vi.fn())
-// The host's read of the item, as it holds it now.
-const hostRead = vi.hoisted(() =>
-  vi.fn((..._args: unknown[]) => Promise.resolve({ item: read.current!.item, events: [] }))
-)
 vi.mock('./use-bot-items', () => ({
   commentOnBotItem: sent,
-  setBotItemsStatus: statusSet,
-  answerBotItem: answered,
-  showBotItem: hostRead
+  setBotItemsStatus: statusSet
 }))
 const fileContextOwners = vi.hoisted(() => vi.fn((..._args: unknown[]) => new Map()))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: fileContextOwners }))
@@ -37,11 +30,41 @@ vi.mock(import('@/lib/browser/navigation/app-http-link-open'), async (importOrig
   openAppHttpLink
 }))
 vi.mock('./BotItemActivityList', () => ({
-  BotItemActivityList: ({ events }: { events: BotItemEvent[] }) => (
+  BotItemActivityList: ({
+    events,
+    quickReplies
+  }: {
+    events: BotItemEvent[]
+    quickReplies?: {
+      send: (text: string) => void
+      edit: (text: string) => void
+      steps?: { current: number; answer: (index: number, words: string) => void } | null
+    }
+  }) => (
     <ol>
       {events.map((event) => (
-        <li key={event.id}>{event.id}</li>
+        <li key={event.id} data-bot-item-comment-id={event.id}>
+          {event.id}
+        </li>
       ))}
+      {quickReplies ? (
+        <>
+          <button type="button" onClick={() => quickReplies.send('Go ahead')}>
+            Quick reply
+          </button>
+          <button type="button" onClick={() => quickReplies.edit('Go ahead')}>
+            Edit quick reply
+          </button>
+          {quickReplies.steps ? (
+            <button
+              type="button"
+              onClick={() => quickReplies.steps?.answer(quickReplies.steps.current, 'Yes')}
+            >
+              Answer this step
+            </button>
+          ) : null}
+        </>
+      ) : null}
     </ol>
   )
 }))
@@ -127,9 +150,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   sent.mockReset()
   statusSet.mockReset()
-  hostRead.mockReset()
-  // Back to its own implementation, so one test's refusal never reaches the next.
-  answered.mockReset()
   openAppHttpLink.mockClear()
   fileContextOwners.mockReturnValue(new Map())
 })
@@ -169,7 +189,15 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String))
+  expect(sent).toHaveBeenCalledWith(
+    BOT,
+    'uid-6',
+    'Ship it',
+    [],
+    expect.any(String),
+    undefined,
+    false
+  )
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
@@ -192,7 +220,9 @@ it('focuses the comment box from its card and preserves focus outside it when su
     'uid-6',
     'Use the proposed flow',
     [],
-    expect.any(String)
+    expect.any(String),
+    undefined,
+    false
   )
   expect(box.contains(document.activeElement)).toBe(false)
 })
@@ -272,452 +302,133 @@ it('sends a plain click the link setting leaves alone to the system browser, as 
   }
 })
 
-const OPEN_ASK = makeTestBotItem(6, {
+const WAITING = makeTestBotItem(6, {
   status: 'needs_you',
-  question: { eventId: 'e3', text: 'Which flow should ship?', answerable: true }
+  question: { eventId: 'e3', text: 'Which flow should ship?' }
 })
 
-function renderItem(item: ReturnType<typeof makeTestBotItem>): void {
-  show(3, item)
-  render(
-    <TooltipProvider>
-      <BotItemView bot={BOT} uid="uid-6" />
-    </TooltipProvider>
-  )
-}
+it("keeps the comment box while the question waits, and posts a quick reply as the owner's comment", async () => {
+  show(3, WAITING)
+  render(<BotItemView bot={BOT} uid="uid-6" />)
 
-it("puts the open question's card in the comment box's place and sends its answer to that question", () => {
-  renderItem(OPEN_ASK)
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Quick reply' })))
 
-  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
-  fireEvent.change(screen.getByPlaceholderText('Type your answer'), {
-    target: { value: 'The short one' }
-  })
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-
-  expect(answered).toHaveBeenCalledWith(
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
     BOT,
     'uid-6',
-    'e3',
-    [{ picks: [], text: 'The short one' }],
-    expect.any(String)
+    'Go ahead',
+    [],
+    expect.any(String),
+    undefined,
+    false
   )
-  expect(sent).not.toHaveBeenCalled()
-})
-
-it('gives the comment box back when the card is folded, and the strip opens it again', () => {
-  renderItem(OPEN_ASK)
-
-  fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
-  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
 })
 
-it('keeps the comment box for a question asked where answers are not recorded', () => {
-  renderItem(
-    makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e3', text: 'Which flow?' } })
-  )
-
-  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
-  expect(screen.queryByPlaceholderText('Type your answer')).toBeNull()
-})
-
-function askingItem(
-  number: number,
-  question: Partial<NonNullable<ReturnType<typeof makeTestBotItem>['question']>> = {}
-) {
-  return makeTestBotItem(number, {
-    status: 'needs_you',
-    question: { eventId: 'e3', text: 'Which flow should ship?', answerable: true, ...question }
-  })
-}
-
-function renderAt(item: ReturnType<typeof makeTestBotItem>, events = 3): ReturnType<typeof render> {
-  show(events, item)
-  return render(
-    <TooltipProvider>
-      <BotItemView bot={BOT} uid={item.uid} />
-    </TooltipProvider>
-  )
-}
-
-function typeAnswer(text: string): void {
-  fireEvent.change(screen.getByPlaceholderText('Type your answer'), { target: { value: text } })
-}
-
-it('keeps the answer being typed when the question is replaced, and offers it back', () => {
-  const view = renderAt(askingItem(21))
-  typeAnswer('The short one')
-
-  const replaced = askingItem(21, { eventId: 'e9', text: 'Which color?' })
-  show(9, replaced)
-  view.rerender(
-    <TooltipProvider>
-      <BotItemView bot={BOT} uid={replaced.uid} />
-    </TooltipProvider>
-  )
-
-  const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('Which flow should ship?')
-  expect(notice.textContent).toContain('The short one')
-  expect(screen.getByPlaceholderText('Type your answer')).toHaveProperty('value', '')
-})
-
-/** Nothing but the answer itself ever reached the host: no comment and no status move. */
-function expectOnlyAnswerCalls(): void {
-  expect(sent).not.toHaveBeenCalled()
-  expect(statusSet).not.toHaveBeenCalled()
-}
-
-it("says an older host can't record the answer, keeps the words, and writes nothing else", async () => {
-  answered.mockResolvedValueOnce('unsupported')
-  renderAt(askingItem(23))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-
-  const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
-  expect(notice.textContent).toContain('Ship B')
-  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
-  expectOnlyAnswerCalls()
-})
-
-it("shows the bot's context in the card while the question's event is off the loaded page", () => {
-  renderAt(
-    askingItem(24, {
-      eventId: 'e40',
-      ask: {
-        context: 'It deletes worktrees idle for 30+ days.',
-        questions: [
-          { prompt: 'Which environment?', options: [{ label: 'Staging' }, { label: 'Prod' }] }
-        ]
-      }
-    })
-  )
-
-  expect(screen.getByText('It deletes worktrees idle for 30+ days.')).toBeTruthy()
-})
-
-function rerenderable(item: ReturnType<typeof makeTestBotItem>): {
-  reconcileTo: (next: ReturnType<typeof makeTestBotItem>, events: BotItemEvent[]) => void
-} {
-  let view: ReturnType<typeof render> | null = null
-  let next: { item: ReturnType<typeof makeTestBotItem>; events: BotItemEvent[] } | null = null
-  show(3, item)
-  // The view's re-read: what the host holds once asked again.
-  read.current!.retry = () => {
-    if (next) {
-      read.current = { ...read.current!, item: next.item, events: next.events }
-      view?.rerender(
-        <TooltipProvider>
-          <BotItemView bot={BOT} uid={item.uid} />
-        </TooltipProvider>
-      )
-    }
+it('holds the answers to an ask of several questions and posts them as one comment at the last', async () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [{ label: 'Yes' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'Yes' }] }
+    ]
   }
-  view = render(
-    <TooltipProvider>
-      <BotItemView bot={BOT} uid={item.uid} />
-    </TooltipProvider>
-  )
-  return {
-    reconcileTo: (nextItem, events) => {
-      next = { item: nextItem, events }
-    }
+  const asker = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
+  read.current = {
+    item: makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e1', text: 'copy' } }),
+    events: [
+      { id: 'e1', kind: 'commented', actor: asker, data: { text: 'copy', ask }, at: 1 },
+      { id: 'e2', kind: 'status', actor: asker, data: { from: 'working', to: 'needs_you' }, at: 1 }
+    ],
+    eventsRead: true,
+    hasEarlier: false,
+    failed: false,
+    deleted: false,
+    loadEarlier: vi.fn(),
+    retry: vi.fn()
   }
-}
+  render(<BotItemView bot={BOT} uid="uid-6" />)
 
-const flush = (): Promise<void> => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Answer this step' })))
+  expect(sent).not.toHaveBeenCalled()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Answer this step' })))
 
-it("never calls the owner's own recorded answer someone else's when its reply was lost", async () => {
-  let loseReply: (error: Error) => void = () => {}
-  answered.mockImplementationOnce(() => new Promise((_, reject) => (loseReply = reject)))
-  const page = rerenderable(askingItem(31))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  const sentId = answered.mock.calls[0]![4]
-  // The change notice's read lands first: the answer, under this card's id, took the question.
-  page.reconcileTo(makeTestBotItem(31, { status: 'working', question: null }), [
-    ...eventsUpTo(3),
-    {
-      id: 'e4',
-      kind: 'commented',
-      actor: { kind: 'owner' },
-      data: {
-        text: 'Ship B',
-        decisions: [{ picks: [], text: 'Ship B' }],
-        answers: 'e3',
-        answerId: sentId
-      },
-      at: 4
-    }
-  ])
-  act(() => read.current!.retry())
-  loseReply(new Error('connection lost'))
-  await flush()
-
-  expect(screen.queryByRole('status')).toBeNull()
-})
-
-it('reads the item again when the host says the question closed, and offers the answer back', async () => {
-  answered.mockResolvedValueOnce('closed')
-  const page = rerenderable(askingItem(32))
-  page.reconcileTo(askingItem(32, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-
-  expect(screen.getByRole('status').textContent).toContain('Ship B')
-})
-
-it("knows an earlier attempt's recorded answer as its own after a changed answer was sent", async () => {
-  answered.mockRejectedValueOnce(new Error('connection lost'))
-  const page = rerenderable(askingItem(35))
-  typeAnswer('Ship A')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  const firstId = answered.mock.calls[0]![4]
-  // A took the question; the changed answer B is refused as closed, and the read shows A.
-  answered.mockResolvedValueOnce('closed')
-  page.reconcileTo(makeTestBotItem(35, { status: 'working', question: null }), [
-    ...eventsUpTo(3),
-    {
-      id: 'e4',
-      kind: 'commented',
-      actor: { kind: 'owner' },
-      data: {
-        text: 'Ship A',
-        decisions: [{ picks: [], text: 'Ship A' }],
-        answers: 'e3',
-        answerId: firstId
-      },
-      at: 4
-    }
-  ])
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-
-  expect(answered.mock.calls[1]![4]).not.toBe(firstId)
-  // A is known as this card's own; B, changed after it, stays.
-  expect(screen.getByRole('status').textContent).toContain('Your answer was recorded')
-})
-
-it('shows what the host holds after a recorded answer, with no change notice needed', async () => {
-  const page = rerenderable(askingItem(36))
-  page.reconcileTo(makeTestBotItem(36, { status: 'working', question: null }), eventsUpTo(4))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-
-  expect(screen.queryByPlaceholderText('Type your answer')).toBeNull()
-  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
-})
-
-it('shows the first empty step instead of sending when the last step is picked first', async () => {
-  renderAt(
-    askingItem(34, {
-      ask: {
-        questions: [
-          { prompt: 'Ready title?', options: [{ label: 'A' }, { label: 'B' }] },
-          { prompt: 'Merge after?', options: [{ label: 'Yes' }, { label: 'No' }] }
-        ]
-      }
-    })
-  )
-  fireEvent.click(screen.getByRole('button', { name: /Step 2/ }))
-  fireEvent.click(screen.getByRole('button', { name: /Yes/ }))
-
-  // The pick's auto-submit lands on the first empty step instead of sending.
-  await vi.waitFor(() => expect(screen.getByText('Ready title?')).toBeTruthy())
-  expect(answered).not.toHaveBeenCalled()
-})
-
-it('keeps what the owner changed after sending when that earlier answer turns out recorded', async () => {
-  answered.mockRejectedValueOnce(new Error('connection lost'))
-  const page = rerenderable(askingItem(41))
-  typeAnswer('Ship A')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  const firstId = answered.mock.calls[0]![4]
-  typeAnswer('Ship B instead')
-  page.reconcileTo(makeTestBotItem(41, { status: 'working', question: null }), [
-    ...eventsUpTo(3),
-    {
-      id: 'e4',
-      kind: 'commented',
-      actor: { kind: 'owner' },
-      data: {
-        text: 'Ship A',
-        decisions: [{ picks: [], text: 'Ship A' }],
-        answers: 'e3',
-        answerId: firstId
-      },
-      at: 4
-    }
-  ])
-  act(() => read.current!.retry())
-  await flush()
-
-  expect(screen.getByRole('status').textContent).toContain('Ship B instead')
-})
-
-it("writes nothing for an older host's refusal when the question is replaced while the answer is out", async () => {
-  let refuse: (outcome: string) => void = () => {}
-  answered.mockImplementationOnce(() => new Promise((resolve) => (refuse = resolve)))
-  const page = rerenderable(askingItem(36))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  // Q2 replaces Q1 after the answer went and before the host's refusal comes back.
-  page.reconcileTo(askingItem(36, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-  act(() => read.current!.retry())
-  refuse('unsupported')
-  await flush()
-
-  expectOnlyAnswerCalls()
-  expect(answered).toHaveBeenCalledExactlyOnceWith(
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
     BOT,
-    'uid-36',
-    'e3',
-    expect.anything(),
-    expect.any(String)
+    'uid-6',
+    'Ship it? → Yes\nTell the team? → Yes',
+    [],
+    expect.any(String),
+    'e1',
+    false
   )
-  const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('can’t record answers yet')
-  expect(notice.textContent).toContain('Ship B')
 })
 
-it('writes nothing for an older host when Q2 replaces Q1 between any read of Q1 and the point a write would go', async () => {
-  answered.mockResolvedValue('unsupported')
-  const page = rerenderable(askingItem(38))
-  let replacedAfterRead = false
-  let replaced = false
-  const replace = (): void => {
-    if (!replaced) {
-      replaced = true
-      page.reconcileTo(askingItem(38, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-      act(() => read.current!.retry())
-    }
+it('shows the question "Replying to" names with focus kept in the box, and its × hides the mark without scrolling', () => {
+  const scrolledTo: Element[] = []
+  const scrollIntoView = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolledTo.push(this)
   }
-  // A page that reads the item before writing sees Q1 open, and Q2 replaces it right after that read.
-  hostRead.mockImplementation(() => {
-    const snapshot = read.current!.item
-    replace()
-    replacedAfterRead = true
-    return Promise.resolve({ item: snapshot, events: [] })
-  })
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  // The refusal is handled; whatever the page writes in reply would go now.
-  await flush()
-  // A page that never reads gets the replacement here, still before any later write.
-  replace()
-  await flush()
+  try {
+    show(3, WAITING)
+    render(<BotItemView bot={BOT} uid="uid-6" />)
+    const box = screen.getByRole('textbox', { name: 'Comment' })
+    const chip = screen.getByRole('button', { name: /^Replying to: Which flow should ship\?/ })
 
-  expect(replaced).toBe(true)
-  expect(replacedAfterRead).toBe(hostRead.mock.calls.length > 0)
-  expectOnlyAnswerCalls()
-  expect(screen.getByRole('status').textContent).toContain('can’t record answers yet')
+    chip.focus()
+    fireEvent.click(chip)
+
+    const question = screen.getByText('e3')
+    expect(scrolledTo).toEqual([question])
+    expect(question.hasAttribute('data-flash')).toBe(true)
+    expect(document.activeElement).toBe(box)
+
+    scrolledTo.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('button', { name: /^Replying to:/ })).toBeNull()
+    expect(scrolledTo).toEqual([])
+  } finally {
+    Element.prototype.scrollIntoView = scrollIntoView
+  }
 })
 
-it('writes nothing on retries to an older host, before or after the question is replaced', async () => {
-  answered.mockResolvedValue('unsupported')
-  const page = rerenderable(askingItem(37))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  // The owner opens the card again and sends the same answer.
-  fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  // Then Q2 replaces Q1, and the owner answers it too.
-  page.reconcileTo(askingItem(37, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-  act(() => read.current!.retry())
-  typeAnswer('Blue')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
+it("puts a quick reply's words in the comment box to add to, without sending", () => {
+  show(3, WAITING)
+  render(<BotItemView bot={BOT} uid="uid-6" />)
 
-  expectOnlyAnswerCalls()
-  expect(answered.mock.calls.map((call) => call[2])).toEqual(['e3', 'e3', 'e9'])
+  fireEvent.click(screen.getByRole('button', { name: 'Edit quick reply' }))
+
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  expect(box.textContent).toBe('Go ahead ')
+  expect(document.activeElement).toBe(box)
+  expect(sent).not.toHaveBeenCalled()
 })
 
-const ENVIRONMENT = {
-  questions: [{ prompt: 'Which environment?', options: [{ label: 'Staging' }, { label: 'Prod' }] }]
-}
+it('keeps focus in the item, with its arrows, when it is deleted while its comment box has focus', () => {
+  const nothingFocused = (): boolean =>
+    document.activeElement === null || document.activeElement === document.body
+  const nav = <button type="button">Next item</button>
+  show(3)
+  const view = render(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  box.focus()
+  expect(document.activeElement).toBe(box)
 
-function recordedUnder(answerId: unknown): BotItemEvent[] {
-  return [
-    ...eventsUpTo(3),
-    {
-      id: 'e4',
-      kind: 'commented',
-      actor: { kind: 'owner' },
-      data: { text: 'Staging', decisions: [{ picks: [0] }], answers: 'e3', answerId },
-      at: 4
-    }
-  ]
-}
+  read.current = { ...read.current!, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+  expect(document.activeElement).toBe(document.querySelector('[data-bot-item-focus-home]'))
+  expect(screen.getByRole('button', { name: 'Next item' })).toBeTruthy()
+})
 
-async function pickStaging(): Promise<void> {
-  const sends = answered.mock.calls.length
-  fireEvent.click(screen.getByRole('button', { name: /Staging/ }))
-  // A single-choice pick submits after the card's short pause.
-  await vi.waitFor(() => expect(answered).toHaveBeenCalledTimes(sends + 1))
-  await flush()
-}
-
-it('keeps words never sent when the same answer is retried and its first send turns out recorded', async () => {
-  answered.mockRejectedValueOnce(new Error('connection lost'))
-  answered.mockRejectedValueOnce(new Error('connection lost'))
-  const page = rerenderable(askingItem(51, { ask: ENVIRONMENT }))
-  await pickStaging()
-  const firstId = answered.mock.calls[0]![4]
-  // Words typed after the send, left unchosen; the same pick goes again under the same id.
-  typeAnswer('only after the freeze')
-  await pickStaging()
-  expect(answered.mock.calls[1]![4]).toBe(firstId)
-  page.reconcileTo(
-    makeTestBotItem(51, { status: 'working', question: null }),
-    recordedUnder(firstId)
+it('reads earlier pages until the waiting question shows, so its words and quick replies are there', () => {
+  show(
+    3,
+    makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e0', text: 'Ship it?' } })
   )
-  act(() => read.current!.retry())
-  await flush()
+  read.current = { ...read.current!, hasEarlier: true }
+  render(<BotItemView bot={BOT} uid="uid-6" />)
 
-  expect(screen.getByRole('status').textContent).toContain('only after the freeze')
-})
-
-it('offers back words typed before the first send that the answer left out', async () => {
-  answered.mockRejectedValueOnce(new Error('connection lost'))
-  const page = rerenderable(askingItem(52, { ask: ENVIRONMENT }))
-  typeAnswer('ask Ops first')
-  await pickStaging()
-  const firstId = answered.mock.calls[0]![4]
-  page.reconcileTo(
-    makeTestBotItem(52, { status: 'working', question: null }),
-    recordedUnder(firstId)
-  )
-  act(() => read.current!.retry())
-  await flush()
-
-  expect(screen.getByRole('status').textContent).toContain('ask Ops first')
-})
-
-it("keeps a several-step question's steps and count inside the card's bordered body", () => {
-  renderAt(
-    askingItem(45, {
-      ask: {
-        questions: [
-          { prompt: 'Which format?', options: [{ label: 'Checklist' }, { label: 'Paragraph' }] },
-          { prompt: 'Which theme?', options: [{ label: 'Light' }, { label: 'Dark' }] }
-        ]
-      }
-    })
-  )
-
-  const body = document.querySelector<HTMLElement>('[data-native-chat-question-surface]')!
-  expect(within(body).getByRole('button', { name: 'Step 1' })).toBeTruthy()
-  expect(within(body).getByText('1/2')).toBeTruthy()
+  expect(read.current.loadEarlier).toHaveBeenCalledOnce()
 })

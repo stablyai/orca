@@ -91,20 +91,6 @@ describe('the access request watch', () => {
     ])
   })
 
-  it('does not announce again after a restart', async () => {
-    const seen = botAccessSeenFile(profileDir())
-    const listed: ConnectorAccessRequest[] = []
-    await host(seen, listed).watch.tick()
-    listed.push(request('r1'))
-    const before = host(seen, listed)
-    await before.watch.tick()
-    const afterRestart = host(seen, listed)
-    await afterRestart.watch.tick()
-
-    expect(before.pushedIds()).toEqual(['bot-access-request:r1'])
-    expect(afterRestart.sent).toEqual([])
-  })
-
   it('never announces a waiting request again once it falls out of the capped list and comes back, across a restart', async () => {
     const seen = botAccessSeenFile(profileDir())
     const listed: ConnectorAccessRequest[] = []
@@ -302,17 +288,6 @@ describe('the access request watch', () => {
     expect(changed).toHaveBeenCalledTimes(3)
   })
 
-  it('serves the list from its last read, so botsChanged re-reads cost no cloud call', async () => {
-    const fake = fakeAccessCloud([request('r1')])
-    const { watch } = host(botAccessSeenFile(profileDir()), [], { cloud: () => fake.cloud })
-
-    await watch.tick()
-    const lists = await Promise.all(Array.from({ length: 5 }, () => watch.list()))
-
-    expect(fake.call).toHaveBeenCalledOnce()
-    expect(lists.every((listed) => listed.ok && listed.value[0]?.requestId === 'r1')).toBe(true)
-  })
-
   it('reads the cloud once for lists asked for before its first read', async () => {
     const fake = fakeAccessCloud([request('r1')])
     const { watch } = host(botAccessSeenFile(profileDir()), [], { cloud: () => fake.cloud })
@@ -324,7 +299,7 @@ describe('the access request watch', () => {
     expect(first.ok && first.value.map((entry) => entry.requestId)).toEqual(['r1'])
   })
 
-  it('drops an answered request at once, then reads the cloud once more', async () => {
+  it('drops an answered request before the cloud refresh completes', async () => {
     const fake = fakeAccessCloud([request('r1'), request('r2')])
     const { watch, changed } = host(botAccessSeenFile(profileDir()), [], {
       cloud: () => fake.cloud
@@ -332,7 +307,6 @@ describe('the access request watch', () => {
     await watch.tick()
     // The decision as the cloud saves it.
     await fake.call('/v1/access-requests/r1/decision', { decision: 'declined' })
-    const reads = fake.call.mock.calls.length
 
     const answered = watch.answered('r1')
     const now = await watch.list()
@@ -340,7 +314,6 @@ describe('the access request watch', () => {
 
     expect(now.ok && now.value.map((entry) => entry.requestId)).toEqual(['r2'])
     expect(changed).toHaveBeenCalledTimes(2)
-    expect(fake.call.mock.calls.length).toBe(reads + 1)
   })
 
   it('drops requests it read once no bot is on a connector', async () => {

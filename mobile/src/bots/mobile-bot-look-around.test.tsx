@@ -23,7 +23,11 @@ vi.mock('lucide-react-native', () => ({
   ArrowUpRight: 'Icon',
   Check: 'Icon',
   ChevronLeft: 'Icon',
-  ChevronRight: 'Icon'
+  ChevronRight: 'Icon',
+  Laptop: 'Icon',
+  Mail: 'Icon',
+  ShieldAlert: 'Icon',
+  ShieldOff: 'Icon'
 }))
 vi.mock('../components/list/DisclosureChevron', () => ({
   DisclosureChevron: ({ children }: { children: ReactNode }) => children
@@ -36,11 +40,32 @@ vi.mock('../components/composer-input/TextField', () => ({
   TextField: 'TextField'
 }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../platform/media-picking/media-picker', () => ({ useMediaPicker: () => ({}) }))
+vi.mock('./MobileBotAvatar', () => ({ MobileBotAvatar: () => null }))
+vi.mock('./soul-memory/MobileBotSoulAndMemory', () => ({
+  MobileBotSoulPage: () => null,
+  MobileBotMemoryPage: () => null
+}))
+vi.mock('./soul-memory/use-bot-home-files', () => ({
+  useBotMemoryTopicNames: () => null,
+  botMemoryTopicCount: () => 0
+}))
+vi.mock('./skills/MobileBotSkills', () => ({
+  useBotSkillScan: () => null,
+  botSkillSourceCount: () => null,
+  MobileBotSkillsPage: () => null
+}))
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
+}))
 vi.mock('../platform/external-links/external-link', () => ({
   openExternalLink: mocks.openLink
 }))
 vi.mock('./bot-sheet-operations', () => ({
   botUpdate: { request: mocks.update, interpret: (reply: unknown) => reply }
+}))
+vi.mock('./tools/bot-tool-operations', () => ({
+  botToolsListRead: { request: async () => ({}), interpret: () => ({ own: [], inherited: [] }) }
 }))
 vi.mock('./bot-up-next-operations', () => ({
   suggestionStart: {
@@ -59,14 +84,17 @@ vi.mock('./bot-up-next-operations', () => ({
 }))
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { lastLookedText, lookedText } from './bot-up-next-copy'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { useBotUpNext } from './use-bot-up-next'
 import type { RouteBot } from './use-route-bot'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked operations never touch the client.
-const client = {} as RpcClient
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked operations never touch the client; Settings reads its state.
+const client = {
+  getState: () => 'connected',
+  onStateChange: () => () => {},
+  getLastConnectedAt: () => 1
+} as unknown as RpcClient
 
 const bot: RouteBot['bot'] = {
   id: 'bot-1',
@@ -96,7 +124,8 @@ const routeBot: RouteBot = {
   applyBot: () => {},
   refresh: () => {},
   reads: 0,
-  itemReads: 0
+  itemReads: 0,
+  hostKey: 'host'
 }
 
 const suggestion = (id: string, title: string) => ({
@@ -139,40 +168,38 @@ function press(root: ReactTestInstance, label: string) {
   act(() => target?.props.onPress())
 }
 
+// Look around is a page of Settings, as on the desktop.
 function settings(lookNow = vi.fn()) {
-  return render(
+  const root = render(
     createElement(MobileBotSettingsTab, {
       routeBot,
       client,
       showToast: () => {},
+      online: true,
+      hostName: 'Studio Mac',
+      home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
       accessRequests: null,
-      lookAround: { onLookNow: lookNow, busy: false }
+      upNext: { lookNow, busy: false }
     })
   )
+  press(root, 'Look around, Every 4 hours, 8 AM to 8 PM')
+  return root
 }
 
 describe('Look around in the phone’s bot Settings', () => {
-  it('saves only the field the owner changed', async () => {
-    const root = settings()
-    const [weekdays] = root.findAllByProps({
-      accessibilityLabel: 'Weekdays only'
-    })
-    await act(async () => weekdays?.props.onValueChange(false))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(client, {
-      botId: 'bot-1',
-      updates: { lookAround: { weekdaysOnly: false } }
-    })
-  })
-
-  it('picks How often on its own page, then returns to Settings', async () => {
+  it('picks How often on its own page, then returns to Look around', async () => {
     const root = settings()
     press(root, 'How often, Every 4 hours, 8 AM to 8 PM')
     expect(texts(root)).toContain('Each morning at 8 AM')
     await act(async () => press(root, 'Each morning at 8 AM'))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(client, {
-      botId: 'bot-1',
-      updates: { lookAround: { every: 'mornings' } }
-    })
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(
+      client,
+      {
+        botId: 'bot-1',
+        updates: { lookAround: { every: 'mornings' } }
+      },
+      { failWhenDisconnected: true }
+    )
     expect(texts(root)).toContain('Last looked')
   })
 
@@ -182,10 +209,14 @@ describe('Look around in the phone’s bot Settings', () => {
     const [field] = root.findAllByProps({ returnKeyType: 'done' })
     act(() => field?.props.onChangeText('  CI on main '))
     await act(async () => press(root, 'Save'))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(client, {
-      botId: 'bot-1',
-      updates: { lookAround: { focus: 'CI on main' } }
-    })
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(
+      client,
+      {
+        botId: 'bot-1',
+        updates: { lookAround: { focus: 'CI on main' } }
+      },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('asks the host to look now', () => {
@@ -194,14 +225,17 @@ describe('Look around in the phone’s bot Settings', () => {
     expect(lookNow).toHaveBeenCalledOnce()
   })
 
-  it('shows nothing on a host that does not look around', () => {
+  it('shows nothing for an agent that does not look around', () => {
     const root = render(
       createElement(MobileBotSettingsTab, {
-        routeBot,
+        routeBot: { ...routeBot, bot: { ...bot, agent: 'grok' } },
         client,
         showToast: () => {},
+        online: true,
+        hostName: 'Studio Mac',
+        home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
         accessRequests: null,
-        lookAround: null
+        upNext: { lookNow: vi.fn(), busy: false }
       })
     )
     expect(texts(root)).not.toContain('Look around')
@@ -227,20 +261,6 @@ describe('Suggestions on the phone', () => {
     start,
     dismiss: mocks.dismiss,
     busy: false
-  })
-
-  it('lists three, then the rest behind Show more', () => {
-    const root = render(
-      createElement(MobileBotUpNext, {
-        botName: 'Scout',
-        upNext,
-        actions: actions(vi.fn())
-      })
-    )
-    expect(texts(root)).toEqual(expect.arrayContaining(['Review #12', 'Fix CI', 'Show 1 more']))
-    expect(texts(root)).not.toContain('Close stale issue')
-    press(root, 'Show 1 more')
-    expect(texts(root)).toContain('Close stale issue')
   })
 
   it('starts, dismisses and opens a link', () => {
@@ -288,7 +308,8 @@ describe('useBotUpNext', () => {
       showing: props.showing ?? false,
       showToast: () => {},
       onStart: props.onStart,
-      refresh: props.refresh
+      refresh: props.refresh,
+      online: true
     })
     return null
   }
@@ -300,10 +321,11 @@ describe('useBotUpNext', () => {
     const out: Hook[] = []
     render(createElement(Probe, { onStart, refresh, out }))
     await act(async () => out[0]?.start?.('s1'))
-    expect(mocks.start).toHaveBeenCalledWith(client, {
-      botId: 'bot-1',
-      suggestionId: 's1'
-    })
+    expect(mocks.start).toHaveBeenCalledWith(
+      client,
+      { botId: 'bot-1', suggestionId: 's1' },
+      { failWhenDisconnected: true }
+    )
     expect(onStart).toHaveBeenCalledWith('Review PR #12')
     expect(refresh).toHaveBeenCalled()
   })
@@ -325,19 +347,5 @@ describe('useBotUpNext', () => {
     await act(async () => root.update(createElement(Probe, { ...props, showing: true })))
     expect(mocks.seen).toHaveBeenCalledWith(client, { botId: 'bot-1' })
     expect(props.refresh).toHaveBeenCalled()
-  })
-})
-
-describe('Suggestions wording', () => {
-  const now = new Date(2026, 9, 31, 18, 0).getTime()
-  it('names the day once it is not today', () => {
-    expect(lookedText(new Date(2026, 9, 31, 16, 12).getTime(), now)).toMatch(/^Looked 4:12\sPM$/)
-    expect(lookedText(new Date(2026, 9, 30, 16, 12).getTime(), now)).toMatch(
-      /^Looked yesterday 4:12\sPM$/
-    )
-    expect(lookedText(new Date(2026, 9, 29, 16, 12).getTime(), now)).toBe('Looked Oct 29')
-    expect(lastLookedText(new Date(2026, 9, 29, 16, 12).getTime(), 4, now)).toBe(
-      'Oct 29 · 4 suggestions'
-    )
   })
 })

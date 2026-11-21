@@ -7,11 +7,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      # Any production change can break a contract the unit suite's dependency selection wouldn't pick.
-      - 'src/**'
-      - 'config/patches/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+      # Ready PRs already run every contract on Linux in the full unit suite; this adds macOS and Windows.
+      - 'src/**/*.performance.test.*'
+      # Older contracts named in vitest.performance.config.ts, without the suffix.
+      - 'src/renderer/src/components/agent/launch-menu/use-new-tab-agent-menu-host-preferences.test.tsx'
+      - 'src/main/codex-usage/codex-rollout-file-lifetime.test.ts'
+      - 'src/main/codex-usage/scanner-incremental-append.test.ts'
+      - 'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts'
       - '.github/workflows/performance-contracts.yml'
       - 'config/vitest.performance.config.ts'
       - 'config/oxlint-performance-audit.json'

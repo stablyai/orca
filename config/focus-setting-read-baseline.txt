@@ -48,7 +48,6 @@
 3 src/renderer/src/components/integrations/task-trackers/jira-integration-card.tsx
 1 src/renderer/src/components/integrations/task-trackers/linear-api-key-dialog.tsx
 2 src/renderer/src/components/integrations/task-trackers/linear-integration-card.tsx
-1 src/renderer/src/components/native-chat-recovery/tree/NativeChatResumeOnRestartGroups.tsx
 1 src/renderer/src/components/native-chat/media/visuals/NativeChatVisualFrame.tsx
 1 src/renderer/src/components/new-workspace/name-field/use-smart-workspace-name-field-controller.ts
 1 src/renderer/src/components/new-workspace/source-search/use-jira-source-connection.ts

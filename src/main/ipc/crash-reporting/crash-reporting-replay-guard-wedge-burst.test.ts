@@ -57,7 +57,7 @@ afterEach(() => {
 
 // Field spans show simultaneous replay wedges; bound the ring hazard while preserving durable per-event evidence.
 describe('replay-guard wedge burst against the fixed-size breadcrumb ring', () => {
-  it('costs one ring slot per call site and preserves the pre-crash trail', () => {
+  it('coalesces the crash trail without losing per-event spans', () => {
     for (let index = 0; index < 10; index += 1) {
       recordCrashBreadcrumb(`pre_crash_evidence_${index}`, { index })
     }
@@ -70,22 +70,9 @@ describe('replay-guard wedge burst against the fixed-size breadcrumb ring', () =
     expect(snapshot.filter((entry) => entry.name.startsWith('pre_crash_evidence_'))).toHaveLength(
       10
     )
-    expect(wedgeCrumbs()).toHaveLength(1)
-  })
-
-  it('carries the burst multiplicity into the ring as suppressedSinceLast', () => {
-    for (let pane = 0; pane < 26; pane += 1) {
-      emitReattachWedge(pane)
-    }
-
-    expect(wedgeCrumbs()[0]?.data?.suppressedSinceLast).toBe(25)
-  })
-
-  // Restarts clear the ring; retain one durable span for every wedge event.
-  it('still emits one durable span per wedge event', () => {
-    for (let pane = 0; pane < 26; pane += 1) {
-      emitReattachWedge(pane)
-    }
+    const crumbs = wedgeCrumbs()
+    expect(crumbs).toHaveLength(1)
+    expect(crumbs[0]?.data?.suppressedSinceLast).toBe(25)
 
     expect(wedgeSpanCount()).toBe(26)
     expect(

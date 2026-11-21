@@ -23,7 +23,7 @@ afterEach(() => {
 function openPicker(): ReturnType<typeof vi.fn> {
   const onSnooze = vi.fn()
   render(<BotItemSnoozeDialog open onSnooze={onSnooze} onClose={() => {}} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Pick a date and time' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Custom time' }))
   return onSnooze
 }
 

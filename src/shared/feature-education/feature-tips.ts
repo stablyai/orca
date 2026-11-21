@@ -74,7 +74,6 @@ export type FeatureTipAction =
 export type FeatureTip = {
   id: FeatureTipId
   priority: FeatureTipPriority
-  eyebrow: string
   title: string
   description: string
   action: FeatureTipAction
@@ -99,7 +98,6 @@ export const FEATURE_TIPS = [
     // First, so upgraded profiles meet it on their first launch after Chat UI left Experimental.
     id: 'chat-ui-here',
     priority: 'new',
-    eyebrow: 'New',
     title: 'Chat UI is here',
     description: 'Agents can now open as a chat, with rich messages, visuals and images.',
     action: 'use-chat-ui',
@@ -109,7 +107,6 @@ export const FEATURE_TIPS = [
   {
     id: 'bots-teammate',
     priority: 'new',
-    eyebrow: 'New',
     title: 'Your AI teammate',
     description:
       'Ask it in a thread. It runs the work, gets it reviewed and brings back a pull request.',
@@ -120,18 +117,16 @@ export const FEATURE_TIPS = [
   {
     id: 'agent-session-search',
     priority: 'new',
-    eyebrow: 'New',
     title: 'Search every agent session',
     description:
       'Find any past conversation by what was said in it, then pick up where the agent left off.',
     action: 'enable-session-search',
-    ctaLabel: 'Turn on session search',
+    ctaLabel: 'Enable session search',
     completedByFeatureInteractions: []
   },
   {
     id: 'orca-cli',
     priority: 'new',
-    eyebrow: 'Tip',
     title: 'Let agents drive Orca with the Orca CLI',
     description: 'Enable agents to coordinate child worktrees and communicate between worktrees.',
     action: 'setup-cli',
@@ -141,7 +136,6 @@ export const FEATURE_TIPS = [
   {
     id: 'cmd-j-palette',
     priority: 'new',
-    eyebrow: 'Tip',
     // The dialog replaces <shortcut> with a live platform-aware <kbd>.
     title: 'Jump to a worktree with <shortcut>',
     description:
@@ -153,11 +147,10 @@ export const FEATURE_TIPS = [
   {
     id: 'voice-dictation',
     priority: 'unseen',
-    eyebrow: 'Tip',
     title: 'Dictate into any pane',
     description: 'Start voice dictation in any focused pane, then use the shortcut again to stop.',
     action: 'enable-voice',
-    ctaLabel: 'Set up voice dictation',
+    ctaLabel: 'Set up dictation',
     completedByFeatureInteractions: ['voice-dictation']
   }
 ] as const satisfies readonly FeatureTip[]

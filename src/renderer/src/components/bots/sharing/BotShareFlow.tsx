@@ -7,7 +7,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_SHARE_ERRORS } from '../../../../../shared/bots/bot-share-errors'
 import { useOrcaCloudSignedOut } from '../orca-cloud-signed-out'
-import { botShareFlagPage, botShareFlagSpot, type BotShareFlagSpot } from './bot-share-flags'
+import { botShareFlagPage } from './bot-share-flags'
+import {
+  botShareFlagSpot,
+  type BotShareFlagSpot
+} from '../../../../../shared/bots/bot-share-flag-spots'
 import { openBotHomeFileAtLine } from './bot-share-go-to-line'
 import type { BotShareContext, BotSharePage } from './bot-share-pages'
 import { publishBotShare, settleBotShare, stopBotShare, updateBotShare } from './bot-share-rpc'
@@ -244,6 +248,8 @@ function ShareBody({
       <>
         <div className={BODY}>
           <BotShareDrillIn
+            // Each page mounts fresh, so it takes focus as it opens.
+            key={nav.length}
             page={page}
             ctx={ctx}
             backLabel={nav.length > 1 ? pageTitle(nav.at(-2)!, t) : bot.name}

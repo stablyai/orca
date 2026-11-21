@@ -74,7 +74,8 @@ it('keeps live capture and custody through committed receipt adoption on the jou
       operationalRevision: 0
     },
     child: null,
-    steering: { kind: 'codex-unavailable' }
+    steering: { kind: 'codex-unavailable' },
+    mailJoinsTurn: true
   }
   const started = Promise.withResolvers<void>()
   const resume = Promise.withResolvers<void>()

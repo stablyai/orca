@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
 import type { AgentCliModelRequirement } from '../../../../../../../shared/agent-launch/installation/agent-cli-update'
 import type { SessionOptionsCliUpdate } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 
@@ -72,9 +73,14 @@ export function NativeChatModelNeedsCliUpdateRow({
             ? t('agentCliUpdate.modelRequiresClaude', 'Requires Claude Code CLI {{version}}', {
                 version: model.minVersion
               })
-            : t('agentCliUpdate.modelRequiresCodex', 'Requires Codex CLI {{version}}', {
-                version: model.minVersion
-              })}
+            : update.agent === 'codex'
+              ? t('agentCliUpdate.modelRequiresCodex', 'Requires Codex CLI {{version}}', {
+                  version: model.minVersion
+                })
+              : t('agentCliUpdate.modelRequires', 'Requires {{product}} {{version}}', {
+                  product: agentCliProductName(update.agent, t),
+                  version: model.minVersion
+                })}
         </TooltipContent>
       </Tooltip>
     </CommandItem>

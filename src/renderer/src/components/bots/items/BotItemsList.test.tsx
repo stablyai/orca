@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 
@@ -50,7 +51,8 @@ it('returns focus to the row Back left, unfolding its group and showing past the
       now={NOW}
       focusUid="uid-7"
       onOpen={() => {}}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   await waitFor(() => expect(document.activeElement?.getAttribute('title')).toBe('Item 7'))
   expect(screen.getByRole('button', { name: /Planned/ }).getAttribute('aria-expanded')).toBe('true')

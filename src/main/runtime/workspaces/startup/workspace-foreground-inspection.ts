@@ -2,11 +2,13 @@ import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-te
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
-  describeLaunchedAgentHost,
   readAdoptedRootAgentForeground,
-  readExactAgentForeground,
+  readExactAgentForeground
+} from '../../terminal/wait/exact-agent-foreground'
+import { readMailboxForeground } from '../../terminal/wait/mailbox-foreground-read'
+import {
+  describeLaunchedAgentHost,
   readLaunchedAgentForeground,
-  readMailboxForeground,
   type ExactAgentName,
   type LaunchedAgentForeground,
   type LaunchedAgentHost

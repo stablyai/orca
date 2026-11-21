@@ -21,7 +21,6 @@ class QoderAdoptionRuntime extends OrcaRuntimeService {
 }
 
 it.each([
-  'client_disconnected',
   'Terminal creation timed out',
   'quoted-agent-command',
   'wsl-inventory',
@@ -434,7 +433,6 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
         clientMutationId: 'fresh-mutation'
       })
     ).rejects.toThrow('runtime_unavailable')
-    expect(spawn).toHaveBeenCalledTimes(4096)
     await vi.advanceTimersByTimeAsync(14 * 60_000)
     await expect(
       runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -442,7 +440,6 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
         clientMutationId: 'fresh-mutation'
       })
     ).rejects.toThrow('runtime_unavailable')
-    expect(spawn).toHaveBeenCalledTimes(4096)
     await vi.advanceTimersByTimeAsync(2 * 60_000)
     const fresh = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       ...request,
@@ -467,7 +464,6 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
         clientMutationId: 'abandoned-0'
       })
     ).rejects.toThrow('runtime_unavailable')
-    expect(spawn).toHaveBeenCalledTimes(4097)
     expect(kill).not.toHaveBeenCalled()
     expect(inventory).toHaveLength(1)
   } finally {

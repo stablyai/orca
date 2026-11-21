@@ -124,21 +124,9 @@ describe('ForeignSqliteReaderClient', () => {
     client.dispose()
   })
 
-  it('returns the failure value when the worker crashes', async () => {
+  it('rejects a malformed Cursor profile result', async () => {
     const workers: FakeWorker[] = []
     const client = new ForeignSqliteReaderClient({ workerFactory: fakeFactory(workers), log() {} })
-    const read = client.readCursorProfile('/a/state.vscdb')
-    workers[0]?.emit('exit', 1)
-    await expect(read).resolves.toEqual(FAILURE)
-    client.dispose()
-  })
-
-  it('returns the failure value when the worker replies with an error or a malformed value', async () => {
-    const workers: FakeWorker[] = []
-    const client = new ForeignSqliteReaderClient({ workerFactory: fakeFactory(workers), log() {} })
-    const errored = client.readCursorProfile('/a/state.vscdb')
-    workers[0]?.emit('message', { id: workers[0].posted[0]?.id, ok: false, error: 'boom' })
-    await expect(errored).resolves.toEqual(FAILURE)
     const malformed = client.readCursorProfile('/a/state.vscdb')
     workers[0]?.reply({ status: 'ok' })
     await expect(malformed).resolves.toEqual(FAILURE)

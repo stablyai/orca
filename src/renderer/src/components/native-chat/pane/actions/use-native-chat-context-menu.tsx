@@ -322,7 +322,7 @@ export function useNativeChatContextMenu({
                   <SquareTerminal />
                   {t(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Continue with Terminal Agent'
+                    'Continue in terminal'
                   )}
                   {shortcutLabel ? (
                     <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut>

@@ -27,7 +27,7 @@ import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import {
-  removeWorktreeMetadataAndTransientState,
+  removeDeletedCheckoutMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
@@ -99,7 +99,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
       removalHostId,
@@ -129,7 +129,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
       removalHostId,

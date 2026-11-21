@@ -4,6 +4,8 @@ import type { ConnectorWorkLink } from '../../shared/connector-work-link-contrac
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
+import { ChatDeliveries } from './external-conversation-chat-delivery'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ConversationEvent } from './external-conversation-events'
 
 const SESSION = 'session-1'
@@ -284,6 +286,51 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
     expect(h.events).toEqual([])
   })
 
+  const steered = {
+    account: 'a',
+    conversation: { source: 'slack', externalId: 'T1:D7:U9' },
+    deliveryId: 'd1'
+  }
+  // A success reads only whom the turn acts for; a failure reads the whole turn for its reason.
+  it.each([
+    ['first adopted', false, 'success', [], true, 'someone_else'],
+    ['first adopted', false, 'failure', [steered], false, undefined],
+    ['first adopted', false, 'success', [steered], true, undefined],
+    ['re-adopted after a restart', true, 'success', [steered], true, undefined],
+    ['first adopted', false, 'success', [], false, 'someone_else']
+  ] as const)(
+    'reads whom a turn %s (restarted: %s, %s, stamps %j, attribution read: %s) acts for from its journal',
+    async (_, restarted, outcome, stamps, attributed, turnFor) => {
+      // The restart forgot any delivery steered in; only the journal's stamps still show it.
+      const h = mailStartedBot('bot-chat')
+      let turns = h.create()
+      turns.observe(h.link.paneKey)
+      turns.news({ kind: 'prompt', sessionId: SESSION })
+      if (restarted) {
+        h.restart()
+        turns = h.create()
+        expect(turns.hears(h.link)).toBe(true)
+        turns.adopt(h.link.paneKey)
+      }
+      turns.news({
+        kind: 'turn-ended',
+        sessionId: SESSION,
+        outcome,
+        at: 600,
+        readTurn: async () =>
+          outcome === 'failure' ? { ...(await h.end('Done.')()), stamps: [...stamps] } : {},
+        ...(attributed
+          ? { readAttribution: async () => ({ ...(await h.end('Done.')()), stamps: [...stamps] }) }
+          : {})
+      })
+      await vi.waitFor(() =>
+        expect(h.events.at(-1)).toMatchObject({ kind: 'turn-ended', origin: 'local' })
+      )
+      const ended = h.events.at(-1)
+      expect(ended?.kind === 'turn-ended' ? ended.turnFor : null).toBe(turnFor)
+    }
+  )
+
   it('keeps a relinked conversation’s prompt restricted even when its turn has a delivery stamp', () => {
     const h = mailStartedBot('bot-chat')
     h.relink()
@@ -342,7 +389,8 @@ describe('an Orca-typed turn in a chat that posts to its Slack thread', () => {
           sequence: 1,
           observedAt: 1,
           body: { kind: 'message', role: 'user', blocks: [] }
-        }
+        },
+        stamps: []
       })
     })
     return events
@@ -389,7 +437,97 @@ describe('an Orca-typed turn in a chat that posts to its Slack thread', () => {
 
   it('keeps the reply in Orca when none of its messages posted', async () => {
     const events = slackThread(() => null)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(events.some((event) => event.kind === 'turn-ended' && event.mirror)).toBe(false)
+    await vi.waitFor(() =>
+      expect(events).toEqual([expect.objectContaining({ kind: 'turn-ended', origin: 'local' })])
+    )
+    expect(events[0]).not.toHaveProperty('lastAssistantMessage')
+    expect(events[0]).not.toHaveProperty('mirror')
+  })
+})
+
+describe('a turn its conversation heard across a host restart', () => {
+  const link: ExternalConversationLink = {
+    source: 'slack',
+    externalId: 'T1:C9:1792.9:U5',
+    sessionId: SESSION,
+    agent: 'claude',
+    paneKey: chatPaneKey(SESSION),
+    bot: { kind: 'bot', botId: 'b1' },
+    createdAt: 0
+  }
+  const queuedDelivery = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [],
+    origin: 'connector' as const,
+    connectorConversation: { source: 'slack', externalId: link.externalId }
+  }
+
+  async function turnForAfterRestart(opener: AgentJournalRenderItem['body'] | null) {
+    // The restarted host remembers no delivery; only the chat's journal survived.
+    const deliveries = new ChatDeliveries(() => {})
+    const events: ConversationEvent[] = []
+    const turns = new ChatTurns({
+      promptsAudience: () => true,
+      turnOpener: () => null,
+      keepAdoptedTurn: () => {},
+      readHookRow: () => ({
+        paneKey: chatPaneKey(SESSION),
+        structuredHost: 'owned',
+        state: 'working',
+        tabId: 'tab',
+        worktreeId: 'wt',
+        connectionId: null,
+        prompt: '',
+        agentType: 'claude',
+        receivedAt: 3,
+        stateStartedAt: 3
+      }),
+      pendingPrompt: () => null,
+      chatTurnOrigin: (sessionId, turnAt) => deliveries.origin(sessionId, turnAt),
+      chatTurnDelivered: (sessionId) => deliveries.pending(sessionId),
+      chatTurnDelivery: (sessionId, turnAt) => deliveries.started(sessionId, turnAt),
+      chatTurnWaiting: (sessionId) => deliveries.waiting(sessionId),
+      runningTurnReported: () => false,
+      workLinks: async () => [],
+      workerActivities: async () => null,
+      actsForOf: () => 'owner',
+      linkedFor: () => ({ link, workspace: { worktreeId: 'wt', sshHostId: null } }),
+      emit: (event) => events.push(event),
+      setTimer: () => ({ cancel: () => {} }),
+      now: () => 0
+    })
+    // The watch's snapshot adopts the turn the queued message started.
+    turns.adopt(link.paneKey)
+    turns.news({
+      kind: 'turn-ended',
+      sessionId: SESSION,
+      outcome: 'success',
+      at: 5,
+      // null: the journal couldn't be read, so nothing is proven.
+      readTurn: async () =>
+        opener
+          ? {
+              lastAssistantMessage: 'Done.',
+              opener: { itemId: 'm1', revision: 0, sequence: 1, observedAt: 1, body: opener },
+              stamps: []
+            }
+          : { lastAssistantMessage: 'Done.' }
+    })
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    const [ended] = events
+    return ended?.kind === 'turn-ended' ? ended.turnFor : null
+  }
+
+  it('leaves a queued delivery’s turn to the cloud, never acting for the owner', async () => {
+    expect(await turnForAfterRestart(queuedDelivery)).toBeUndefined()
+  })
+
+  it('still says the owner for a turn the journal shows the owner typed', async () => {
+    expect(await turnForAfterRestart({ kind: 'message', role: 'user', blocks: [] })).toBe('owner')
+  })
+
+  it('never says the owner for a turn whose journal proves nothing', async () => {
+    expect(await turnForAfterRestart(null)).toBe('someone_else')
   })
 })

@@ -3,6 +3,7 @@ const DEFAULT_RIGHT_GAP = 24
 const DEFAULT_BOTTOM_GAP = 72
 const DRAG_MARGIN = 8
 const TITLEBAR_SAFE_TOP = 36
+const KEEP_CLEAR_GAP = 8
 
 export const FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY =
   'orca-floating-terminal-trigger-position-v2'
@@ -27,6 +28,15 @@ export type FloatingTerminalTriggerCommittedPosition =
   | FloatingTerminalAnchoredTriggerPosition
 
 export type FloatingTerminalTriggerPositionSource = 'default' | 'user'
+
+export type FloatingTerminalTriggerKeepClearRect = {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  /** Bottom of the pane holding the box: the button may only go below the box above this. */
+  paneBottom: number
+}
 
 function getViewport(): { width: number; height: number } {
   return {
@@ -86,6 +96,39 @@ export function clampFloatingTerminalTriggerPosition(
     left: Math.min(Math.max(DRAG_MARGIN, position.left), maxLeft),
     top: Math.min(Math.max(TITLEBAR_SAFE_TOP, position.top), maxTop)
   }
+}
+
+/** Where the button shows: its own spot, or the nearest clear spot below, else above, a page part it would cover. */
+export function keepFloatingTerminalTriggerClear(
+  position: FloatingTerminalTriggerPosition,
+  keepClear: readonly FloatingTerminalTriggerKeepClearRect[]
+): FloatingTerminalTriggerPosition {
+  const covers = (top: number, rect: FloatingTerminalTriggerKeepClearRect): boolean =>
+    position.left < rect.right &&
+    position.left + TRIGGER_SIZE > rect.left &&
+    top < rect.bottom &&
+    top + TRIGGER_SIZE > rect.top
+  const covered = keepClear.filter((rect) => covers(position.top, rect))
+  if (covered.length === 0) {
+    return position
+  }
+  // Below a covered box first, then above it, then beside the others: moving off one box can land on another.
+  const spots = [...covered, ...keepClear.filter((rect) => !covered.includes(rect))].flatMap(
+    (rect) => {
+      const below = rect.bottom + KEEP_CLEAR_GAP
+      // The pane may run past the window, which the button must stay inside too.
+      const floor = Math.min(rect.paneBottom, getViewport().height) - DRAG_MARGIN
+      const above = rect.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+      return below + TRIGGER_SIZE <= floor ? [below, above] : [above]
+    }
+  )
+  const lowest = getViewport().height - TRIGGER_SIZE - DRAG_MARGIN
+  // A spot the window clamp would move could land back on a box, so only spots it keeps count.
+  const clear = spots.find(
+    (top) =>
+      top >= TITLEBAR_SAFE_TOP && top <= lowest && !keepClear.some((rect) => covers(top, rect))
+  )
+  return clampFloatingTerminalTriggerPosition({ left: position.left, top: clear ?? spots[0] })
 }
 
 export function hasUsableFloatingTerminalTriggerViewport(): boolean {

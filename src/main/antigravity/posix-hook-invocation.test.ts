@@ -8,7 +8,6 @@ import { z } from 'zod'
 import { tokenizeCommandLine } from '../../shared/agent-status/process/agent-command-line-entrypoint'
 import { spawnProcess } from '@orca/process-host'
 import { AntigravityHookService } from './hook-service'
-import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { readAgentProcess } from '../../shared/agent-status/process/agent-process-presence-probe'
@@ -116,7 +115,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
         const command =
           version === 'current'
             ? currentCommand
-            : `/bin/sh -c ${quotePosixShell(wrapPosixHookCommand(join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'), { ORCA_ANTIGRAVITY_EVENT: 'PreToolUse' }, { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION }))}`
+            : `/bin/sh -c ${quotePosixShell(wrapPosixHookCommand(join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'), { ORCA_ANTIGRAVITY_EVENT: 'PreToolUse' }, { fallbackStdout: '{"decision":"ask"}' }))}`
         const result = await invoke(command, payload, {
           ...process.env,
           ORCA_AGENT_HOOK_ENDPOINT: '',
@@ -128,7 +127,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
           TMUX_PANE: '%4'
         })
         expect(result.code).toBe(0)
-        expect(result.stdout).toBe('{"decision":"ask"}')
+        expect(result.stdout).toBe('')
         expect(result.elapsedMs).toBeLessThan(8000)
         expect(posts).toHaveLength(1)
         expect(posts[0]?.get('payload')).toBe(payload)
@@ -185,7 +184,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
   )
 
   it.each([
-    ['PreToolUse', '{"decision":"ask"}'],
+    ['PreToolUse', ''],
     ['Stop', '{"decision":""}'],
     ['PreInvocation', '{}']
   ])(

@@ -12,6 +12,8 @@ import {
   readAgentAttentionNotificationSound
 } from './agent-attention-notification-delivery'
 
+type CatalogState = { runtimeEnvironments?: readonly { id: string }[] }
+
 /** Retained host attention uses the same client policy and delivery as agent input requests. */
 export function createRetainedAgentAttentionReceiver() {
   const presentedByEnvironment = new Map<string, Map<string, string>>()
@@ -92,7 +94,10 @@ export function createRetainedAgentAttentionReceiver() {
       }
     },
     /** A host removed from the catalog sends no clearing snapshot, so its notice state ends here. */
-    keepCatalogEnvironments: (state: { runtimeEnvironments?: readonly { id: string }[] }): void => {
+    keepCatalogEnvironments: (state: CatalogState, previous?: CatalogState): void => {
+      if (previous && previous.runtimeEnvironments === state.runtimeEnvironments) {
+        return
+      }
       // Why the catalog, not connection: a disconnected host keeps its notices for the reconnect snapshot.
       for (const environmentId of presentedByEnvironment.keys()) {
         if (!state.runtimeEnvironments?.some((environment) => environment.id === environmentId)) {

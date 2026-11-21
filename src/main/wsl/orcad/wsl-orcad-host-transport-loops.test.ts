@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 describe.runIf(posix)('WSL transport command loops', () => {
-  it('runs a sequence of stdin-free probes over one wsl.exe', async () => {
+  it('shares one wsl.exe for probes and gives a command with stdin its own process', async () => {
     const { transport, specs } = localTransport()
     for (const word of ['uname', 'home', 'record', 'fence']) {
       expect(await execCommand(transport, `echo ${word}`)).toBe(`${word}\n`)
@@ -49,11 +49,6 @@ describe.runIf(posix)('WSL transport command loops', () => {
     expect(specs).toHaveLength(1)
     expect(specs[0]?.args?.slice(0, 5)).toEqual(['-d', 'Ubuntu-24.04', '--exec', 'sh', '-c'])
     expect(specs[0]?.args?.[6]).toBe('orca-wsl-exec-loop')
-  })
-
-  it('still gives a command that takes stdin its own wsl.exe', async () => {
-    const { transport, specs } = localTransport()
-    await execCommand(transport, 'echo first')
     expect(
       await execCommand(transport, 'cat', {
         stdin: Readable.from([Buffer.from('piped')])
@@ -62,6 +57,8 @@ describe.runIf(posix)('WSL transport command loops', () => {
     expect(specs).toHaveLength(2)
     expect(specs[1]?.args).toEqual(['-d', 'Ubuntu-24.04', '--exec', 'sh', '-c', expect.any(String)])
     expect(specs[1]?.args?.[5]).toContain('cat')
+    expect(await execCommand(transport, 'echo after')).toBe('after\n')
+    expect(specs).toHaveLength(2)
   })
 
   it('runs a fence before every command of a fenced transport, sharing its loop', async () => {

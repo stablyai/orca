@@ -40,7 +40,7 @@ import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { useBotItemOpenRequest } from './items/bot-item-open'
-import { botItemWalkReturnRow } from './items/bot-item-walk'
+import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItems, useBotItemsSeenAtOpen } from './items/use-bot-items'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
@@ -183,6 +183,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     <div
       ref={scroll}
       tabIndex={-1}
+      // The bot row's hover card moves focus here when it opens the bot's Home.
+      data-bot-home-panel=""
       className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
     >
       {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}

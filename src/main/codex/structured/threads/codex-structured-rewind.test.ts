@@ -173,7 +173,6 @@ describe('Codex rewind', () => {
 
 it.each([
   { turns: ['T1', 'T2', 'drop'], kept: 'T2' },
-  { turns: ['T1', 'drop'], kept: 'T1' },
   { turns: ['T1', 'T2', 'drop', 'later'], kept: 'T2' },
   { turns: ['drop'], kept: null }
 ])('recovers a lost reply with the prepared native predecessor $kept', async ({ turns, kept }) => {

@@ -176,8 +176,8 @@ export const ptySessionControlApi = {
   setRendererPtyVisible: (id: string, visible: boolean): void => {
     ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
   },
-  setHiddenRendererPty: (id: string, hidden: boolean): void => {
-    ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
+  setHiddenRendererPty: (id: string, hidden: boolean, retainGraphics?: boolean): void => {
+    ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden, retainGraphics })
   },
   setPtyDeliveryInterest: (id: string, interested: boolean): void => {
     ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })

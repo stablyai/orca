@@ -143,15 +143,6 @@ describe('SidebarBotsSplit', () => {
     expect(section.style.maxHeight).toBe('')
   })
 
-  it('hides the Projects list without unmounting it while folded', () => {
-    const view = render(
-      <SidebarProjectsListSlot botsShown collapsed>
-        <div data-testid="list" />
-      </SidebarProjectsListSlot>
-    )
-    expect(view.getByTestId('list').parentElement!.className).toContain('hidden')
-  })
-
   it('hides the handle while the Bots section is collapsed', () => {
     mocks.state.collapsedGroups = new Set([BOTS_GROUP_KEY])
     const { container } = renderSplit(40, 400)

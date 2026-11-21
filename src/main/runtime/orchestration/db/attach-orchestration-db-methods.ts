@@ -9,6 +9,7 @@ import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
 import { attachDispatchContextStore } from './dispatch-context/dispatch-context-store'
 import { attachDispatchLinksById } from './dispatch-context/dispatch-links-by-id'
+import { attachSessionPartyRows } from './worker-terminal/session-party-rows'
 import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
 import { attachDispatchDepth } from './dispatch-depth'
 import { attachWorkerReportSettlement } from './dispatch-context/worker-report-settlement'
@@ -128,6 +129,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerTerminalListing(ctor)
   attachDispatchContextStore(ctor)
   attachDispatchLinksById(ctor)
+  attachSessionPartyRows(ctor)
   attachDispatchLookup(ctor)
   attachDispatchDepth(ctor)
   attachDispatchCompletion(ctor)

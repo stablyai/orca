@@ -1,12 +1,13 @@
 // One item, in the list's place: a frozen header (title, status, links), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
-// Activity takes only the height it needs, so the box sits right under its last entry; while the
-// agent's question is open, its card takes the box's place.
+// The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
+// or picked from the question's quick replies.
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { selectFocusedTab } from '@/lib/focused-chat-workers'
@@ -14,6 +15,7 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
+import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -30,16 +32,17 @@ import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/acti
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
 import { BotItemActivityList } from './BotItemActivityList'
-import { BotItemAskSlot, useBotItemOpenAsk } from './BotItemAskSlot'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
+import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
 import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
+import { BotItemNavRow } from './BotItemStepper'
 
 const NO_FOLDERS: never[] = []
 
@@ -49,6 +52,8 @@ export function BotItemView({
   listed,
   takeFocus,
   commentRef,
+  nav,
+  onShown,
   onGone
 }: {
   bot: Bot
@@ -57,34 +62,81 @@ export function BotItemView({
   commentRef?: React.RefObject<BotItemCommentBoxHandle | null>
   /** Whether the item should take focus as it shows (nothing else in the pane holds it). */
   takeFocus?: () => boolean
+  /** The previous / next arrows, for the comment box's tool row. */
+  nav?: React.ReactNode
+  /** Called once, when the item first shows. */
+  onShown?: (item: BotItem) => void
   onGone?: (uid: string) => void
 }): React.JSX.Element {
   const view = useBotItemView(bot, uid, listed)
-  const { deleted } = view
+  const { deleted, item } = view
   useEffect(() => {
     if (deleted) {
       onGone?.(uid)
     }
   }, [deleted, onGone, uid])
+  // Once per mount (the view is keyed by item), and once under a replayed effect too.
+  const told = useRef(false)
+  useEffect(() => {
+    if (item && !told.current) {
+      told.current = true
+      onShown?.(item)
+    }
+  }, [item, onShown])
   const notice = deleted ? <BotItemDeletedNotice /> : null
-  if (!view.item) {
+  if (!item) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <BotItemUnread takeFocus={takeFocus} failed={view.failed} deleted={deleted} nav={nav}>
         {notice}
         {view.failed ? <BotItemsReadFailed onRetry={view.retry} /> : null}
-      </div>
+      </BotItemUnread>
     )
   }
   return (
     <BotItemBody
       bot={bot}
       view={view}
-      item={view.item}
+      item={item}
       notice={notice}
       deleted={deleted}
       takeFocus={takeFocus}
       commentRef={commentRef}
+      nav={nav}
     />
+  )
+}
+
+/** No item to show yet (reading, or the read failed): the arrows still sit at the bottom, and it holds
+ *  focus a removed control (Retry) dropped. */
+function BotItemUnread({
+  takeFocus,
+  failed,
+  deleted,
+  nav,
+  children
+}: {
+  takeFocus?: () => boolean
+  failed: boolean
+  deleted: boolean
+  nav?: React.ReactNode
+  children: React.ReactNode
+}): React.JSX.Element {
+  const pane = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (takeFocus?.()) {
+      pane.current?.focus({ preventScroll: true })
+    }
+  }, [takeFocus, failed, deleted])
+  return (
+    <div
+      ref={pane}
+      tabIndex={-1}
+      data-bot-item-focus-home=""
+      className="flex min-h-0 flex-1 flex-col outline-none"
+    >
+      {children}
+      {nav ? <BotItemNavRow nav={nav} /> : null}
+    </div>
   )
 }
 
@@ -105,7 +157,8 @@ export function BotItemBody({
   notice,
   deleted = false,
   takeFocus,
-  commentRef
+  commentRef,
+  nav
 }: {
   bot: Bot
   view: BotItemViewRead
@@ -116,6 +169,8 @@ export function BotItemBody({
   takeFocus?: () => boolean
   /** Where the comment box's handle goes, for the pane's type-to-focus. */
   commentRef?: React.RefObject<BotItemCommentBoxHandle | null>
+  /** The previous / next arrows, for the comment box's tool row. */
+  nav?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const [canceling, setCanceling] = useState(false)
@@ -123,12 +178,13 @@ export function BotItemBody({
   const pane = useRef<HTMLDivElement | null>(null)
   const ownComment = useRef<BotItemCommentBoxHandle | null>(null)
   const comment = commentRef ?? ownComment
-  // Shown on open or a step: typing then reaches the comment box without a click.
+  // Shown on open or a step: typing then reaches the comment box without a click. Deleted, its comment box
+  // goes, and focus it held comes here.
   useEffect(() => {
     if (takeFocus?.()) {
       pane.current?.focus({ preventScroll: true })
     }
-  }, [takeFocus])
+  }, [takeFocus, deleted])
   const chatTitle =
     item.chat.kind === 'home'
       ? t('bots.items.homeChat', 'Home Chat')
@@ -141,12 +197,22 @@ export function BotItemBody({
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
-  const ask = useBotItemOpenAsk(bot, item, deleted)
   const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
     itemCount: view.events.length + pending.shown.length,
     isWorking: false,
     isVisible: true
   })
+  // From the comment box or a quick reply: shown at once, then sent to the host.
+  const sendComment = (
+    text: string,
+    paths: readonly string[] = [],
+    questionId?: string,
+    plain?: boolean
+  ): void => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId, plain)
+    jumpToLatest()
+  }
+  const sendLatest = useLatestHandler(sendComment)
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
   const sourceTabId = useAppStore(
@@ -172,6 +238,46 @@ export function BotItemBody({
     }),
     [fileContext?.fileLinkContext, runtimeContext]
   )
+  // `waitingLine`: the question the comment box names, until a reply is on its way.
+  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+    bot,
+    item,
+    view.events,
+    sendLatest,
+    pending.shown
+  )
+  const quickReplies = useMemo(
+    () =>
+      deleted
+        ? undefined
+        : {
+            send: quick,
+            edit: (text: string) => comment.current?.fill(text),
+            recover: (text: string) => comment.current?.fill(text, true),
+            type: () => comment.current?.answer(),
+            steps,
+            sent
+          },
+    [deleted, comment, quick, steps, sent]
+  )
+  // The waiting question's comment, with its words and quick replies, is read even when it is older
+  // than the loaded page: earlier pages load until it shows.
+  const questionId = item.question?.eventId
+  const questionUnread =
+    view.eventsRead &&
+    questionId !== undefined &&
+    !view.events.some((event) => event.id === questionId)
+  const { hasEarlier, loadEarlier } = view
+  const earliest = view.events[0]?.id
+  useEffect(() => {
+    if (questionUnread && hasEarlier) {
+      loadEarlier()
+    }
+  }, [questionUnread, hasEarlier, earliest, loadEarlier])
+  const waitingOn =
+    waitingLine && !pending.shown.some(({ failed }) => !failed)
+      ? { ...waitingLine, asker: item.owner.name ?? bot.name }
+      : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
     isVisible: true
@@ -181,8 +287,7 @@ export function BotItemBody({
       ref={pane}
       // Clicking the item's text focuses the pane, so typing after it still reaches the box.
       tabIndex={-1}
-      // The open question's card takes focus and number keys from anywhere in here, as in chat.
-      data-native-chat-prompt-scope=""
+      data-bot-item-focus-home=""
       className="flex min-h-0 flex-1 flex-col outline-none"
     >
       {notice}
@@ -190,16 +295,15 @@ export function BotItemBody({
       {/* Pasted-text and file pills open their preview from the bot's host; files drop anywhere here. */}
       <NativeChatMarkdownImageOwnerContext value={imageOwner}>
         <NativeChatTextAttachmentScope enabled>
-          <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col">
+          {/* A size container: the comment box caps its height to a share of this pane's (`cqh`). */}
+          <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col [container-type:size]">
             <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
               <NativeChatLinkClickContext value={links.onLinkClick}>
-                {/* Only as tall as its content: the comment box (or the question) follows the last entry,
-                    and spare height falls below it rather than between. */}
-                <div className="relative flex min-h-0 flex-initial flex-col">
+                <div className="relative flex min-h-0 flex-1 flex-col">
                   <div
                     ref={scrollRef}
                     {...scrollerProps}
-                    className="scrollbar-sleek min-h-0 flex-initial overflow-y-auto [overflow-anchor:none]"
+                    className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
                   >
                     <BotItemHeader
                       bot={bot}
@@ -257,7 +361,7 @@ export function BotItemBody({
                             item={item}
                             events={view.events}
                             pending={pending}
-                            askShown={ask.question !== null}
+                            quickReplies={quickReplies}
                           />
                         ) : null}
                       </section>
@@ -270,31 +374,26 @@ export function BotItemBody({
                   />
                   <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
                 </div>
-                <BotItemAskSlot
-                  bot={bot}
-                  item={item}
-                  ask={ask}
-                  events={view.events}
-                  onReconcile={view.retry}
-                  commentRef={comment}
-                />
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
             <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
-            {deleted ? null : (
-              <div hidden={ask.shown} className="contents">
-                <BotItemCommentBox
-                  ref={ask.shown ? undefined : comment}
-                  bot={bot}
-                  item={item}
-                  attachTo={attachTo}
-                  hidden={ask.shown}
-                  onSend={(text, paths) => {
-                    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
-                    jumpToLatest()
-                  }}
-                />
-              </div>
+            {deleted ? (
+              nav ? (
+                <BotItemNavRow nav={nav} />
+              ) : null
+            ) : (
+              <BotItemCommentBox
+                ref={comment}
+                bot={bot}
+                item={item}
+                attachTo={attachTo}
+                nav={nav}
+                question={waitingOn}
+                onShowQuestion={(eventId) =>
+                  revealBotItemComment(scrollRef.current, eventId, 'flash')
+                }
+                onSend={fromBox}
+              />
             )}
           </NativeChatPaneFileDropSurface>
         </NativeChatTextAttachmentScope>

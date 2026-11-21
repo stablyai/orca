@@ -6,6 +6,8 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
@@ -108,15 +110,48 @@ function fixture(
   const journal = {
     read: async () => rows.filter((candidate) => !('sent' in candidate)),
     fillOutcomes: async (fills: readonly JournalConnectorReplyFill[]) => {
-      for (const { account, deliveryId, ...fill } of fills) {
+      for (const { account, deliveryId, expect: state, ...fill } of fills) {
         const target = rows.find((r) => r.account === account && r.deliveryId === deliveryId)
-        if (target && !target.fill) {
+        // As the writer does: only a row in the state the fill expects.
+        const expected =
+          state === undefined
+            ? !target?.cut && target?.claimMessageId === undefined
+            : 'claimMessageId' in state
+              ? target?.claimMessageId === state.claimMessageId
+              : target?.cut?.turnId === state.cutTurnId && target.claimMessageId === undefined
+        if (target && !target.fill && expected) {
           target.fill = { ...fill, filledAt: 1 }
         }
       }
       return fills.length > 0
     },
-    sent: async () => {}
+    sent: async () => {},
+    cut: async ({ keys, cut }: JournalConnectorReplyCutRows) => {
+      for (const target of rows) {
+        if (
+          keys.some((key) => key.deliveryId === target.deliveryId) &&
+          !target.fill &&
+          !target.cut &&
+          target.claimMessageId === undefined
+        ) {
+          target.cut = cut
+        }
+      }
+      return true
+    },
+    recut: async (claim: string, cut: JournalConnectorReplyCut) => {
+      for (const target of rows.filter((r) => r.claimMessageId === claim && !r.fill)) {
+        target.cut = cut
+        delete target.claimMessageId
+      }
+      return true
+    },
+    releaseClaim: async (claim: string) => {
+      for (const target of rows.filter((r) => r.claimMessageId === claim && !r.fill)) {
+        delete target.claimMessageId
+      }
+      return true
+    }
   }
   const filled = vi.fn()
   const chat = {
@@ -260,21 +295,6 @@ describe('recovery from the journal', () => {
 })
 
 describe('recovery, round 2', () => {
-  it('fills a request the provider exited before taking, with no turn, as interrupted', async () => {
-    const f = fixture({
-      items: [asked('d1', 1)],
-      submissions: [
-        submission('d1', {
-          dispatchState: 'unknown',
-          recovered: true,
-          reason: 'provider_exited_before_acknowledgement'
-        })
-      ]
-    })
-    await f.recovery.boot()
-    expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
-  })
-
   it('keeps an outstanding send with no evidence unfilled and watched', async () => {
     const f = fixture({
       items: [asked('d1', 1)],
@@ -381,5 +401,50 @@ describe('recovery, round 4', () => {
     })
     await f.publish()
     expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', prose: 'X done.' })
+  })
+})
+
+describe('recovery of a bot’s answer to its owner’s DM', () => {
+  const DM = { source: 'slack', externalId: 'T05BHT77GUF:D0CH5QFFC2C:D0CH5QFFC2C:U0CGB82KBC2' }
+  // The owner's own DM, as the journal stores its asker.
+  const ownerAsked = (deliveryId: string, sequence: number) => {
+    const asking = asked(deliveryId, sequence)
+    return {
+      ...asking,
+      body: {
+        ...asking.body,
+        origin: 'connector' as const,
+        asker: {
+          source: 'slack' as const,
+          userId: 'U0OWNER',
+          role: 'owner' as const,
+          place: { kind: 'direct_message' as const, id: 'D0CH5QFFC2C' }
+        }
+      }
+    }
+  }
+
+  it('decides as the live fill does: the DM gets the words before the marker, a thread stays quiet', async () => {
+    const answer = "I started fixes for Neil's items.\n\nNO_REPLY"
+    const f = fixture(
+      {
+        items: [asked('d1', 1), ownerAsked('d2', 2), said(answer, 3, TURN_KEY), turn(4, 'd1')],
+        submissions: [submission('d2', { answeredInTurn: { turnItemId: TURN_KEY, via: 'steer' } })]
+      },
+      {
+        bot: true,
+        rows: [
+          { ...row('d1'), conversation: SLACK },
+          { ...row('d2'), conversation: DM }
+        ]
+      }
+    )
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toMatchObject({ outcome: 'quiet' })
+    expect(f.rows[0]?.fill).not.toHaveProperty('prose')
+    expect(f.rows[1]?.fill).toMatchObject({
+      outcome: 'answered',
+      prose: "I started fixes for Neil's items."
+    })
   })
 })

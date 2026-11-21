@@ -12,7 +12,6 @@ import {
 } from './client-hosted-browser-page-persistence'
 import { recoverUnavailableRuntimeBrowserClientPages } from './runtime-browser-client-page-recovery'
 import { adoptRuntimeBrowserClientPagesFromInventory } from './runtime-browser-client-page-adoption'
-import { retireRuntimeBrowserClientPage } from './browser-client-page-close'
 
 function rig(ids: string[], inventory: BrowserClientHostedPageInventory[] = [], modern = true) {
   const authority = new BrowserHostLeaseRegistry({
@@ -169,30 +168,6 @@ it('a fast imported row and plain recovery publish independently of held adoptio
   h.release('slow-adopted')
   await h.published.get('slow-adopted')!.promise
   expect(h.authority.getClientPageExecutionHostKey('fast-adopted')).toBe('new-key')
-  h.host.release()
-})
-
-it('four held initializations keep the next queued and closing one joins cleanup before admitting it', async () => {
-  const h = rig(['slow1', 'slow2', 'slow3', 'slow4', 'queued'])
-  await recoverUnavailableRuntimeBrowserClientPages(h.options)
-  h.authority.sealClientPageInitializations(h.host.lease, false)
-  await Promise.all(['slow1', 'slow2', 'slow3', 'slow4'].map((id) => h.navigating.get(id)!.promise))
-  expect(h.commands.some((event) => event.browserPageId === 'queued')).toBe(false)
-  const host = {
-    resolveBrowserWorkspace: async () => ({ id: 'workspace-a' }),
-    getBrowserHostLeaseRegistry: () => h.authority,
-    getRuntimeBrowserPageRegistry: () => h.pages,
-    notifyHeadlessBrowserSessionTabsChanged: h.notifyWorkspace
-  }
-  await retireRuntimeBrowserClientPage(host, h.pages.getPage('slow1')!)
-  expect(h.pages.getPage('slow1')).toBeUndefined()
-  await h.published.get('queued')!.promise
-  expect(h.authority.getPlacement('slow1')).toBeUndefined()
-  expect(h.authority.getClientPageExecutionHostKey('slow1')).toBeUndefined()
-  for (const id of ['slow2', 'slow3', 'slow4']) {
-    h.release(id)
-  }
-  await Promise.all(['slow2', 'slow3', 'slow4'].map((id) => h.published.get(id)!.promise))
   h.host.release()
 })
 

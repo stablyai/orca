@@ -8,7 +8,12 @@ import {
   isolatedScanRoots,
   writeAntigravityTranscript
 } from '../../scanner-fixtures/session-scanner-test-fixtures'
-import { antigravitySessionOrigin } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+import {
+  antigravitySessionOrigin,
+  antigravityTranscriptReferencePrompt
+} from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+import { quoteStartupArg } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { quoteCmdDoubleQuoted } from '../../../../shared/shell/launch/shell-argument-quoting'
 import './session-scanner-antigravity-history'
 import './session-scanner-antigravity-metadata'
 
@@ -73,7 +78,12 @@ describe('Antigravity IDE history discovery', () => {
       } else {
         expect(session.resumeCommand).toContain('--prompt-interactive')
         expect(session.resumeCommand).not.toContain('--conversation')
-        expect(session.resumeCommand).toContain(session.filePath)
+        const expectedPrompt = antigravityTranscriptReferencePrompt(session.filePath)
+        const quotedPrompt =
+          process.platform === 'win32'
+            ? quoteCmdDoubleQuoted(expectedPrompt)
+            : quoteStartupArg(expectedPrompt, 'posix')
+        expect(session.resumeCommand).toContain(quotedPrompt)
       }
     }
   })

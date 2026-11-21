@@ -63,13 +63,14 @@ export function useBotItemSnoozing(
   }
 }
 
-/** Snooze ▸ for an open item, or the open items of a selection; Unsnooze under it once one is snoozed. */
 export function BotItemSnoozeMenuItems({
   items,
-  snoozing
+  snoozing,
+  inSubmenu = true
 }: {
   items: readonly BotItem[]
   snoozing: BotItemSnoozing
+  inSubmenu?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Read as the menu opens; the presets resolve against it.
@@ -77,31 +78,38 @@ export function BotItemSnoozeMenuItems({
   const only = items.length === 1 ? items[0] : undefined
   const snoozedUntil = only && isBotItemSnoozed(only, now) ? only.snoozedUntil : null
   const anySnoozed = items.some((item) => isBotItemSnoozed(item, now))
+  const options = (
+    <>
+      {botItemSnoozePresets(now).map((preset) => (
+        <DropdownMenuItem key={preset.id} onSelect={() => snoozing.snooze(items, preset.at)}>
+          {botItemSnoozePresetName(preset, t)}
+          <DropdownMenuShortcut>{formatBotItemSnoozeTime(preset.at, now)}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onSelect={() => snoozing.pick(items)}>
+        <CalendarDays />
+        {t('bots.items.snooze.pick', 'Pick a time…')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
     <>
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          <AlarmClock />
-          {snoozedUntil !== null
-            ? t('bots.items.snooze.until', 'Snoozed until {{when}}', {
-                when: formatBotItemSnoozeTime(snoozedUntil, now)
-              })
-            : t('bots.items.snooze.menu', 'Snooze')}
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
-          {botItemSnoozePresets(now).map((preset) => (
-            <DropdownMenuItem key={preset.id} onSelect={() => snoozing.snooze(items, preset.at)}>
-              {botItemSnoozePresetName(preset, t)}
-              <DropdownMenuShortcut>{formatBotItemSnoozeTime(preset.at, now)}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => snoozing.pick(items)}>
-            <CalendarDays />
-            {t('bots.items.snooze.pick', 'Pick a time…')}
-          </DropdownMenuItem>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
+      {inSubmenu ? (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <AlarmClock />
+            {snoozedUntil !== null
+              ? t('bots.items.snooze.until', 'Snoozed until {{when}}', {
+                  when: formatBotItemSnoozeTime(snoozedUntil, now)
+                })
+              : t('bots.items.snooze.menu', 'Snooze')}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>{options}</DropdownMenuSubContent>
+        </DropdownMenuSub>
+      ) : (
+        options
+      )}
       {anySnoozed ? (
         <DropdownMenuItem onSelect={() => snoozing.snooze(items, null)}>
           <AlarmClockOff />

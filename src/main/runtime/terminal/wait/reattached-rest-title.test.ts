@@ -6,7 +6,7 @@ import {
   type TerminalCommandPaintRecord
 } from '../input/terminal-command-paint'
 import { ReattachedRestTitleReads, reattachedRestTitleAgent } from './reattached-rest-title'
-import { readExactAgentForeground } from './launched-agent-foreground'
+import { readExactAgentForeground } from './exact-agent-foreground'
 
 const REST_TITLE = '✳ Claude Code'
 const FINISH = '\x1b]133;D;0\x07'

@@ -1,10 +1,4 @@
 import { safeStorage } from 'electron'
-import { usesMockKeychain } from '../startup/chromium-policy/configure-dev-keychain'
-
-import {
-  MOCK_KEYCHAIN_CIPHERTEXT_PREFIX as MOCK_CIPHERTEXT_PREFIX,
-  isMockKeychainCiphertext
-} from '../../shared/secure-storage/secret-at-rest-protection'
 
 let withheldReason: string | null = null
 
@@ -33,20 +27,13 @@ export const guardedSafeStorage = {
     if (withheldReason !== null) {
       throw new SafeStorageWithheldError(withheldReason)
     }
-    const cipher = safeStorage.encryptString(plainText)
-    return usesMockKeychain() ? Buffer.concat([MOCK_CIPHERTEXT_PREFIX, cipher]) : cipher
+    return safeStorage.encryptString(plainText)
   },
   decryptString(cipher: Buffer): string {
     if (withheldReason !== null) {
       throw new SafeStorageWithheldError(withheldReason)
     }
-    const isMockCipher = isMockKeychainCiphertext(cipher)
-    if (isMockCipher !== usesMockKeychain()) {
-      throw new Error('Credential was encrypted with a different keychain mode')
-    }
-    return safeStorage.decryptString(
-      isMockCipher ? cipher.subarray(MOCK_CIPHERTEXT_PREFIX.length) : cipher
-    )
+    return safeStorage.decryptString(cipher)
   }
 }
 

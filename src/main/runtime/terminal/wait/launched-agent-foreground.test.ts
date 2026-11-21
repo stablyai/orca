@@ -3,11 +3,9 @@ import type { RemoteForegroundEvidence } from '../../../../shared/terminal/pty/f
 import type { ProcessTableRow } from '../../../../shared/process-observation/tables/process-table-snapshot'
 import type * as TerminalForegroundGroup from '../../../pty/process-retirement/terminal-process-rows'
 
-import {
-  readAdoptedRootAgentForeground,
-  readLaunchedAgentForeground,
-  readMailboxForeground
-} from './launched-agent-foreground'
+import { readLaunchedAgentForeground } from './launched-agent-foreground'
+import { readAdoptedRootAgentForeground } from './exact-agent-foreground'
+import { readMailboxForeground } from './mailbox-foreground-read'
 
 const paneTerminal = vi.hoisted(() => {
   const state: { rows: ProcessTableRow[] | null } = { rows: null }

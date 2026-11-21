@@ -3,6 +3,7 @@ import {
   openCodeComposerHoldsDraft,
   readOpenCodeComposerTypedText
 } from '../../../../shared/terminal/input/opencode-composer'
+import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import {
   readTerminalComposerTypedText,
   type TerminalCursorContext
@@ -116,14 +117,15 @@ export function terminalDeliveryRefusal(input: {
     : { kind: 'unsettled' }
 }
 
-// OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+// OpenCode's and Pi's composers have no prompt glyph, so only their own panes are read with their layouts.
 export function mailboxComposerHoldsDraft(
   agent: string | null,
   context: TerminalCursorContext
 ): boolean {
-  return agent === 'opencode' || agent === 'opencode2'
-    ? openCodeComposerHoldsDraft(context)
-    : !!readTerminalComposerTypedText(context)
+  if (agent === 'opencode' || agent === 'opencode2') {
+    return openCodeComposerHoldsDraft(context)
+  }
+  return agent === 'pi' ? piComposerHoldsDraft(context) : !!readTerminalComposerTypedText(context)
 }
 
 export function readAgentTerminalComposerTypedText(

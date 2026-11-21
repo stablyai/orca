@@ -41,7 +41,10 @@ async function apiWith(routes: FakeRoute[]) {
       ? googleJson(200, { id: 'primary', summary: 'Ada', timeZone: ZONE, primary: true })
       : null
   const fake = fakeGoogle([recorder, primary, ...routes])
-  return { api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }), sent }
+  return {
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    sent
+  }
 }
 
 const answer =

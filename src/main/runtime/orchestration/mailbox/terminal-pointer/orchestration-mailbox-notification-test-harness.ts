@@ -105,6 +105,7 @@ class MailboxRuntime extends OrcaRuntimeService {
 export type MailboxNotificationHarness = {
   runtime: MailboxRuntime
   write: ReturnType<typeof vi.fn<(ptyId: string, data: string) => boolean>>
+  requestRepaint: ReturnType<typeof vi.fn>
 }
 
 /** Keep main-owned pane bindings in the fixture's session layout. */
@@ -140,6 +141,7 @@ export async function createRuntime(
     getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
+    foregroundProcess?: string
   } = {}
 ): Promise<MailboxNotificationHarness> {
   const runtime = new MailboxRuntime(
@@ -156,12 +158,14 @@ export async function createRuntime(
     }
   )
   const write = vi.fn((_ptyId: string, _data: string) => true)
+  const requestRepaint = vi.fn()
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,
     writeWithSettlement: settledWriteStub(write),
     kill: vi.fn(),
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => options.foregroundProcess ?? null,
+    requestRepaint
   })
   bindPaneFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
   runtime.registerPty(
@@ -186,7 +190,7 @@ export async function createRuntime(
   runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
   if (options.headless) {
     publishHeadlessRuntimeGraph(runtime)
-    return { runtime, write }
+    return { runtime, write, requestRepaint }
   }
   runtime.attachWindow(1)
   await runtime.syncWindowGraph(1, {
@@ -209,7 +213,7 @@ export async function createRuntime(
       }
     ]
   })
-  return { runtime, write }
+  return { runtime, write, requestRepaint }
 }
 
 export async function registerSecondPane(

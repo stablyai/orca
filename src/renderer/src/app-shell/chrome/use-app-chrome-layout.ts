@@ -8,6 +8,7 @@ import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/wor
 import { useAppStore } from '../../store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
+import { APP_RAIL_WIDTH, selectAppRailVisible } from '../../components/app-rail/app-rail-layout'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
@@ -24,6 +25,7 @@ export function useAppChromeLayout() {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const appRailVisible = useAppStore(selectAppRailVisible)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Booleans only: App owns this hook, and raw active ids would re-render the whole app on every workspace switch.
   const { hasActiveWorktree, hasTabBar, activeTabCanExpand, effectiveActiveTabExpanded } =
@@ -112,7 +114,11 @@ export function useAppChromeLayout() {
     activeView,
     activePendingCreationId,
     activeTabCanExpand,
-    collapsedSidebarHeaderWidth,
+    appRailVisible,
+    // Tab strips start right of the rail, so they only reserve the header's overhang past it.
+    collapsedSidebarHeaderWidth: appRailVisible
+      ? Math.max(0, collapsedSidebarHeaderWidth - APP_RAIL_WIDTH)
+      : collapsedSidebarHeaderWidth,
     creationLayoutActive,
     hasActiveWorktree,
     isFullScreen,

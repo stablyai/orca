@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createWorktreePreparationLockReason } from '../../../../shared/worktree/creation/create-preparation'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache
@@ -49,6 +51,13 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return (await runner.gitExecFileAsync(args, { cwd })).stdout.trim()
 }
 
+// Git prints worktree paths with forward slashes even on Windows.
+async function listedWorktreePaths(repo: string): Promise<string[]> {
+  return parseWorktreeList(await git(repo, ['worktree', 'list', '--porcelain'])).map((worktree) =>
+    normalizeRuntimePathForComparison(worktree.path)
+  )
+}
+
 async function fixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-fallback-cleanup-')))
   roots.push(root)
@@ -87,7 +96,7 @@ it('preserves a pre-existing empty target if its cached fallback lock-path probe
     failure
   )
   expect(existsSync(join(prepared, '.git'))).toBe(true)
-  expect((await run(['worktree', 'list', '--porcelain'], { cwd: repo })).stdout).toContain(prepared)
+  expect(await listedWorktreePaths(repo)).toContain(normalizeRuntimePathForComparison(prepared))
 })
 
 it('removes its completed fallback lock when cancellation arrives during the filesystem write', async () => {
@@ -106,7 +115,7 @@ it('removes its completed fallback lock when cancellation arrives during the fil
     )
   ).rejects.toBe(failure)
   expect(existsSync(prepared)).toBe(false)
-  expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(prepared)
+  expect(await listedWorktreePaths(repo)).not.toContain(normalizeRuntimePathForComparison(prepared))
 })
 
 it('discards a ready available checkout when its preparation caller cancels', async () => {

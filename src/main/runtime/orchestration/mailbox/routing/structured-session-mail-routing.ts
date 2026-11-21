@@ -8,6 +8,7 @@ import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-jo
 import { structuredSessionIdleEdgeMailboxes } from './structured-session-mail-target'
 import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
 
 /** Mail for structured chat sessions: idle-edge redrives, closed chats, and what a chat is still owed. */
 export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWithGetPtyRecordForPaneKey {
@@ -33,6 +34,7 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
     // Log failures without blocking the later first-turn workspace rename.
     try {
       if (summary.status === 'working') {
+        observeChatWorkerWorking(summary.sessionId, this.workerTurnStopReportDeps)
         // A working edge can follow a human answer, unblocking parked mail too.
         this.notifyStructuredSessionJournalActivity(summary.sessionId)
         return

@@ -367,13 +367,6 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
               : undefined
           }
           initialPurpose={creating.purpose}
-          origin={
-            creating.template
-              ? t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
-                  template: creating.template.name
-                })
-              : undefined
-          }
           returnFocusTo={invoker}
           // New bot has opened the bot's page by now.
           onCreated={onClose}
