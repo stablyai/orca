@@ -50,6 +50,7 @@ import {
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
+import { ProjectGroupHeaderBackground } from '../viewport/ProjectGroupBackgrounds'
 
 export function renderWorktreeSectionHeaderRow(
   args: {
@@ -59,6 +60,7 @@ export function renderWorktreeSectionHeaderRow(
     isActiveStickyHeader: boolean
     hasStickyHost: boolean
     hasHeaderTopSpacing: boolean
+    projectGroupBackgroundStyle?: React.CSSProperties
     measureVirtualRowElement: (element: HTMLDivElement | null) => void
   },
   t?: Translate
@@ -193,6 +195,11 @@ export function renderWorktreeSectionHeaderRow(
       )}
       style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
     >
+      <ProjectGroupHeaderBackground
+        style={isActiveStickyHeader ? args.projectGroupBackgroundStyle : undefined}
+        isGroupHeader={isProjectGroupHeader}
+        collapsed={isHeaderCollapsed}
+      />
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
           id={getWorktreeOptionId(row.key)}
@@ -362,7 +369,7 @@ export function renderWorktreeSectionHeaderRow(
                 groupId={projectGroupIdForHeader}
                 hostId={projectGroupHostIdForHeader}
                 label={label}
-                projectGroup={folderBackedProjectGroup}
+                projectGroup={row.projectGroup?.id ? row.projectGroup : null}
                 onRefreshProjectGroup={ctx.onRefreshProjectGroup}
                 onRename={ctx.onRenameProjectGroup}
                 onDelete={ctx.onDeleteProjectGroup}
