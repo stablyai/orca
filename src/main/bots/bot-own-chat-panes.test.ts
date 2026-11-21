@@ -1,77 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { AgentSessionRecordReader } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import type { BotChatTreeHost } from './bot-chat-tree-host'
-import { BotLookAroundStore } from './bot-look-around-store'
 import { readBotOwnChatPanes } from './bot-own-chat-panes'
+import {
+  bot,
+  closeOwnChatHost,
+  homeRecord,
+  ownChatHost as host
+} from './bot-own-chat-panes.test-fixture'
 import { makeTestBot } from './bot.test-fixture'
 
-const bot = makeTestBot({ folderWorkspaceId: 'home-1', chatSessionId: 'chat-home' })
-
-let db: OrchestrationDb | undefined
-afterEach(() => {
-  structuredWorkerIdentities.clear()
-  db?.close()
-  db = undefined
-})
-
-function homeRecord(
-  sessionId: string,
-  name: string,
-  home = bot.folderWorkspaceId
-): AgentSessionRecord {
-  const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
-  return {
-    ...base,
-    location: { ...base.location, workspaceId: folderWorkspaceKey(home) },
-    conversationName: name,
-    lastTurn: { state: 'settled', at: 1, prompt: 'ask', reply: 'reply' }
-  }
-}
-
-function host(
-  records: readonly AgentSessionRecord[],
-  bots: readonly (typeof bot)[] = [bot],
-  tabReads: string[] = []
-): BotChatTreeHost {
-  const views = new Map(records.map((r) => [r.sessionId, agentSessionConversationView(r)]))
-  const store: AgentSessionRecordReader = {
-    getRecord: (sessionId) => views.get(sessionId) ?? null,
-    listRecords: () => [...views.values()],
-    isSessionTabRetired: () => false
-  }
-  db = new OrchestrationDb(':memory:')
-  const database = db
-  return {
-    bots: () => bots,
-    externalConversations: () => [],
-    chatTabs: async (workspaceId) => {
-      tabReads.push(workspaceId)
-      return []
-    },
-    statusRows: () => [],
-    automations: () => [],
-    automationRuns: () => new Map(),
-    recordedWorkers: async () => [],
-    sessionRecords: async () => store,
-    db: () => database,
-    dispatchWorkers: async () => [],
-    backgroundRuns: new BotLookAroundStore({ read: () => null, write: async () => {} }, () => {})
-  }
-}
+afterEach(closeOwnChatHost)
 
 describe('readBotOwnChatPanes', () => {
   it('lists the bot’s side chats and leaves out a Dispatch worker running in its home', async () => {
@@ -113,5 +57,41 @@ describe('readBotOwnChatPanes', () => {
     const all = await readBotOwnChatPanes(read)
     expect(Object.keys(all)).toHaveLength(botCount)
     expect(tabReads).toHaveLength(botCount)
+  })
+
+  it('leaves out a worker that lost its identity (listed as ended), and one held only by its durable terminal row', async () => {
+    const sides = Array.from({ length: 3 }, (_, i) => homeRecord(`chat-side-${i}`, `Side ${i}`))
+    const lost = homeRecord('chat-lost-worker', 'Lost worker')
+    const restarted = homeRecord('chat-restarted-worker', 'Restarted worker')
+    const read = host([...sides, lost, restarted])
+    const database = read.db()
+    for (const record of [lost, restarted]) {
+      const processIncarnation = structuredWorkerProcessIncarnation(record.sessionId)
+      const handle = mintStructuredWorkerHandle()
+      const dispatch = database.createDispatchContext({
+        taskId: database.createTask({ runId: 'run_legacy_local', spec: 'work' }).id,
+        assigneeHandle: handle,
+        processIncarnation,
+        creator: { kind: 'system' },
+        maxDepth: 10
+      })
+      if (record === restarted) {
+        database.createWorkerTerminalResourceStatement({
+          dispatchId: dispatch.id,
+          terminalHandle: handle,
+          paneKey: mintStructuredWorkerPaneKey(record.sessionId),
+          processIncarnation,
+          worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
+          ownership: 'owned',
+          hostScope: JSON.stringify({ kind: 'local', hostId: 'local' })
+        })
+      }
+    }
+    const chats = await readBotOwnChatPanes(read)
+    expect(chats[bot.id]?.map((chat) => chat.title).toSorted()).toEqual([
+      'Side 0',
+      'Side 1',
+      'Side 2'
+    ])
   })
 })
