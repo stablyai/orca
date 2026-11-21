@@ -25,6 +25,8 @@ export const phoneBotSchema = z.looseObject({
   members: salvagingArray(BotMemberSchema),
   // Only whether each is set: an automation's events need their connector.
   slack: BotSchema.shape.slack,
+  // Every Slack workspace, for its Connectors rows.
+  slackApps: BotSchema.shape.slackApps,
   linear: BotSchema.shape.linear,
   linearWorkspaces: BotSchema.shape.linearWorkspaces,
   github: BotSchema.shape.github,

@@ -102,10 +102,10 @@ export function MobileBotSettingsRoot(props: {
   onDelete: () => void
   /** Above the list, under the page's header. */
   header: ReactNode
+  /** Access's first row, as on the desktop: Connectors. */
+  connectorsRow: ReactNode
   /** Rows under Who can ask in Access, such as Tools. */
   accessRows?: ReactNode
-  /** Groups that follow Access, such as Webhooks once the bot has a hook. */
-  afterAccess?: ReactNode
 }) {
   const t = useMobileTranslation()
   const { bot } = props
@@ -198,6 +198,7 @@ export function MobileBotSettingsRoot(props: {
           />
         </Section>
         <Section title={t('bots.settings.access', 'Access')}>
+          {props.connectorsRow}
           <DrillRow
             label={t('bots.settings.whoCanAsk', 'Who can ask')}
             value={whoCanAskLine(bot.members, props.accessRequests)}
@@ -206,7 +207,6 @@ export function MobileBotSettingsRoot(props: {
           />
           {props.accessRows}
         </Section>
-        {props.afterAccess}
         <Section title={t('bots.settings.notifications', 'Notifications')}>
           {notification(
             'needsPermission',

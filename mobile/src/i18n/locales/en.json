@@ -194,6 +194,16 @@
       "download": "Download for this phone",
       "downloadSize": "About {{size}} MB",
       "phoneChecking": "Checking…"
+    },
+    "bots": {
+      "slackStatus": {
+        "notInstalled": "Not installed",
+        "unknown": "Can’t check",
+        "updateNeeded": "Update needed",
+        "waiting": "Waiting for install"
+      },
+      "addConnector": "Add a connector",
+      "connectors": "Connectors"
     }
   },
   "common": {
@@ -5416,7 +5426,10 @@
       "chatDefaultNote": "Using your chat default. Background runs use your Agents setting.",
       "useChatDefaults": "Use chat defaults",
       "modelDefault": "Default",
-      "signInChanged": "Orca sign-in changed"
+      "signInChanged": "Orca sign-in changed",
+      "whoCanAskName": "Who can ask {{name}}",
+      "you": "You",
+      "owner": "Owner"
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
@@ -6370,6 +6383,123 @@
       "nudgeOne": "We found a bot in {{app}}.",
       "nudgeMany": "We found {{count}} bots in {{app}}.",
       "noFolders": "No folders"
+    },
+    "host": {
+      "errors": {
+        "signedOut": "Sign {{host}} in to Orca Cloud to connect {{service}}.",
+        "accountChanged": "{{host}}’s Orca sign-in changed. Start again."
+      }
+    },
+    "slack": {
+      "errors": {
+        "notAToken": "That is not a configuration refresh token. It starts with xoxe-.",
+        "grantExpired": "Slack no longer accepts this workspace’s token. Generate a new one and paste it.",
+        "rateLimited": "Too many tries. Wait a minute, then try again.",
+        "slackUnavailable": "Slack did not answer. Try again.",
+        "slackRefused": "Slack refused to set up the app.",
+        "unknownBot": "Orca Cloud has not seen this bot yet. Try again in a minute.",
+        "wrongWorkspace": "This bot’s Slack app is in another workspace. Remove it from Slack first.",
+        "notInstalled": "Add this bot to Slack first.",
+        "unreachable": "Orca Cloud could not be reached. Check your connection and try again."
+      },
+      "setup": {
+        "checking": "Checking Slack…",
+        "isIn": "{{name}} is in Slack",
+        "retry": "Try again",
+        "connectAnother": "Connect another Slack workspace",
+        "connect": "Connect Slack",
+        "cancel": "Cancel",
+        "reconnectShort": "Reconnect",
+        "createShort": "Create",
+        "settingUp": "Setting up your Slack app…",
+        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
+        "readyTitle": "Your Slack app is ready",
+        "readyDetail": "Approve it in Slack to finish. If your workspace needs an admin to approve new apps, {{name}} joins once they do.",
+        "approve": "Approve in Slack",
+        "waiting": "Waiting for Slack…",
+        "expired": "The install link expired.",
+        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
+        "newLink": "Get a new link",
+        "uncertain": "Slack may have created an app named {{name}} that Orca cannot use. Delete it in Slack app settings if it is there, then set up again.",
+        "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
+        "again": "Set up again"
+      },
+      "connection": {
+        "installedBy": "installed by {{installer}}",
+        "waiting": "Waiting for the install in Slack.",
+        "none": "Not in Slack yet.",
+        "unfinished": "Slack setup did not finish.",
+        "removeFromTitle": "Remove {{name}} from {{place}}?",
+        "removeNote": "Removing stops new work from Slack. It does not delete the app in Slack.",
+        "removeConfirm": "Remove",
+        "add": "Add to Slack",
+        "finish": "Finish setup",
+        "update": "Update in Slack",
+        "appSettings": "Slack app settings",
+        "updatePermissions": "Update Slack permissions…"
+      },
+      "mentionLinePlain": "Mention @{{name}} in a channel or DM.",
+      "replies": "Replies",
+      "postAs": {
+        "title": "Post as",
+        "changeOn": "Change it on {{host}}"
+      },
+      "token": {
+        "open": "Get config token",
+        "step1": "In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.",
+        "step2": "Select the workspace for your bot.",
+        "step3": "Copy the Refresh Token and paste it below.",
+        "label": "Configuration refresh token",
+        "paste": "Paste",
+        "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
+        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
+      }
+    },
+    "cloudSignIn": {
+      "paused": "Paused while signed out",
+      "needsSignIn": "Needs sign-in"
+    },
+    "apps": {
+      "line": {
+        "slack": "Messages and mentions",
+        "github": "Mentions and events on issues and PRs",
+        "linear": "Assigned issues and mentions",
+        "google": "Gmail, Calendar and Drive, as you"
+      },
+      "webhooks": {
+        "line": "Events from any tool or script"
+      },
+      "category": {
+        "coding": "Coding",
+        "chat": "Chat",
+        "docs": "Docs and projects",
+        "mail": "Mail and meetings"
+      },
+      "search": "Search apps",
+      "allShort": "All",
+      "onBot": "On {{bot}}",
+      "noMatch": "No app matches “{{query}}”.",
+      "connectors": "Connectors",
+      "add": "Add"
+    },
+    "connectors": {
+      "back": "Back to Connectors",
+      "addOrg": "Add org",
+      "addWorkspace": "Add workspace",
+      "manage": "Manage",
+      "emptyNote": "Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.",
+      "addAnotherWorkspace": "Add another workspace"
+    },
+    "connector": {
+      "titleSeparator": " · ",
+      "actions": "{{name}} actions",
+      "removeFrom": "Remove from {{place}}…"
+    },
+    "composio": {
+      "viaComposio": "via Composio"
+    },
+    "setup": {
+      "for": "for {{name}}"
     }
   },
   "mobileWebShell": {
