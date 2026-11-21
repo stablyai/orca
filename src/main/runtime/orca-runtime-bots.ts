@@ -364,8 +364,11 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
+    // Their items hear of it as an items notice naming them.
+    dispatchIds.forEach((dispatchId) => this.botItems.dispatchChanged(dispatchId))
+    const scope = { ...(botIds ? { botIds } : {}), workersNamed: true as const }
     if (botIds?.length !== 0) {
-      this.botChangeNotices.changed({ ...(botIds ? { botIds } : {}), kinds: ['workers'] })
+      this.botChangeNotices.changed({ ...scope, kinds: ['workers'] })
     }
   }
 

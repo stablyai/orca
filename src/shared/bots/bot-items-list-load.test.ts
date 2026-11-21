@@ -10,33 +10,39 @@ const order = (a: BotItem, b: BotItem) => b.lastActivityAt - a.lastActivityAt ||
 /** A host's list call over these items, as `bots.items.owner.list` pages them; `older` ignores the
  *  params a host before them doesn't know (it answers every open item and one Closed page). */
 function host(items: BotItem[], older = false): BotItemsListCall {
-  return async (params) => {
-    const counts: Partial<Record<BotItem['status'], number>> = {}
-    items.forEach((item) => (counts[item.status] = (counts[item.status] ?? 0) + 1))
-    if (!older && Array.isArray(params.uids)) {
-      const uids = new Set(params.uids)
-      return { items: items.filter((item) => uids.has(item.uid)), counts, seenEventId: 'e0' }
-    }
-    const size = !older && typeof params.closedLimit === 'number' ? params.closedLimit : 50
-    const [at, number] = String(params.closedCursor ?? '')
-      .split(':')
-      .map(Number)
-    const after = (item: BotItem) =>
-      !Number.isFinite(at) ||
-      item.lastActivityAt < at! ||
-      (item.lastActivityAt === at && item.number < number!)
-    const open = !older && params.closedOnly ? [] : items.filter((item) => !closed(item))
-    const rest = items.filter((item) => closed(item) && after(item)).sort(order)
-    const page = rest.slice(0, size)
-    const end = page.at(-1)
-    return {
-      items: [...open.sort(order), ...page],
-      counts,
-      seenEventId: 'e0',
-      ...(rest.length > size && end
-        ? { nextClosedCursor: `${end.lastActivityAt}:${end.number}` }
-        : {})
-    }
+  return async (params) => structuredClone(answer(items, older, params))
+}
+
+function answer(
+  items: BotItem[],
+  older: boolean,
+  params: Record<string, unknown>
+): BotItemsListRead {
+  const counts: Partial<Record<BotItem['status'], number>> = {}
+  items.forEach((item) => (counts[item.status] = (counts[item.status] ?? 0) + 1))
+  if (!older && Array.isArray(params.uids)) {
+    const uids = new Set(params.uids)
+    return { items: items.filter((item) => uids.has(item.uid)), counts, seenEventId: 'e0' }
+  }
+  const size = !older && typeof params.closedLimit === 'number' ? params.closedLimit : 50
+  const [at, number] = String(params.closedCursor ?? '')
+    .split(':')
+    .map(Number)
+  const after = (item: BotItem) =>
+    typeof params.closedCursor !== 'string' ||
+    item.lastActivityAt < at! ||
+    (item.lastActivityAt === at && item.number < number!)
+  const open = !older && params.closedOnly ? [] : items.filter((item) => !closed(item))
+  const rest = items.filter((item) => closed(item) && after(item)).sort(order)
+  const page = rest.slice(0, size)
+  const end = page.at(-1)
+  return {
+    items: [...open.sort(order), ...page],
+    counts,
+    seenEventId: 'e0',
+    ...(rest.length > size && end
+      ? { nextClosedCursor: `${end.lastActivityAt}:${end.number}` }
+      : {})
   }
 }
 
@@ -99,5 +105,16 @@ describe('loadBotItemsList', () => {
       expect(read.items.filter(closed)).toHaveLength(150)
       expect(read.items.filter((item) => !closed(item))).toHaveLength(100)
     }
+  })
+
+  it('keeps loaded Closed items when an older host answers a named read whole', async () => {
+    const items = seeded()
+    const call = host(items, true)
+    let read = await loadBotItemsList(call, null, WHOLE)
+    read = await loadBotItemsList(call, read, MORE)
+    // A loaded row on the second page, named (as a worker change names linked items).
+    read = await loadBotItemsList(call, read, { whole: false, parts: ['i220'], more: false })
+    expect(read.items.filter(closed)).toHaveLength(100)
+    expect(read.items.some((item) => item.uid === 'i220')).toBe(true)
   })
 })

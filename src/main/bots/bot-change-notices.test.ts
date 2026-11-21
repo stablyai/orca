@@ -184,7 +184,8 @@ describe('followAgentPhasesForBots', () => {
       botOfWorkspace: (worktreeId) => (worktreeId === 'folder:fw-scout' ? 'bot-scout' : null),
       botOfPane,
       inGroupRoom: () => false,
-      workerPane: (paneKey) => paneKey === WORKER_PANE,
+      workerDispatch: (paneKey) => (paneKey === WORKER_PANE ? 'ctx_w' : null),
+      workerChanged: vi.fn(),
       readEveryBot: () => true
     })
     const report = (
@@ -204,7 +205,7 @@ describe('followAgentPhasesForBots', () => {
   it('notices each phase a worker moves through, from the host status store', () => {
     const { notices, report } = follow()
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
-    const scope = { botIds: ['bot-scout'], kinds: ['status', 'workers'] }
+    const scope = { botIds: ['bot-scout'], kinds: ['status', 'workers'], workersNamed: true }
     expect(notices.changed).toHaveBeenCalledExactlyOnceWith(scope)
     // Repeating a phase is a tick, not a change.
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
@@ -242,7 +243,9 @@ describe('botPhaseChangeScopes', () => {
     botOfWorkspace: () => null,
     botOfPane: (paneKey: string) => (paneKey === chat ? 'bot-a' : null),
     inGroupRoom: (sessionId: string) => sessionId === 'session-room',
-    workerPane: (paneKey: string) => paneKey === 'tab-w:55555555-5555-4555-8555-555555555555',
+    workerDispatch: (paneKey: string) =>
+      paneKey === 'tab-w:55555555-5555-4555-8555-555555555555' ? 'ctx_w' : null,
+    workerChanged: () => {},
     readEveryBot: () => false
   }
 
@@ -277,7 +280,7 @@ describe('botPhaseChangeScopes', () => {
           }
         }
       )
-    ).toEqual([{ botIds: ['bot-b'], kinds: ['status', 'workers'] }])
+    ).toEqual([{ botIds: ['bot-b'], kinds: ['status', 'workers'], workersNamed: true }])
   })
 
   it("tells every bot of a worker pane it can't place when some bot's chats can't be read", () => {
@@ -290,7 +293,7 @@ describe('botPhaseChangeScopes', () => {
         },
         facts
       )
-    ).toEqual([{ kinds: ['status', 'workers'] }])
+    ).toEqual([{ kinds: ['status', 'workers'], workersNamed: true }])
   })
 
   it("tells the groups of a member's phase in a group room", () => {

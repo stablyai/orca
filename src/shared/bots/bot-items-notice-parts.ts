@@ -7,8 +7,8 @@ import {
 } from './bot-change-scope'
 import type { BotItem } from './bot-items'
 
-/** Those the notice names for the bot, and for a change of its workers the loaded items that link a
- *  worker (only they show one). Null when the list must read whole: the notice names nothing, an
+/** Those the notice names for the bot, and for a change of its workers the host didn't name the
+ *  loaded items that link a worker still going (only they show one that can change). Null when the list must read whole: the notice names nothing, an
  *  items change names no items, or a kind this build doesn't know changed. */
 export function botItemsNoticeParts(
   scope: BotChangeScope | undefined,
@@ -33,12 +33,19 @@ export function botItemsNoticeParts(
     }
     named.forEach((uid) => parts.add(uid))
   }
-  if (concerns('workers')) {
+  // A host that named every worker change's items sent them as an items notice of their own.
+  if (concerns('workers') && !scope.workersNamed) {
     if (!items) {
       return null
     }
+    // A finished worker no longer changes; one still going (or not yet known) can.
     for (const item of items) {
-      if (item.links.some((link) => link.kind === 'dispatch')) {
+      if (
+        item.links.some(
+          (link) =>
+            link.kind === 'dispatch' && (link.state === 'working' || link.state === 'unknown')
+        )
+      ) {
         parts.add(item.uid)
       }
     }

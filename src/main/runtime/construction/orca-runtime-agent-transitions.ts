@@ -219,16 +219,16 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       botOfPane: (paneKey) => {
         const index = this.botChatTreeIndex
         const byPane = index?.botOfPane(paneKey)
-        if (byPane) {
-          return byPane
-        }
         // A worker pane's Dispatch names its bot once the index has placed it.
-        const dispatchId = this.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId
-        return dispatchId ? (index?.botOfDispatch(dispatchId) ?? null) : null
+        const dispatchId = byPane
+          ? null
+          : this.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId
+        return byPane ?? (dispatchId ? (index?.botOfDispatch(dispatchId) ?? null) : null)
       },
       inGroupRoom: (sessionId) => this.botSessions.groupRoomOf(sessionId) !== null,
-      workerPane: (paneKey) =>
-        this.getAgentStatusOrchestrationContextForPaneKey(paneKey) !== undefined,
+      workerDispatch: (paneKey) =>
+        this.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId ?? null,
+      workerChanged: (dispatchId) => this.botItems.dispatchChanged(dispatchId),
       readEveryBot: () => this.botChatTreeIndex?.readEveryBot() !== false
     })
     // A paired computer that comes back is asked again at once, not after its unreachable backoff.
