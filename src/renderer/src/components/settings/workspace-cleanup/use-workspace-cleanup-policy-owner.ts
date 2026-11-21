@@ -52,7 +52,7 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
     const order = ++reads.current.started
     try {
       const value = await readLatest()
-      if (token !== generation.current || order < reads.current.adopted) {
+      if (token !== generation.current || order <= reads.current.adopted) {
         return
       }
       reads.current.adopted = order
@@ -65,6 +65,11 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
     }
   }
   const reload = () => load(false)
+  // A saved answer is newer than any read still in flight.
+  const adoptSaved = (value: WorkspaceCleanupPolicyRead) => {
+    reads.current.adopted = reads.current.started
+    adopt(value)
+  }
   const reloadEffect = useEffectEvent(() => reload())
   // Another client may change this host's rules while the pane is open; writes still re-read first.
   // A failed refresh keeps the last read; the next write or retry reads the host again.
@@ -91,5 +96,14 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
       generation.current = token + 1
     }
   }, [scopeKey])
-  return { read, recovering, capability, adopt, readLatest, generation, scopeKey, reload }
+  return {
+    read,
+    recovering,
+    capability,
+    adopt: adoptSaved,
+    readLatest,
+    generation,
+    scopeKey,
+    reload
+  }
 }

@@ -148,3 +148,21 @@ it("keeps a refreshed answer when the first read of the host's rules fails late"
   await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
   expect(screen.queryByText(/Couldn't load this host's cleanup rules/)).toBeNull()
 })
+
+it('keeps a saved rule when a refresh begun before the save answers after it', async () => {
+  hostRules = { ...hostRules, merged: { enabled: true } }
+  renderPane()
+  await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
+  expect(control().getAttribute('aria-checked')).toBe('true')
+  const refresh = hold('workspaceCleanup.policyState')
+  announce()
+  await waitFor(() => expect(calls('workspaceCleanup.policyState')).toBe(2))
+  const before = structuredClone(hostRules)
+
+  // Turning a rule off only keeps more, so it saves without a preview.
+  fireEvent.click(control())
+  await waitFor(() => expect(calls('settings.update')).toBe(1))
+  await waitFor(() => expect(control().getAttribute('aria-checked')).toBe('false'))
+  await act(async () => refresh.resolve(policyRead(before)))
+  expect(control().getAttribute('aria-checked')).toBe('false')
+})
