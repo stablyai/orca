@@ -10,6 +10,41 @@ import { defaultServerNameForAccessLink } from '../../../../../../shared/remote-
 import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from '../../../runtime-access/RuntimeHostAccessFailureAlert'
 import { warnWslHostServerStop } from '../../../sidebar/host-lifecycle/wsl-host-removal'
+import type { RuntimeHostSshRoute } from '../../../runtime-access/RuntimeHostAccessForm'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
+
+type AddServerSshRoute = RuntimeHostSshRoute & {
+  api: Pick<ManagedOrcadPreloadApi, 'linkSshAccess'>
+}
+
+/** Saves the pairing, then links it through SSH the way Settings' SSH access does; the link verifies over the tunnel. */
+async function addEnvironmentThroughSshRoute(args: {
+  name: string
+  pairingCode: string
+  route: AddServerSshRoute
+}): Promise<{ environment: PublicKnownRuntimeEnvironment; updatedExisting: boolean }> {
+  const knownIds = new Set(useAppStore.getState().runtimeEnvironments.map((entry) => entry.id))
+  const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
+    name: args.name,
+    pairingCode: args.pairingCode
+  })
+  const updatedExisting = knownIds.has(environment.id)
+  try {
+    await args.route.api.linkSshAccess({
+      selector: environment.id,
+      requestId: createBrowserUuid(),
+      sshTargetId: args.route.sshTargetId,
+      remotePort: args.route.remotePort
+    })
+  } catch (error) {
+    if (!updatedExisting) {
+      await window.api.runtimeEnvironments.remove({ selector: environment.id }).catch(() => {})
+    }
+    throw error
+  }
+  return { environment, updatedExisting }
+}
 
 type RuntimeEnvironmentMutationActionParams = {
   settings: GlobalSettings
@@ -49,7 +84,10 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
   }
 
-  const addEnvironment = async (allowLoopback: boolean): Promise<void> => {
+  const addEnvironment = async (
+    allowLoopback: boolean,
+    sshRoute?: AddServerSshRoute
+  ): Promise<void> => {
     const trimmedPairingCode = pairingCode.trim()
     const trimmedName =
       name.trim() ||
@@ -66,26 +104,41 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
     setIsSaving(true)
     try {
-      // Main distinguishes duplicate names from refreshing the same saved server.
-      const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
-        name: trimmedName,
-        pairingCode: trimmedPairingCode,
-        allowLoopback
-      })
-      if (!result.ok) {
+      let result: { environment: PublicKnownRuntimeEnvironment; updatedExisting?: boolean }
+      if (sshRoute) {
+        result = await addEnvironmentThroughSshRoute({
+          name: trimmedName,
+          pairingCode: trimmedPairingCode,
+          route: sshRoute
+        })
         if (mountedRef.current) {
-          setAddServerFailure(result)
+          setName('')
+          setPairingCode('')
         }
-        return
+        await loadEnvironments()
+      } else {
+        // Main distinguishes duplicate names from refreshing the same saved server.
+        const verified = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+          name: trimmedName,
+          pairingCode: trimmedPairingCode,
+          allowLoopback
+        })
+        if (!verified.ok) {
+          if (mountedRef.current) {
+            setAddServerFailure(verified)
+          }
+          return
+        }
+        result = verified
+        if (mountedRef.current) {
+          setName('')
+          setPairingCode('')
+        }
+        await loadEnvironments({
+          environmentId: verified.environment.id,
+          runtimeStatus: verified.runtimeStatus
+        })
       }
-      if (mountedRef.current) {
-        setName('')
-        setPairingCode('')
-      }
-      await loadEnvironments({
-        environmentId: result.environment.id,
-        runtimeStatus: result.runtimeStatus
-      })
       if (result.updatedExisting && mountedRef.current) {
         toast.success(
           t(

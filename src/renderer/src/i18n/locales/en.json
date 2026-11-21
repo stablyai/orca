@@ -13511,7 +13511,9 @@
           "addServer": "Add server",
           "nameLabel": "Name",
           "optional": "(optional)",
-          "headlessHelpPrefix": "Running Orca without a window? On that computer, run"
+          "headlessHelpPrefix": "Running Orca without a window? On that computer, run",
+          "sshRoute": "Connect through an SSH host",
+          "sshRouteHelp": "Orca opens a tunnel through the host and checks the server over it."
         },
         "CloudVmSetupGuide": {
           "cardTitle": "Cloud VMs",

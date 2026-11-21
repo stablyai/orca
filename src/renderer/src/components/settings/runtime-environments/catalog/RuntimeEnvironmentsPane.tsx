@@ -254,7 +254,13 @@ export function RuntimeEnvironmentsPane({
           setAddServerFailure(null)
         }}
         onClose={closeAddServerForm}
-        onSubmit={(allowLoopback) => void addEnvironment(allowLoopback)}
+        onSubmit={(allowLoopback, sshRoute) =>
+          void addEnvironment(
+            allowLoopback,
+            sshRoute && managedCatalog.api ? { ...sshRoute, api: managedCatalog.api } : undefined
+          )
+        }
+        sshTargets={managedCatalog.api ? managedCatalog.targets : undefined}
       />
 
       {managedCatalog.api ? (
