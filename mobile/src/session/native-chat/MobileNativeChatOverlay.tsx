@@ -1,5 +1,8 @@
 import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
-import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import {
+  MobileQueuedMessageComposerContext,
+  useMobileQueuedMessageComposer
+} from './input/queued-messages/mobile-queued-message-composer-context'
 import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -187,44 +190,17 @@ function MobileNativeChatOverlayContent({
         : null,
     [itemSource, fullContent.detail, load]
   )
-  const queuedComposerContext = useMemo(
-    () => ({
-      agent,
-      structured: structuredComposer ?? null,
-      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
-        (entry) => entry.id === 'interactionMode'
-      ),
-      skillDiscovery: controller.nativeChatSkills,
-      onNeedSkills: controller.loadNativeChatSkills,
-      filePaths: controller.nativeChatFilePaths,
-      onNeedFiles: controller.loadNativeChatFiles,
-      onError: (message: string) => controller.reportQueuedEditError?.(message),
-      onMicPress,
-      micActive,
-      micStarting,
-      micProcessing,
-      dictationMode,
-      onMicPressIn,
-      onMicPressOut
-    }),
-    [
-      agent,
-      structuredComposer,
-      controller.nativeChatSessionOptions,
-      controller.nativeChatSkills,
-      controller.loadNativeChatSkills,
-      controller.nativeChatFilePaths,
-      controller.loadNativeChatFiles,
-      controller.reportQueuedEditError,
-      onMicPress,
-      micActive,
-      micStarting,
-      micProcessing,
-      dictationMode,
-      onMicPressIn,
-      onMicPressOut
-    ]
-  )
+  const queuedComposerContext = useMobileQueuedMessageComposer(controller, {
+    agent,
+    structured: structuredComposer ?? null,
+    onMicPress,
+    micActive,
+    micStarting,
+    micProcessing,
+    dictationMode,
+    onMicPressIn,
+    onMicPressOut
+  })
   // Why a ref: rows read this through context, and the route's callback changes every render.
   const runInTerminalRef = useRef(onRunInTerminal)
   useLayoutEffect(() => {
