@@ -25,3 +25,14 @@ it('a queued reply edit records its original only when the update is accepted, n
   await act(async () => hook.result.current.editor?.save())
   expect(nativeChatReplySourceOf(quoted('Why, really?'))).toBe('m-orig')
 })
+
+it('a refused queued reply edit records no original for its words', async () => {
+  rememberNativeChatReplySource(quoted('How?'), 'm-orig')
+  const hook = harness(true, { messages: [withText(quoted('How?'))] })
+  await begin(hook)
+  act(() => hook.result.current.editor?.change('How, exactly?'))
+  // The card changed under the edit: the save is refused, so these words were never queued.
+  script.answer = done({ status: 'changed', messageId: 'card' })
+  await act(async () => hook.result.current.editor?.save())
+  expect(nativeChatReplySourceOf(quoted('How, exactly?'))).toBeUndefined()
+})

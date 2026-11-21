@@ -7,8 +7,10 @@ const STORAGE_KEY = 'orca.nativeChat.replySources.v1'
 export const NATIVE_CHAT_REPLY_SOURCES_MAX = 200
 
 const sources = new Map<string, string>()
-/** Recorded for text sent in reply to more than one message. */
-const AMBIGUOUS = ''
+/** Recorded for text sent in reply to more than one message. As a reply's original it names no
+ *  message, so the original reads as unavailable instead of being guessed from its words. */
+export const NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS = 'orca:ambiguous-reply-source'
+const AMBIGUOUS = NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS
 let loaded = false
 
 /** A compact key for sent text: its length and a 32-bit FNV-1a hash. */
@@ -65,7 +67,7 @@ export function rememberNativeChatReplySource(sentText: string, messageId: strin
 /** The message a sent reply answered, when this client sent it. */
 export function nativeChatReplySourceOf(sentText: string): string | undefined {
   load()
-  return sources.get(keyOf(sentText)) || undefined
+  return sources.get(keyOf(sentText))
 }
 
 /** Test-only: forget all sources and reload from storage on next read. */

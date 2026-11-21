@@ -22,6 +22,7 @@ import {
 } from '../reply/native-chat-reply-target'
 import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
 import {
+  NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS,
   nativeChatReplySourceOf,
   rememberNativeChatReplySource,
   resetNativeChatReplySourcesForTests
@@ -208,7 +209,7 @@ describe('replying to a message from a structured chat', () => {
 const runtimeSend = vi.hoisted(() => ({
   sendNativeChatMessage: vi.fn(() => ({})),
   sendNativeChatTypedCommand: vi.fn(() => ({})),
-  sendWithImages: vi.fn((): { outcome?: Promise<'not-submitted'> } => ({}))
+  sendWithImages: vi.fn((): { outcome?: Promise<'not-submitted' | 'submitted'> } => ({}))
 }))
 vi.mock('../../session/terminal/send/native-chat-runtime-image-send', () => ({
   sendNativeChatMessageWithImageAttachments: runtimeSend.sendWithImages
@@ -312,6 +313,30 @@ describe('replying to a message from a terminal chat', () => {
     expect(readNativeChatReplyTarget(ptyScope)).toBeNull()
     await act(async () => settle('not-submitted'))
     expect(readNativeChatReplyTarget(ptyScope)?.id).toBe('reply-1')
+    // The terminal never took it, so it answers nothing: no original is remembered for these words.
+    expect(
+      nativeChatReplySourceOf(
+        withNativeChatReplyContext('/Users/me/shot.png looks off', target, 'Codex')
+      )
+    ).toBeUndefined()
+  })
+
+  it('remembers the original of a terminal reply once the terminal takes the write', async () => {
+    setNativeChatReplyTarget(ptyScope, target)
+    let settle: (outcome: 'submitted') => void = () => {}
+    runtimeSend.sendWithImages.mockReturnValueOnce({
+      outcome: new Promise((resolve) => {
+        settle = resolve
+      })
+    })
+    const send = ptySend('Is this right?', 'chat', ['/tmp/shot.png'])
+    act(() => {
+      send()
+    })
+    const sent = withNativeChatReplyContext('Is this right?', target, 'Codex')
+    expect(nativeChatReplySourceOf(sent)).toBeUndefined()
+    await act(async () => settle('submitted'))
+    expect(nativeChatReplySourceOf(sent)).toBe(target.messageId)
   })
 
   it('types a command as-is, with or without an image, and keeps the reply', () => {
@@ -417,6 +442,6 @@ describe('remembering which message a reply answered', () => {
     rememberNativeChatReplySource(sent, 'm-first')
     expect(nativeChatReplySourceOf(sent)).toBe('m-first')
     rememberNativeChatReplySource(sent, 'm-second')
-    expect(nativeChatReplySourceOf(sent)).toBeUndefined()
+    expect(nativeChatReplySourceOf(sent)).toBe(NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS)
   })
 })

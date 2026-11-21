@@ -104,6 +104,13 @@ function save(): void {
   }
 }
 
+/** Saves after a change to these scopes, unless they are all editor-only and so never stored. */
+function saveFor(scopeKeys: readonly string[]): void {
+  if (scopeKeys.some((key) => !ephemeral.has(key))) {
+    save()
+  }
+}
+
 function notify(scopeKey: string): void {
   for (const listener of listeners.get(scopeKey) ?? []) {
     listener()
@@ -147,16 +154,13 @@ export function setNativeChatReplyTarget(
   if (owner) {
     custodyOwners.set(scopeKey, owner)
   }
-  const evicted: string[] = []
-  while (targets.size > NATIVE_CHAT_REPLY_TARGETS_MAX) {
-    const oldest = targets.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    targets.delete(oldest)
-    evicted.push(oldest)
+  // Only saved replies count toward the cap: an editor's reply never pushes out a chat's.
+  const durable = [...targets.keys()].filter((key) => !ephemeral.has(key))
+  const evicted = durable.slice(0, Math.max(0, durable.length - NATIVE_CHAT_REPLY_TARGETS_MAX))
+  for (const key of evicted) {
+    targets.delete(key)
   }
-  save()
+  saveFor([scopeKey, ...evicted])
   notify(scopeKey)
   // A mounted strip for a dropped scope must not keep showing a reply the send can no longer read.
   for (const key of evicted) {
@@ -246,7 +250,7 @@ export function clearNativeChatReplyTargetsWhere(
   for (const key of removed) {
     targets.delete(key)
   }
-  save()
+  saveFor(removed)
   for (const key of removed) {
     notify(key)
   }
@@ -259,11 +263,11 @@ export function releaseNativeChatReplyScope(scopeKey: string): void {
   custody.delete(scopeKey)
   custodyOwners.delete(scopeKey)
   cancelled.delete(scopeKey)
-  ephemeral.delete(scopeKey)
   if (had) {
-    save()
+    saveFor([scopeKey])
     notify(scopeKey)
   }
+  ephemeral.delete(scopeKey)
 }
 
 /** Clears the scope's target; with `id`, only when it is still that target, so a newer Reply survives a send. */
@@ -275,7 +279,7 @@ export function clearNativeChatReplyTarget(scopeKey: string, id?: string): boole
   }
   cancelled.delete(scopeKey)
   targets.delete(scopeKey)
-  save()
+  saveFor([scopeKey])
   notify(scopeKey)
   return true
 }

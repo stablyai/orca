@@ -1,14 +1,32 @@
-import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage
+} from '../../../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
+import { nativeChatMessageRowBlocks } from '../../messages/rows/native-chat-message-row-words'
 import { nativeChatReplyExcerpt } from './native-chat-reply-quote'
 
 const collapsed = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
-/** Whether `text` is the message an excerpt was taken from, judged by the message's own words only. */
-function excerptMatches(excerpt: string, text: string): boolean {
-  // The same excerpt the message would give today: a literal "…" or a cut both have to agree.
-  const quoted = collapsed(excerpt)
-  return quoted !== '' && collapsed(nativeChatReplyExcerpt(text)) === quoted
+/** Each message's excerpt, collapsed, by its blocks: a transcript update rescans only changed messages. */
+const excerpts = new WeakMap<readonly NativeChatBlock[], string>()
+
+/** The excerpt Reply takes from a message today: the words its row draws (no sent-image markers or
+ *  empty blocks), and for an agent without visual directive lines. */
+function excerptOf(message: Pick<NativeChatMessage, 'role' | 'blocks'>): string {
+  const cached = excerpts.get(message.blocks)
+  if (cached !== undefined) {
+    return cached
+  }
+  const words = deriveNativeChatRowContent(nativeChatMessageRowBlocks(message)).markdown
+  const excerpt = collapsed(
+    nativeChatReplyExcerpt(
+      message.role === 'assistant' ? withoutNativeChatVisualDirectiveLines(words) : words
+    )
+  )
+  excerpts.set(message.blocks, excerpt)
+  return excerpt
 }
 
 /** A reply restored from sent text that this client did not send names no message: the one message
@@ -19,27 +37,20 @@ export function nativeChatReplyOriginalId(
   { author, excerpt }: { author: 'agent' | 'user'; excerpt: string }
 ): string | null {
   const role = author === 'agent' ? 'assistant' : 'user'
+  // The same excerpt the message would give today: a literal "…" or a cut both have to agree.
+  const quoted = collapsed(excerpt)
+  if (quoted === '') {
+    return null
+  }
   let found: string | null = null
   for (const message of messages) {
-    if (message.role !== role) {
+    if (message.role !== role || excerptOf(message) !== quoted) {
       continue
     }
-    const words = message.blocks
-      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-      // As the Reply action reads a row: text blocks a blank line apart, so long excerpts cut alike.
-      .join('\n\n')
-    // An agent's Reply quotes its words without visual directive lines.
-    if (
-      excerptMatches(
-        excerpt,
-        author === 'agent' ? withoutNativeChatVisualDirectiveLines(words) : words
-      )
-    ) {
-      if (found !== null) {
-        return null
-      }
-      found = message.id
+    if (found !== null) {
+      return null
     }
+    found = message.id
   }
   return found
 }
