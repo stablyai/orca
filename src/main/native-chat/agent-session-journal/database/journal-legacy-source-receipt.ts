@@ -2,10 +2,6 @@ import type { BigIntStats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 
 export const JOURNAL_LEGACY_SOURCE_RECEIPT = 'journal.legacy-source-copy.v1'
-/** The original found damaged, the check that judged it, and why; read again once either changes. */
-export const JOURNAL_LEGACY_SOURCE_DAMAGED = 'journal.legacy-source-damaged.v1'
-/** Set after a pass absorbed every original chat, so each chat here carries its revision. */
-export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
 export const JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION = {
   version: 1,
   profileCopyInventoryVersion: 1
@@ -142,46 +138,5 @@ function sameJson(saved: unknown, current: unknown): boolean {
   return (
     Object.keys(saved).length === keys.length &&
     keys.every((key) => key in saved && sameJson(saved[key], current[key]))
-  )
-}
-
-/** A damage record's receipt; with `check`, only when that check judged it. */
-export function journalLegacyDamagedReceipt(
-  value: string | undefined,
-  check?: string
-): string | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return isRecord(parsed) &&
-      'receipt' in parsed &&
-      'check' in parsed &&
-      (check === undefined || parsed.check === check)
-      ? JSON.stringify(parsed.receipt)
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * Whether opening a store without chats would take nothing in from the original: it is as last
- * absorbed or recorded damaged, or has no identity to tell a change by. The open PR watches make
- * once serving still reconciles it; this only decides whether launch waits on that.
- */
-export function journalLegacySourceSettled(
-  meta: (key: string) => string | undefined,
-  current: JournalLegacySourceReceipt
-): boolean {
-  return (
-    current.disposition !== 'copied-source' ||
-    (meta(JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined &&
-      sameJournalLegacySource(meta(JOURNAL_LEGACY_SOURCE_RECEIPT), current)) ||
-    sameJournalLegacySource(
-      journalLegacyDamagedReceipt(meta(JOURNAL_LEGACY_SOURCE_DAMAGED)),
-      current
-    )
   )
 }

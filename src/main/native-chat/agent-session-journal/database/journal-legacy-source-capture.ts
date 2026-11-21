@@ -7,7 +7,7 @@ import {
   type JournalLegacySourceReceipt
 } from './journal-legacy-source-receipt'
 
-// Synchronous, for the journal SQL worker's open and reconcile and main's launch probe; else async.
+// Synchronous, for the journal SQL worker's open and reconcile only; main reads the receipt async.
 
 export function journalLegacyFileIdentity(filename: string): JournalLegacyFileIdentity {
   return journalLegacyFileIdentityFromStat(

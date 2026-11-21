@@ -171,11 +171,15 @@ export class JournalLegacyProof {
       // Only counts that began at the first page are carried, so a resumed walk can say so.
       ...(this.frontier.whole ? { counts: { ...this.frontier.counts } } : {})
     }
-    await this.writer.maintain({
+    const saved = await this.writer.maintain({
       kind: 'legacy-retirement-save',
       value: JSON.stringify(proving),
       durable: false
     })
+    // A copy converts only once the progress before it is saved.
+    if (saved !== true) {
+      throw new Error('legacy proof progress was not saved')
+    }
   }
 
   private async saveRefusal(): Promise<void> {

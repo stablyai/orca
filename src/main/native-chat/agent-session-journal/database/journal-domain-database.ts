@@ -22,11 +22,11 @@ import {
 } from './journal-domain-migrations'
 import { importJournalDomainProfile } from './journal-domain-profile-import'
 import { openJournalLegacySource } from './journal-legacy-source'
-import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './journal-legacy-source-receipt'
+  reconcileJournalLegacySource
+} from './journal-legacy-reconcile'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */

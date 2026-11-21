@@ -10,11 +10,12 @@ import {
   openJournalLegacySourceChecked
 } from './journal-legacy-source'
 import {
-  JOURNAL_LEGACY_SOURCE_DAMAGED,
-  journalLegacyDamagedReceipt,
   sameJournalLegacySource,
   type JournalLegacySourceReceipt
 } from './journal-legacy-source-receipt'
+
+/** The original found damaged, the check that judged it, and why; read again once either changes. */
+export const JOURNAL_LEGACY_SOURCE_DAMAGED = 'journal.legacy-source-damaged.v1'
 
 /**
  * Opens the original for a reconcile pass, or undefined when it is damaged: every chat in it would
@@ -27,13 +28,7 @@ export function openReconcilableJournalLegacySource(
   captured: JournalLegacySourceReceipt
 ): Database.Database | undefined {
   const damaged = readMeta(db, JOURNAL_LEGACY_SOURCE_DAMAGED)
-  if (
-    damaged !== undefined &&
-    sameJournalLegacySource(
-      journalLegacyDamagedReceipt(damaged, JOURNAL_LEGACY_DAMAGE_CHECK),
-      captured
-    )
-  ) {
+  if (damaged !== undefined && sameJournalLegacySource(damagedReceipt(damaged), captured)) {
     return undefined
   }
   const { source, missing } = openJournalLegacySourceChecked(sourcePath)
@@ -81,5 +76,20 @@ function keepOriginalClaims(source: Database.Database, db: Database.Database, er
         })
       }
     })
+  }
+}
+
+function damagedReceipt(value: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return parsed &&
+      typeof parsed === 'object' &&
+      'receipt' in parsed &&
+      'check' in parsed &&
+      parsed.check === JOURNAL_LEGACY_DAMAGE_CHECK
+      ? JSON.stringify(parsed.receipt)
+      : undefined
+  } catch {
+    return undefined
   }
 }

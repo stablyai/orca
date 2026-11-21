@@ -9,10 +9,8 @@ import {
   JOURNAL_LEGACY_RETIREMENT_REPORTED,
   type JournalLegacyRetirementState
 } from './journal-legacy-retirement-state'
-import {
-  JOURNAL_LEGACY_REVISIONS_KEPT,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './database/journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
 import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-host-database'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'

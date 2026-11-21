@@ -46,14 +46,17 @@ import {
   type JournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
 import {
-  JOURNAL_LEGACY_REVISIONS_KEPT,
-  JOURNAL_LEGACY_SOURCE_DAMAGED,
   JOURNAL_LEGACY_SOURCE_RECEIPT,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
-import { openReconcilableJournalLegacySource } from './journal-legacy-source-damage'
+import {
+  JOURNAL_LEGACY_SOURCE_DAMAGED,
+  openReconcilableJournalLegacySource
+} from './journal-legacy-source-damage'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
+/** Set after a pass absorbed every original chat, so each chat here carries its revision. */
+export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
 /**
  * An older Orca keeps writing the original journal after a downgrade. When the original changed,
  * each original chat's revision is compared with the one this file shows: a chat it started, or

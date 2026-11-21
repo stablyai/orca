@@ -7,7 +7,6 @@ import {
   journalDomainDatabasePath
 } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
-import { captureJournalLegacySourceReceipt } from '../../../native-chat/agent-session-journal/database/journal-legacy-source-capture'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
@@ -168,26 +167,18 @@ function finishRetirement(slot: RecordStoreSlot): Promise<void> {
   return slot.retiring
 }
 
-/** Whether this profile holds a structured chat: a record or tab in the journal database, or
- *  chats an older Orca wrote to the original since an empty store last took it in. */
+/** Whether this profile holds a structured chat: a record or tab in the journal database. */
 export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
   const currentPath = journalDomainDatabasePath(stateDirectory)
-  const originalPath = journalDatabasePath(stateDirectory)
-  const databasePath = fileExists(currentPath) ? currentPath : originalPath
+  const databasePath = fileExists(currentPath) ? currentPath : journalDatabasePath(stateDirectory)
   if (!fileExists(databasePath)) {
     return false
   }
   try {
-    return journalDatabaseHoldsAgentSessions(
-      databasePath,
-      // Opening the store is what takes those chats in; an unchanged original starts nothing.
-      databasePath === currentPath && fileExists(originalPath)
-        ? () => captureJournalLegacySourceReceipt(originalPath)
-        : undefined
-    )
+    return journalDatabaseHoldsAgentSessions(databasePath)
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true

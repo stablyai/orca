@@ -1,20 +1,16 @@
 /** Early launch admission and the later chat host must share one record-store writer. */
 
-import { link, mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import Database from '../../../sqlite/sync-database'
 import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
 import {
   journalDatabasePath,
   journalDomainDatabasePath
 } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import {
-  initializeJournalDomainDatabase,
-  openJournalDomainDatabase
-} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import { openJournalDomainDatabase } from '../../../native-chat/agent-session-journal/database/journal-domain-database'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
@@ -68,7 +64,7 @@ afterEach(async () => {
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-it('discovers saved SQL chats after restart, and opens an empty store while the original remains', async () => {
+it('discovers saved SQL chats after restart and consults the old store only before conversion', async () => {
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
   const oldPath = journalDatabasePath(stateDirectory)
   const { db: old } = openJournalDatabase(oldPath)
@@ -80,39 +76,13 @@ it('discovers saved SQL chats after restart, and opens an empty store while the 
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
   const { db } = openJournalDomainDatabase(journalDomainDatabasePath(stateDirectory))
   try {
-    // No receipt says this store took the original in yet.
-    expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
-    await rm(oldPath)
     expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
     db.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('new-chat', '{}')
   } finally {
     db.close()
   }
+  await rm(oldPath)
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
-})
-
-it('opens an empty store beside the original only once an older Orca wrote to it', async () => {
-  const oldPath = journalDatabasePath(stateDirectory)
-  openJournalDatabase(oldPath).db.close()
-  await initializeJournalDomainDatabase(stateDirectory)
-  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
-  const { db: old } = openJournalDatabase(oldPath)
-  try {
-    old.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('older-orca-chat', '{}')
-  } finally {
-    old.close()
-  }
-  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
-  // Without an identity to tell a change by, launch doesn't wait on it; serving's open reads it.
-  await link(oldPath, `${oldPath}-link`)
-  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
-  await rm(`${oldPath}-link`)
-  // An original the open recorded as damaged is settled until it changes again.
-  const damaged = new Database(oldPath)
-  damaged.exec('DROP TABLE journal_sessions')
-  damaged.close()
-  await initializeJournalDomainDatabase(stateDirectory)
-  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
 })
 
 it('still opens the store when cleanup deleted the last chat before its rows were gone', () => {

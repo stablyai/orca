@@ -12,10 +12,6 @@ import {
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import { readForgottenJournalChats } from '../journal-forgotten-chats'
-import {
-  journalLegacySourceSettled,
-  type JournalLegacySourceReceipt
-} from './journal-legacy-source-receipt'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
@@ -33,19 +29,8 @@ export function journalPragmaNumber(db: Database.Database, name: string): number
   return Number(db.pragma(name, { simple: true }) ?? 0)
 }
 
-/** `original` reads the original journal's receipt: an empty store holds what it hasn't taken in. */
-export function journalDatabaseHoldsAgentSessions(
-  dbPath: string,
-  original?: () => JournalLegacySourceReceipt
-): boolean {
+export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
-  const settled = (current: JournalLegacySourceReceipt): boolean => {
-    const meta = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-    return journalLegacySourceSettled((key) => {
-      const row = meta.get(key)
-      return row === undefined ? undefined : String(row.value)
-    }, current)
-  }
   try {
     const tables = new Set(
       db
@@ -59,8 +44,7 @@ export function journalDatabaseHoldsAgentSessions(
           tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
       ) ||
       // Deleted chats whose rows are still being removed: opening the store finishes them.
-      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0) ||
-      (original !== undefined && !settled(original()))
+      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0)
     )
   } finally {
     db.close()
