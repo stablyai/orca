@@ -52,7 +52,7 @@ export function startStructuredAgentSessionReadTransport(
     // renderer, so it is asked without a check and the read still opens in the same turn.
     textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
-    coalesce: { visibility: documentViewerVisibility },
+    coalesce: { visibility: documentViewerVisibility(read.sessionId) },
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
     subscribe: (params, onEvent, onError, onClose) =>

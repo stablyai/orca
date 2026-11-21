@@ -349,7 +349,7 @@ export function NativeChatMessageList({
   })
 
   const rowContext = useNativeChatTranscriptRowContext({
-    agent: session.agent,
+    session,
     turnBot,
     hostWork,
     structuredAttachments,

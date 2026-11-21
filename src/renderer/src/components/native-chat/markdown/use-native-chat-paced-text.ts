@@ -6,7 +6,10 @@ import {
 } from '@/components/comment-markdown/CommentMarkdownWords'
 import type { MarkdownFadeHold } from '@/components/comment-markdown/comment-markdown-word-fade'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
-import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
+import {
+  NativeChatHeldTextSessionContext,
+  NativeChatReplyRevealsContext
+} from './native-chat-reply-reveals'
 import { documentHeldDrawnCount } from '../session/structured/read/document-viewer-visibility'
 import {
   nativeChatRevealStepFrames,
@@ -91,7 +94,8 @@ export function useNativeChatPacedText(
     [root]
   )
   const [grew, setGrew] = useState(initial.shown < text.length)
-  const heldDrawn = useRef(documentHeldDrawnCount())
+  const heldTextSession = useContext(NativeChatHeldTextSessionContext)
+  const heldDrawn = useRef(documentHeldDrawnCount(heldTextSession))
 
   useLayoutEffect(() => {
     const previous = pace.current
@@ -99,8 +103,8 @@ export function useNativeChatPacedText(
       setGrew(true)
     }
     // Text held while the window was hidden is drawn at once, without a fade.
-    const caughtUp = heldDrawn.current !== documentHeldDrawnCount()
-    heldDrawn.current = documentHeldDrawnCount()
+    const caughtUp = heldDrawn.current !== documentHeldDrawnCount(heldTextSession)
+    heldDrawn.current = documentHeldDrawnCount(heldTextSession)
     pace.current = receiveNativeChatText(
       previous,
       text,
@@ -113,7 +117,7 @@ export function useNativeChatPacedText(
       setShown(pace.current.shown, caughtUp)
     }
     reveals?.drawn.set(rowKey, pace.current)
-  }, [text, streaming, reducedMotion, reveals, rowKey, setShown])
+  }, [text, streaming, reducedMotion, reveals, rowKey, setShown, heldTextSession])
 
   const behind = !reducedMotion && shown < text.length
   useEffect(() => {

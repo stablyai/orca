@@ -10,6 +10,7 @@ import type { CurrentRequestsSubscriber } from '../../observations/agent-session
 import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { StructuredAgentSessionViewerVisibility } from '../../../../../shared/agent-session/view/live-read/structured-agent-session-coalescer'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
@@ -34,6 +35,8 @@ export type AgentSessionSubscribeInput = {
   showsPromptSuggestions?: boolean
   /** Whether this stream's append transport holds a row's text; live rows go only where it does. */
   holdsTextBase?: (itemId: string) => boolean
+  /** The reader's window, when the host can see it: hidden, it gets no live text until it shows. */
+  viewer?: StructuredAgentSessionViewerVisibility
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -56,6 +59,7 @@ export type Subscriber = {
   workView?: string
   historyView?: string
   holdsTextBase?: (itemId: string) => boolean
+  viewer?: StructuredAgentSessionViewerVisibility
   /** Live rows last sent, by row; a page that replaces the view clears it. */
   liveSent?: Map<string, SubscriberLiveRow>
   /** Streaming replies this subscriber was sent shortened; their saves carry them, not live text. */

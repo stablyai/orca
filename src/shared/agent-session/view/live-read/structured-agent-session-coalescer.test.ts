@@ -133,4 +133,35 @@ describe('structured agent session event coalescer', () => {
       null
     ])
   })
+
+  it('reports held text drawn only when a show had text waiting', () => {
+    vi.useFakeTimers()
+    let hidden = true
+    let shown = (): void => {}
+    let drawn = 0
+    const coalescer = createStructuredAgentSessionEventCoalescer(() => {}, {
+      ms: 50,
+      visibility: {
+        hidden: () => hidden,
+        heldDrawn: () => {
+          drawn += 1
+        },
+        subscribeShown: (onShown) => {
+          shown = onShown
+          return () => {}
+        }
+      }
+    })
+    hidden = false
+    shown()
+    expect(drawn).toBe(0)
+    hidden = true
+    coalescer.push(batch(1))
+    vi.advanceTimersByTime(100)
+    hidden = false
+    shown()
+    expect(drawn).toBe(1)
+    coalescer.dispose()
+    vi.useRealTimers()
+  })
 })

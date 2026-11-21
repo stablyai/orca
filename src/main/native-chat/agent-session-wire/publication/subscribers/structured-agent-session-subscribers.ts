@@ -51,6 +51,7 @@ export class AgentSessionSubscribers {
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+  private readonly shownViewers = new liveText.LiveTextForShownViewers()
   readonly promptSuggestions = new AgentSessionPromptSuggestionDelivery({
     subscribers: (sessionId) => this.subscribers(sessionId),
     send: (subscriber, event) => this.enqueue(subscriber, () => this.emit(subscriber, event())),
@@ -92,6 +93,7 @@ export class AgentSessionSubscribers {
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
+    this.shownViewers.watch(subscriber, replaced)
 
     this.forkMarkers.add(subscriber)
     this.enqueue(subscriber, async () => {
@@ -150,16 +152,15 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     fence: number,
     read: liveText.SubscriberLiveTextSource,
-    targets = this.subscribers(sessionId)
+    all: readonly Subscriber[] = this.subscribers(sessionId)
   ): void => {
-    const hostNow = this.now()
-    const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets) : []
-    for (const subscriber of targets) {
-      // Checked per subscriber, in case ending one ends another mid fan-out.
-      if (this.isActive(subscriber)) {
-        this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
-      }
-    }
+    const republish = (only: readonly Subscriber[]) =>
+      this.publishLiveText(sessionId, journal, fence, read, only)
+    const targets = this.shownViewers.shown(sessionId, all, republish).filter(this.isActive)
+    const items = targets.length > 0 ? liveText.liveTextFor(read, targets) : []
+    const live = { journal, fence, items, hostNow: this.now() }
+    // Checked per subscriber, in case ending one ends another mid fan-out.
+    targets.forEach((target) => this.isActive(target) && this.lanes.of(target).liveText(live))
   }
 
   /** What a request's frame captures with, outside any subscriber. */
@@ -253,10 +254,8 @@ export class AgentSessionSubscribers {
   private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []
     // Sending nothing leaves any waiting live text for after the subscriber catches up.
-    if (items.length === 0 || !liveText.subscriberAtHead(subscriber, journal)) {
-      return []
-    }
-    return this.lanes.of(subscriber).sendsLiveText(items) ? items : []
+    const sends = items.length > 0 && liveText.subscriberAtHead(subscriber, journal)
+    return sends && this.lanes.of(subscriber).sendsLiveText(items) ? items : []
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [
@@ -333,6 +332,7 @@ export class AgentSessionSubscribers {
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
+    this.shownViewers.unwatch(subscriber, session?.size === 0)
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)

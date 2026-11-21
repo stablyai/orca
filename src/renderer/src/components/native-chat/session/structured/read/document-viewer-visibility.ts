@@ -3,29 +3,36 @@ import type { StructuredAgentSessionViewerVisibility } from '../../../../../../.
 const documentHidden = (): boolean =>
   typeof document !== 'undefined' && document.visibilityState === 'hidden'
 
-let heldDrawnCount = 0
+function subscribeDocumentShown(shown: () => void): () => void {
+  if (typeof document === 'undefined') {
+    return () => {}
+  }
+  const onChange = (): void => {
+    if (!documentHidden()) {
+      shown()
+    }
+  }
+  document.addEventListener('visibilitychange', onChange)
+  return () => document.removeEventListener('visibilitychange', onChange)
+}
 
-/** How many times text held while the window was hidden has been drawn; text landing across a change was held. */
-export function documentHeldDrawnCount(): number {
-  return heldDrawnCount
+const heldDrawnBySession = new Map<string, number>()
+
+/** How many times a chat's text held while the window was hidden has been drawn; its text landing
+ *  across a change was held. */
+export function documentHeldDrawnCount(sessionId: string | undefined): number {
+  return sessionId === undefined ? 0 : (heldDrawnBySession.get(sessionId) ?? 0)
 }
 
 /** A minimized or hidden window merges a chat's streaming text until it shows, then draws it once. */
-export const documentViewerVisibility: StructuredAgentSessionViewerVisibility = {
-  hidden: documentHidden,
-  heldDrawn: () => {
-    heldDrawnCount += 1
-  },
-  subscribeShown: (shown) => {
-    if (typeof document === 'undefined') {
-      return () => {}
-    }
-    const onChange = (): void => {
-      if (!documentHidden()) {
-        shown()
-      }
-    }
-    document.addEventListener('visibilitychange', onChange)
-    return () => document.removeEventListener('visibilitychange', onChange)
+export function documentViewerVisibility(
+  sessionId: string
+): StructuredAgentSessionViewerVisibility {
+  return {
+    hidden: documentHidden,
+    heldDrawn: () => {
+      heldDrawnBySession.set(sessionId, documentHeldDrawnCount(sessionId) + 1)
+    },
+    subscribeShown: subscribeDocumentShown
   }
 }

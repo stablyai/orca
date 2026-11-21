@@ -66,6 +66,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
       snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
       ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
       ...(appends ? { holdsTextBase: appends.holdsBase } : {}),
+      ...(ctx.viewerVisibility ? { viewer: ctx.viewerVisibility } : {}),
       // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
       ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
     })

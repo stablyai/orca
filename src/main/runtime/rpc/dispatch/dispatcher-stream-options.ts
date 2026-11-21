@@ -16,6 +16,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'caller'
   | 'plugin'
   | 'clientKind'
+  | 'viewerVisibility'
   | 'clientCapabilities'
   | 'capabilitySource'
   | 'updateClientCapabilities'
@@ -71,6 +72,7 @@ export function rpcContextFromTransport(
     caller: resolveRpcCallerIdentity(options),
     plugin: options?.plugin,
     clientKind: options?.clientKind,
+    viewerVisibility: options?.viewerVisibility,
     callerScope: options?.callerScope,
     clientCapabilities: options?.clientCapabilities,
     capabilitySource: options?.capabilitySource,
