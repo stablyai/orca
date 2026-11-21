@@ -12,6 +12,8 @@ describe('ChatDeliveries.adopt', () => {
     deliveries.adopt(key, chat, 'Deploy pings')
 
     expect(link).toHaveBeenCalledWith(key, chat, 'Deploy pings')
+    // No reply outbox row answers an adopted turn: its legacy end does.
+    expect(deliveries.answeredThroughOutbox('s1')).toBe(false)
     expect(deliveries.origin('s1', null)).toBe('delivery')
     expect(deliveries.origin('s1', null)).toBe('local')
   })

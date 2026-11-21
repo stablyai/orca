@@ -242,12 +242,15 @@ function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boo
 const COALESCED_QUIET_REPLY =
   'I replied but the message may not have reached you. Please ask again.'
 
-/** Only count metadata can turn a quiet completion into a constant; earlier text is never read. */
+/** Only count metadata can turn a quiet completion into a constant; earlier text is never read.
+ *  `outboxed`: every delivery the turn answers has reply outbox rows, which post each merged
+ *  turn's own words, so nothing was dropped. */
 export function botTurnReply(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
-  requested: boolean
+  requested: boolean,
+  outboxed = false
 ): string | undefined {
   const message = turn.lastAssistantMessage
   if (!link.bot || !message || !isQuietBotResult(message)) {
@@ -261,9 +264,11 @@ export function botTurnReply(
   // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.
   const reason = !requested
     ? 'not-thread-request'
-    : answersThread(link, turn)
-      ? 'thread-answered-quietly'
-      : 'coalesced-quiet'
+    : outboxed
+      ? 'answered-through-outbox'
+      : answersThread(link, turn)
+        ? 'thread-answered-quietly'
+        : 'coalesced-quiet'
   const fallback = reason === 'coalesced-quiet'
   // Text-free and id-free: only how many turns merged and what was decided.
   console.info('[connector] merged quiet completion', { providerTurnCount, fallback, reason })

@@ -119,6 +119,9 @@ export type ConversationEventsDeps = {
   onWatchDisposed?: () => void
   /** Read once per ended chat turn. */
   chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
+  /** Whether every delivery the chat's ending turn answers has reply outbox rows; read before
+   *  chatTurnOrigin. */
+  chatTurnOutboxed?: (sessionId: string) => boolean
   /** Whether a delivery was sent to the chat (or its running turn claims some) and it hasn't ended. */
   chatTurnDelivered: (sessionId: string) => boolean
   /** The delivery a chat turn that began at `turnAt` answers; taken once. */

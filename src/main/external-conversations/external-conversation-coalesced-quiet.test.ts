@@ -32,6 +32,7 @@ import {
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { chatPaneKey, type ConversationChatHost } from './external-conversation-chat'
+import { endedTurn } from './external-conversation-ended-turn'
 import type { ConversationEvent, ConversationSnapshot } from './external-conversation-events'
 import { HOST_CLOCK, type ExternalConversationHost } from './external-conversation-host'
 import { harness, installedChats } from './external-conversation-seam.test-fixture'
@@ -357,6 +358,53 @@ it('keeps a single-turn NO_REPLY silent and logs only the merged decision, witho
   await eventually(() => expect(ended(linked.events)).toHaveLength(2))
   expect(ended(linked.events)[1]).not.toHaveProperty('lastAssistantMessage')
   expect(quietLogs()).toHaveLength(1)
+})
+
+it('posts no stand-in to a thread that asked through the reply outbox, whose own row has the answer', async () => {
+  const { chats } = await botChat()
+  const linked = linkedBot(chats)
+  const asked = await askFromThread(linked, { reply: true })
+  let mail = ''
+  await providerTurn('turn-a', asked, [ANSWER], {
+    running: async () => {
+      mail = await sendMail()
+    }
+  })
+  await providerTurn('turn-b', mail, ['NO_REPLY'])
+  await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+  expect(ended(linked.events)[0]).not.toHaveProperty('lastAssistantMessage')
+  expect(quietLogs()).toEqual([
+    [
+      '[connector] merged quiet completion',
+      { providerTurnCount: 2, fallback: false, reason: 'answered-through-outbox' }
+    ]
+  ])
+  // The row reply recovery fills for the earlier turn names this thread and carries its answer.
+  const { host } = hostTestState()
+  const { cursor } = (
+    await (await host.journalReads(HOST_TEST_SESSION)).operationWindow({ afterSequence: 0 })
+  ).snapshot
+  const earlier = await endedTurn(host, HOST_TEST_SESSION, 'turn-a', cursor)
+  expect(earlier.turnProse).toBe(ANSWER)
+  expect(earlier.stamps).toMatchObject([{ conversation: KEY }])
+})
+
+it('still posts the stand-in when one of the merged deliveries has no reply outbox row', async () => {
+  const { chats } = await botChat()
+  const linked = linkedBot(chats)
+  const asked = await askFromThread(linked, { reply: true })
+  let mail = ''
+  await providerTurn('turn-a', asked, [ANSWER], {
+    running: async () => {
+      mail = await sendMail()
+      await askFromThread(linked, { taken: { steeredInto: 'turn-a' } })
+    }
+  })
+  await providerTurn('turn-b', mail, ['NO_REPLY'])
+  await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+  expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
+    'I replied but the message may not have reached you. Please ask again.'
+  )
 })
 
 it('stays silent when the thread message itself got the quiet answer after merged mail', async () => {
