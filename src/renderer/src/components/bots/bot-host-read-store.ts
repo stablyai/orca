@@ -116,9 +116,9 @@ export function createBotHostRead<T>(
     try {
       const value = options
         ? await options.load(entry.bot, previous, ask, show, live)
-        : reuseEqualJson(
-            previous,
-            pick(await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id }))
+        : await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id }).then((result) =>
+            // A reply no one shows any more is not compared.
+            live() ? reuseEqualJson(previous, pick(result)) : previous
           )
       if (live()) {
         // An unchanged answer tells no one.
