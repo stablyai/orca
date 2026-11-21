@@ -1,7 +1,8 @@
 import {
   countBlockquoteDepth,
-  stripClosedHtmlComments
+  stripBlockquoteLevels
 } from '../../markdown/source-scanning/markdown-code-and-comment-scan'
+import { stripClosedHtmlComments } from '../../markdown/source-scanning/markdown-html-comment-scan'
 import {
   extractFootnoteDefinitionIdentifier,
   isFootnoteDefinitionLine,
@@ -19,6 +20,8 @@ const SINGLE_LINE_REFERENCE_LINK_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]+\S/
 const MULTILINE_REFERENCE_LINK_LABEL_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]*$/
 const MULTILINE_REFERENCE_LINK_TARGET_PATTERN = /^ {0,3}\S/
 const TRANSPORT_ENVELOPE_PATTERN = /\[\[ORCA_RICH_MD:[a-f0-9]{32}:/
+// Cap container nesting depth so crafted repeated footnote/quote prefixes stay linear and stack-safe.
+const MAX_REFERENCE_SCAN_DEPTH = 32
 
 export function hasFootnoteCandidate(contentWithoutCode: string): boolean {
   if (!contentWithoutCode.includes('[^')) {
@@ -37,104 +40,91 @@ function getLineBounds(
   return { lineEnd, nextLineStart: newlineIndex === -1 ? content.length : newlineIndex + 1 }
 }
 
-function stripQuoteLevels(line: string, levels: number): string | null {
-  let index = 0
-  for (let level = 0; level < levels; level += 1) {
-    let spaces = 0
-    while (index < line.length && spaces < 3 && line.charCodeAt(index) === 32) {
-      index += 1
-      spaces += 1
-    }
-    if (index >= line.length || line.charCodeAt(index) !== 62) {
-      return null
-    }
-    index += 1
-    if (index < line.length && line.charCodeAt(index) === 32) {
-      index += 1
-    }
-  }
-  return line.slice(index)
-}
-
 export function hasNonFootnoteReferenceLinkCandidate(contentWithoutCode: string): boolean {
   if (!contentWithoutCode.includes(']:')) {
     return false
   }
-  let lineStart = 0
-  while (lineStart <= contentWithoutCode.length) {
-    const { lineEnd, nextLineStart } = getLineBounds(contentWithoutCode, lineStart)
-    const line = contentWithoutCode.slice(lineStart, lineEnd)
-    const quoteMatch = line.match(BLOCKQUOTE_PREFIX_PATTERN)
-    const quoteDepth = quoteMatch ? countBlockquoteDepth(quoteMatch[0]) : 0
-    const unwrapped = quoteMatch ? line.slice(quoteMatch[0].length) : line
 
-    if (isFootnoteDefinitionLine(unwrapped)) {
-      if (quoteDepth === 0) {
-        const block = matchFootnoteDefinitionBlock(contentWithoutCode, lineStart)
-        if (block) {
-          if (hasNonFootnoteReferenceLinkCandidate(block.body)) {
-            return true
-          }
-          const consumedEnd = lineStart + block.raw.length
-          if (consumedEnd >= contentWithoutCode.length) {
-            break
-          }
-          lineStart = consumedEnd
-          continue
-        }
-      } else {
+  const pending: { content: string; depth: number }[] = [{ content: contentWithoutCode, depth: 0 }]
+
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (current.depth >= MAX_REFERENCE_SCAN_DEPTH) {
+      return true
+    }
+    const text = current.content
+    if (!text.includes(']:')) {
+      continue
+    }
+
+    let lineStart = 0
+    while (lineStart <= text.length) {
+      const { lineEnd, nextLineStart } = getLineBounds(text, lineStart)
+      const line = text.slice(lineStart, lineEnd)
+      const quoteMatch = line.match(BLOCKQUOTE_PREFIX_PATTERN)
+      if (quoteMatch) {
+        const quoteDepth = countBlockquoteDepth(quoteMatch[0])
         const quotedLines: string[] = []
         let scanStart = lineStart
         let chunkEnd = nextLineStart
-        while (scanStart <= contentWithoutCode.length) {
-          const bounds = getLineBounds(contentWithoutCode, scanStart)
-          const stripped = stripQuoteLevels(
-            contentWithoutCode.slice(scanStart, bounds.lineEnd),
-            quoteDepth
-          )
+        while (scanStart <= text.length) {
+          const bounds = getLineBounds(text, scanStart)
+          const stripped = stripBlockquoteLevels(text.slice(scanStart, bounds.lineEnd), quoteDepth)
           if (stripped === null) {
             break
           }
           quotedLines.push(stripped)
           chunkEnd = bounds.nextLineStart
-          if (bounds.lineEnd === contentWithoutCode.length) {
+          if (bounds.lineEnd === text.length) {
             break
           }
           scanStart = bounds.nextLineStart
         }
-        const block = matchFootnoteDefinitionBlock(quotedLines.join('\n'), 0)
-        if (block && hasNonFootnoteReferenceLinkCandidate(block.body)) {
-          return true
-        }
-        if (chunkEnd <= lineStart || chunkEnd >= contentWithoutCode.length) {
+        pending.push({ content: quotedLines.join('\n'), depth: current.depth + 1 })
+        if (chunkEnd <= lineStart || chunkEnd >= text.length) {
           break
         }
         lineStart = chunkEnd
         continue
       }
-    }
 
-    if (SINGLE_LINE_REFERENCE_LINK_PATTERN.test(unwrapped)) {
-      return true
-    }
+      if (isFootnoteDefinitionLine(line)) {
+        const block = matchFootnoteDefinitionBlock(text, lineStart)
+        if (block) {
+          if (block.body.includes(']:')) {
+            pending.push({ content: block.body, depth: current.depth + 1 })
+          }
+          const consumedEnd = lineStart + block.raw.length
+          if (consumedEnd >= text.length) {
+            break
+          }
+          lineStart = consumedEnd > lineStart ? consumedEnd : nextLineStart
+          continue
+        }
+      }
 
-    if (
-      MULTILINE_REFERENCE_LINK_LABEL_PATTERN.test(unwrapped) &&
-      lineEnd < contentWithoutCode.length
-    ) {
-      const nextBounds = getLineBounds(contentWithoutCode, nextLineStart)
-      const nextRaw = contentWithoutCode.slice(nextLineStart, nextBounds.lineEnd)
-      const nextUnwrapped = quoteDepth > 0 ? stripQuoteLevels(nextRaw, quoteDepth) : nextRaw
-      if (nextUnwrapped !== null && MULTILINE_REFERENCE_LINK_TARGET_PATTERN.test(nextUnwrapped)) {
+      if (SINGLE_LINE_REFERENCE_LINK_PATTERN.test(line)) {
         return true
       }
-    }
 
-    if (nextLineStart <= lineStart || lineEnd === contentWithoutCode.length) {
-      break
+      if (MULTILINE_REFERENCE_LINK_LABEL_PATTERN.test(line) && lineEnd < text.length) {
+        const nextBounds = getLineBounds(text, nextLineStart)
+        if (
+          MULTILINE_REFERENCE_LINK_TARGET_PATTERN.test(
+            text.slice(nextLineStart, nextBounds.lineEnd)
+          )
+        ) {
+          return true
+        }
+      }
+
+      if (nextLineStart <= lineStart || lineEnd === text.length) {
+        break
+      }
+      lineStart = nextLineStart
     }
-    lineStart = nextLineStart
   }
+
   return false
 }
 
