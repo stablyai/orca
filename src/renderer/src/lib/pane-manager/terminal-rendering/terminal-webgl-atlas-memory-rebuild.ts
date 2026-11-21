@@ -12,6 +12,8 @@ const ATLAS_REBUILD_MIN_INTERVAL_MS = 60_000
 const ATLAS_REBUILD_QUIET_MS = 2_000
 // Output that never pauses would retain GPU memory without bound; past this, typing alone holds the rebuild.
 const ATLAS_REBUILD_MAX_QUIET_WAIT_MS = 60_000
+// An overdue atlas blocked by an on-screen synchronized-output frame looks again this soon, to land between frames.
+const ATLAS_REBUILD_FRAME_RETRY_MS = 250
 // Only macOS was measured retaining it (desktop app and Mac browsers); elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
 const ATLAS_MEMORY_REBUILD_ENABLED =
   typeof navigator !== 'undefined' &&
@@ -39,6 +41,7 @@ const atlasesWithLargePage = new WeakSet<GlyphAtlas>()
 const atlasesWithOutput = new WeakSet<GlyphAtlas>()
 const lastOutputAt = new WeakMap<GlyphAtlas, number>()
 const dueSince = new WeakMap<GlyphAtlas, number>()
+const frameRetryAt = new WeakMap<GlyphAtlas, number>()
 const attachedPanes = new Map<unknown, ManagedPaneInternal>()
 // Owners indexed per atlas, so an attempt visits only the due atlases' panes, never every terminal.
 const atlasOwners = new WeakMap<GlyphAtlas, Set<ManagedPaneInternal>>()
@@ -114,12 +117,14 @@ function readyAt(atlas: GlyphAtlas): number {
   const typingClear = lastTypedAt + ATLAS_REBUILD_QUIET_MS
   const quiet = (lastOutputAt.get(atlas) ?? Number.NEGATIVE_INFINITY) + ATLAS_REBUILD_QUIET_MS
   const overdue = (dueSince.get(atlas) ?? 0) + ATLAS_REBUILD_MAX_QUIET_WAIT_MS
-  return Math.max(typingClear, Math.min(quiet, overdue))
+  const frameRetry = frameRetryAt.get(atlas) ?? Number.NEGATIVE_INFINITY
+  return Math.max(typingClear, frameRetry, Math.min(quiet, overdue))
 }
 
 function forgetDue(atlas: GlyphAtlas): void {
   dueAtlases.delete(atlas)
   dueSince.delete(atlas)
+  frameRetryAt.delete(atlas)
 }
 
 /** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
@@ -159,31 +164,36 @@ function rebuildDueAtlases(): void {
     scheduleRebuild()
     return
   }
-  lastAttemptAt = now
   const shown = shownPaneFilter()
   const onScreen: PaneFilter = (pane) => shown(pane) && !paneIsCoveredByNativeChat(pane)
   const panes: ManagedPaneInternal[] = []
   let retry = false
+  let attempted = false
   for (const atlas of ready) {
     const atlasPanes = [...(atlasOwners.get(atlas) ?? [])].filter(
       (pane) => attachedPanes.get(pane.terminal) === pane && atlasOf(pane) === atlas
     )
-    // A new canvas paints straight from the buffer, so an on-screen pane mid synchronized-output (DEC 2026) frame would flash it half drawn; that atlas waits.
-    // Once overdue it goes ahead: such panes then wait for their frame to close one by one, so a TUI that keeps reopening frames can't hold the memory forever.
-    const overdue = now - (dueSince.get(atlas) ?? now) >= ATLAS_REBUILD_MAX_QUIET_WAIT_MS
-    if (
-      !overdue &&
-      atlasPanes.some((pane) => onScreen(pane) && pane.terminal.modes.synchronizedOutputMode)
-    ) {
-      // Stays due; the next attempt (at most the overdue one) catches a frame that closed without more output.
+    // A new canvas paints straight from the buffer, and xterm holds the DOM renderer's paint until a synchronized-output (DEC 2026) frame closes, so an on-screen pane mid-frame would go blank or half drawn; that atlas waits.
+    if (atlasPanes.some((pane) => onScreen(pane) && pane.terminal.modes.synchronizedOutputMode)) {
       retry = true
+      if (now - (dueSince.get(atlas) ?? now) >= ATLAS_REBUILD_MAX_QUIET_WAIT_MS) {
+        // Overdue: look again soon, so a TUI that keeps reopening frames is caught between two of them.
+        frameRetryAt.set(atlas, now + ATLAS_REBUILD_FRAME_RETRY_MS)
+      } else {
+        // Counts as an attempt; the next one is overdue and retries between frames.
+        attempted = true
+      }
       continue
     }
+    attempted = true
     // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
     forgetDue(atlas)
     atlasesWithLargePage.delete(atlas)
     atlasesWithOutput.delete(atlas)
     panes.push(...atlasPanes)
+  }
+  if (attempted) {
+    lastAttemptAt = now
   }
   if (retry || dueAtlases.size > 0) {
     scheduleRebuild()

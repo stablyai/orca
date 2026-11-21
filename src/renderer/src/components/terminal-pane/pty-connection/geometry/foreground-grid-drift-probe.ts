@@ -1,5 +1,6 @@
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { requestStablePaneFit } from '@/lib/pane-manager/terminal-fit/pane-fit-resize-observer'
+import { isPaneAwaitingAtlasRebuildReattach } from '@/lib/pane-manager/terminal-rendering/pane-webgl-reattach'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const FOREGROUND_GRID_DRIFT_CHECK_MIN_MS = 250
@@ -62,7 +63,9 @@ export function installForegroundGridDriftProbe(session: ConnectPanePtySession):
         session.disposed ||
         !session.deps.isVisibleRef.current ||
         session.shouldSuppressDesktopPtyResize() ||
-        session.terminalSelectionFitGuard?.isActive()
+        session.terminalSelectionFitGuard?.isActive() ||
+        // Its DOM renderer measures cells differently from the WebGL it gets back next frames; no fit until then.
+        isPaneAwaitingAtlasRebuildReattach(session.pane as ManagedPaneInternal)
       ) {
         return
       }
