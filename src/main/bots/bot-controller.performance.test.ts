@@ -31,6 +31,7 @@ describe('unchanged bot edits', () => {
       const notify = vi.fn()
       const store = {
         getBots: () => records,
+        getRepos: () => [],
         saveBot,
         removeBot: vi.fn(),
         getProjectGroups: () => [],
