@@ -121,7 +121,9 @@ export async function readRefLink(path: string): Promise<string | undefined> {
     rethrowUnlessMissing(error)
     return undefined
   }
-  return target.startsWith('refs/') ? `ref: ${target}` : readRefContent(path)
+  // Windows reports a link's target with backslashes; Git for Windows reads it with forward slashes.
+  const ref = process.platform === 'win32' ? target.replaceAll('\\', '/') : target
+  return ref.startsWith('refs/') ? `ref: ${ref}` : readRefContent(path)
 }
 
 // Refs are a short line; anything larger, or not a regular file, is left to Git's listing.

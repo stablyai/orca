@@ -3,7 +3,13 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { readGitDirState, readOptional, readRefFile, UNRESOLVED_HEAD } from './git-dir-branch-state'
+import {
+  readGitDirState,
+  readOptional,
+  readRefFile,
+  readRefLink,
+  UNRESOLVED_HEAD
+} from './git-dir-branch-state'
 import { normalizeHead } from './git-ref-text'
 
 let root: string | undefined
@@ -48,3 +54,19 @@ it('reads rebase state larger than a gitfile may be', async () => {
 it('keeps a branch name ending in a no-break space, which Git allows', () => {
   expect(normalizeHead('ref:\trefs/heads/main\u00a0\r\n')).toBe('ref: refs/heads/main\u00a0')
 })
+
+// Windows itself needs symlink privileges; this stands in for its backslashed link targets.
+it.skipIf(process.platform === 'win32')(
+  'reads a backslashed Windows link target as the ref Git for Windows sees',
+  async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-windows-link-'))
+    await symlink('refs\\heads\\main', join(root, 'HEAD'))
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      await expect(readRefLink(join(root, 'HEAD'))).resolves.toBe('ref: refs/heads/main')
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  }
+)
