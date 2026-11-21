@@ -89,13 +89,16 @@ export async function scanDarwin(
       return group !== undefined && chain.has(group) ? [group] : []
     })
   )
-  // The launcher's owner-pipe watcher sits beside the chain in the launcher's own group:
-  // infrastructure. A chat's command runs in a group of its own, so a name alone never exempts it.
+  // The launcher's owner-pipe watcher is a launcher-named child of a launcher (never of Codex) that
+  // leads its own process group (provider-exec's run_watcher setpgid(0, 0)): not a chat's work.
   const infrastructure = new Set(chain)
   for (const pid of chain) {
+    if (!isLauncherName(processes.get(pid)?.name)) {
+      continue
+    }
     for (const child of children.get(pid) ?? []) {
       const row = processes.get(child)
-      if (isLauncherName(row?.name) && row !== undefined && owned.has(row.group)) {
+      if (isLauncherName(row?.name) && row?.group === child) {
         infrastructure.add(child)
       }
     }

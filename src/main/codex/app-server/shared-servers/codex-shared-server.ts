@@ -118,8 +118,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     const others = this.leases.size
     const threads = (): string[] => [...lease.threads, ...lease.abandonedThreads]
     const running = (): string[] => threads().flatMap((id) => this.turns.runningOn(id) ?? [])
-    // A turn that started since (a helper) needs its own interrupt, so it wakes the retry too.
-    const seen = new Set(running())
+    // A running turn no Stop has interrupted yet (a helper that started late) wakes the retry.
+    const seen = lease.interruptedTurns
     return this.turns.waitUntil(
       () =>
         this.hasExited ||
@@ -164,7 +164,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     const released = new Promise<void>((resolve) => {
       done = resolve
     })
-    const fenced = [...lease.threads]
+    // Abandoned threads too, so another chat can't resume one while this cleanup still runs.
+    const fenced = [...lease.threads, ...lease.abandonedThreads]
     for (const threadId of fenced) {
       this.releasingThreads.set(threadId, released)
     }

@@ -28,6 +28,7 @@ export async function stopCodexLeaseWriter(
     await Promise.all(
       running.map(async ({ threadId, turnId }) => {
         interrupted.add(turnId)
+        lease.interruptedTurns.add(turnId)
         const ended = turns.waitUntil(
           () => turns.runningOn(threadId) !== turnId,
           requestTimeoutMs + TURN_STOP_PROOF_MS
