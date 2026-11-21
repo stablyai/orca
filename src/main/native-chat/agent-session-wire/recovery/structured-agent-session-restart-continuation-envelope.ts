@@ -5,6 +5,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-
 import { restartContinuationMessage } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
+import { agentSessionSendFields } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 /** What a continuation is sent for: the offer's wording, and the interrupted work it resumes (a
  *  restart offer's `work`, or a cut turn's row named outright). */
@@ -80,10 +81,12 @@ export function restartContinuationEnvelope(
       sessionId,
       clientOperationId: continuationId,
       expectedRuntimeFence: fence,
+      // Over the fields the host's send plan hashes, which leave out restartOf: the same request
+      // must hash the same on both sides, or the host refuses it as a mismatch.
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
         sessionId,
-        fields: { body }
+        fields: agentSessionSendFields({ body })
       })
     }
   }

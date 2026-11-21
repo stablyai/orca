@@ -111,19 +111,17 @@ function recoveryCapsulePublished(filePath: string): void {
   }
 }
 
-/** Every offer a continuation may still answer: pending, in an action now (and its replacement),
- *  or failed and open to a retry. Read under the file's lock, like the capsule's own reads. */
+/** Every offer a continuation may still answer: pending, or in an action now (and its
+ *  replacement). A failed action is not: its requests are told how the work ended. Read under the
+ *  file's lock, like the capsule's own reads. */
 export function readStandingRecoveryOffers(
   filePath: string,
   now: number
 ): Promise<AgentSessionResumeMarker[]> {
   return withFileTransactionLock(filePath, async () => {
-    const { entries, failed } = normalizeState(await readRecoveryCapsuleState(filePath), now)
-    return [
-      ...entries.flatMap((entry) =>
-        entry.replacement ? [entry.marker, entry.replacement] : [entry.marker]
-      ),
-      ...failed.map((failure) => failure.marker)
-    ]
+    const { entries } = normalizeState(await readRecoveryCapsuleState(filePath), now)
+    return entries.flatMap((entry) =>
+      entry.replacement ? [entry.marker, entry.replacement] : [entry.marker]
+    )
   })
 }

@@ -10,6 +10,7 @@ import type { AgentSessionResumeWork } from '../../shared/agent-session/lifecycl
 import type { JournalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
 import type { ReplyPolicy } from './connector-reply-policy'
 import {
+  BINDING_UNKNOWN,
   offerNames,
   restartBinding,
   turnEndedAt,
@@ -23,7 +24,7 @@ import { readEndedChatTurnOpener } from './external-conversation-turn-opener'
 type Reads = { journalReads(sessionId: string): Promise<Pick<JournalSqlReads, 'canonicalItemIds'>> }
 
 /** The restart offers a continuation may still answer (the recovery capsule): pending, in an
- *  action, or failed and open to a retry. */
+ *  action. A failed action no longer holds. */
 export type ReplyRecoveryOffers = {
   read(now: number): Promise<readonly { sessionId: string; work: AgentSessionResumeWork }[]>
   onChange(listener: () => void): () => void
@@ -56,7 +57,13 @@ export const coversRow = (stamp: AgentJournalConnectorDelivery, row: JournalConn
 
 export class SettlePass {
   private readonly openers = new Map<string, Promise<AgentJournalRenderItem | null | undefined>>()
-  private readonly bindings = new Map<string, Promise<RestartBinding | null>>()
+  private readonly bindings = new Map<
+    string,
+    Promise<RestartBinding | null | typeof BINDING_UNKNOWN>
+  >()
+  /** An opener or a continuation's binding couldn't be read: anything that may be resumed waits,
+   *  nothing is settled by absence, and the chat is settled again shortly. */
+  unknown = false
   // What a continuation in this window verifiably resumes; read by prepare(), before any hold.
   private resumed = new Set<string>()
   /** The earliest durable deadline of a hold this pass kept, if any. */
@@ -69,14 +76,19 @@ export class SettlePass {
     /** Null: the offers couldn't be read, so any may stand. */
     private readonly offers: readonly AgentSessionResumeWork[] | null,
     readonly now: number,
-    private readonly policy: ReplyPolicy
+    private readonly policy: ReplyPolicy,
+    /** Whether an offer was recorded or settled after `offers` was read (a crash cut's offer is
+     *  recorded at startup): then a cut may yet be resumed, so it waits for the next pass. */
+    private readonly watch: { offersMoved: () => boolean } = { offersMoved: () => false }
   ) {}
 
   /** Resolves every continuation in the window, before any turn's hold is decided. */
   async prepare(): Promise<void> {
     for (const item of this.snapshot.items) {
       const binding = await this.bindingOf(item)
-      if (binding) {
+      if (binding === BINDING_UNKNOWN) {
+        this.unknown = true
+      } else if (binding) {
         this.resumed.add(binding.resumed.itemId)
       }
     }
@@ -109,14 +121,20 @@ export class SettlePass {
         () => this.chat.journalReads(this.sessionId),
         items,
         turnItemId
-      )
+      ).then((read) => {
+        // Unknown is not none: nothing this pass decides by absence, and it runs again soon.
+        this.unknown ||= read === undefined
+        return read
+      })
       this.openers.set(turnItemId, opener)
     }
     return opener
   }
 
   /** What a continuation message resumes, verified; null for any other message. */
-  bindingOf(message: AgentJournalRenderItem): Promise<RestartBinding | null> {
+  bindingOf(
+    message: AgentJournalRenderItem
+  ): Promise<RestartBinding | null | typeof BINDING_UNKNOWN> {
     if (message.body.kind !== 'message' || !message.body.restartOf) {
       return Promise.resolve(null)
     }
@@ -168,7 +186,11 @@ export class SettlePass {
       return false
     }
     const waiting =
-      this.resumed.has(itemId) || this.offers === null || offerNames(this.offers, work)
+      this.resumed.has(itemId) ||
+      this.unknown ||
+      this.offers === null ||
+      offerNames(this.offers, work) ||
+      this.watch.offersMoved()
     if (waiting) {
       this.holdUntil = this.holdUntil === null ? until : Math.min(this.holdUntil, until)
     }

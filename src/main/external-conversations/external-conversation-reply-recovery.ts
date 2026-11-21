@@ -4,12 +4,13 @@ import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/j
 import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
 import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { structuredAgentSessionTurnFailure } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { connectorFailure } from './external-conversation-failure'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
 import {
+  answerProse,
+  BINDING_UNKNOWN,
   personMessagesDuring,
   settledTurnVerdict,
   turnEndedAt
@@ -25,6 +26,7 @@ import {
 
 export type { ReplyRecoveryOffers }
 import { fillByEvidence } from './external-conversation-reply-evidence'
+import { ReplySettleTimers } from './external-conversation-reply-settle-timers'
 
 // Design item 125 §3: rows a live turn end didn't fill. Boot fills them from the journal, and a
 // watch on each such chat settles the rest as its journal moves (withdrawn cards fill in their own
@@ -34,10 +36,8 @@ import { fillByEvidence } from './external-conversation-reply-evidence'
 
 // Chats opened at once by the boot scan (O15).
 const OPEN_AT_ONCE = 2
-// A watched chat's journal moves with every streamed token; it is settled once it pauses.
-const SETTLE_AFTER_MS = 2_000
-// The restart offers couldn't be read: their chats are settled again after this.
-const OFFERS_RETRY_MS = 30_000
+// The restart offers (or a pass's reads) failed: their chats are settled again after this.
+const RETRY_MS = 30_000
 
 export type ReplyRecoveryChat = {
   conversation(sessionId: string): Promise<unknown>
@@ -53,9 +53,15 @@ export class ConnectorReplyRecovery {
   private readonly watches = new Map<string, () => void>()
   private readonly settling = new Map<string, Promise<void>>()
   private readonly again = new Set<string>()
-  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
-  private readonly deadlines = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly timers = new ReplySettleTimers(
+    (sessionId) => void this.settle(sessionId),
+    () => this.now()
+  )
   private offersChanged: (() => void) | null = null
+  /** How often the offers changed: a pass that saw them move after it read them fills no cut. */
+  private offerChanges = 0
+  /** Bumped by dispose, so a pass that was running then schedules nothing after it. */
+  private generation = 0
   private readonly expiries: ReplyExpiries
 
   constructor(
@@ -107,9 +113,10 @@ export class ConnectorReplyRecovery {
   async boot(): Promise<void> {
     // Subscribed before the first read: an offer that settles while boot reads settles again.
     this.offersChanged ??=
-      this.deps
-        .offers?.()
-        ?.onChange(() => [...this.watches.keys()].forEach((id) => this.later(id))) ?? null
+      this.deps.offers?.()?.onChange(() => {
+        this.offerChanges += 1
+        ;[...this.watches.keys()].forEach((id) => this.timers.later(id))
+      }) ?? null
     const rows =
       (await this.deps
         .journal()
@@ -129,14 +136,12 @@ export class ConnectorReplyRecovery {
 
   /** Stops every watch: another host, or connectors off. */
   dispose(): void {
+    this.generation += 1
     this.offersChanged?.()
     this.offersChanged = null
     this.watches.forEach((release) => release())
     this.watches.clear()
-    for (const timers of [this.timers, this.deadlines]) {
-      timers.forEach((timer) => clearTimeout(timer))
-      timers.clear()
-    }
+    this.timers.clear()
   }
 
   /** A request was admitted to this chat: its journal is watched from now on, subscribed before the
@@ -145,13 +150,13 @@ export class ConnectorReplyRecovery {
     const chat = this.deps.chat()
     if (chat) {
       this.watch(chat, sessionId)
-      this.later(sessionId)
+      this.timers.later(sessionId)
     }
   }
 
   /** A chat's turn ended: rows it left unfilled are watched from now on. */
   turnEnded(sessionId: string): void {
-    this.later(sessionId)
+    this.timers.later(sessionId)
   }
 
   private settle(sessionId: string, open = false): Promise<void> {
@@ -160,12 +165,17 @@ export class ConnectorReplyRecovery {
       this.again.add(sessionId)
       return running
     }
+    const generation = this.generation
     const pass = (async () => {
       do {
         this.again.delete(sessionId)
-        await this.settleOnce(sessionId, open).catch((error: unknown) =>
+        await this.settleOnce(sessionId, open).catch((error: unknown) => {
           console.warn('[connector] could not settle reply outbox rows', error)
-        )
+          // A failed read (at a hold's deadline too) is tried again, not left until something moves.
+          if (generation === this.generation) {
+            this.timers.deadline(sessionId, this.now() + RETRY_MS)
+          }
+        })
       } while (this.again.has(sessionId))
     })().finally(() => this.settling.delete(sessionId))
     this.settling.set(sessionId, pass)
@@ -202,6 +212,7 @@ export class ConnectorReplyRecovery {
     this.watch(chat, sessionId)
     // The offers before the journal: a continuation is journaled before its offer settles, so a
     // continuation still to come shows in at least one of the two (design D2 §3).
+    const offerChanges = this.offerChanges
     const offers = await standingOffers(this.deps.offers?.() ?? null, sessionId, this.now())
     // From the rows' own sends (or the queued cards they carried) to the head, without tool output:
     // the whole journal can be hundreds of MB.
@@ -211,7 +222,9 @@ export class ConnectorReplyRecovery {
       operationIds: unfilled.map((row) => row.messageId),
       withoutToolOutput: true
     })
-    const pass = new SettlePass(chat, sessionId, snapshot, offers, this.now(), this.policy)
+    const pass = new SettlePass(chat, sessionId, snapshot, offers, this.now(), this.policy, {
+      offersMoved: () => this.offerChanges !== offerChanges
+    })
     await pass.prepare()
     const messageAt = (row: Unfilled): number => pass.messageOf(row)?.sequence ?? 0
     // Only turns that could have answered a row still unfilled.
@@ -237,9 +250,9 @@ export class ConnectorReplyRecovery {
     if ((await journal.read(sessionId)).some((row) => !row.fill)) {
       this.watch(chat, sessionId)
       // A hold's own deadline, or sooner when the offers couldn't be read.
-      const retryAt = offers === null ? pass.now + OFFERS_RETRY_MS : null
+      const retryAt = offers === null || pass.unknown ? pass.now + RETRY_MS : null
       const at = [pass.holdUntil, retryAt].filter((time): time is number => time !== null)
-      this.deadline(sessionId, at.length > 0 ? Math.min(...at) : null)
+      this.timers.deadline(sessionId, at.length > 0 ? Math.min(...at) : null)
     } else {
       this.unwatch(sessionId)
     }
@@ -256,12 +269,18 @@ export class ConnectorReplyRecovery {
     const { sessionId, snapshot } = pass
     const verdict = settledTurnVerdict(turn)
     const opener = await pass.openerOf(turn.itemId)
-    const resumed = opener ? await pass.bindingOf(opener) : null
+    const binding = opener ? await pass.bindingOf(opener) : null
+    const resumed = binding === BINDING_UNKNOWN ? null : binding
     const stamps = [
       ...connectorReplyTurnStamps(snapshot, opener, turn.itemId),
       ...(resumed?.stamps ?? [])
     ]
-    if (!verdict || (verdict === 'interruption' && pass.turnHeld(turn, opener))) {
+    if (
+      !verdict ||
+      // What it resumed couldn't be read: owed until it can.
+      binding === BINDING_UNKNOWN ||
+      (verdict === 'interruption' && pass.turnHeld(turn, opener))
+    ) {
       // Running, unverifiable, or waiting on its continuation: owed and watched (O3).
       return stamps
     }
@@ -295,7 +314,7 @@ export class ConnectorReplyRecovery {
       turnItemId: turn.itemId,
       stamps,
       outcome: verdict,
-      prose: structuredAgentSessionTurnAssistantMessage(snapshot.items, turn.itemId),
+      prose: answerProse(snapshot.items, turn.itemId, resumed),
       bot: this.deps.isBot(sessionId),
       links: [],
       ...(verdict === 'failure'
@@ -314,42 +333,14 @@ export class ConnectorReplyRecovery {
     if (!this.watches.has(sessionId)) {
       this.watches.set(
         sessionId,
-        chat.observeJournalPublications(sessionId, () => this.later(sessionId))
+        chat.observeJournalPublications(sessionId, () => this.timers.later(sessionId))
       )
     }
-  }
-
-  private later(sessionId: string): void {
-    clearTimeout(this.timers.get(sessionId))
-    const timer = setTimeout(() => {
-      this.timers.delete(sessionId)
-      void this.settle(sessionId)
-    }, SETTLE_AFTER_MS)
-    timer.unref?.()
-    this.timers.set(sessionId, timer)
-  }
-
-  /** Settles the chat again at a hold's durable deadline, so it ends with nothing else moving. */
-  private deadline(sessionId: string, at: number | null): void {
-    clearTimeout(this.deadlines.get(sessionId))
-    this.deadlines.delete(sessionId)
-    if (at === null) {
-      return
-    }
-    const timer = setTimeout(
-      () => {
-        this.deadlines.delete(sessionId)
-        void this.settle(sessionId)
-      },
-      Math.max(0, at - this.now())
-    )
-    timer.unref?.()
-    this.deadlines.set(sessionId, timer)
   }
 
   private unwatch(sessionId: string): void {
     this.watches.get(sessionId)?.()
     this.watches.delete(sessionId)
-    this.deadline(sessionId, null)
+    this.timers.deadline(sessionId, null)
   }
 }

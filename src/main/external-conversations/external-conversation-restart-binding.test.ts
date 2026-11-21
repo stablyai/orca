@@ -5,7 +5,7 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalRestartOf } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { restartBinding } from './external-conversation-restart-binding'
+import { BINDING_UNKNOWN, restartBinding } from './external-conversation-restart-binding'
 
 // What a restart continuation resumes (design: slack-reply-lost-restart, D2 §2): exactly one match
 // before it, a turn that ended interrupted or a send in doubt, nothing in between, at most four hops;
@@ -67,13 +67,20 @@ const submission = (id: string, fields: Partial<AgentJournalSubmission> = {}) =>
 function bind(
   items: AgentJournalRenderItem[],
   continuationId: string,
-  { submissions = [] as AgentJournalSubmission[], chainMax = 4 } = {}
+  {
+    submissions = [] as AgentJournalSubmission[],
+    chainMax = 4,
+    unreadable = undefined as string | undefined
+  } = {}
 ) {
   const window = { items, submissions }
   const message = items.find((candidate) => candidate.itemId === key(continuationId))!
   return restartBinding(window, message, {
     chainMax,
     openerOf: async (turnItemId) => {
+      if (turnItemId === unreadable) {
+        return undefined
+      }
       const row = items.find((candidate) => candidate.itemId === turnItemId)
       const userItemId = row?.body.kind === 'turn' ? row.body.userItemId : undefined
       return items.find((candidate) => candidate.itemId === userItemId) ?? null
@@ -82,7 +89,7 @@ function bind(
 }
 
 const ids = (binding: Awaited<ReturnType<typeof bind>>) =>
-  binding?.stamps.map((stamp) => stamp.deliveryId) ?? null
+  binding === BINDING_UNKNOWN ? BINDING_UNKNOWN : (binding?.stamps.map((s) => s.deliveryId) ?? null)
 
 describe('restart continuation binding', () => {
   it('binds a turn by its lifecycle id, by its row key, and a send that became that turn', async () => {
@@ -143,7 +150,7 @@ describe('restart continuation binding', () => {
     expect(await bind(items, 'c')).toBeNull()
   })
 
-  it('follows a chain of four restarts, and binds nothing past the fourth hop', async () => {
+  it('follows a chain of four restarts, and fails the whole chain closed past the fourth hop', async () => {
     // d1's turn cut, resumed by c1, whose turn was cut, resumed by c2 ... each hop one turn.
     const items: AgentJournalRenderItem[] = [asked('d1', 1), turn('t0', 2, 'd1')]
     for (let hop = 1; hop <= 5; hop += 1) {
@@ -151,6 +158,18 @@ describe('restart continuation binding', () => {
       items.push(turn(`t${hop}`, hop * 2 + 2, `c${hop}`))
     }
     expect(ids(await bind(items.slice(0, 10), 'c4'))).toEqual(['d1'])
-    expect(ids(await bind(items, 'c5'))).toEqual([])
+    // Past the fourth hop the whole chain binds nothing, so its requests release.
+    expect(await bind(items, 'c5')).toBeNull()
+  })
+
+  it('is unknown, not unbound, when an opener it needs can’t be read', async () => {
+    const items = [
+      asked('d1', 1),
+      turn('t1', 2, 'd1'),
+      continuation('c', 3, { kind: 'turn', id: 'tid-t1' })
+    ]
+    expect(await bind(items, 'c', { unreadable: 't1' })).toBe(BINDING_UNKNOWN)
+    items[2] = continuation('c', 3, { kind: 'submission', id: 'd1' })
+    expect(await bind(items, 'c', { unreadable: 't1' })).toBe(BINDING_UNKNOWN)
   })
 })

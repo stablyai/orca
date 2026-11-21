@@ -23,6 +23,8 @@ export type ChatTurnEnd = {
   workersChecked: () => Promise<unknown>
   /** Still the same signed-in account: false after a reset, so the end reaches no one. */
   current: () => boolean
+  /** The Slack mirror holds this turn's end, and so tells the thread its words itself. */
+  mirrored?: boolean
 }
 
 /** An adopted turn's end: how it went, never what it said or the links its work opened. A success
@@ -113,11 +115,21 @@ export async function endRepliedTurn(
   if (!end.current()) {
     return true
   }
+  const failure =
+    end.news.outcome === 'failure' ? { failure: connectorFailure(turn.failure, end.agent) } : {}
+  // A restart continuation's words answer the requests its resumed work took, through reply
+  // recovery (design: slack-reply-lost-restart): its end tells this conversation the turn's state
+  // only, so the thread never gets that answer twice. A turn the mirror holds tells it there.
+  if (fill && !end.mirrored && isRestartContinuation(turn.opener)) {
+    await end.workersChecked()
+    if (end.current()) {
+      end.emit({ ...end.ended, ...end.turnFor(turn), stateOnly: true, ...failure })
+    }
+    return true
+  }
   if (!fill || !turn.stamps?.length || !turn.turnItemId) {
     return false
   }
-  const failure =
-    end.news.outcome === 'failure' ? { failure: connectorFailure(turn.failure, end.agent) } : {}
   const covered = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
@@ -142,3 +154,6 @@ export async function endRepliedTurn(
   }
   return true
 }
+
+const isRestartContinuation = (opener: EndedChatTurn['opener']): boolean =>
+  opener?.body.kind === 'message' && opener.body.restartOf !== undefined

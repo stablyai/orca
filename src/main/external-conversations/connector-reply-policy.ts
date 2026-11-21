@@ -10,7 +10,9 @@ export const REPLY_FRESH_MS = 60 * 60_000
 export const REPLY_REQUEST_MAX_AGE_MS = 24 * 60 * 60_000
 
 /** An interrupted turn's requests wait for its restart continuation at most this long after the
- *  interruption, even while a restart offer still stands. */
+ *  interruption, even while a restart offer still stands. A hold that ends without a continuation
+ *  more than REPLY_FRESH_MS after the interruption closes quietly, by design: the thread gets no
+ *  day-old "stopped" notice. A continuation's own answer is judged by when it ended. */
 export const REPLY_HOLD_MAX_MS = 24 * 60 * 60_000
 
 /** A continuation of a continuation is followed this many times, no further. */

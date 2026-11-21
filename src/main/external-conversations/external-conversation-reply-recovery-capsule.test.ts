@@ -18,7 +18,7 @@ import {
 } from './external-conversation-reply-recovery-restart.test-fixture'
 
 // Design slack-reply-lost-restart D2 §3, against the real recovery capsule: a cut request waits
-// while any restart offer for its work stands (pending, in an action, failed and open to a retry),
+// while a restart offer for its work stands (pending, or in an action), releases once it fails,
 // and the capsule is read before the journal, so every way an offer settles is safe to interleave.
 
 // The capsule is a real file under a real lock (proper-lockfile retries on timers), so a test
@@ -39,9 +39,12 @@ async function run<T>(work: Promise<T>): Promise<T> {
   return work
 }
 
-/** Lets the settle an offer change or a journal move woke run to its end. */
-async function settled(): Promise<void> {
-  for (let step = 0; step < 6; step += 1) {
+/** Lets the settle an offer change or a journal move woke run to its end. Given what that end
+ *  shows, steps until it shows (real file I/O can outlast a fixed count of steps on a busy host),
+ *  within a bound; without one, a fixed few steps, for a check that nothing happened. */
+async function settled(done?: () => boolean): Promise<void> {
+  const until = Date.now() + 20_000
+  for (let step = 0; done ? !done() && Date.now() < until : step < 6; step += 1) {
     await vi.advanceTimersByTimeAsync(2_000)
     await io()
   }
@@ -127,7 +130,7 @@ describe('reply recovery against the recovery capsule', () => {
     await run(f.recovery.boot())
     expect(f.rows[0]?.fill).toBeUndefined()
     await run(capsule.dismiss([SESSION], NOW))
-    await settled()
+    await settled(() => f.rows[0]?.fill !== undefined)
     expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
   })
 
@@ -145,11 +148,11 @@ describe('reply recovery against the recovery capsule', () => {
     expect(f.rows[0]?.fill).toBeUndefined()
     f.clock.now = ANSWERED_AT + MINUTE
     await f.publish(answered)
-    await settled()
+    await settled(() => f.rows[0]?.fill !== undefined)
     expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', prose: 'Deployed.' })
   })
 
-  it('holds while a failed action stays open to a retry, and releases once that is dismissed', async () => {
+  it('releases the cut once its action fails, rather than holding a day and closing silently', async () => {
     await capsule.record([offer], NOW)
     await run(capsule.beginResume([SESSION], 'op-1', NOW))
     await capsule.failResume(
@@ -169,9 +172,6 @@ describe('reply recovery against the recovery capsule', () => {
     await run(capsule.rollbackResume('op-1', NOW))
     const f = withCapsule()
     await run(f.recovery.boot())
-    expect(f.rows[0]?.fill).toBeUndefined()
-    await run(capsule.dismiss([SESSION], NOW))
-    await settled()
     expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
   })
 
@@ -182,7 +182,7 @@ describe('reply recovery against the recovery capsule', () => {
     await run(f.recovery.boot())
     expect(f.rows[0]?.fill).toBeUndefined()
     await run(capsule.completeResume('op-1', [SESSION], NOW))
-    await settled()
+    await settled(() => f.rows[0]?.fill !== undefined)
     expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
   })
 
@@ -213,7 +213,7 @@ describe('reply recovery against the recovery capsule', () => {
     expect(f.rows[0]?.fill).toBeUndefined()
     f.clock.now = ANSWERED_AT + MINUTE
     await f.publish(answered)
-    await settled()
+    await settled(() => f.rows[0]?.fill !== undefined)
     expect(f.rows[0]?.fill?.outcome).toBe('answered')
   })
 

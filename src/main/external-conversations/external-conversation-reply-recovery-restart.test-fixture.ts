@@ -205,7 +205,7 @@ export function restartFixture(
     ;[...observers].forEach((observer) => observer())
     await vi.advanceTimersByTimeAsync(2_000)
   }
-  return { rows, recovery, make, publish, observers, clock }
+  return { rows, recovery, make, publish, observers, clock, chat, journal }
 }
 
 /** A list of restart offers kept in memory, standing in for the recovery capsule. */

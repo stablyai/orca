@@ -291,7 +291,8 @@ export class ChatTurns {
       emit: this.deps.emit,
       turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
       workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
-      current: () => generation === this.generation
+      current: () => generation === this.generation,
+      mirrored: Boolean(mirrored)
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {

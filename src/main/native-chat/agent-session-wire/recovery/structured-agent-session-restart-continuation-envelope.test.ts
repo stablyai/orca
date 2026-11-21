@@ -3,6 +3,8 @@ import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint
 } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { sendPlan } from '../operations/structured-agent-session-mutation-plans'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { SendBody } from '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import {
   restartContinuationBody,
@@ -40,6 +42,23 @@ describe('restart continuation body', () => {
     const { restartOf: _restartOf, ...plain } = body
     expect(agentSessionSendBodyFingerprint('chat-1', body)).toBe(
       agentSessionSendBodyFingerprint('chat-1', plain)
+    )
+  })
+
+  it('hashes the envelope as the host’s send plan does, so the host admits it', () => {
+    const { envelope, body } = restartContinuationEnvelope(
+      'chat-1',
+      1,
+      { work: { kind: 'turn', id: 'turn-1' } },
+      '1795203605251-0123456789abcdef0123456789abcdef'
+    )
+    const plan = sendPlan({ envelope, body })
+    expect(envelope.payloadFingerprint).toBe(
+      computeAgentSessionPayloadFingerprint({
+        method: plan.method,
+        sessionId: envelope.sessionId,
+        fields: plan.fields
+      })
     )
   })
 

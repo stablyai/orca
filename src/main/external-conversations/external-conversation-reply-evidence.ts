@@ -62,7 +62,10 @@ export async function fillByEvidence(input: {
       }
     }
     const at = pass.messageOf(row)?.sequence ?? 0
-    return idle && !claimed(row) && at > 0 && at < lastEnded ? ('unattributed' as const) : null
+    // Unclaimed only by what this pass could read: an unreadable opener proves nothing.
+    return idle && !pass.unknown && !claimed(row) && at > 0 && at < lastEnded
+      ? ('unattributed' as const)
+      : null
   }
   const left = (await journal.read(pass.sessionId)).filter((row) => !row.fill)
   // A typed rejection says why, as the live end would.

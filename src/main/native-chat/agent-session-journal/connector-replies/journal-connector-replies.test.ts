@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { automaticSubmissionFixture } from '../journal-automatic-submission.test-fixture'
 import { lifecycleFacts } from '../journal-domain-lifecycle.test-fixture'
@@ -190,8 +190,10 @@ it('dates each admission, keeps why a row closed quietly, and upgrades a table a
   f.db.exec('ALTER TABLE journal_connector_replies DROP COLUMN expired_reason')
   ensureJournalConnectorRepliesSchema(f.db)
   ensureJournalConnectorRepliesSchema(f.db)
-  const before = Date.now()
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_795_203_315_486)
   await f.send('new', stamped('after', { deliveryId: 'd-new' }))
+  vi.useRealTimers()
   fillJournalConnectorReplies(
     f.db,
     [
@@ -213,6 +215,6 @@ it('dates each admission, keeps why a row closed quietly, and upgrades a table a
     outcome: 'quiet',
     expiredReason: 'stale_answer: interruption resolved at 2026-11-20T19:39:06.310Z'
   })
-  expect(fresh?.admittedAt).toBeGreaterThanOrEqual(before)
+  expect(fresh?.admittedAt).toBe(1_795_203_315_486)
   expect(fresh?.fill).toBeUndefined()
 })

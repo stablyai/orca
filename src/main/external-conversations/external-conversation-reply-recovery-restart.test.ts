@@ -13,6 +13,7 @@ import {
   turnRow,
   typed
 } from './external-conversation-reply-recovery-restart.test-fixture'
+import type { ReplyRecoveryOffers } from './external-conversation-reply-settle-pass'
 
 // Design slack-reply-lost-restart: an Orca restart cuts the turn that took a Slack request (state
 // interrupted, no outcome); the restart continuation's answer must fill that request's row, once,
@@ -251,6 +252,29 @@ describe('a continuation the Slack mirror tells the thread', () => {
     expect(mirrorsTo).toHaveBeenCalledWith(SESSION, 'slack:T1:C1:1.2', ['orca:owner-1'])
   })
 
+  it('answers it when the person typed only after it ended: the mirror holds that with the next turn', async () => {
+    const late = {
+      items: [
+        asked('d1', 1, T0),
+        cutTurn,
+        continued('c1', 3, CUT_AT + MINUTE, { kind: 'turn', id: 'tid-t-cut' }),
+        turnRow('t-cont', 4, 'c1', 'completed', CUT_AT + MINUTE, ANSWERED_AT),
+        said('Deployed.', 5, ANSWERED_AT, 't-cont'),
+        typed('owner-1', 6, ANSWERED_AT + MINUTE)
+      ],
+      submissions: []
+    }
+    const mirrorsTo = vi.fn(() => true)
+    const f = restartFixture(late, {
+      rows: [row('d1', T0)],
+      now: ANSWERED_AT + 2 * MINUTE,
+      mirrorsTo
+    })
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', prose: 'Deployed.' })
+    expect(mirrorsTo).not.toHaveBeenCalled()
+  })
+
   it('answers it when the chat does not mirror', async () => {
     const f = restartFixture(mirroredChat, {
       rows: [row('d1', T0)],
@@ -417,5 +441,130 @@ describe('one post per answer across the mirror and the outbox, either order', (
     await f.recovery.boot()
     await outbox(sink, f.rows)
     expect([...sink.posted]).toEqual([`answer:${SLACK_THREAD}:d1`])
+  })
+})
+
+describe('what a continuation resumes, when it can’t be read or was refused', () => {
+  it('keeps the cut request owed while the binding can’t be read, then answers once it can', async () => {
+    const f = restartFixture(resumedChat(), { rows: [row('d1', T0)], now: ANSWERED_AT + MINUTE })
+    const reads = f.chat.journalReads
+    let failing = true
+    f.chat.journalReads = async () => {
+      const journal = await reads()
+      return {
+        ...journal,
+        canonicalItemIds: async (ids: readonly string[]) => {
+          if (failing) {
+            throw new Error('journal reader busy')
+          }
+          return journal.canonicalItemIds(ids)
+        }
+      }
+    }
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toBeUndefined()
+    failing = false
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', answerDeliveryId: 'd1' })
+  })
+
+  it('tells the cut as interrupted when the agent refused the continuation', async () => {
+    const refused = {
+      items: [
+        asked('d1', 1, T0),
+        cutTurn,
+        continued('c1', 3, CUT_AT + MINUTE, { kind: 'turn', id: 'tid-t-cut' })
+      ],
+      submissions: [submission('c1', { origin: 'host', dispatchState: 'rejected' })]
+    }
+    const f = restartFixture(refused, { rows: [row('d1', T0)], now: CUT_AT + 2 * MINUTE })
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
+  })
+})
+
+describe('the whole answer, and a chain too long to follow', () => {
+  it('answers with the reply the restart cut partway through, then the continuation’s', async () => {
+    const window = resumedChat()
+    // The cut turn was writing its reply when Orca quit: its last root item is its own prose.
+    window.items.splice(2, 0, said('Staging is green; production is', 2.5, CUT_AT, 't-cut'))
+    const f = restartFixture(window, { rows: [row('d1', T0)], now: ANSWERED_AT + MINUTE })
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill?.prose).toBe(
+      'Staging is green; production is\n\nDeployed to staging and production.'
+    )
+  })
+
+  it('releases the original request at once when the restart chain runs past its last hop', async () => {
+    const items = [asked('d1', 1, T0), turnRow('t0', 2, 'd1', 'interrupted', T0, CUT_AT)]
+    for (let hop = 1; hop <= 5; hop += 1) {
+      const at = CUT_AT + hop * MINUTE
+      items.push(continued(`c${hop}`, hop * 2 + 1, at, { kind: 'turn-item', id: `t${hop - 1}` }))
+      items.push(turnRow(`t${hop}`, hop * 2 + 2, `c${hop}`, 'interrupted', at, at + 30_000))
+    }
+    const f = restartFixture(
+      { items, submissions: [] },
+      { rows: [row('d1', T0)], now: CUT_AT + 7 * MINUTE }
+    )
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill?.outcome).toBe('interrupted')
+  })
+})
+
+describe('a pass that can’t finish, or that the offers moved under', () => {
+  const cutOnly = { items: [asked('d1', 1, T0), cutTurn], submissions: [] }
+
+  it('tries a failed settle at a hold’s deadline again, rather than leaving the request open', async () => {
+    const offers = memoryOffers([{ sessionId: SESSION, work: { kind: 'turn', id: 'tid-t-cut' } }])
+    const f = restartFixture(cutOnly, {
+      rows: [row('d1', T0)],
+      now: CUT_AT + MINUTE,
+      offers: offers.source
+    })
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toBeUndefined()
+    const read = f.journal.read
+    let failing = true
+    f.journal.read = async () => {
+      if (failing) {
+        failing = false
+        throw new Error('journal busy')
+      }
+      return read()
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    f.clock.now = CUT_AT + 24 * HOUR
+    await vi.advanceTimersByTimeAsync(24 * HOUR)
+    expect(failing).toBe(false)
+    expect(f.rows[0]?.fill).toMatchObject({ outcome: 'quiet' })
+  })
+
+  it('keeps a cut owed when its offer is recorded just after the pass read the offers', async () => {
+    const offers = memoryOffers([])
+    const source = offers.source()
+    let recorded = false
+    const racing: ReplyRecoveryOffers = {
+      read: async (now) => {
+        const read = await source.read(now)
+        if (!recorded) {
+          // A crash cut's offer is recorded at startup, right after this pass looked.
+          recorded = true
+          offers.set([{ sessionId: SESSION, work: { kind: 'turn', id: 'tid-t-cut' } }])
+        }
+        return read
+      },
+      onChange: source.onChange
+    }
+    const f = restartFixture(cutOnly, {
+      rows: [row('d1', T0)],
+      now: CUT_AT + MINUTE,
+      offers: () => racing
+    })
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toBeUndefined()
+    // The next pass sees the offer and holds for its continuation.
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(recorded).toBe(true)
+    expect(f.rows[0]?.fill).toBeUndefined()
   })
 })
