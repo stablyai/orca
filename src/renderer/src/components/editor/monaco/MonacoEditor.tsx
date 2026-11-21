@@ -323,6 +323,7 @@ export default function MonacoEditor({
           automaticLayout: true,
           unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
           tabSize: 2,
+          linkedEditing: settings?.editorLinkedEditing === true,
           readOnly,
           scrollbar: autoHeight
             ? {

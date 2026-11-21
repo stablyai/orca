@@ -1,4 +1,5 @@
 import { getAutoSaveSearchEntry } from './GeneralAutoSaveSetting'
+import { getLinkedEditingSearchEntry } from './EditorLinkedEditingSetting'
 import { GENERAL_SETTING_ANCHORS, generalSetting } from '../general/general-setting-anchors'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
@@ -137,6 +138,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('settings.general.inlineBlameKeywordAnnotation', 'annotation')
     ]
   }),
+  generalSetting(GENERAL_SETTING_ANCHORS.linkedEditing, getLinkedEditingSearchEntry()),
   generalSetting(GENERAL_SETTING_ANCHORS.markdownView, {
     title: translate('auto.components.settings.general.search.0f9304f821', 'Default Markdown view'),
     description: translate(

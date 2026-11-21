@@ -71,6 +71,7 @@ export function buildDefaultSettings(args: {
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     editorInlineBlame: false,
+    editorLinkedEditing: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,

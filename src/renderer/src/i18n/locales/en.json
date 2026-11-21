@@ -1427,7 +1427,12 @@
       "inlineBlameKeywordBlame": "blame",
       "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "author",
-      "inlineBlameKeywordAnnotation": "annotation"
+      "inlineBlameKeywordAnnotation": "annotation",
+      "linkedEditingTitle": "Linked editing",
+      "linkedEditingDescription": "Rename the matching JSX tag while you edit a tag name.",
+      "linkedEditingKeywordTag": "tag",
+      "linkedEditingKeywordRename": "rename",
+      "linkedEditingKeywordJsx": "jsx"
     },
     "openInApp": {
       "preset": {
