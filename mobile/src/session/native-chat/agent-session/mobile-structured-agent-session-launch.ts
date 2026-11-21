@@ -44,6 +44,12 @@ export type MobileStructuredAgentLaunchResult =
   | { kind: 'failed'; message: string }
   | { kind: 'unknown'; message: string }
 
+/** What `agentSession.create` alone can answer; only the createSupport probe yields `unsupported`. */
+type MobileStructuredAgentCreateResult = Exclude<
+  MobileStructuredAgentLaunchResult,
+  { kind: 'unsupported' }
+>
+
 function createParamsFor(
   agent: TuiAgent,
   worktree: string,
@@ -75,7 +81,7 @@ function createParamsFor(
   })
 }
 
-function unknownCreateResult(agent: TuiAgent, error: unknown): MobileStructuredAgentLaunchResult {
+function unknownCreateResult(agent: TuiAgent, error: unknown): MobileStructuredAgentCreateResult {
   const message = error instanceof Error ? error.message.trim() : ''
   return { kind: 'unknown', message: message || unconfirmedMessage(agent) }
 }
@@ -93,27 +99,19 @@ function classifyCreateRefusal(
   agent: TuiAgent,
   code: string,
   message: string
-): MobileStructuredAgentLaunchResult {
+): MobileStructuredAgentCreateResult {
   if (!isDefinitiveAgentSessionCreateRefusal(code)) {
     return unknownCreateResult(agent, new Error(message))
   }
   return { kind: 'failed', message: message || failedMessage(agent) }
 }
 
-export async function createMobileStructuredAgentSession(
+/** Null when the host admits a new chat here; otherwise the unsupported result to return. */
+async function createSupportRefusal(
   client: RpcClient,
-  worktreeId: string,
-  agent: TuiAgent,
-  /** Sent only to a host advertising forks. */
-  forkFrom?: StructuredAgentSessionForkSource,
-  /** Sent only to a host advertising create placement; the replay keeps it. */
-  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
-  /** Sent only to a host advertising create messages: the chat's first prompt. */
-  firstMessageText?: string,
-  /** A transcript already placed on this host, e.g. a chat copied from another host. */
-  resumeFrom?: StructuredAgentSessionResumeSource
-): Promise<MobileStructuredAgentLaunchResult> {
-  const worktree = `id:${worktreeId}`
+  worktree: string,
+  agent: TuiAgent
+): Promise<Extract<MobileStructuredAgentLaunchResult, { kind: 'unsupported' }> | null> {
   let supportResponse
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -151,7 +149,64 @@ export async function createMobileStructuredAgentSession(
   if (!support || typeof support !== 'object' || support.supported !== true) {
     return { kind: 'unsupported', reason: support?.reason }
   }
+  return null
+}
 
+export async function createMobileStructuredAgentSession(
+  client: RpcClient,
+  worktreeId: string,
+  agent: TuiAgent,
+  /** Sent only to a host advertising forks; skips createSupport like forkMobileStructuredAgentSession. */
+  forkFrom?: StructuredAgentSessionForkSource,
+  /** Sent only to a host advertising create placement; the replay keeps it. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
+  /** Sent only to a host advertising create messages: the chat's first prompt. */
+  firstMessageText?: string,
+  /** A transcript already placed on this host, e.g. a chat copied from another host. */
+  resumeFrom?: StructuredAgentSessionResumeSource
+): Promise<MobileStructuredAgentLaunchResult> {
+  const worktree = `id:${worktreeId}`
+  return (
+    (forkFrom ? null : await createSupportRefusal(client, worktree, agent)) ??
+    requestStructuredAgentSessionCreate(
+      client,
+      worktree,
+      agent,
+      forkFrom,
+      tabPlacement,
+      firstMessageText,
+      resumeFrom
+    )
+  )
+}
+
+/** Skips createSupport: a fork never falls back to a terminal, and that probe refuses phones on terminal-default hosts. */
+export function forkMobileStructuredAgentSession(
+  client: RpcClient,
+  worktreeId: string,
+  agent: TuiAgent,
+  forkFrom: StructuredAgentSessionForkSource,
+  /** Sent only to a host advertising create placement; the replay keeps it. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
+): Promise<MobileStructuredAgentCreateResult> {
+  return requestStructuredAgentSessionCreate(
+    client,
+    `id:${worktreeId}`,
+    agent,
+    forkFrom,
+    tabPlacement
+  )
+}
+
+async function requestStructuredAgentSessionCreate(
+  client: RpcClient,
+  worktree: string,
+  agent: TuiAgent,
+  forkFrom?: StructuredAgentSessionForkSource,
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
+  firstMessageText?: string,
+  resumeFrom?: StructuredAgentSessionResumeSource
+): Promise<MobileStructuredAgentCreateResult> {
   const params = createParamsFor(
     agent,
     worktree,

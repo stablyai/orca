@@ -3,7 +3,8 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
 const { accessMock, existsSyncMock, spawnMock } = vi.hoisted(() => ({
-  accessMock: vi.fn(),
+  // Windows directory uploads probe System32 tar.exe first; default to it existing.
+  accessMock: vi.fn(async () => {}),
   existsSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -111,6 +112,7 @@ describe('spawnSystemSsh', () => {
 
 describe('system SSH operation aborts', () => {
   beforeEach(() => {
+    accessMock.mockReset()
     existsSyncMock.mockReset()
     spawnMock.mockReset()
     mockSystemSshExists()
@@ -128,6 +130,8 @@ describe('system SSH operation aborts', () => {
       '/tmp/remote-relay',
       { signal: controller.signal }
     )
+    // Windows awaits the tar.exe probe before spawning, so abort only once both children exist.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     controller.abort()
 
     const outcome = await Promise.race([
@@ -177,6 +181,30 @@ describe('system SSH directory upload tar binary', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
     vi.unstubAllEnvs()
+  })
+
+  it('keeps the inherited cwd for tar on Unix so PATH lookup is unchanged', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', '/usr/bin/ssh')
+    const tarCreate = createMockChildProcess()
+    const sshExtract = createMockChildProcess()
+    spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(sshExtract)
+
+    const uploadPromise = uploadDirectoryViaSystemSsh(
+      createTarget(),
+      '/local-relay',
+      '/tmp/remote-relay'
+    )
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    tarCreate.stdout.end()
+    tarCreate.emit('close', 0, null)
+    sshExtract.emit('close', 0, null)
+    await uploadPromise
+
+    const [program, args, options] = spawnMock.mock.calls[0]
+    expect(program).toBe('tar')
+    expect(args).toEqual(['-czf', '-', '-C', '/local-relay', '.'])
+    expect(options).not.toHaveProperty('cwd')
   })
 
   it.each([

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { chatForkRecapMessages } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
+import { chatForkRecapMessages } from '../../../../../../../shared/agent-session/conversation-context/chat-fork-recap'
 import {
   chatForkPath,
   chatForkSurfaceChoice

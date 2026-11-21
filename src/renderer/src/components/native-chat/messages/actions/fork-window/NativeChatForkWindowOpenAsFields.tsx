@@ -9,7 +9,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
+import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/conversation-context/chat-fork-recap'
 import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'
 import type { NativeChatForkRoute } from './native-chat-fork-window-choices'
 

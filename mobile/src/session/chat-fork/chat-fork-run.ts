@@ -6,7 +6,7 @@ import { triggerError } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileWorktreeForkMode } from '../mobile-structured-chat-worktree-fork'
 import { chatForkCopy } from './chat-fork-copy'
-import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
+import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/conversation-context/chat-fork-recap'
 import type {
   ChatForkPath,
   ChatForkSurface

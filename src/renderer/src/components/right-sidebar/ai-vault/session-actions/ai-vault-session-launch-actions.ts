@@ -25,10 +25,8 @@ import {
 } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
 import { translate } from '@/i18n/i18n'
 import { describeAiVaultCliForkFailure } from './ai-vault-session-cli-fork'
-import {
-  loadDatabaseAiVaultSessionContinuation,
-  prepareAiVaultSessionContinuation
-} from './ai-vault-session-continuation'
+import { loadDatabaseAiVaultSessionContinuation } from './ai-vault-session-continuation'
+import { prepareAiVaultSessionContinuation } from '../../../../../../shared/ai-vault/resume/ai-vault-session-continuation'
 import { isAiVaultDatabaseAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
@@ -47,7 +45,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
-import type { AgentSessionContinuationRequest } from '../../../../../../shared/agent-session/context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../../../shared/agent-session/conversation-context/agent-session-continuation'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,

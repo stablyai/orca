@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
+import { confirmUnknownWorkerStart, observeWorkerWorking } from './worker-working-observation'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
 import {
   hasRelayedWorkerReport,
@@ -34,7 +35,8 @@ export type WorkerRest = Pick<
   | 'turnStartedAt'
   | 'mailTaken'
   | 'requestError'
-> & { reason: 'finished' | 'errored' | 'needs-input' }
+  | 'startSurface'
+> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' }
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
@@ -84,11 +86,7 @@ export function observeWorker(
   const dispatchId = workerTurnStopDispatchId(target)
   const current = readWorkerPresence(db, dispatchId)
   if (observation.presence === 'working') {
-    const fence = observation.newTurn ? `turn:${(current?.generation ?? 0) + 1}` : null
-    const next = nextWorkerPresence(current, { presence: 'working', fence, report: null })
-    if (next.changed) {
-      writeWorkerPresence(db, dispatchId, next)
-    }
+    observeWorkerWorking(db, target, observation.newTurn === true)
     return false
   }
   if (observation.presence === 'gone') {
@@ -122,6 +120,10 @@ export function observeWorker(
     return sent
   }
   const { rest } = observation
+  // A rest proves its turn ran, though a missed hook may have hidden the turn's start.
+  if (target.kind === 'local' && rest.reason !== 'start-unconfirmed') {
+    confirmUnknownWorkerStart(db, dispatchId)
+  }
   // Seen again, an undecided rest is decided again: what held it back may have cleared.
   const sent = reconcileWorkerReport(
     db,
@@ -270,8 +272,7 @@ function reconcileWorkerReport(
   if (
     rest.reason !== 'exited' &&
     rest.reason !== 'lost' &&
-    (db.isWorkerStopRequested(dispatchId) ||
-      (!('requestError' in rest && rest.requestError) && isDeliberateRest(db, target, rest, deps)))
+    (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
   ) {
     return keep()
   }

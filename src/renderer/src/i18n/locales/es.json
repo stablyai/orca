@@ -503,6 +503,9 @@
         "unknownPlatform": "Se ignoró la plataforma desconocida \"{{platform}}\".",
         "conflictingOverrides": "Se ignoraron los atajos personalizados en conflicto: {{actions}}.",
         "readFailed": "No se pudo leer el archivo de combinaciones de teclas: {{reason}}"
+      },
+      "groups": {
+        "bots": "Bots"
       }
     },
     "network": {
@@ -567,6 +570,18 @@
         "everyNightLine": "Cada noche después de las 3 a. m., o en cuanto este ordenador esté activo",
         "everyWeekLine": "Una vez por semana después de las 3 a. m., o en cuanto este ordenador esté activo",
         "everyDescriptionAwake": "Si este ordenador está en reposo a esa hora, se ejecuta en cuanto esté activo. Solo después de noches con chats nuevos. Cada limpieza usa tu plan de {{agent}}, como un chat corto."
+      },
+      "lookAround": {
+        "title": "Revisión"
+      },
+      "skills": {
+        "claudeOnly": "Solo para Claude",
+        "notClaude": "No es para Claude",
+        "own": "Skills propias de {{bot}}",
+        "ownNone": "Aún no tiene skills propias.",
+        "ownShort": "Skills propias",
+        "showMore": "Mostrar {{count}} más",
+        "notLoaded": "Ningún agente la carga"
       }
     }
   },
@@ -19117,6 +19132,7 @@
         "optionUpdateFailed": "No se pudo actualizar la opción",
         "optionValue": {
           "none": "Ninguno",
+          "off": "Desactivado",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Bajo",
@@ -19176,7 +19192,9 @@
         "sessionAttachmentsFailed": "El chat {{agent}} no se pudo abrir. Utilice Reintentar en el chat y luego adjunte los archivos nuevamente.",
         "sessionAttachmentsStarting": "El chat de {{agent}} aún se está abriendo. Espera a que se abra y vuelve a adjuntar los archivos.",
         "moreControls": "Más controles de chat",
-        "exitPlanMode": "Salir del modo de planificación"
+        "exitPlanMode": "Salir del modo de planificación",
+        "botFor": "Para: {{detail}}",
+        "bots": "Bots"
       },
       "tool": {
         "result": "Resultado",
@@ -19904,7 +19922,6 @@
         "copyFailed": "No se pudo copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (no es una rama)",
-        "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
@@ -19944,6 +19961,60 @@
       "splitDown": "Dividir hacia abajo",
       "automationSaved": {
         "openFullPage": "Abrir página"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Sin iniciar",
+          "connected": "Conectado",
+          "disabled": "Desactivado",
+          "failed": "Error",
+          "failedReason": "Error: {{error}}",
+          "needsAuth": "Sesión requerida",
+          "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
+          "pending": "Conectando…",
+          "tools_many": "{{count}} herramientas",
+          "tools_one": "{{count}} herramienta",
+          "tools_other": "{{count}} herramientas"
+        },
+        "signIn": {
+          "external": "Completa el proceso en la página que se abrió",
+          "waiting": "Esperando el inicio de sesión…",
+          "waitingBrowser": "Esperando tu navegador…",
+          "action": "Iniciar sesión",
+          "remote": "Después de iniciar sesión, el navegador llega a una página que no se carga. Copia la dirección de esa página y pégala aquí.",
+          "done": "Listo",
+          "finish": "Finalizar",
+          "openAgain": "Volver a abrir",
+          "addressLabel": "Dirección de la página de inicio de sesión",
+          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo»."
+        },
+        "title": "Servidores MCP",
+        "close": "Cerrar",
+        "loading": "Cargando…",
+        "notRunning": "Se conectan al enviar tu próximo mensaje",
+        "unsupported": "Actualiza Orca en el host de este chat para administrarlos aquí",
+        "readFailed": "No se pudo cargar",
+        "retry": "Reintentar",
+        "empty": "No hay ninguno configurado para este chat",
+        "cancel": "Cancelar",
+        "reconnect": "Reconectar",
+        "toggle": "Usar {{name}}",
+        "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
+        "summary": {
+          "connected": "Conectados: {{count}}",
+          "needsAuth_one": "{{count}} requiere iniciar sesión",
+          "needsAuth_other": "{{count}} requieren iniciar sesión",
+          "failed": "Fallidos: {{count}}",
+          "signingIn": "iniciando sesión en {{name}}",
+          "needsAuth_many": "{{count}} requieren iniciar sesión"
+        },
+        "source": {
+          "project": "Proyecto",
+          "local": "Local",
+          "user": "Usuario",
+          "plugin": "Plugin",
+          "session": "Sesión"
+        }
       }
     },
     "tab": {
@@ -20229,7 +20300,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
           "unavailable": "No se pudieron comprobar los cambios",
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",
@@ -20253,7 +20323,6 @@
           "line_other": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}",
           "line_many": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}"
         },
-        "ignoredFilesLost": "Se perderán los archivos ignorados: {{names}}",
         "ignoredFilesUnchecked": "No se pudieron comprobar todos los archivos ignorados"
       }
     },
@@ -21323,6 +21392,92 @@
       "switchedNoteTitle": "Los agentes nuevos se abrirán en Chat UI",
       "switchedNoteBody": "¿Prefieres el terminal? Vuelve cuando quieras: busca <term>Chat UI</term> en Ajustes.",
       "openSettings": "Abrir ajustes"
+    },
+    "botsTeammate": {
+      "title": "Tu compañero de equipo con IA",
+      "itemsTitle": "Su trabajo, en una lista",
+      "groupTitle": "Los bots trabajan juntos",
+      "pageAnnounce": "Página {{number}} de {{count}}: {{title}}",
+      "groupName": "Equipo de lanzamiento",
+      "releaseBot": "Bot de lanzamientos",
+      "reviewBot": "Bot de revisión",
+      "groupAsk": "Publica la nueva página de ajustes.",
+      "groupBuilding": "La estoy creando.",
+      "groupReview": "El botón de guardar se solapa con el pie de página en pantallas pequeñas.",
+      "docsBot": "Bot de documentación",
+      "groupDocs": "He actualizado la documentación de los ajustes.",
+      "groupAnswer": "He corregido el solapamiento. Listo para ti:",
+      "groupPr": "#1302 Nueva página de ajustes",
+      "groupComposer": "Escribe a {{group}}, @ para mencionar un bot",
+      "items": "Elementos",
+      "inProgress": "En curso",
+      "needsYou": "Te necesita",
+      "itemMeta": "Elemento {{number}} · {{bot}} · ahora",
+      "activity": "Actividad",
+      "activityAdded": "<b>{{bot}}</b> añadió este elemento",
+      "activityWorker": "Worker iniciado: <b>{{name}}</b>",
+      "activityMoved": "<b>{{who}}</b> movió esto a <b>{{status}}</b>",
+      "answering": "Respondiendo a:",
+      "addComment": "Añade un comentario…",
+      "now": "ahora",
+      "itemCsv": "Corregir la exportación a CSV",
+      "itemDocs": "Actualizar la documentación",
+      "idle": "Inactivo",
+      "inProgressCount": "{{count}} en curso",
+      "needsYouCount": "{{count}} te necesita",
+      "itemsAsk": "Corrige la exportación a CSV y el fallo de inicio de sesión en Safari, y actualiza la documentación.",
+      "itemsReply": "Me pongo con ello. Registro cada tarea como un elemento.",
+      "askAnything": "Pregunta lo que quieras",
+      "closed": "Cerrado",
+      "description": "Pídeselo en un hilo. Se encarga del trabajo, lo hace revisar y te trae un pull request.",
+      "alwaysOnLead": "Siempre activo.",
+      "alwaysOn": "Se encarga del trabajo mientras estás fuera.",
+      "teamLead": "Parte del equipo.",
+      "askIn": "Cualquiera puede preguntarle en",
+      "askInPlaces": "Slack, GitHub o Linear",
+      "learnsLead": "Aprende sobre la marcha.",
+      "learns": "Recuerda lo que le enseñas.",
+      "agents": "Trabaja con los agentes que usas",
+      "itemsDescription": "Pídele varias cosas a la vez. Lleva el seguimiento de cada una como un elemento hasta completarla.",
+      "itemsListLead": "Una lista con su trabajo.",
+      "itemsList": "Cada tarea que le encargas.",
+      "itemsMovesLead": "Hace avanzar los elementos por su cuenta.",
+      "itemsMoves": "En curso, luego cerrado.",
+      "itemsAsksLead": "Te pregunta en el elemento.",
+      "itemsAsks": "Responde ahí y seguirá trabajando.",
+      "groupDescription": "Pon varios bots en un chat de grupo y dales un objetivo. Se reparten el trabajo y te dan una única respuesta.",
+      "groupChatLead": "Pon varios bots en un chat.",
+      "groupChat": "Menciona a uno o a todos.",
+      "groupHandLead": "Se pasan el trabajo entre ellos.",
+      "groupHand": "Cada uno se encarga de su parte.",
+      "groupOneLead": "Recibes una única respuesta.",
+      "groupOne": "Con el pull request.",
+      "previousPage": "Página anterior",
+      "pageNumber": "Página {{number}}",
+      "nextPage": "Página siguiente",
+      "taskDesktop": "Diseño de los ajustes para escritorio",
+      "taskMobile": "Pantalla de ajustes para móvil",
+      "taskScreenshots": "Pruebas con capturas de pantalla",
+      "taskTypes": "Errores de tipos",
+      "slackThread": "Hilo",
+      "slackAsk": "la página de ajustes falla en el móvil. ¿Puedes encargarte?",
+      "slackTyping": "{{name}} está escribiendo",
+      "slackReply": "Me pongo con ello. Estoy ejecutando 4 agentes en paralelo.",
+      "agentDone": "Hecho",
+      "agentRunning": "En ejecución",
+      "agentsFinished": "4 agentes han terminado",
+      "slackReview": "He revisado el diff. He corregido dos problemas de espaciado en pantallas pequeñas.",
+      "slackMemory": "Anotado para la próxima vez: comprobar los ajustes en el punto de ruptura para pantallas pequeñas.",
+      "savedToMemory": "Guardado en la memoria",
+      "slackReady": "Listo para revisión.",
+      "slackPrTitle": "#1284 Adaptar la página de ajustes a la pantalla",
+      "slackPrBody": "Diseños para escritorio y móvil, con pruebas de capturas de pantalla actualizadas.",
+      "slackPrFiles": "6 archivos",
+      "checksPassed": "Checks aprobados",
+      "question": "¿Cerrar la sesión de todos una vez o mantener las sesiones actuales?",
+      "answer": "Mantén las sesiones actuales.",
+      "itemSafari": "Corregir el fallo de inicio de sesión en Safari",
+      "cta": "Crear un bot"
     }
   },
   "fileExplorer": {
@@ -22513,7 +22668,6 @@
         "withIgnored": "Se perderán {{what}} y los archivos ignorados",
         "ignoredOnly": "Se perderán los archivos ignorados"
       },
-      "showChanges": "Mostrar cambios",
       "unsavedSuffix": "(sin guardar)",
       "onHost": "En {{host}}",
       "forceDeletingEllipsis": "Forzando la eliminación…",
@@ -23117,7 +23271,9 @@
       "128cce6e6d": "Establecer título…",
       "e9da9f872a": "Enviar notas de revisión al agente",
       "1524825c2c": "Alternar tablero de espacios de trabajo",
-      "d286d1ab85": "Borrar título del panel"
+      "d286d1ab85": "Borrar título del panel",
+      "botItemPrevious": "Elemento anterior",
+      "botItemNext": "Elemento siguiente"
     },
     "group": {
       "global": "Global",
@@ -23130,7 +23286,8 @@
       "agents": "Agentes",
       "45347db2a3": "Navegación entre pestañas",
       "aab2837fa5": "Comandos rápidos",
-      "3492a954c8": "Paneles del terminal"
+      "3492a954c8": "Paneles del terminal",
+      "bots": "Bots"
     },
     "searchKeyword": {
       "worktreePaletteFormerTitle": "Cambiar de worktree"
@@ -23314,6 +23471,9 @@
     "linkedMessageMissing": "No se pudo encontrar ese mensaje.",
     "math": {
       "scrollDisplayEquation": "Desplazar ecuación en bloque"
+    },
+    "messageTime": {
+      "yesterday": "Ayer {{time}}"
     }
   },
   "runtime": {
@@ -23729,7 +23889,8 @@
         "settingUp": "El proyecto aún se está configurando en el host seleccionado para la automatización.",
         "error": "La configuración del proyecto falló en el host seleccionado para la automatización.",
         "unsupported": "El host seleccionado para la automatización no admite este proyecto."
-      }
+      },
+      "botProviderErrorNotSaved": "El turno del bot falló, pero esta ejecución no guardó el error del proveedor. El chat original puede contener más detalles."
     },
     "extraAgentArgs": {
       "errors": {
@@ -23756,6 +23917,9 @@
       "reviewAction": "Revisar configuración",
       "listSkipped": "Configuración omitida",
       "listSkippedTitle": "La última ejecución omitió la configuración porque cambiaron los comandos de configuración de orca.yaml de su rama. Revísalos desde el menú de acciones."
+    },
+    "botTarget": {
+      "hostNeedsUpdate": "Actualiza el servidor de Orca en {host} para que sus bots puedan tener automatizaciones."
     }
   },
   "codeHost": {
@@ -24192,7 +24356,20 @@
     },
     "upcoming": {
       "tidyNightAfter": "Cada noche a partir de las {{from}}, o en cuanto este ordenador esté activo",
-      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo"
+      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo",
+      "every2h": "cada 2 horas",
+      "every4h": "cada 4 horas",
+      "lookFirst": "Después de tu primer chat · luego {{every}}",
+      "mornings": "cada mañana",
+      "tidyUp": "Ordenar memoria",
+      "twiceDaily": "dos veces al día",
+      "lastNeededSignIn": "Su última ejecución se detuvo para iniciar sesión",
+      "stopped": "Detenida",
+      "lookAroundSettings": "Ajustes de revisión",
+      "dueNow": "Toca ahora",
+      "runsEvery": "Se ejecuta {{every}}",
+      "tidySettings": "Ajustes de ordenación de memoria",
+      "needsSignIn": "Necesita iniciar sesión"
     },
     "palette": {
       "placeholder": "Busca bots, chats, terminales, espacios de trabajo, tareas, ajustes y acciones...",
@@ -24216,18 +24393,322 @@
       "section": "Bots"
     },
     "templates": {
-      "browse": "Explorar plantillas"
+      "browse": "Explorar plantillas",
+      "filterCategory": "Filtrar por categoría",
+      "allCategories": "Todas",
+      "category": {
+        "support": "Soporte y clasificación",
+        "personal": "Asistente personal"
+      }
     },
     "new": {
-      "fromTemplate": "Plantilla"
+      "fromTemplate": "Plantilla",
+      "hostNeedsServer": "Necesita un servidor de Orca",
+      "hostNeedsServerHint": "Configura un servidor de Orca en {{host}} en Ajustes → Servidores remotos de Orca para ejecutar bots.",
+      "pictureColor": "Color de fondo",
+      "pictureColorCustom": "Color personalizado",
+      "colorSky": "Cielo",
+      "colorWhite": "Blanco",
+      "colorLavender": "Lavanda",
+      "colorPink": "Rosa",
+      "colorPeach": "Melocotón",
+      "colorButter": "Mantequilla",
+      "colorSage": "Salvia",
+      "colorMint": "Menta",
+      "colorSlate": "Pizarra",
+      "colorGraphite": "Grafito",
+      "colorInk": "Tinta",
+      "noChatAgents": "No hay agentes de chat disponibles en este ordenador.",
+      "change": "Cambiar",
+      "computer": "Ordenador",
+      "computerHint": "Dónde se ejecuta el bot.",
+      "computerAccountHint": "Dónde se ejecuta el bot, con la sesión de Orca iniciada como {{account}}.",
+      "useChatDefaults": "Usar los valores predeterminados del chat",
+      "agent": "Agente",
+      "folder": "Carpeta: {{path}}"
     },
     "googleSetup": {
-      "otherAccount": "Cambiar de cuenta"
+      "otherAccount": "Cambiar de cuenta",
+      "pickHostKey": "Elige el archivo de clave que quieres importar:",
+      "pickKeyHere": "Elige un archivo en este ordenador"
     },
     "apps": {
       "paste": {
         "remoteSignIn": "Inicio de sesión remoto"
+      },
+      "composio": {
+        "withComposio": "Con Composio"
+      },
+      "allApps": "Todas las apps",
+      "onBot": "En {{bot}}",
+      "mcp": {
+        "addTitle": "Añadir {{app}}",
+        "advanced": "Avanzado",
+        "hostInvalid": "Introduce un nombre de host, como {{example}}.",
+        "datadog": {
+          "siteLabel": "Sitio de Datadog"
+        },
+        "gitlab": {
+          "hostLabel": "Dirección de GitLab (opcional)",
+          "hostHint": "Para instalaciones autogestionadas o Dedicated. Déjalo vacío para GitLab.com."
+        },
+        "place": {
+          "usEast": "Este de Estados Unidos",
+          "usWest": "Oeste de Estados Unidos",
+          "usCentral": "Centro de Estados Unidos",
+          "europe": "Europa",
+          "japan": "Japón",
+          "australia": "Australia",
+          "unitedKingdom": "Reino Unido"
+        },
+        "elsewhereTitle": "{{app}} ya está en {{bot}}",
+        "elsewhereLine": "Está añadida en {{place}}. Quítala en Gestionar para añadir otra.",
+        "elsewhereOther": "Quítala en Gestionar para añadir otra."
       }
+    },
+    "row": {
+      "runsOn": "Se ejecuta en {{host}}",
+      "disconnected": "Desconectado",
+      "hostDisconnected": "{{host}} desconectado",
+      "idle": "Inactivo",
+      "paused": "En pausa",
+      "reading": "Leyendo tu mensaje",
+      "replying": "Respondiendo",
+      "replyingIn": "Respondiendo en {{place}}",
+      "replyingOn": "Respondiendo a {{place}}",
+      "waitingCount": "Eventos pendientes: {{count}}",
+      "waitingFor": "Esperando {{label}}",
+      "waitingForUntil": "Esperando {{label}} · hasta {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} de {{total}}",
+        "navigation": "Elemento {{index}} de {{total}}",
+        "loadingNext": "Cargando el siguiente elemento",
+        "shown": "Elemento {{index}} de {{total}}: {{title}}",
+        "firstItem": "Primer elemento",
+        "lastItem": "Último elemento",
+        "previous": "Elemento anterior",
+        "next": "Elemento siguiente",
+        "subWhere": "Elemento {{number}} · {{chat}}"
+      },
+      "activity": {
+        "linked": "enlazó {{links}}",
+        "you": "Tú"
+      },
+      "chat": {
+        "moreItems": "+{{count}} más"
+      },
+      "comment": {
+        "add": "Añade un comentario…",
+        "label": "Comentario",
+        "submit": "Comentar"
+      },
+      "group": {
+        "new": "{{count}} nuevos"
+      },
+      "row": {
+        "more": "Más"
+      },
+      "stale": {
+        "cancelAll": "Cancelar todos"
+      },
+      "tab": "Inicio",
+      "loading": "Cargando elementos…",
+      "snooze": {
+        "rowUntil": "hasta {{when}}",
+        "menu": "Posponer",
+        "pickTitle": "Posponer hasta",
+        "time": "Hora",
+        "back": "Atrás",
+        "week": "En una semana",
+        "pickCustom": "Hora personalizada"
+      },
+      "ask": {
+        "notSentYet": "aún no enviado",
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+      }
+    },
+    "hover": {
+      "asksQuestion": "Espera tu respuesta",
+      "wantsApproval": "Solicita tu aprobación",
+      "signIn": "Necesita que inicies sesión",
+      "access": "Ha solicitado acceso",
+      "review": "Revisar",
+      "openHome": "Abrir Home de {{name}}",
+      "needsYouHeading_one": "{{count}} asunto te necesita",
+      "needsYouHeading_many": "{{count}} asuntos te necesitan",
+      "needsYouHeading_other": "{{count}} asuntos te necesitan",
+      "moreAsks_one": "+{{count}} solicitud más",
+      "moreAsks_many": "+{{count}} solicitudes más",
+      "moreAsks_other": "+{{count}} solicitudes más",
+      "itemsNeedYou_one": "{{count}} elemento que marcó para ti",
+      "itemsNeedYou_many": "{{count}} elementos que marcó para ti",
+      "itemsNeedYou_other": "{{count}} elementos que marcó para ti"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Nuevo chat",
+      "searchRetry": "Probar de nuevo",
+      "loading": "Cargando chats…",
+      "readFailed": "No se pudieron leer los chats de este bot."
+    },
+    "needs": {
+      "chat": "Tu chat con {{name}}",
+      "worker": "Worker: {{name}}"
+    },
+    "panel": {
+      "needYou_many": "{{count}} te necesitan",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_other": "{{count}} te necesitan",
+      "working": "{{count}} trabajando",
+      "working_many": "{{count}} trabajando",
+      "working_one": "{{count}} trabajando",
+      "working_other": "{{count}} trabajando",
+      "runsOn": "Se ejecuta en {{host}}",
+      "disconnected": "Desconectado"
+    },
+    "usageLimit": {
+      "continuesAt": "Continúa a las {{time}}",
+      "continuesShort": "Continúa {{time}}",
+      "continuesTip": "Continúa automáticamente a las {{time}}",
+      "hitLimit": "Límite alcanzado · se restablece a las {{time}}",
+      "hitShort": "Límite alcanzado",
+      "hitTip": "{{agent}} alcanzó su límite de uso · se restablece a las {{time}}"
+    },
+    "section": {
+      "title": "Bots",
+      "startFromScratch": "Empezar de cero"
+    },
+    "errors": {
+      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo."
+    },
+    "automations": {
+      "paused": "En pausa",
+      "newDraft": "Configura una automatización que ",
+      "failed": "Fallido",
+      "running": "En ejecución",
+      "next": "Siguiente",
+      "runNow": "Ejecutar ahora",
+      "openOnPage": "Abrir en la página de Automatizaciones",
+      "pauseShort": "Pausa",
+      "resumeShort": "Reanudar"
+    },
+    "access": {
+      "thisComputer": "este equipo",
+      "reject": "Rechazar",
+      "confirmWarning": "Actuarán como tú en {{computer}}.",
+      "confirmComputer": "Ejecutar comandos y cambiar archivos",
+      "confirmNoApprovals": "Actúa sin preguntar antes",
+      "confirmMaySkipApprovals": "Puede actuar sin preguntar antes",
+      "confirmApproveOne": "{{person}} puede aprobar sus solicitudes",
+      "confirmApproveMany": "Pueden aprobar sus solicitudes de permiso",
+      "confirmGoogle": "Usar tu cuenta de Google",
+      "confirmGitHub": "Comentar y hacer push en GitHub como tú",
+      "confirmLinear": "Actualizar issues de Linear como tú",
+      "controlNone": "Cualquier persona que añadas puede usar {{name}} para trabajar en {{computer}} como tú: ejecutar comandos, abrir y modificar archivos y usar tus cuentas conectadas.",
+      "controlOne": "{{person}} puede usar {{name}} para trabajar en {{computer}} como tú: ejecutar comandos, abrir y modificar archivos y usar tus cuentas conectadas.",
+      "controlMany": "Pueden usar {{name}} para trabajar en {{computer}} como tú: ejecutar comandos, abrir y modificar archivos y usar tus cuentas conectadas.",
+      "controlBrief": "Pueden actuar como tú aquí.",
+      "controlBriefIfAdded": "Cualquier persona que añadas puede actuar como tú aquí.",
+      "controlBriefOnHost": "Pueden actuar como tú en {{computer}}.",
+      "controlBriefIfAddedOnHost": "Cualquier persona que añadas puede actuar como tú en {{computer}}.",
+      "reachSlack": "Publicar en Slack como @{{name}}",
+      "here": "aquí",
+      "thisServer": "este servidor",
+      "there": "allí",
+      "executionComputer": "el ordenador en el que se ejecuta este agente"
+    },
+    "webhooks": {
+      "delete": {
+        "withAutomation": {
+          "title": "¿Eliminar “{{automation}}” y su webhook?",
+          "note": "Nada más inicia esta automatización, así que se elimina junto con su historial de ejecuciones. La URL del webhook deja de funcionar y se cancelan las llamadas que siguen en espera.",
+          "confirm": "Eliminar ambos"
+        }
+      }
+    },
+    "upNext": {
+      "lookNow": "Revisar ahora",
+      "newCount": "{{count}} nuevas",
+      "lookingShort": "Revisando"
+    },
+    "groups": {
+      "newGroup": "Nuevo grupo",
+      "handoffsPaused": "En pausa tras {{count}} traspasos. Responde para continuar.",
+      "pairedComputersOnly": "Los grupos solo pueden añadir bots de ordenadores emparejados.",
+      "needsLocalBot": "Este grupo necesita al menos un bot en este ordenador.",
+      "thisComputer": "Este ordenador",
+      "remoteNeedsChat": "Abre un chat con {{name}} una vez y luego añádelo al grupo.",
+      "remoteReplied": "Respondió en {{computer}}",
+      "remoteNotice": "No respondió en {{computer}}",
+      "remoteNotSent": "No enviado a {{computer}}",
+      "remoteUnknown": "Estado de entrega desconocido",
+      "remoteStopped": "Detenido aquí",
+      "remoteSending": "Preguntando en {{computer}}…",
+      "remoteAsked": "Se preguntó en {{computer}}",
+      "remoteMayAnswer": "Aún puede responder en {{computer}}.",
+      "remoteShortened": "Respuesta acortada. La respuesta completa está en {{computer}}."
+    },
+    "import": {
+      "nudgeOne": "Hemos encontrado un bot en {{app}}.",
+      "nudgeMany": "Hemos encontrado {{count}} bots en {{app}}.",
+      "nudgeDismiss": "No volver a mostrar",
+      "menu": "Importar desde otra app…"
+    },
+    "share": {
+      "linkStatusUnavailable": "No se pudo comprobar el enlace compartido",
+      "linkNoLongerAvailable": "Este enlace compartido ya no está disponible.",
+      "previewChanged": "La vista previa ha cambiado. Revísala antes de publicar.",
+      "signInToPublish": "Iniciar sesión para publicar",
+      "cancelSignIn": "Cancelar inicio de sesión",
+      "notShared": "No compartido",
+      "stopSharing": "Dejar de compartir",
+      "loadingLinks": "Cargando enlaces compartidos…",
+      "receive": {
+        "fromLinkMenu": "Desde un enlace…"
+      },
+      "duplicateSkill": "Mismo nombre, en {{folder}} · no compartida"
+    },
+    "host": {
+      "botWorkspaceUnavailable": "El espacio de trabajo de este agente no está disponible aquí ahora, así que la página no se puede abrir en él.",
+      "signIn": {
+        "updateFirst": "Actualiza Orca en {{host}} y luego inicia sesión desde aquí.",
+        "unconfigured": "Orca en {{host}} se compiló sin inicio de sesión en Orca Cloud. Instala allí la versión oficial de Orca para iniciar sesión.",
+        "unread": "No se pudo consultar el inicio de sesión de Orca en {{host}}.",
+        "readAgain": "Probar de nuevo"
+      }
+    },
+    "cloudSignIn": {
+      "signIn": "Iniciar sesión",
+      "webhooksHostChat": "Los webhooks necesitan que {{host}} tenga la sesión iniciada en Orca Cloud. Lo crearé cuando la tenga.",
+      "eventsHostChat": "Los eventos de {{source}} necesitan que {{host}} tenga la sesión iniciada en Orca Cloud. Guardaré esta regla cuando la tenga.",
+      "webhooksNotReaching": "Orca Cloud no consigue conectarse con {{name}}, así que aún no puede crear webhooks."
+    },
+    "settingsView": {
+      "backToItems": "Volver a Inicio",
+      "sharing": "Uso compartido",
+      "itemsStale": {
+        "shortTitle": "Inactivos tras"
+      },
+      "memoryFiles_one": "{{count}} archivo",
+      "memoryFiles_other": "{{count}} archivos",
+      "memoryFiles_many": "{{count}} archivos",
+      "lookAroundShort": {
+        "every4h": "4 h",
+        "every2h": "2 h",
+        "twiceDaily": "Dos veces al día",
+        "mornings": "Por las mañanas"
+      },
+      "tidyUpShort": {
+        "night": "Cada noche",
+        "week": "Semanal"
+      },
+      "youAndOthers_one": "Tú y {{count}} persona más",
+      "youAndOthers_other": "Tú y {{count}} personas más",
+      "youAndOthers_many": "Tú y {{count}} personas más",
+      "shareAction": "Compartir",
+      "sharingOn": "Activado"
     }
   },
   "speechModelUpdate": {

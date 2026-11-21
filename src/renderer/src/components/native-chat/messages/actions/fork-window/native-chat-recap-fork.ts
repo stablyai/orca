@@ -6,7 +6,7 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import {
   buildChatForkRecap,
   type ChatForkRecapScope
-} from '../../../../../../../shared/agent-session/context/chat-fork-recap'
+} from '../../../../../../../shared/agent-session/conversation-context/chat-fork-recap'
 import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'

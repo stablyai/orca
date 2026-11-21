@@ -45,6 +45,7 @@ export const EXECUTION_HOST_METHODS = [
   'aiVault.commitChatForkImport',
   'aiVault.exportChatFork',
   'aiVault.listSessions',
+  'aiVault.prepareSessionHandoffPrompt',
   'aiVault.prepareSessionResume',
   'aiVault.readChatForkExport',
   'aiVault.releaseChatForkExport',

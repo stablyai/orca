@@ -103,6 +103,7 @@ import { BOT_WORK_METHODS } from './bots-work'
 import { BOT_ITEMS_METHODS } from './bots-items'
 import { BOT_CONNECTOR_OFFER_METHOD } from './bots-connector-offer'
 import { GOOGLE_SETUP_METHODS } from './bots-google-setup'
+import { GOOGLE_SETUP_SAVED_KEY_METHODS } from './bots-google-setup-saved-key'
 import { BOT_REQUEST_OUTCOME_METHOD } from './bots-request-outcome'
 import { WORKTREE_RELEASE_BOT_HOME_METHOD } from './bots-home-release'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
@@ -171,6 +172,7 @@ const BOT_RPC_METHODS = [
   ...BOT_ITEMS_METHODS,
   BOT_CONNECTOR_OFFER_METHOD,
   ...GOOGLE_SETUP_METHODS,
+  ...GOOGLE_SETUP_SAVED_KEY_METHODS,
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,

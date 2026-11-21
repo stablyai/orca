@@ -34,6 +34,7 @@ vi.mock(
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
     canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false,
     spawnProcessOnWorkerThread: (spec: { program: string }) =>
       blockedLaunch('worker thread', spec.program)
   })

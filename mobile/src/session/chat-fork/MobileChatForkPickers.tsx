@@ -4,7 +4,7 @@ import { PickerModal, type PickerOption } from '../../components/sheets/PickerMo
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ChatForkPicks, ChatForkSelection, ChatForkWorkspace } from './chat-fork-selection'
 import type { ChatForkSurface } from '../../../../src/shared/native-chat/chat-fork-path'
-import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
+import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/conversation-context/chat-fork-recap'
 import type { ChatForkHostRow } from './use-chat-fork-hosts'
 import type { ChatForkWorkspaceRow } from './use-chat-fork-target'
 

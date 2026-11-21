@@ -26,6 +26,8 @@ export type ProjectGroupUpdate = Partial<
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
 
+export type ProjectGroupParentMove = { groupId: string; parentGroupId: string }
+
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number

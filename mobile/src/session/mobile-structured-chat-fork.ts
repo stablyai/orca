@@ -7,7 +7,10 @@ import type {
   StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
-import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
+import {
+  createMobileStructuredAgentSession,
+  forkMobileStructuredAgentSession
+} from './native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchedSelection,
   withLaunchReply,
@@ -70,14 +73,22 @@ export async function forkMobileStructuredChat(
   // Arm before requesting so later user tab picks supersede the fork.
   scope.pendingSelectionRef.current = launchedSelection(lock, {}, null)
   try {
-    const result = await createMobileStructuredAgentSession(
-      client,
-      scope.worktreeId,
-      agent,
-      recap ? undefined : forkFrom,
-      tabPlacement,
-      recap
-    )
+    const result = recap
+      ? await createMobileStructuredAgentSession(
+          client,
+          scope.worktreeId,
+          agent,
+          undefined,
+          tabPlacement,
+          recap
+        )
+      : await forkMobileStructuredAgentSession(
+          client,
+          scope.worktreeId,
+          agent,
+          forkFrom,
+          tabPlacement
+        )
     if (result.kind === 'created') {
       scope.pendingSelectionRef.current = withLaunchReply(scope.pendingSelectionRef.current, lock, {
         sessionId: result.sessionId

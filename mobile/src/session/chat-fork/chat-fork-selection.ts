@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
+import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/conversation-context/chat-fork-recap'
 import {
   chatForkPath,
   chatForkSurfaceChoice,

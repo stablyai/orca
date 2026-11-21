@@ -20,7 +20,7 @@ import {
   chatForkSurfaceChoice,
   type ChatForkSurface
 } from '../../../../../../../shared/native-chat/chat-fork-path'
-import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
+import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/conversation-context/chat-fork-recap'
 import {
   nativeChatForkAgent,
   nativeChatForkHostChoices,

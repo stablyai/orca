@@ -21,6 +21,7 @@ export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
   'config/scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts',
   'config/scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-process-worker-setup.ts',
   'config/scripts/test-runtime/environment/vitest-orcad-feature-readiness-reset.ts'
 ]
 

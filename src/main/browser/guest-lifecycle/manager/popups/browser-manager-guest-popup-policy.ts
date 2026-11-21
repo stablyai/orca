@@ -10,17 +10,21 @@ import {
 import {
   isNewBrowserTabPopupIntent,
   isBrowserTabPopupRequest,
+  waitsForPopupOpener,
   normalizeBrowserPopupUrl,
   type NewBrowserTabPopupRequest
 } from '../../popups/browser-popup-new-tab-intent'
 import { SAFE_POPUP_WINDOW_OPTIONS } from '../../popups/presentation/browser-popup-window-policy'
 import { safeOrigin } from '../../browser-event-origin'
-import { openPopupWithOriginBar } from '../../popups/presentation/popup-origin-bar-window'
+import {
+  discardPopupChildWindow,
+  openPopupWithOriginBar,
+  popupChildOpener
+} from '../../popups/presentation/popup-origin-bar-window'
 import type { PopupChildWindowOptions } from '../../popups/presentation/browser-popup-window-contract'
 import { BrowserManagerNavigation } from '../navigation/browser-manager-navigation'
 import {
   allowNativeBrowserPopup,
-  discardBrowserPopupContents,
   isNativeBrowserPopupRequest
 } from '../../popups/presentation/browser-popup-native-window'
 import { isBrowserRouteGuestPopup } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
@@ -47,34 +51,23 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
       // Spend activation even on popups so it cannot fund a later tab.
       const observed = gesture.consume()
-      if (this.openNewTabPopup(guest, { url, frameName, disposition, postBody }, observed)) {
+      const request = { url, frameName, disposition, postBody }
+      if (this.openNewTabPopup(guest, request, observed)) {
         return { action: 'deny' }
       }
-      const clicked = observed !== null
       // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
       const showWhenAppActive = observed?.byAgent !== false
-      const activateTab = disposition !== 'background-tab'
-      const agentOpened = observed?.byAgent !== false && this.isAgentLeadingGuest(guest.id)
       const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
 
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
       if (browserTabId && canOpenAsChild) {
-        // A tab-shaped GET needs no OAuth child window when it has no opener.
-        const tabUrl =
-          externalUrl && isBrowserTabPopupRequest({ frameName, disposition, postBody })
-            ? externalUrl
-            : null
         const openAsTabWithoutOpener = (
           options: PopupChildWindowOptions
         ): Electron.WebContents | null =>
-          tabUrl && !(options.nativeWindow?.webContents ?? options.webContents)?.opener
-            ? this.openPopupAsBrowserTab(guest, tabUrl, options, {
-                clicked,
-                activate: activateTab,
-                agentOpened
-              })
+          this.openNewTabPopup(guest, request, observed, popupChildOpener(options))
+            ? discardPopupChildWindow(options, url)
             : null
         if (isNativeBrowserPopupRequest({ disposition, features, frameName })) {
           return allowNativeBrowserPopup({
@@ -129,17 +122,25 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
   }
 
-  /** Answers a new-tab request as an Orca tab; false leaves opener-dependent requests to a child window. */
+  /**
+   * Answers a new-tab request as an Orca tab; false leaves opener-dependent requests to a child window.
+   * Once Chromium has created the child, pass its `childOpener`: only a child without one becomes a tab.
+   */
   openNewTabPopup(
     guest: Electron.WebContents,
     request: NewBrowserTabPopupRequest,
-    observed: ObservedBrowserGuestGesture | null
+    observed: ObservedBrowserGuestGesture | null,
+    childOpener?: Electron.WebFrameMain | null
   ): boolean {
     const ownerContext = this.resolvePopupOwnerContext(guest.id)
     const newTabUrl =
       normalizeExternalBrowserUrl(request.url) ??
       (isLocalFileLinkFromLocalPage(guest, request.url) ? request.url : null)
-    if (!ownerContext || !newTabUrl || !isNewBrowserTabPopupIntent(request)) {
+    const answersAsTab =
+      childOpener === undefined
+        ? isNewBrowserTabPopupIntent(request) && !waitsForPopupOpener(request, observed)
+        : childOpener === null && isBrowserTabPopupRequest(request)
+    if (!ownerContext || !newTabUrl || !answersAsTab) {
       return false
     }
     // Scripted opens persist as tabs, so opens without observed input consume a budget.
@@ -184,30 +185,6 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       requestingUrl,
       pageInitiated
     })
-  }
-
-  /** The tab loads the URL; discard the provisional popup before its first request. */
-  private openPopupAsBrowserTab(
-    opener: Electron.WebContents,
-    url: string,
-    options: PopupChildWindowOptions,
-    tab: { clicked: boolean; activate: boolean; agentOpened: boolean }
-  ): Electron.WebContents {
-    const owner = this.resolvePopupOwnerContext(opener.id)
-    const opened =
-      owner !== null &&
-      (tab.clicked || this.tryConsumePageInitiatedTab(owner.rootGuestWebContentsId)) &&
-      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate, tab.agentOpened)
-    this.forwardOrQueuePopupEvent(opener.id, {
-      origin: safeOrigin(url),
-      action: opened ? 'opened-in-orca' : 'blocked'
-    })
-    if (options.webContents && !options.nativeWindow) {
-      // Discard directly to avoid flashing a window that would immediately close.
-      discardBrowserPopupContents(options.webContents)
-      return options.webContents
-    }
-    return openPopupWithOriginBar(options, url, () => false).contentWebContents
   }
 
   reportRouteGuestPopupBlocked(input: { openerWebContentsId: number; url: string }): void {

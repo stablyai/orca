@@ -18,6 +18,8 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { mobileWorktreeForkAction } from './native-chat/history/mobile-native-chat-worktree-fork-action'
 import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
+import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
+import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
 type Props = {
   controller: MobileSessionController
@@ -59,6 +61,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     'subagent'
   )
   const botActions = useContext(MobileSessionBotActionsContext)
+  const workspaceOnPairedHost = useWorkspaceOnPairedHost()
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -157,6 +160,12 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   const tabs: ActionSheetAction[] = [
     ...(worktreeFork ? [worktreeFork] : []),
     ...(subagentFork ? [subagentFork] : []),
+    ...getMobileNativeChatCliForkActions({
+      controller,
+      tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
+      workspaceOnPairedHost,
+      onDismiss: () => setShowHeaderMoreActions(false)
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled })),
     ...(actionsCollapsed
       ? [
           {
