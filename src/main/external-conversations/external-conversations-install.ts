@@ -212,10 +212,14 @@ function connectorReplyOutbox(
   })
   setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))
   let unwatchStatus: (() => void) | undefined
+  let unwatchPauses: (() => void) | undefined
   const boot = () => {
     recovery.dispose()
     unwatchStatus?.()
+    unwatchPauses?.()
     const host = getStructuredAgentSessionHost()
+    // A setting change or a never-loaded chat's close publishes no status: its scheduler says so.
+    unwatchPauses = host?.usageLimitContinue.onDispositionChange((id) => recovery.statusChanged(id))
     // Every end of a usage-limit pause publishes the chat's status (its continue's state).
     unwatchStatus = host?.subscribeStatus({
       id: 'connector-reply-pauses',
@@ -235,6 +239,7 @@ function connectorReplyOutbox(
   signal.addEventListener('abort', () => {
     stop()
     unwatchStatus?.()
+    unwatchPauses?.()
     setConnectorClaimSource(null)
     recovery.dispose()
   })

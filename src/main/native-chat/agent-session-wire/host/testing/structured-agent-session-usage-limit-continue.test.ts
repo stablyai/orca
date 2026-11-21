@@ -177,3 +177,14 @@ it('still continues the other chats when one chat cannot be read', async () => {
   await sweep.tick()
   expect(sent).toEqual(['chat-a', 'chat-c'])
 })
+
+it('says a chat’s continue may have ended once the chat closes, loaded or not', async () => {
+  const open = { tabs: ['chat-a', 'chat-b'], background: [] as string[] }
+  const sweep = sweepOver(open, [], { loaded: false })
+  const told: (string | undefined)[] = []
+  sweep.onDispositionChange((id) => told.push(id))
+  await sweep.tick()
+  open.tabs = ['chat-a']
+  await sweep.tick()
+  expect(told).toEqual(['chat-b'])
+})

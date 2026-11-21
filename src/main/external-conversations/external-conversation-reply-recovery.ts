@@ -293,10 +293,13 @@ export class ConnectorReplyRecovery {
     }
   }
 
-  /** A chat's status was published: a pause it owes may have ended. */
-  statusChanged(sessionId: string): void {
-    if (this.paused.has(sessionId)) {
-      this.later(sessionId)
+  /** A chat's status was published, or its continue's scheduler says it may have ended (none
+   *  named: every chat): a pause it owes may have ended. */
+  statusChanged(sessionId?: string): void {
+    for (const id of sessionId === undefined ? [...this.paused] : [sessionId]) {
+      if (this.paused.has(id)) {
+        this.later(id)
+      }
     }
   }
 
