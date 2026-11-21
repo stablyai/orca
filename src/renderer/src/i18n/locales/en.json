@@ -9223,6 +9223,12 @@
             "description": "Icon bar on the left edge for switching between workspaces and other pages.",
             "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
             "toggleLabel": "Toggle app rail"
+          },
+          "sharedCodexServers": {
+            "title": "Shared Codex servers",
+            "description": "Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.",
+            "copy": "Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat. Uses less memory and starts new chats faster. If a shared server crashes, all of its chats reconnect. Applies to chats started after you change it.",
+            "toggleLabel": "Toggle shared Codex servers"
           }
         },
         "FloatingWorkspacePane": {
@@ -11445,6 +11451,12 @@
               "navigation": "navigation",
               "sidebar": "sidebar",
               "icons": "icons"
+            },
+            "sharedCodexServers": {
+              "title": "Shared Codex servers",
+              "description": "Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.",
+              "codex": "codex",
+              "memory": "memory"
             }
           }
         },

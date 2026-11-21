@@ -474,6 +474,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalTerminalAttention: boolean
   /** Experimental: automatically sleep completed, resumable background agent terminals. */
   experimentalAgentHibernation?: boolean
+  /** Experimental: Codex chats share a few capped app-servers instead of one each. */
+  experimentalSharedCodexServers?: boolean
   /** Milliseconds a completed agent must stay idle before hibernation can be considered. */
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */

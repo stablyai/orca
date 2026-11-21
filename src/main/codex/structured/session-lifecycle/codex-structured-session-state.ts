@@ -51,6 +51,10 @@ export type CodexStructuredLaunch = CodexBotLaunchOptions & {
   /** Command values that must survive the user's shell environment policy. */
   commandEnv?: Record<string, string>
   visuals?: NativeChatVisualsLaunch
+  /** What this launch's `codex --version` reported, when it could be read. */
+  codexVersion?: string
+  /** Launched through the user's Command setting rather than the stock CLI. */
+  customCommand?: boolean
 }
 
 /** Boundaries retain host receipt time through buffering and retries. */
@@ -114,6 +118,8 @@ export type CodexStructuredSessionAdapterDeps = {
   /** The sends Codex holds (`CodexDispatchEchoes.heldSends`) changed with no journal row. */
   onHeldSendsChanged?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection
+  /** Read per start: true leases a thread on a shared, capped app-server. */
+  sharedServers?: () => boolean
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
   mintAcquisitionGeneration?: () => string

@@ -1,0 +1,310 @@
+import { randomUUID } from 'node:crypto'
+import type { ProviderProcessCloseResult } from '../../../provider-process/provider-process-close'
+import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from '../codex-app-server-connection-types'
+import { codexSharedFrameParams, type CodexSharedServerFrame } from './codex-shared-server-frames'
+import { sendCodexLeaseRequest } from './codex-shared-server-lease-requests'
+
+/** A paused chat holds its own frames; past these it is dropped instead of stalling the server. */
+export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
+export const CODEX_SHARED_LEASE_MAX_QUEUED_BYTES = 64 * 1024 * 1024
+
+/** A release's outcome: whether the chat's turns are proven over (else it stays on the server for
+ *  a retry), and whether its commands are proven gone. */
+export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean }
+
+const RELEASE_RETRY_MS = 10_000
+
+/** What a lease needs from the server it rides on. */
+export type CodexSharedLeaseHost = {
+  readonly pid: number | undefined
+  readonly closed: boolean
+  readonly connection: CodexAppServerConnection
+  claim: (threadId: string, lease: CodexSharedServerLease) => void
+  /** A thread that opened after its chat left: nobody will use it, so the server lets it go.
+   *  Resolves whether Codex confirmed it. */
+  abandon: (threadId: string, lease: CodexSharedServerLease) => Promise<boolean>
+  /** Settles once no chat leaving the server is still cleaning up this thread. */
+  threadReleased: (threadId: string) => Promise<void>
+  /** Records a turn/start in flight, so a release that races it still interrupts its turn. */
+  trackTurnStart: (threadId: string, request: Promise<unknown>) => void
+  noteTurnStarted: (threadId: string, turnId: string) => void
+  release: (lease: CodexSharedServerLease) => Promise<CodexLeaseRelease>
+  /** After the server exited: whether its commands were proven gone, once reaped. */
+  workloadVerdict: () => DescendantTreeVerdict
+  afterReap: () => Promise<void>
+}
+
+/** One chat's view of a shared app-server: its threads' frames, its own backpressure and close. */
+export class CodexSharedServerLease implements CodexAppServerConnection {
+  readonly threads = new Set<string>()
+  /** Tags every command this chat's threads run (CODEX_SHARED_LEASE_ENV). */
+  readonly id = randomUUID()
+  /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
+  readonly pendingOpens = new Set<Promise<unknown>>()
+  readonly outstanding = new Set<(error: Error) => void>()
+  /** Threads that opened after this chat left, and the server letting each go. */
+  readonly abandonedThreads = new Set<string>()
+  readonly abandoning = new Set<Promise<boolean>>()
+  private workload: (() => DescendantTreeVerdict) | null = null
+  private state: 'open' | 'closing' | 'ended' = 'open'
+  private closing: Promise<boolean> | null = null
+  private closeAnnounced = false
+  private paused = false
+  private draining = false
+  private queue: { frame: CodexSharedServerFrame; bytes: number }[] = []
+  /** Next frame to dispatch; drained slots are dropped in one splice so a drain stays linear. */
+  private queueHead = 0
+  private queuedBytes = 0
+
+  constructor(
+    readonly host: CodexSharedLeaseHost,
+    private readonly handlers: CodexAppServerConnectionHandlers,
+    readonly sessionId: string | null
+  ) {}
+
+  get pid(): number | undefined {
+    return this.host.pid
+  }
+
+  get closed(): boolean {
+    return this.state !== 'open' || this.host.closed
+  }
+
+  get open(): boolean {
+    return this.state === 'open'
+  }
+
+  /** Still owns its threads' frames, including while a close waits for its turns to stop. */
+  get routable(): boolean {
+    return this.state !== 'ended'
+  }
+
+  /** The lease's end, judged like a process: the chat's commands are its workload tree. */
+  get closeResult(): ProviderProcessCloseResult | null {
+    return this.workload ? { root: 'exited', tree: this.workload() } : null
+  }
+
+  /** The lease ended without proof that its turns stopped (Stop reports it, as for a live tree). */
+  get processTreeUnproven(): boolean {
+    return this.closeResult !== null && this.closeResult.tree !== 'exited'
+  }
+
+  request(
+    method: string,
+    params?: Record<string, unknown>,
+    options: { timeoutMs?: number | null; onReply?: (result?: unknown) => void } = {}
+  ): Promise<unknown> {
+    if (this.state !== 'open') {
+      return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
+    }
+    // The server was initialized once when it started; Codex refuses a second initialize.
+    if (method === 'initialize') {
+      return Promise.resolve({})
+    }
+    return sendCodexLeaseRequest(this, method, params, options)
+  }
+
+  claim(threadId: string): void {
+    this.host.claim(threadId, this)
+  }
+
+  abandon(threadId: string): void {
+    void this.host.abandon(threadId, this)
+  }
+
+  notify(method: string, params?: Record<string, unknown>): void {
+    if (this.state !== 'open' || method === 'initialized') {
+      return
+    }
+    this.host.connection.notify(method, params)
+  }
+
+  respond(id: number | string, result: unknown): void {
+    if (this.state === 'open') {
+      this.host.connection.respond(id, result)
+    }
+  }
+
+  respondWithError(id: number | string, code: number, message: string): void {
+    if (this.state === 'open') {
+      this.host.connection.respondWithError(id, code, message)
+    }
+  }
+
+  pauseReading = (): void => {
+    this.paused = true
+  }
+
+  resumeReading = (): void => {
+    this.paused = false
+    this.drainQueue()
+  }
+
+  deliver(frame: CodexSharedServerFrame): void {
+    if (this.state === 'ended') {
+      return
+    }
+    if (this.paused || this.queue.length > this.queueHead) {
+      const bytes = Buffer.byteLength(JSON.stringify(codexSharedFrameParams(frame) ?? null), 'utf8')
+      this.queue.push({ frame, bytes })
+      this.queuedBytes += bytes
+      if (
+        this.queue.length - this.queueHead > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES ||
+        this.queuedBytes > CODEX_SHARED_LEASE_MAX_QUEUED_BYTES
+      ) {
+        this.fail(new Error('codex chat fell too far behind its shared app-server'), true)
+      }
+      return
+    }
+    this.dispatch(frame)
+  }
+
+  private drainQueue(): void {
+    if (this.draining) {
+      return
+    }
+    this.draining = true
+    try {
+      while (!this.paused && this.queueHead < this.queue.length && this.state !== 'ended') {
+        const { frame, bytes } = this.queue[this.queueHead]!
+        this.queueHead += 1
+        this.queuedBytes -= bytes
+        this.dispatch(frame)
+      }
+    } finally {
+      this.queue.splice(0, this.queueHead)
+      this.queueHead = 0
+      this.draining = false
+    }
+  }
+
+  private dispatch(frame: CodexSharedServerFrame): void {
+    try {
+      if (frame.kind === 'request') {
+        this.handlers.onServerRequest?.(frame.request)
+        return
+      }
+      this.handlers.onNotification?.(frame.method, frame.params)
+    } catch (error) {
+      // One chat's handler failing must not reach the shared reader and end every chat.
+      this.fail(error instanceof Error ? error : new Error(String(error)), true)
+    }
+  }
+
+  /** The server is up and this chat may use it; a rejection from onSpawned ends the lease. */
+  async announce(): Promise<void> {
+    const pid = this.host.pid
+    if (pid !== undefined) {
+      await this.handlers.onSpawned?.(pid)
+    }
+  }
+
+  close(): Promise<boolean> {
+    if (this.state === 'ended') {
+      // A lease its server's exit ended reports once that server's tree is judged.
+      return this.host.afterReap().then(() => true)
+    }
+    if (this.closing) {
+      return this.closing
+    }
+    this.state = 'closing'
+    const error = new Error('codex app-server connection closed')
+    this.announceClose(error)
+    const closing = this.releaseOnHost(error, true).then((ended) => {
+      if (!ended && this.closing === closing) {
+        // A turn still runs: report the close unproven so the caller tries again.
+        this.closing = null
+      }
+      return ended
+    })
+    this.closing = closing
+    return closing
+  }
+
+  /** Ends the lease once the server proves its turns stopped; false while one still runs. */
+  private releaseOnHost(error: Error, expected: boolean): Promise<boolean> {
+    return this.host
+      .release(this)
+      .catch((): CodexLeaseRelease => ({ writerStopped: true, workloadGone: false }))
+      .then(({ writerStopped, workloadGone }) => {
+        if (!writerStopped && this.state !== 'ended') {
+          return false
+        }
+        this.finish(error, expected, workloadGone ? 'exited' : 'live')
+        return true
+      })
+  }
+
+  /** The server can take no more requests; its exit, reported to every chat, follows. */
+  serverClosing(error: Error): void {
+    this.announceClose(error)
+  }
+
+  private announceClose(error: Error): void {
+    if (!this.closeAnnounced) {
+      this.closeAnnounced = true
+      this.handlers.onClose?.(error)
+    }
+  }
+
+  /** Ends this chat's lease alone: the server died, or this chat can no longer keep up. */
+  fail(error: Error, releaseOnServer: boolean): void {
+    if (this.state === 'ended') {
+      return
+    }
+    if (this.state === 'closing') {
+      // A dead server proves its turns ended; anything else leaves the close's own proof pending.
+      if (!releaseOnServer) {
+        this.finish(error, true, () => this.host.workloadVerdict())
+      }
+      return
+    }
+    this.state = 'closing'
+    this.announceClose(error)
+    this.paused = true
+    if (!releaseOnServer) {
+      this.finish(error, false, () => this.host.workloadVerdict())
+      return
+    }
+    // The chat hears its exit only after its turns are stopped, so a recovery can't race them; a
+    // close meanwhile waits on this same cleanup.
+    const attempt = (): Promise<boolean> => {
+      const closing = this.releaseOnHost(error, false).then((ended) => {
+        if (!ended && this.closing === closing) {
+          this.closing = null
+          setTimeout(() => {
+            if (this.state === 'closing' && !this.closing) {
+              this.closing = attempt()
+            }
+          }, RELEASE_RETRY_MS).unref?.()
+        }
+        return ended
+      })
+      return closing
+    }
+    this.closing = attempt()
+  }
+
+  private finish(
+    error: Error,
+    expected: boolean,
+    workload: DescendantTreeVerdict | (() => DescendantTreeVerdict)
+  ): void {
+    if (this.state === 'ended') {
+      return
+    }
+    this.state = 'ended'
+    this.queue = []
+    this.queueHead = 0
+    this.queuedBytes = 0
+    this.workload = typeof workload === 'function' ? workload : () => workload
+    for (const giveUp of this.outstanding) {
+      giveUp(new Error('codex app-server connection closed'))
+    }
+    this.handlers.onExit?.(error, { expected })
+  }
+}
