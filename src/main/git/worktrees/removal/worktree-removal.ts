@@ -234,7 +234,7 @@ export async function localBranchExists(
   }
 }
 
-// Git for Windows can exit 0 leaving junctions and parent directories; finish that accepted delete.
+// Git can exit 0 leaving the emptied checkout directory; finish that accepted delete.
 async function removeCheckoutLeftByGit(
   worktreePath: string,
   options: RemoveWorktreeOptions
@@ -251,8 +251,9 @@ async function removeCheckoutLeftByGit(
     }
     throw error
   }
-  console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
+  // Git removed the accepted checkout; files here now cannot be told from a folder recreated in place.
   await removeUnregisteredHostCheckout(worktreePath, options.checkoutDeleteSignal, {
-    forbidAnyMarker: true
+    forbidAnyMarker: true,
+    requireMarker: true
   })
 }

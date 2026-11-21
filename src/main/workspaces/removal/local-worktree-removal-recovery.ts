@@ -18,7 +18,6 @@ import {
 } from '../../git/worktrees/worktree-operation-options'
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
-  getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePaths,
   type CheckoutMarkerState,
@@ -29,11 +28,9 @@ import { readCheckoutMarkerState, readCheckoutRootState } from './worktree-remov
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
-  canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath
 } from './worktree-removal-safety'
-import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
-import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { provesLocalOrphanedWorktree } from './local-orphaned-worktree-proof'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
@@ -201,7 +198,6 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   const expectedMarker =
     args.expectedMarker ?? (leftover.marker.kind === 'file' ? leftover.marker.identity : undefined)
   const forbidAnyMarker = args.forbidAnyMarker || leftover.marker.kind === 'absent'
-  const access = getLocalWorktreePathAccess(opts, path)
   const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
     [path, repoPath],
     opts,
@@ -230,8 +226,8 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   if (before.kind === 'absent') {
     return {
       forbidAnyMarker: true,
-      // Inodes get reused: a marker that vanished during teardown only leaves an empty folder removable.
-      ...(leftover.marker.kind === 'file' ? { requireMarker: true } : {}),
+      // The folder cannot be told from one recreated in place: once a .git was accepted, only an empty one goes.
+      ...(expectedMarker !== undefined ? { requireMarker: true } : {}),
       ...(rootBefore.identity ? { expectedRoot: rootBefore.identity } : {})
     }
   }
@@ -242,23 +238,10 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   ) {
     throw differentCheckoutAtPathError(path)
   }
-  const canFallbackWin32 =
-    process.platform === 'win32' &&
-    runtimePath !== path &&
-    isWindowsAbsolutePathLike(path) &&
-    isWindowsAbsolutePathLike(repoPath) &&
-    !isWslUncPath(path) &&
-    !isWslUncPath(repoPath)
-  const safe =
-    (await canSafelyRemoveOrphanedWorktreeDirectory(
-      runtimePath,
-      runtimeRepoPath,
-      CLIENT_REMOVAL_HOME,
-      access
-    )) ||
-    // A Windows-authored drive checkout opened under a WSL project spells gitdir: as C:/...
-    (canFallbackWin32 &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(path, repoPath, CLIENT_REMOVAL_HOME)))
+  const safe = await provesLocalOrphanedWorktree(path, repoPath, opts, CLIENT_REMOVAL_HOME, [
+    runtimePath,
+    runtimeRepoPath
+  ])
   throwIfSignalAborted(signal)
   if (!safe) {
     throw differentCheckoutAtPathError(path)

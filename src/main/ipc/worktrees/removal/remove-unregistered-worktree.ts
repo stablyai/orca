@@ -10,17 +10,13 @@ import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
-  canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../../../workspaces/removal/worktree-removal-safety'
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePaths
-} from '../../../workspaces/removal/local-worktree-filesystem'
+import { removeLocalWorktreePath } from '../../../workspaces/removal/local-worktree-filesystem'
+import { provesLocalOrphanedWorktree } from '../../../workspaces/removal/local-orphaned-worktree-proof'
 import {
   captureAcceptedCheckoutGuard,
   proveOrphanedCheckoutGuard,
@@ -57,14 +53,9 @@ export async function removeUnregisteredWorktree(
       meta: removedMeta
     })
   ) {
-    const access = getLocalWorktreePathAccess(localWorktreeGitOptions, worktreePath)
     if (!isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome)) {
-      const [runtimeWorktree, runtimeRepo] = await toLocalWorktreeRuntimePaths(
-        [worktreePath, repo.path],
-        localWorktreeGitOptions
-      )
       orphanGuard = await proveOrphanedCheckoutGuard(worktreePath, localWorktreeGitOptions, () =>
-        canSafelyRemoveOrphanedWorktreeDirectory(runtimeWorktree, runtimeRepo, removalHome, access)
+        provesLocalOrphanedWorktree(worktreePath, repo.path, localWorktreeGitOptions, removalHome)
       )
     }
   }

@@ -8,11 +8,8 @@ import {
   resolveWorktreeRemovalHome,
   type WorktreeRemovalRoute
 } from '../../../workspaces/removal/worktree-removal-execution-host-route'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePaths
-} from '../../../workspaces/removal/local-worktree-filesystem'
+import { removeLocalWorktreePath } from '../../../workspaces/removal/local-worktree-filesystem'
+import { provesLocalOrphanedWorktree } from '../../../workspaces/removal/local-orphaned-worktree-proof'
 import {
   captureAcceptedCheckoutGuard,
   proveOrphanedCheckoutGuard,
@@ -22,7 +19,6 @@ import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/wo
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
-  canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
@@ -54,14 +50,9 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   const removalHome = resolveWorktreeRemovalHome(route)
   let orphanGuard: ProvenOrphanCheckoutGuard | null = null
   if (canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta })) {
-    const access = getLocalWorktreePathAccess(args.localOptions, target.path)
     if (!isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome)) {
-      const [runtimeTarget, runtimeRepo] = await toLocalWorktreeRuntimePaths(
-        [target.path, repo.path],
-        args.localOptions
-      )
       orphanGuard = await proveOrphanedCheckoutGuard(target.path, args.localOptions, () =>
-        canSafelyRemoveOrphanedWorktreeDirectory(runtimeTarget, runtimeRepo, removalHome, access)
+        provesLocalOrphanedWorktree(target.path, repo.path, args.localOptions, removalHome)
       )
     }
   }

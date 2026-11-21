@@ -6,8 +6,8 @@ import {
   toLocalWorktreeRuntimePaths
 } from './local-worktree-filesystem'
 import { proveOrphanedCheckoutGuard } from './worktree-removal-gitdir-identity'
+import { provesLocalOrphanedWorktree } from './local-orphaned-worktree-proof'
 import {
-  canSafelyRemoveOrphanedWorktreeDirectory,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
@@ -33,12 +33,10 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
     path,
     options,
     () =>
-      canSafelyRemoveOrphanedWorktreeDirectory(
+      provesLocalOrphanedWorktree(path, repoPath, options, CLIENT_REMOVAL_HOME, [
         runtimePath,
-        runtimeRepoPath,
-        CLIENT_REMOVAL_HOME,
-        access
-      ),
+        runtimeRepoPath
+      ]),
     markerOptions
   )
   throwIfSignalAborted(signal)

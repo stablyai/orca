@@ -85,11 +85,10 @@ describe('removeWorktree', () => {
     })
   })
 
-  it('deletes what Git left of the checkout after a successful remove', async () => {
+  it('removes the empty directory Git left after a successful remove', async () => {
     const scratch = await mkdtemp(join(tmpdir(), 'orca-remove-residue-'))
     const worktreePath = join(scratch, 'feature')
-    // Git for Windows leaves junctions and the directories holding them behind yet exits 0.
-    await mkdir(join(worktreePath, 'node_modules', 'left-behind'), { recursive: true })
+    await mkdir(worktreePath, { recursive: true })
     try {
       mockGitCommands({})
 
@@ -98,6 +97,26 @@ describe('removeWorktree', () => {
       })
 
       expect(existsSync(worktreePath)).toBe(false)
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps files found at the path after Git removed the checkout', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'orca-remove-recreated-'))
+    const worktreePath = join(scratch, 'feature')
+    // Indistinguishable from a folder recreated at the path once Git has removed the checkout.
+    await mkdir(join(worktreePath, 'notes'), { recursive: true })
+    try {
+      mockGitCommands({})
+
+      await expect(
+        removeWorktree('/repo', worktreePath, false, {
+          knownRemovedWorktree: { branch: '', head: '', locked: false }
+        })
+      ).rejects.toThrow('A different checkout is now at')
+
+      expect(existsSync(join(worktreePath, 'notes'))).toBe(true)
     } finally {
       await rm(scratch, { recursive: true, force: true })
     }
