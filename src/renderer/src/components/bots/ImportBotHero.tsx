@@ -78,17 +78,20 @@ export function ImportBotHero({
                 />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-96">
-              <BotPicturePicker
-                value={picture.value}
-                custom={picture.custom}
-                onChange={picture.onChange}
-                onUpload={picture.onUpload}
-                color={picture.color}
-                onColorChange={picture.onColorChange}
-                outfit={picture.outfit}
-                onOutfitChange={picture.onOutfitChange}
-              />
+            {/* A window too short for the open picker scrolls the card; any other fits it whole. */}
+            <PopoverContent wheelScroll className="flex w-96 flex-col">
+              <div className="scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain">
+                <BotPicturePicker
+                  value={picture.value}
+                  custom={picture.custom}
+                  onChange={picture.onChange}
+                  onUpload={picture.onUpload}
+                  color={picture.color}
+                  onColorChange={picture.onColorChange}
+                  outfit={picture.outfit}
+                  onOutfitChange={picture.onOutfitChange}
+                />
+              </div>
             </PopoverContent>
           </Popover>
         </Face>

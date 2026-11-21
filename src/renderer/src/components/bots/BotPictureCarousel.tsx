@@ -135,6 +135,8 @@ export function BotPictureCarousel({
         // Faces past the neighbours wait further out, so they slide in rather than appear.
         const x = Math.sign(offset) * NEIGHBOUR_OFFSET_PX * (distance > 1 ? 1.4 : 1)
         const position = distance === 0 ? 'current' : distance === 1 ? 'neighbour' : 'hidden'
+        // Hidden faces wear nothing, so only the three in view read and decode outfit art.
+        const shown = position !== 'hidden'
         const style = {
           transform: `translate(calc(-50% + ${x}px), -50%) scale(${distance === 0 ? 1 : NEIGHBOUR_SCALE})`
         }
@@ -171,14 +173,14 @@ export function BotPictureCarousel({
               <BotMascotBitmapTile
                 id={face.mascot.id}
                 color={face.mascot.color}
-                face={face.mascot.face}
-                outfit={face.outfit}
+                face={shown ? face.mascot.face : null}
+                outfit={shown ? face.outfit : null}
                 className="size-28 rounded-xl"
               />
             ) : (
               <BotAvatarTile
                 src={face.src}
-                outfit={face.outfit}
+                outfit={shown ? face.outfit : null}
                 fallback={face.fallback}
                 className="size-28 rounded-xl text-4xl"
               />
