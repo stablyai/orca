@@ -1,6 +1,9 @@
 import type { Session } from 'electron'
 
-import { getProxySessionApplicationReadiness } from '../../../network/proxy-settings'
+import {
+  getProxySessionApplicationReadiness,
+  isProxySessionApplicationReady
+} from '../../../network/proxy-settings'
 import { onProxySessionReadinessChanged } from '../../../network/proxy-session-readiness-listeners'
 import { answerBrowserSessionBeforeRequest } from './browser-session-request-decisions'
 import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
@@ -36,7 +39,7 @@ function refresh(session: Session): void {
   }
   const needed =
     gateHoldsBySession.has(session) ||
-    getProxySessionApplicationReadiness(session) !== true ||
+    !isProxySessionApplicationReady(session) ||
     (session.extensions?.getAllExtensions().length ?? 0) > 0
   if (needed && !gated.release) {
     gated.release = listen(session)

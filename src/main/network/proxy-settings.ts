@@ -76,6 +76,12 @@ export async function awaitProxySessionApplication(proxySession: ProxySession): 
   }
 }
 
+/** Readiness without waiting: true only once the newest policy applied (or none is tracked). */
+export function isProxySessionApplicationReady(proxySession: ProxySession): boolean {
+  const state = sessionProxyApplications.get(proxySession)
+  return !state || (!state.retired && state.readiness === 'ready')
+}
+
 export function getProxySessionApplicationReadiness(
   proxySession: ProxySession
 ): boolean | Promise<boolean> {

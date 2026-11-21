@@ -11,6 +11,7 @@ import { rewritesRequestHeaders } from './browser-manager-navigation'
 
 // An unloading frame leaves the frame tree just after its pagehide.
 const REMOVAL_CHECK_DELAY_MS = 250
+const POPUP_FRAME_RECHECK_MS = 2_000
 // One check per guest covers a burst of unloads; churn can't postpone it, and an unload during a
 // pending check earns one more pass in case its frame left the tree after that check.
 const removalChecks = new Map<number, { again: boolean }>()
@@ -154,6 +155,23 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
  */
 export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
   const { id, session } = contents
+  // Popups run no guest preload to report a removed iframe; while one has a site iframe, its
+  // tracked frames (only those) are rechecked now and then.
+  let recheck: NodeJS.Timeout | null = null
+  const watchPopupSiteFrames = (): void => {
+    if (recheck || getBrowserGuestFrameUserAgentDemand(id).size === 0) {
+      return
+    }
+    recheck = setInterval(() => {
+      if (contents.isDestroyed() || getBrowserGuestFrameUserAgentDemand(id).size === 0) {
+        clearInterval(recheck ?? undefined)
+        recheck = null
+        return
+      }
+      scheduleRemovalCheck(contents)
+    }, POPUP_FRAME_RECHECK_MS)
+    recheck.unref?.()
+  }
   const onStart = (
     details: Electron.Event<{
       url: string
@@ -163,6 +181,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   ): void => {
     if (!details.isMainFrame) {
       noteBrowserGuestSubframeNavigation(contents, details.url, details.frame)
+      watchPopupSiteFrames()
     } else {
       setBrowserGuestPageUserAgentDemand(
         session,
@@ -183,6 +202,14 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
     )
   })
   contents.on(
+    'did-fail-provisional-load',
+    (_event, _code, _description, _url, isMainFrame, frameProcessId, frameRoutingId) => {
+      if (!isMainFrame) {
+        settleBrowserGuestSubframe(contents, frameProcessId, frameRoutingId)
+      }
+    }
+  )
+  contents.on(
     'did-frame-navigate',
     (_event, _url, _code, _status, isMainFrame, frameProcessId, frameRoutingId) => {
       if (!isMainFrame) {
@@ -190,5 +217,10 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
       }
     }
   )
-  contents.once('destroyed', () => clearBrowserGuestUserAgentDemand(id))
+  contents.once('destroyed', () => {
+    if (recheck) {
+      clearInterval(recheck)
+    }
+    clearBrowserGuestUserAgentDemand(id)
+  })
 }
