@@ -28,13 +28,25 @@ vi.mock('@/components/sidebar/workspace-actions/deletion/folder-workspace-delete
 
 import { useDeleteBot } from './use-delete-bot'
 
-const bot = {
+const bot: Bot = {
   id: 'bot-1',
   name: 'Reviewer',
   hostId: 'local',
   folder: 'reviewer',
-  folderWorkspaceId: 'w1'
-} as Bot
+  folderWorkspaceId: 'w1',
+  agent: 'codex',
+  avatar: null,
+  paused: false,
+  permissionMode: 'ask',
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  chatSessionId: null,
+  linear: null,
+  github: null,
+  createdAt: 1,
+  updatedAt: 1
+}
 
 describe('useDeleteBot', () => {
   it("shows the host's unsaved-drafts refusal rather than the generic error", async () => {
