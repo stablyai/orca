@@ -10,7 +10,7 @@ it("reads a form POST result from Chromium's history entry in real Electron", as
   )
   expect(result.timedOut).toBe(false)
   expect(result.code, `${result.signal}\n${result.stdout}\n${result.stderr}`).toBe(0)
-  expect(result.output).toEqual({
+  expect(result.output, result.stderr).toEqual({
     plain: 'none',
     post: 'form-data',
     // A 303 turns the POST into a GET page; a 307 re-POSTs.
