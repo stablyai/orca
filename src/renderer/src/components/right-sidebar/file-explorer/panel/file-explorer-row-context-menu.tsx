@@ -157,13 +157,15 @@ export function FileExplorerRowContextMenu({
       }}
     >
       {pastePreview ? (
-        <FileExplorerPasteMenuItem
-          preview={pastePreview}
-          disabled={writesBlocked}
-          onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
-        />
+        <>
+          <FileExplorerPasteMenuItem
+            preview={pastePreview}
+            disabled={writesBlocked}
+            onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
+          />
+          <ContextMenuSeparator />
+        </>
       ) : null}
-      <ContextMenuSeparator />
       <ContextMenuItem
         disabled={writesBlocked}
         onSelect={() => onStartNew('file', targetDir, targetDepth)}
