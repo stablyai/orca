@@ -27,7 +27,7 @@ import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import {
   collectWslDriveUncScope,
   withNestedWslDriveUncProjects,
-  wslDriveUncDuplicatesSplitBy
+  wslDriveUncRefusedSplitBy
 } from './wsl-drive-unc-project-scope'
 import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 import { rewriteWslDriveUncState, wslDriveUncRewriteRoots } from './wsl-drive-unc-state-rewrite'
@@ -155,7 +155,7 @@ function checkScope(
     { repoIds, folderWorkspaceIds },
     rewriteRoots
   )
-  const split = wslDriveUncDuplicatesSplitBy(state, scope, request.distro, converting, () =>
+  const split = wslDriveUncRefusedSplitBy(state, scope, request.distro, converting, () =>
     rewriteRoots(converting)
   )
   return split.length > 0

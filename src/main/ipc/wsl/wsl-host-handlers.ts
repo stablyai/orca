@@ -49,6 +49,7 @@ import { changesWslHostAccounts } from '../../wsl/orcad/wsl-orcad-host-account-p
 import {
   addWslHostThenSeedPermission,
   pushHostAccounts,
+  pushHostChatAutoName,
   seedHostPermission
 } from './wsl-host-desktop-settings-push'
 import { wslHostConnectOptions } from '../../wsl/host-lifecycle/wsl-host-connect-request'
@@ -120,6 +121,7 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
         reconnect: true
       }).catch(() => {})
       pushHostAccounts(args.getUserDataPath, environmentId, distro)
+      pushHostChatAutoName(args.getUserDataPath, environmentId, args.store)
       void automationWake?.learn(environmentId)
     },
     removed: (environmentId) => {
@@ -181,6 +183,13 @@ async function startService(args: WslHostHandlerArgs): Promise<WslHostService | 
       for (const status of created.getStatuses()) {
         if (status.state === 'ready') {
           pushHostAccounts(args.getUserDataPath, status.environmentId, status.distro)
+        }
+      }
+    }
+    if ('nativeChatAutoName' in updates) {
+      for (const status of created.getStatuses()) {
+        if (status.state === 'ready') {
+          pushHostChatAutoName(args.getUserDataPath, status.environmentId, args.store)
         }
       }
     }
@@ -273,7 +282,12 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
     'wslHosts:connect',
     (
       _event,
-      request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
+      request: {
+        environmentId: string
+        intent?: unknown
+        pastUncountedTerminals?: unknown
+        withdrawPendingRemoval?: unknown
+      }
     ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
   const capability = (): WslHostCapability => ({

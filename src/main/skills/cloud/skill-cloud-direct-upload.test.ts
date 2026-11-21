@@ -19,65 +19,46 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.alloc(3 * 64 * 1024, 0x61)
     await writeFile(archivePath, archive)
-    let markStarted!: () => void
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve
-    })
-    let chunksSeen = 0
-    const chunkWaiters = new Set<() => void>()
-    const waitForChunk = async (count: number): Promise<void> => {
-      if (chunksSeen >= count) {
-        return
-      }
-      await new Promise<void>((resolve) => {
-        const check = (): void => {
-          if (chunksSeen >= count) {
-            chunkWaiters.delete(check)
-            resolve()
-          }
-        }
-        chunkWaiters.add(check)
-      })
-    }
+    // Read chunk size depends on the runtime and platform, so the case advances one 30s delay
+    // per chunk until the upload settles instead of counting chunks.
+    let chunkDelayPending = false
     const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
-      markStarted()
       const body = init?.body as unknown as AsyncIterable<Buffer>
       for await (const _chunk of body) {
-        chunksSeen += 1
-        chunkWaiters.forEach((notify) => notify())
+        chunkDelayPending = true
         await new Promise<void>((resolve) => setTimeout(resolve, 30_000))
+        chunkDelayPending = false
       }
       return new Response(null, { status: 204 })
     })
     const progress = vi.fn()
+    let settled = false
+    const startedAt = Date.now()
     const upload = uploadSkillPackageToSignedPolicy({
       policy: {
         url: 'https://storage.googleapis.com/upload',
         fields: {},
-        expiresAt: new Date(Date.now() + 10 * 60_000).toISOString()
+        expiresAt: new Date(startedAt + 10 * 60_000).toISOString()
       },
       archivePath,
       expectedBytes: archive.length,
       fetcher: fetcher as typeof fetch,
       onProgress: progress
+    }).finally(() => {
+      settled = true
     })
 
-    await started
-    await waitForChunk(1)
-    await vi.advanceTimersByTimeAsync(30_000)
-    await waitForChunk(2)
-    await vi.advanceTimersByTimeAsync(30_000)
-    await waitForChunk(3)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(progress).toHaveBeenCalled()
-    expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(false)
-    await vi.advanceTimersByTimeAsync(29_000)
-    await waitForChunk(4)
-    await vi.advanceTimersByTimeAsync(30_000)
-    await waitForChunk(5)
-    await vi.advanceTimersByTimeAsync(30_000)
+    // Bounded by the 10 minute policy expiry so a body that never ends fails instead of hanging.
+    for (let step = 0; step < 20 && !settled; step += 1) {
+      await vi.waitUntil(() => settled || chunkDelayPending, { timeout: 5_000 })
+      await vi.advanceTimersByTimeAsync(30_000)
+    }
 
+    expect(settled).toBe(true)
     await expect(upload).resolves.toBeUndefined()
+    expect(Date.now() - startedAt).toBeGreaterThan(60_000)
+    expect(progress).toHaveBeenCalledWith(archive.length)
+    expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(false)
   })
 
   it('streams exact bytes with policy fields and bounded progress', async () => {
