@@ -1498,6 +1498,7 @@
         "chatFrom": "{{chat}} · from {{source}}",
         "kept": "Orca · {{chat}} wrote over it",
         "owner": "You, in Settings",
+        "restored": "You, kept from item #{{item}}",
         "bot": "Forget, from {{chat}}",
         "undo": "Undo",
         "tidyUp": "Tidy-up · Undo puts back all of its MEMORY.md changes",

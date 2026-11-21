@@ -11,8 +11,11 @@ export const BotMemoryAuthorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('chat'), sessionId: z.string(), source: z.string().nullable() }),
   /** Orca put back what a chat's write dropped. */
   z.object({ kind: z.literal('kept'), sessionId: z.string() }),
-  /** The owner, in Settings. */
-  z.object({ kind: z.literal('owner') }),
+  /** The owner, in Settings; or a line the owner kept when salvage offered it on item `item`. */
+  z.object({
+    kind: z.literal('owner'),
+    restored: z.object({ month: z.string(), item: z.number() }).optional()
+  }),
   /** The bot's own Forget command, from one of its chats. */
   z.object({ kind: z.literal('bot'), sessionId: z.string() }),
   /** An Undo of row `of`. */

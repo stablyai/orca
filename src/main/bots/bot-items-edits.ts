@@ -1,7 +1,8 @@
 // Making an item and changing its fields or status. A status move can carry a comment (Needs you
 // must: it is the question); any other status clears that question. A closed item reopens here.
 import { randomUUID } from 'node:crypto'
-import { isOpenBotItemStatus } from '../../shared/bots/bot-items'
+import type { BotItemAsk } from '../../shared/bots/bot-item-ask'
+import { type BotItemActor, isOpenBotItemStatus } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
 import {
   assertBotItemAddable,
@@ -19,6 +20,8 @@ import { BotItemsReads } from './bot-items-reads'
 import type { BotItemRecord } from './bot-items-schema'
 
 type TextField = 'title' | 'description' | 'doneMeans'
+/** Orca's own write on a bot's item: it mails no chat, so the bot isn't woken by it. */
+type OrcaActor = Extract<BotItemActor, { kind: 'orca' }>
 
 export class BotItemsEdits extends BotItemsReads {
   add(input: BotItemAddInput, actor: BotItemBotActor, now = Date.now()): BotItemWriteOutcome {
@@ -27,9 +30,39 @@ export class BotItemsEdits extends BotItemsReads {
     return this.transaction(() => this.insertItem({ ...input, links }, actor, now))
   }
 
+  /** Orca's own question to a bot's owner: the item is made and set Needs you with `ask` in one
+   *  write, so it never shows without its question. */
+  orcaAsk(
+    input: Omit<BotItemAddInput, 'status' | 'links' | 'uid' | 'madeBy'>,
+    ask: BotItemAsk,
+    why: string,
+    now = Date.now()
+  ): BotItemWriteOutcome {
+    const actor: OrcaActor = { kind: 'orca', why }
+    const add = { ...input, status: 'planned' as const, links: [] }
+    assertBotItemAddable(add)
+    const changes: BotItemSetInput = { status: 'needs_you', ask }
+    assertBotItemSetInput(changes)
+    return this.transaction(() => {
+      const { uid } = this.insertItem(add, actor, now)
+      return this.applySet(uid, changes, actor, now)
+    })
+  }
+
+  /** Orca's own change to an item it made: a question again, or a close with its note. */
+  orcaSet(
+    uid: string,
+    changes: BotItemSetInput,
+    why: string,
+    now = Date.now()
+  ): BotItemWriteOutcome {
+    assertBotItemSetInput(changes)
+    return this.transaction(() => this.applySet(uid, changes, { kind: 'orca', why }, now))
+  }
+
   private insertItem(
     input: BotItemAddInput,
-    actor: BotItemBotActor,
+    actor: BotItemBotActor | OrcaActor,
     now: number
   ): BotItemWriteOutcome {
     const uid = input.uid ?? randomUUID()
@@ -86,7 +119,7 @@ export class BotItemsEdits extends BotItemsReads {
   private applySet(
     uid: string,
     changes: BotItemSetInput,
-    actor: BotItemBotActor,
+    actor: BotItemBotActor | OrcaActor,
     now: number
   ): BotItemWriteOutcome {
     const item = this.requireItem(uid)

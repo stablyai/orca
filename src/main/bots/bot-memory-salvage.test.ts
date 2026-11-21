@@ -177,7 +177,9 @@ describe("a bot's salvage record", () => {
         ...many,
         old: source('- 2026-11-20 once expired', 'expired', 1),
         gone: source('- 2026-11-01 expired twice', 'expired', 2)
-      }
+      },
+      proposal: null,
+      lastProposalAt: 0
     }
     const next = salvageNextProposal(salvage)
     expect(next).toHaveLength(SALVAGE.perProposal)

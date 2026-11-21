@@ -99,7 +99,11 @@ function authorOf(t: BotChatTranslate, { by, chat }: BotMemoryHistoryView): stri
         chat: named
       })
     case 'owner':
-      return t('settings.bots.memoryHistory.owner', 'You, in Settings')
+      return by.restored
+        ? t('settings.bots.memoryHistory.restored', 'You, kept from item #{{item}}', {
+            item: by.restored.item
+          })
+        : t('settings.bots.memoryHistory.owner', 'You, in Settings')
     case 'bot':
       return t('settings.bots.memoryHistory.bot', 'Forget, from {{chat}}', { chat: named })
     case 'undo':

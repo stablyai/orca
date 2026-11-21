@@ -37,8 +37,13 @@ export function journalTopic(today: string): string {
 }
 
 /** Moves the dated status lines to this month's journal; null when there are none. Undated lines
- *  stay, as every tidy-up keeps them. */
-export function statusMigrationPlan(memory: string, today: string): TidyUpPlan | null {
+ *  stay, as every tidy-up keeps them, and so do the lines in `kept`: ones the owner chose to keep
+ *  when salvage offered them back. */
+export function statusMigrationPlan(
+  memory: string,
+  today: string,
+  kept: ReadonlySet<string> = new Set()
+): TidyUpPlan | null {
   const snapshot = memorySnapshot(memory)
   const key = (raw: string): string | null => botMemoryLineKey({ line: raw, after: null })
   // Every line grouped by its words first; a group moves only when it is one dated status line
@@ -59,6 +64,7 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
     [...all].filter(
       ([, group]) =>
         group.length === 1 &&
+        !kept.has(group[0].raw.trimEnd()) &&
         group[0].fact.date !== null &&
         isStatusLine(group[0].fact.text) &&
         !secret(group[0])

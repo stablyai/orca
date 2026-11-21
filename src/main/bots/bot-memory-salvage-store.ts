@@ -35,11 +35,28 @@ const SourceSchema = z.object({
   expiries: z.number().default(0)
 })
 
-const BotSalvageSchema = z.object({ sources: z.record(z.string(), SourceSchema) })
+const ProposalSchema = z.object({
+  /** The item that asks, and the question its answer must follow. */
+  uid: z.string(),
+  number: z.number(),
+  question: z.number(),
+  /** The candidates listed, in their numbered order. */
+  hashes: z.array(z.string()),
+  at: z.number(),
+  /** It asked again once after an answer it couldn't read. */
+  reasked: z.boolean().default(false)
+})
+
+const BotSalvageSchema = z.object({
+  sources: z.record(z.string(), SourceSchema),
+  proposal: ProposalSchema.nullable().default(null),
+  lastProposalAt: z.number().default(0)
+})
 const FileSchema = z.object({ bots: z.record(z.string(), BotSalvageSchema) })
 
 export type SalvageSource = z.infer<typeof SourceSchema>
 export type BotSalvage = z.infer<typeof BotSalvageSchema>
+export type SalvageProposal = z.infer<typeof ProposalSchema>
 
 export type SalvageStoreIo = {
   read: () => Promise<string | null>
@@ -70,7 +87,11 @@ export function salvageFileIo(path: () => string): SalvageStoreIo {
   }
 }
 
-const EMPTY: BotSalvage = Object.freeze({ sources: Object.freeze({}) })
+const EMPTY: BotSalvage = Object.freeze({
+  sources: Object.freeze({}),
+  proposal: null,
+  lastProposalAt: 0
+})
 
 let hostStore: BotSalvageStore | null = null
 
@@ -113,16 +134,10 @@ export class BotSalvageStore {
   }
 
   /** Notes lines the status move took into `month`'s journal; a line already known keeps its
-   *  state, so a line moved again after a restore is still the restored one. Calls run one at a
-   *  time, and the record in memory changes only once the file has it, so a failed save is tried
-   *  again by the next call that brings the same lines. */
+   *  state, so a line moved again after a restore is still the restored one. */
   recordMoved(botId: string, month: string, lines: readonly string[], now: number): Promise<void> {
-    const run = this.writing.then(async () => {
-      const all = await this.all()
-      if (this.readOnly) {
-        return
-      }
-      const sources = { ...(all.get(botId) ?? EMPTY).sources }
+    return this.update(botId, (before) => {
+      const sources = { ...before.sources }
       let added = 0
       for (const line of lines) {
         const hash = salvageLineHash(month, line)
@@ -131,16 +146,43 @@ export class BotSalvageStore {
           added++
         }
       }
-      if (added === 0) {
+      return added === 0 ? before : { ...before, sources }
+    })
+  }
+
+  /**
+   * Applies `change` to a bot's record and saves it. Calls run one at a time, and the record in
+   * memory changes only once the file has it, so a failed save is tried again by the next call
+   * that makes the same change. Returning the record unchanged saves nothing.
+   */
+  update(botId: string, change: (before: BotSalvage) => BotSalvage): Promise<void> {
+    const run = this.writing.then(async () => {
+      const all = await this.all()
+      if (this.readOnly) {
         return
       }
-      const next = new Map(all).set(botId, { sources })
+      const before = all.get(botId) ?? EMPTY
+      const after = change(before)
+      if (after === before) {
+        return
+      }
+      const next = new Map(all).set(botId, after)
       await this.io.write(JSON.stringify({ bots: Object.fromEntries(next) }))
-      all.set(botId, { sources })
+      all.set(botId, after)
     })
     // The next call waits for this one, never for its failure.
     this.writing = run.catch(() => {})
     return run
+  }
+
+  /** The lines the owner kept, which the status move leaves where they are. */
+  async keptLines(botId: string): Promise<Set<string>> {
+    const { sources } = await this.get(botId)
+    return new Set(
+      Object.values(sources).flatMap(({ state, line }) =>
+        state === 'kept' || state === 'kept-already-present' ? [line] : []
+      )
+    )
   }
 }
 

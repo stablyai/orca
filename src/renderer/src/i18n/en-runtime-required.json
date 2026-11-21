@@ -2975,6 +2975,7 @@
         "keptMany": "Kept {{count}} lines other chats wrote over",
         "keptOne": "Kept a line another chat wrote over",
         "owner": "You, in Settings",
+        "restored": "You, kept from item #{{item}}",
         "secret": "{{author}} · Can’t be undone: it held a secret",
         "tidied": "Tidied {{count}} lines",
         "tidyUp": "Tidy-up · Undo puts back all of its MEMORY.md changes",

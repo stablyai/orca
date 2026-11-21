@@ -104,10 +104,10 @@ export class BotItemsOwner extends BotItemsWrites {
     })
   }
 
-  /** The owner's own Needs you note is no question to answer. */
+  /** The owner's own Needs you note is no question to answer; the bot's or Orca's is. */
   private askedByBot(eventId: number): boolean {
     const row = this.db.prepare('SELECT * FROM item_events WHERE id = ?').get(eventId)
-    return row !== undefined && eventRecordOf(row).actor.kind === 'bot'
+    return row !== undefined && eventRecordOf(row).actor.kind !== 'owner'
   }
 
   private ownerCommentByRequest(uid: string, requestId: string): number | null {

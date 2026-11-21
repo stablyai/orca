@@ -130,6 +130,7 @@ export function runtimeTidyUpRunner(runtime: OrcaRuntimeService): BotTidyUpRunne
     memory: runtime.bots.memory,
     fs: localBotHomeFilesystem,
     salvage: hostSalvageStore(),
+    afterPilotRun: (botId) => void runtime.botSalvage.pass(botId),
     memoryFiles,
     homeFolder: (bot) => botHomeFolder(bot),
     sessions: runtimeBotAutomationSessions(runtime),

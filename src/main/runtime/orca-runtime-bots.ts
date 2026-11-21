@@ -17,6 +17,7 @@ import {
   lookAroundStoreFile
 } from '../bots/bot-look-around-store'
 import { botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { runtimeSalvage } from '../bots/bot-memory-salvage-runtime'
 import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
@@ -216,9 +217,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime)
 
-  private readonly botJournal = journaledItemsNotice(this, (scope) =>
+  /** Owner decisions the status move took, offered back word for word (pilot bots only). */
+  readonly botSalvage = runtimeSalvage(this)
+
+  private readonly botJournal = journaledItemsNotice(this, (scope) => {
+    this.botSalvage.noticed(scope)
     this.botChangeNotices.changed(scope)
-  )
+  })
 
   /** What each bot is doing for its owner and needs from them, on this host. */
   readonly botItems = runtimeBotItems({

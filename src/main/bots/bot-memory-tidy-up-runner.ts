@@ -65,7 +65,9 @@ export type BotTidyUpRunnerDeps = {
   memory: Pick<BotMemoryRecord, 'change' | 'history'>
   fs: TidyUpFiles
   /** Where the status move's lines are noted for salvage. */
-  salvage?: Pick<BotSalvageStore, 'recordMoved'>
+  salvage?: Pick<BotSalvageStore, 'recordMoved' | 'keptLines'>
+  /** A pilot bot's run ended, however it went: salvage looks at what it moved. */
+  afterPilotRun?: (botId: string) => void
   /** The files in the bot's memory/ folder, the archive among them, as far as the prompt reads. */
   memoryFiles: (folder: string) => Promise<TidyUpMemoryFile[]>
   homeFolder: (bot: Bot) => string
@@ -195,6 +197,7 @@ export class BotTidyUpRunner {
           )
     })
     let applied: TidyUpApplied | null = null
+    let pilotRun = false
     let historyRows: BotMemoryHistoryRow[] = []
     let startedAt = this.deps.now()
     let chatCount = 0
@@ -229,6 +232,7 @@ export class BotTidyUpRunner {
       const files = await this.deps.memoryFiles(folder)
       // The marker counts by being there: its contents are never read.
       const pilot = (await this.deps.fs.statFile(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
+      pilotRun = pilot
       // A pilot bot never falls back to the whole-file reply: it waits until its file fits.
       if (pilot && !memoryFitsOps(memory)) {
         this.change(bot.id, (state) => beginTidyUp(state, sessionId, startedAt))
@@ -248,7 +252,8 @@ export class BotTidyUpRunner {
       // The ten minutes run from here, through the reply; the apply after is local and is never
       // cut off midway, though a sleep in it still makes the run missed.
       watch = watchBackgroundRun(this.deps.power, sessionId)
-      const format = tidyUpFormat({ memory, files, chats, today, pilot })
+      const kept = pilot ? await this.deps.salvage?.keptLines(bot.id) : undefined
+      const format = tidyUpFormat({ memory, files, chats, today, pilot, kept })
       start = startWithinLimit(
         watch,
         {
@@ -316,6 +321,9 @@ export class BotTidyUpRunner {
         })
         if (summary) {
           this.deps.noteTidied(bot, { botId: bot.id, changes: tidyUpChangeCount(summary) })
+        }
+        if (pilotRun) {
+          this.deps.afterPilotRun?.(bot.id)
         }
         void this.deps.sessions.release(sessionId)
       }

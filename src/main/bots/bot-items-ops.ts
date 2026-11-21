@@ -15,6 +15,8 @@ export const BOT_ITEMS_OPS = [
   'viewRows',
   'add',
   'set',
+  'orcaAsk',
+  'orcaSet',
   'comment',
   'close',
   'link',
