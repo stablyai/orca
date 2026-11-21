@@ -4,36 +4,8 @@ import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/age
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-authority/pane-foreground-agent'
 
-export const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
-  'Claude Code': 'claude',
-  OpenClaude: 'openclaude',
-  Codex: 'codex',
-  'Gemini CLI': 'gemini',
-  'GitHub Copilot': 'copilot',
-  Grok: 'grok',
-  Devin: 'devin',
-  Jcode: 'jcode',
-  Antigravity: 'antigravity',
-  OpenCode: 'opencode',
-  Aider: 'aider',
-  Cursor: 'cursor',
-  Droid: 'droid',
-  Hermes: 'hermes',
-  'DeepSeek Build': 'dsb',
-  Pi: 'pi',
-  OMP: 'omp'
-}
-
-export function resolveTitleDerivedAgentType(
-  title: string,
-  _label: string,
-  _ownerAgentType?: AgentType | null
-): AgentType | null {
-  const admittedAgent = resolveExplicitTerminalTitleAgentType(title)
-  return admittedAgent
-    ? (Object.values(TITLE_AGENT_LABEL_TO_TYPE).find((agent) => agent === admittedAgent) ??
-        'unknown')
-    : null
+export function resolveTitleDerivedAgentType(title: string): AgentType | null {
+  return resolveExplicitTerminalTitleAgentType(title)
 }
 
 /** The pane's foreground-process read as the tracker publishes it; routing fields are omitted. */
@@ -56,6 +28,12 @@ export function resolveTitleDerivedPaneAgent(args: {
   launchAgentType: AgentType | null
   foreground: TitleDerivedPaneForeground | undefined
 }): AgentType | null {
+  if (
+    !args.titleShowsActivity &&
+    (args.foreground?.shellForeground === true || titleRetiresProcessRead(args))
+  ) {
+    return null
+  }
   // Launch records lack run IDs; exit titles must override stale process reads after reattach.
   const processAgent =
     args.foreground?.agentEvidence !== 'process-read' || titleRetiresProcessRead(args)

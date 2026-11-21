@@ -121,12 +121,17 @@ export function agentForOwnerSuffix(text: string): TerminalAgent | null {
   return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
 
+const PRIME_AGENT_NATIVE_TITLE_RE = /^prime-agent - \S[^\r\n]*$/
+
 const NATIVE_PAYLOAD_RE = /(?::\s+[\s\S]*|\s*[\u2013\u2014]\s*[\s\S]*)$/
 const NATIVE_STATUS_RE =
   /(?:\s+(?:(?:ready|idle|done|working|thinking|running|waiting|permission)|\[(?:ready|idle|done|working|thinking|running|waiting|permission)\])|\s+-\s+action required)$/i
 
 /** Only payload delimiters consume later pipes; bare names/statuses still require the full frame. */
 export function agentForNamedTitlePrefix(text: string): TerminalAgent | null {
+  if (PRIME_AGENT_NATIVE_TITLE_RE.test(text.trim())) {
+    return 'prime-agent'
+  }
   const undecorated = stripLeadingAgentTitleDecorationOrEmpty(text).trim()
   const match = NATIVE_PAYLOAD_RE.exec(undecorated)
   return match ? agentForNativeName(undecorated.slice(0, match.index)) : null
@@ -151,6 +156,9 @@ export function isNeutralAgentTitleWrapper(header: string): boolean {
 
 /** Native frames identify an agent by a complete name, a named status, or a name before task text. */
 export function agentForNativeFrame(text: string): TerminalAgent | null {
+  if (PRIME_AGENT_NATIVE_TITLE_RE.test(text.trim())) {
+    return 'prime-agent'
+  }
   if (isCursorAgentTitle(text)) {
     return 'cursor'
   }
