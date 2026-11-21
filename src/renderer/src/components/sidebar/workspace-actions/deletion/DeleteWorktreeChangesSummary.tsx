@@ -68,6 +68,8 @@ export function deleteWorktreeLossLine(
 
 type StatusTone = 'checking' | 'clean' | 'warning'
 
+// gap-1.5 between the line's items.
+const GAP_PX = 6
 // size-3.5 chevron plus the trigger's gap-1.5.
 const CHEVRON_ROOM_PX = 20
 
@@ -89,36 +91,39 @@ export function DeleteWorktreeChangesSummary({
 }): JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const [overflow, setOverflow] = useState({ px: 0, inToggle: false, latched: false, key: '' })
+  const [fit, setFit] = useState({ need: 0, room: 0 })
   const [focused, setFocused] = useState(false)
   const [opened, setOpened] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const noteRef = useRef<HTMLSpanElement>(null)
   // A long translation can clip the one fixed line; the full sentence then moves into the panel.
+  // Measured against the plain line's room whatever form the line is in, so the result never
+  // depends on whether the chevron is showing and the two forms can't flip back and forth.
   const measureClipped = useCallback(() => {
-    const spans = [textRef.current, noteRef.current].filter((el) => el != null)
-    const px = spans.reduce((total, el) => total + el.scrollWidth - el.clientWidth, 0)
-    const inToggle = spans[0]?.closest('button') != null
-    const font = spans[0] ? getComputedStyle(spans[0]).fontFamily : ''
-    const key = `${spans.map((el) => el.textContent).join('|')}|${rowRef.current?.clientWidth}|${font}`
-    // Latch a clip the plain line showed for this text and width; otherwise the toggle's chevron and
-    // the plain line can disagree by a subpixel and swap forever.
-    const latched = inToggle ? null : px > 0
-    setOverflow((current) => {
-      const next = {
-        px,
-        inToggle,
-        key,
-        latched: latched === null ? current.key === key && current.latched : latched
+    const text = textRef.current
+    const line = text?.parentElement
+    const row = rowRef.current
+    if (!text || !line || !row) {
+      return
+    }
+    const note = noteRef.current
+    const need = text.scrollWidth + (note?.scrollWidth ?? 0)
+    let fixed = 0
+    let items = 0
+    for (const child of line.children) {
+      if (getComputedStyle(child).position === 'absolute') {
+        continue
       }
-      return current.px === next.px &&
-        current.inToggle === next.inToggle &&
-        current.key === next.key &&
-        current.latched === next.latched
-        ? current
-        : next
-    })
+      items += 1
+      if (child !== text && !child.contains(note)) {
+        fixed += child.getBoundingClientRect().width
+      }
+    }
+    // The note cancels its own gap with a negative margin.
+    const gaps = (items - 1 - (note ? 1 : 0)) * GAP_PX
+    const room = Math.floor(row.clientWidth - fixed - gaps)
+    setFit((current) => (current.need === need && current.room === room ? current : { need, room }))
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
   useLayoutEffect(measureClipped)
@@ -184,8 +189,8 @@ export function DeleteWorktreeChangesSummary({
   // An open or focused toggle outlives its last loss, so an autosave never collapses or unfocuses it.
   const keepsToggle = hasDetails || open || focused
   // A toggle that exists only because of clipping takes the chevron's room from the text itself.
-  const clipped =
-    overflow.latched || overflow.px > (overflow.inToggle && !keepsToggle ? CHEVRON_ROOM_PX : 0)
+  // A toggle kept for its file list also loses the chevron's room.
+  const clipped = fit.need > fit.room - (keepsToggle ? CHEVRON_ROOM_PX : 0)
   const expandable = keepsToggle || clipped
   const hasRow = tone !== null
   useEffect(() => {
@@ -228,12 +233,11 @@ export function DeleteWorktreeChangesSummary({
       </span>
       {note ? (
         // A zero flex basis gives the note only leftover room, so the main sentence stays whole.
-        // The gap is the note's own padding, so a zero-width note leaves no gap behind.
-        <span
-          ref={noteRef}
-          className="-ml-1.5 min-w-0 flex-1 truncate pl-1.5 text-muted-foreground"
-        >
-          · {note}
+        // Its gap is inner padding the outer box can clip, so a zero-width note leaves no gap.
+        <span className="-ml-1.5 min-w-0 flex-1 overflow-hidden">
+          <span ref={noteRef} className="block truncate pl-1.5 text-muted-foreground">
+            · {note}
+          </span>
         </span>
       ) : null}
       {stillChecking ? (
