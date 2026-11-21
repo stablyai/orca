@@ -1,6 +1,4 @@
-import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -45,20 +43,20 @@ type AccountRestartPane = {
 
 type AccountRestartTarget = Pick<AccountRestartPane, 'worktreeId' | 'shellOverride'>
 
-/**
- * The resume startup for the pane's own session, or null when it has none to name.
- * Capture it before restart clears the old pane's status.
- */
-export function resolveAgentAccountRestartResumeStartup(
+export type AgentAccountRestartResumeInput = {
+  providerSession: AgentProviderSessionMetadata
+  launchConfig?: SleepingAgentLaunchConfig
+} | null
+
+export function captureAgentAccountRestartResumeInput(
+  state: AppState,
   agent: AccountRestartAgent,
   args: AccountRestartPane
-): AgentAccountRestartStartup | null {
-  const state = useAppStore.getState()
+): AgentAccountRestartResumeInput {
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const entry = state.agentStatusByPaneKey.get(paneKey)
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const agentType = entry?.agentType ?? sleeping?.agent
-  if (agentType !== agent) {
+  if ((entry?.agentType ?? sleeping?.agent) !== agent) {
     return null
   }
   const providerSession =
@@ -67,6 +65,27 @@ export function resolveAgentAccountRestartResumeStartup(
   if (!providerSession) {
     return null
   }
+  const launchConfig = entry
+    ? state.getAgentLaunchConfigForStatusEntry(entry)
+    : sleeping?.agent === agent
+      ? sleeping.launchConfig
+      : undefined
+  return structuredClone({ providerSession, launchConfig })
+}
+
+/** Capture before teardown; retry a build error using the same conversation inputs. */
+export function resolveAgentAccountRestartResumeStartup(
+  state: AppState,
+  agent: AccountRestartAgent,
+  args: AccountRestartPane,
+  input?: AgentAccountRestartResumeInput
+): AgentAccountRestartStartup | null {
+  const captured =
+    input === undefined ? captureAgentAccountRestartResumeInput(state, agent, args) : input
+  if (!captured) {
+    return null
+  }
+  const { providerSession, launchConfig } = captured
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
   // Why Codex only: a WSL Claude resume reads the guest's selected-account pointer at launch.
   if (
@@ -74,14 +93,11 @@ export function resolveAgentAccountRestartResumeStartup(
     projectRuntime?.status === 'resolved' &&
     projectRuntime.runtime.kind === 'wsl'
   ) {
+    if (input) {
+      throw new Error('terminal_account_restart_resume_unsupported')
+    }
     return null
   }
-  // A live invocation takes the one decision's answer, none included.
-  const launchConfig = entry
-    ? state.getAgentLaunchConfigForStatusEntry(entry)
-    : sleeping?.agent === agent
-      ? sleeping.launchConfig
-      : undefined
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
@@ -115,30 +131,31 @@ export function resolveAgentAccountRestartResumeStartup(
 
 /** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
 export function buildPaneAccountRestartStartup(
+  state: AppState,
   agent: AccountRestartAgent,
-  args: AccountRestartPane
+  args: AccountRestartPane,
+  input?: AgentAccountRestartResumeInput
 ): AgentAccountRestartStartup | null {
-  const resume = resolveAgentAccountRestartResumeStartup(agent, args)
+  const resume = resolveAgentAccountRestartResumeStartup(state, agent, args, input)
+  if (input && !resume) {
+    throw new Error('terminal_account_restart_resume_unavailable')
+  }
   const sessionId = resume?.resumeProviderSession?.id
   // Why here: another pane may have resumed the session since the restart was queued.
   if (
     agent === 'claude' &&
     sessionId &&
-    isSessionHeldByAnotherPane(
-      useAppStore.getState(),
-      makePaneKey(args.tabId, args.leafId),
-      sessionId
-    )
+    isSessionHeldByAnotherPane(state, makePaneKey(args.tabId, args.leafId), sessionId)
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(state, args) : null)
 }
 
 export function buildCodexAccountRestartStartup(
+  state: AppState,
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {
-  const state = useAppStore.getState()
   const target = resolveAccountRestartLaunchTarget(
     state,
     args,
@@ -173,6 +190,7 @@ function resolveAccountRestartLaunchTarget(
     : null
   // Why: a folder or nested-SSH workspace on a server runs on its SSH target, not the server.
   const connectionId = repo?.connectionId ?? getConnectionIdFromState(state, args.worktreeId)
+  const runtimeStatuses = state.runtimeStatusByEnvironmentId
   return resolveAgentResumeLaunchTarget({
     projectRuntime,
     connectionId,
@@ -186,9 +204,9 @@ function resolveAccountRestartLaunchTarget(
       runtimeEnvironmentIdUnlessTwin(state, args.worktreeId),
       connectionId
     ),
-    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(readRuntimeStatuses(), executionHostId),
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(runtimeStatuses, executionHostId),
     runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
-      readRuntimeStatuses(),
+      runtimeStatuses,
       executionHostId
     )
   })

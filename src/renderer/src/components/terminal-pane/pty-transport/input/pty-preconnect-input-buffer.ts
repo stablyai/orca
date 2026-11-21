@@ -24,6 +24,7 @@ type BufferedInput = PtyPreconnectInputEntry & {
 
 export type PreconnectInputWriter = {
   isCurrent: () => boolean
+  canSendInput?: (inputKind: TerminalInputKind) => boolean
   sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (
@@ -176,6 +177,11 @@ export function createPtyPreconnectInputBuffer(
           input.resolve?.(false)
           clear()
           return
+        }
+        if (writer.canSendInput?.(input.inputKind) === false) {
+          input.resolve?.(false)
+          activeAcceptedInput = null
+          continue
         }
         if (input.kind === 'accepted') {
           let accepted: boolean | null = null

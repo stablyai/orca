@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { codexRestartTabIndex } from '../terminals/codex-account-restart-continuation'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -7,12 +8,18 @@ import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardo
 import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-purge-scopes'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
+import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import {
   collectRemovedHostTwinState,
   isRuntimeHost,
   removedHostCanonicalizer,
   type RemovedHostTwinState
 } from './repo-removal-host-twin-attribution'
+import {
+  captureMixedAccountRestarts,
+  retiresRemovedHostAccountRestart,
+  type MixedAccountRestart
+} from './repo-removal-mixed-account-restarts'
 
 export type RemovedHostTwins = {
   /** Twin ids with the hosts that still publish them. */
@@ -23,6 +30,7 @@ export type RemovedHostTwins = {
     /** This host's own twin ids with their survivors. */
     twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>
     removed: RemovedHostTwinState
+    accountRestarts?: ReadonlyMap<string, MixedAccountRestart>
   }[]
 }
 
@@ -40,11 +48,20 @@ export function collectRemovedHostTwins(
   ]
   return {
     twinHostIds: new Map(scopes.flatMap(([, twins]) => [...twins])),
-    byHost: scopes.map(([attributedHostId, twins]) => ({
-      hostId: attributedHostId,
-      twinHostIds: twins,
-      removed: collectRemovedHostTwinState(state, new Set(twins.keys()), attributedHostId, twins)
-    }))
+    byHost: scopes.map(([attributedHostId, twins]) => {
+      const removed = collectRemovedHostTwinState(
+        state,
+        new Set(twins.keys()),
+        attributedHostId,
+        twins
+      )
+      return {
+        hostId: attributedHostId,
+        twinHostIds: twins,
+        removed,
+        accountRestarts: captureMixedAccountRestarts(state, attributedHostId, removed)
+      }
+    })
   }
 }
 
@@ -65,6 +82,7 @@ export function closeRemovedHostTwinState(
   for (const hostId of new Set([...twins.byHost, ...preCall.byHost].map((entry) => entry.hostId))) {
     const current = twins.byHost.find((entry) => entry.hostId === hostId)
     const removed = current?.removed
+    const captured = preCall.byHost.find((entry) => entry.hostId === hostId)?.accountRestarts
     // Why this host's ids only: another attributed host's survivor may be this host.
     const hostTwinIds = current?.twinHostIds ?? new Map<string, readonly ExecutionHostId[]>()
     // Why: a host frame during the call can drop a tab without closeTab's agent and cache cleanup.
@@ -84,7 +102,7 @@ export function closeRemovedHostTwinState(
       [...terminalTabIds].flatMap((tabId) => get().ptyIdsByTabId[tabId] ?? [])
     )
     const killedPtyIds = new Set<string>()
-    const retiredPtyIds = new Set<string>()
+    const retiredPtyIds = new Set(removed?.mixedTabPtyIds ?? [])
     for (const [tabId, plan] of plans) {
       for (const ptyId of [
         ...plan.localOrSshPtyIds,
@@ -119,22 +137,43 @@ export function closeRemovedHostTwinState(
       }
     }
     // Why: a parked or restored pane has no exit callback left to clear these; shared PTYs are not in the plans' lists.
-    set((state) => ({
-      ...removeWorkspaceUnreadState(
-        state,
-        [
-          ...new Set([
-            ...hostTwinIds.keys(),
-            ...preCall.byHost
-              .filter((entry) => entry.hostId === hostId)
-              .flatMap((entry) => [...entry.twinHostIds.keys()])
-          ])
-        ].map((id) => ({ id, hostId }))
-      ),
-      suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
-      pendingPaneAccountRestarts: omitRecordKeys(state.pendingPaneAccountRestarts, retiredPtyIds),
-      codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
-    }))
+    const beforeRestarts = get().pendingPaneAccountRestarts
+    set((state) => {
+      const tabs = captured?.size ? codexRestartTabIndex(state) : undefined
+      return {
+        ...removeWorkspaceUnreadState(
+          state,
+          [
+            ...new Set([
+              ...hostTwinIds.keys(),
+              ...preCall.byHost
+                .filter((entry) => entry.hostId === hostId)
+                .flatMap((entry) => [...entry.twinHostIds.keys()])
+            ])
+          ].map((id) => ({ id, hostId }))
+        ),
+        suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
+        pendingPaneAccountRestarts: Object.fromEntries(
+          Object.entries(state.pendingPaneAccountRestarts).filter(([key, request]) =>
+            typeof request === 'string'
+              ? !retiredPtyIds.has(key)
+              : !(
+                  request.hostId === hostId &&
+                  (terminalTabIds.has(request.tabId) ||
+                    retiresRemovedHostAccountRestart(
+                      state,
+                      request,
+                      retiredPtyIds,
+                      captured?.get(key),
+                      tabs
+                    ))
+                )
+          )
+        ),
+        codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
+      }
+    })
+    releaseRetiredAccountRestartSlots(beforeRestarts, get().pendingPaneAccountRestarts)
     // Why: a pending chat's tab can already be gone, so its launch is cancelled through the registry.
     cancelStructuredLaunchesForWorktrees(
       new Set(hostTwinIds.keys()),

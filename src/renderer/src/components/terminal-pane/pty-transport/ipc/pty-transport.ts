@@ -3,7 +3,7 @@ import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { markTerminalProviderSessionBound } from '../../../terminal/provider-snapshots/terminal-provider-gone-sessions'
-import { createPtyInputWriteQueue } from '../input/pty-input-write-queue'
+import { canSendIpcPtyInput, createIpcPtyInputWriteQueue } from './ipc-pty-input-admission'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { createPtyPreconnectInputBuffer } from '../input/pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from '../pty-transport-types'
@@ -35,10 +35,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? createPtyPreconnectInputBuffer(opts.preconnectInput)
       : null
 
-  const inputWriteQueue = createPtyInputWriteQueue({
+  const canSendInput = (id: string | null, kind: TerminalInputKind): boolean =>
+    canSendIpcPtyInput(opts, id, kind)
+  const inputWriteQueue = createIpcPtyInputWriteQueue(opts, {
     isWritable: (id) => !destroyed && connected && ptyId === id,
-    write: (id, data, inputKind) => window.api.pty.write(id, data, inputKind),
-    writeAccepted: (id, data, inputKind) => window.api.pty.writeAccepted(id, data, inputKind),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
@@ -113,13 +113,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
-      sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),
+      canSendInput: (inputKind) => canSendInput(id, inputKind),
+      sendInput: (data, inputKind) =>
+        canSendInput(id, inputKind) && inputWriteQueue.enqueue(id, data, inputKind),
       sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
       ...(connectionId
         ? {}
         : {
             sendInputAccepted: (data: string, inputKind: TerminalInputKind) =>
-              inputWriteQueue.enqueueAccepted(id, data, inputKind)
+              canSendInput(id, inputKind)
+                ? inputWriteQueue.enqueueAccepted(id, data, inputKind)
+                : Promise.resolve(false)
           })
     })
   }
@@ -222,6 +226,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data, inputKind) {
+      if (!canSendInput(ptyId, inputKind)) {
+        return false
+      }
       if (!destroyed && inputKind === 'driving') {
         opts.onDrivingInputAttempt?.(ptyId)
       }
@@ -251,6 +258,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? {}
       : {
           async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
+            if (!canSendInput(ptyId, inputKind)) {
+              return false
+            }
             if (!destroyed && inputKind === 'driving') {
               opts.onDrivingInputAttempt?.(ptyId)
             }

@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -151,7 +152,7 @@ type PtyCallbacks = {
   onPausedOutputDropped?: () => void
   onOutputGapRecovered?: () => void
   /** The host kept this restore asleep; no process started and the resume handle is intact. */
-  onSpawnDeferred?: (reason: SpawnDeferralReason) => void
+  onSpawnDeferred?: (reason: SpawnDeferralReason, failure?: string) => void
 }
 
 /** What started a pane's recovery: the server connection, or only this pane's stream. */
@@ -182,11 +183,13 @@ export type PtyTransport = {
     cols?: number
     rows?: number
     sessionId?: string
+    expectedIncarnationId?: string
     /** Declare hidden before spawn bytes so main’s gate/model responder owns queries from byte zero; remote runtimes ignore this local-only field. */
     initiallyHidden?: boolean
     /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */
     attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
+    accountRestart?: AccountRestartCondition
     resumeSpawnIntent?: RestoreSpawnIntent
     /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
     wslPassiveRestore?: true
@@ -202,8 +205,15 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
-    /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
-    shouldContinue?: () => boolean
+    /** Fence dispatch and, for account restarts, acceptance before binding a returned owner. */
+    isAccountRestartCurrent?: () => boolean
+    onAccountRestartDispatch?: () => boolean
+    onAccountRestartFailure?: (error: unknown) => void
+    verifyAccountRestartResult?: (result: {
+      id: string
+      incarnationId?: string | null
+    }) => Promise<boolean>
+    shouldContinue?: (result?: { id: string; incarnationId?: string | null }) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -299,6 +309,12 @@ export type IpcPtyTransportOptions = {
   keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
   /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
   releasePreconnectInput?: () => boolean
+  /** Rechecked at admission and delivery; automatic terminal replies remain independent. */
+  canSendInput?: (
+    ptyId: string | null,
+    inputKind: TerminalInputKind,
+    incarnationId?: string | null
+  ) => boolean
   /** Keys typed before a remote pane bound its terminal were dropped for safety, unsent. */
   onTypingDiscardedBeforeBind?: () => void
   /** Seed a fresh transport with input handed off from a remounted deferred split. */

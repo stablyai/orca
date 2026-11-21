@@ -7,7 +7,8 @@ import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/
 import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,
-  setPaneSpawnDeferral
+  setPaneSpawnDeferral,
+  type PaneSpawnDeferral
 } from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import {
   cancelDeferredRestoreRetry,
@@ -21,11 +22,14 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { releaseHiddenAgentResumeHold } from './hidden-agent-resume-deferral'
 import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 import type { FreshSpawnOptions, PendingStartupCommand } from '../startup/fresh-spawn-types'
+import { routeCodexAccountRestartWake } from '../../account-restart/codex-account-restart-wake'
+import type { CodexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 
 type DeferredSpawn = {
   reason: SpawnDeferralReason
   startupOverride: PendingStartupCommand | null | undefined
   options: FreshSpawnOptions
+  accountRestartToken?: CodexAccountRestartToken
 }
 
 /** Adds "Resume automatic restores" once the pane's host proves it can clear the pause. */
@@ -54,6 +58,9 @@ function offerHostResume(
 
 /** A restore the host kept asleep: the pane shows a sleeping overlay and retries when opened. */
 export function installSpawnDeferredSleep(session: ConnectPanePtySession): void {
+  let ownedOverlay: PaneSpawnDeferral | null = null
+  const ownsOverlay = (overlay = ownedOverlay): boolean =>
+    Boolean(overlay && getPaneSpawnDeferral(session.cacheKey)?.resume === overlay.resume)
   // Set by the transport for the spawn in flight; read when that spawn settles without a PTY.
   session.pendingSpawnDeferral = null
   session.deferredSpawn = null
@@ -79,8 +86,14 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
   ): void => {
     releaseDeferredCwdFence(session)
     session.keepUnrunResumeHandle(startupOverride)
-    session.deferredSpawn = { reason, startupOverride, options }
+    session.deferredSpawn = {
+      reason,
+      startupOverride,
+      options,
+      accountRestartToken: session.deps.accountRestartToken
+    }
     const deferral = { reason, resume: () => void session.resumeDeferredSpawn() }
+    ownedOverlay = deferral
     setPaneSpawnDeferral(session.cacheKey, deferral)
     if (reason === 'paused') {
       // Why no background retry: a crash pause is cleared by the user, not by waiting.
@@ -101,17 +114,31 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
 
   session.resumeDeferredSpawn = (): Promise<string | null> => {
     const deferred: DeferredSpawn | null = session.deferredSpawn
-    if (!deferred || session.disposed || session.transport.getPtyId()) {
+    if (!deferred || session.disposed || session.transport.getPtyId() || !ownsOverlay()) {
       return Promise.resolve(null)
     }
     session.deferredSpawn = null
     cancelDeferredRestoreRetry(session.cacheKey)
+    const ownDeferral = ownedOverlay
+    const accountWake = routeCodexAccountRestartWake(
+      session,
+      { token: deferred.accountRestartToken },
+      deferred.options
+    )
+    if (accountWake !== undefined) {
+      return accountWake.finally(() => {
+        if (ownsOverlay(ownDeferral)) {
+          clearPaneSpawnDeferral(session.cacheKey)
+        }
+      })
+    }
     if (skipPaneResumeOwnedElsewhere(session, deferred.startupOverride)) {
       clearPaneSpawnDeferral(session.cacheKey)
       return Promise.resolve(null)
     }
     // Retain session ownership until PTY binding so activation cannot resume it in another tab mid-spawn.
     const resuming = { reason: deferred.reason, resume: () => {}, resuming: true as const }
+    ownedOverlay = resuming
     setPaneSpawnDeferral(session.cacheKey, resuming)
     const settle = (): void => {
       if (getPaneSpawnDeferral(session.cacheKey) === resuming) {
@@ -165,8 +192,11 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
 
   session.disposeSpawnDeferral = (): void => {
     session.deferredSpawn = null
-    cancelDeferredRestoreRetry(session.cacheKey)
-    clearPaneSpawnDeferral(session.cacheKey)
+    if (ownsOverlay()) {
+      cancelDeferredRestoreRetry(session.cacheKey)
+      clearPaneSpawnDeferral(session.cacheKey)
+    }
+    ownedOverlay = null
     releaseHiddenAgentResumeHold(session)
   }
 }

@@ -12,6 +12,8 @@ import {
 import { startDeferredSessionReattach } from '../reattach/deferred-session-reattach-connect'
 import { mainStartsPane } from './main-starts-pane'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { routeCodexAccountRestartWake } from '../../account-restart/codex-account-restart-wake'
+import { isCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 
 type MainPaneStartHandlers = {
   /** Runs once main's start for the pane ends: the pane is bound to its terminal. */
@@ -27,6 +29,11 @@ export function startPaneThroughMain(
   session: ConnectPanePtySession,
   handlers: MainPaneStartHandlers
 ): boolean {
+  const accountWake = routeCodexAccountRestartWake(session)
+  if (accountWake !== undefined) {
+    void accountWake
+    return true
+  }
   const tabId = parsePaneKey(session.cacheKey)?.tabId
   if (!tabId) {
     return false
@@ -60,6 +67,10 @@ export function startPaneThroughMainThenAttach(
   session: ConnectPanePtySession,
   today: () => Promise<string | null>
 ): Promise<string | null> {
+  const accountWake = routeCodexAccountRestartWake(session)
+  if (accountWake !== undefined) {
+    return accountWake
+  }
   if (!mainStartsPane(session)) {
     return today()
   }
@@ -98,6 +109,13 @@ export function defersToMainPaneStart(
   session: ConnectPanePtySession,
   connect: () => void
 ): boolean {
+  if (
+    session.deps.accountRestartToken ||
+    isCodexAccountRestart(useAppStore.getState().pendingPaneAccountRestarts[session.cacheKey])
+  ) {
+    // Initialize output, serializer and spawn callbacks before the account wake chooses its route.
+    return false
+  }
   if (waitsForMainPaneStart(session, connect)) {
     return true
   }

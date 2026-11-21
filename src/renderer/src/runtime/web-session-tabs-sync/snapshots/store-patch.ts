@@ -1,3 +1,5 @@
+import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
+import { withCodexAccountRestartPruning } from '@/store/terminals/codex-account-restart-continuation'
 import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -62,7 +64,8 @@ export function applyWebSessionTabsStorePatch(
     state: AppState,
     changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
-    const patch = buildPatch(state, changedAgentPaneKeys)
+    const built = buildPatch(state, changedAgentPaneKeys)
+    const patch = built === state ? state : withCodexAccountRestartPruning(state, built)
     markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
@@ -205,7 +208,15 @@ export function applyWebSessionTabsStorePatch(
     return patch
   }
 
-  useAppStore.getState().updateAgentStatusState(runStorePatch)
+  const requestsBefore = useAppStore.getState().pendingPaneAccountRestarts
+  try {
+    useAppStore.getState().updateAgentStatusState(runStorePatch)
+  } finally {
+    releaseRetiredAccountRestartSlots(
+      requestsBefore,
+      useAppStore.getState().pendingPaneAccountRestarts
+    )
+  }
 
   for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
     if (decision.apply && source) {

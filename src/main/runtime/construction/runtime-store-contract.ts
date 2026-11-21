@@ -88,6 +88,8 @@ export type RuntimeStore = {
   persistPtyBinding?: Store['persistPtyBinding']
   retirePtyBinding?: Store['retirePtyBinding']
   getPtyBindingGeneration?: Store['getPtyBindingGeneration']
+  trackPtyBindingGeneration?: Store['trackPtyBindingGeneration']
+  getPtyBindingEpoch?: Store['getPtyBindingEpoch']
   getLayoutEditorViews?: Store['getLayoutEditorViews']
   admitTerminalPane?: Store['admitTerminalPane']
   withdrawTerminalPane?: Store['withdrawTerminalPane']

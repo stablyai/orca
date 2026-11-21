@@ -6,6 +6,7 @@ import {
   encodeTerminalStreamFrame
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { IpcPtyTransportOptions } from '../pty-transport-types'
 import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { runTerminalPasteOperationWithTimeout } from '../../input/paste/terminal-paste-operation-timeout'
@@ -122,13 +123,15 @@ function pasteChunk(transport: Parameters<typeof writeTerminalPastePtyInput>[0],
 
 async function connectPane(
   capabilities: Record<string, 1>,
-  callbacks: { onWriteUnavailable?: () => void } = {}
+  callbacks: { onWriteUnavailable?: () => void } = {},
+  canSendInput?: IpcPtyTransportOptions['canSendInput']
 ) {
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'tab-1',
-    leafId: 'pane:1'
+    leafId: 'pane:1',
+    canSendInput
   })
   onTestFinished(() => transport.destroy?.())
   transport.attach({ existingPtyId: 'remote:terminal-1', cols: 80, rows: 24, callbacks })
@@ -260,6 +263,52 @@ describe('remote pane input across a silent outage', () => {
       }
       await expect(write).resolves.toBe(true)
       transport.destroy?.()
+    }
+  )
+
+  it.each(['recovery', 'stall'] as const)(
+    'withdraws denied driving input before journal replay through %s',
+    async (path) => {
+      vi.useFakeTimers()
+      try {
+        let allowed = true
+        const { transport } = await connectPane(
+          { inputAck: 1 },
+          {},
+          (_id, kind) => kind === 'query-reply' || allowed
+        )
+        transport.sendInput('typed-before-denial', 'driving')
+        const write = transport.sendInputAccepted?.('accepted-before-denial', 'driving')
+        await vi.waitFor(() =>
+          expect(sentInputs().map((input) => input.text)).toEqual([
+            'typed-before-denial',
+            'accepted-before-denial'
+          ])
+        )
+        allowed = false
+        if (path === 'recovery') {
+          subscriptionCallbacks?.onClose?.()
+          await reconnect({ inputAck: 1 }, 2)
+        } else {
+          await vi.advanceTimersByTimeAsync(6000)
+        }
+        expect(sentInputs().slice(2)).toEqual([
+          { seq: 1, text: '' },
+          { seq: 2, text: '' }
+        ])
+        await expect(write).resolves.toBe(false)
+        allowed = true
+        transport.sendInput('new-command', 'driving')
+        await vi.waitFor(() => expect(sentInputs().at(-1)).toEqual({ seq: 3, text: 'new-command' }))
+        expect(
+          sentInputs()
+            .slice(2)
+            .map((input) => input.text)
+        ).toEqual(['', '', 'new-command'])
+        transport.destroy?.()
+      } finally {
+        vi.useRealTimers()
+      }
     }
   )
 })

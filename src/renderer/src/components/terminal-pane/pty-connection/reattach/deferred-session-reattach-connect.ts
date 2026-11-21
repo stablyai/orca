@@ -20,56 +20,38 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-la
 import { holdInPlaceResumeUntilSettled } from '../startup/in-place-resume-hold'
 import { mainStartsPane, startMainPaneOnFirstView } from '../spawn/main-starts-pane'
 import { attachResumeCheck } from '../spawn/main-pane-resume-banner'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 
-import {
-  awaitAgentStatusStartupSnapshot,
-  isAgentStatusStartupSnapshotReady
-} from '@/hooks/ipc-events/agent-status/agent-status-startup-snapshot'
+import { isDeferredSessionReattachReady } from './deferred-session-reattach-readiness'
 
 const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
 const PANE_OWNER_CHANGED_ERROR = 'terminal_pane_owner_changed'
 
 /** Layout-owner build: `afterMainStart` attaches to the terminal main just started for the pane. */
-type ReattachOptions = { afterMainStart?: true; userAct?: true }
+type ReattachOptions = {
+  afterMainStart?: true
+  userAct?: true
+  attachOnlyView?: true
+  expectedIncarnationId?: string
+  shouldContinue?: Parameters<PtyTransport['connect']>[0]['shouldContinue']
+}
 
 export function startDeferredSessionReattach(
   session: ConnectPanePtySession,
   deferredReattachSessionId: string,
   options: ReattachOptions = {}
-): void {
-  void prepareDeferredSessionReattach(session, deferredReattachSessionId, options).catch(
-    (error: unknown) => {
+): Promise<void> {
+  return isDeferredSessionReattachReady(session)
+    .then(async (ready) => {
+      if (ready) {
+        await connectDeferredSessionReattach(session, deferredReattachSessionId, options)
+      }
+    })
+    .catch((error: unknown) => {
       if (!session.disposed) {
         session.reportError(error instanceof Error ? error.message : String(error))
       }
-    }
-  )
-}
-
-async function prepareDeferredSessionReattach(
-  session: ConnectPanePtySession,
-  deferredReattachSessionId: string,
-  options: ReattachOptions
-): Promise<void> {
-  const generation = session.transportStreamGeneration
-  let waitedForSnapshot = false
-  if (
-    !session.runtimeEnvironmentId &&
-    !session.buildColdRestoreAgentResumeStartup() &&
-    !isAgentStatusStartupSnapshotReady()
-  ) {
-    waitedForSnapshot = true
-    await awaitAgentStatusStartupSnapshot()
-  }
-  if (
-    session.disposed ||
-    generation !== session.transportStreamGeneration ||
-    (waitedForSnapshot &&
-      session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport)
-  ) {
-    return
-  }
-  void connectDeferredSessionReattach(session, deferredReattachSessionId, options)
+    })
 }
 
 /** Resolves to what the reattach did, which a held pane's release reports. */
@@ -97,7 +79,7 @@ function connectDeferredSessionReattach(
   let heldByNewerDaemon = false
   let heldForStoppedDistro: ReturnType<typeof parseWslDistroHold> = null
   // Why: main started this pane's agent; the window's attach never resumes it a second time.
-  const attachOnlyView = mainStartsPane(session)
+  const attachOnlyView = options.attachOnlyView || mainStartsPane(session)
   const resumeStartup = session.buildColdRestoreAgentResumeStartup()
   const coldRestoreStartup = attachOnlyView ? null : resumeStartup
   const resumedAgent = attachResumeCheck(session, coldRestoreStartup)
@@ -139,6 +121,7 @@ function connectDeferredSessionReattach(
     cols: session.cols,
     rows: session.rows,
     sessionId: deferredReattachSessionId,
+    expectedIncarnationId: options.expectedIncarnationId,
     ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
     ...(coldRestoreStartup?.env
       ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
@@ -152,6 +135,12 @@ function connectDeferredSessionReattach(
     ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
     ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
     ...(attachOnlyView ? { attachOnlyView: true as const } : {}),
+    ...(options.shouldContinue
+      ? {
+          shouldContinue: options.shouldContinue,
+          isAccountRestartCurrent: () => options.shouldContinue?.() === true
+        }
+      : {}),
     ...wslRestoreStartArgs(session, options.userAct === true),
     callbacks: outputCallbacks.callbacks
   })
@@ -168,7 +157,9 @@ function connectDeferredSessionReattach(
     }
   }
   const startFreshInstead = (): Promise<HeldPaneReopenOutcome> =>
-    reopenPaneAfterMissingReattach(session, coldRestoreStartup, resumedAgent)
+    options.attachOnlyView
+      ? Promise.resolve(NOT_REOPENED)
+      : reopenPaneAfterMissingReattach(session, coldRestoreStartup, resumedAgent)
 
   void Promise.resolve(reattachPromise)
     .catch(() => null)
@@ -186,11 +177,14 @@ function connectDeferredSessionReattach(
         if (isCurrentReattach() && heldForStoppedDistro) {
           // Start is the user's act: this reconnect may start the distro.
           holdForStoppedWslDistro(session, deferredReattachSessionId, heldForStoppedDistro, () =>
-            connectDeferredSessionReattach(session, deferredReattachSessionId, { userAct: true })
+            connectDeferredSessionReattach(session, deferredReattachSessionId, {
+              ...options,
+              userAct: true
+            })
           )
         } else if (isCurrentReattach()) {
           holdForNewerDaemon(session, deferredReattachSessionId, () =>
-            connectDeferredSessionReattach(session, deferredReattachSessionId)
+            connectDeferredSessionReattach(session, deferredReattachSessionId, options)
           )
         }
         return NOT_REOPENED
@@ -200,7 +194,7 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(
           session,
           outputCallbacks.generation,
-          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId, options),
           coldRestoreStartup
         )
         session.settlePaneAttachAttempt('failed')
@@ -210,7 +204,7 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(
           session,
           outputCallbacks.generation,
-          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId, options),
           coldRestoreStartup
         )
         await abandonPendingSerializer()
@@ -286,7 +280,7 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(
           session,
           outputCallbacks.generation,
-          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId, options),
           coldRestoreStartup
         )
         session.settlePaneAttachAttempt('failed')

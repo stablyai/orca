@@ -1,11 +1,26 @@
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
+import { isCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
+import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+const EMPTY_READY_RESTARTS: string[] = []
 
 /** PTYs whose queued account restart this tab runs: any Codex at once, and this tab's own Claude panes. */
 export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string): string[] {
   const pending = state.pendingPaneAccountRestarts
-  const ready = Object.keys(pending).filter((ptyId) => pending[ptyId] === 'codex')
-  const ptyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+  if (Object.keys(pending).length === 0) {
+    return EMPTY_READY_RESTARTS
+  }
+  const layout = state.terminalLayoutsByTabId[tabId]
+  const ready: string[] = collectLeafIds(layout?.root)
+    .map((leafId) => makePaneKey(tabId, leafId))
+    .filter((key) => {
+      const request = pending[key]
+      return (
+        isCodexAccountRestart(request) && request.tabId === tabId && request.phase === 'accepted'
+      )
+    })
+  const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
   for (const ptyId of Object.values(ptyIdsByLeafId)) {
     if (pending[ptyId] === 'claude') {
       ready.push(ptyId)
@@ -17,8 +32,9 @@ export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string):
 const paneBoundListeners = new Map<string, Set<() => void>>()
 
 /** A queued restart can arrive before its pane's transport attaches; the attach must wake the tab's executor. */
-export function notifyQueuedRestartPaneBound(tabId: string, ptyId: string): void {
-  if (!(ptyId in useAppStore.getState().pendingPaneAccountRestarts)) {
+export function notifyQueuedRestartPaneReady(tabId: string, ptyId: string, paneKey?: string): void {
+  const pending = useAppStore.getState().pendingPaneAccountRestarts
+  if (!(ptyId in pending) && (!paneKey || !(paneKey in pending))) {
     return
   }
   for (const listener of paneBoundListeners.get(tabId) ?? []) {
@@ -26,7 +42,7 @@ export function notifyQueuedRestartPaneBound(tabId: string, ptyId: string): void
   }
 }
 
-export function onQueuedRestartPaneBound(tabId: string, listener: () => void): () => void {
+export function onQueuedRestartPaneReady(tabId: string, listener: () => void): () => void {
   const listeners = paneBoundListeners.get(tabId) ?? new Set()
   listeners.add(listener)
   paneBoundListeners.set(tabId, listeners)

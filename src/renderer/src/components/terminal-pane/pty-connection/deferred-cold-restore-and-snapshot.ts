@@ -25,6 +25,7 @@ import { bindReplacedProcessInputModes } from './output/replaced-process-input-m
 import { deferHiddenAgentResume } from './spawn/hidden-agent-resume-deferral'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './spawn/main-resumed-sleep-pane'
 import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
+import { routeCodexAccountRestartWake } from '../account-restart/codex-account-restart-wake'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -117,6 +118,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     options: FreshSpawnOptions = {},
     automatic?: boolean
   ): Promise<string | null> => {
+    const accountWake = routeCodexAccountRestartWake(session, undefined, options)
+    if (accountWake !== undefined) {
+      return accountWake
+    }
     if (startup?.resumeSource?.cancelled) {
       return Promise.resolve(null)
     }

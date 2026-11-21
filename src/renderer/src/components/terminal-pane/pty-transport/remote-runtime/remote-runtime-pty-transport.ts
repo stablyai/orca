@@ -147,6 +147,7 @@ import {
   drainRolledBackPtyShutdownData,
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
+  removePtyDataHandler,
   ptyReplayHandlers,
   ptyShutdownLifecycleHandlers
 } from '../shutdown/pty-shutdown-data-suspension'
@@ -389,6 +390,7 @@ export function createRemoteRuntimePtyTransport(
   } | null = null
   const inputJournal = createRemoteRuntimeInputJournal({
     currentStream: sequencedInputTarget,
+    canSendDriving: () => canSendAccountInput('driving'),
     // Why: a refusal that never clears would drop every keystroke behind a connected-looking pane.
     onRefusalsPersist: () => notifyWriteUnavailable()
   })
@@ -616,10 +618,13 @@ export function createRemoteRuntimePtyTransport(
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
     const boundHandle = multiplexedStreamHandle
-    if (stream.acknowledgesInput() && boundHandle) {
-      inputJournal.send(stream, heldInputEndpoint(boundHandle), queued)
-    } else {
-      for (const segment of queued) {
+    for (const segment of queued) {
+      if (!canSendAccountInput(segment.queryReply ? 'query-reply' : 'driving')) {
+        continue
+      }
+      if (stream.acknowledgesInput() && boundHandle) {
+        inputJournal.send(stream, heldInputEndpoint(boundHandle), [segment])
+      } else {
         stream.sendInput(segment.text)
       }
     }
@@ -676,7 +681,7 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     if (ptyDataHandlers.get(ptyId) === shutdownDataHandler) {
-      ptyDataHandlers.delete(ptyId)
+      removePtyDataHandler(ptyId, shutdownDataHandler)
     }
     if (ptyReplayHandlers.get(ptyId) === shutdownReplayHandler) {
       ptyReplayHandlers.delete(ptyId)
@@ -1263,18 +1268,25 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function attachHostSessionMirror(
-    options: { cols?: number; rows?: number; sessionId?: string },
+    options: {
+      cols?: number
+      rows?: number
+      sessionId?: string
+      isAccountRestartCurrent?: () => boolean
+    },
     notifySpawn = true,
     expectedAttachGeneration?: number,
     expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
+    const isAccountRestartCurrent = options.isAccountRestartCurrent
     if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
       return undefined
     }
     const isCurrent = (): boolean =>
       !destroyed &&
       (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration) &&
-      (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
+      (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch) &&
+      (!isAccountRestartCurrent || isAccountRestartCurrent())
     const hostTabId = toHostSessionTabId(tabId)
     const paneHandle = options.sessionId
       ? getRemoteRuntimeTerminalHandle(options.sessionId)
@@ -1371,6 +1383,11 @@ export function createRemoteRuntimePtyTransport(
     }
 
     return {
+      ...(matchesHostHandle(resolvedPane) &&
+      handle === resolvedPane.handle &&
+      (resolvedPane.incarnationId ?? null) === authoritativePtyIncarnationId
+        ? terminalLaunchFacts(resolvedPane)
+        : {}),
       id: remotePtyId,
       replay: '',
       isReattach: true,
@@ -1632,14 +1649,23 @@ export function createRemoteRuntimePtyTransport(
 
   async function adoptResolvedHostPane(
     terminal: RuntimeTerminalResolvePane,
-    options: { cols?: number; rows?: number; existingPtyId?: string },
+    options: {
+      cols?: number
+      rows?: number
+      existingPtyId?: string
+      isAccountRestartCurrent?: () => boolean
+    },
     notifySpawn = true,
     expectedAttachGeneration?: number,
-    expectedRecoveryEpoch?: number
+    expectedRecoveryEpoch?: number,
+    expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
+    const isAccountRestartCurrent = options.isAccountRestartCurrent
     if (
       destroyed ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
+      (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
+      (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
       return undefined
     }
@@ -1683,11 +1709,17 @@ export function createRemoteRuntimePtyTransport(
       destroyed ||
       !connected ||
       !remotePtyId ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
+      (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
+      (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
       return undefined
     }
     return {
+      ...(handle === terminal.handle &&
+      (terminal.incarnationId ?? null) === authoritativePtyIncarnationId
+        ? terminalLaunchFacts(terminal)
+        : {}),
       id: remotePtyId,
       replay: '',
       isReattach: true,
@@ -1893,6 +1925,9 @@ export function createRemoteRuntimePtyTransport(
   function inputBlocked(): boolean {
     return recoveryBlocksIo() && !subscriptionAcceptsInput()
   }
+  function canSendAccountInput(inputKind: TerminalInputKind = 'driving'): boolean {
+    return opts.canSendInput?.(remotePtyId, inputKind, authoritativePtyIncarnationId) !== false
+  }
 
   // Hold typing for the known terminal during binding/recovery and through bounded disconnected grace (#25784).
   function shouldHoldInput(): boolean {
@@ -2096,6 +2131,7 @@ export function createRemoteRuntimePtyTransport(
     resumeSequencedInput(stream, boundHandle)
     const active = recoveryInputHold.release(heldInputEndpoint(boundHandle), {
       isCurrent: () => connected && handle === boundHandle && !inputBlocked(),
+      canSendInput: canSendAccountInput,
       // Why: the 1 Mi-code-unit hold fits the 16 MiB ceiling; one journal batch survives a mid-send outage.
       sendInput: (data) => {
         const current = getCurrentMultiplexedStream(boundHandle)
@@ -2129,26 +2165,37 @@ export function createRemoteRuntimePtyTransport(
   ): Promise<boolean> {
     const signal = options?.signal
     const targetHandle = handle
-    if (!connected || !targetHandle || inputBlocked() || signal?.aborted) {
+    const targetLifecycleEpoch = lifecycleEpoch
+    const targetIncarnation = authoritativePtyIncarnationId
+    const isCurrent = (): boolean =>
+      connected &&
+      handle === targetHandle &&
+      lifecycleEpoch === targetLifecycleEpoch &&
+      authoritativePtyIncarnationId === targetIncarnation &&
+      !inputBlocked() &&
+      !signal?.aborted &&
+      canSendAccountInput(_inputKind)
+    if (!targetHandle || !isCurrent()) {
       return false
     }
     if (!data) {
       return true
     }
     await inputBatcher.drain()
-    if (!connected || handle !== targetHandle || inputBlocked()) {
+    if (!isCurrent()) {
       return false
     }
     if (pendingViewportClaim && !getCurrentMultiplexedStream(targetHandle)) {
       const ready = await new Promise<boolean>((resolve) => {
         viewportClaimReadyWaiters.add(resolve)
       })
-      if (!ready || !connected || handle !== targetHandle) {
+      if (!ready || !isCurrent()) {
         return false
       }
     }
     // Why: normal sendInput may be awaiting size validation; drain it before acknowledged writes so terminal bytes stay ordered.
-    const pendingTyping = inputBatcher.takePending()
+    const queuedTyping = inputBatcher.takePending()
+    const pendingTyping = canSendAccountInput('driving') ? queuedTyping : ''
     const text = `${pendingTyping}${data}`
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(text)
@@ -2158,30 +2205,50 @@ export function createRemoteRuntimePtyTransport(
     } catch {
       return false
     }
-    if (signal?.aborted) {
+    if (!isCurrent()) {
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
     if (stream?.acknowledgesInput()) {
-      return sendSequencedInputAccepted(stream, targetHandle, pendingTyping, data, signal)
+      return sendSequencedInputAccepted(
+        stream,
+        targetHandle,
+        canSendAccountInput('driving') ? pendingTyping : '',
+        data,
+        signal
+      )
     }
     try {
-      for (const chunk of iterateTerminalInputChunks(text)) {
-        if (!connected || handle !== targetHandle || inputBlocked() || signal?.aborted) {
-          return false
-        }
-        // Why: acknowledged sends order behind pending debounce text but must not collapse large paste back into one remote RPC.
-        const result = await trackTerminalSend(
-          targetHandle,
-          callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
-            terminal: targetHandle,
-            text: chunk,
-            client: { id: clientId, type: 'desktop' },
-            ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-          })
-        )
-        if (result.send.accepted !== true) {
-          return false
+      const writes: { text: string; kind: TerminalInputKind }[] =
+        _inputKind === 'query-reply'
+          ? [
+              { text: pendingTyping, kind: 'driving' },
+              { text: data, kind: 'query-reply' }
+            ]
+          : [{ text, kind: _inputKind ?? 'driving' }]
+      for (const write of writes) {
+        for (const chunk of iterateTerminalInputChunks(write.text)) {
+          if (!isCurrent()) {
+            return false
+          }
+          if (!canSendAccountInput(write.kind)) {
+            break
+          }
+          // Why: keep protocol replies separate from typing, and recheck permission at each delivery.
+          const result = await trackTerminalSend(
+            targetHandle,
+            callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
+              terminal: targetHandle,
+              text: chunk,
+              client: { id: clientId, type: 'desktop' },
+              ...(desiredViewport
+                ? { viewport: desiredViewport, claimViewport: true as const }
+                : {})
+            })
+          )
+          if (result.send.accepted !== true) {
+            return false
+          }
         }
       }
       return true
@@ -2225,7 +2292,12 @@ export function createRemoteRuntimePtyTransport(
   const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
-    if (!connected || !targetHandle || inputBlocked()) {
+    if (
+      !connected ||
+      !targetHandle ||
+      inputBlocked() ||
+      !canSendAccountInput(queryReply ? 'query-reply' : 'driving')
+    ) {
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
@@ -2289,6 +2361,9 @@ export function createRemoteRuntimePtyTransport(
   const inputBatcher = createRemoteRuntimePtyTextBatcher(
     REMOTE_TERMINAL_INPUT_FLUSH_MS,
     (text) => {
+      if (!canSendAccountInput()) {
+        return
+      }
       if (!sendUnacknowledgedInput(text)) {
         holdUnsentInput(text)
       }
@@ -3496,7 +3571,7 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function sendInputNow(data: string): boolean {
-    if (!connected || !handle || inputBlocked()) {
+    if (!connected || !handle || inputBlocked() || !canSendAccountInput()) {
       return false
     }
     if (!data) {
@@ -3535,7 +3610,7 @@ export function createRemoteRuntimePtyTransport(
       return true
     }
     const pending = inputBatcher.takePending()
-    if (pending && !sendUnacknowledgedInput(pending)) {
+    if (pending && canSendAccountInput() && !sendUnacknowledgedInput(pending)) {
       return false
     }
     return sendUnacknowledgedInput(data, true)
@@ -3601,6 +3676,11 @@ export function createRemoteRuntimePtyTransport(
     }
     const connectLifecycleEpoch = ++lifecycleEpoch
     const createEnvironmentId = currentRuntimeEnvironmentId
+    const accountRestart = options.accountRestart
+    const isAccountRestartCurrent = options.isAccountRestartCurrent
+    const shouldContinue = options.shouldContinue
+    const onAccountRestartDispatch = options.onAccountRestartDispatch
+    const onAccountRestartFailure = options.onAccountRestartFailure
     lastConnectOptions = options
     lastAttachOptions = null
     storedCallbacks = options.callbacks
@@ -3615,7 +3695,58 @@ export function createRemoteRuntimePtyTransport(
 
     let releasePrewarmedStream: (() => void) | null = null
     try {
-      if (isWebTerminalSurfaceTabId(tabId ?? '')) {
+      if (options.attachOnlyView) {
+        const hostTabId = toHostSessionTabId(tabId ?? '')
+        const terminal = await resolveHostSessionPane(hostTabId)
+        if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
+          return undefined
+        }
+        if (
+          isAccountRestartCurrent &&
+          (!terminal || terminal.connected === false || !terminal.incarnationId)
+        ) {
+          throw new Error('terminal_account_restart_outcome_unknown')
+        }
+        if (
+          !terminal ||
+          terminal.handle !== getRemoteRuntimeTerminalHandle(options.sessionId ?? '') ||
+          terminal.connected === false ||
+          (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+          (shouldContinue &&
+            !shouldContinue({
+              id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+              incarnationId: terminal.incarnationId
+            }))
+        ) {
+          throw new Error('terminal_pane_owner_changed')
+        }
+        if (
+          options.verifyAccountRestartResult &&
+          (!(await options.verifyAccountRestartResult({
+            id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+            incarnationId: terminal.incarnationId
+          })) ||
+            destroyed ||
+            lifecycleEpoch !== connectLifecycleEpoch ||
+            (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+            (shouldContinue &&
+              !shouldContinue({
+                id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+                incarnationId: terminal.incarnationId
+              })))
+        ) {
+          return undefined
+        }
+        return await adoptResolvedHostPane(
+          terminal,
+          options,
+          true,
+          attachGeneration,
+          undefined,
+          connectLifecycleEpoch
+        )
+      }
+      if (isWebTerminalSurfaceTabId(tabId ?? '') && !accountRestart) {
         // Commit tab/layout reattach ownership before publishing replacement as a fresh spawn.
         return await attachHostSessionMirror(
           options,
@@ -3676,9 +3807,10 @@ export function createRemoteRuntimePtyTransport(
         ? await trustOptions(createEnvironmentId)
         : {}
       const legacyCreateParams = {
+        ...(accountRestart ? { accountRestart: accountRestart } : {}),
         ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
-        clientMutationId: terminalCreateMutationId,
+        clientMutationId: accountRestart?.attemptId ?? terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
         ...(startupCommandDeliveryToSend !== undefined
           ? { startupCommandDelivery: startupCommandDeliveryToSend }
@@ -3696,10 +3828,11 @@ export function createRemoteRuntimePtyTransport(
           ? { shell: opts.shellOverride }
           : {}),
         ...spawnIntentParams,
+        ...(accountRestart ? { spawnIntent: 'user-resume' as const } : {}),
         ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
-        tabId,
-        leafId,
+        tabId: accountRestart?.pane.tabId ?? tabId,
+        leafId: accountRestart?.pane.leafId ?? leafId,
         focus: false,
         // Why: transport backs an already-mounted pane; activation is local state, not permission for remote UI reveal.
         presentation: 'background' as const,
@@ -3733,21 +3866,33 @@ export function createRemoteRuntimePtyTransport(
             startupCommandDelivery: plan.startupCommandDelivery
           })
         }
-        const result = await createWithUnknownOutcomeRecovery(
-          'terminal',
-          (timeoutMs, reconcileExisting) =>
-            callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
-              createEnvironmentId,
-              'terminal.create',
-              {
-                ...legacyCreateParams,
-                ...(reconcileExisting ? { reconcileExisting: true } : {})
-              },
-              timeoutMs
-            ),
-          createEnvironmentId,
-          epoch
-        )
+        const invoke = (
+          timeoutMs: number,
+          reconcileExisting: boolean
+        ): Promise<RemoteAgentSessionLaunchResult> => {
+          if (
+            accountRestart &&
+            (!isAccountRestartCurrent?.() ||
+              destroyed ||
+              lifecycleEpoch !== epoch ||
+              (onAccountRestartDispatch && !onAccountRestartDispatch()))
+          ) {
+            throw new Error('terminal_account_restart_view_changed')
+          }
+          return callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
+            createEnvironmentId,
+            'terminal.create',
+            {
+              ...legacyCreateParams,
+              ...(reconcileExisting ? { reconcileExisting: true } : {})
+            },
+            timeoutMs
+          )
+        }
+        // An account timeout belongs to its retained continuation; ordinary create recovery may create again.
+        const result = accountRestart
+          ? await invoke(15_000, false)
+          : await createWithUnknownOutcomeRecovery('terminal', invoke, createEnvironmentId, epoch)
         if (fallback) {
           promptPlan = fallback
         }
@@ -3864,26 +4009,28 @@ export function createRemoteRuntimePtyTransport(
       const resumeHostAuthorityCapability = resumeProviderSessionToSend
         ? agentResumeHostAuthorityCapability(launchAgentToSend)
         : undefined
-      const created = replayLaunch
-        ? await replayLaunch(connectLifecycleEpoch)
-        : launchAgentToSend
-          ? agentSessionRequiresHostAuthorityReplay
-            ? await hostAuthorityCreate()
-            : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                environmentId: createEnvironmentId,
-                hostAuthority: () => {
-                  replayLaunch = hostAuthorityCreate
-                  return hostAuthorityCreate()
-                },
-                ...(resumeHostAuthorityCapability
-                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-                  : {}),
-                legacy: () => {
-                  replayLaunch = legacyCreate
-                  return legacyCreate()
-                }
-              })
-          : await (replayLaunch = legacyCreate)()
+      const created = accountRestart
+        ? await legacyCreate()
+        : replayLaunch
+          ? await replayLaunch(connectLifecycleEpoch)
+          : launchAgentToSend
+            ? agentSessionRequiresHostAuthorityReplay
+              ? await hostAuthorityCreate()
+              : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+                  environmentId: createEnvironmentId,
+                  hostAuthority: () => {
+                    replayLaunch = hostAuthorityCreate
+                    return hostAuthorityCreate()
+                  },
+                  ...(resumeHostAuthorityCapability
+                    ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+                    : {}),
+                  legacy: () => {
+                    replayLaunch = legacyCreate
+                    return legacyCreate()
+                  }
+                })
+            : await (replayLaunch = legacyCreate)()
       if (!created) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
           connecting = false
@@ -3892,6 +4039,20 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       const createdTerminal = created.terminal
+      if (
+        accountRestart &&
+        shouldContinue &&
+        !shouldContinue({
+          id: toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId),
+          incarnationId: createdTerminal.incarnationId
+        })
+      ) {
+        await options.verifyAccountRestartResult?.({
+          id: toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId),
+          incarnationId: createdTerminal.incarnationId
+        })
+        return
+      }
       adoptExecutionMetadata(createdTerminal)
       if (created.disposition !== undefined && tabId && createdTerminal.tabId) {
         recordWebAgentSessionHandoff({
@@ -3974,6 +4135,23 @@ export function createRemoteRuntimePtyTransport(
         }
         return
       }
+      const createdPtyId = toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId)
+      if (
+        options.verifyAccountRestartResult &&
+        (!(await options.verifyAccountRestartResult({
+          id: createdPtyId,
+          incarnationId: createdTerminal.incarnationId
+        })) ||
+          destroyed ||
+          lifecycleEpoch !== connectLifecycleEpoch ||
+          (shouldContinue &&
+            !shouldContinue({
+              id: createdPtyId,
+              incarnationId: createdTerminal.incarnationId
+            })))
+      ) {
+        return
+      }
       handle = createdTerminal.handle
 
       if (createdTerminal.isReattach === true) {
@@ -3999,24 +4177,47 @@ export function createRemoteRuntimePtyTransport(
           throw error
         }
       }
-      if (destroyed || !connected || !remotePtyId) {
+      if (
+        destroyed ||
+        lifecycleEpoch !== connectLifecycleEpoch ||
+        (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+        !connected ||
+        remotePtyId !== createdPtyId ||
+        handle !== createdTerminal.handle ||
+        (createdTerminal.incarnationId &&
+          authoritativePtyIncarnationId &&
+          createdTerminal.incarnationId !== authoritativePtyIncarnationId)
+      ) {
         return
       }
 
+      const resultIncarnationId = createdTerminal.incarnationId ?? authoritativePtyIncarnationId
       return {
         ...terminalLaunchFacts(createdTerminal),
         ...(createdTerminal.isReattach !== true && createdTerminal.coldRestore
           ? { coldRestore: createdTerminal.coldRestore }
           : {}),
-        id: remotePtyId,
+        id: createdPtyId,
         replay: '',
-        ...(authoritativePtyIncarnationId ? { incarnationId: authoritativePtyIncarnationId } : {}),
+        ...(resultIncarnationId ? { incarnationId: resultIncarnationId } : {}),
         ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
       } satisfies PtyConnectResult
     } catch (error) {
+      onAccountRestartFailure?.(error)
       if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
         connecting = false
         const message = runtimeTerminalErrorMessage(error)
+        if (accountRestart || isAccountRestartCurrent) {
+          const deferral = readTerminalSpawnDeferral(error)
+          recovery.cancel()
+          emitRecoveryState()
+          if (deferral) {
+            storedCallbacks.onSpawnDeferred?.(deferral, message)
+          } else {
+            surfaceErrorMessage(message)
+          }
+          return undefined
+        }
         if (message.includes(ownerChanged)) {
           return await reconcilePaneOwner(options, connectLifecycleEpoch)
         }
@@ -4024,7 +4225,7 @@ export function createRemoteRuntimePtyTransport(
         if (deferral) {
           recovery.cancel()
           emitRecoveryState()
-          storedCallbacks.onSpawnDeferred?.(deferral)
+          storedCallbacks.onSpawnDeferred?.(deferral, message)
         } else if (isRemoteTerminalGoneMessage(message)) {
           recovery.cancel()
           handleRemoteTerminalError(error)
@@ -4123,8 +4324,14 @@ export function createRemoteRuntimePtyTransport(
       storedCallbacks = {}
     },
 
-    // Why: the kind only gates the local hold; terminal.send gets no kind, so the host classifies desktop bytes itself.
+    // Kind gates window delivery; terminal.send still lets the host classify bytes.
     sendInput(data, inputKind): boolean {
+      if (!canSendAccountInput(inputKind)) {
+        return false
+      }
+      if (inputKind === 'query-reply') {
+        return sendInputImmediateNow(data)
+      }
       if (releaseThenShouldHold(inputKind)) {
         if (!data) {
           return true
@@ -4143,6 +4350,9 @@ export function createRemoteRuntimePtyTransport(
     sendInputImmediate: (data: string): boolean => sendInputImmediateNow(data),
 
     sendInputAccepted(data, inputKind, options) {
+      if (!canSendAccountInput(inputKind)) {
+        return Promise.resolve(false)
+      }
       if (releaseThenShouldHold(inputKind) && data) {
         if (inputBatcher.hasPendingValidation()) {
           return holdAcceptedAfterValidation(data, inputKind, options)

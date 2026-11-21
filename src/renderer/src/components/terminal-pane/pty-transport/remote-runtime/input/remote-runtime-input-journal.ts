@@ -55,6 +55,7 @@ export function createRemoteRuntimeInputJournal(deps: {
     stream: RemoteRuntimeInputStream
     endpoint: RemoteRuntimeInputEndpoint
   } | null
+  canSendDriving?: () => boolean
   /** Called once per stall when the host keeps refusing input with no progress. */
   onRefusalsPersist?: () => void
 }): RemoteRuntimeInputJournal {
@@ -149,7 +150,12 @@ export function createRemoteRuntimeInputJournal(deps: {
     }
     let index = 0
     for (let seq = ackedSeq + 1; seq < nextSeq; seq += 1) {
-      const entry = entries[index]?.seq === seq ? entries[index++] : undefined
+      let entry = entries[index]?.seq === seq ? entries[index++] : undefined
+      if (entry && deps.canSendDriving?.() === false) {
+        // Revoked typing stays withdrawn even if permission later returns.
+        dropEntries()
+        entry = undefined
+      }
       if (!stream.sendInput(entry?.text ?? '', seq)) {
         resumedStream = null
         return

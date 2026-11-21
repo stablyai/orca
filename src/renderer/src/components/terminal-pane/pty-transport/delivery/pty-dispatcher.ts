@@ -28,6 +28,7 @@ import {
   bufferPtyShutdownReplayData,
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
+  removePtyDataHandler,
   ptyDataSidecars,
   ptyExitHandlers,
   ptyReplayHandlers
@@ -286,7 +287,7 @@ export function registerEagerPtyBuffer(
   const exitHandler = (code: number): void => {
     // Shell died before attach; identity-guard so we never evict a handler a transport re-registered for this id (#7894 detach/attach race).
     if (ptyDataHandlers.get(ptyId) === dataHandler) {
-      ptyDataHandlers.delete(ptyId)
+      removePtyDataHandler(ptyId, dataHandler)
       ptyReplayHandlers.delete(ptyId)
     }
     ptyExitHandlers.delete(ptyId)
@@ -311,7 +312,7 @@ export function registerEagerPtyBuffer(
     dispose() {
       // Why: identity-guard removal — after attach() swaps in its own handler this must no-op, not evict it.
       if (ptyDataHandlers.get(ptyId) === dataHandler) {
-        ptyDataHandlers.delete(ptyId)
+        removePtyDataHandler(ptyId, dataHandler)
         ptyReplayHandlers.delete(ptyId)
       }
       if (ptyExitHandlers.get(ptyId) === exitHandler) {

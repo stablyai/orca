@@ -46,19 +46,58 @@ export async function connectIpcPty(
 ): Promise<void | string | PtyConnectResult> {
   const { transportOptions, handlers } = context
   const { onPtySpawn, retainDisposedSpawn } = transportOptions
+  const accountRestart = Boolean(options.accountRestart || options.isAccountRestartCurrent)
+  const requireMatchingExitIncarnation = accountRestart || Boolean(options.expectedIncarnationId)
+  const shouldContinue = options.shouldContinue
+  const onAccountRestartFailure = options.onAccountRestartFailure
   context.setCallbacks(options.callbacks)
   ensurePtyDispatcher()
 
-  if (context.isDestroyed()) {
+  if (
+    context.isDestroyed() ||
+    (options.isAccountRestartCurrent && !options.isAccountRestartCurrent()) ||
+    (shouldContinue && !shouldContinue())
+  ) {
     return
   }
-  if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
+  if (options.sessionId && options.expectedIncarnationId) {
+    discardPreHandlerPtyExitFromForeignIncarnation(
+      options.sessionId,
+      options.expectedIncarnationId,
+      requireMatchingExitIncarnation
+    )
+  }
+  if (
+    options.sessionId &&
+    (!accountRestart || options.expectedIncarnationId) &&
+    hasPreHandlerPtyExit(
+      options.sessionId,
+      options.expectedIncarnationId,
+      requireMatchingExitIncarnation
+    )
+  ) {
+    const result = { id: options.sessionId, incarnationId: options.expectedIncarnationId }
+    if (
+      accountRestart &&
+      ((shouldContinue && !shouldContinue(result)) ||
+        (options.verifyAccountRestartResult &&
+          !(await options.verifyAccountRestartResult(result))) ||
+        context.isDestroyed() ||
+        (options.isAccountRestartCurrent && !options.isAccountRestartCurrent()) ||
+        (shouldContinue && !shouldContinue(result)))
+    ) {
+      return
+    }
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {
       return
     }
-    handlers.registerExit(options.sessionId)
+    handlers.registerExit(
+      options.sessionId,
+      options.expectedIncarnationId,
+      requireMatchingExitIncarnation
+    )
     if (!context.isExpectedExitCurrent()) {
       return
     }
@@ -81,12 +120,24 @@ export async function connectIpcPty(
         return
       }
     }
-    if (options.shouldContinue && !options.shouldContinue()) {
+    if (shouldContinue && !shouldContinue()) {
       return
     }
     // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
+    if (accountRestart && shouldContinue && !shouldContinue(spawnResult)) {
+      await options.verifyAccountRestartResult?.(spawnResult)
+      return
+    }
+    if (
+      options.verifyAccountRestartResult &&
+      (!(await options.verifyAccountRestartResult(spawnResult)) ||
+        context.isDestroyed() ||
+        (shouldContinue && !shouldContinue(spawnResult)))
+    ) {
+      return
+    }
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
     markTerminalProviderSessionBound(spawnResult.id)
@@ -117,7 +168,11 @@ export async function connectIpcPty(
     }
 
     // Drop foreign-incarnation exits for fresh and restored sessions alike; identity proves they cannot belong to this attachment.
-    discardPreHandlerPtyExitFromForeignIncarnation(spawnResult.id, spawnResult.incarnationId)
+    discardPreHandlerPtyExitFromForeignIncarnation(
+      spawnResult.id,
+      spawnResult.incarnationId,
+      requireMatchingExitIncarnation
+    )
     if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
       // Only fresh spawns discard pre-request state; reattach deliberately re-owns a pre-existing ID and needs its real buffered exit.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
@@ -133,13 +188,23 @@ export async function connectIpcPty(
     if (context.isDestroyed()) {
       return
     }
-    if (!hasPreHandlerPtyExit(spawnResult.id, spawnResult.incarnationId)) {
+    if (
+      !hasPreHandlerPtyExit(
+        spawnResult.id,
+        spawnResult.incarnationId,
+        requireMatchingExitIncarnation
+      )
+    ) {
       admitTerminalNoticeLifetime(spawnResult.id, {
         incarnationId: spawnResult.incarnationId,
         fresh: !admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore
       })
     }
-    const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
+    const exitedBeforeAttach = handlers.registerExit(
+      spawnResult.id,
+      spawnResult.incarnationId,
+      requireMatchingExitIncarnation
+    )
     if (exitedBeforeAttach) {
       if (!context.isExpectedExitCurrent()) {
         return
@@ -173,6 +238,7 @@ export async function connectIpcPty(
     }
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
+    onAccountRestartFailure?.(error)
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, null)
     if (context.isDestroyed()) {
       return
@@ -202,7 +268,7 @@ function handleConnectError(
   }
   const deferral = readTerminalSpawnDeferral(message)
   if (deferral) {
-    context.getCallbacks().onSpawnDeferred?.(deferral)
+    context.getCallbacks().onSpawnDeferred?.(deferral, message)
     return undefined
   }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {

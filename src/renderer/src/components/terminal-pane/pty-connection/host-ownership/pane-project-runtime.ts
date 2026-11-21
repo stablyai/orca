@@ -1,3 +1,4 @@
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -9,6 +10,14 @@ export function bindPaneProjectRuntime(session: ConnectPanePtySession): void {
   session.localWindowsTerminalCapabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
+  const accountRequest = session.deps.accountRestartToken
+    ? currentCodexAccountRestart(session.state, session.deps.accountRestartToken)
+    : null
+  session.shellOverride = accountRequest ? accountRequest.shellOverride : session.tab?.shellOverride
+  if (accountRequest) {
+    session.projectRuntime = accountRequest.projectRuntime
+    return
+  }
   session.projectRuntime =
     !session.tab?.forceHostRuntime &&
     session.runtimeEnvironmentId === null &&

@@ -1,4 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
+import { notifyQueuedRestartPaneReady } from '../account-restart/pane-account-restart-readiness'
 import type { resolveTerminalPaneOwnerContext } from '../host-state/terminal-pane-owner-context'
 import type { HasPty } from './lifecycle/terminal-dead-session-reconcile'
 import { useAppStore } from '@/store'
@@ -38,6 +39,7 @@ export type PanePtyBinding = IDisposable & {
 const SHIFT_ENTER_RECONFIRM_IDLE_MS = 350
 
 export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBinding {
+  const releaseHandoff = session.deps.releaseResumeInPlace
   session.reconcileIfSessionMissing = (
     hasPty: HasPty,
     livenessRequestedAt = performance.now()
@@ -84,6 +86,11 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       .catch(() => {})
   }
 
+  notifyQueuedRestartPaneReady(
+    session.deps.tabId,
+    session.transport.getPtyId() ?? '',
+    session.cacheKey
+  )
   return {
     getOwnerContext: () => session.ownerContext,
     syncProcessTracking() {
@@ -176,7 +183,7 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
-      session.deps.releaseResumeInPlace?.()
+      releaseHandoff?.()
       session.discardAgentPreReadyDraft?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()

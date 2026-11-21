@@ -1,3 +1,4 @@
+import { withAccountRestartReceipt } from './account-restart-rpc-failure'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
@@ -172,7 +173,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
 ])
 
-export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
+export const mapRuntimeError = (id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure =>
+  withAccountRestartReceipt(mapRuntimeFailure(id, meta, error), error)
+
+function mapRuntimeFailure(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
@@ -284,12 +288,8 @@ function agentSessionRefusalErrorResponse(
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-  ) {
-    return errorResponse(id, meta, (error as { code: string }).code, error.message)
+  if (error instanceof Error && 'code' in error && typeof error.code === 'string') {
+    return errorResponse(id, meta, error.code, error.message)
   }
   return mapRuntimeError(id, meta, error)
 }

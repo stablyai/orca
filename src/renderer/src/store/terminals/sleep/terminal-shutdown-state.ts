@@ -88,6 +88,14 @@ export function commitTerminalShutdownState({
         codexRestartNoticeByPtyId.delete(ptyId)
       }
 
+      if (!keepIdentifiers) {
+        const tabIds = new Set(tabs.map((tab) => tab.id))
+        for (const [key, request] of Object.entries(state.pendingPaneAccountRestarts)) {
+          if (typeof request === 'object' && tabIds.has(request.tabId)) {
+            pendingPaneAccountRestarts.delete(key)
+          }
+        }
+      }
       const titleDeletions: [string, null][] = []
       const pendingIssueCommandSplitByTabId = copyOnWriteRecord(
         state.pendingIssueCommandSplitByTabId

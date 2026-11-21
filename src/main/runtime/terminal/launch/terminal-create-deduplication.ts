@@ -51,7 +51,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       canonicalWorktreeSelector: string | undefined,
       preAllocatedHandle: string | undefined
     ) => Promise<RuntimeTerminalCreate>,
-    options: { wslUserAct?: boolean } = {}
+    options: { wslUserAct?: boolean; accountRestart?: true } = {}
   ): Promise<RuntimeTerminalCreate> {
     if (!clientMutationId || !worktreeSelector) {
       if (reconcileExisting) {
@@ -84,6 +84,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
           )
           if (adopted) {
             return adopted
+          }
+          if (options.accountRestart) {
+            throw new Error('terminal_account_restart_outcome_unknown')
           }
         }
         return await run(canonicalWorktreeSelector, preAllocatedHandle)

@@ -1,3 +1,4 @@
+import { reconcileTrackedPtyBindingGenerations } from '../terminal-bindings/pty-binding-generations'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -135,6 +136,7 @@ export function setLocalWorkspaceSession(
   }
   // Apply group ordering after prior steps finish rebasing stored rows.
   session = orderTerminalRowsByTabGroups(session, rewrites?.worktreeIds)
+  reconcileTrackedPtyBindingGenerations(context.runtime, LOCAL_EXECUTION_HOST_ID, prior, session)
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)

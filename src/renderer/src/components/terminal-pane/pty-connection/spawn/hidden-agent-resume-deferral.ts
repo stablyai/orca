@@ -95,7 +95,9 @@ export function startDeferredSessionReattachUnlessHiddenAgentResume(
   session: ConnectPanePtySession,
   sessionId: string
 ): void {
-  const reattach = (): void => startDeferredSessionReattach(session, sessionId)
+  const reattach = (): void => {
+    void startDeferredSessionReattach(session, sessionId)
+  }
   if (
     // Why local only: hasPty answers for this machine's providers; a paired host's id reads unverifiable.
     isRemoteRuntimePtyId(sessionId) ||

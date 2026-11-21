@@ -5,6 +5,7 @@ import {
   drainRolledBackPtyShutdownData,
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
+  removePtyDataHandler,
   ptyExitHandlers,
   ptyReplayHandlers,
   ptyShutdownLifecycleHandlers,
@@ -32,7 +33,11 @@ type IpcPtySessionHandlersOptions = {
 
 export type IpcPtySessionHandlers = {
   registerData: (id: string) => void
-  registerExit: (id: string, incarnationId?: string) => boolean
+  registerExit: (
+    id: string,
+    incarnationId?: string,
+    requireMatchingIncarnation?: boolean
+  ) => boolean
   unregisterAll: (id: string) => void
   unregisterData: (id: string) => void
   clearAccumulatedState: () => void
@@ -70,7 +75,7 @@ export function createIpcPtySessionHandlers({
     const owned = ownedDataHandlers.get(id)
     if (owned) {
       if (ptyDataHandlers.get(id) === owned.data) {
-        ptyDataHandlers.delete(id)
+        removePtyDataHandler(id, owned.data)
       }
       if (ptyReplayHandlers.get(id) === owned.replay) {
         ptyReplayHandlers.delete(id)
@@ -135,8 +140,12 @@ export function createIpcPtySessionHandlers({
     }
   }
 
-  function registerExit(id: string, incarnationId?: string): boolean {
-    const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId)
+  function registerExit(
+    id: string,
+    incarnationId?: string,
+    requireMatchingIncarnation = false
+  ): boolean {
+    const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId, requireMatchingIncarnation)
     const lifetime = getTerminalNoticeLifetime(id)
     const exit = (code: number): void => {
       const currentId = getPtyId()
@@ -167,7 +176,8 @@ export function createIpcPtySessionHandlers({
             finishNotice()
           }
         },
-        incarnationId
+        incarnationId,
+        requireMatchingIncarnation
       )
     } catch (error) {
       if (!hadBufferedExit) {

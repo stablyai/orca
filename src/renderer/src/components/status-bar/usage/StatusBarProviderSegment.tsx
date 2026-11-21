@@ -120,13 +120,17 @@ export function isUsageUrgent(p: ProviderRateLimits): boolean {
 export function UsageOverflowChip({
   hidden,
   providerCount,
-  display
+  display,
+  restartPending = false
 }: {
   hidden: readonly ProviderRateLimits[]
   providerCount: number
   display: UsagePercentageDisplay
+  /** A hidden chip has a pending account restart: fill amber like its badge would be. */
+  restartPending?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const tone = restartPending ? 'restart' : 'normal'
   const names = hidden
     .map((p) => {
       const tightest = getTightestUsageSection(p, t, 'all')
@@ -138,10 +142,11 @@ export function UsageOverflowChip({
     .join(', ')
   return (
     <span
+      data-tone={tone}
       title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
         value0: names
       })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground"
+      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=restart]:border-transparent data-[tone=restart]:bg-status-warning data-[tone=restart]:text-status-warning-on-solid"
     >
       {/* Why: reserve the widest count so the measured width doesn't depend on how many are hidden. */}
       <span aria-hidden="true" className="invisible col-start-1 row-start-1">

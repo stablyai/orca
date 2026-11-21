@@ -71,6 +71,13 @@ export type CodexManagedAccountRuntimeSelection = {
   wsl: Record<string, string | null>
 }
 
+export type CodexManagedAccountSettings = {
+  /** Durable settings let Orca prepare the shared Codex home before the renderer hydrates. */
+  codexManagedAccounts: CodexManagedAccount[]
+  activeCodexManagedAccountId: string | null
+  activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
+}
+
 export type ClaudeManagedAccount = {
   id: string
   email: string

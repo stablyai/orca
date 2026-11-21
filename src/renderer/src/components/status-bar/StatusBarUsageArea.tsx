@@ -33,6 +33,11 @@ import { UsageUnitLabel, usageChipShowsPercentage } from './usage/usage-unit-lab
 import type { useStatusBarController } from './composition/use-status-bar-controller'
 import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
 import { getAccountOwnerKey } from './accounts/owner-account-rows'
+import {
+  CodexRestartBadge,
+  codexRestartBadgeLabel,
+  useCodexStaleSessionCount
+} from './accounts/CodexRestartBadge'
 
 type StatusBarController = NonNullable<ReturnType<typeof useStatusBarController>>
 
@@ -44,6 +49,7 @@ export function StatusBarUsageArea({
 }): React.JSX.Element {
   const t = useTranslate()
   const [usageAreaRef, usageWidths] = useUsageRowWidths()
+  const codexStaleSessionCount = useCodexStaleSessionCount()
   const {
     antigravityAccounts,
     anyFetching,
@@ -71,7 +77,7 @@ export function StatusBarUsageArea({
     USAGE_ROW_LEVELS[level]?.tightestOnly ? 'compact' : statusBarUsageMode
   const chipFacts: UsageChipFacts[] = rosterProviders.map((p) => ({
     provider: p.provider,
-    urgent: isUsageUrgent(p),
+    urgent: isUsageUrgent(p) || (p.provider === 'codex' && codexStaleSessionCount > 0),
     percentage: [
       usageChipShowsPercentage(p, levelMode(0), t),
       usageChipShowsPercentage(p, levelMode(1), t),
@@ -86,6 +92,14 @@ export function StatusBarUsageArea({
   const shownProviders = rosterProviders.filter((p) => !usageLayout.collapsed.includes(p.provider))
   const hiddenProviders = rosterProviders.filter((p) => usageLayout.collapsed.includes(p.provider))
   const showUnitLabel = shownProviders.some((p) => usageChipShowsPercentage(p, usageMode, t))
+  const usageLabel = t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')
+  // Why: announce restarts only when this menu has a Codex row that opens the restart action;
+  // a hidden Codex status item or a not-set-up placeholder leaves nothing to act on here.
+  const announcedRestartCount = rosterProviders.some(
+    (p) => p.provider === 'codex' && !isOwnerNotSetUpPlaceholder(p)
+  )
+    ? codexStaleSessionCount
+    : 0
 
   // Why: usage gives way first, but keeps enough width to stay clickable; its popover holds
   // every provider. Its form is chosen from widths measured off-layout (see useUsageRowWidths).
@@ -115,23 +129,35 @@ export function StatusBarUsageArea({
                   type="button"
                   data-usage-trigger=""
                   className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
-                  aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
+                  aria-label={
+                    announcedRestartCount > 0
+                      ? `${usageLabel}. ${codexRestartBadgeLabel(announcedRestartCount, t)}`
+                      : usageLabel
+                  }
                 >
                   {showUnitLabel ? <UsageUnitLabel display={usagePercentageDisplay} /> : null}
                   {shownProviders.map((p) => (
-                    <ClippedRowProviderSegment
-                      key={p.provider}
-                      p={p}
-                      compact={usageCompact}
-                      display={usagePercentageDisplay}
-                      mode={usageMode}
-                    />
+                    <span key={p.provider} className="inline-flex items-center gap-1">
+                      <ClippedRowProviderSegment
+                        p={p}
+                        compact={usageCompact}
+                        display={usagePercentageDisplay}
+                        mode={usageMode}
+                      />
+                      {p.provider === 'codex' ? (
+                        <CodexRestartBadge count={codexStaleSessionCount} />
+                      ) : null}
+                    </span>
                   ))}
                   {hiddenProviders.length > 0 ? (
                     <UsageOverflowChip
                       hidden={hiddenProviders}
                       providerCount={rosterProviders.length}
                       display={usagePercentageDisplay}
+                      restartPending={
+                        codexStaleSessionCount > 0 &&
+                        hiddenProviders.some((p) => p.provider === 'codex')
+                      }
                     />
                   ) : null}
                 </button>
@@ -255,7 +281,7 @@ export function StatusBarUsageArea({
                 key={`${p.provider}-${index}`}
                 data-measure-chip={p.provider}
                 data-measure-level={index}
-                className="inline-flex"
+                className="inline-flex items-center gap-1"
               >
                 <ProviderSegment
                   p={p}
@@ -264,6 +290,10 @@ export function StatusBarUsageArea({
                   mode={levelMode(index)}
                   countdownActive={false}
                 />
+                {/* Why: the shown Codex chip carries its restart badge, so its measured width must too. */}
+                {p.provider === 'codex' ? (
+                  <CodexRestartBadge count={codexStaleSessionCount} />
+                ) : null}
               </span>
             ))
           )}

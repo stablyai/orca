@@ -3,6 +3,23 @@ import { hasPtySerializer } from '../../snapshots/pty-buffer-serializer'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
+export function declareFreshPaneSerializer(session: ConnectPanePtySession) {
+  const paneKey = session.cacheKey
+  const pending = session.runtimeEnvironmentId
+    ? Promise.resolve(null)
+    : window.api.pty.declarePendingPaneSerializer(paneKey).catch(() => null)
+  return {
+    pending,
+    clear: (): void => {
+      void pending.then((generation) => {
+        if (typeof generation === 'number') {
+          void window.api.pty.clearPendingPaneSerializer(paneKey, generation).catch(() => {})
+        }
+      })
+    }
+  }
+}
+
 export function bindPaneSerializerReadiness(session: ConnectPanePtySession): void {
   session.settlePaneSerializerAfterReplay = async (
     ptyId: string,

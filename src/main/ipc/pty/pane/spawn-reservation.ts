@@ -169,3 +169,18 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
   }
   return response
 }
+
+export function settlePaneSpawnReservation(
+  key: string | null,
+  reservation: PaneSpawnReservation,
+  outcome: PtySpawnOutcome,
+  operation?: PaneSpawnOperation
+): boolean {
+  if (reservation.outcome) {
+    return false
+  }
+  reservation.outcome = outcome
+  reservation.operation = operation
+  resolvePaneSpawnReservation(key, reservation, outcome.result)
+  return true
+}

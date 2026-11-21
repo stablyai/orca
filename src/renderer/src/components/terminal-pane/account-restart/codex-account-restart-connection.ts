@@ -1,0 +1,115 @@
+import { useAppStore } from '@/store'
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
+import {
+  formatAccountRestartFailure,
+  readAccountRestartReceipt,
+  withoutAccountRestartReceipt
+} from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import {
+  continueCodexAccountRestart,
+  dispatchCodexAccountRestart,
+  failCodexAccountRestart
+} from './codex-account-restart-execution'
+import { settleCodexAccountRestart } from './codex-account-restart-settlement'
+import { verifyCodexAccountRestartResult } from './codex-account-restart-result-authority'
+import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
+
+type ConnectOptions = Parameters<PtyTransport['connect']>[0]
+
+/** One captured attempt supplies dispatch, failure and settlement; live session options may later change. */
+export function captureCodexAccountRestartConnection(session: ConnectPanePtySession) {
+  const token = session.deps.accountRestartToken
+  if (!token) {
+    return null
+  }
+  const request = currentCodexAccountRestart(useAppStore.getState(), token)
+  if (!request?.condition || !['claimed', 'preparing', 'dispatched'].includes(request.phase)) {
+    return false
+  }
+  const { condition, startup, resultPtyId, resultIncarnationId } = request
+  let error: unknown
+  let deferred = false
+  const captureFailure = (failure: unknown): void => {
+    const receipt = readAccountRestartReceipt(failure)
+    const message =
+      failure &&
+      typeof failure === 'object' &&
+      'message' in failure &&
+      typeof failure.message === 'string'
+        ? failure.message
+        : String(failure)
+    error = new Error(
+      receipt
+        ? formatAccountRestartFailure(withoutAccountRestartReceipt(message).slice(0, 4096), receipt)
+        : message.slice(0, 4096)
+    )
+  }
+  return {
+    captureFailure,
+    reportFailure: (message: string): void => {
+      if (!readAccountRestartReceipt(error)) {
+        captureFailure(message)
+      }
+    },
+    continue: (result?: { id: string; incarnationId?: string | null }): boolean =>
+      continueCodexAccountRestart(token, result),
+    options: (isCurrent: () => boolean): Partial<ConnectOptions> => ({
+      ...(startup
+        ? {
+            command: startup.command,
+            env: session.mergeStartupEnvWithPaneIdentity({
+              ...startup.env,
+              ORCA_AGENT_LAUNCH_TOKEN: token.attemptId
+            }),
+            launchConfig: startup.launchConfig,
+            resumeProviderSession: startup.resumeProviderSession,
+            launchAgent: startup.launchAgent,
+            launchToken: token.attemptId
+          }
+        : {}),
+      ...(resultPtyId
+        ? {
+            sessionId: resultPtyId,
+            expectedIncarnationId: resultIncarnationId,
+            attachOnlyView: true as const
+          }
+        : { accountRestart: condition }),
+      isAccountRestartCurrent: () =>
+        isCurrent() && Boolean(currentCodexAccountRestart(useAppStore.getState(), token)),
+      onAccountRestartDispatch: () =>
+        Boolean(condition && isCurrent() && dispatchCodexAccountRestart(token, condition)),
+      verifyAccountRestartResult: (result) => verifyCodexAccountRestartResult(token, result),
+      onAccountRestartFailure: captureFailure
+    }),
+    defer: (): boolean => {
+      failCodexAccountRestart(token, error, 'deferred')
+      deferred = currentCodexAccountRestart(useAppStore.getState(), token)?.phase === 'deferred'
+      return deferred
+    },
+    settle: (
+      ptyId: string | null,
+      generation: number,
+      options: ConnectOptions,
+      isCurrent: () => boolean
+    ): void => {
+      const settled = settleCodexAccountRestart(session, token, {
+        ptyId,
+        generation,
+        error,
+        deferred,
+        retireOptions: () => {
+          delete options.accountRestart
+          delete options.isAccountRestartCurrent
+          delete options.onAccountRestartDispatch
+          delete options.onAccountRestartFailure
+          delete options.verifyAccountRestartResult
+          options.shouldContinue = isCurrent
+        }
+      })
+      if (settled && isCurrent()) {
+        session.settlePaneAttachAttempt?.('success')
+      }
+    }
+  }
+}

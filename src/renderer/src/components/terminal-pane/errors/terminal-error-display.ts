@@ -1,3 +1,4 @@
+import { withoutAccountRestartReceipt } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import { unwrapHostRefusalIpcLines } from './terminal-error-ipc-unwrap'
 import { translate } from '../../../i18n/i18n'
 import type { Translate } from '../../../i18n/use-translate'
@@ -157,7 +158,10 @@ export function humanizeTerminalError(
     return describeSshSignInRequiredTerminalError(error, t)
   }
   // Hosts send a held start as its code (older) or English sentence (newer); either reads in the user's language.
-  const unwrapped = localizeWslDistroHoldText(unwrapHostRefusalIpcLines(error, t), t)
+  const unwrapped = localizeWslDistroHoldText(
+    unwrapHostRefusalIpcLines(withoutAccountRestartReceipt(error), t),
+    t
+  )
   let humanized = humanizeFolderWorkspacePathErrors(
     localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId, t) ?? unwrapped, t)
   )

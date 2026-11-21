@@ -100,6 +100,9 @@ export async function executePtySpawn(
       // Claims can outlive this controller; import authoritative owner listings before deciding absence.
       await reconcileAgentSessionOwnerListings()
       const recoveredOwner = agentSessionOwners.find(args.agentSessionEnsure.claim)
+      if (ctx.accountRestartOperation && recoveredOwner) {
+        throw new Error('agent_session_conflict')
+      }
       if (recoveredOwner && ctx.pendingRegistrationPtyId !== recoveredOwner.ptyId) {
         if (ctx.pendingRegistrationPtyId) {
           ctx.deps.runtime?.cancelPendingPtyRegistration?.(
@@ -182,6 +185,10 @@ export async function executePtySpawn(
       }
       if (ensured) {
         ctx.result.agentSessionEnsure = ensured
+      }
+      if (ctx.accountRestartOperation && ensured?.disposition === 'adopted') {
+        ctx.result.isReattach = true
+        throw new Error('agent_session_conflict')
       }
     } else {
       if (!facts.attachOnlyView) {

@@ -1,3 +1,4 @@
+import { isCodexAccountRestart } from '../codex-account-restart-continuation'
 import {
   replaceTabBuckets,
   replaceRecordEntries
@@ -170,7 +171,16 @@ export function createTerminalPtyBindingActions(
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
-            nextCodexRestartNoticeByPtyId[ptyId] ??= replacedNotice
+            const retiresAccountRequest = Object.values(s.pendingPaneAccountRestarts).some(
+              (request) =>
+                isCodexAccountRestart(request) &&
+                request.tabId === tabId &&
+                request.oldPtyId === replacementPtyId &&
+                request.resultPtyId !== ptyId
+            )
+            nextCodexRestartNoticeByPtyId[ptyId] ??= retiresAccountRequest
+              ? { ...replacedNotice, restartRequested: undefined, incarnationId: undefined }
+              : replacedNotice
             delete nextCodexRestartNoticeByPtyId[replacementPtyId]
           }
           if (hasReplacementMigrationUnsupported) {
