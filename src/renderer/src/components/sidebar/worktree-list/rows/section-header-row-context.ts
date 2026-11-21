@@ -13,6 +13,8 @@ import type { RepoHeaderProjectActions } from './repo-header-project-actions'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
+  /** Draw project headers with their badge-color rail and tint (Appearance setting). */
+  projectColorAccents: boolean
   projectHeaderHostContexts?: ReadonlyMap<string, ProjectHeaderHostContext>
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
