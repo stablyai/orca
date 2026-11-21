@@ -245,7 +245,10 @@
   --rich-md-measure: calc(
     var(--markdown-reading-measure-em) * (14px + var(--editor-font-zoom-level, 0) * 1px)
   );
-  --rich-md-rail-reserve: clamp(252px, 28%, 308px);
+  --rich-md-card-width: clamp(220px, 24%, 250px);
+  /* Why: keep wide panes' 42px text-to-card gap on narrow ones too: 4px + the 24px add button + up to 14px of
+     editor scrollbar, because the button is placed from the shell's width and the card from the scroller's. */
+  --rich-md-rail-reserve: max(clamp(252px, 28%, 308px), var(--rich-md-card-width) + 58px);
   --rich-md-pad-end: 32px;
   /* Why: start padding always assumes the rail is reserved, so opening a draft or toggling notes never moves the column. */
   --rich-md-pad-start: max(
@@ -290,7 +293,7 @@
 .rich-markdown-editor-shell > .orca-diff-comment-popover {
   left: auto;
   right: calc(16px + var(--rich-md-inset-end));
-  width: clamp(220px, 24%, 250px);
+  width: var(--rich-md-card-width);
 }
 
 .rich-markdown-review-rail-actions {
@@ -347,7 +350,7 @@
   top: 0;
   right: 16px;
   /* Why: the card action pill needs the same minimum rail width as preview mode. */
-  width: clamp(220px, 24%, 250px);
+  width: var(--rich-md-card-width);
   pointer-events: none;
   z-index: 30;
 }

@@ -419,6 +419,24 @@ test.describe('Markdown reading width', () => {
       await orcaPage.getByRole('button', { name: 'Show review notes', exact: true }).click()
       await expect(card).toBeVisible()
       expectSameRect(await rectOf(second), column)
+
+      // With a note showing on narrower panes, a new selection's add button stays clear of the card.
+      for (const width of [800, 1000]) {
+        await layoutWindow(orcaPage, width)
+        await expect(card).toBeVisible()
+        // Why: select from the keyboard; a click on the noted text can select the whole note range.
+        const line = await rectOf(first)
+        await orcaPage.mouse.click(line.left + 40, line.top + 8)
+        await orcaPage.keyboard.press('Home')
+        for (let step = 0; step < 5; step += 1) {
+          await orcaPage.keyboard.press('Shift+ArrowRight')
+        }
+        await expect(addNote).toBeVisible()
+        const buttonRect = await rectOf(addNote)
+        expect(buttonRect.right).toBeLessThanOrEqual((await rectOf(card)).left)
+        await orcaPage.keyboard.press('ArrowRight')
+        await expect(addNote).toBeHidden()
+      }
     } finally {
       await cleanupMarkdownFixture(filePath)
     }
