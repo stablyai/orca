@@ -3,8 +3,9 @@ import {
   buildMobileTerminalImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
-import type {
-  MobileGalleryPick,
+import {
+  MobileUploadCancelledError,
+  type MobileGalleryPick,
   MobileImageSource,
   PickedMobileFile,
   PickedMobileImage
@@ -25,6 +26,8 @@ export type AttachMobileImageDeps = {
   readonly onUploadStart?: () => void
   readonly fitImage?: (image: PickedMobileImage) => Promise<PickedMobileImage>
   readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
+  // True once the user stops the transfer; checked between chunks and before each paste.
+  readonly shouldCancel?: () => boolean
 }
 
 export async function attachMobileImageToTerminal(
@@ -87,9 +90,10 @@ async function pasteMobileFileIntoTerminal(
 ): Promise<boolean> {
   deps.onUploadStart?.()
   const connectionId = await deps.getConnectionId()
-  const path = await uploadMobileTerminalFile(deps.client, file, { connectionId }).finally(() =>
-    file.dispose?.()
-  )
+  const path = await uploadMobileTerminalFile(deps.client, file, {
+    connectionId,
+    shouldCancel: deps.shouldCancel
+  }).finally(() => file.dispose?.())
   return pastePathIntoTerminal(path, deps)
 }
 
@@ -99,6 +103,9 @@ async function pasteMobileImageIntoTerminal(
 ): Promise<boolean> {
   deps.onUploadStart?.()
   const picked = deps.fitImage ? await deps.fitImage(pickedImage) : pickedImage
+  if (deps.shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
   const connectionId = await deps.getConnectionId()
   const imagePath = await saveMobileClipboardImageAsTempFile(deps.client, picked.base64, {
     connectionId,
@@ -109,8 +116,11 @@ async function pasteMobileImageIntoTerminal(
 
 async function pastePathIntoTerminal(
   path: string,
-  { client, agent, terminal, deviceToken, beforeTerminalSend }: TerminalPasteDeps
+  { client, agent, terminal, deviceToken, beforeTerminalSend, shouldCancel }: TerminalPasteDeps
 ): Promise<boolean> {
+  if (shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
   // Always bracket injected paths atomically and append a space so following typing cannot glue onto the filename.
   const payload = separateImagePasteFromFollowingText(
     buildMobileTerminalImagePastePayload(path, agent),

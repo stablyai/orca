@@ -80,10 +80,11 @@ export function useMobileSessionImageAttachments({
 }: Args): {
   attachImage: (source: MobileImageSource | 'gallery') => Promise<void>
   isAttaching: boolean
+  cancelAttach: () => void
   nativeChatImages: MobileNativeChatImageAttachments
   nativeChatFiles: MobileNativeChatFileAttachments
 } {
-  const { attachImage, isAttaching } = useMobileImageAttachment({
+  const { attachImage, isAttaching, cancelAttach } = useMobileImageAttachment({
     client,
     agent,
     activeHandle,
@@ -150,6 +151,7 @@ export function useMobileSessionImageAttachments({
   return {
     attachImage,
     isAttaching,
+    cancelAttach,
     nativeChatImages: { ...nativeChatImages, attachGallery },
     nativeChatFiles
   }

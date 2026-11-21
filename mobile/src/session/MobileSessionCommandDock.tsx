@@ -39,6 +39,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     handleDictationPressIn,
     handleDictationPressOut,
     isAttaching,
+    cancelAttach,
     attachImage
   } = controller
   if (!sessionCommandDockShown(controller)) {
@@ -70,6 +71,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               dictationMode={dictationMode}
               heard={liveDictationText}
               isAttaching={isAttaching}
+              onCancelAttach={cancelAttach}
             />
           }
         />

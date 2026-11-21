@@ -173,6 +173,7 @@ function Harness(props: HarnessProps) {
       sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],
       isAttaching: false,
+      cancelAttach: () => {},
       attachImage: async () => {},
       attachStreamedFiles: async () => {},
       attachFiles: async () => {},

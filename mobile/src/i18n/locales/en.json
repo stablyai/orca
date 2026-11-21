@@ -2230,6 +2230,7 @@
       "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
       "preparingMic": "Preparing microphone",
+      "cancelUpload": "Cancel upload",
       "uploadingImage": "Uploading image to host"
     },
     "markdownReader": {

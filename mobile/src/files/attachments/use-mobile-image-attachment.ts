@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
@@ -6,6 +6,7 @@ import { useMediaPicker } from '../../platform/media-picking/media-picker'
 import {
   ImageLibraryPermissionError,
   MobileFileTooLargeError,
+  MobileUploadCancelledError,
   type MobileImageSource
 } from '../../platform/media-picking/media-picker-contract'
 import {
@@ -39,6 +40,8 @@ type MobileImageAttachment = {
   readonly attachImage: (source: MobileImageSource | 'gallery') => Promise<void>
   // Show upload progress after picker completion so the host transfer cannot look like a no-op.
   readonly isAttaching: boolean
+  // Stops the running upload between chunks; the host drops the partial file.
+  readonly cancelAttach: () => void
 }
 
 function getErrorMessage(error: unknown): string {
@@ -60,11 +63,16 @@ export function useMobileImageAttachment({
 }: UseMobileImageAttachmentArgs): MobileImageAttachment {
   const [isAttaching, setIsAttaching] = useState(false)
   const picker = useMediaPicker()
+  const cancelRequested = useRef(false)
+  const cancelAttach = useCallback(() => {
+    cancelRequested.current = true
+  }, [])
   const attachImage = useCallback(
     async (source: MobileImageSource | 'gallery'): Promise<void> => {
       if (!client || !activeHandle || !canSend) {
         return
       }
+      cancelRequested.current = false
       try {
         const common = {
           client,
@@ -74,7 +82,8 @@ export function useMobileImageAttachment({
           getConnectionId: getActiveWorktreeConnectionId,
           onUploadStart: () => setIsAttaching(true),
           fitImage: fitMobileAgentImage,
-          beforeTerminalSend
+          beforeTerminalSend,
+          shouldCancel: () => cancelRequested.current
         }
         const sent =
           source === 'files'
@@ -89,6 +98,9 @@ export function useMobileImageAttachment({
           onSuccess()
         }
       } catch (error) {
+        if (error instanceof MobileUploadCancelledError) {
+          return
+        }
         onError()
         if (connState !== 'connected') {
           showToast(
@@ -136,5 +148,5 @@ export function useMobileImageAttachment({
     ]
   )
 
-  return { attachImage, isAttaching }
+  return { attachImage, isAttaching, cancelAttach }
 }

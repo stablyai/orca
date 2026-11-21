@@ -112,10 +112,18 @@ async function* readPickedFiles(
   }
 }
 
+// The shell's refusal names the ceiling it enforced: an image stages whole under a smaller one than a streamed video.
+const STAGING_CEILING_RE = /over the (\d+) this shell stages/
+
 function refuseTooLarge(error: unknown): unknown {
-  return error instanceof NativeVerbError && error.reason === 'native_media_too_large'
-    ? new MobileFileTooLargeError(null, MOBILE_STREAMED_FILE_MAX_BYTES)
-    : error
+  if (!(error instanceof NativeVerbError) || error.reason !== 'native_media_too_large') {
+    return error
+  }
+  const ceiling = Number(STAGING_CEILING_RE.exec(error.message)?.[1])
+  return new MobileFileTooLargeError(
+    null,
+    Number.isFinite(ceiling) && ceiling > 0 ? ceiling : MOBILE_STREAMED_FILE_MAX_BYTES
+  )
 }
 
 // A gallery selection holds its video handles until each upload ends, so every handle is released by its file's dispose or by a failure here.
