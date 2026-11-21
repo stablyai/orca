@@ -7,7 +7,7 @@ import type { NativeChatBlock } from '../../../../../../shared/native-chat/nativ
 import { PanZoomImageDialog } from '../../../editor/document-images/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
-  useLocalImageSrc
+  useLocalImageRead
 } from '../../../editor/document-images/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '../../../../runtime/files/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
@@ -43,7 +43,11 @@ const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
 type ImageRef = Extract<NativeChatBlock, { type: 'image-ref' }>
 
-/** One image's bytes while `active`, read from its owner (a URL loads as itself). */
+/** Wait before the one automatic retry of a read that found no image. */
+const IMAGE_READ_RETRY_MS = 1500
+
+/** One image's bytes while `active`, read from its owner (a URL loads as itself). A read that finds
+ *  nothing retries once after a short delay; coming back into view or reopening reads again. */
 function useTranscriptImageSrc(
   block: ImageRef | undefined,
   runtimeContext: RuntimeFileOperationArgs | null | undefined,
@@ -52,14 +56,26 @@ function useTranscriptImageSrc(
   const source = block?.url?.trim() || block?.path
   const filePath = block?.path ?? source ?? ''
   const external = renderableImageSource(source)
-  const localSrc = useLocalImageSrc(
+  const [retry, setRetry] = useState({ key: 0, used: false })
+  const read = useLocalImageRead(
     active && !external && runtimeContext !== undefined ? source : undefined,
     filePath,
     runtimeContext?.connectionId,
     runtimeContext,
-    TRANSCRIPT_IMAGE_ACCESS
+    TRANSCRIPT_IMAGE_ACCESS,
+    retry.key
   )
-  return { source, displaySrc: external && active ? source : localSrc, external }
+  useEffect(() => {
+    if (!read.failed || retry.used) {
+      return
+    }
+    const timer = setTimeout(
+      () => setRetry((current) => ({ key: current.key + 1, used: true })),
+      IMAGE_READ_RETRY_MS
+    )
+    return () => clearTimeout(timer)
+  }, [read.failed, retry.used])
+  return { source, displaySrc: external && active ? source : read.src, external }
 }
 
 function ImageLabelChip({ label }: { label: string }): React.JSX.Element {

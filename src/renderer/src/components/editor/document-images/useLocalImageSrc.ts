@@ -92,6 +92,18 @@ export function useLocalImageSrc(
   access?: LocalFileAccess,
   retryKey?: number
 ): string | undefined {
+  return useLocalImageRead(rawSrc, filePath, connectionId, runtimeContext, access, retryKey).src
+}
+
+/** `useLocalImageSrc` plus whether the current read settled without an image, so a caller can retry. */
+export function useLocalImageRead(
+  rawSrc: string | undefined,
+  filePath: string,
+  connectionId?: string | null,
+  runtimeContext?: LocalImageRuntimeContext | null,
+  access?: LocalFileAccess,
+  retryKey?: number
+): { src: string | undefined; failed: boolean } {
   const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
   const externalSrc =
     rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
@@ -123,6 +135,9 @@ export function useLocalImageSrc(
     () => externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
   )
 
+  const attempt = cacheKey ? `${cacheKey}\0${generation}\0${retryKey ?? 0}` : null
+  const [failedAttempt, setFailedAttempt] = useState<string | null>(null)
+
   useEffect(() => {
     if (externalSrc || !cacheKey) {
       setDisplaySrc(externalSrc)
@@ -134,27 +149,30 @@ export function useLocalImageSrc(
       return
     }
 
+    setFailedAttempt(null)
     let cancelled = false
     const effectGeneration = generation
+    const settle = (url: string | null) => {
+      if (cancelled) {
+        return
+      }
+      // A refocus during the read starts a fresh one; only a read that found nothing failed.
+      const current = getLocalImageCacheGeneration() === effectGeneration
+      setDisplaySrc(current && url ? url : undefined)
+      if (current && !url) {
+        setFailedAttempt(attempt)
+      }
+    }
     readImage()
-      .then((url) => {
-        if (cancelled) {
-          return
-        }
-        setDisplaySrc(getLocalImageCacheGeneration() === effectGeneration && url ? url : undefined)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDisplaySrc(undefined)
-        }
-      })
+      .then(settle)
+      .catch(() => settle(null))
 
     return () => {
       cancelled = true
     }
-  }, [cacheKey, externalSrc, generation, retryKey])
+  }, [attempt, cacheKey, externalSrc, generation, retryKey])
 
-  return displaySrc
+  return { src: displaySrc, failed: attempt !== null && failedAttempt === attempt }
 }
 
 /** Load through the same IPC/blob cache outside React, including ProseMirror node views. */
