@@ -25,6 +25,8 @@ export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
   private registry?: ClaudeAgentViewRegistryFile
+  private publishQueued = false
+  private lastFrame = '[]'
 
   subscribe(listener: (snapshot: ClaudeAgentViewSnapshot) => void): () => void {
     this.listeners.add(listener)
@@ -80,11 +82,23 @@ export class ClaudeAgentViewBridge {
     )
   }
 
+  // One frame per task however many panes changed (a worktree removal drops many), none unchanged.
   private publish(): void {
-    const snapshot = this.snapshot()
-    for (const listener of this.listeners) {
-      listener(snapshot)
+    if (this.publishQueued) {
+      return
     }
+    this.publishQueued = true
+    queueMicrotask(() => {
+      this.publishQueued = false
+      const snapshot = this.snapshot()
+      const frame = JSON.stringify(snapshot)
+      if (frame !== this.lastFrame) {
+        this.lastFrame = frame
+        for (const listener of this.listeners) {
+          listener(snapshot)
+        }
+      }
+    })
   }
 
   private observe(session: ViewSession, view: z.infer<typeof ClaudeAgentViewObservation>): void {

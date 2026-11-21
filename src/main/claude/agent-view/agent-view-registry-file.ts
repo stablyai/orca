@@ -65,6 +65,7 @@ export class ClaudeAgentViewRegistryFile {
   private frozen?: readonly RegisteredClaudeAgentView[]
   private failed = false
   private failedWrites = 0
+  private failedAt = 0
   private restoring = false
   private savedDuringRestore = false
   private closed = false
@@ -102,7 +103,7 @@ export class ClaudeAgentViewRegistryFile {
     const timeout = new Promise<false>((resolve) => {
       timer = setTimeout(() => resolve(false), ms)
     })
-    if (this.failed && !this.writing) {
+    if (this.failed && !this.writing && Date.now() - this.failedAt >= 30_000) {
       void this.save() // storage may be back; nothing else would write again
     }
     const done = (async () => {
@@ -156,6 +157,7 @@ export class ClaudeAgentViewRegistryFile {
           console.warn('[agent-hooks] failed to save Claude agent views:', error)
         }
         this.failed = true
+        this.failedAt = Date.now()
         // Idle mods will not register again, so retry (2 s doubling, five times); a later change retries too.
         if (++this.failedWrites <= 5) {
           if (!this.dirty && this.closed) {
