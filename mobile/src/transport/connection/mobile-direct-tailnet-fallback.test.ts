@@ -174,4 +174,29 @@ describe('mobile authenticated tailnet fallback', () => {
       expect(open).toHaveBeenCalledTimes(2)
       fallback.stop()
     }))
+
+  it('ignores a burst of nudges right after a probe but honors a later one inside the cooldown', () =>
+    withFakeTimers(async () => {
+      const host = logical('reconnecting')
+      const backups = [physical('connecting'), physical('connecting')]
+      const open = vi.fn(() => backups[open.mock.calls.length - 1]!.client)
+      const fallback = new MobileDirectTailnetFallback(host.client, open)
+      fallback.start()
+      await vi.advanceTimersByTimeAsync(0)
+      backups[0]!.setState('disconnected')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(open).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      fallback.nudge()
+      fallback.nudge()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(open).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(3_000)
+      fallback.nudge()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(open).toHaveBeenCalledTimes(2)
+      fallback.stop()
+    }))
 })

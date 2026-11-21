@@ -6,6 +6,8 @@ const PROBE_TIMEOUT_MS = 12_000
 const RETRY_DELAY_MS = 15_000
 // A short LAN blip usually recovers on its own; don't migrate paths for it.
 const RECONNECT_GRACE_MS = 2_000
+// A burst of nudges (Android can fire several network-change events at once) must not become a burst of dials.
+const MIN_NUDGE_GAP_MS = 3_000
 
 // Fail over in either direction using only addresses from the authenticated pairing.
 export class MobileDirectTailnetFallback {
@@ -14,6 +16,7 @@ export class MobileDirectTailnetFallback {
   private activeProbe: AbortController | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private graceTimer: ReturnType<typeof setTimeout> | null = null
+  private lastProbeStartedAt = Number.NEGATIVE_INFINITY
   private unsubscribe: (() => void) | null = null
 
   constructor(
@@ -55,10 +58,14 @@ export class MobileDirectTailnetFallback {
   }
 
   nudge(): void {
-    if (this.logical.getState() !== 'connected') {
-      this.clearRetry()
-      this.tryFallback()
+    if (
+      this.logical.getState() === 'connected' ||
+      Date.now() - this.lastProbeStartedAt < MIN_NUDGE_GAP_MS
+    ) {
+      return
     }
+    this.clearRetry()
+    this.tryFallback()
   }
 
   stop(): void {
@@ -85,6 +92,7 @@ export class MobileDirectTailnetFallback {
     this.clearGrace()
     const controller = new AbortController()
     this.activeProbe = controller
+    this.lastProbeStartedAt = Date.now()
     const generation = this.logical.getGeneration()
     const alternatePath = this.logical.getActivePath() === 'tailscale' ? 'lan' : 'tailscale'
     void this.probe(controller, generation, alternatePath)
