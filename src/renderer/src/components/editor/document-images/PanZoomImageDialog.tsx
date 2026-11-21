@@ -20,7 +20,7 @@ import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-comman
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
-  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size'
+  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size' | 'surface'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -114,9 +114,7 @@ export function PanZoomImageDialog({
           }
         }}
         showCloseButton={false}
-        // Full window and see-through over a dark scrim; it only fades, so nothing on it moves.
-        overlayClassName="bg-black/80"
-        className="inset-0 top-0 left-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:border-0 dark:shadow-none"
+        surface="media"
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement

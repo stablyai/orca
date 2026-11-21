@@ -10,9 +10,9 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      constructor(private readonly callback: ResizeObserverCallback) {}
+      constructor(private readonly callback: () => void) {}
       observe(): void {
-        this.callback([], this as unknown as ResizeObserver)
+        this.callback()
       }
       disconnect(): void {}
     }
