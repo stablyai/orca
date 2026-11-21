@@ -85,4 +85,27 @@ describe('agent copy writes', () => {
     })
     expect(saved()[1]).toMatchObject({ agent: 'claude', name: 'A2 copy', command: 'old' })
   })
+
+  it('sends edits to a copy that took a vacated id to that copy, not to the one renamed away', async () => {
+    const { result, saved } = setup([
+      { id: 'claude.a', name: 'A', agent: 'claude' },
+      { id: 'claude.c', name: 'C', agent: 'claude' }
+    ])
+    await act(() => result.current.changeId('claude.a', 'claude.b'))
+    await act(() => result.current.changeId('claude.c', 'claude.a'))
+    await act(() => result.current.rename('claude.a', 'New A'))
+    await act(() => result.current.remove('claude.a'))
+    expect(saved()).toEqual([{ id: 'claude.b', name: 'A', agent: 'claude' }])
+  })
+
+  it('duplicates nothing when the copy to duplicate was deleted first', async () => {
+    const { result, saved } = setup([{ id: 'claude.a', name: 'A', agent: 'claude' }])
+    await act(async () => {
+      const removed = result.current.remove('claude.a')
+      result.current.duplicate({ id: 'claude', label: 'Claude' }, 'claude.a')
+      await removed
+      await vi.waitFor(() => expect(toast.error).toHaveBeenCalled())
+    })
+    expect(saved()).toEqual([])
+  })
 })

@@ -1204,7 +1204,8 @@
       "copyIdLabel": "Copy ID",
       "copySaveFailed": "The agent copy could not be saved. Try again.",
       "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice.",
-      "copyIdInUse": "Used by {{bots}}. Change what they run as first."
+      "copyIdInUse": "Used by {{bots}}. Change what they run as first.",
+      "copySourceGone": "That copy was deleted, so nothing was duplicated."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",

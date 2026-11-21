@@ -114,6 +114,13 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
         return null
       }
       const from = fromId ? copies.find((copy) => copy.id === current(fromId)) : undefined
+      if (fromId && !from) {
+        // Never fall back to the agent's own values for a copy deleted in the meantime.
+        toast.error(
+          t('settings.agents.copySourceGone', 'That copy was deleted, so nothing was duplicated.')
+        )
+        return null
+      }
       const name = t('settings.agents.copyDefaultName', '{{agent}} copy', {
         agent: from?.name ?? agent.label
       })
@@ -166,6 +173,8 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
       // Registered before any later edit is queued, so that edit already follows the new id.
       return operation.then(() => {
         if (moved) {
+          // The new id now names this copy, so no older rename may still forward it elsewhere.
+          renamed.current.delete(nextId)
           renamed.current.set(moved, nextId)
         }
       })
