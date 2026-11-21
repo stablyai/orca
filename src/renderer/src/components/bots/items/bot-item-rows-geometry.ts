@@ -48,11 +48,25 @@ export function mixedGeometry(tall: readonly boolean[], sizes: RowSizes): Geomet
   }
 }
 
-/** The drawn rows' heights as laid out, or `was` where no row of a kind is drawn. */
-export function readRowSizes(container: HTMLElement, was: RowSizes): RowSizes {
-  const heightOf = (selector: string, fallback: number): number =>
-    container.querySelector(selector)?.getBoundingClientRect().height || fallback
-  const row = heightOf(':scope > [data-bot-item-row]:not([data-bot-item-tall])', was.row)
-  const placed = heightOf(':scope > [data-bot-item-row][data-bot-item-tall]', was.placed)
-  return row === was.row && placed === was.placed ? was : { row, placed }
+/** Which row kinds' heights have been read from a drawn row. */
+export type RowSizesKnown = { row: boolean; placed: boolean }
+export const NO_ROW_SIZES_KNOWN: RowSizesKnown = { row: false, placed: false }
+
+/** The drawn rows' heights as laid out, or `was` where no row of a kind is drawn, and which kinds are now
+ *  known. */
+export function readRowSizes(
+  container: HTMLElement,
+  was: RowSizes,
+  known: RowSizesKnown
+): { sizes: RowSizes; known: RowSizesKnown } {
+  const heightOf = (selector: string): number =>
+    container.querySelector(selector)?.getBoundingClientRect().height || 0
+  const rowRead = heightOf(':scope > [data-bot-item-row]:not([data-bot-item-tall])')
+  const placedRead = heightOf(':scope > [data-bot-item-row][data-bot-item-tall]')
+  const row = rowRead || was.row
+  const placed = placedRead || was.placed
+  return {
+    sizes: row === was.row && placed === was.placed ? was : { row, placed },
+    known: { row: known.row || rowRead > 0, placed: known.placed || placedRead > 0 }
+  }
 }

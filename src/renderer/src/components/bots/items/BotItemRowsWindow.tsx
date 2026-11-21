@@ -15,6 +15,7 @@ import { botItemsDocumentHidden, type BotItemsViewport } from './bot-items-viewp
 import {
   DEFAULT_ROW_SIZES,
   mixedGeometry,
+  NO_ROW_SIZES_KNOWN,
   readRowSizes,
   uniformGeometry
 } from './bot-item-rows-geometry'
@@ -27,7 +28,12 @@ import {
   samePick,
   type RowPick
 } from './bot-item-row-picks'
-import { rowFocusControl, rowTabTarget, type BotItemRowEdge } from './bot-item-row-tab-stops'
+import {
+  focusBotItemBackRow,
+  rowFocusControl,
+  rowTabTarget,
+  type BotItemRowEdge
+} from './bot-item-row-tab-stops'
 
 /** Drawn past each edge of the panel, so a scroll shows rows already there. */
 const OVERSCAN_PX = 300
@@ -41,15 +47,6 @@ type Range = { start: number; end: number }
 type WindowRange = Range & { band: readonly RowPick[] }
 
 const NO_INDEXES: readonly number[] = []
-
-/** Back's row: focused and scrolled to. Back is a command, not navigation: Esc would otherwise draw
- *  Chromium's keyboard ring here. */
-export function focusBotItemBackRow(row: HTMLElement | null | undefined): void {
-  row
-    ?.querySelector<HTMLElement>('[data-bot-item-open]')
-    ?.focus({ preventScroll: true, focusVisible: false })
-  row?.scrollIntoView({ block: 'nearest' })
-}
 
 const NAVIGATION_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End'])
 
@@ -95,7 +92,7 @@ export function BotItemRowsWindow({
     [items, placed]
   )
   const [sizes, setSizes] = useState(DEFAULT_ROW_SIZES)
-  const sizesRead = useRef(false)
+  const sizesKnown = useRef(NO_ROW_SIZES_KNOWN)
   const geometry = useMemo(
     () =>
       tallKey.includes('1')
@@ -160,15 +157,18 @@ export function BotItemRowsWindow({
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
-    // Heights are read from drawn rows once, then as the range moves or the group's height stops
-    // matching them (the font size changed), not every scroll frame, and never for a group out of view.
+    // Each row kind's height is read once, again only when the group's height stops matching (font size).
     const moved = next.start !== windowRange.start || next.end !== windowRange.end
-    const resized = rect !== null && Math.abs(rect.height - geometry.total) > 1
-    let read = sizes
-    if (element && next.end > next.start && (moved || resized || !sizesRead.current)) {
-      sizesRead.current = windowRange.end > windowRange.start
-      read = readRowSizes(element, sizes)
+    if (rect !== null && Math.abs(rect.height - geometry.total) > 1) {
+      sizesKnown.current = NO_ROW_SIZES_KNOWN
     }
+    const known = sizesKnown.current
+    const found =
+      element && next.end > next.start && (!known.row || (!known.placed && tallKey.includes('1')))
+        ? readRowSizes(element, sizes, known)
+        : { sizes, known }
+    const read = found.sizes
+    sizesKnown.current = found.known
     // An unchanged range over the same rows (most scroll frames) updates nothing.
     if (
       read === sizes &&
@@ -398,16 +398,11 @@ export function BotItemRowsWindow({
         className="-mb-0.5"
         onKeyDown={onKeyDown}
         onFocus={() => setFocusWithin(true)}
-        onBlur={(event) => {
-          if (
-            !(
-              event.relatedTarget instanceof Node &&
-              event.currentTarget.contains(event.relatedTarget)
-            )
-          ) {
-            setFocusWithin(false)
-          }
-        }}
+        onBlur={(event) =>
+          setFocusWithin(
+            event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)
+          )
+        }
       >
         {drawn.map((index, at) => {
           const item = items[index]!

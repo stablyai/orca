@@ -61,3 +61,12 @@ export function rowTabTarget(
   }
   return { uid: item.uid, at, edge: event.shiftKey ? 'last' : 'first' }
 }
+
+/** Back's row: focused and scrolled to. Back is a command, not navigation: Esc would otherwise draw
+ *  Chromium's keyboard ring here. */
+export function focusBotItemBackRow(row: HTMLElement | null | undefined): void {
+  row
+    ?.querySelector<HTMLElement>('[data-bot-item-open]')
+    ?.focus({ preventScroll: true, focusVisible: false })
+  row?.scrollIntoView({ block: 'nearest' })
+}

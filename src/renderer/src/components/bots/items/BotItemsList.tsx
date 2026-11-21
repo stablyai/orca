@@ -31,7 +31,8 @@ import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
-import { BotItemRowsWindow, focusBotItemBackRow } from './BotItemRowsWindow'
+import { BotItemRowsWindow } from './BotItemRowsWindow'
+import { focusBotItemBackRow } from './bot-item-row-tab-stops'
 import {
   BOT_ITEMS_SCROLLER_ATTR,
   useBotItemsViewport,
