@@ -1,9 +1,9 @@
+import { NativeChatQueuedMessageExpandToggle } from '@/components/native-chat/queue/NativeChatQueuedMessageExpandToggle'
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
   AlertCircle,
-  ChevronDown,
   CornerDownRight,
   ListEnd,
   MoreHorizontal,
@@ -168,6 +168,7 @@ export function NativeChatQueuedMessageCard({
   const attention = queuedMessageCardNeedsAttention(card)
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
+  const actionPending = pending === 'send' || pending === 'delete'
   const isMac = isMacPlatform()
   // Allow inspecting clipped text before acting; another agent may have authored the card.
   const [expanded, setExpanded] = useState(false)
@@ -193,6 +194,7 @@ export function NativeChatQueuedMessageCard({
       {caption}
     </p>
   ) : null
+  const hasExpandedMetadata = expanded && (sender !== null || captionLine !== null)
   if (editor) {
     return (
       // The editor fills the row, so a drop anywhere on the card reaches it.
@@ -213,7 +215,7 @@ export function NativeChatQueuedMessageCard({
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
       className={cn(
-        'group/queued relative flex items-start gap-1 py-1 pr-1 pl-2.5 hover:bg-accent/50 dark:hover:bg-accent/35',
+        'group/queued relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-1 py-1 pr-1 pl-2.5 hover:bg-accent/50 dark:hover:bg-accent/35',
         // Lit while the chat's composer shows Steer queued: the card that press would send.
         showsSteerShortcut &&
           '[[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-accent'
@@ -228,7 +230,13 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <span className="relative flex h-7 w-3.5 shrink-0 items-center justify-center">
+      {hasExpandedMetadata ? (
+        <div className="col-start-2">
+          {sender}
+          {captionLine}
+        </div>
+      ) : null}
+      <span className="relative col-start-1 flex h-7 w-3.5 items-center justify-center">
         {attention && !drag?.grip ? (
           <AlertCircle className="size-3.5 text-destructive" aria-hidden />
         ) : (
@@ -246,7 +254,8 @@ export function NativeChatQueuedMessageCard({
       {/* Reserve the same gutter in both states so the chevron stays aligned when expanded text scrolls. */}
       <div
         className={cn(
-          '-my-1 -mr-1 min-h-9 min-w-0 flex-1 py-1 pr-1 [scrollbar-gutter:stable]',
+          'col-start-2 -mr-1 -mb-1 min-h-9 min-w-0 py-1 pr-1 [scrollbar-gutter:stable]',
+          !hasExpandedMetadata && '-mt-1',
           expanded ? 'scrollbar-sleek max-h-64 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
         )}
       >
@@ -255,7 +264,15 @@ export function NativeChatQueuedMessageCard({
           {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
           {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
           {card.hold === 'sending' ? null : (
-            <span className="flex items-center can-hover:pointer-events-none can-hover:opacity-0 group-hover/queued:pointer-events-auto group-hover/queued:opacity-100 group-focus-within/queued:pointer-events-auto group-focus-within/queued:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+            <span
+              className={cn(
+                'flex items-center can-hover:pointer-events-none group-hover/queued:pointer-events-auto group-focus-within/queued:pointer-events-auto has-[[data-state=open]]:pointer-events-auto',
+                // A shortcut can start a send without bringing focus or the pointer into the row.
+                actionPending
+                  ? 'can-hover:invisible group-hover/queued:visible group-focus-within/queued:visible has-[[data-state=open]]:visible'
+                  : 'can-hover:opacity-0 group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 has-[[data-state=open]]:opacity-100'
+              )}
+            >
               {/* A command never steers: its Send shows only while the agent is idle. */}
               {card.waitsForAgent ? null : (
                 <Tooltip>
@@ -264,10 +281,15 @@ export function NativeChatQueuedMessageCard({
                       type="button"
                       variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                       size="xs"
+                      className="px-1.5"
                       onClick={onSteer}
                       disabled={steerHeld || busy}
                     >
-                      <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
+                      <NativeChatPendingIcon
+                        pending={pending === 'send'}
+                        className="size-3"
+                        showWhileHidden
+                      >
                         {sendNow.steers ? (
                           <CornerDownRight className="size-3" />
                         ) : (
@@ -299,7 +321,11 @@ export function NativeChatQueuedMessageCard({
                     disabled={busy}
                     onClick={onDelete}
                   >
-                    <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
+                    <NativeChatPendingIcon
+                      pending={pending === 'delete'}
+                      className="size-3.5"
+                      showWhileHidden
+                    >
                       <Trash2 className="size-3.5" />
                     </NativeChatPendingIcon>
                   </Button>
@@ -337,7 +363,7 @@ export function NativeChatQueuedMessageCard({
           )}
           {/* Holds the header chevron's column even when there is nothing more to show. */}
           {expanded || clipped ? (
-            <QueuedMessageExpandToggle
+            <NativeChatQueuedMessageExpandToggle
               expanded={expanded}
               controls={expanded ? textId : undefined}
               onToggle={() => setExpanded(!expanded)}
@@ -346,9 +372,7 @@ export function NativeChatQueuedMessageCard({
             <span aria-hidden className="size-6 shrink-0" />
           )}
         </div>
-        {sender}
-        {/* Expanded, the status stays above the text so it isn't scrolled out of view. */}
-        {expanded ? captionLine : null}
+        {expanded ? null : sender}
         {expanded ? (
           <p
             id={textId}
@@ -365,46 +389,5 @@ export function NativeChatQueuedMessageCard({
         {expanded ? null : captionLine}
       </div>
     </li>
-  )
-}
-
-function QueuedMessageExpandToggle({
-  expanded,
-  controls,
-  onToggle
-}: {
-  expanded: boolean
-  /** The opened text element; absent while folded, when no such element exists. */
-  controls: string | undefined
-  onToggle: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const label = expanded
-    ? t('components.native-chat.queuedMessages.showLess', 'Show less')
-    : t('components.native-chat.queuedMessages.showFullMessage', 'Show full message')
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={label}
-          aria-expanded={expanded}
-          aria-controls={controls}
-          onClick={onToggle}
-        >
-          <ChevronDown
-            className={cn(
-              'size-3.5 transition-transform motion-reduce:transition-none',
-              expanded && 'rotate-180'
-            )}
-          />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
   )
 }
