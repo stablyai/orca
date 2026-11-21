@@ -128,7 +128,10 @@ export function buildActivityEvents(
     if (!parsed) {
       return null
     }
-    const context = tabContext.get(parsed.tabId) ?? attributedActivityTabContext(entry)
+    // A tabless pane is listed only where workspace cards list it: finished local panes whose tab closed drop out.
+    const context =
+      tabContext.get(parsed.tabId) ??
+      (statuses.projection.rowWorktree(paneKey) ? attributedActivityTabContext(entry) : null)
     if (!context) {
       return null
     }

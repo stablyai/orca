@@ -98,20 +98,6 @@ describe('a quiet turn that is settled while the chat still reads working', () =
 })
 
 describe('a quiet turn that settles while the chat shows it working', () => {
-  it('fades, then goes', () => {
-    vi.useFakeTimers()
-    const hook = renderHook((props: Input) => useNativeChatTranscriptSlots(props), {
-      initialProps: input({
-        isWorking: true,
-        turnStatuses: { active: null, completedByTurn: RUNNING }
-      })
-    })
-    hook.rerender(input({}))
-    expect(rows(hook.result.current.slots)).toEqual(FADING)
-    act(() => vi.runAllTimers())
-    expect(rows(hook.result.current.slots)).toEqual(GONE)
-  })
-
   it('fades again when the host reopens the turn and it settles quiet again', () => {
     vi.useFakeTimers()
     const running = input({
@@ -122,6 +108,7 @@ describe('a quiet turn that settles while the chat shows it working', () => {
       initialProps: running
     })
     hook.rerender(input({}))
+    expect(rows(hook.result.current.slots)).toEqual(FADING)
     act(() => vi.runAllTimers())
     expect(rows(hook.result.current.slots)).toEqual(GONE)
     // Reopened: its settled entry goes away, so it is no longer quiet and is watched again.

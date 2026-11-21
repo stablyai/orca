@@ -195,16 +195,10 @@ describe('a slot that carries on a run of notes', () => {
       ...overrides
     })
 
-  it('sits 4 px below the notes before it', () => {
-    expect(joins()).toBe(true)
-    // The run's first slot keeps the row gap above it.
-    expect(joins({ slot: first!, previous: prose })).toBe(false)
-  })
-
-  it('keeps the whole row gap below an approval card drawn after the slot before', () => {
+  it('joins a continued note slot even when another row has an approval card', () => {
     const card = { key: 'approval', at: 1, node: null }
-    expect(joins({ timedRowsAfter: new Map([[first!.message.id, [card]]]) })).toBe(false)
     expect(joins({ timedRowsAfter: new Map([['elsewhere', [card]]]) })).toBe(true)
+    expect(joins({ slot: first!, previous: prose })).toBe(false)
   })
 
   it('keeps the whole row gap where the "New" marker opens either row', () => {

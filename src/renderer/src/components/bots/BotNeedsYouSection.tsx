@@ -265,7 +265,7 @@ const NeedItem = memo(function NeedItem({
           detail={connectorNeed(need.connector, name, t)}
           action={{
             label: t('bots.needs.fixConnector', 'Open {{name}}', { name }),
-            onOpen: () => manageConnectors(bot),
+            onOpen: () => manageConnectors(bot, need.connector.key),
             named: true
           }}
         />

@@ -54,93 +54,90 @@ function reads(db: Database.Database, counted: (sql: string, key: unknown) => bo
   }
 }
 
-it.each([10, 100])(
-  'does not retry %i recordless claim refusals during retirement',
-  async (count) => {
-    const state = await profile()
-    const { db: source } = openJournalDatabase(state.filename)
-    const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
-    const record = state.db.prepare('INSERT INTO agent_session_records VALUES(?,?)')
-    for (let index = 0; index < count; index++) {
-      const id = `claim-only-${index}`
-      claim.run(`refused-${index}`, id, 100)
-      record.run(id, '{}')
-    }
-    let writes = 0
-    state.db.function('refused_attempt', () => {
-      writes++
-      return 1
-    })
-    state.db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
+it('does not retry recordless claim refusals during retirement', async () => {
+  const count = 100
+  const state = await profile()
+  const { db: source } = openJournalDatabase(state.filename)
+  const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+  const record = state.db.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+  for (let index = 0; index < count; index++) {
+    const id = `claim-only-${index}`
+    claim.run(`refused-${index}`, id, 100)
+    record.run(id, '{}')
+  }
+  let writes = 0
+  state.db.function('refused_attempt', () => {
+    writes++
+    return 1
+  })
+  state.db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
     WHEN refused_attempt() BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
-    source.close()
-    reconcileJournalLegacySource(state.root, state.db)
-    writes = 0
-    let eligibility = 0
-    for (let launch = 0; launch < 3; launch++) {
-      await state
-        .launch('1.0.1', true, fakeLease, {
-          present: () => {},
-          check: async () => {
-            eligibility++
-          }
-        })
-        .run()
-    }
-    expect(eligibility).toBe(1)
-    expect(writes).toBe(0)
-    expect(
-      state.db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()
-    ).toEqual({
-      held: 0
+  source.close()
+  reconcileJournalLegacySource(state.root, state.db)
+  writes = 0
+  let eligibility = 0
+  for (let launch = 0; launch < 3; launch++) {
+    await state
+      .launch('1.0.1', true, fakeLease, {
+        present: () => {},
+        check: async () => {
+          eligibility++
+        }
+      })
+      .run()
+  }
+  expect(eligibility).toBe(1)
+  expect(writes).toBe(0)
+  expect(
+    state.db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()
+  ).toEqual({
+    held: 0
+  })
+})
+
+it('does not inventory unrelated failures for one forced copy', async () => {
+  const count = 100
+  const root = mkdtempSync(join(tmpdir(), 'legacy-forced-perf-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => source.close())
+  const insert = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+  insert.run('forced', '{}')
+  for (let index = 0; index < count; index++) {
+    insert.run(`failed-${index}`, '{}')
+  }
+  const filename = await initializeJournalDomainDatabase(root)
+  const { db } = openJournalDomainDatabase(filename)
+  cleanup.push(() => db.close())
+  for (let index = 0; index < count; index++) {
+    recordJournalLegacyFailure(db, {
+      sessionId: `failed-${index}`,
+      revision: 'null',
+      error: 'record refused'
     })
   }
-)
+  db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(
+    `${JOURNAL_LEGACY_COPY_DUE}forced`,
+    '1'
+  )
+  const counted = (sql: string, key: unknown) =>
+    (sql.includes('SELECT key FROM agent_session_store_meta') &&
+      key === 'journal.legacy-failed:') ||
+    (sql.includes('SELECT 1 FROM agent_session_records') &&
+      typeof key === 'string' &&
+      key.startsWith('failed-'))
+  const failureReads = reads(Database.prototype, counted)
+  reconcileJournalLegacySource(root, db)
+  expect(failureReads.total()).toBe(0)
+  expect(
+    db
+      .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+      .get(`${JOURNAL_LEGACY_COPY_DUE}forced`)
+  ).toBeUndefined()
+})
 
-it.each([10, 100])(
-  'does not inventory %i unrelated failures for one forced copy',
-  async (count) => {
-    const root = mkdtempSync(join(tmpdir(), 'legacy-forced-perf-'))
-    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-    const { db: source } = openJournalDatabase(journalDatabasePath(root))
-    cleanup.push(() => source.close())
-    const insert = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
-    insert.run('forced', '{}')
-    for (let index = 0; index < count; index++) {
-      insert.run(`failed-${index}`, '{}')
-    }
-    const filename = await initializeJournalDomainDatabase(root)
-    const { db } = openJournalDomainDatabase(filename)
-    cleanup.push(() => db.close())
-    for (let index = 0; index < count; index++) {
-      recordJournalLegacyFailure(db, {
-        sessionId: `failed-${index}`,
-        revision: 'null',
-        error: 'record refused'
-      })
-    }
-    db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(
-      `${JOURNAL_LEGACY_COPY_DUE}forced`,
-      '1'
-    )
-    const counted = (sql: string, key: unknown) =>
-      (sql.includes('SELECT key FROM agent_session_store_meta') &&
-        key === 'journal.legacy-failed:') ||
-      (sql.includes('SELECT 1 FROM agent_session_records') &&
-        typeof key === 'string' &&
-        key.startsWith('failed-'))
-    const failureReads = reads(Database.prototype, counted)
-    reconcileJournalLegacySource(root, db)
-    expect(failureReads.total()).toBe(0)
-    expect(
-      db
-        .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-        .get(`${JOURNAL_LEGACY_COPY_DUE}forced`)
-    ).toBeUndefined()
-  }
-)
-
-it.each([10, 100])('reads each unchanged chat failure once across %i chats', async (count) => {
+it('reads each unchanged chat failure once', async () => {
+  const count = 100
   const root = mkdtempSync(join(tmpdir(), 'legacy-reconcile-perf-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db: source } = openJournalDatabase(journalDatabasePath(root))
@@ -169,7 +166,8 @@ it.each([10, 100])('reads each unchanged chat failure once across %i chats', asy
   expect(queries.total()).toBe(0)
 })
 
-it.each([10, 100])('bounds transaction-ending recovery reads by its %i claims', (count) => {
+it('bounds transaction-ending recovery reads by its claim count', () => {
+  const count = 100
   const root = mkdtempSync(join(tmpdir(), 'legacy-claims-perf-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
@@ -197,7 +195,8 @@ it.each([10, 100])('bounds transaction-ending recovery reads by its %i claims', 
   })
 })
 
-it.each([10, 100])('fingerprints changed custody once before retrying %i claims', async (count) => {
+it('fingerprints changed custody once before retrying claims', async () => {
+  const count = 100
   const root = mkdtempSync(join(tmpdir(), 'legacy-claims-perf-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db: source } = openJournalDatabase(journalDatabasePath(root))

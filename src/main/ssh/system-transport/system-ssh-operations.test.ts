@@ -179,6 +179,30 @@ describe('system SSH directory upload tar binary', () => {
     vi.unstubAllEnvs()
   })
 
+  it('keeps the inherited cwd for tar on Unix so PATH lookup is unchanged', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', '/usr/bin/ssh')
+    const tarCreate = createMockChildProcess()
+    const sshExtract = createMockChildProcess()
+    spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(sshExtract)
+
+    const uploadPromise = uploadDirectoryViaSystemSsh(
+      createTarget(),
+      '/local-relay',
+      '/tmp/remote-relay'
+    )
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    tarCreate.stdout.end()
+    tarCreate.emit('close', 0, null)
+    sshExtract.emit('close', 0, null)
+    await uploadPromise
+
+    const [program, args, options] = spawnMock.mock.calls[0]
+    expect(program).toBe('tar')
+    expect(args).toEqual(['-czf', '-', '-C', '/local-relay', '.'])
+    expect(options).not.toHaveProperty('cwd')
+  })
+
   it.each([
     { systemTarExists: true, expected: 'D:\\Windows\\System32\\tar.exe' },
     { systemTarExists: false, expected: 'tar' }

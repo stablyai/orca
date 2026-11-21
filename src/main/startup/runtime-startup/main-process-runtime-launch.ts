@@ -48,7 +48,7 @@ import {
 import { mainProcessState as state } from '../main-process-state'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../../updater/lifecycle/main-window-updater'
-import { preserveStateBeforeUpdateRestart } from '../../updater/update-restart-preservation'
+import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
 import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
@@ -209,7 +209,7 @@ async function launchServeMode(
   await printServeReady(serveOptions)
   chatJournalHostServing()
   const store = state.store!
-  setupHeadlessServeAutoUpdater(store, {
+  setupHeadlessServeAutoUpdater(state.nativeSettings!, {
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',

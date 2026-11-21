@@ -1,5 +1,6 @@
 // A Needs you comment's question footer: under the body, each question line (`--ask`) with its quick
-// replies. While the item waits on it, an orange dot marks the open line, the one color on the comment.
+// replies. While the item waits on it, the open line reads as a title and its recommended reply is
+// filled; the card's Needs you tag carries the color.
 // One question: a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
 // in the comment box to add to first; Type your answer leads to the box. Several: one line at a time
 // (BotItemQuestionStep), answers held until the last. Answered, a line reads "Question → answer", muted,
@@ -21,9 +22,11 @@ import {
   BOT_ITEM_CHIP,
   BotItemAnswerLine,
   BotItemChipWords,
-  BotItemQuestionStep,
-  BotItemQuestionDot
+  BOT_ITEM_CHIP_RECOMMENDED,
+  BOT_ITEM_OPEN_QUESTION,
+  BotItemQuestionStep
 } from './BotItemQuestionStep'
+import { BOT_ITEM_CHIPS_ATTRIBUTE } from './use-bot-item-chip-stacked'
 import { useBotItemHeldAnswers, type BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
@@ -36,7 +39,8 @@ export function BotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
-  actions
+  actions,
+  className
 }: {
   shape: BotItemQuestionShape
   /** The ask's event id. */
@@ -51,6 +55,8 @@ export function BotItemQuestionLines({
   byOrder?: readonly boolean[]
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
+  /** Its spacing from the body above; by default a gap under a body. */
+  className?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const steps = actions?.steps?.askId === askId ? actions.steps : null
@@ -65,19 +71,17 @@ export function BotItemQuestionLines({
       steps?.lines.includes(index) || (several && byOrder?.[index]) ? null : answers[index]
     return answer ? botItemAnswerWords(shape, index, answer.data) : (sent?.[index] ?? null)
   })
+  const spacing = className ?? (shape.body.trim() ? 'mt-4' : undefined)
   if (waiting && several && steps && actions) {
     return (
-      <div data-bot-item-question="waiting" className={cn(shape.body.trim() && 'mt-4')}>
+      <div data-bot-item-question="waiting" className={spacing}>
         <BotItemQuestionStep shape={shape} answered={answered} steps={steps} actions={actions} />
       </div>
     )
   }
   const unsent = !waiting && heldScope && stored.held.some(Boolean) ? stored : null
   return (
-    <div
-      data-bot-item-question={waiting ? 'waiting' : 'closed'}
-      className={cn(shape.body.trim() && 'mt-4')}
-    >
+    <div data-bot-item-question={waiting ? 'waiting' : 'closed'} className={spacing}>
       <div className={several ? 'space-y-1.5' : 'space-y-3'}>
         {shape.decisions.map((decision, index) => {
           const words = answered[index]
@@ -112,15 +116,18 @@ export function BotItemQuestionLines({
             <div key={decision.question}>
               <div
                 className={cn(
-                  'relative font-medium [&_p]:font-medium',
-                  !open && 'text-muted-foreground [&_*]:text-muted-foreground'
+                  open
+                    ? BOT_ITEM_OPEN_QUESTION
+                    : 'font-medium text-muted-foreground [&_*]:text-muted-foreground [&_p]:font-medium'
                 )}
               >
-                {open ? <BotItemQuestionDot /> : null}
                 <BotItemMarkdown text={decision.question} />
               </div>
               {open && actions && decision.replies.length > 0 ? (
-                <div className="mt-2.5 flex flex-wrap gap-2">
+                <div
+                  {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }}
+                  className="mt-2.5 flex flex-wrap gap-2"
+                >
                   {decision.replies.map((reply) => (
                     <button
                       key={reply.label}
@@ -128,7 +135,10 @@ export function BotItemQuestionLines({
                       title={reply.detail}
                       className={cn(
                         BOT_ITEM_CHIP,
-                        'text-foreground outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
+                        'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                        reply.recommended
+                          ? BOT_ITEM_CHIP_RECOMMENDED
+                          : 'text-foreground hover:bg-foreground/5'
                       )}
                       onClick={(event) => {
                         const text = botItemQuickReplyText(shape, decision, reply)
@@ -139,7 +149,7 @@ export function BotItemQuestionLines({
                         }
                       }}
                     >
-                      <BotItemChipWords reply={reply} />
+                      <BotItemChipWords reply={reply} filled={reply.recommended} />
                     </button>
                   ))}
                   {/* Muted, with a pencil: your own words are the other way to answer. */}
