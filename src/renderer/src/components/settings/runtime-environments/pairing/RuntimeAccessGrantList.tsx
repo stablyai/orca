@@ -1,6 +1,8 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Button } from '../../../ui/button'
+import { cn } from '@/lib/class-names'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { LegacyEncryptionNotice } from '../../legacy-encryption-notice'
@@ -29,6 +31,17 @@ function grantDisplayName(
     : grant.name
 }
 
+type ScrollEdges = { above: boolean; below: boolean }
+
+function readScrollEdges(el: HTMLElement, current: ScrollEdges): ScrollEdges {
+  const next = {
+    above: el.scrollTop > 1,
+    below: el.scrollTop + el.clientHeight < el.scrollHeight - 1
+  }
+  // Why: keep the same object when nothing changed so scrolling does not re-render every row.
+  return next.above === current.above && next.below === current.below ? current : next
+}
+
 type RuntimeAccessGrantListProps = {
   className?: string
   grants: RuntimeAccessGrant[]
@@ -48,6 +61,23 @@ export function RuntimeAccessGrantList({
 }: RuntimeAccessGrantListProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  const listRef = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState<ScrollEdges>({ above: false, below: false })
+
+  // Why: fade only the edges that hide rows; measure before paint so a capped list never flashes
+  // a hard cut. Rows change on revoke and refresh; the box changes when the window narrows.
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (!el) {
+      return
+    }
+    const update = (): void => setEdges((current) => readScrollEdges(el, current))
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [grants])
+
   return (
     <div className={className}>
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -62,8 +92,27 @@ export function RuntimeAccessGrantList({
         </p>
       ) : (
         // Why: links pile up over time; past ~3.5 rows (56px row + 8px gap) the list scrolls
-        // under a fixed heading, and the half row that peeks shows there is more.
-        <div className="scrollbar-sleek max-h-[13.75rem] space-y-2 overflow-y-auto">
+        // under a fixed heading, and the faded half row that peeks shows there is more.
+        // scroll-py-4 keeps a focused Revoke clear of the 1rem fades when Tab scrolls to it.
+        <div
+          ref={listRef}
+          onScroll={(event) => {
+            const el = event.currentTarget
+            setEdges((current) => readScrollEdges(el, current))
+          }}
+          className={cn(
+            'scrollbar-sleek max-h-[13.75rem] scroll-py-4 space-y-2 overflow-y-auto',
+            edges.above &&
+              edges.below &&
+              '[mask-image:linear-gradient(to_bottom,transparent,black_1rem,black_calc(100%-1rem),transparent)]',
+            edges.above &&
+              !edges.below &&
+              '[mask-image:linear-gradient(to_bottom,transparent,black_1rem)]',
+            !edges.above &&
+              edges.below &&
+              '[mask-image:linear-gradient(to_bottom,black_calc(100%-1rem),transparent)]'
+          )}
+        >
           {grants.map((grant) => {
             const isCurrent = currentGrantId === grant.deviceId
             const isRevoking = revokingGrantId === grant.deviceId
