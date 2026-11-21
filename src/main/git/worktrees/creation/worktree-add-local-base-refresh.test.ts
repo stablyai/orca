@@ -111,8 +111,8 @@ describe('addWorktree', () => {
     expect(checkoutGitMock.mock.calls[0]?.[0]).toContain('add')
   })
 
-  it('skips local base refresh when worktree ownership cannot be listed', async () => {
-    queueBehindInspection({ worktrees: new Error('worktree list failed') })
+  it('skips local base refresh when worktree ownership cannot be read', async () => {
+    queueBehindInspection({ owner: new Error('git failed') })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -125,6 +125,7 @@ describe('addWorktree', () => {
       'rev-parse',
       'rev-parse',
       'rev-parse',
+      'for-each-ref',
       'worktree'
     ])
   })
@@ -146,16 +147,17 @@ describe('addWorktree', () => {
 })
 
 function queueBehindInspection(
-  options: { worktrees?: string | Error; counts?: { stdout: string } } = {}
+  options: { owner?: string | Error; counts?: { stdout: string } } = {}
 ) {
-  const worktrees = options.worktrees ?? 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
+  const owner = options.owner ?? 'refs/heads/main\0\0\n'
   refreshGitMock
     .mockResolvedValueOnce({ stdout: 'abc123\n' })
     .mockResolvedValueOnce({ stdout: 'old-main\n' })
     .mockResolvedValueOnce({ stdout: 'remote-main\n' })
-  if (worktrees instanceof Error) {
-    return refreshGitMock.mockRejectedValueOnce(worktrees)
+  if (owner instanceof Error) {
+    // Both Git's branch lookup and the worktree listing it falls back to fail.
+    return refreshGitMock.mockRejectedValueOnce(owner).mockRejectedValueOnce(owner)
   }
-  refreshGitMock.mockResolvedValueOnce({ stdout: worktrees })
+  refreshGitMock.mockResolvedValueOnce({ stdout: owner })
   return refreshGitMock.mockResolvedValueOnce(options.counts ?? { stdout: '0\t3\n' })
 }

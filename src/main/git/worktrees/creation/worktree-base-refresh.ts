@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
@@ -15,12 +16,7 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import {
-  isDirectory,
-  readGitDirState,
-  readLinkedWorktreeDir,
-  UNRESOLVED_HEAD
-} from './git-dir-branch-state'
+import { readGitDirState, UNRESOLVED_HEAD } from './git-dir-branch-state'
 import {
   translateWslOutputPath,
   translateWslOutputPaths
@@ -176,92 +172,80 @@ function localBaseBranchGit(
     )
     return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routed(repoPath)))
   }
-  const repoGitDirsOf = async (repoPath: string): Promise<RepoGitDirs> => {
+  const commonDirOf = async (repoPath: string) => {
     const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--is-bare-repository', '--git-common-dir'],
+      ['rev-parse', '--git-common-dir'],
       execOptions(repoPath)
     )
-    // The path comes last and keeps any newline or edge space; only the final line ending goes.
-    const bareEnd = stdout.indexOf('\n')
-    const commonDirLine = stdout.slice(bareEnd + 1).replace(/\r?\n$/, '')
-    if (bareEnd === -1 || !commonDirLine) {
-      throw new Error(`git rev-parse printed no common dir for ${repoPath}`)
-    }
-    const commonDir = isAbsolute(commonDirLine)
-      ? translateWslOutputPath(commonDirLine, repoPath, routed(repoPath))
-      : join(repoPath, commonDirLine)
-    const reportsBare = stdout.slice(0, bareEnd).trim() === 'true'
-    // A `.git` directory means the repo path's own git dir is the common dir; linked worktrees have a `.git` file.
-    const isMain = reportsBare || (await isDirectory(join(repoPath, '.git')))
-    // From a linked worktree Git reports false; its main is bare when core.bare says so.
-    const bare = reportsBare || (!isMain && (await readCoreBare(repoPath)))
-    return { commonDir, isMain, bare }
+    // Only strip the line ending: a path may end in spaces.
+    const commonDir = stdout.replace(/\r?\n$/, '')
+    return isAbsolute(commonDir)
+      ? translateWslOutputPath(commonDir, repoPath, routed(repoPath))
+      : join(repoPath, commonDir)
   }
-  const readCoreBare = async (repoPath: string) => {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['config', '--bool', '--get', 'core.bare'],
-        execOptions(repoPath)
-      )
-      return stdout.trim() === 'true'
-    } catch {
-      // Unset or unreadable: count the main checkout as in use.
-      return false
+  // Git's own answer for one branch; `git worktree list` costs seconds at thousands of worktrees.
+  const readBranchOwner = async (
+    repoPath: string,
+    fullRef: string,
+    commonDir: string
+  ): Promise<BranchOwner> => {
+    const listed = await gitExecFileAsync(
+      ['for-each-ref', '--format=%(refname)%00%(worktreepath)%00', fullRef],
+      execOptions(repoPath)
+    ).catch(() => undefined)
+    if (!listed) {
+      // Git before 2.23 has no worktreepath.
+      const worktrees = await listWorktrees(repoPath)
+      const owner = worktrees.find((wt) => wt.branch === fullRef)
+      return {
+        ...(owner ? { ownerPath: owner.path } : {}),
+        bareHead: worktrees[0]?.isBare === true
+      }
     }
-  }
-  // Reads each git dir's HEAD instead of listing every worktree, which costs seconds at thousands of worktrees.
-  const readBranchUse = async (repoPath: string, fullRef: string) => {
-    const dirs = await repoGitDirsOf(repoPath)
-    const { heads, reserved } = await readGitDirState(dirs.commonDir)
-    if (reserved.has(fullRef)) {
-      return { reserved: true }
+    // The pattern also matches refs under `<fullRef>/`; ref names hold no newline or NUL.
+    const text = `\n${listed.stdout}`
+    const at = text.indexOf(`\n${fullRef}\0`)
+    const from = at + fullRef.length + 2
+    const path = at === -1 ? '' : text.slice(from, text.indexOf('\0', from))
+    if (!path) {
+      return { bareHead: false }
     }
-    const owner = [...heads.entries()].find(
-      ([gitDir, head]) => head === `ref: ${fullRef}` && !(dirs.bare && gitDir === dirs.commonDir)
-    )?.[0]
-    let ownerPath: string | undefined
-    if (owner === dirs.commonDir) {
-      // Only the main worktree's own path is known without asking Git.
-      ownerPath = dirs.isMain ? repoPath : undefined
-    } else if (owner !== undefined) {
-      ownerPath = await readLinkedWorktreePath(owner, repoPath)
-    }
-    // HEADs the files cannot resolve, or an owner whose path they do not give, need Git's own listing.
-    if (
-      [...heads.values()].includes(UNRESOLVED_HEAD) ||
-      (owner !== undefined && ownerPath === undefined)
-    ) {
-      const fromGit = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
-      return { reserved: false, ...(fromGit ? { ownerPath: fromGit.path } : {}) }
-    }
-    return { reserved: false, ...(ownerPath === undefined ? {} : { ownerPath }) }
-  }
-  const readLinkedWorktreePath = async (gitDir: string, repoPath: string) => {
-    const path = await readLinkedWorktreeDir(gitDir)
-    if (path === undefined) {
-      return undefined
-    }
-    return isAbsolute(path)
+    const ownerPath = isAbsolute(path)
       ? translateWslOutputPath(path, repoPath, routed(repoPath))
-      : join(gitDir, path)
+      : path
+    // A bare repo's HEAD names a branch nothing has checked out; Git reports the repo itself.
+    return (await isSamePath(ownerPath, commonDir))
+      ? { bareHead: true }
+      : { ownerPath, bareHead: false }
   }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
-    readBranchUse,
+    readBranchUse: async (repoPath, fullRef) => {
+      const commonDir = await commonDirOf(repoPath)
+      if ((await readGitDirState(commonDir)).reserved.has(fullRef)) {
+        return { reserved: true }
+      }
+      const { ownerPath } = await readBranchOwner(repoPath, fullRef, commonDir)
+      return { reserved: false, ...(ownerPath === undefined ? {} : { ownerPath }) }
+    },
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
-      const { commonDir, bare } = await repoGitDirsOf(repoPath)
+      const commonDir = await commonDirOf(repoPath)
+      const { ownerPath, bareHead } = await readBranchOwner(repoPath, fullRef, commonDir)
+      if (ownerPath !== undefined) {
+        return false
+      }
       let inUse = false
       try {
         await gitExecFileAsync(args, {
           ...execOptions(repoPath),
+          // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
             const { heads, reserved } = await readGitDirState(commonDir)
             inUse =
               reserved.has(fullRef) ||
               [...heads].some(
                 ([gitDir, head]) =>
-                  // A bare repo's own HEAD names a branch without checking it out.
-                  !(bare && gitDir === commonDir) &&
+                  !(bareHead && gitDir === commonDir) &&
                   // Fail closed on a HEAD the files cannot resolve (reftable, odd symlinks).
                   (head === `ref: ${fullRef}` || head === UNRESOLVED_HEAD)
               )
@@ -279,12 +263,20 @@ function localBaseBranchGit(
   }
 }
 
-type RepoGitDirs = {
-  commonDir: string
-  /** The repo path is the main worktree or the bare repo; false when unsure, which falls back to Git's listing. */
-  isMain: boolean
-  /** The common dir's own HEAD names a branch nothing has checked out. */
-  bare: boolean
+type BranchOwner = {
+  /** The checkout that has the branch, as this host reports it. */
+  ownerPath?: string
+  /** The branch is only the bare common dir's own HEAD. */
+  bareHead: boolean
+}
+
+async function isSamePath(left: string, right: string): Promise<boolean> {
+  try {
+    const [a, b] = await Promise.all([realpath(left), realpath(right)])
+    return normalizeRuntimePathForComparison(a) === normalizeRuntimePathForComparison(b)
+  } catch {
+    return false
+  }
 }
 
 function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {

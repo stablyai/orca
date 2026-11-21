@@ -90,20 +90,3 @@ function rethrowUnlessMissing(error: unknown): void {
     throw error
   }
 }
-
-/** The checkout a linked git dir belongs to, as its `gitdir` file names it (Git 2.48+ may write it relative to the git dir). */
-export async function readLinkedWorktreeDir(gitDir: string): Promise<string | undefined> {
-  const dotGit = (await readOptional(join(gitDir, 'gitdir'))).replace(/\r?\n$/, '')
-  if (!dotGit.endsWith('/.git')) {
-    return undefined
-  }
-  return dotGit.slice(0, -'/.git'.length)
-}
-
-export async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory()
-  } catch {
-    return false
-  }
-}

@@ -50,13 +50,16 @@ function installGitFake(fake: GitFake): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     const command = commandOf(args)
     if (command === 'rev-parse') {
-      if (args[1] === '--is-bare-repository') {
-        return { stdout: `false\n${commonDir}\n${commonDir}\n` }
+      if (args[1] === '--git-common-dir') {
+        return { stdout: `${commonDir}\n` }
       }
       return { stdout: args[2] === 'refs/heads/main^{commit}' ? `${localMain}\n` : 'remote-main\n' }
     }
     if (command === 'rev-list') {
       return { stdout: '0\t3\n' }
+    }
+    if (command === 'for-each-ref') {
+      return { stdout: 'refs/heads/main\0\0\n' }
     }
     if (command === 'merge-base') {
       // Local is still an ancestor of the target unless asked whether it already contains it.
@@ -139,8 +142,8 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
           return { stdout: command === 'rev-parse' ? 'current\n' : '' }
         }
         if (command === 'rev-parse') {
-          if (args[1] === '--is-bare-repository') {
-            return { stdout: `false\n${commonDir}\n${commonDir}\n` }
+          if (args[1] === '--git-common-dir') {
+            return { stdout: `${commonDir}\n` }
           }
           return { stdout: args[2]?.startsWith('refs/heads/') ? `${localOid}\n` : 'remote-main\n' }
         }
