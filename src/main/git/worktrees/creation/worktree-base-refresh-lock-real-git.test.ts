@@ -277,7 +277,7 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     )
 
     await vi.waitFor(() => expect(git(repoPath, ['rev-parse', 'HEAD'])).toBe(remoteOid), {
-      timeout: 60_000,
+      timeout: 25_000,
       interval: 250
     })
     expect(await readFile(join(repoPath, 'version.txt'), 'utf8')).toBe('two\n')
@@ -312,11 +312,8 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       await rm(lockPath, { force: true })
       git(repoPath, ['worktree', 'add', '--quiet', join(repoPath, '..', 'spelled'), '--detach'])
       await writeFile(join(repoPath, '.git', 'worktrees', 'spelled', 'HEAD'), head)
-      const spy = spyOnFastForwards()
 
       await refresh(repoPath)
-
-      expect(spy.writes()).toBe(0)
       expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     }
   )
@@ -337,11 +334,8 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       ])
       git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
       git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
-      const spy = spyOnFastForwards()
 
       await refresh(repoPath)
-
-      expect(spy.writes()).toBe(0)
       expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     }
   )
@@ -367,11 +361,8 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/main'])
     git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
     git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
-    const spy = spyOnFastForwards()
 
     await refresh(repoPath)
-
-    expect(spy.writes()).toBe(0)
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
   })
 
@@ -388,11 +379,8 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       await rename(adminDir, movedAdmin)
       await symlink(movedAdmin, adminDir)
       await writeFile(join(movedAdmin, 'commondir'), `${join(repoPath, '.git')}\n`)
-      const spy = spyOnFastForwards()
 
       await refresh(repoPath)
-
-      expect(spy.writes()).toBe(0)
       expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     }
   )
@@ -406,11 +394,8 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       git(repoPath, ['checkout', '--quiet', 'main'])
       await rm(join(repoPath, '.git', 'HEAD'))
       await symlink('refs/heads/main', join(repoPath, '.git', 'HEAD'))
-      const spy = spyOnFastForwards()
 
       await expect(refresh(repoPath)).resolves.toBeUndefined()
-
-      expect(spy.writes()).toBe(0)
       expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     }
   )

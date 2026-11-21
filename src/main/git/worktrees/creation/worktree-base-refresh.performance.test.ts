@@ -63,7 +63,7 @@ async function refreshAndFollowUp(repoPath: string, owner: string, remoteOid: st
   fastForwardCheckedOutLocalBaseAfterCreate(repoPath, 'origin/main', 'refs/remotes/origin/main', {})
   // The follow-up runs detached; Windows Git takes seconds.
   await vi.waitFor(() => expect(git(owner, ['rev-parse', 'HEAD'])).toBe(remoteOid), {
-    timeout: 60_000,
+    timeout: 25_000,
     interval: 250
   })
 }
