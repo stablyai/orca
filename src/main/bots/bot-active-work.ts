@@ -1,7 +1,7 @@
 // The live work a bot's owner turn hears of: items waiting on the owner, workers still running,
 // items in progress, and finished work whose PR is still open. Built from Items and the work record
 // each time and never stored, so a closed item or a merged PR drops out on its own.
-import type { BotItem } from '../../shared/bots/bot-items'
+import { type BotItem, isBotItemSnoozed } from '../../shared/bots/bot-items'
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { fenceQuotedText } from '../../shared/quoted-text-fence'
 import { BOT_ORCA_CLI } from './bot-preamble'
@@ -41,9 +41,16 @@ function workerPr(worker: BotWorkerSummary): string {
 /** The section and its key (ids and states, sorted, no times or checks), so a turn resends it only
  *  when the work changed. With nothing live it says so, so a chat that saw work hears it ended. */
 export function botActiveWorkSection(
-  items: readonly Pick<BotItem, 'number' | 'title' | 'status' | 'lastActivityAt' | 'links'>[],
-  workers: readonly BotWorkerSummary[]
+  all: readonly Pick<
+    BotItem,
+    'number' | 'title' | 'status' | 'lastActivityAt' | 'snoozedUntil' | 'links'
+  >[],
+  workers: readonly BotWorkerSummary[],
+  /** `unread`: open items the reads left out, still counted in "N more". */
+  { unread = 0, now = Date.now() }: { unread?: number; now?: number } = {}
 ): BotActiveWorkSection {
+  // An item its owner snoozed is hidden until then, here as in Items.
+  const items = all.filter((item) => !isBotItemSnoozed(item, now))
   const itemRow = (item: (typeof items)[number], label: string): Row => ({
     id: `#${item.number}`,
     state: item.status + itemPrs(item),
@@ -83,7 +90,7 @@ export function botActiveWorkSection(
       )
       .map((worker) => workerRow(worker, 'finished, PR still open'))
   ]
-  if (rows.length === 0) {
+  if (rows.length === 0 && unread === 0) {
     return {
       text: '[Orca: you have no live work now: no open items or running workers.]',
       key: NOTHING_LIVE_KEY
@@ -100,7 +107,7 @@ export function botActiveWorkSection(
     shown.push({ ...row, line: row.line.slice(0, Math.max(0, left - 1)) })
     left -= row.line.length + 1
   }
-  const more = rows.length - shown.length
+  const more = rows.length - shown.length + unread
   const lines = [
     ...shown.map(({ line }) => line),
     ...(more > 0

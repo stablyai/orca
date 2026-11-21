@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { botActiveWorkSection, joinedTurnSections, type TurnSectionsMemo } from './bot-active-work'
+import { type BotActiveWorkReads, createBotActiveWorkReader } from './bot-active-work-read'
 
 const item = (number: number, status: 'needs_you' | 'working', lastActivityAt: number) => ({
   number,
   title: `Item ${number}`,
   status,
   lastActivityAt,
+  snoozedUntil: null as number | null,
   links: []
 })
 const worker = (
@@ -138,5 +140,68 @@ describe("a turn's joined sections", () => {
     expect(joinedTurnSections(memo, 's1', [null, none])).toBeNull()
     joinedTurnSections(memo, 's2', [null, live])
     expect(joinedTurnSections(memo, 's2', [null, none])?.text).toBe(none.text)
+  })
+})
+
+describe("a bot's Active work reads", () => {
+  type Fake = ReturnType<typeof item>
+  const record = (number: number, at: number): Fake => item(number, 'needs_you', at)
+  const reads = (overrides: Partial<BotActiveWorkReads<Fake>> = {}): BotActiveWorkReads<Fake> => ({
+    askers: async () => [{ kind: 'owner' }],
+    items: async () => ({ items: [], counts: {} }),
+    views: async (items) => [...items],
+    workers: async () => [],
+    ...overrides
+  })
+
+  it("reads nothing for a turn that isn't the owner's, and keeps nothing for later", async () => {
+    let read = 0
+    const reader = createBotActiveWorkReader()
+    const teammate = reads({
+      askers: async () => [{ kind: 'unknown' }],
+      workers: async () => (read++, [])
+    })
+    expect(await reader('b1', teammate, 1_000)).toBeNull()
+    expect(read).toBe(0)
+  })
+
+  it('rejects a failed read so the turn keeps what it had, and reads again next time', async () => {
+    const reader = createBotActiveWorkReader()
+    const failing = reads({
+      workers: async () => {
+        throw new Error('down')
+      }
+    })
+    await expect(reader('b1', failing, 1_000)).rejects.toThrow('down')
+    expect((await reader('b1', reads(), 2_000))?.key).toBe('[]')
+  })
+
+  it('reads every waiting item, so the oldest wait is shown and the rest counted', async () => {
+    const waiting = Array.from({ length: 130 }, (_, i) => record(i + 1, 10_000 - i))
+    const reader = createBotActiveWorkReader()
+    const section = await reader(
+      'b1',
+      reads({
+        items: async (status, limit, cursor) => {
+          if (status === 'working') {
+            return { items: [], counts: {} }
+          }
+          const from = cursor ? waiting.findIndex((r) => r.number === cursor.number) + 1 : 0
+          return { items: waiting.slice(from, from + limit), counts: { needs_you: 130 } }
+        }
+      }),
+      1_000
+    )
+    const lines = section?.text.split('\n') ?? []
+    expect(lines[2]).toBe('#130 needs you: "Item 130"')
+    expect(lines.some((line) => line.startsWith('(118 more:'))).toBe(true)
+  })
+})
+
+describe('snoozed items', () => {
+  it('are left out while snoozed, as Items hides them', () => {
+    const snoozed = { ...item(4, 'needs_you', 1), snoozedUntil: 5_000 }
+    expect(botActiveWorkSection([snoozed], [], { now: 1_000 }).key).toBe('[]')
+    expect(botActiveWorkSection([snoozed], [], { now: 6_000 }).key).not.toBe('[]')
   })
 })

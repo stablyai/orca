@@ -92,7 +92,7 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
             undefined
           ),
           withTimeout(
-            readBotActiveWork(runtime, botId, sessionId, message).catch(() => null),
+            readBotActiveWork(runtime, botId, sessionId, message),
             BOT_WORK_NOTE_TIMEOUT_MS,
             undefined
           )
