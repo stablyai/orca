@@ -5,10 +5,11 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { createHash, randomUUID } from 'node:crypto'
-import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
+import { isHardLinkUnsupported } from './hard-link-unsupported-error'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
@@ -33,7 +34,13 @@ export function writeFileAtomically(
       observeFilePublication(targetPath, contents)
       return
     } catch (error) {
-      rmSync(tmpPath, { force: true })
+      try {
+        rmSync(tmpPath, { force: true })
+      } catch (cleanupError) {
+        if (attempt === 0) {
+          throw cleanupError
+        }
+      }
       if (attempt > 0) {
         break
       }
@@ -243,21 +250,23 @@ function attemptGuardedAtomicWrite(
       if (!isHardLinkUnsupported(error)) {
         throw error
       }
-      // Why: \\wsl$ shares and FAT/exFAT have no hard links. Publish as atomic saves usually do:
-      // check the bytes, then rename a complete file over them (rechecked before each retry).
-      const stillExpected = (): boolean => {
-        try {
-          return (
-            expectedContents !== null && nodeFileContentsEqualSync(targetPath, expectedContents)
-          )
-        } catch (readError) {
-          if (!isDefinitiveAbsence(readError)) {
-            throw readError
-          }
-          return expectedContents === null
+      // Why: \\wsl$ shares and FAT/exFAT have no hard links. Check the bytes (a create: no file), then
+      // rename a complete file in, once: a busy file fails this pass instead of sleeping on main.
+      try {
+        const matches = nodeFileContentsEqualSync(targetPath, expectedContents ?? '')
+        if (expectedContents === null || !matches) {
+          return false
+        }
+      } catch (readError) {
+        if (!isDefinitiveAbsence(readError)) {
+          throw readError
+        }
+        if (expectedContents !== null) {
+          return false
         }
       }
-      return renameFileWithWindowsRetry(tmpPath, targetPath, stillExpected)
+      renameSync(tmpPath, targetPath)
+      return true
     }
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
@@ -326,13 +335,4 @@ export function publishFileWithoutOverwrite(sourcePath: string, targetPath: stri
     }
     throw error
   }
-}
-
-function isHardLinkUnsupported(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException).code
-  if (code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS') {
-    return true
-  }
-  // Windows reports a share's "Incorrect function" as EISDIR; Linux vfat/exfat refuse link() with EPERM.
-  return process.platform === 'win32' ? code === 'EISDIR' : code === 'EPERM'
 }

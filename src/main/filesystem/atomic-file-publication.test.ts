@@ -356,6 +356,9 @@ describe('writeFileAtomically', () => {
       expect(readFileSync(target, 'utf-8')).toBe('mirror\n')
       expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(false)
       expect(readFileSync(target, 'utf-8')).toBe('mirror\n')
+      rmSync(target)
+      expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(true)
+      expect(readFileSync(target, 'utf-8')).toBe('fresh\n')
       expect(readdirSync(dir)).toEqual(['config.toml'])
     } finally {
       fsMock.linkSync.mockImplementation(link)
