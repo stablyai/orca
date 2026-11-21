@@ -14075,7 +14075,23 @@
             "markResolved": "解決済みとしてマーク",
             "keepFile": "ファイルを残す",
             "keepDeletion": "削除を維持",
-            "refreshAll": "すべて更新"
+            "refreshAll": "すべて更新",
+            "baseUpToDate": "最新です",
+            "rebaseOperationInProgress": "現在の Git 操作が終わるまでお待ちください",
+            "rebaseButton": "リベース",
+            "rebaseConflictCount_other": "{{count}} 件の競合",
+            "rebasePaused": "リベースを一時停止中",
+            "rebaseResolveConflictsFirst": "先に競合を解決してください",
+            "rebaseAbort": "中止",
+            "rebaseContinue": "続行",
+            "continueRebasePausedAgain": "次の競合でリベースを一時停止しました",
+            "continueRebaseFailed": "リベースの続行に失敗しました",
+            "rebaseAutostashConflict": "リベースしました。未コミットの変更はきれいに再適用できず、stash に保存されています。",
+            "rebaseStoppedByGit": "Git がリベースを一時停止しました",
+            "continueRebaseUnconfirmed": "結果を確認できませんでした。ソース管理を更新して現在の状態を表示しました。",
+            "noRebaseInProgress": "進行中のリベースはありません",
+            "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
+            "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -14506,7 +14522,6 @@
                   "titleCommitAndPush": "ステージ済みの変更をコミットしてプッシュ",
                   "commitForcePush": "コミットとフォースプッシュ",
                   "commitPush": "コミットとプッシュ",
-                  "titleOperationInProgress": "操作が進行中です…",
                   "titleAbortRebaseInProgress": "進行中のリベースを中止",
                   "titleAbortMergeInProgress": "進行中のマージを中止",
                   "titleNothingToPushTo": "{{upstreamName}} にプッシュするものはありません",
@@ -14567,7 +14582,6 @@
                   "statusSetsUpstream": "アップストリームを設定",
                   "statusMayFail": "失敗する可能性あり",
                   "statusPublished": "公開済み",
-                  "statusStashFirst": "先に stash",
                   "statusReplaces": "↓{{behind}} を置き換え",
                   "statusCommitFirst": "先にコミット",
                   "statusReviewOpen": "{{shortLabel}} オープン中",
@@ -14586,10 +14600,8 @@
                   "titlePublishBranchFirst": "コミットを同期するには、先にブランチを公開してください",
                   "titleUseForcePush": "「コミットとフォースプッシュ」を使用してください — リモートにはローカルコミットの古いコピーしかありません",
                   "titleCommitThenPullPush": "コミットしてからプルとプッシュ",
-                  "rebaseFromNamedBase": "{{baseRef}} からリベース",
                   "rebaseFromBase": "ベースからリベース",
                   "rebaseChooseRemoteBase": "リベース元のリモートベースブランチを選択してください",
-                  "rebaseDirtyHint": "リベースを試行します。git が先にローカルの変更のコミットまたは stash を要求する場合があります",
                   "rebaseWithLatestFrom": "現在のブランチを {{baseRef}} の最新コミットでリベース",
                   "blockedCommitFirst": "先に変更をコミットしてください",
                   "blockedCheckOutBranchFirst": "先にブランチをチェックアウトしてください",
@@ -14602,7 +14614,14 @@
                   "blockedExistingReview": "{{reviewLabel}} はすでに存在します",
                   "blockedForkHeadUnsupported": "フォークのヘッドはサポートされていません",
                   "blockedBaseNotOnRemote": "ベースブランチがリモートにありません",
-                  "blockedBranchNotReady": "ブランチの準備ができていません"
+                  "blockedBranchNotReady": "ブランチの準備ができていません",
+                  "rebaseOntoNamedBase": "{{base}} にリベース",
+                  "rebaseCommitOrStashFirst": "先に変更をコミットまたはスタッシュしてください",
+                  "continueRebase": "リベースを続行",
+                  "titleContinueRebase": "一時停止中のリベースを続行",
+                  "rebaseFromNamedBase": "{{baseRef}} からリベース",
+                  "rebaseDirtyHint": "リベースを試行します。git が先にローカルの変更のコミットまたは stash を要求する場合があります",
+                  "statusStashFirst": "先に stash"
                 }
               },
               "primary": {
@@ -14645,7 +14664,8 @@
                   "e9b5d1f470": "{{value0}} を作成する前にブランチをチェックアウトしてください。",
                   "f0c6e2a581": "このブランチはまだ {{value0}} の準備ができていません。",
                   "8f9a0b1c2d": "コミットするものがありません。ブランチは最新です。",
-                  "h3i4j5k607": "このブランチが {{value0}} を作成できるか確認中…"
+                  "h3i4j5k607": "このブランチが {{value0}} を作成できるか確認中…",
+                  "nothingToCommit": "コミットする内容はありません"
                 }
               },
               "branch": {
@@ -19247,7 +19267,8 @@
         "transitionFieldsNeedsUpdate": "ステータス変更に必要なフィールドを送信するには、リモートの Orca サーバーを更新するか、Jira でステータス変更を完了してください。"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "マージを完了するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。"
+        "completeMergeNeedsNewerHost": "マージを完了するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。",
+        "continueRebaseNeedsNewerHost": "リベースを続行するには、このホストの Orca を更新する必要があります。そのホストで Orca を更新してください。"
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "競合を解決するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。"

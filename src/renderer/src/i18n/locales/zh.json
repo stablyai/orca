@@ -14568,7 +14568,23 @@
             "keepFile": "保留文件",
             "keepDeletion": "保留删除",
             "refreshAll": "全部刷新",
-            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的"
+            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的",
+            "baseUpToDate": "已是最新",
+            "rebaseOperationInProgress": "请等待当前 Git 操作完成",
+            "rebaseButton": "变基",
+            "rebaseConflictCount_other": "{{count}} 个冲突",
+            "rebasePaused": "变基已暂停",
+            "rebaseResolveConflictsFirst": "请先解决冲突",
+            "rebaseAbort": "中止",
+            "rebaseContinue": "继续",
+            "continueRebasePausedAgain": "变基在下一个冲突处暂停",
+            "continueRebaseFailed": "继续变基失败",
+            "rebaseAutostashConflict": "已变基。你的未提交更改未能干净地重新应用，已保存在 stash 中。",
+            "rebaseStoppedByGit": "Git 暂停了变基",
+            "continueRebaseUnconfirmed": "无法确认结果。源代码管理已刷新以显示当前状态。",
+            "noRebaseInProgress": "没有正在进行的变基",
+            "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
+            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -14998,10 +15014,8 @@
                   "titlePublishBranchFirst": "请先发布分支再同步提交",
                   "titleUseForcePush": "使用提交并强制推送 — 远程只有本地提交的旧副本",
                   "titleCommitThenPullPush": "先提交，再拉取并推送",
-                  "rebaseFromNamedBase": "从 {{baseRef}} 变基",
                   "rebaseFromBase": "从基准分支变基",
                   "rebaseChooseRemoteBase": "选择要从中变基的远程基准分支",
-                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或暂存本地更改",
                   "rebaseWithLatestFrom": "使用 {{baseRef}} 的最新提交变基当前分支",
                   "blockedCommitFirst": "请先提交更改",
                   "blockedCheckOutBranchFirst": "请先检出分支",
@@ -15023,7 +15037,6 @@
                   "titleCommitAndPush": "提交已暂存的更改并推送",
                   "commitForcePush": "提交并强制推送",
                   "commitPush": "提交并推送",
-                  "titleOperationInProgress": "操作正在进行中…",
                   "titleAbortRebaseInProgress": "中止正在进行的变基",
                   "titleAbortMergeInProgress": "中止正在进行的合并",
                   "titleNothingToPushTo": "没有要推送到 {{upstreamName}} 的内容",
@@ -15084,7 +15097,6 @@
                   "statusSetsUpstream": "将设置上游",
                   "statusMayFail": "可能失败",
                   "statusPublished": "已发布",
-                  "statusStashFirst": "请先存入 stash",
                   "statusReplaces": "替换 ↓{{behind}}",
                   "statusCommitFirst": "请先提交",
                   "statusReviewOpen": "{{shortLabel}} 已打开",
@@ -15095,7 +15107,14 @@
                   "statusPushFirst": "请先推送",
                   "statusForcePushFirst": "请先强制推送",
                   "statusSyncFirst": "请先同步",
-                  "statusUnsupported": "不支持"
+                  "statusUnsupported": "不支持",
+                  "rebaseOntoNamedBase": "变基到 {{base}}",
+                  "rebaseCommitOrStashFirst": "请先提交或暂存更改",
+                  "continueRebase": "继续变基",
+                  "titleContinueRebase": "继续已暂停的变基",
+                  "rebaseFromNamedBase": "从 {{baseRef}} 变基",
+                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或暂存本地更改",
+                  "statusStashFirst": "请先存入 stash"
                 }
               },
               "primary": {
@@ -15138,7 +15157,8 @@
                   "e9b5d1f470": "在创建 {{value0}} 之前检出一个分支",
                   "f0c6e2a581": "此分支尚未准备好创建 {{value0}}",
                   "8f9a0b1c2d": "没有可提交的内容，分支已是最新状态",
-                  "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…"
+                  "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…",
+                  "nothingToCommit": "没有可提交的内容"
                 }
               },
               "branch": {
@@ -19794,7 +19814,8 @@
         "transitionFieldsNeedsUpdate": "请更新远程 Orca 服务器以提交必填的流转字段，或在 Jira 中完成流转"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
+        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。",
+        "continueRebaseNeedsNewerHost": "继续变基需要此主机上更新版本的 Orca。请在该主机上更新 Orca。"
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "解决冲突需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
