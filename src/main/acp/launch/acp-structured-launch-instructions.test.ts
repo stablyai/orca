@@ -51,7 +51,8 @@ const SPECS = {
   kilo: acpLaunchSpecFor('kilo')!,
   'mimo-code': acpLaunchSpecFor('mimo-code')!,
   gemini: acpLaunchSpecFor('gemini')!,
-  'qwen-code': acpLaunchSpecFor('qwen-code')!
+  'qwen-code': acpLaunchSpecFor('qwen-code')!,
+  dsh: acpLaunchSpecFor('dsh')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -68,7 +69,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' },
-  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' }
+  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' },
+  dsh: { variable: 'DSH_HOME', path: '/home/user/.dsh' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -348,6 +350,92 @@ describe('ACP launch: standing instructions', () => {
       }
     }
   )
+
+  it("writes them into DSH's own AGENTS.md, keeping the text the user already had there", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-'))
+    try {
+      const agentsPath = join(home, 'AGENTS.md')
+      await writeFile(agentsPath, 'Workspace instructions')
+      const resolved = await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.args).toEqual(['--profile', 'acp'])
+
+      const written = await readFile(agentsPath, 'utf8')
+      expect(written).toMatch(/^Workspace instructions/)
+      expect(written).toContain(`<!-- orca:begin -->\n${PREAMBLE}\n<!-- orca:end -->`)
+
+      await launch('dsh', {
+        instructions: 'The replacement set of standing instructions.',
+        workspacePath: home
+      })
+      const rewritten = await readFile(agentsPath, 'utf8')
+      expect(rewritten).toContain('Workspace instructions')
+      expect(rewritten).not.toContain(PREAMBLE)
+      expect(rewritten.match(/<!-- orca:begin -->/g)).toHaveLength(1)
+
+      // DSH reads this file at every start, so a launch with no instructions takes the block back
+      // out instead of leaving text no launch brought. The user's own text stays.
+      const bare = await launch('dsh', { workspacePath: home })
+      expect(bare.args).toEqual(resolved.args)
+      expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions\n')
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it("keeps the indentation the user's AGENTS.md opens with when the block goes", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-indent-'))
+    try {
+      const agentsPath = join(home, 'AGENTS.md')
+      const userText = '    indented first line\n\nrest of the notes'
+      await writeFile(agentsPath, userText)
+
+      await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+      await launch('dsh', { workspacePath: home })
+
+      expect(await readFile(agentsPath, 'utf8')).toBe(`${userText}\n`)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  // Windows may refuse to make the link at all, which would fail the setup, not the refusal.
+  it.skipIf(process.platform === 'win32')(
+    'refuses to start DSH when the file it must write is a link it will not follow',
+    async () => {
+      const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-link-'))
+      try {
+        const linked = join(home, 'linked-notes.md')
+        await writeFile(linked, 'Workspace instructions')
+        await symlink(linked, join(home, 'AGENTS.md'))
+
+        await expect(
+          launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+        ).rejects.toThrow(/cannot take this chat's standing instructions/)
+        expect(await readFile(linked, 'utf8')).toBe('Workspace instructions')
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it("leaves no AGENTS.md holding only Orca's markers", async () => {
+    for (const existing of [null, '']) {
+      const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-empty-'))
+      try {
+        const agentsPath = join(home, 'AGENTS.md')
+        if (existing !== null) {
+          await writeFile(agentsPath, existing)
+        }
+        await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+        expect(await readFile(agentsPath, 'utf8')).toContain(PREAMBLE)
+
+        await launch('dsh', { workspacePath: home })
+        expect(await lstat(agentsPath).catch(() => null)).toBeNull()
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  })
 
   it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
     const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))

@@ -10,7 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { writeFolderContextFile } from './acp-folder-context-file'
+import { writeFolderContextFile, removeFolderContextBlock } from './acp-folder-context-file'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -186,6 +186,19 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 }
 
+// DSH builds its system prompt from the folder's AGENTS.md files, so it needs no ACP channel for
+// them; only DSH's own marker block is replaced, and the file stays for later launches. A new file
+// is 0600; one the user already had keeps their mode, because the file is theirs. A file Orca may
+// not write (a link, or one it cannot read) refuses the launch: DSH would run without any of them.
+export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) =>
+  (await writeFolderContextFile(cwd, 'AGENTS.md', 'DeepSeek Harness', text)) ? {} : null
+
+/** DSH reads the folder's AGENTS.md at every start, so a launch that brings no instructions takes
+ *  the block an earlier one left, which DSH would otherwise keep following. */
+export const undoDshInstructions = async ({ cwd }: { cwd: string }): Promise<void> => {
+  await removeFolderContextBlock(cwd, 'AGENTS.md', 'DeepSeek Harness')
+}
+
 const cleared = new Map<string, Promise<void>>()
 
 /** Stdio children never outlive the host, and one host holds a profile, so the folder is cleared
@@ -276,7 +289,7 @@ export async function makeAcpInstructionsFolder(
 /** Null for a session without instructions; throws when the agent cannot take them, so the session
  *  never starts without them. */
 export async function acpLaunchInstructions(
-  spec: Pick<AcpLaunchSpec, 'agent' | 'instructions'>,
+  spec: Pick<AcpLaunchSpec, 'agent' | 'instructions' | 'undoInstructions'>,
   dataDirectory: string,
   input: {
     sessionId: string
@@ -288,6 +301,7 @@ export async function acpLaunchInstructions(
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
   if (!text) {
+    await spec.undoInstructions?.({ cwd: input.cwd })
     return null
   }
   const delivered = await spec.instructions?.({
