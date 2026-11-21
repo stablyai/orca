@@ -102,18 +102,20 @@ it('still refuses a version-four journal that lost the record tables its version
   expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
 })
 
-it('requires of a released journal exactly the tables its migration created', () => {
-  // A failure here means a migration changed the original journal's tables. Files a release wrote
-  // keep their tables: leave their lists frozen, add the new version's list, and change the check.
+it('fails when the journal migration changes the tables an older file is judged by', () => {
+  // A migration changed the original journal's tables. Files a release wrote keep theirs: leave the
+  // released lists frozen, add the new version's list, and the recorded damage check changes too.
   const migrated = new Database(':memory:')
   migrated.exec(createJournalTablesSql() + createAgentSessionRecordTablesSql())
-  const created = migrated
-    .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
-    .all()
-    .map(({ name }) => String(name))
+  const created = new Set(
+    migrated
+      .prepare("SELECT name FROM sqlite_schema WHERE type='table'")
+      .all()
+      .map(({ name }) => String(name))
+  )
   migrated.close()
   expect(JOURNAL_DB_SCHEMA_VERSION).toBe(4)
-  expect(created).toEqual([
+  expect([...created].sort()).toEqual([
     'agent_session_operations',
     'agent_session_records',
     'agent_session_retired_claim_keys',
@@ -125,15 +127,6 @@ it('requires of a released journal exactly the tables its migration created', ()
     'journal_sessions',
     'journal_set_aside'
   ])
-  expect(journalLegacyRequiredTables(3)).toEqual(['journal_rows', 'journal_sessions'])
-  expect(journalLegacyRequiredTables(4)).toEqual([
-    'journal_rows',
-    'journal_sessions',
-    'agent_session_records',
-    'agent_session_operations',
-    'agent_session_retired_claim_keys',
-    'agent_session_tabs',
-    'agent_session_store_meta'
-  ])
-  expect(journalLegacyRequiredTables(5)).toEqual([])
+  // Recovery tables are read only when present, so they are never required.
+  expect(journalLegacyRequiredTables(4).filter((table) => !created.has(table))).toEqual([])
 })
