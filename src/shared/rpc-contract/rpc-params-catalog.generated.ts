@@ -562,6 +562,7 @@ import {
   ProjectStatusOrder,
   SearchIssues,
   SelectSite,
+  SelectedIssueFields,
   SiteSelection,
   UserSearch
 } from './jira/jira-params'
@@ -1714,6 +1715,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'jira.disconnect': SiteSelection,
   'jira.generateIssueSummary': GenerateIssueSummary,
   'jira.getIssue': IssueKey,
+  'jira.getIssueFields': SelectedIssueFields,
   'jira.getIssueStream': IssueKey,
   'jira.getProjectStatusOrder': ProjectStatusOrder,
   'jira.issueComments': IssueKey,

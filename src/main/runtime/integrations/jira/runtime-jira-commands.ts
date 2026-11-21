@@ -19,7 +19,7 @@ import type { JiraMediaFormat } from '../../../../shared/jira/jira-attachment-im
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../../../jira/client'
 import { listFavouriteFilters } from '../../../jira/favourite-filters'
 import { addIssueComment, createIssue, updateIssue } from '../../../jira/jira-issue-mutations'
-import { getIssue, getIssueSummary } from '../../../jira/jira-issue-read'
+import { getIssue, getIssueSummary, getSelectedIssueFields } from '../../../jira/jira-issue-read'
 import { getIssueComments } from '../../../jira/jira-issue-comments'
 import { getProjectStatusOrder, listTransitions } from '../../../jira/jira-transition-queries'
 import {
@@ -107,6 +107,10 @@ export class RuntimeJiraCommands {
     mediaFormat?: JiraMediaFormat
   ): ReturnType<typeof getIssue> {
     return getIssue(key, siteId, strict, mediaFormat)
+  }
+
+  async jiraGetIssueFields(key: string, siteId: string, fields: string[], signal?: AbortSignal) {
+    return getSelectedIssueFields(key, siteId, fields, signal)
   }
 
   async jiraLookupIssueSummary(

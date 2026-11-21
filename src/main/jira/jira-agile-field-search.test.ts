@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './authenticated-request'
 import { searchIssues } from './jira-issue-search'
-import { getIssue } from './jira-issue-read'
+import { getIssue, getSelectedIssueFields } from './jira-issue-read'
 
 const { getClientsMock, jiraRequestMock } = vi.hoisted(() => ({
   getClientsMock: vi.fn(),
@@ -32,6 +32,21 @@ function client(id: string): JiraClientForSite {
 }
 
 describe('planning fields in Jira searches', () => {
+  it('projects only requested raw fields and distinguishes null from an absent field', async () => {
+    getClientsMock.mockReturnValue([client('selected-site')])
+    jiraRequestMock.mockImplementation(async (_entry, path) => {
+      const url = new URL(path, 'https://selected-site.atlassian.net')
+      expect(url.searchParams.get('fields')).toBe('customfield_10050,labels,missing')
+      return { key: 'DEMO-1', fields: { customfield_10050: null, labels: ['qa'], extra: 3 } }
+    })
+    const issue = await getSelectedIssueFields('DEMO-1', 'selected-site', [
+      'customfield_10050',
+      'labels',
+      'missing'
+    ])
+    expect(issue.fields).toEqual({ customfield_10050: null, labels: ['qa'] })
+  })
+
   it('requests all discovered points fields and maps the populated project field', async () => {
     getClientsMock.mockReturnValue([client('field-request-site')])
     jiraRequestMock.mockImplementation(async (_entry, path) =>

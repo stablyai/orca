@@ -19,6 +19,7 @@ import {
   ProjectIssueTypes,
   ProjectStatusOrder,
   SearchIssues,
+  SelectedIssueFields,
   SelectSite,
   SiteSelection,
   UserSearch
@@ -135,6 +136,13 @@ export const JIRA_METHODS = [
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraGetIssue(params.key.trim(), params.siteId, params.strict, params.mediaFormat)
+  }),
+  defineMethod({
+    name: 'jira.getIssueFields',
+    permission: 'workspace',
+    params: SelectedIssueFields,
+    handler: (params, { runtime, signal }) =>
+      runtime.jiraGetIssueFields(params.key.trim(), params.siteId, params.fields, signal)
   }),
   defineMethod({
     name: 'jira.lookupIssueSummary',

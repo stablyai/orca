@@ -6,6 +6,7 @@ import type {
   JiraIssueFilter,
   JiraIssueType,
   JiraPriority,
+  JiraSelectedIssueFields,
   JiraProject,
   JiraTransition,
   JiraUser
@@ -34,6 +35,24 @@ import { JIRA_WRITE_HANDLERS } from './jira-write'
 
 function issueTarget(context: HandlerContext) {
   return resolveJiraTarget(context, getRequiredStringFlag(context.flags, 'key'))
+}
+
+function assertRequestedIssue<T extends Pick<JiraIssue, 'key' | 'url' | 'siteId'>>(
+  issue: T | null,
+  target: Awaited<ReturnType<typeof issueTarget>>
+): asserts issue is T {
+  const parsed = parseJiraIssueUrl(issue?.url ?? '')
+  if (
+    !issue ||
+    !parsed ||
+    !isResolvedJiraIssueMatch(parsed, target.site, issue) ||
+    issue.key.toUpperCase() !== target.key
+  ) {
+    throw new RuntimeClientError(
+      'jira_issue_unavailable',
+      'Jira did not return the requested issue on the selected site.'
+    )
+  }
 }
 
 function parseFilter(context: HandlerContext): JiraIssueFilter | undefined {
@@ -70,24 +89,36 @@ export const JIRA_HANDLERS: Record<string, CommandHandler> = {
   },
   'jira issue': async (context) => {
     const target = await issueTarget(context)
+    if (context.flags.has('fields')) {
+      const fields = [
+        ...new Set(
+          getRequiredStringFlag(context.flags, 'fields')
+            .split(',')
+            .map((id) => id.trim())
+        )
+      ]
+      const response = await context.client.call<JiraSelectedIssueFields>('jira.getIssueFields', {
+        key: target.key,
+        siteId: target.siteId,
+        fields
+      })
+      const issue = response.result
+      assertRequestedIssue(issue, target)
+      printResult(response, context.json, (result) =>
+        [
+          result.key,
+          ...Object.entries(result.fields).map(([id, value]) => `${id}\t${JSON.stringify(value)}`)
+        ].join('\n')
+      )
+      return
+    }
     const response = await context.client.call<JiraIssue | null>('jira.getIssue', {
       key: target.key,
       siteId: target.siteId,
       strict: true
     })
     const issue = response.result
-    const parsed = parseJiraIssueUrl(issue?.url ?? '')
-    if (
-      !issue ||
-      !parsed ||
-      !isResolvedJiraIssueMatch(parsed, target.site, issue) ||
-      issue.key.toUpperCase() !== target.key
-    ) {
-      throw new RuntimeClientError(
-        'jira_issue_unavailable',
-        'Jira did not return the requested issue on the selected site.'
-      )
-    }
+    assertRequestedIssue(issue, target)
     printResult({ ...response, result: issue }, context.json, formatJiraIssue)
   },
   'jira list': async (context) => {

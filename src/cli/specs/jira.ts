@@ -14,10 +14,13 @@ export const JIRA_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['jira', 'issue'],
     summary: 'Read a Jira issue',
-    usage: 'orca jira issue <key> [--site <id>] [--json]',
-    allowedFlags: [...SITE_FLAGS, 'key'],
+    usage: 'orca jira issue <key> [--fields <id,...>] [--site <id>] [--json]',
+    allowedFlags: [...SITE_FLAGS, 'key', 'fields'],
     positionalArgs: ['key'],
-    examples: ['orca jira issue ENG-123', 'orca jira issue ENG-123 --json']
+    examples: [
+      'orca jira issue ENG-123',
+      'orca jira issue ENG-123 --fields summary,customfield_10050 --json'
+    ]
   },
   {
     path: ['jira', 'list'],
