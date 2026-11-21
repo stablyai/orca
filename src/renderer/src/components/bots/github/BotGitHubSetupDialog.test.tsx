@@ -243,6 +243,12 @@ describe('BotGitHubSetupDialog', () => {
       '@orca-bots ranger review this PR'
     )
     expect(screen.getByRole('button', { name: 'Copy @orca-bots ranger' })).toBeDefined()
+    // The sample is hidden from screen readers, so one sentence says the ask and the reply.
+    expect(
+      screen.getByText(
+        'Mention @orca-bots ranger on an issue or pull request to ask Ranger. For example, “@orca-bots ranger review this PR”, and Ranger replies “On it.”'
+      ).className
+    ).toBe('sr-only')
   })
 
   it('leaves the bot off when the sign-in that linked was another surface’s, or another bot’s setup', async () => {

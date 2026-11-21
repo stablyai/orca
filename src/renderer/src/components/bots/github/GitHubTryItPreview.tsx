@@ -27,17 +27,19 @@ export function GitHubTryItPreview({
   const headingId = useId()
   const now = t('bots.github.setup.preview.commented', 'commented now')
   const command = gitHubMention(bot)
+  const ask = t('bots.github.setup.preview.ask', 'review this PR')
+  const reply = t('bots.github.setup.preview.reply', 'On it.')
   return (
     <section aria-labelledby={headingId} className="space-y-2">
       <h3 id={headingId} className="text-xs font-medium">
         {t('bots.github.setup.tryIt', 'Try it on any issue or PR')}
       </h3>
-      {/* A sample, not a real thread: screen readers get what to do instead. */}
+      {/* A sample, not a real thread: screen readers get what to do and what it answers instead. */}
       <p className="sr-only">
         {t(
           'bots.github.setup.preview.label',
-          'Mention {{command}} on an issue or pull request to ask {{name}}.',
-          { command, name: bot.name }
+          'Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”',
+          { command, name: bot.name, ask, reply }
         )}
       </p>
       <div className="space-y-3 rounded-lg border border-border bg-background p-3">
@@ -60,9 +62,12 @@ export function GitHubTryItPreview({
             />
           }
         >
-          {/* The mention is what to type: it keeps its room and the sample ask ends in "…". */}
-          <span className={MENTION}>{GITHUB_BOT_MENTION}</span> {bot.folder}{' '}
-          {t('bots.github.setup.preview.ask', 'review this PR')}
+          {/* What to type keeps its room: the sample ask ends in "…" first, and only a handle
+              wider than the whole row is cut. */}
+          <span className="max-w-full shrink-0 truncate">
+            <span className={MENTION}>{GITHUB_BOT_MENTION}</span> {bot.folder}
+          </span>{' '}
+          <span className="min-w-0 truncate">{ask}</span>
         </GitHubComment>
         <GitHubComment
           avatar={<BotAvatar bot={bot} className="size-full rounded-md border-0" />}
@@ -70,7 +75,7 @@ export function GitHubTryItPreview({
           label={t('bots.github.setup.preview.bot', 'bot')}
           time={now}
         >
-          {t('bots.github.setup.preview.reply', 'On it.')}
+          <span className="min-w-0 truncate">{reply}</span>
         </GitHubComment>
       </div>
     </section>
@@ -118,7 +123,7 @@ function GitHubComment({
         >
           <span className="truncate font-semibold">{name}</span>
           {label ? (
-            <span className="shrink-0 rounded-full border border-border px-1.5 text-[10px] leading-4 text-muted-foreground">
+            <span className="shrink-0 rounded-full border border-border px-1.5 text-[11px] leading-4 text-foreground/70">
               {label}
             </span>
           ) : null}
@@ -130,8 +135,11 @@ function GitHubComment({
             action ? 'pr-1' : 'pr-2.5'
           )}
         >
-          {/* The text after the mention is the part that ends in "…". */}
-          <p aria-hidden className="min-w-0 flex-1 truncate text-[13px] leading-5">
+          {/* Each part says where its own "…" goes. */}
+          <p
+            aria-hidden
+            className="flex min-w-0 flex-1 gap-1 text-[13px] leading-5 whitespace-nowrap"
+          >
             {children}
           </p>
           {action ? <span className="-my-1 shrink-0">{action}</span> : null}
