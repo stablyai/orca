@@ -1,19 +1,36 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, beforeAll, expect, it, vi } from 'vitest'
-import zh from '@/i18n/locales/zh.json'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
-import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import type { BotRowLine } from './bot-row-activity-line'
 import { BotHoverLatestLine, BotRowLineText } from './BotRowActivityLine'
 
 // React Compiler memoizes these components on their props, so a language switch must reach their
 // words through useTranslate() rather than module translate(); each case keeps one mount across it.
+// A sentinel catalog stands in for the real one, so only the switch is under test, not its copy.
 
 beforeAll(() => {
-  i18n.addResourceBundle('zh', 'translation', zh)
+  i18n.addResourceBundle(
+    'zh',
+    'translation',
+    {
+      bots: {
+        panel: {
+          needYou_other: 'switched need {{count}}',
+          working_other: 'switched work {{count}}'
+        },
+        row: { replyingIn: 'switched reply {{place}}' }
+      }
+    },
+    false,
+    true
+  )
+})
+
+afterAll(() => {
+  i18n.removeResourceBundle('zh', 'translation')
 })
 
 afterEach(async () => {
@@ -22,9 +39,9 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-async function switchLanguage(language: string): Promise<void> {
+async function switchToZh(): Promise<void> {
   await act(async () => {
-    await i18n.changeLanguage(language)
+    await i18n.changeLanguage('zh')
   })
 }
 
@@ -34,54 +51,52 @@ function renderInScope(node: React.ReactNode): void {
 }
 
 it.each<[string, BotRowLine, string, string]>([
-  ['needs you', { kind: 'needYouElsewhere', count: 2 }, '2 need you', '2 项需要你处理'],
-  ['working', { kind: 'workingElsewhere', count: 3 }, '3 working', '3 项工作进行中'],
+  ['needs you', { kind: 'needYouElsewhere', count: 2 }, '2 need you', 'switched need 2'],
+  ['working', { kind: 'workingElsewhere', count: 3 }, '3 working', 'switched work 3'],
   [
     'replying in a place',
     { kind: 'replying', place: { label: '#general', source: 'slack' } },
     'Replying in #general',
-    '正在 #general 中回复'
+    'switched reply #general'
   ]
 ])(
   'the row line (%s) follows a language switch without remounting',
-  async (_, line, en, zhText) => {
+  async (_, line, before, after) => {
     renderInScope(
       <p data-testid="line">
         <BotRowLineText line={line} now={0} />
       </p>
     )
-    expect(screen.getByTestId('line').textContent).toBe(en)
+    expect(screen.getByTestId('line').textContent).toBe(before)
 
-    await switchLanguage('zh')
+    await switchToZh()
 
-    expect(screen.getByTestId('line').textContent).toBe(zhText)
+    expect(screen.getByTestId('line').textContent).toBe(after)
   }
 )
 
 it('the hover card line follows a language switch without remounting', async () => {
-  const now = 10 * 60_000
-  renderInScope(<BotHoverLatestLine line={{ kind: 'needYouElsewhere', count: 2 }} now={now} />)
+  renderInScope(<BotHoverLatestLine line={{ kind: 'needYouElsewhere', count: 2 }} now={0} />)
   expect(screen.getByText('2 need you')).toBeTruthy()
 
-  await switchLanguage('zh')
+  await switchToZh()
 
-  expect(screen.getByText('2 项需要你处理')).toBeTruthy()
+  expect(screen.getByText('switched need 2')).toBeTruthy()
 })
 
 it('the hover card age follows a language switch without remounting', async () => {
   const now = 10 * 60_000
   renderInScope(
-    <BotHoverLatestLine
-      line={{ kind: 'activity', place: null, text: 'Shipped it', at: now - 5 * 60_000 }}
-      now={now}
-    />
+    <p data-testid="hover">
+      <BotHoverLatestLine
+        line={{ kind: 'activity', place: null, text: 'Shipped it', at: now - 5 * 60_000 }}
+        now={now}
+      />
+    </p>
   )
-  const enAge = formatUiRelativeTime(-5 * 60_000)
-  expect(screen.getByText(`${enAge} ·`, { exact: false })).toBeTruthy()
+  expect(screen.getByTestId('hover').textContent).toContain('5 minutes ago')
 
-  await switchLanguage('zh')
+  await switchToZh()
 
-  const zhAge = formatUiRelativeTime(-5 * 60_000)
-  expect(zhAge).not.toBe(enAge)
-  expect(screen.getByText(`${zhAge} ·`, { exact: false })).toBeTruthy()
+  expect(screen.getByTestId('hover').textContent).not.toContain('5 minutes ago')
 })
