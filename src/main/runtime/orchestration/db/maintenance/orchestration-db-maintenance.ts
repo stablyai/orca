@@ -8,6 +8,7 @@ import {
   listRetiredRunCandidates
 } from './settled-run-retention'
 import { retireSettledRun, type RunPartyLiveness } from './settled-run-retirement'
+import type { OrchestrationDbCompaction } from './orchestration-db-compaction'
 
 const MINUTE = 60_000
 const PRUNE_INTERVAL_MS = 60 * MINUTE
@@ -23,12 +24,15 @@ export class OrchestrationDbMaintenance {
   private readonly stopped = new AbortController()
   private timer: NodeJS.Timeout | undefined
   private work = 0
-  private restoreCheckpoints: (() => void) | undefined
+  // This session's last prune, which a bookkeeping write skipped for a waiting copy doesn't persist.
+  private prunedAt = Number.NEGATIVE_INFINITY
+  private restoreCheckpoints: (() => Promise<void>) | undefined
 
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
     private readonly chatIsReadable: (dispatchId: string) => boolean,
-    private readonly runPartyLiveness: RunPartyLiveness
+    private readonly runPartyLiveness: RunPartyLiveness,
+    private readonly compaction?: OrchestrationDbCompaction
   ) {}
 
   start(): void {
@@ -36,12 +40,15 @@ export class OrchestrationDbMaintenance {
     this.arm()
   }
 
-  stop(): void {
-    this.restoreCheckpoints?.()
+  /** Resolves once the checkpoint thread, and its connection, are gone. */
+  stop(): Promise<void> {
+    const exited = this.restoreCheckpoints?.() ?? Promise.resolve()
     this.restoreCheckpoints = undefined
     this.stopped.abort()
+    this.compaction?.stop()
     clearTimeout(this.timer)
     this.timer = undefined
+    return exited
   }
 
   private arm(): void {
@@ -62,9 +69,12 @@ export class OrchestrationDbMaintenance {
   }
 
   private async pass(): Promise<void> {
-    if (this.pruneIsDue() && !(await this.prune())) {
+    // A copy waiting for quit would go stale on the prune's writes, so retention waits for it, for a day at most.
+    if (!this.compaction?.defersPrune && this.pruneIsDue() && !(await this.prune())) {
       return
     }
+    // Converts a file made before incremental auto-vacuum, and clears what a past conversion left.
+    await this.compaction?.tick()
     // Only incremental files can return pages; others reuse them as they are freed.
     if (Number(this.orchestrationDb.db.pragma('auto_vacuum', { simple: true })) === 2) {
       for (let page = 0; page < RECLAIM_PAGES_PER_PASS; page += RECLAIM_PAGES_PER_STEP) {
@@ -77,6 +87,7 @@ export class OrchestrationDbMaintenance {
 
   /** False when stopped mid-way. */
   private async prune(): Promise<boolean> {
+    const changesBefore = this.totalChanges()
     const settledRuns = new Map<string, boolean>()
     for (let after: string | null = ''; after !== null;) {
       const page = await this.slice(() =>
@@ -95,9 +106,17 @@ export class OrchestrationDbMaintenance {
       // Recorded anyway, so a lasting failure is retried hourly, not every minute.
       console.warn('[orchestration] settled Run retention failed', error)
     }
-    // Persisted so a restart does not rescan before the interval.
-    this.recordPrune()
+    this.prunedAt = Date.now()
+    // Persisted so a restart does not rescan before the interval, unless the prune changed nothing and the
+    // write alone would make a copy waiting for quit stale.
+    if (!this.compaction?.hasCopy || this.totalChanges() !== changesBefore) {
+      this.recordPrune()
+    }
     return true
+  }
+
+  private totalChanges(): number {
+    return Number(this.orchestrationDb.db.prepare('SELECT total_changes() AS n').get()?.n)
   }
 
   /** False when stopped mid-way. */
@@ -151,6 +170,9 @@ export class OrchestrationDbMaintenance {
   }
 
   private pruneIsDue(): boolean {
+    if (Date.now() - this.prunedAt < PRUNE_INTERVAL_MS) {
+      return false
+    }
     const row = this.orchestrationDb.db
       .prepare('SELECT pruned_at FROM orchestration_maintenance WHERE id = 1')
       .get()

@@ -1187,6 +1187,7 @@
 10 src/main/runtime/orchestration/db/dispatch-context/worker-report-settlement.ts
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts
+1 src/main/runtime/orchestration/db/maintenance/orchestration-db-compaction.ts # readFileState: one cached page-1 statement (data_version + page counts) on the runtime's own connection, which no other thread can read; 0.03-0.06 ms warm, once per maintenance minute
 2 src/main/runtime/orchestration/db/maintenance/orchestration-db-maintenance.ts
 2 src/main/runtime/orchestration/db/maintenance/settled-run-retention.ts
 5 src/main/runtime/orchestration/db/maintenance/settled-run-retirement.ts

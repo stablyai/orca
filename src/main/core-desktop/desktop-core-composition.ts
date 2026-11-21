@@ -248,6 +248,10 @@ export async function composeDesktopCore(
     attachBrowserHost: native.attachBrowserHost,
     registerCleanup: deps.registerCleanup
   })
+  if (!native.isServeMode()) {
+    // Its copy is swapped in only by the desktop quit.
+    runtime.allowOrchestrationDbCompaction()
+  }
   core.rendererCheckpoint = createRendererShutdownCheckpointService(
     store,
     (session) => runtime.quitResumeRecordsFor(session),

@@ -80,9 +80,10 @@ setTimeout(tick, interval);
  * For as long as the database is open, checkpoints the WAL on a worker thread instead of in main's
  * commits: an auto-checkpointing commit fsyncs the whole file, which blocked main for up to 934 ms on
  * a busy disk and turned single-row status writes into half-second stalls. Main keeps only a far
- * backstop. Returns the undo; a worker that fails or exits hands checkpoints back to main at once.
+ * backstop. Returns the undo, which resolves once the thread is gone; a worker that fails or exits hands
+ * checkpoints back to main at once.
  */
-export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () => void {
+export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () => Promise<void> {
   const { db } = orchestrationDb
   const main = db
     .prepare('PRAGMA database_list')
@@ -90,7 +91,7 @@ export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () =>
     .find((row) => row.name === 'main')
   const filename = typeof main?.file === 'string' ? main.file : ''
   if (!filename) {
-    return () => {}
+    return () => Promise.resolve()
   }
   const previous = Number(db.pragma('wal_autocheckpoint', { simple: true }))
   let worker: ReturnType<typeof spawnWorkerThread>
@@ -107,7 +108,7 @@ export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () =>
       }
     })
   } catch {
-    return () => {}
+    return () => Promise.resolve()
   }
   let restored = false
   const restore = (): void => {
@@ -124,14 +125,18 @@ export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () =>
   worker.on('exit', restore)
   worker.unref()
   db.pragma(`wal_autocheckpoint = ${MAIN_CHECKPOINT_BACKSTOP_PAGES}`)
-  let stopped = false
-  const stop = (): void => {
-    if (!stopped) {
-      stopped = true
+  let exited: Promise<void> | undefined
+  // Resolves once the thread, and with it its connection, is gone.
+  const stop = (): Promise<void> => {
+    if (!exited) {
       forget()
-      worker.terminate().catch(() => {})
+      exited = worker.terminate().then(
+        () => {},
+        () => {}
+      )
       restore()
     }
+    return exited
   }
   // The thread's connection must not outlive this one, which a reopen would then contend with.
   const forget = orchestrationDb.onClose(stop)

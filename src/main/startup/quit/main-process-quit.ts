@@ -9,6 +9,7 @@ import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { isQuittingForUpdate } from '../../updater/updater-service'
+import { swapCompactedOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction-quit'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
@@ -128,6 +129,8 @@ function installWillQuitHandler(): void {
       { name: 'install-park', promise: pendingServeSupervisorQuitCommit() }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
+    // Desktop quits only, and only after every teardown fulfilled.
+    let mayCompact = !state.isServeMode
     settleTeardownWithinDeadline([
       ...teardowns,
       { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
@@ -136,6 +139,11 @@ function installWillQuitHandler(): void {
         if (pendingTeardowns.length > 0) {
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
+        return pendingTeardowns.length === 0 ? teardownSettlement : null
+      })
+      .then((settled) => {
+        // Settled is not clean: a rejected teardown may have left a writer behind.
+        mayCompact &&= settled?.every((result) => result.status === 'fulfilled') === true
       })
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
@@ -148,6 +156,13 @@ function installWillQuitHandler(): void {
           closeBrowserExtensionProfileDocumentStores(),
           closeBrowserExtensionProfileStateStore()
         ])
+      )
+      // After everything else: nothing can reach the orchestration database again. Renames only, capped.
+      .then(() =>
+        // Update installs included: the swap is a rename, and they are most quits for an app left open.
+        mayCompact && !isDevParentShutdownRequested()
+          ? swapCompactedOrchestrationDbAtQuit(state.core.runtime)
+          : undefined
       )
       .then(() => {
         daemonDisconnectDone = true
