@@ -25,9 +25,13 @@ export type ConversationCopy = {
   /** The store folder holding the rollout's other place (dated or archived), if it has one. */
   otherFolder: string | null
   isHandled: () => boolean
-  /** Called once the copy is in the store; never throws. */
-  recordPublished: () => Promise<void>
+  /** Records it as handled before it can join the store, and takes that back if it doesn't; never throw. */
+  recordIntent: () => Promise<void>
+  releaseIntent: () => Promise<void>
 }
+
+// Outcomes after which the store holds the conversation.
+const IN_STORE = new Set<ImportPublishOutcome>(['copied', 'existing', 'store-holds'])
 
 /**
  * Stages one conversation's copy outside the history queue, then publishes it with a short job in
@@ -52,11 +56,17 @@ export async function copyConversationIntoStore(
     )
     return 'failed'
   }
+  let intended = false
+  let outcome: ImportPublishOutcome | null = null
   try {
     if ((await stageImportRollout(copy.from, staged)) === 'source-changed') {
       return 'refused'
     }
-    return await args.publish(() =>
+    // Before the publish, so no crash leaves a copy in the store that the ledger doesn't know of
+    // (one the user then deletes would come back); a crash in between only skips this one.
+    await copy.recordIntent()
+    intended = true
+    outcome = await args.publish(() =>
       publishStagedImport({
         staged,
         final: join(copy.targetDir, copy.name),
@@ -64,10 +74,10 @@ export async function copyConversationIntoStore(
         indexPendingDir: args.indexPendingDir,
         deletionEpoch,
         isCurrent: args.isCurrent,
-        isHandled: copy.isHandled,
-        recordPublished: copy.recordPublished
+        isHandled: copy.isHandled
       })
     )
+    return outcome
   } catch (error) {
     console.warn(`[codex-history-import] Could not copy ${copy.from}:`, error)
     if (error instanceof RolloutSourceReadError) {
@@ -79,6 +89,9 @@ export async function copyConversationIntoStore(
     // copyFile doesn't say which side failed: while the store takes files, it was the source.
     return (await canWriteIn(copy.targetDir, args.runId)) ? 'refused' : 'failed'
   } finally {
+    if (intended && (outcome === null || !IN_STORE.has(outcome))) {
+      await copy.releaseIntent()
+    }
     // Never throws, so a published conversation is always recorded as handled.
     await forgetStagedImport(recordPath, staged)
   }
