@@ -272,8 +272,7 @@ export class BotItemsHost {
         lastActivityAt: item.lastActivityAt,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
-        closedAt: item.closedAt,
-        ...(summary ? { summary: true as const } : {})
+        closedAt: item.closedAt
       }
     })
   }

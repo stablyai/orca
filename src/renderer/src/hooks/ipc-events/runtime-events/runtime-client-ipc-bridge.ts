@@ -4,7 +4,7 @@ import {
 } from '../../../lib/work-items/linear/linear-linked-issue-refresh'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { emitPairedBotsChanged, emitPairedBotsStreamCameBack } from '@/lib/bot-host-listing'
-import { readBotChangeScope } from '../../../../../shared/bots/bot-change-scope'
+import { readBotChangeScopeWithItems } from '../../../../../shared/bots/bot-change-scope'
 import { emitRuntimeClientWindowEvent } from './runtime-client-window-events'
 import { applyHostWorkspaceRowEvent } from '../workspace-catalog/worktree-metadata-set-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
@@ -126,7 +126,7 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (event.type === 'botsChanged') {
-      emitPairedBotsChanged(environmentId, readBotChangeScope(event))
+      emitPairedBotsChanged(environmentId, readBotChangeScopeWithItems(event))
       return
     }
     if (event.type === 'orchestrationSessionWorkersChanged') {

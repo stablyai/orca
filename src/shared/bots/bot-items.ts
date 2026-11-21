@@ -207,9 +207,6 @@ export type BotItem = {
   createdAt: number
   updatedAt: number
   closedAt: number | null
-  /** A list's summary: description, done means and close note left out (null); the item's own read
-   *  has them. */
-  summary?: true
 }
 
 /** How the Items list and item view show an item's number: `#35`. */

@@ -223,18 +223,29 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
       : undefined
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
-  const itemUids = 'itemUids' in event ? readStringLists(event.itemUids) : undefined
-  const namesItems = 'namesItems' in event && event.namesItems === true
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
         ...(kinds ? { kinds } : {}),
         ...(kindBots ? { kindBots } : {}),
-        ...(needsYou ? { needsYou } : {}),
-        ...(itemUids ? { itemUids } : {}),
-        ...(namesItems ? { namesItems: true as const } : {})
+        ...(needsYou ? { needsYou } : {})
       }
     : undefined
+}
+
+/** `readBotChangeScope` with the items it names (`itemUids`, `namesItems`), for Items lists that read
+ *  just those; kept apart so readers that don't stay as small as they were. */
+export function readBotChangeScopeWithItems(event: unknown): BotChangeScope | undefined {
+  const scope = readBotChangeScope(event)
+  if (!scope || !event || typeof event !== 'object') {
+    return scope
+  }
+  const itemUids = 'itemUids' in event ? readStringLists(event.itemUids) : undefined
+  return {
+    ...scope,
+    ...(itemUids ? { itemUids } : {}),
+    ...('namesItems' in event && event.namesItems === true ? { namesItems: true as const } : {})
+  }
 }
 
 /** A record of string lists (`kindBots`, `itemUids`), read loosely. */

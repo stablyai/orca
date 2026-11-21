@@ -10,10 +10,7 @@ const order = (a: BotItem, b: BotItem) => b.lastActivityAt - a.lastActivityAt ||
 /** A host's list call over these items, as `bots.items.owner.list` pages them; `older` ignores the
  *  params a host before them doesn't know (it answers every open item and one Closed page). */
 export function host(items: BotItem[], older = false): BotItemsListCall {
-  return async (params) => {
-    const read = structuredClone(answer(items, older, params))
-    return older ? read : { ...read, items: read.items.map((item) => ({ ...item, summary: true })) }
-  }
+  return async (params) => structuredClone(answer(items, older, params))
 }
 
 function answer(

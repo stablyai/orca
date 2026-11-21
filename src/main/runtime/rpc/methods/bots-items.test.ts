@@ -337,11 +337,9 @@ describe('bot items over RPC', () => {
     }
 
     const whole = await list({})
-    expect(
-      whole.items.map((item) => [item.number, item.description, item.doneMeans, item.summary])
-    ).toEqual([
-      [1, null, null, true],
-      [2, null, null, true]
+    expect(whole.items.map((item) => [item.number, item.description, item.doneMeans])).toEqual([
+      [1, null, null],
+      [2, null, null]
     ])
     const closedPage = await list({
       closedCursor: `${Number.MAX_SAFE_INTEGER}:1000`,
