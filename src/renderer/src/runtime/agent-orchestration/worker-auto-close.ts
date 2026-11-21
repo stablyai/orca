@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
@@ -6,6 +6,7 @@ import {
   readLocalRuntimeCapabilitiesOrUnknown
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { useNowFromMount } from '@/lib/window-activity/use-now'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
@@ -106,7 +107,6 @@ export function useWorkerAutoClose(
   )
   const state = useSyncExternalStore(subscribe, () => readPublishedWorkerAutoClose(key))
   const activity = useAppStore((s) => workerActivity(s, paneKey))
-  const [nowMs, setNowMs] = useState(() => Date.now())
 
   useEffect(() => {
     if (activity === null) {
@@ -126,14 +126,7 @@ export function useWorkerAutoClose(
 
   const shown = activity === null ? null : state
   const ticking = active && shown !== null && !shown.kept && shown.closesAt !== null
-  useEffect(() => {
-    if (!ticking) {
-      return
-    }
-    setNowMs(Date.now())
-    const interval = setInterval(() => setNowMs(Date.now()), 1_000)
-    return () => clearInterval(interval)
-  }, [ticking])
+  const nowMs = useNowFromMount(1_000, ticking)
 
   const keepOpen = useCallback(() => {
     publishWorkerAutoClose(key, { kept: true })

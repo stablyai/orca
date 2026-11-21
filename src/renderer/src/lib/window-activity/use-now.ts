@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import {
   installWindowVisibilityInterval,
   type WindowVisibilityIntervalTimer
@@ -41,6 +41,8 @@ export function createSharedNowClock(
     subscribe: (listener) => {
       listeners.add(listener)
       if (!stopInterval) {
+        // Why: with no subscribers the snapshot is frozen at the last tick; refresh it so the first subscriber's re-read is current even while hidden.
+        now = deps.now()
         // Share one visibility-gated timer per cadence; restart ticks immediately to catch up remounted/revealed labels without hidden-window churn.
         stopInterval = installWindowVisibilityInterval({
           run: tick,
@@ -75,6 +77,12 @@ const subscribeWhileDisabled = (): (() => void) => () => {}
 /** Share coarse label ticks across rows to avoid N timers/commits. Disabled callers activate through a passive effect and may first read arbitrarily stale time; deadlines must use Date.now() in the acting effect. */
 export function useNow(intervalMs: number, enabled = true): number {
   return useNowSnapshot(intervalMs, readNow, enabled)
+}
+
+/** useNow for countdown labels: never older than the mount, as a per-component Date.now() state was; an idle shared clock can hold an hours-old tick. */
+export function useNowFromMount(intervalMs: number, enabled = true): number {
+  const [mountedAt] = useState(() => Date.now())
+  return Math.max(mountedAt, useNow(intervalMs, enabled))
 }
 
 const readNow = (now: number): number => now

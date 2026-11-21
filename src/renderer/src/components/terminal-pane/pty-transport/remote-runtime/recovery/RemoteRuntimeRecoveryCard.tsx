@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Clock, KeyRound, ServerOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -7,20 +6,8 @@ import {
   remoteRuntimeDownForLabel,
   remoteRuntimeTailscaleHintLabel
 } from './remote-runtime-recovery-copy'
+import { useNowFromMount } from '@/lib/window-activity/use-now'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!active) {
-      return
-    }
-    setNow(Date.now())
-    const timer = setInterval(() => setNow(Date.now()), 1_000)
-    return () => clearInterval(timer)
-  }, [active])
-  return now
-}
 
 /** The one look for "this remote work is recovering", shared by the pane and server notices. */
 export function RemoteRuntimeRecoveryCard({
@@ -42,7 +29,7 @@ export function RemoteRuntimeRecoveryCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const now = useNow(downSince !== null)
+  const now = useNowFromMount(1_000, downSince !== null)
   return (
     <div
       className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex justify-center"
