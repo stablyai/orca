@@ -2,6 +2,7 @@ import type { ClientRequest, IncomingMessage } from 'node:http'
 import WebSocket from 'ws'
 import {
   CLOUD_TRANSCRIPTION_SAMPLE_RATE,
+  UPLOAD_BYTES_PER_MS,
   MAX_CLOUD_TRANSCRIPTION_SECONDS
 } from '../../shared/speech/dictation/dictation-finish-deadlines'
 import type { CloudDictationSession } from './cloud-dictation-session'
@@ -15,13 +16,15 @@ import {
   readSonioxError,
   SONIOX_REALTIME_URL,
   sonioxStreamConfig,
+  SONIOX_REFUSED_KEY_STATUSES,
+  sonioxKeyRefusalMessage,
   sonioxTokenFrameSchema,
   type OpenSonioxSocket,
   type SonioxSocket
 } from './soniox-protocol'
 
 const MAX_AUDIO_SAMPLES = MAX_CLOUD_TRANSCRIPTION_SECONDS * CLOUD_TRANSCRIPTION_SAMPLE_RATE
-// Opened but never answering would otherwise hold the whole dictation in the queue.
+// A socket that never opens would otherwise hold the whole dictation in the queue.
 export const SONIOX_ACCEPT_TIMEOUT_MS = 15_000
 // Soniox answers `finished` within a second of the end frame; this bounds a stalled stream.
 export const SONIOX_FINISH_TIMEOUT_MS = 10_000
@@ -36,6 +39,8 @@ export type SonioxRealtimeSessionOptions = {
   sink: SttEventSink
   /** A failure before stop: the dictation can't go on, so the caller ends it. */
   onFailure: (error: string) => void
+  /** True once the dictation was stopped while its key was being read; no stream opens then. */
+  isCanceled: () => boolean
   openSocket?: OpenSonioxSocket
 }
 
@@ -50,6 +55,8 @@ export class SonioxRealtimeSession implements CloudDictationSession {
   private closed = false
   private failure: string | null = null
   private endSent = false
+  private finished = false
+  private canceled = false
   private readonly queued: Buffer[] = []
   private audioSamples = 0
   /** Finalized since the last 'final'. */
@@ -65,8 +72,7 @@ export class SonioxRealtimeSession implements CloudDictationSession {
   /** Opens the stream; throws when the key can't be read, so the dictation fails to start instead. */
   async start(): Promise<void> {
     this.apiKey = await this.options.readApiKey()
-    // Canceled while the key was read.
-    if (this.closed) {
+    if (this.options.isCanceled()) {
       return
     }
     const socket = (this.options.openSocket ?? openSonioxSocket)(SONIOX_REALTIME_URL, this.apiKey)
@@ -84,20 +90,21 @@ export class SonioxRealtimeSession implements CloudDictationSession {
       const status = response.statusCode ?? 0
       request.destroy()
       this.fail(
-        status === 401 || status === 403
-          ? `Soniox rejected the API key (${status}).`
+        SONIOX_REFUSED_KEY_STATUSES.has(status)
+          ? sonioxKeyRefusalMessage(status)
           : `Soniox refused the connection (${status}).`
       )
     })
     socket.on('error', (error: Error) => this.fail(`Could not reach Soniox: ${error.message}`))
     socket.on('close', (code: number, reason: Buffer) => {
       // Any close before the end frame (even 1000, at a session limit) drops the audio after it.
-      if (!this.endSent) {
-        const detail = reason.toString()
-        this.fail(`Soniox closed the stream (${code}${detail ? `: ${detail}` : ''}).`)
-      } else {
+      // After the end frame, only a close that follows `finished` means every word arrived.
+      if (this.finished) {
         this.settleFinish?.()
+        return
       }
+      const detail = reason.toString()
+      this.fail(`Soniox closed the stream (${code}${detail ? `: ${detail}` : ''}).`)
     })
     this.acceptTimer = setTimeout(
       () => this.fail('Soniox did not start the stream in time.'),
@@ -129,8 +136,19 @@ export class SonioxRealtimeSession implements CloudDictationSession {
 
   async finish(): Promise<string> {
     if (!this.closed && !this.failure && this.audioSamples > 0) {
+      // Audio still waiting to go out gets the time cloud uploads allow for it.
+      const unsentBytes =
+        (this.socket?.bufferedAmount ?? 0) + this.queued.reduce((sum, pcm) => sum + pcm.length, 0)
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(done, SONIOX_FINISH_TIMEOUT_MS)
+        const timer = setTimeout(
+          () => {
+            this.failure ??= this.accepting
+              ? 'Soniox did not finish the transcript in time; the end may be missing.'
+              : 'Soniox did not start the stream in time.'
+            done()
+          },
+          SONIOX_FINISH_TIMEOUT_MS + Math.ceil(unsentBytes / UPLOAD_BYTES_PER_MS)
+        )
         function done(): void {
           clearTimeout(timer)
           resolve()
@@ -140,22 +158,27 @@ export class SonioxRealtimeSession implements CloudDictationSession {
           this.sendEnd()
         }
       })
-      if (!this.accepting && !this.failure) {
-        this.failure = 'Soniox did not start the stream in time.'
-      }
     }
     const failure = this.failure
-    const rest = this.finalized + this.tentative
+    // A failed finish still lands the words Soniox finalized; tentative ones may be wrong.
+    const rest = failure ? this.finalized : this.finalized + this.tentative
     this.finalized = ''
     this.tentative = ''
     this.close()
+    if (this.canceled) {
+      return ''
+    }
     if (failure) {
+      if (rest.trim()) {
+        this.options.sink({ type: 'final', text: rest.trim() })
+      }
       throw new Error(failure)
     }
     return rest.trim()
   }
 
   cancel(): void {
+    this.canceled = true
     this.close()
   }
 
@@ -199,10 +222,12 @@ export class SonioxRealtimeSession implements CloudDictationSession {
       return
     }
     let tentative = ''
-    let pause = false
     for (const token of parsed.data.tokens ?? []) {
       if (token.text === '<end>') {
-        pause = true
+        // After the end frame finish() returns the rest in one piece.
+        if (!this.endSent) {
+          this.commit()
+        }
       } else if (/^<\w+>$/.test(token.text)) {
         // Other control tokens such as <fin> are markers, not speech.
         continue
@@ -213,11 +238,9 @@ export class SonioxRealtimeSession implements CloudDictationSession {
       }
     }
     this.tentative = tentative
-    if (pause && !this.endSent) {
-      this.commit()
-    }
     this.publishPartial()
     if (parsed.data.finished === true) {
+      this.finished = true
       this.settleFinish?.()
     }
   }
@@ -255,6 +278,8 @@ export class SonioxRealtimeSession implements CloudDictationSession {
       return
     }
     const failure = this.failure
+    // Words Soniox already finalized land before the dictation ends.
+    this.commit()
     this.close()
     this.options.onFailure(failure)
   }

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import type { SttEvent } from './stt-service'
-import { SONIOX_FINISH_TIMEOUT_MS, SonioxRealtimeSession } from './soniox-realtime-session'
+import {
+  SONIOX_ACCEPT_TIMEOUT_MS,
+  SONIOX_FINISH_TIMEOUT_MS,
+  SonioxRealtimeSession
+} from './soniox-realtime-session'
 import { sonioxStreamConfig, type SonioxSocket } from './soniox-protocol'
 import { checkSonioxApiKey } from './soniox-key-verification'
 
@@ -45,8 +49,9 @@ class FakeSocket implements SonioxSocket {
   }
 }
 
-async function setup(apiKey = 'soniox-test-key-123') {
+async function setup(apiKey = 'soniox-test-key-123', isCanceled = () => false) {
   const socket = new FakeSocket()
+  const opened: FakeSocket[] = []
   const events: SttEvent[] = []
   const failures: string[] = []
   const session = new SonioxRealtimeSession({
@@ -55,10 +60,14 @@ async function setup(apiKey = 'soniox-test-key-123') {
     terms: ['Orca'],
     sink: (event) => events.push(event),
     onFailure: (error) => failures.push(error),
-    openSocket: () => socket
+    isCanceled,
+    openSocket: () => {
+      opened.push(socket)
+      return socket
+    }
   })
   await session.start()
-  return { socket, events, failures, session }
+  return { socket, events, failures, session, opened }
 }
 
 const token = (text: string, final: boolean) => ({ text, is_final: final })
@@ -116,7 +125,7 @@ describe('SonioxRealtimeSession', () => {
       error_code: 401,
       error_message: 'bad key secret-key-abcdef'
     })
-    expect(failures).toEqual(['Soniox rejected the API key. bad key [redacted]'])
+    expect(failures).toEqual(['Soniox rejected the API key (401). bad key [redacted]'])
     expect(events).toEqual([])
     expect(socket.listenerCount('message')).toBe(0)
   })
@@ -138,15 +147,145 @@ describe('SonioxRealtimeSession', () => {
     expect(failures).toEqual([])
   })
 
-  it('gives up on a stream that never finishes', async () => {
+  it('reports a stream that never finishes, landing its finalized words first', async () => {
+    vi.useFakeTimers()
+    const { socket, session, events } = await setup()
+    socket.open()
+    session.feedAudio(new Float32Array(160), 16_000)
+    socket.frame({ tokens: [token('partly', true), token(' maybe', false)] })
+    const finished = session.finish()
+    const outcome = expect(finished).rejects.toThrow('the end may be missing')
+    await vi.advanceTimersByTimeAsync(SONIOX_FINISH_TIMEOUT_MS)
+    await outcome
+    expect(events.at(-1)).toEqual({ type: 'final', text: 'partly' })
+  })
+
+  it('waits longer when audio is still in the send buffer at stop', async () => {
     vi.useFakeTimers()
     const { socket, session } = await setup()
     socket.open()
     session.feedAudio(new Float32Array(160), 16_000)
-    socket.frame({ tokens: [token('partly', true)] })
+    socket.bufferedAmount = 125_000
     const finished = session.finish()
     await vi.advanceTimersByTimeAsync(SONIOX_FINISH_TIMEOUT_MS)
-    await expect(finished).resolves.toBe('partly')
+    socket.frame({ tokens: [token('late', true)], finished: true })
+    await expect(finished).resolves.toBe('late')
+  })
+
+  it('gives audio queued before the stream opened time to go out at stop', async () => {
+    vi.useFakeTimers()
+    const { socket, session } = await setup()
+    // 4 s of audio queued while the socket opens: 128 KB, about a second at the upload rate.
+    session.feedAudio(new Float32Array(4 * 16_000), 16_000)
+    const finished = session.finish()
+    socket.open()
+    await vi.advanceTimersByTimeAsync(SONIOX_FINISH_TIMEOUT_MS)
+    socket.frame({ tokens: [token('queued', true)], finished: true })
+    await expect(finished).resolves.toBe('queued')
+  })
+
+  it('says the stream never started when it was still opening at the finish deadline', async () => {
+    vi.useFakeTimers()
+    const { session } = await setup()
+    session.feedAudio(new Float32Array(160), 16_000)
+    const outcome = expect(session.finish()).rejects.toThrow(
+      'Soniox did not start the stream in time.'
+    )
+    // The deadline adds a few ms for the queued audio.
+    await vi.advanceTimersByTimeAsync(SONIOX_FINISH_TIMEOUT_MS + 1000)
+    await outcome
+  })
+
+  it('fails a stream that closes after the end frame without finishing', async () => {
+    const { socket, session } = await setup()
+    socket.open()
+    session.feedAudio(new Float32Array(160), 16_000)
+    const finished = session.finish()
+    socket.emit('close', 1006, Buffer.from(''))
+    await expect(finished).rejects.toThrow('Soniox closed the stream (1006).')
+  })
+
+  it('lands finalized words before ending a stream that breaks mid-dictation', async () => {
+    const { socket, events, failures } = await setup()
+    socket.open()
+    socket.frame({ tokens: [token('kept', true), token(' lost', false)] })
+    socket.emit('close', 1000, Buffer.from('session limit'))
+    expect(events.at(-1)).toEqual({ type: 'final', text: 'kept' })
+    expect(failures).toHaveLength(1)
+  })
+
+  it('commits each phrase separately when one frame carries two', async () => {
+    const { socket, events } = await setup()
+    socket.open()
+    socket.frame({
+      tokens: [token('one', true), token('<end>', true), token(' two', true), token('<end>', true)]
+    })
+    expect(events.filter((e) => e.type === 'final')).toEqual([
+      { type: 'final', text: 'one' },
+      { type: 'final', text: 'two' }
+    ])
+  })
+
+  it('returns no text when canceled during finish', async () => {
+    const { socket, session } = await setup()
+    socket.open()
+    session.feedAudio(new Float32Array(160), 16_000)
+    socket.frame({ tokens: [token('dropped', true)] })
+    const finished = session.finish()
+    session.cancel()
+    await expect(finished).resolves.toBe('')
+  })
+
+  it('opens no stream when the dictation was stopped while the key was read', async () => {
+    const { opened } = await setup('key', () => true)
+    expect(opened).toHaveLength(0)
+  })
+
+  it('fails when the stream does not open in time', async () => {
+    vi.useFakeTimers()
+    const { failures } = await setup()
+    await vi.advanceTimersByTimeAsync(SONIOX_ACCEPT_TIMEOUT_MS)
+    expect(failures).toEqual(['Soniox did not start the stream in time.'])
+  })
+
+  it('sends queued audio and the end frame when stop comes before the stream opens', async () => {
+    const { socket, session } = await setup()
+    session.feedAudio(new Float32Array(160), 16_000)
+    const finished = session.finish()
+    socket.open()
+    expect(socket.sent.map((data) => (typeof data === 'string' ? data : 'pcm'))).toEqual([
+      JSON.stringify(sonioxStreamConfig('uk', ['Orca'])),
+      'pcm',
+      ''
+    ])
+    socket.frame({ tokens: [token('hi', true)], finished: true })
+    await expect(finished).resolves.toBe('hi')
+  })
+
+  it('fails a dictation whose socket cannot keep up', async () => {
+    const { socket, session, failures } = await setup()
+    socket.open()
+    socket.bufferedAmount = 2 * 1024 * 1024
+    session.feedAudio(new Float32Array(160), 16_000)
+    expect(failures).toEqual(['Soniox connection is too slow.'])
+  })
+
+  it('reports a key Soniox refuses at the handshake', async () => {
+    const { socket, failures } = await setup()
+    const request = { destroy: vi.fn() }
+    socket.emit('unexpected-response', request, { statusCode: 402 })
+    expect(request.destroy).toHaveBeenCalled()
+    expect(failures).toEqual(['Soniox refused this API key (402).'])
+  })
+
+  it('stops taking audio at the 10-minute cap', async () => {
+    const { socket, session } = await setup()
+    socket.open()
+    const tenMinutes = new Float32Array(10 * 60 * 16_000)
+    expect(session.feedAudio(tenMinutes, 16_000)).toBe(true)
+    const sent = socket.sent.length
+    expect(session.feedAudio(new Float32Array(160), 16_000)).toBe(false)
+    expect(socket.sent).toHaveLength(sent)
   })
 
   it('returns nothing and sends no end frame when no audio came', async () => {
@@ -175,7 +314,16 @@ describe('checkSonioxApiKey', () => {
       error_type: 'unauthenticated',
       error_message: 'Invalid'
     })
-    await expect(result).resolves.toBe('Soniox rejected the API key. Invalid')
+    await expect(result).resolves.toBe('Soniox rejected the API key (401). Invalid')
+  })
+
+  it('refuses a key Soniox turns away at the handshake', async () => {
+    const socket = new FakeSocket()
+    const result = checkSonioxApiKey('k', () => socket)
+    const request = { destroy: vi.fn() }
+    socket.emit('unexpected-response', request, { statusCode: 401 })
+    await expect(result).resolves.toBe('Soniox rejected the API key (401).')
+    expect(request.destroy).toHaveBeenCalled()
   })
 
   it('lets an unreachable Soniox save the key anyway', async () => {

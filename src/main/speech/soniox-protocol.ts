@@ -52,6 +52,9 @@ export const sonioxTokenFrameSchema = z.object({
   finished: z.boolean().optional()
 })
 
+/** HTTP or error-frame statuses that mean Soniox refuses this key (402/403: billing or permissions on a valid key). */
+export const SONIOX_REFUSED_KEY_STATUSES: ReadonlySet<number> = new Set([401, 402, 403])
+
 /** Soniox's error frame, or null for a transcript frame. */
 export function readSonioxError(frame: Record<string, unknown>): string | null {
   const code = frame.error_code
@@ -61,14 +64,17 @@ export function readSonioxError(frame: Record<string, unknown>): string | null {
   }
   const status = typeof code === 'number' ? code : null
   const detail = typeof message === 'string' ? message : ''
-  if (status === 401) {
-    return `Soniox rejected the API key. ${detail}`.trim()
-  }
-  // 402/403 usually mean billing or permissions on a valid key, so they are worded apart from 401.
-  if (status === 402 || status === 403) {
-    return `Soniox refused this API key (${status}). ${detail}`.trim()
+  if (status !== null && SONIOX_REFUSED_KEY_STATUSES.has(status)) {
+    return sonioxKeyRefusalMessage(status, detail)
   }
   return `Soniox error${status === null ? '' : ` ${status}`}: ${detail}`.trim()
+}
+
+/** The same words for a refused key whether Soniox says so at the handshake or in an error frame. */
+export function sonioxKeyRefusalMessage(status: number, detail = ''): string {
+  // 402/403 usually mean billing or permissions on a valid key, so they are worded apart from 401.
+  const verdict = status === 401 ? 'rejected the API key' : 'refused this API key'
+  return `Soniox ${verdict} (${status}). ${detail}`.trim()
 }
 
 export function parseSonioxFrame(raw: string): Record<string, unknown> | null {
@@ -82,11 +88,12 @@ export function parseSonioxFrame(raw: string): Record<string, unknown> | null {
   }
 }
 
+/** Little-endian 16-bit PCM; typed arrays use the host's byte order, little-endian on every platform Orca ships. */
 export function encodePcm16(samples: Float32Array): Buffer {
-  const buffer = Buffer.alloc(samples.length * 2)
+  const pcm = new Int16Array(samples.length)
   for (let i = 0; i < samples.length; i += 1) {
     const clamped = Math.max(-1, Math.min(1, samples[i]))
-    buffer.writeInt16LE(Math.round(clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff), i * 2)
+    pcm[i] = Math.round(clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff)
   }
-  return buffer
+  return Buffer.from(pcm.buffer)
 }

@@ -7,12 +7,10 @@ import {
 import { saveVerifiedSonioxSpeechApiKey } from '../speech/soniox-key-verification'
 
 export function registerSonioxSpeechKeyHandlers(): void {
-  ipcMain.handle('speech:getSonioxApiKeyStatus', () => {
-    return {
-      configured: hasSonioxSpeechApiKey(),
-      protection: getSonioxSpeechApiKeyProtection()
-    }
-  })
+  ipcMain.handle('speech:getSonioxApiKeyStatus', async () => ({
+    configured: await hasSonioxSpeechApiKey(),
+    protection: await getSonioxSpeechApiKeyProtection()
+  }))
 
   ipcMain.handle('speech:saveSonioxApiKey', async (_event, apiKey: string) => {
     await saveVerifiedSonioxSpeechApiKey(apiKey)

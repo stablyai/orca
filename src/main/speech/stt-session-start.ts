@@ -127,7 +127,8 @@ async function startCloudSession(
     terms: session.vocabulary,
     // Events reach whichever sink the session holds now; a re-attached client replaces it.
     sink: (event) => session.sink(event),
-    onFailure: (error) => failCloudSession(state, session, error)
+    onFailure: (error) => failCloudSession(state, session, error),
+    isCanceled: () => state.sessions.get(session.owner) !== session
   })
   await stream.start()
   return stream

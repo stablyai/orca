@@ -6,6 +6,8 @@ import {
   parseSonioxFrame,
   readSonioxError,
   SONIOX_REALTIME_URL,
+  SONIOX_REFUSED_KEY_STATUSES,
+  sonioxKeyRefusalMessage,
   sonioxStreamConfig,
   type OpenSonioxSocket,
   type SonioxSocket
@@ -15,7 +17,6 @@ import { sanitizeOpenAiTranscriptionErrorMessage } from './openai-transcription-
 const KEY_CHECK_TIMEOUT_MS = 10_000
 // 100 ms of silence: enough for Soniox to run the stream and answer `finished`.
 const PROBE_SILENCE_BYTES = (CLOUD_TRANSCRIPTION_SAMPLE_RATE / 10) * 2
-const REFUSED_STATUSES = new Set([401, 402, 403])
 const REFUSED_ERROR_TYPES = new Set(['unauthenticated', 'permission_denied'])
 
 /** null: the key works, or the check couldn't tell (offline, timeout); otherwise why Soniox refused it. */
@@ -64,7 +65,8 @@ export function checkSonioxApiKey(
       const error = readSonioxError(frame)
       if (error) {
         const refused =
-          (typeof frame.error_code === 'number' && REFUSED_STATUSES.has(frame.error_code)) ||
+          (typeof frame.error_code === 'number' &&
+            SONIOX_REFUSED_KEY_STATUSES.has(frame.error_code)) ||
           (typeof frame.error_type === 'string' && REFUSED_ERROR_TYPES.has(frame.error_type))
         settle(refused ? error : null)
       } else if (frame.finished === true) {
@@ -74,7 +76,7 @@ export function checkSonioxApiKey(
     opened.on('unexpected-response', (request: ClientRequest, response: IncomingMessage) => {
       request.destroy()
       const status = response.statusCode ?? 0
-      settle(REFUSED_STATUSES.has(status) ? `Soniox rejected the API key (${status}).` : null)
+      settle(SONIOX_REFUSED_KEY_STATUSES.has(status) ? sonioxKeyRefusalMessage(status) : null)
     })
     opened.on('error', () => settle(null))
     opened.on('close', () => settle(null))

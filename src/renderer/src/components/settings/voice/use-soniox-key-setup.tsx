@@ -98,7 +98,9 @@ export function useSonioxKeySetup({
   const save = (): Promise<void> =>
     run(
       async () => {
-        await window.api.speech.saveSonioxApiKey(draft)
+        const saved = await window.api.speech.saveSonioxApiKey(draft)
+        // A replaced key may be sealed differently; `configured` doesn't flip, so the effect won't re-read it.
+        setProtection(saved.protection)
         if (pendingModelId) {
           onUpdateVoiceSettings({ sttModel: pendingModelId })
         }

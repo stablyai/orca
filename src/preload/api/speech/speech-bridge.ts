@@ -33,9 +33,11 @@ export const speechApi = {
     configured: boolean
     protection: SecretAtRestProtection | null
   }> => ipcRenderer.invoke('speech:getSonioxApiKeyStatus'),
-  saveSonioxApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+  saveSonioxApiKey: (
+    apiKey: string
+  ): Promise<{ configured: boolean; protection: SecretAtRestProtection | null }> =>
     ipcRenderer.invoke('speech:saveSonioxApiKey', apiKey),
-  clearSonioxApiKey: (): Promise<{ configured: boolean }> =>
+  clearSonioxApiKey: (): Promise<{ configured: boolean; protection: null }> =>
     ipcRenderer.invoke('speech:clearSonioxApiKey'),
   getOpenAiCompatibleProvider: (): Promise<OpenAiCompatibleSpeechProviderSummary | null> =>
     ipcRenderer.invoke('speech:getOpenAiCompatibleProvider'),
