@@ -71,6 +71,10 @@ export type AcpLaunchSpec = {
     fullAccessAtLaunch?: true
     /** The modes govern only some requests; under full access Orca answers the rest itself. */
     fullAccessAnswersRequests?: true
+    /** Config id when the session advertises no mode select. */
+    configId?: string
+    /** A successful write stands when the reply lists no options. */
+    emptyConfigMenuConfirms?: true
   }
   /** Enables /compact as a prompt command. */
   compaction?: true

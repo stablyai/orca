@@ -9,7 +9,7 @@ import { ProviderAcquisitionStarts } from '../../provider-process/provider-acqui
 import { removeAntigravitySignInSessionFiles } from '../../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/execution/source-control-generation-limits'
 import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
-import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
+import { acpLaunchSpecForAccount, acpPermissionModeConfigId } from '../launch/acp-launch-command'
 import { prepareAcpLaunch } from '../launch/acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from '../launch/acp-private-temp'
 import { acpClientInfo } from '../launch/acp-client-info'
@@ -248,10 +248,10 @@ export class AcpTextTasks {
           })
           .then((started) => {
             sessionId = started.sessionId
-            modeConfigId =
-              started.response.configOptions?.find(
-                (option) => option.category === 'mode' && option.type === 'select'
-              )?.id ?? 'mode'
+            modeConfigId = acpPermissionModeConfigId(
+              started.response.configOptions,
+              spec.permissionModeConfig?.configId
+            )
           })
           .finally(() => {
             starting = false

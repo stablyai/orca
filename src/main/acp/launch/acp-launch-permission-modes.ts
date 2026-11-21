@@ -2,6 +2,8 @@ import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
 } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { SessionConfigOption } from '../generated/acp-protocol.generated'
+import type { AcpStructuredOptions } from '../options/acp-structured-options'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 
 /** The session modes a launch reports as Orca's: a full-access launch holds only that mode. */
@@ -29,6 +31,75 @@ export function acpLaunchPermission(
     permissionModes: acpLaunchPermissionModes(spec, fullAccess),
     permission: permission ?? 'ask',
     launchArgsGrantFullAccess: fullAccess && args(true) !== args(false)
+  }
+}
+
+type SelectConfigOption = Extract<SessionConfigOption, { type: 'select' }>
+
+/** Picks the permission mode select option using the same rule for reads and write confirmation. */
+export function findAcpPermissionModeSelect(
+  configOptions: readonly SessionConfigOption[],
+  preferredId?: string
+): SelectConfigOption | null {
+  const byId = preferredId
+    ? configOptions.find(
+        (option): option is SelectConfigOption =>
+          option.type === 'select' && option.id === preferredId
+      )
+    : undefined
+  if (byId) {
+    return byId
+  }
+  return (
+    configOptions.find(
+      (option): option is SelectConfigOption =>
+        option.type === 'select' && option.category === 'mode'
+    ) ?? null
+  )
+}
+
+/** The config id a permission write targets: the advertised select, else the spec's id. */
+export function acpPermissionModeConfigId(
+  configOptions: readonly SessionConfigOption[] | null | undefined,
+  preferredId?: string
+): string {
+  return findAcpPermissionModeSelect(configOptions ?? [], preferredId)?.id ?? preferredId ?? 'mode'
+}
+
+/** A mode write is confirmed by its echo, or by an empty menu when the agent applies it silently. */
+export function confirmAcpPermissionModeWrite(
+  mode: { configId?: string; emptyConfigMenuConfirms?: true },
+  configId: string,
+  requested: string,
+  configOptions: readonly SessionConfigOption[],
+  options: Pick<
+    AcpStructuredOptions,
+    'adoptConfigOptions' | 'adoptConfirmedPermissionValue' | 'hasModeSelect' | 'clearPermissionMode'
+  >
+): void {
+  const echoed = findAcpPermissionModeSelect(configOptions, mode.configId ?? configId)
+  const acceptsEmptyMenu =
+    mode.emptyConfigMenuConfirms === true &&
+    !options.hasModeSelect(mode.configId) &&
+    mode.configId !== undefined &&
+    configId === mode.configId
+  const confirmed =
+    echoed?.currentValue === requested || (acceptsEmptyMenu && configOptions.length === 0)
+  if (!confirmed) {
+    if (configOptions.length === 0) {
+      options.clearPermissionMode()
+    } else {
+      options.adoptConfirmedPermissionValue(null)
+      options.adoptConfigOptions([...configOptions])
+    }
+    throw new Error('Permission mode could not be confirmed')
+  }
+  // A confirmed empty menu applied the mode and listed nothing, so the held menu stays.
+  if (configOptions.length > 0) {
+    options.adoptConfirmedPermissionValue(null)
+    options.adoptConfigOptions([...configOptions])
+  } else {
+    options.adoptConfirmedPermissionValue(requested)
   }
 }
 
