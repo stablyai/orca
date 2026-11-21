@@ -14,6 +14,7 @@ import {
   type HostlessChatsAreLocal
 } from '../../../../shared/bots/bot-home-tab'
 import { hostlessChatsAreLocal } from '@/lib/workspace/ownership/recorded-workspace-owner'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
@@ -153,7 +154,10 @@ export function installBotHomeTabPlacement(store: StoreApi<AppState> = useAppSto
       state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
       state.groupsByWorktree !== previous.groupsByWorktree ||
       state.layoutByWorktree !== previous.layoutByWorktree ||
-      state.workspaceSessionReady !== previous.workspaceSessionReady
+      state.workspaceSessionReady !== previous.workspaceSessionReady ||
+      // Hostless chats are claimed from these records, which can arrive after the tabs.
+      selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous) ||
+      state.projectGroups !== previous.projectGroups
     ) {
       place()
     }

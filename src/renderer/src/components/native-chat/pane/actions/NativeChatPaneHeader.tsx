@@ -11,7 +11,7 @@ import type { NativeChatTabSession } from '../../../tab-bar/session-actions/tab-
 import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
-import { useBotForWorkspace } from '../../../bots/bot-workspace'
+import { useBotForChatTab } from '../../../bots/bot-workspace'
 import { BotHomeBanner } from '../../../bots/home-chat/BotHomeBanner'
 import { isHostedBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
 import { hostlessChatsAreLocal } from '@/lib/workspace/ownership/recorded-workspace-owner'
@@ -49,7 +49,7 @@ export function NativeChatPaneHeader({
     (state) =>
       state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)?.executionHostId
   )
-  const bot = useBotForWorkspace(worktreeId, tabHostId)
+  const bot = useBotForChatTab(worktreeId, tabHostId)
   // A bot's chats stay native chats.
   const onBotPage = bot !== null
   const homeRule = useBotHomeRuleApplies(bot)

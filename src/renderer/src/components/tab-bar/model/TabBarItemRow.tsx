@@ -24,7 +24,7 @@ import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-st
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import { useBotForWorkspace } from '../../bots/bot-workspace'
+import { useBotForChatTab } from '../../bots/bot-workspace'
 import {
   isBotHomeTab,
   isBotSideChatTab,
@@ -93,7 +93,7 @@ function TabBarItemRow({
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
-  const bot = useBotForWorkspace(
+  const bot = useBotForChatTab(
     worktreeId,
     item.type === 'agent-session' ? item.data.executionHostId : undefined
   )

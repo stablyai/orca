@@ -277,10 +277,14 @@ describe('bot Home tab placement', () => {
     expect(strips()).toEqual([['tab-home', 'tab-side-1']])
   })
 
-  it("leaves hostless chats alone while no record says their workspace is this app's", () => {
+  it("leaves hostless chats alone until a record says their workspace is this app's", () => {
     restoreSessionSavedWithoutTabHosts()
     expect(pinnedIds()).toEqual(['tab-side-1'])
     expect(strips()).toEqual([['tab-side-1', 'tab-home']])
+
+    store.setState({ folderWorkspaces: [makeFolderWorkspace({ id: 'bot-home' })] })
+    expect(pinnedIds()).toEqual(['tab-home'])
+    expect(strips()).toEqual([['tab-home', 'tab-side-1']])
   })
 
   it('reopens first in the top-left group whichever group it opens in', () => {
