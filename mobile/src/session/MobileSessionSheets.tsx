@@ -364,11 +364,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
         keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
-          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then((created) => {
-            if (created) {
-              setShowCreateBrowserModal(false)
-            }
-          })
+          setShowCreateBrowserModal(Platform.OS !== 'ios') // iOS alert is gone; else keep URL to retry
+          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then(
+            (created) => created && setShowCreateBrowserModal(false)
+          )
         }}
         onCancel={() => setShowCreateBrowserModal(false)}
       />
