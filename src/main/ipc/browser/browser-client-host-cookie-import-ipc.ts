@@ -95,7 +95,7 @@ export function registerClientHostCookieImportHandlers(): void {
     }
   )
 
-  // Only while this desktop hosts the pages, so a shown source is the one an import here reads.
+  // Null unless this desktop hosts the pages; hosted pages use only this desktop's jar.
   ipcMain.handle(
     'browser:session:clientRouteImportSources',
     (event, args: { environmentId: string }) => {
@@ -104,7 +104,7 @@ export function registerClientHostCookieImportHandlers(): void {
         typeof args?.environmentId !== 'string' ||
         !getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
       ) {
-        return {}
+        return null
       }
       return clientRouteCookieImportSources(args.environmentId)
     }

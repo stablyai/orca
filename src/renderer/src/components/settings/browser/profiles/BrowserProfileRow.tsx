@@ -190,7 +190,8 @@ export function BrowserProfileRow({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        // Keys on the row's own buttons must reach those buttons.
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
           onSelect()
         }

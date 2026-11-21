@@ -80,15 +80,16 @@ export function createBrowserProfileListActions(
             undefined,
             { timeoutMs: 15_000, expectedEnvironmentPairingRevision: pairingRevision }
           )
-          // Client-hosted pages use this desktop's jar, so its import source replaces the server's.
+          // Client-hosted pages use only this desktop's jar, so its import sources replace the server's.
           const clientImportSources = await window.api.browser
             .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
-            .catch(() => ({}))
-          const profiles = result.profiles.map((profile) =>
-            clientImportSources?.[profile.id]
-              ? { ...profile, source: clientImportSources[profile.id] }
-              : profile
-          )
+            .catch(() => null)
+          const profiles = clientImportSources
+            ? result.profiles.map((profile) => ({
+                ...profile,
+                source: clientImportSources[profile.id] ?? null
+              }))
+            : result.profiles
           if (isLatest()) {
             await landListing(hostId, profiles)
           }
