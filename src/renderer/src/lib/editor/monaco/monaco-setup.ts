@@ -8,6 +8,7 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { createTextMateTokensProvider } from '../../monaco-languages/textmate-token-provider'
 import { registerAstroLanguage } from '../../monaco-languages/register-astro'
 import { registerCMakeLanguage } from '../../monaco-languages/register-cmake'
 import { registerCudaLanguage } from '../../monaco-languages/register-cuda'
@@ -75,6 +76,22 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 })
 
 runMonacoSetupSteps([
+  // Keep Monaco's existing TypeScript language ID, configuration, and language services.
+  // Replace only tokenization to distinguish functions, parameters, and primitive types.
+  [
+    'TypeScript TextMate tokenization',
+    () => {
+      monaco.languages.registerTokensProviderFactory('typescript', {
+        create: () =>
+          createTextMateTokensProvider({
+            loadGrammar: async () => {
+              const { default: grammars } = await import('shiki/langs/typescript.mjs')
+              return grammars[0]
+            }
+          })
+      })
+    }
+  ],
   ['Vue language registration', () => registerVueLanguage(monaco)],
   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
   ['Astro language registration', () => registerAstroLanguage(monaco)],
