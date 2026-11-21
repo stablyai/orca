@@ -1,4 +1,3 @@
-import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
@@ -191,6 +190,7 @@ function resolveAccountRestartLaunchTarget(
     : null
   // Why: a folder or nested-SSH workspace on a server runs on its SSH target, not the server.
   const connectionId = repo?.connectionId ?? getConnectionIdFromState(state, args.worktreeId)
+  const runtimeStatuses = state.runtimeStatusByEnvironmentId
   return resolveAgentResumeLaunchTarget({
     projectRuntime,
     connectionId,
@@ -204,9 +204,9 @@ function resolveAccountRestartLaunchTarget(
       runtimeEnvironmentIdUnlessTwin(state, args.worktreeId),
       connectionId
     ),
-    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(readRuntimeStatuses(), executionHostId),
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(runtimeStatuses, executionHostId),
     runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
-      readRuntimeStatuses(),
+      runtimeStatuses,
       executionHostId
     )
   })

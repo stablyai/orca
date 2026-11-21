@@ -51,10 +51,8 @@ beforeEach(() => {
     api: {
       pty: { spawn },
       runtimeEnvironments: {
-        call: (args: Parameters<typeof window.api.runtimeEnvironments.call>[0]) =>
-          Promise.resolve(
-            createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-before')
-          ).then((status) => status ?? call(args))
+        call: async (args: { method: string }) =>
+          createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-before') ?? call(args)
       }
     }
   })

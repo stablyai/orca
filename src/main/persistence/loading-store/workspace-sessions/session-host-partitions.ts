@@ -57,11 +57,8 @@ import {
   runtimePartitionFencePrior
 } from './runtime-partition-topology-fence'
 
-type SessionHostPartitionOperationsRuntime = Pick<
-  StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage'
-> &
-  GenerationRuntime
+type SessionHostPartitionOperationsRuntime = GenerationRuntime &
+  Pick<StoreRuntimeState, 'state' | 'terminalScrollbackSnapshotStorage'>
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
 type SessionHostPartitionOperationsContext = {
@@ -221,41 +218,31 @@ export function removeWorkspaceSessionOwnerInPartition(
     return
   }
   const current = owner.getWorkspaceSession(resolved)
+  const { runtime, scheduling } = owner[sessionHostPartitionOperationsContext]
   const advanceTerminalTopologyRevision = options.advanceTerminalTopologyRevision ?? true
   const session = removeWorkspaceSessionOwner(current, worktreeId, {
     advanceTerminalTopologyRevision
   })
   if (advanceTerminalTopologyRevision) {
-    noteRuntimeTopologyChange(
-      owner[sessionHostPartitionOperationsContext].runtime,
-      resolved,
-      worktreeId
-    )
+    noteRuntimeTopologyChange(runtime, resolved, worktreeId)
   }
   if (!session) {
     return
   }
   // Releasing session ownership may unblock metadata pruning; no other signal covers this write.
   invalidateLocalWorktreeMetadataPruneInputs()
-  reconcileTrackedPtyBindingGenerations(
-    owner[sessionHostPartitionOperationsContext].runtime,
-    resolved,
-    current,
-    session
-  )
+  reconcileTrackedPtyBindingGenerations(runtime, resolved, current, session)
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
+    runtime.state.workspaceSession = session
   } else {
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
-      ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
+    runtime.state.workspaceSessionsByHostId = {
+      ...runtime.state.workspaceSessionsByHostId,
       [resolved]: session
     }
   }
-  scheduleSave(
-    owner[sessionHostPartitionOperationsContext].scheduling,
-    resolved === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
-    resolved
-  )
+  const domain =
+    resolved === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
+  scheduleSave(scheduling, [domain], resolved)
 }
 
 export function partitionOwnsWorktreeTabs(
