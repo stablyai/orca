@@ -1,3 +1,6 @@
+/** Shared progress word: odd while starting or handling work, and it moves on every step. */
+export const JOURNAL_CHECKPOINT_PROGRESS = 0
+
 // Evaluated source travels with both host bundles, without a separate worker entry or Electron imports.
 export const journalCheckpointWorkerSource = `
 const { parentPort, workerData } = require('node:worker_threads');
@@ -8,6 +11,14 @@ let idle;
 let generation = 0;
 let nextTruncate = 0;
 let pendingTruncate;
+// The owner tells a slow checkpoint from a dead worker by this, since a native call can't answer.
+// A unit of work ends after its reply is posted, so one load never sees a gap as idle and silent.
+const progress = new Int32Array(workerData.liveness);
+const work = (run) => {
+  Atomics.add(progress, ${JOURNAL_CHECKPOINT_PROGRESS}, 1);
+  try { run(); } finally { Atomics.add(progress, ${JOURNAL_CHECKPOINT_PROGRESS}, 1); }
+};
+const reply = (message) => parentPort.postMessage(message);
 try {
   db = new DatabaseSync(workerData.filename);
   if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
@@ -23,7 +34,7 @@ try {
   const schedule = (state, blocked) => {
     // While writes wait on the WAL, retry soon: a truncate needs a gap between readers' snapshots.
     if (blocked || state.log - state.checkpointed >= 1000) {
-      idle = setTimeout(() => check(true), blocked ? 100 : 1000);
+      idle = setTimeout(() => work(() => check(true)), blocked ? 100 : 1000);
     }
   };
   const check = (force, id, nextGeneration = generation) => {
@@ -36,14 +47,19 @@ try {
     }
     if (state.log === state.checkpointed && (ceiling(state) || oversized())) {
       pendingTruncate = { truncateId: ++nextTruncate, id, generation, state };
-      parentPort.postMessage({ type: 'truncate-request', ...pendingTruncate, ...state });
+      reply({ type: 'truncate-request', ...pendingTruncate, ...state });
       return;
     }
     const blocked = (ceiling(state) || oversized()) && state.checkpointed < state.log;
-    parentPort.postMessage({ type: 'checked', id, generation, ...state, blocked });
+    reply({ type: 'checked', id, generation, ...state, blocked });
     schedule(state, blocked);
   };
-  parentPort.on('message', (request) => {
+  parentPort.on('message', (request) => work(() => {
+    // Ready to take checkpoints over; the owner hands them over only after this reply.
+    if (request.type === 'hello') {
+      reply({ type: 'hello' });
+      return;
+    }
     clearTimeout(idle);
     if (request.type === 'truncate') {
       if (!pendingTruncate || request.truncateId !== pendingTruncate.truncateId) return;
@@ -59,18 +75,20 @@ try {
       const state = frames.get();
       const blocked = (ceiling(state) && (busy || state.checkpointed < state.log)) || oversized();
       pendingTruncate = undefined;
-      parentPort.postMessage({ type: 'checked', id: pending.id, generation: pending.generation,
+      reply({ type: 'checked', id: pending.id, generation: pending.generation,
         truncateId: pending.truncateId, ...state, blocked });
       schedule(state, blocked);
       return;
     }
     if (pendingTruncate) {
-      parentPort.postMessage({ type: 'checked', id: request.id, generation: pendingTruncate.generation,
+      reply({ type: 'checked', id: request.id, generation: pendingTruncate.generation,
         ...pendingTruncate.state, blocked: true });
       return;
     }
     check(request.force, request.id, request.generation);
-  });
+  }));
+  // Started: the owner counted startup as one unit of work.
+  Atomics.add(progress, ${JOURNAL_CHECKPOINT_PROGRESS}, 1);
 } catch (error) {
   db?.close();
   throw error;
