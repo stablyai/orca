@@ -84,3 +84,8 @@ export function isBrowserSessionWebRequestHeld(
 ): boolean {
   return holdersBySession.get(session)?.has(event) ?? false
 }
+
+/** Electron hands a request started with no listener straight to the network, redirects included. */
+export function hasBrowserSessionWebRequestListener(session: Session): boolean {
+  return (holdersBySession.get(session)?.size ?? 0) > 0
+}

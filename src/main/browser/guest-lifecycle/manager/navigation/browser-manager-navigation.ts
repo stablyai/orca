@@ -142,6 +142,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     )
   }
 
+  protected tabRewritesRequestHeaders(guest: Electron.WebContents, url: string): boolean {
+    return rewritesRequestHeaders(url, this.resolveGuestTabIdentity(guest, url))
+  }
+
   protected hasTabIdentityOverrideWork(guest: Electron.WebContents, url: string): boolean {
     return (
       this.resolveTabIdentityOverride(
