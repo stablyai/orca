@@ -72,10 +72,10 @@ export async function resolveBranchCheckouts(
   }
   const settled = () => owners.length > 1 || (firstOwnerSettles && owners.length > 0)
   for (const [gitDir, head] of state.heads) {
-    if (gitDir === bareCommonDir || head === '') {
+    if (gitDir === bareCommonDir) {
       continue
     }
-    // A HEAD without a `ref:` line may still be a symlink naming a ref; probe those only if needed.
+    // A HEAD without a `ref:` line may be a symlink naming a ref (read as empty when that ref is packed).
     if (!head.startsWith('ref: ')) {
       unnamed.push(gitDir)
     } else if (!classify(gitDir, head)) {
@@ -91,8 +91,9 @@ export async function resolveBranchCheckouts(
     const link = settled() ? undefined : await readRefLink(join(gitDir, 'HEAD'))
     if (link !== undefined) {
       unresolvable ||= !classify(gitDir, link)
-    } else if (!COMMIT_ID.test(state.heads.get(gitDir) ?? '')) {
-      unresolvable = true
+    } else {
+      const head = state.heads.get(gitDir) ?? ''
+      unresolvable ||= head !== '' && !COMMIT_ID.test(head)
     }
   })
   if (settled()) {

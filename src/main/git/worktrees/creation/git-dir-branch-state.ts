@@ -20,13 +20,21 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   }
   const gitDirs = [commonDir]
   try {
+    const linked: string[] = []
     for (const entry of await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })) {
       const gitDir = join(commonDir, 'worktrees', entry.name)
-      // Git follows a symlinked registration, so it counts too.
-      if (entry.isDirectory() || (entry.isSymbolicLink() && (await isDirectory(gitDir)))) {
+      if (entry.isDirectory()) {
         gitDirs.push(gitDir)
+      } else if (entry.isSymbolicLink()) {
+        linked.push(gitDir)
       }
     }
+    // Git follows a symlinked registration, so it counts too.
+    await forEachBounded(linked, async (gitDir) => {
+      if (await isDirectory(gitDir)) {
+        gitDirs.push(gitDir)
+      }
+    })
   } catch (error) {
     rethrowUnlessMissing(error)
   }
