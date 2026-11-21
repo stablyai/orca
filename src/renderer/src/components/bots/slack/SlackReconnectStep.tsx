@@ -1,6 +1,6 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The expired-token step: this desktop's own working token first when it has one, else a short paste.
-import React, { useId, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Trans } from 'react-i18next'
 import { ChevronRight, Info } from 'lucide-react'
@@ -100,21 +100,36 @@ export function SlackReconnectStep({
   const pasteRef = useRef<HTMLDivElement>(null)
   const pasteId = useId()
   const offered = offer !== null && hostName !== null
-  // Whether the field holds a token now: an offer arriving then opens the disclosure on it.
+  // An offer arriving never hides the paste form someone is in: a token in the field, or focus
+  // anywhere in the form, opens the disclosure on it, unless they closed it themselves.
   const [hasToken, setHasToken] = useState(false)
+  const [inPasteForm, setInPasteForm] = useState(false)
+  const [closedByUser, setClosedByUser] = useState(false)
   const [wasOffered, setWasOffered] = useState(offered)
   if (offered !== wasOffered) {
     setWasOffered(offered)
-    if (offered && hasToken) {
+    if (offered && (hasToken || inPasteForm) && !closedByUser) {
       setPasting(true)
     }
   }
-  // An offer arriving or going removes or hides controls. Focus left on one of them goes to where
-  // the step now asks for input: the field, or the disclosure while the field is behind it.
-  // Focus still on a control that stays (the ⓘ, the field, the dialog's close) is left alone.
+  // An offer arriving or going removes controls. Focus that was in this step, on one of them, goes
+  // to where the step now asks for input: the field, or the disclosure while the field is behind
+  // it. Focus on a control that stays (the ⓘ, the field), or outside the step, is left alone.
   const stepRef = useRef<HTMLDivElement>(null)
   const pasteToggleRef = useRef<HTMLButtonElement>(null)
+  const focusInStep = useRef(false)
   const focusedFor = useRef(offered)
+  useEffect(() => {
+    // Where focus last went. A focused control that is removed moves focus to nothing, with no
+    // focusin, so this still says it was in the step.
+    const onFocusIn = (event: FocusEvent): void => {
+      focusInStep.current =
+        event.target instanceof Node && stepRef.current?.contains(event.target) === true
+    }
+    focusInStep.current = stepRef.current?.contains(document.activeElement) === true
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [])
   useLayoutEffect(() => {
     if (focusedFor.current === offered) {
       return
@@ -125,7 +140,7 @@ export function SlackReconnectStep({
       !active ||
       active === document.body ||
       (stepRef.current?.contains(active) === true && active.closest('[hidden]') !== null)
-    if (lost) {
+    if (focusInStep.current && lost) {
       const target =
         offered && !pasting ? pasteToggleRef.current : pasteRef.current?.querySelector('input')
       target?.focus()
@@ -198,6 +213,7 @@ export function SlackReconnectStep({
             aria-controls={pasteId}
             onClick={() => {
               const open = !pasting
+              setClosedByUser(!open)
               // Opening it is asking to paste: the field takes focus once it shows.
               flushSync(() => setPasting(open))
               if (open) {
@@ -212,6 +228,12 @@ export function SlackReconnectStep({
         {/* Hidden, not unmounted, while closed: a token typed before closing it is still there. */}
         <div
           id={pasteId}
+          onFocus={() => setInPasteForm(true)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setInPasteForm(false)
+            }
+          }}
           ref={pasteRef}
           hidden={offered && !pasting}
           className={offered ? 'pt-3' : undefined}
