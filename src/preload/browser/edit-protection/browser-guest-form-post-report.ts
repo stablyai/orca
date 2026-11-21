@@ -87,18 +87,21 @@ function postedFormAction(
 ): string | null {
   // `new FormData(form)` fires formdata too. A submission builds its entry list only after its
   // submit event finished dispatching uncancelled; a page handler's FormData runs during it.
-  // (`form.submit()` fires no submit event; in the top frame the Navigation API still sees it.)
-  const submit = target instanceof HTMLFormElement ? lastSubmitByForm.get(target) : undefined
-  if (
-    !(target instanceof HTMLFormElement) ||
-    !submit ||
-    submit.eventPhase !== Event.NONE ||
-    submit.defaultPrevented
-  ) {
+  // `form.submit()` fires no submit event: the top frame's Navigation API sees it, and an embedded
+  // frame reports it anyway; a `new FormData(form)` report is disproved by the navigation's method.
+  if (!(target instanceof HTMLFormElement)) {
+    return null
+  }
+  const recorded = lastSubmitByForm.get(target)
+  if (recorded && recorded.eventPhase !== Event.NONE) {
     return null
   }
   lastSubmitByForm.delete(target)
-  const submitter = submit.submitter
+  const submit = recorded && !recorded.defaultPrevented ? recorded : undefined
+  if (!submit && window === window.top) {
+    return null
+  }
+  const submitter = submit?.submitter
   const button =
     submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
       ? submitter

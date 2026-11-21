@@ -277,6 +277,18 @@ export function installBrowserGuestDiscardProtection(
       publish()
     }
   }
+  // A 204, a download or an error ends the navigation without a commit.
+  const failed = (
+    _event: Electron.Event,
+    _code: number,
+    _description: string,
+    _url: string,
+    isMainFrame: boolean
+  ): void => {
+    if (isMainFrame) {
+      stopWatchingMethods()
+    }
+  }
   const unresponsive = (): void => {
     owner.unavailable = true
     invalidate()
@@ -301,6 +313,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('frame-created', frameCreated)
   guest.on('did-start-navigation', navigation)
   guest.on('did-navigate', committed)
+  guest.on('did-fail-load', failed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
     stopRequests()
@@ -312,6 +325,7 @@ export function installBrowserGuestDiscardProtection(
     guest.off('ipc-message', report)
     guest.off('dom-ready', settled)
     guest.off('did-stop-loading', loadStopped)
+    guest.off('did-fail-load', failed)
     guest.off('responsive', responsive)
     guest.off('unresponsive', unresponsive)
     guest.off('render-process-gone', unresponsive)
