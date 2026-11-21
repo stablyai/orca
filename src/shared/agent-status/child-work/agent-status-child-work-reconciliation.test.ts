@@ -170,4 +170,16 @@ describe('structured child-work reconciliation', () => {
     // Once the child reported its ending, a later acknowledged Stop changes nothing either.
     expect(apply(stopped('same', 103))).toMatchObject({ settled: 0 })
   })
+
+  it('keeps the effort an operation edge reports and leaves it empty otherwise', () => {
+    const { store, apply } = harness()
+    apply(live(child('task-a')))
+    expect(only(store)).not.toHaveProperty('effort')
+
+    apply({ type: 'operation', observedAt: 200, childId: 'task-a', effort: 'high' })
+    expect(only(store).effort).toBe('high')
+
+    apply({ type: 'operation', observedAt: 300, childId: 'task-a', effort: 'low' })
+    expect(only(store).effort).toBe('low')
+  })
 })
