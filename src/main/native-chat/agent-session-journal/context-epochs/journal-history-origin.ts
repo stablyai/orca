@@ -18,7 +18,7 @@ const nativeCopyOrigin = z.object({
   version: z.literal(1),
   kind: z.literal('native_copy'),
   providerHandle: handle,
-  unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message']),
+  unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message', 'zcode-turn']),
   agent: text,
   ids: z.array(text)
 })

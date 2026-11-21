@@ -1,6 +1,7 @@
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -63,6 +64,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
+  /** The plan site zcode chats present credentials for; absent reads zcode's own selection. */
+  resolveZcodeChatPlanSite?: () => GlobalSettings['zcodePlanSite']
   /** See `StructuredAgentLaunchSources.resolveInstructions`. */
   resolveSessionInstructions?: (
     record: AgentSessionRecord,

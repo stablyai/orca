@@ -548,6 +548,8 @@
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
 1 src/main/zcode/hook-config-json.ts
+3 src/main/zcode/structured/credentials/zcode-account-config-push.ts # one-shot account push table read
+7 src/main/zcode/structured/launch/zcode-runtime-resolution.ts # one-shot runtime resolution: bundled discovery, ASAR version and provider table probes
 6 src/shared/agent-hook-listener/claude-session-continuation.ts
 9 src/shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts

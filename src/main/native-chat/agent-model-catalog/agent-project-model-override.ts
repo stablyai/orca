@@ -196,9 +196,10 @@ function ancestry(cwd: string): string[] {
   }
 }
 
-// Grok and Antigravity pick models from user-level config, not project model settings.
+// Grok and Antigravity pick models from user-level config; zcode keeps its account, model and
+// mode state entirely under its own home — none read project model settings.
 export function agentReadsProjectModelConfig(agent: string): boolean {
-  return agent !== 'grok' && agent !== 'antigravity'
+  return agent !== 'grok' && agent !== 'antigravity' && agent !== 'zcode'
 }
 
 export async function workspaceMayOverrideDefaultModel(input: {

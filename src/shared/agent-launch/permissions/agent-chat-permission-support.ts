@@ -15,6 +15,11 @@ const CODEX_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'auto', 'full-access']
 }
 
+// zcode maps these onto its own collaboration modes (build/edit/auto/yolo).
+const ZCODE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'accept-edits', 'auto', 'full-access']
+}
+
 // ACP chats: Orca answers the agent's permission requests yes under Full access, else the person does.
 const ACP_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'full-access']
@@ -34,6 +39,7 @@ const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
 export const NATIVE_CHAT_AGENTS = [
   'claude',
   'codex',
+  'zcode',
   'grok',
   'opencode',
   'opencode2',
@@ -62,6 +68,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
 > = {
   claude: CLAUDE_CHAT_PERMISSION_MODES,
   codex: CODEX_CHAT_PERMISSION_MODES,
+  zcode: ZCODE_CHAT_PERMISSION_MODES,
   grok: ACP_CHAT_PERMISSION_MODES,
   opencode: ACP_CHAT_PERMISSION_MODES,
   opencode2: ACP_CHAT_PERMISSION_MODES,

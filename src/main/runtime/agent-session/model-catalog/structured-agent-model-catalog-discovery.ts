@@ -8,6 +8,8 @@ import {
   type ClaudeModelCatalogProbeDeps
 } from '../../../claude/model-catalog/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
+import { createZcodeModelCatalogProbe } from '../../../zcode/structured/catalog/zcode-model-catalog-probe'
+import { resolveZcodeChatCredentials } from '../../../zcode/structured/credentials/zcode-chat-credentials'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from '../installation/structured-agent-runtime-registration-types'
 import type { StructuredAgentSessionRuntimeDeps } from '../installation/structured-agent-session-runtime-contract'
@@ -100,6 +102,26 @@ export function acpModelCatalogDiscovery(
       ...(deps.resolveAgentCommandSettings
         ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
         : {})
+    })
+  }
+}
+
+export function zcodeModelCatalogDiscovery({
+  deps,
+  environment
+}: StructuredAgentModelCatalogContext): AgentModelCatalogDiscovery {
+  return {
+    kind: 'probe',
+    // The projection names the account's current model alongside the listing.
+    listingNamesConfiguredModel: true,
+    probe: createZcodeModelCatalogProbe({
+      // The per-agent overlay decides which PATH finds zcode; probing the base environment
+      // would report the CLI missing where a chat launch would find it.
+      resolveEnvironment: () => environment.resolveAgentEnvironment('zcode'),
+      resolveCommandSettings: deps.resolveAgentCommandSettings,
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('zcode'),
+      resolveChatCredentials: () =>
+        resolveZcodeChatCredentials({ site: deps.resolveZcodeChatPlanSite?.() })
     })
   }
 }

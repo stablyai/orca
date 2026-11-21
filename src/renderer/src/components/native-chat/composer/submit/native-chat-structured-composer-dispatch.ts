@@ -27,7 +27,7 @@ export async function dispatchNativeChatStructuredComposerText(
     attachments.map((attachment) => attachment.id)
   )
   const pickedModeSkill =
-    agentSessionInteractionCommand('codex', prompt) !== null &&
+    agentSessionInteractionCommand(transport.agent ?? 'codex', prompt) !== null &&
     skills.some((skill) => prompt.trimEnd() === `/${skill.name}`)
   // A sent command releases the draft now, as a pending message does; a refusal hands it back.
   const { handled, ...command } = pickedModeSkill

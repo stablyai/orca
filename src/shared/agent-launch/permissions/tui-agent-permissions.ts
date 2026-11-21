@@ -7,6 +7,8 @@ export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode auto',
   'claude-agent-teams': '--permission-mode auto',
   codex: '--approve-for-me',
+  // ZCode's own auto mode asks the model to confirm risky work itself.
+  zcode: '--mode auto',
   // Why: Cursor's server classifier runs safe tool calls and asks for the rest; its ACP server has no such mode.
   cursor: '--auto-review'
 }

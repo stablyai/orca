@@ -1143,10 +1143,12 @@
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts # zcode adapter joins the codex/opencode startup wiring; same one-shot probes
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
 2 src/main/runtime/agent-session/installation/structured-agent-session-runtime.ts
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
+2 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts # zcode probe joins the codex catalog startup
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
@@ -1535,7 +1537,23 @@
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
 1 src/main/wsl/orcad/wsl-orcad-liveness-wiring.ts
 1 src/main/wsl/orcad/wsl-orcad-pairing-repair.ts
+1 src/main/zcode/app-server/zcode-app-server-connection.ts # one-shot spawn-absence probe on the app-server spawn
 6 src/main/zcode/hook-service.ts
+1 src/main/zcode/structured/catalog/zcode-at-rest-commands.ts # one-shot at-rest catalog launch probe
+4 src/main/zcode/structured/catalog/zcode-model-catalog-probe.ts # one-shot model catalog probe: launch, table and executable-missing reads
+4 src/main/zcode/structured/conversation/zcode-conversation-copy.ts # one-shot fork backend launch, table and credential reads
+1 src/main/zcode/structured/credentials/zcode-chat-credentials.ts # one-shot v2 plan credential read per chat start
+4 src/main/zcode/structured/launch/zcode-headless-launch.ts # one-shot headless launch: bundled version, runtime and provider table probes
+10 src/main/zcode/structured/launch/zcode-runtime-resolution.ts # one-shot runtime resolution: bundled discovery, ASAR version and provider table probes
+4 src/main/zcode/structured/launch/zcode-structured-launch-resolution.ts # same one-shot launch resolution probes as zcode-headless-launch
+2 src/main/zcode/structured/naming/zcode-naming-run.ts # one-shot naming run launch and table read
+1 src/main/zcode/structured/session-lifecycle/zcode-structured-session-acquisition.ts # one-shot session acquisition probe
+2 src/main/zcode/structured/session-lifecycle/zcode-structured-session-fork.ts # one-shot fork/rewind backend probes
+1 src/main/zcode/structured/session-lifecycle/zcode-structured-session-open.ts # one-shot table read on session open
+1 src/main/zcode/structured/session-lifecycle/zcode-structured-session.ts # one-shot session open probe
+1 src/main/zcode/structured/session-lifecycle/zcode-structured-start.ts # one-shot table read on session start
+1 src/main/zcode/structured/zcode-runtime-metadata.ts # one-shot command capability read
+1 src/main/zcode/structured/zcode-transcript-import.ts # one-shot transcript import probe
 3 src/main/zcode/zcode-plan-credential-commands.ts
 3 src/main/zcode/zcode-v2-plan-credentials.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts

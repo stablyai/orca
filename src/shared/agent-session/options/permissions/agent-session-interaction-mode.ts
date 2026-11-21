@@ -46,5 +46,5 @@ export function agentSessionInteractionCommand(
   if (draft === '/plan') {
     return 'plan'
   }
-  return draft === '/default' && agent === 'codex' ? 'default' : null
+  return draft === '/default' && (agent === 'codex' || agent === 'zcode') ? 'default' : null
 }
