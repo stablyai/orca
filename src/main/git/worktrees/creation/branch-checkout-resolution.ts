@@ -54,37 +54,58 @@ export async function resolveBranchCheckouts(
   if ((await readLooseRef(fullRef, commonDir)).startsWith('ref: ')) {
     return { kind: 'unknown' }
   }
-  // A HEAD without a `ref:` line may be a symlink naming a ref.
-  const heads = new Map(state.heads)
-  const unnamed = [...heads].filter(([, head]) => !head.startsWith('ref: ')).map(([dir]) => dir)
-  await forEachBounded(unnamed, async (gitDir) => {
-    const link = await readRefLink(join(gitDir, 'HEAD'))
-    if (link !== undefined) {
-      heads.set(gitDir, link)
-    }
-  })
   const owners: string[] = []
   const branches: [gitDir: string, ref: string][] = []
-  for (const [gitDir, head] of heads) {
-    if (gitDir === bareCommonDir || head === '' || COMMIT_ID.test(head)) {
-      continue
-    }
+  const unnamed: string[] = []
+  // False when the HEAD rules out file-based resolution.
+  const classify = (gitDir: string, head: string): boolean => {
     const ref = head.slice('ref: '.length)
     if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/')) {
-      return { kind: 'unknown' }
+      return false
     }
     if (foldRef(ref) === target) {
       owners.push(gitDir)
     } else {
       branches.push([gitDir, ref])
     }
+    return true
   }
-  // Two direct checkouts already settle it: nothing may move.
-  if (owners.length > 1 || (firstOwnerSettles && owners.length > 0)) {
+  const settled = () => owners.length > 1 || (firstOwnerSettles && owners.length > 0)
+  for (const [gitDir, head] of state.heads) {
+    if (gitDir === bareCommonDir || head === '') {
+      continue
+    }
+    // A HEAD without a `ref:` line may still be a symlink naming a ref; probe those only if needed.
+    if (!head.startsWith('ref: ')) {
+      unnamed.push(gitDir)
+    } else if (!classify(gitDir, head)) {
+      return { kind: 'unknown' }
+    }
+  }
+  // Two direct checkouts, or one when only occupancy matters, already settle it.
+  if (settled()) {
     return { kind: 'owned', gitDirs: owners }
+  }
+  let unresolvable = false
+  await forEachBounded(unnamed, async (gitDir) => {
+    const link = settled() ? undefined : await readRefLink(join(gitDir, 'HEAD'))
+    if (link !== undefined) {
+      unresolvable ||= !classify(gitDir, link)
+    } else if (!COMMIT_ID.test(state.heads.get(gitDir) ?? '')) {
+      unresolvable = true
+    }
+  })
+  if (settled()) {
+    return { kind: 'owned', gitDirs: owners }
+  }
+  if (unresolvable) {
+    return { kind: 'unknown' }
   }
   let unknown = false
   const resolve = async ([gitDir, start]: [string, string]) => {
+    if (settled()) {
+      return
+    }
     let ref = start
     for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown; hop += 1) {
       // Packed and missing refs are never symrefs.

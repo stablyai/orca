@@ -257,8 +257,12 @@ function localBaseBranchGit(
             const state = await readGitDirState(commonDir.path)
             inUse =
               state.reserved.has(fullRef) ||
-              (await resolveBranchCheckouts(state, commonDir.path, fullRef, { bareCommonDir }))
-                .kind !== 'free'
+              (
+                await resolveBranchCheckouts(state, commonDir.path, fullRef, {
+                  bareCommonDir,
+                  firstOwnerSettles: true
+                })
+              ).kind !== 'free'
             return !inUse
           }
         })

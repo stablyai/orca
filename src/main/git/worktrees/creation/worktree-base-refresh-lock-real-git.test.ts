@@ -276,6 +276,7 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       {}
     )
 
+    // The follow-up runs detached; Windows Git takes seconds.
     await vi.waitFor(() => expect(git(repoPath, ['rev-parse', 'HEAD'])).toBe(remoteOid), {
       timeout: 25_000,
       interval: 250
@@ -347,6 +348,26 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
     git(linkedPath, ['symbolic-ref', 'refs/worktree/alias', 'refs/heads/main'])
     git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/worktree/alias'])
+
+    await refresh(repoPath)
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+
+  it('skips the write when a checkout alias is retargeted to main while update-ref waits to start', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'retargeted')
+    git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/develop'])
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+    const original = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args[0] === 'update-ref') {
+        git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/main'])
+      }
+      return original(args, options)
+    })
 
     await refresh(repoPath)
 
