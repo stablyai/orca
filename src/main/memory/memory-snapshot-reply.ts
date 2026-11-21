@@ -4,15 +4,13 @@ import type {
   SessionMemory,
   WorktreeMemory
 } from '../../shared/diagnostics/process-stats-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values'
 
 // Paired clients draw a short sparkline, so a large host's reply drops older points first.
 export const MEMORY_REPLY_HISTORY_POINTS = 20
-// Room under the limit for the app section, host totals and the envelope.
-const MEMORY_REPLY_BUDGET_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 256 * 1024
-// Room under the limit for the RPC envelope around an exactly measured reply.
-const MEMORY_REPLY_MEASURED_LIMIT_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 64 * 1024
+// Room under the budget for the app section and host totals, which the estimate leaves out.
+const ESTIMATE_RESERVE_BYTES = 256 * 1024
 // Upper bounds for keys, punctuation and numbers around each object's strings.
 const ROW_OVERHEAD_BYTES = 200
 const SESSION_OVERHEAD_BYTES = 160
@@ -135,28 +133,52 @@ function withHistory(snapshot: MemorySnapshot, points: number): MemorySnapshot {
   }
 }
 
-function fitsMeasured(reply: MemorySnapshot): boolean {
-  return Buffer.byteLength(JSON.stringify(reply), 'utf8') <= MEMORY_REPLY_MEASURED_LIMIT_BYTES
+/** Exact JSON size of a number array keeping its last `keep` entries. */
+function historyJsonBytes(history: readonly number[], keep: number): number {
+  let bytes = 2 + Math.max(0, keep - 1)
+  for (let i = history.length - keep; i < history.length; i++) {
+    const point = history[i]
+    bytes += Number.isFinite(point) ? String(point).length : 4
+  }
+  return bytes
+}
+
+/** Exact JSON size of every history array, keeping at most `points` per array. */
+function allHistoryJsonBytes(snapshot: MemorySnapshot, points: number): number {
+  let bytes = historyJsonBytes(snapshot.app.history, Math.min(points, snapshot.app.history.length))
+  for (const worktree of snapshot.worktrees) {
+    bytes += historyJsonBytes(worktree.history, Math.min(points, worktree.history.length))
+  }
+  return bytes
 }
 
 /**
- * The snapshot as sent to a paired client. Near the size limit it drops older history, then all
- * history, then everything chat sampling adds (chat lists, chat-only rows, pane keys, the agent
- * total and chats' share of the totals), so a host never sends more than its terminals alone would.
+ * The snapshot as sent to a paired client, within `budgetBytes` of reply content. Near the limit it
+ * drops older history, then all history, then everything chat sampling adds (chat lists, chat-only
+ * rows, pane keys, the agent total and chats' share of the totals), so a host never sends more than
+ * its terminals alone would.
  */
-export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
-  let bytes = snapshot.app.history.length * HISTORY_POINT_BYTES
+export function toMemorySnapshotReply(
+  snapshot: MemorySnapshot,
+  budgetBytes: number = REMOTE_RPC_MAX_CONTENT_BYTES
+): MemorySnapshot {
+  let estimate = snapshot.app.history.length * HISTORY_POINT_BYTES
   for (const worktree of snapshot.worktrees) {
-    bytes += rowBytes(worktree) + worktree.history.length * HISTORY_POINT_BYTES
+    estimate += rowBytes(worktree) + worktree.history.length * HISTORY_POINT_BYTES
   }
-  // The estimate is an upper bound, so most hosts never serialize here; only large ones measure.
-  if (bytes <= MEMORY_REPLY_BUDGET_BYTES || fitsMeasured(snapshot)) {
+  // The estimate is an upper bound, so most hosts never serialize here.
+  if (estimate <= budgetBytes - ESTIMATE_RESERVE_BYTES) {
     return snapshot
   }
+  // One measurement; each shorter-history tier's size then follows exactly from its history arrays.
+  const fullBytes = Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
+  if (fullBytes <= budgetBytes) {
+    return snapshot
+  }
+  const withoutHistory = fullBytes - allHistoryJsonBytes(snapshot, Number.POSITIVE_INFINITY)
   for (const points of [MEMORY_REPLY_HISTORY_POINTS, 0]) {
-    const reply = withHistory(snapshot, points)
-    if (fitsMeasured(reply)) {
-      return reply
+    if (withoutHistory + allHistoryJsonBytes(snapshot, points) <= budgetBytes) {
+      return withHistory(snapshot, points)
     }
   }
   return terminalOnlyReply(snapshot)

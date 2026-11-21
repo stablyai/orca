@@ -74,9 +74,19 @@ describe('the memory snapshot sent over RPC', () => {
   })
 
   it("falls back to the terminals' own rows and totals before it would outgrow them", () => {
-    const terminals = Array.from({ length: 4_000 }, (_, i) =>
-      row(i, 300, [123_456_789], i % 2 === 0)
-    )
+    // Chat detail alone pushes this host past the limit even with no history.
+    const terminals = Array.from({ length: 4_000 }, (_, i) => ({
+      ...row(i, 300, [123_456_789], true),
+      chats: [
+        {
+          agentSessionId: `chat-${i}-${'x'.repeat(700)}`,
+          agent: 'claude',
+          name: 'Plan',
+          cpu: 0.2,
+          memory: 200
+        }
+      ]
+    }))
     const chatOnly: WorktreeMemory = {
       ...row(9_999, 10, [1], true),
       sessions: [],
