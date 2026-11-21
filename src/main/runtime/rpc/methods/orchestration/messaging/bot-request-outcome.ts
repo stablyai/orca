@@ -30,6 +30,7 @@ import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
+import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
 import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
@@ -127,7 +128,13 @@ export async function settleBotRequestFailure(
   }
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
-  await settleBotRequests(runtime, failure.sessionId, why, error?.text)
+  // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
+  await settleBotRequests(
+    runtime,
+    failure.sessionId,
+    why,
+    error ? redactFailure(error.text) : undefined
+  )
 }
 
 async function settleBotRequests(

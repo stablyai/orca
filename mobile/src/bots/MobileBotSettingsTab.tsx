@@ -47,6 +47,7 @@ import {
   MobileBotWhoCanAsk
 } from './MobileBotWhoCanAsk'
 import { isHostNotConnectedError } from '../query/host-query-errors'
+import { useMobileBotWebhookSettings } from './webhooks/MobileBotWebhooks'
 
 // What the host lets a phone change.
 type PhoneUpdates = Pick<
@@ -102,6 +103,8 @@ export function MobileBotSettingsTab(props: {
   /** The host answers: off, every setting is read-only. */
   online: boolean
   hostName: string
+  /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
+  onAskInChat?: ((draft: string) => void) | null
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -125,6 +128,7 @@ export function MobileBotSettingsTab(props: {
   const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
   const tidyUp = useMobileBotTidyUp(props.client, bot.id, props.routeBot.reads, props.showToast)
   const access = props.accessRequests
+  const webhooks = useMobileBotWebhookSettings(props, offlineBanner)
 
   const save = async (updates: PhoneUpdates) => {
     if (!props.client) {
@@ -237,6 +241,10 @@ export function MobileBotSettingsTab(props: {
         banner={offlineBanner}
       />
     )
+  }
+
+  if (webhooks.page) {
+    return webhooks.page
   }
 
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
@@ -372,6 +380,7 @@ export function MobileBotSettingsTab(props: {
           />
         ))}
       </MobileBotWhoCanAsk>
+      {webhooks.row}
       {/* The desktop's order: general, then who can ask (connectors), then notifications. */}
       <Section title={t('bots.settings.notifications', 'Notifications')}>
         <SwitchRow

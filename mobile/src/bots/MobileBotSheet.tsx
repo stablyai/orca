@@ -135,6 +135,7 @@ export function MobileBotSheet(props: {
           online={props.online}
           hostName={props.hostName}
           accessRequests={props.accessRequests}
+          onAskInChat={props.onStartSuggestion}
           lookAround={
             lookAroundSupported(bot.agent) ? { onLookNow: upNext.lookNow, busy: upNext.busy } : null
           }
