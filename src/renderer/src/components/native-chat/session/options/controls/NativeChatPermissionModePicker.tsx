@@ -195,11 +195,19 @@ function NativeChatPermissionModePickerInner({
               type="button"
               variant={appearance === 'form' ? 'outline' : 'ghost'}
               size="xs"
-              aria-label={t(
-                'components.native-chat.composer.pillAccessibleName',
-                '{{value0}} {{value1}}',
-                { value0: title, value1: described }
-              )}
+              aria-label={
+                // An unrecognized value falls back to the title, which must not be said twice.
+                described === title
+                  ? title
+                  : t(
+                      'components.native-chat.composer.pillAccessibleName',
+                      '{{value0}} {{value1}}',
+                      {
+                        value0: title,
+                        value1: described
+                      }
+                    )
+              }
               className={compact ? undefined : 'h-8 w-64 max-w-full justify-between'}
             >
               {compact ? (

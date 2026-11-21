@@ -15,27 +15,36 @@ const paint = (): Promise<void> =>
 type PermissionState = {
   current: string
   reported?: string
-  reportedUnnamed?: true
   /** The English name the tooltip and accessible name must carry. */
   name: string
+  /** The lucide icon the pill shows: the mode's menu icon, or the settings icon. */
+  icon: string
+  /** The English hint the tooltip adds under the name. */
+  hint?: string
 }
 
 const STATES = {
-  ask: { current: 'ask', name: 'Ask for approval' },
-  acceptEdits: { current: 'accept-edits', name: 'Accept edits' },
-  auto: { current: 'auto', name: 'Approve for me' },
-  fullAccess: { current: 'full-access', name: 'Full access' },
+  ask: { current: 'ask', name: 'Ask for approval', icon: 'hand' },
+  acceptEdits: { current: 'accept-edits', name: 'Accept edits', icon: 'file-pen-line' },
+  auto: { current: 'auto', name: 'Approve for me', icon: 'shield-check' },
+  fullAccess: { current: 'full-access', name: 'Full access', icon: 'shield-alert' },
   // Own settings before the agent reports a mode.
-  fallback: { current: 'own', name: 'Claude Code settings' },
+  fallback: {
+    current: 'own',
+    name: 'Claude Code settings',
+    icon: 'settings-2',
+    hint: 'Uses your Claude Code permission settings.'
+  },
   // Own settings with a reported mode Orca has no name for.
   unnamed: {
     current: 'own',
     reported: 'read-only',
-    reportedUnnamed: true,
-    name: 'Claude Code settings'
+    name: 'Claude Code settings',
+    icon: 'settings-2',
+    hint: "Orca can't show this mode."
   },
   // A saved value this build doesn't recognize.
-  unknown: { current: 'legacy-mode', name: 'Permissions' }
+  unknown: { current: 'legacy-mode', name: 'Permissions', icon: 'settings-2' }
 } satisfies Record<string, PermissionState>
 
 function permissionFixture({
@@ -63,7 +72,6 @@ function permissionFixture({
         type: 'select',
         currentValue: state.current,
         reportedValue: state.reported,
-        reportedUnnamed: state.reportedUnnamed,
         settingsAgent: 'claude',
         choices: [
           { value: 'ask', label: 'Ask for approval' },
@@ -160,6 +168,17 @@ function permissionFixture({
       if (Math.abs(icon.left - pillBox.left - (pillBox.right - chevron.right)) > 1) {
         throw new Error('The permission pill must pad its icon and chevron evenly')
       }
+      if (!glyphs[0].classList.contains(`lucide-${state.icon}`)) {
+        throw new Error(`The permission pill must show the ${state.icon} icon`)
+      }
+      // Full access alone tints its icon; every other state matches the neutral chevron.
+      const tinted = getComputedStyle(glyphs[0]).color !== getComputedStyle(glyphs[1]).color
+      if (tinted !== (state.current === 'full-access')) {
+        throw new Error('Only Full access may tint the permission icon')
+      }
+      if (accessibleName.split(/\s+/).filter((word) => word === 'Permissions').length > 1) {
+        throw new Error('The permission pill must not repeat its title in its accessible name')
+      }
       const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).at(-1)!
       const controls = Array.from(host.querySelectorAll<HTMLElement>('[data-composer-control]'))
         .filter((control) => getComputedStyle(control).visibility === 'visible')
@@ -215,6 +234,9 @@ function permissionFixture({
       }
       if (language === 'en' && !content.innerText.includes(state.name)) {
         throw new Error(`The permission tooltip must name "${state.name}"`)
+      }
+      if (language === 'en' && state.hint && !content.innerText.includes(state.hint)) {
+        throw new Error(`The permission tooltip must keep its hint "${state.hint}"`)
       }
     }
   })
@@ -295,6 +317,8 @@ export const fallbackKeyboard = permissionFixture({
   state: STATES.fallback,
   focus: 'keyboard'
 })
+export const unnamedKeyboard = permissionFixture({ state: STATES.unnamed, focus: 'keyboard' })
+export const unknownKeyboard = permissionFixture({ state: STATES.unknown, focus: 'keyboard' })
 export const zhFullAccessHover = permissionFixture({
   state: STATES.fullAccess,
   language: 'zh',
