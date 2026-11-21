@@ -16,6 +16,7 @@ import { DnrMatchedRules } from './browser-extension-dnr-matched-rules'
 import { getBrowserExtensionInstallStore } from '../../installation/browser-extension-install-store'
 import { extensionHasPermission } from '../../api-runtime/browser-extension-namespace-registry'
 import { whenBrowserExtensionProfileLoaded } from '../../profile-sessions/browser-extension-session-loader'
+import { holdBrowserSessionRequestGate } from '../../../sessions/requests/browser-session-request-gate'
 import { resolveBrowserExtensionTab } from '../../tabs-and-windows/browser-extension-tab-model'
 
 // Chrome holds requests until rulesets load; a ruleset that never finishes must not stall pages.
@@ -267,6 +268,14 @@ export function getDnrSessionRuntime(session: Electron.Session): DnrSessionRunti
   return runtimes.get(session)
 }
 
+// The request gate listens only for loaded extensions; requests made while rules load must still
+// reach the startup hold.
+function holdForStartup(runtime: DnrSessionRuntime, session: Electron.Session, profileId: string): void {
+  const release = holdBrowserSessionRequestGate(session)
+  runtime.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
+  void whenBrowserExtensionProfileLoaded(profileId).finally(release)
+}
+
 /** Session setup: follows the session's extensions; rules load as each one does. */
 export function attachBrowserExtensionDnr(
   session: Electron.Session,
@@ -281,14 +290,14 @@ export function attachBrowserExtensionDnr(
   // A session attached again (idle profile reopened, extensions turned back on) holds requests again.
   if (existing) {
     if (expectsRules) {
-      existing.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
+      holdForStartup(existing, session, profileId)
     }
     return
   }
   const runtime = new DnrSessionRuntime(session, profileId)
   runtimes.set(session, runtime)
   if (expectsRules) {
-    runtime.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
+    holdForStartup(runtime, session, profileId)
   }
   const add = (extension: Electron.Extension): void => {
     if (usesDeclarativeNetRequest(extension, session)) {

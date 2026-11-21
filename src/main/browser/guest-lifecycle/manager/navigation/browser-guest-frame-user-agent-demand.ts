@@ -34,6 +34,11 @@ export function noteBrowserGuestSubframeNavigation(
 ): void {
   if (frame && defaultIdentityRewritesRequestHeaders(url)) {
     setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, frame.frameTreeNodeId, true)
+    // A site iframe removed before it committed reports nothing; each new one sweeps those out,
+    // so dead entries never outnumber live frames.
+    if (getBrowserGuestFrameUserAgentDemand(guest.id).size > 1) {
+      scheduleRemovalCheck(guest)
+    }
   }
 }
 

@@ -29,7 +29,11 @@ export function installBrowserGuestFormPostReport(port: {
   window.addEventListener(
     'formdata',
     (event) => {
-      const formPost = event.isTrusted ? postedFormAction(event.target, lastSubmitByForm) : null
+      // An opaque-origin document (a sandboxed page) fires no navigate events.
+      const navigationSeesForms = Boolean(navigation && navigation.currentEntry !== null)
+      const formPost = event.isTrusted
+        ? postedFormAction(event.target, lastSubmitByForm, navigationSeesForms)
+        : null
       if (!formPost) {
         return
       }
@@ -37,7 +41,7 @@ export function installBrowserGuestFormPostReport(port: {
       // Withdraw it unless a form navigate event is pending: a real submission reports again from
       // its navigate event; without one (the page removed the form, say) no POST loads. An
       // opaque-origin document (a sandboxed page) fires no navigate events, so its report stays.
-      if (navigation && navigation.currentEntry !== null) {
+      if (navigationSeesForms) {
         setTimeout(() => {
           if (pendingForm === null) {
             retract(formPost)
@@ -83,12 +87,14 @@ export function installBrowserGuestFormPostReport(port: {
 /** The action URL of a POST that replaces the top page; null for GET or another target. */
 function postedFormAction(
   target: EventTarget | null,
-  lastSubmitByForm: WeakMap<HTMLFormElement, SubmitEvent>
+  lastSubmitByForm: WeakMap<HTMLFormElement, SubmitEvent>,
+  navigationSeesForms: boolean
 ): string | null {
   // `new FormData(form)` fires formdata too. A submission builds its entry list only after its
   // submit event finished dispatching uncancelled; a page handler's FormData runs during it.
-  // `form.submit()` fires no submit event: the top frame's Navigation API sees it, and an embedded
-  // frame reports it anyway; a `new FormData(form)` report is disproved by the navigation's method.
+  // `form.submit()` fires no submit event: the top frame's Navigation API sees it; elsewhere (an
+  // embedded or sandboxed frame) it reports anyway, and the navigation's method disproves a
+  // `new FormData(form)` report.
   if (!(target instanceof HTMLFormElement)) {
     return null
   }
@@ -98,7 +104,7 @@ function postedFormAction(
   }
   lastSubmitByForm.delete(target)
   const submit = recorded && !recorded.defaultPrevented ? recorded : undefined
-  if (!submit && window === window.top) {
+  if (!submit && navigationSeesForms) {
     return null
   }
   const submitter = submit?.submitter

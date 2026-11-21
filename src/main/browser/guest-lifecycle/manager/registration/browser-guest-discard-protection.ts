@@ -9,7 +9,7 @@ export {
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
 import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
-import { watchBrowserSessionRequestMethods } from '../../../sessions/requests/browser-session-request-gate'
+import { holdBrowserSessionRequestGate } from '../../../sessions/requests/browser-session-request-gate'
 import { createFormPostNavigationTracker } from './browser-guest-form-post-navigation'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
@@ -246,7 +246,7 @@ export function installBrowserGuestDiscardProtection(
       pendingMethod = null
       stopWatchingMethods()
       if (formPost.started(details.url)) {
-        releaseMethods = watchBrowserSessionRequestMethods(guest.session)
+        releaseMethods = holdBrowserSessionRequestGate(guest.session)
       }
       owner.navigating = true
       invalidate()
