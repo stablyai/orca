@@ -37,15 +37,17 @@ async function run(): Promise<void> {
   const address = server.address()
   const origin = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
   const win = new BrowserWindow({ show: false })
-  const submit = (action: string) => async (): Promise<void> => {
+  const submit = async (action: string): Promise<string> => {
     await win.loadURL(`${origin}/form${action}`)
-    await win.webContents.executeJavaScript('document.getElementById("f").submit()')
+    return load(win, () =>
+      win.webContents.executeJavaScript('document.getElementById("f").submit()')
+    )
   }
   const output = {
     plain: await load(win, () => win.loadURL(`${origin}/plain`)),
-    post: await load(win, submit('/result')),
-    seeOther: await load(win, submit('/see-other')),
-    temporary: await load(win, submit('/temporary'))
+    post: await submit('/result'),
+    seeOther: await submit('/see-other'),
+    temporary: await submit('/temporary')
   }
   process.stdout.write(`${JSON.stringify(output)}\n`)
   server.close()

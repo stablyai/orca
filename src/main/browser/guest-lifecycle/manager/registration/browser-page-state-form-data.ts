@@ -1,9 +1,10 @@
 /** Whether a history entry's document was a form POST result, from Chromium's own record. */
 export type BrowserPageStateFormData = 'form-data' | 'none' | 'unknown'
 
-// Chromium's page state (Electron's base64 `pageState`) starts with a little-endian int32
-// version. Blink keeps the request body, and its content type as UTF-16, on the entry only when
-// the document's own request was a POST, however the form was submitted or redirected.
+// Chromium's page state (Electron's base64 `pageState`) is a pickle: a little-endian uint32
+// payload size, then an int32 version. Blink keeps the request body, and its content type as
+// UTF-16, on the entry only when the document's own request was a POST, however the form was
+// submitted or redirected.
 const SUPPORTED_VERSIONS = { min: 26, max: 40 }
 const FORM_CONTENT_TYPES = [
   'application/x-www-form-urlencoded',
@@ -23,10 +24,10 @@ export function readBrowserPageStateFormData(
   } catch {
     return 'unknown'
   }
-  if (bytes.length < 8) {
+  if (bytes.length < 8 || bytes.readUInt32LE(0) !== bytes.length - 4) {
     return 'unknown'
   }
-  const version = bytes.readInt32LE(0)
+  const version = bytes.readInt32LE(4)
   if (version < SUPPORTED_VERSIONS.min || version > SUPPORTED_VERSIONS.max) {
     return 'unknown'
   }
