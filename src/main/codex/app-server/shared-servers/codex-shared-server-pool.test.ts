@@ -1,194 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CodexAppServerUnsupportedError } from '../codex-app-server-request-error'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers
-} from '../codex-app-server-connection-types'
-import { CodexSharedServerPool } from './codex-shared-server-pool'
 import { CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES } from './codex-shared-server-lease'
-import { codexOpenedThreadId } from './codex-shared-server-frames'
 import {
   codexConnectionOpener,
   opensSharedCodexServer
 } from '../../structured/acquisition/codex-structured-connection-opener'
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
-
-type FakeServer = {
-  pid: number
-  handlers: CodexAppServerConnectionHandlers
-  requests: { method: string; params?: Record<string, unknown> }[]
-  /** Background terminals per thread, as Codex lists them. */
-  terminals: Map<string, Set<string>>
-  /** Whether Orca stopped reading this server's output. */
-  readingPaused: boolean
-  /** Answers the thread/start held by `holdOpen`. */
-  releaseOpen: () => void
-  crash: () => void
-  /** The server goes unusable without its exit being proven yet. */
-  closeTransport: () => void
-}
-
-/** interrupt: 'ends' completes the turn at once, 'later' after 3 s, 'ignored' never. */
-function fakeCodex(
-  interrupt: 'ends' | 'later' | 'ignored' = 'ends',
-  /** What closing the process proves about its commands. */
-  closeTree: 'exited' | 'unverifiable' = 'exited',
-  /** Whether thread/backgroundTerminals/terminate actually stops the command. */
-  terminateWorks = true,
-  codex: { listUnsupported?: boolean; unsubscribeFails?: boolean } = {}
-) {
-  const servers: FakeServer[] = []
-  let nextThread = 1
-  const connect = async (
-    _launch: unknown,
-    handlers: CodexAppServerConnectionHandlers = {}
-  ): Promise<CodexAppServerConnection> => {
-    let closed = false
-    let closeResult: CodexAppServerConnection['closeResult'] = null
-    const held: (() => void)[] = []
-    const server: FakeServer = {
-      pid: 5000 + servers.length,
-      handlers,
-      requests: [],
-      terminals: new Map(),
-      readingPaused: false,
-      releaseOpen: () => {},
-      crash: () => {
-        closed = true
-        handlers.onClose?.(new Error('codex crashed'))
-        handlers.onExit?.(new Error('codex crashed'), { expected: false })
-      },
-      closeTransport: () => {
-        closed = true
-        handlers.onClose?.(new Error('broken pipe'))
-      }
-    }
-    servers.push(server)
-    return {
-      pid: server.pid,
-      get closed() {
-        return closed
-      },
-      get closeResult() {
-        return closeResult
-      },
-      request: async (method, params, options) => {
-        // A paused reader gets no replies, as on a real pipe.
-        while (server.readingPaused) {
-          await new Promise<void>((resume) => held.push(resume))
-        }
-        server.requests.push({ method, ...(params ? { params } : {}) })
-        if (method === 'turn/start' && params?.hang === true) {
-          // A send Codex has not answered yet.
-          return new Promise(() => {})
-        }
-        if (
-          (method === 'thread/start' || method === 'thread/resume') &&
-          params?.holdOpen === true
-        ) {
-          const id =
-            typeof params.threadId === 'string' ? params.threadId : `thread-${nextThread++}`
-          return new Promise((resolve) => {
-            server.releaseOpen = () => {
-              const result = { thread: { id } }
-              options?.onReply?.(result)
-              resolve(result)
-            }
-          })
-        }
-        const threadId = typeof params?.threadId === 'string' ? params.threadId : ''
-        if (method === 'thread/resume' && params?.gone === true) {
-          throw new Error('codex app-server thread/resume failed: no rollout found')
-        }
-        if (method === 'thread/backgroundTerminals/list' && codex.listUnsupported) {
-          throw new CodexAppServerUnsupportedError('codex app-server does not support list')
-        }
-        if (method === 'thread/unsubscribe' && codex.unsubscribeFails) {
-          throw new Error('codex app-server thread/unsubscribe failed')
-        }
-        if (method === 'thread/backgroundTerminals/list') {
-          const running = [...(server.terminals.get(threadId) ?? [])]
-          const result = { data: running.map((processId) => ({ processId })), nextCursor: null }
-          options?.onReply?.(result)
-          return result
-        }
-        if (method === 'thread/backgroundTerminals/terminate' && terminateWorks) {
-          server.terminals.get(threadId)?.delete(String(params?.processId))
-        }
-        let result: unknown = {}
-        if (method === 'thread/start') {
-          const id = `thread-${nextThread++}`
-          // Codex announces the thread before it answers the start.
-          handlers.onNotification?.('thread/started', { thread: { id } })
-          result = { thread: { id } }
-        } else if (method === 'thread/resume') {
-          result = { thread: { id: params?.threadId } }
-        } else if (method === 'turn/interrupt' && interrupt !== 'ignored') {
-          const end = () =>
-            handlers.onNotification?.('turn/completed', {
-              threadId: params?.threadId,
-              turn: { id: params?.turnId, status: 'interrupted' }
-            })
-          if (interrupt === 'ends') {
-            end()
-          } else {
-            setTimeout(end, 3_000)
-          }
-        }
-        options?.onReply?.(result)
-        return result
-      },
-      pauseReading: () => {
-        server.readingPaused = true
-      },
-      resumeReading: () => {
-        server.readingPaused = false
-        for (const resume of held.splice(0)) {
-          resume()
-        }
-      },
-      notify: () => {},
-      respond: () => {},
-      respondWithError: () => {},
-      close: async () => {
-        closed = true
-        closeResult = { root: 'exited', tree: closeTree }
-        handlers.onExit?.(new Error('closed'), { expected: true })
-        return true
-      }
-    }
-  }
-  // The host sweep finds nothing left of a chat unless a test leaves something running.
-  const sweep = { leftovers: false }
-  return {
-    servers,
-    sweep,
-    pool: new CodexSharedServerPool(connect, async () => !sweep.leftovers)
-  }
-}
-
-function chat() {
-  const notifications: { method: string; params: unknown }[] = []
-  const exits: { message: string; expected: boolean | undefined }[] = []
-  const handlers: CodexAppServerConnectionHandlers = {
-    onNotification: (method, params) => notifications.push({ method, params }),
-    onExit: (error, exit) => exits.push({ message: error.message, expected: exit?.expected })
-  }
-  return { handlers, notifications, exits }
-}
-
-const launch = (home = '/home/a/.codex') => ({
-  command: '/usr/local/bin/codex',
-  args: ['app-server'],
-  cwd: '/work',
-  env: { CODEX_HOME: home, ORCA_AGENT_SESSION_ID: `chat-${Math.random()}` }
-})
-
-async function startThread(connection: CodexAppServerConnection): Promise<string> {
-  const threadId = codexOpenedThreadId(await connection.request('thread/start', { cwd: '/work' }))
-  expect(threadId).not.toBeNull()
-  return threadId ?? ''
-}
+import { chat, fakeCodex, launch, startThread } from './codex-shared-server-pool-fixture'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -315,137 +132,6 @@ describe('shared Codex app-servers', () => {
     expect(a.exits[0]?.expected).toBe(false)
     expect(connB.closed).toBe(false)
     expect(b.notifications.at(-1)?.method).toBe('item/started')
-  })
-
-  async function backloggedPair() {
-    const { servers, pool } = fakeCodex()
-    const a = chat()
-    const b = chat()
-    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
-    const connB = await pool.open(launch(), b.handlers, { sessionId: 'b', skillRoots: [] })
-    const threadA = await startThread(connA)
-    const threadB = await startThread(connB)
-    const megabyte = (threadId: string): void =>
-      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
-        threadId,
-        delta: 'x'.repeat(1024 * 1024)
-      })
-    return { server: servers[0]!, a, b, connA, connB, threadA, threadB, megabyte }
-  }
-
-  it('makes the server wait while every chat is paused, dropping no one', async () => {
-    vi.useFakeTimers()
-    const { server, a, b, connA, connB, threadA, threadB, megabyte } = await backloggedPair()
-    connA.pauseReading?.()
-    connB.pauseReading?.()
-    for (let i = 0; i < 20; i += 1) {
-      megabyte(threadA)
-      megabyte(threadB)
-    }
-    // 40 MiB queued across the two chats: past the 32 MiB server budget, Codex now waits.
-    expect(server.readingPaused).toBe(true)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(a.exits).toEqual([])
-    connB.resumeReading?.()
-    // Replayed a 64 KiB chunk per task, as a pipe read would, not 20 MiB at once.
-    expect(b.notifications.filter((n) => n.method === 'item/agentMessage/delta')).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(100)
-    expect(b.notifications.filter((n) => n.method === 'item/agentMessage/delta')).toHaveLength(20)
-    // A alone still holds 20 MiB, above the 16 MiB the server resumes at; B now asks for something.
-    expect(server.readingPaused).toBe(true)
-    void connB.request('thread/read', { threadId: threadB })
-    // A gets a grace to catch up before it is dropped.
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(a.exits).toEqual([])
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(a.exits).toHaveLength(1)
-    expect(server.readingPaused).toBe(false)
-    expect(connB.closed).toBe(false)
-  })
-
-  it('drops a lagging chat after a short grace when another chat on its server runs a turn', async () => {
-    vi.useFakeTimers()
-    const { server, a, b, connA, threadA, threadB, megabyte } = await backloggedPair()
-    server.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
-    connA.pauseReading?.()
-    for (let i = 0; i < 40; i += 1) {
-      megabyte(threadA)
-    }
-    expect(server.readingPaused).toBe(true)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(a.exits).toHaveLength(1)
-    expect(server.readingPaused).toBe(false)
-    server.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadB })
-    expect(b.notifications.at(-1)?.method).toBe('item/agentMessage/delta')
-  })
-
-  it('gives a chat that keeps catching up more time, even while another chat waits', async () => {
-    vi.useFakeTimers()
-    const { server, a, b, connA, threadA, threadB, megabyte } = await backloggedPair()
-    server.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
-    let draining = false
-    const handlers = a.handlers.onNotification
-    a.handlers.onNotification = (method, params) => {
-      handlers?.(method, params)
-      // Its journal takes one frame, then pushes back again.
-      if (draining) {
-        connA.pauseReading?.()
-      }
-    }
-    connA.pauseReading?.()
-    // Just past the budget: the paused reader takes nothing more.
-    for (let i = 0; i < 33; i += 1) {
-      megabyte(threadA)
-    }
-    expect(server.readingPaused).toBe(true)
-    draining = true
-    // About 5 MiB a second: slower than its frames arrive, but always moving.
-    for (let i = 0; i < 30 && server.readingPaused; i += 1) {
-      connA.resumeReading?.()
-      await vi.advanceTimersByTimeAsync(200)
-    }
-    expect(a.exits).toEqual([])
-    expect(b.exits).toEqual([])
-    expect(server.readingPaused).toBe(false)
-  })
-
-  it('holds a waiting chat at most a few seconds behind a chat that catches up very slowly', async () => {
-    vi.useFakeTimers()
-    const { server, a, connA, threadA, threadB, megabyte } = await backloggedPair()
-    server.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
-    const handlers = a.handlers.onNotification
-    a.handlers.onNotification = (method, params) => {
-      handlers?.(method, params)
-      connA.pauseReading?.()
-    }
-    connA.pauseReading?.()
-    for (let i = 0; i < 33; i += 1) {
-      megabyte(threadA)
-    }
-    // 1 MiB a second, progress in every grace, would hold the server for 17 s.
-    for (let i = 0; i < 10 && a.exits.length === 0; i += 1) {
-      connA.resumeReading?.()
-      await vi.advanceTimersByTimeAsync(1_000)
-    }
-    expect(a.exits).toHaveLength(1)
-    expect(server.readingPaused).toBe(false)
-  })
-
-  it("does not let a paused chat's backlog hold up another chat's close", async () => {
-    vi.useFakeTimers()
-    const { server, a, connA, connB, threadA, threadB, megabyte } = await backloggedPair()
-    connA.pauseReading?.()
-    connB.pauseReading?.()
-    for (let i = 0; i < 40; i += 1) {
-      megabyte(threadA)
-    }
-    void threadB
-    expect(server.readingPaused).toBe(true)
-    const closing = connB.close()
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(a.exits).toHaveLength(1)
-    expect(server.readingPaused).toBe(false)
-    await expect(closing).resolves.toBe(true)
   })
 
   it('retries a dropped chat whose turn ignores Stop only when that turn ends, never on a clock', async () => {
@@ -583,6 +269,26 @@ describe('shared Codex app-servers', () => {
     servers[0]!.releaseOpen()
     await started
     expect(a.notifications.map((n) => n.method)).toContain('thread/started')
+  })
+
+  it('ends a chat whose new thread lost its early frames to the hold cap, so it reopens it whole', async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const started = connA.request(
+      'thread/start',
+      { cwd: '/work', holdOpen: true },
+      { timeoutMs: null }
+    )
+    servers[0]!.handlers.onNotification?.('thread/started', { thread: { id: 'thread-1' } })
+    // Other unclaimed threads push the held frames past the cap.
+    for (let i = 0; i < 2_000; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/started', { threadId: `stray-${i}` })
+    }
+    servers[0]!.releaseOpen()
+    await started
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
+    expect(a.exits[0]?.expected).toBe(false)
   })
 
   it('lets another chat open a thread this chat failed to resume', async () => {

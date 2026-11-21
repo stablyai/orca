@@ -56,6 +56,11 @@ export class CodexSharedServerRouter {
       }
       lease.deliver(frame)
     }
+    // Its early frames were dropped to bound memory: the chat reopens it from Codex's history
+    // rather than run on with events missing.
+    if (this.unrouted.takeLost(threadId)) {
+      lease.shed()
+    }
   }
 
   /** Drops one thread this chat claimed but no longer wants (a resume its caller gave up on). */

@@ -3,6 +3,7 @@ import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 /** Frames for a thread no chat has claimed yet (e.g. thread/started before thread/start replies). */
 const MAX_UNROUTED_FRAMES = 2_000
 const UNROUTED_TTL_MS = 30_000
+const MAX_LOST_THREADS = 4_096
 
 type Bucket = { frames: CodexSharedServerFrame[]; since: number }
 
@@ -13,6 +14,8 @@ export class CodexSharedServerUnrouted {
   private timer: ReturnType<typeof setTimeout> | null = null
   /** Expiry waits while a thread open is pending: its early frames are held for its reply. */
   private deferred = false
+  /** Threads whose held frames were dropped; a chat that claims one has missed events. */
+  private readonly lost = new Set<string>()
 
   constructor(
     private readonly drop: (frame: CodexSharedServerFrame) => void,
@@ -53,13 +56,26 @@ export class CodexSharedServerUnrouted {
       this.timer = null
     }
     this.deferred = false
+    this.lost.clear()
     this.buckets.clear()
     this.count = 0
+  }
+
+  /** Whether frames held for this thread were dropped before anyone claimed it. */
+  takeLost(threadId: string): boolean {
+    return this.lost.delete(threadId)
   }
 
   private discard(threadId: string): void {
     for (const frame of this.take(threadId)) {
       this.drop(frame)
+    }
+    this.lost.add(threadId)
+    if (this.lost.size > MAX_LOST_THREADS) {
+      const oldest = this.lost.values().next()
+      if (!oldest.done) {
+        this.lost.delete(oldest.value)
+      }
     }
   }
 
