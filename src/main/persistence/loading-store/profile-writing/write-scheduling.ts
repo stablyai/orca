@@ -16,6 +16,28 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 export type StateWriteOptions = {
   /** Set only when the write leaves every host's and folder's external conversation links unchanged. */
   preservesExternalConversationLinks?: boolean
+  /** Set when only this single workspace's external conversation links could have changed. */
+  externalConversationLinksUpdate?: {
+    workspace: { worktreeId: string; sshHostId: ExecutionHostId | null }
+    externalConversations: unknown
+  }
+}
+
+export function workspaceLinkWriteOptions(
+  workspace: { worktreeId: string; sshHostId: ExecutionHostId | null },
+  changedExternalConversations: boolean,
+  externalConversations: unknown,
+  orderPreserved = true
+): StateWriteOptions | undefined {
+  if (orderPreserved) {
+    return changedExternalConversations
+      ? { externalConversationLinksUpdate: { workspace, externalConversations } }
+      : { preservesExternalConversationLinks: true }
+  }
+  const empty = !Array.isArray(externalConversations) || externalConversations.length === 0
+  return !changedExternalConversations && empty
+    ? { preservesExternalConversationLinks: true }
+    : undefined
 }
 
 /** Undefined means any domain may have changed. */

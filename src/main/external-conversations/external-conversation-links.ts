@@ -1,15 +1,10 @@
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { isConversationReport } from './external-conversation-turn-opener'
-import { z } from 'zod'
 import {
-  CONNECTOR_SOURCES,
-  SLACK_MIRROR_BLOCKS,
-  SLACK_MIRROR_POST_STATES,
   conversationPlaceText,
   type ChatMailPlace,
   type ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
-import { NATIVE_CHAT_AGENTS } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import {
   readWorkspaceRecord,
@@ -22,52 +17,10 @@ import {
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-link-index'
+import { linksOf, parseExternalConversationLink } from './external-conversation-link-parser'
 
+export { linksOf }
 export type { ExternalConversationLinkStore, LinkedConversation }
-
-// A terminal pane's link from an older Orca has no session and is skipped.
-const ExternalConversationLinkSchema = z.object({
-  source: z.enum(CONNECTOR_SOURCES),
-  externalId: z.string(),
-  sessionId: z.string().min(1),
-  agent: z.enum(NATIVE_CHAT_AGENTS),
-  paneKey: z.string(),
-  bot: z.object({ kind: z.enum(['bot', 'bot-chat']), botId: z.string().min(1) }).optional(),
-  title: z.string().optional(),
-  place: z.string().optional(),
-  lastTurn: z.enum(['conversation', 'orca']).optional(),
-  adoptedTurn: z.object({ itemId: z.string().min(1), at: z.number().positive() }).optional(),
-  seenAt: z.number().nullable().optional(),
-  // Mirror facts read loosely: a malformed one is dropped alone, never the link.
-  opener: z
-    .object({
-      role: z.enum(['owner', 'member']),
-      name: z.string().max(200).optional(),
-      dm: z.literal(true).optional()
-    })
-    .optional()
-    .catch(undefined),
-  mirror: z.boolean().optional().catch(undefined),
-  mirrorBlocked: z.enum(SLACK_MIRROR_BLOCKS).optional().catch(undefined),
-  mirrorPosts: z
-    .record(
-      z.string(),
-      z.object({
-        state: z.enum(SLACK_MIRROR_POST_STATES),
-        at: z.number(),
-        error: z.string().max(64).optional()
-      })
-    )
-    .optional()
-    .catch(undefined),
-  mirrorChosen: z.literal(true).optional().catch(undefined),
-  mirrorExternal: z.boolean().optional().catch(undefined),
-  mirrorHeld: z
-    .array(z.object({ event: z.unknown(), waiting: z.array(z.string()) }))
-    .optional()
-    .catch(undefined),
-  createdAt: z.number()
-})
 
 /** Skip malformed links so hand edits or newer host shapes do not break reads. */
 export function readLinks(
@@ -76,16 +29,6 @@ export function readLinks(
 ): ExternalConversationLink[] {
   const record = readWorkspaceRecord(store, workspace)
   return linksOf(record?.externalConversations)
-}
-
-export function linksOf(value: unknown): ExternalConversationLink[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    return []
-  }
-  return value.flatMap((entry) => {
-    const parsed = ExternalConversationLinkSchema.safeParse(entry)
-    return parsed.success ? [parsed.data] : []
-  })
 }
 
 export function sameConversation(link: ExternalConversationLink, key: ConversationKey): boolean {
@@ -117,7 +60,8 @@ export function writeLink(
       [link, ...replaced].map((key) => JSON.stringify(['conversation', key.source, key.externalId]))
     )
   }
-  writeWorkspaceRecord(store, workspace, { externalConversations: [...others, link] })
+  const validated = parseExternalConversationLink(link) ?? link
+  writeWorkspaceRecord(store, workspace, { externalConversations: [...others, validated] })
   // The record writer refuses ambiguous hosts; verify that the link actually persisted.
   if (!readLinks(store, workspace).some((current) => current.paneKey === link.paneKey)) {
     throw new Error('external_conversation_link_unwritten')
@@ -140,7 +84,7 @@ export function removeLink(
   return linked
 }
 
-const index = createExternalConversationLinkIndex(linksOf)
+const index = createExternalConversationLinkIndex((value) => linksOf(value))
 
 /** Read canonical rows on every host; the locator map can hide same-path workspaces on other hosts. */
 export const allLinks = index.allLinks

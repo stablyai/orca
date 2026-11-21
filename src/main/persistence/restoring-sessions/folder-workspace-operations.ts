@@ -17,6 +17,7 @@ import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-ope
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { workspaceLinkWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
 
@@ -33,14 +34,6 @@ export class FolderWorkspacePersistenceOperations {
 
   private get state(): PersistedState {
     return this.operations.state
-  }
-
-  private scheduleSave(domains: ProfileSaveDomains, options?: StateWriteOptions): void {
-    this.operations.scheduleSave(domains, options)
-  }
-
-  private hydrateRepo(repo: Repo): Repo {
-    return this.operations.hydrateRepo(repo)
   }
 
   getFolderWorkspaces(): FolderWorkspace[] {
@@ -117,7 +110,7 @@ export class FolderWorkspacePersistenceOperations {
       updatedAt: now
     }
     this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
-    this.scheduleSave(['folderWorkspaces'])
+    this.operations.scheduleSave(['folderWorkspaces'])
     return workspace
   }
 
@@ -262,11 +255,15 @@ export class FolderWorkspacePersistenceOperations {
       workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
-    const preservesExternalConversationLinks =
-      !('externalConversations' in updates) &&
-      ((updates.sortOrder === undefined && updates.name === undefined) ||
-        !workspace.externalConversations?.length)
-    this.scheduleSave(['folderWorkspaces'], { preservesExternalConversationLinks })
+    this.operations.scheduleSave(
+      ['folderWorkspaces'],
+      workspaceLinkWriteOptions(
+        { worktreeId: folderWorkspaceKey(workspace.id), sshHostId: null },
+        'externalConversations' in updates,
+        workspace.externalConversations,
+        updates.sortOrder === undefined && updates.name === undefined
+      )
+    )
     return workspace
   }
 
@@ -283,7 +280,7 @@ export class FolderWorkspacePersistenceOperations {
     this.operations.pruneMobileClientTabSelections(
       (worktreeId) => worktreeId === folderWorkspaceKey(id)
     )
-    this.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
+    this.operations.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
     return true
   }
 
@@ -306,7 +303,7 @@ export class FolderWorkspacePersistenceOperations {
       typeof order === 'number' && Number.isFinite(order)
         ? order
         : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
-    this.scheduleSave(['repos'])
-    return this.hydrateRepo(repo)
+    this.operations.scheduleSave(['repos'])
+    return this.operations.hydrateRepo(repo)
   }
 }

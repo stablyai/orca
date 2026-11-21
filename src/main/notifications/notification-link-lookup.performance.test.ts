@@ -1,22 +1,28 @@
-// Perf contract (#45503, STA-16839): every structured chat notification rebuilt host worktree
-// projections and reparsed external conversation links, even before skip gates or after sort-stamp writes.
+// Perf contract (#45503, STA-16839): structured chat notifications and Slack mirror link writes
+// must not rebuild fleet worktree projections or reparse unrelated saved conversation links.
 
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BrowserWindow } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAttentionOrigin } from '../../shared/agent-session/view/agent-session-attention'
 import { getDefaultNotificationSettings } from '../../shared/notifications/notification-settings-defaults'
 import type { NotificationDispatchRequest } from '../../shared/notifications/notification-settings-types'
 import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type * as LinkParser from '../external-conversations/external-conversation-link-parser'
 import {
   chatMailPlace,
+  findLink,
+  removeLink,
   sessionRepliesInSlack,
   writeLink
 } from '../external-conversations/external-conversation-links'
+import { SlackMirror } from '../external-conversations/slack-mirror'
+import type { SlackMirrorCloud } from '../external-conversations/slack-mirror-cloud'
 import {
   closeTestStores,
   createStore,
@@ -27,6 +33,7 @@ import { createStructuredAttentionMobileDelivery } from '../runtime/agent-sessio
 import { createNotificationDeliveryService } from './notification-delivery-service'
 
 const windowFocus = vi.hoisted(() => ({ focused: false }))
+const linkReads = vi.hoisted(() => ({ calls: 0, rows: 0 }))
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false },
@@ -36,9 +43,21 @@ vi.mock('electron', () => ({
     }
   }
 }))
+vi.mock('../external-conversations/external-conversation-link-parser', async (load) => {
+  const actual = await load<typeof LinkParser>()
+  return {
+    ...actual,
+    linksOf: (value: unknown) => {
+      linkReads.calls += 1
+      linkReads.rows += Array.isArray(value) ? value.length : 0
+      return actual.linksOf(value)
+    }
+  }
+})
 
 const SLACK_SESSION = 'session-slack'
 const LOCAL_SESSION = 'session-local'
+const SLACK_KEY = { source: 'slack', externalId: 'T1:C1:100.1' } as const
 const SLACK_REPLY = 'Pinged <!here> and <@U12345ABC|sam>.'
 const CODE_REPLY = 'Updated Array<string> and <div> layout.'
 
@@ -75,14 +94,44 @@ function buildFleet(worktreesPerHost: number) {
   const store = createStore()
   store.addRepo(makeRepo({ id: 'repo-local', path: '/fleet/local' }))
   store.addRepo(makeRepo({ id: 'repo-ssh', path: '/fleet/ssh', connectionId: 'conn-1' }))
+  const savedMirrorPosts = {
+    [agentJournalSubmissionKey('old-1')]: { state: 'posted' as const, at: 1 },
+    [agentJournalSubmissionKey('old-2')]: { state: 'posted' as const, at: 2 }
+  }
   for (let index = 0; index < worktreesPerHost; index += 1) {
     store.setWorktreeMeta(
       hostWorktreeTarget({ id: `repo-local::/fleet/local/wt-${index}`, hostId: 'local' }),
-      { lastActivityAt: index + 1 }
+      {
+        lastActivityAt: index + 1,
+        externalConversations: [
+          {
+            source: 'slack',
+            externalId: `T1:LOCAL:${index}`,
+            sessionId: `session-local-wt-${index}`,
+            agent: 'claude',
+            paneKey: `chat:session-local-wt-${index}`,
+            mirrorPosts: savedMirrorPosts,
+            createdAt: 1
+          }
+        ]
+      }
     )
     store.setWorktreeMeta(
       hostWorktreeTarget({ id: `repo-ssh::/fleet/ssh/wt-${index}`, hostId: 'ssh:conn-1' }),
-      { lastActivityAt: index + 1 }
+      {
+        lastActivityAt: index + 1,
+        externalConversations: [
+          {
+            source: 'slack',
+            externalId: `T1:SSH:${index}`,
+            sessionId: `session-ssh-wt-${index}`,
+            agent: 'claude',
+            paneKey: `chat:session-ssh-wt-${index}`,
+            mirrorPosts: savedMirrorPosts,
+            createdAt: 1
+          }
+        ]
+      }
     )
   }
   const group = store.createProjectGroup({
@@ -93,13 +142,14 @@ function buildFleet(worktreesPerHost: number) {
   const folder = store.createFolderWorkspace({ projectGroupId: group.id })
   const botWorkspace = { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }
   writeLink(store, botWorkspace, {
-    source: 'slack',
-    externalId: 'T1:C1:100.1',
+    ...SLACK_KEY,
     sessionId: SLACK_SESSION,
     agent: 'claude',
     paneKey: `chat:${SLACK_SESSION}`,
     bot: { kind: 'bot', botId: 'bot-1' },
     place: '#releases',
+    mirror: true,
+    mirrorChosen: true,
     createdAt: 1
   })
   for (let index = 0; index < 20; index += 1) {
@@ -110,6 +160,7 @@ function buildFleet(worktreesPerHost: number) {
       agent: 'claude',
       paneKey: `chat:session-thread-${index}`,
       bot: { kind: 'bot', botId: 'bot-1' },
+      mirrorPosts: savedMirrorPosts,
       createdAt: index + 2
     })
   }
@@ -196,26 +247,53 @@ function buildFleet(worktreesPerHost: number) {
     })
   }
 
+  const mirrorPostsSent: number[] = []
+  const cloud: SlackMirrorCloud = {
+    cloudFeatures: () => new Set(['slack.mirror']),
+    call: async (_path, _body, schema) => {
+      mirrorPostsSent.push(1)
+      return { ok: true, value: schema.parse({ ts: `${mirrorPostsSent.length}.0` }) }
+    }
+  }
+
   return {
     store,
     folderId: folder.id,
+    botWorkspace,
     desktop,
     notifyTurn,
     desktopBodies,
     mobileBodies,
+    mirrorPostsSent,
+    createMirror: () =>
+      new SlackMirror({
+        store,
+        cloud: () => cloud,
+        orcaName: () => 'Alice',
+        botSetting: () => undefined,
+        readMessage: async () => null,
+        emitTurnEnd: () => true,
+        signal: new AbortController().signal
+      }),
     setFocused: (value: boolean) => {
       windowFocus.focused = value
     }
   }
 }
 
-describe('structured chat notification link lookups', () => {
+describe('structured chat notification and mirror link lookups', () => {
   it.each([
-    [50, { coldSkipped: 0, warmHosts: 2, warmFolders: 1 }],
-    [500, { coldSkipped: 0, warmHosts: 2, warmFolders: 1 }]
+    [
+      50,
+      { coldSkipped: 0, warmHosts: 2, warmFolders: 1, mirrorParseCalls: 35, mirrorParseRows: 735 }
+    ],
+    [
+      500,
+      { coldSkipped: 0, warmHosts: 2, warmFolders: 1, mirrorParseCalls: 35, mirrorParseRows: 735 }
+    ]
   ])(
-    'skip link scans before admission or Slack markup and keep one index across sort stamps (N=%i)',
-    (worktreesPerHost, expected) => {
+    'gate notification lookups and update single-workspace links without fleet rebuilds (N=%i)',
+    async (worktreesPerHost, expected) => {
       const fleet = buildFleet(worktreesPerHost)
       vi.useFakeTimers()
       const hostProjections = vi.spyOn(fleet.store, 'getAllWorktreeMetaForHost')
@@ -297,23 +375,53 @@ describe('structured chat notification link lookups', () => {
         SLACK_REPLY
       ])
 
-      // Linking the local session invalidates once and formats its next Slack reply.
-      writeLink(
-        fleet.store,
-        { worktreeId: 'repo-local::/fleet/local/wt-0', sshHostId: null },
+      // Five Slack mirror post cycles update only the active workspace with zero fleet projections or unrelated parses.
+      const mirror = fleet.createMirror()
+      hostProjections.mockClear()
+      folderReads.mockClear()
+      linkReads.calls = 0
+      linkReads.rows = 0
+      for (let post = 1; post <= 5; post += 1) {
+        mirror.admitted({
+          sessionId: SLACK_SESSION,
+          workspaceId: fleet.botWorkspace.worktreeId,
+          clientMessageId: `send-${post}`,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: `Update ${post}` }]
+          },
+          joinsRunningTurn: false
+        })
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(fleet.mirrorPostsSent).toHaveLength(5)
+      expect(hostProjections.mock.calls.length).toBe(0)
+      expect(folderReads.mock.calls.length).toBe(0)
+      expect(linkReads.calls).toBe(expected.mirrorParseCalls)
+      expect(linkReads.rows).toBe(expected.mirrorParseRows)
+
+      // Host ownership, scan-order precedence (worktrees before folders), relink, and removal stay exact without fleet rebuilds.
+      expect(findLink(fleet.store, { source: 'slack', externalId: 'T1:SSH:0' })?.workspace).toEqual(
         {
-          source: 'slack',
-          externalId: 'T1:C1:999.1',
-          sessionId: LOCAL_SESSION,
-          agent: 'claude',
-          paneKey: `chat:${LOCAL_SESSION}`,
-          createdAt: 99
+          worktreeId: 'repo-ssh::/fleet/ssh/wt-0',
+          sshHostId: 'ssh:conn-1'
         }
       )
+      const localWorktree = { worktreeId: 'repo-local::/fleet/local/wt-0', sshHostId: null }
+      writeLink(fleet.store, localWorktree, {
+        ...SLACK_KEY,
+        sessionId: LOCAL_SESSION,
+        agent: 'claude',
+        paneKey: `chat:${LOCAL_SESSION}`,
+        createdAt: 99
+      })
+      expect(findLink(fleet.store, SLACK_KEY)?.workspace).toEqual(localWorktree)
       expect(fleet.notifyTurn(LOCAL_SESSION, SLACK_REPLY, 11)).toEqual({ delivered: true })
-      expect(fleet.notifyTurn(LOCAL_SESSION, SLACK_REPLY, 12)).toEqual({ delivered: true })
       expect(fleet.desktopBodies.at(-1)).toBe('Pinged @here and @sam.')
-      expect(hostProjections.mock.calls.length).toBe(expected.warmHosts * 2)
+      expect(removeLink(fleet.store, SLACK_KEY)?.workspace).toEqual(localWorktree)
+      expect(findLink(fleet.store, SLACK_KEY)?.workspace).toEqual(fleet.botWorkspace)
+      expect(hostProjections.mock.calls.length).toBe(0)
     }
   )
 })
