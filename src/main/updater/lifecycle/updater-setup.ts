@@ -1,3 +1,5 @@
+// orca-fork: the custom build keeps upstream's updater off
+import { isUpdaterActive } from '../../orca-fork/fork-updater'
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/release-channel'
@@ -150,7 +152,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       this.sendErrorStatus(`The server update did not complete: ${serveHandoffFailure}`, true)
     }
 
-    if (!app.isPackaged) {
+    if (!isUpdaterActive()) {
       return
     }
 

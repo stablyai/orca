@@ -164,6 +164,6 @@ ci-shards/
 
 .local/static-analysis-research/
 
-# fork: rodrillet/orca docs
+# orca-fork: rodrillet/orca docs
 !docs/fork/
 !docs/fork/**
