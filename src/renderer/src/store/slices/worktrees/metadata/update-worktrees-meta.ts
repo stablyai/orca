@@ -37,25 +37,26 @@ type FolderWorkspaceMetaUpdate = {
   executionHostId?: ExecutionHostId
 }
 
-// Why: like worktree rows, a dropped folder row must hold its new slot while the save is in flight.
-function applyFolderWorkspaceMetaUpdates(
+// Why: a dropped folder row must hold its new slot while the save is in flight. Only the rank goes in
+// early, because updateFolderWorkspace reads the stored links as the merge base of an attachment edit.
+function applyFolderWorkspaceManualOrders(
   state: ReturnType<WorktreeSliceGet>,
   entries: readonly FolderWorkspaceMetaUpdate[]
 ): ReturnType<WorktreeSliceGet>['folderWorkspaces'] {
   // Same owner lookup as updateFolderWorkspace, so a same-id folder on another host stays as is.
-  const updatesByOwner = new Map<object, FolderWorkspaceMetaUpdate['updates']>()
+  const manualOrderByOwner = new Map<object, number>()
   for (const { folderWorkspaceId, updates, executionHostId } of entries) {
     const owner = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
-    if (owner) {
-      updatesByOwner.set(owner, { ...updatesByOwner.get(owner), ...updates })
+    if (owner && updates.manualOrder !== undefined) {
+      manualOrderByOwner.set(owner, updates.manualOrder)
     }
   }
-  if (updatesByOwner.size === 0) {
+  if (manualOrderByOwner.size === 0) {
     return state.folderWorkspaces
   }
   return state.folderWorkspaces.map((workspace) => {
-    const updates = updatesByOwner.get(workspace)
-    return updates ? { ...workspace, ...updates } : workspace
+    const manualOrder = manualOrderByOwner.get(workspace)
+    return manualOrder === undefined ? workspace : { ...workspace, manualOrder }
   })
 }
 
@@ -103,7 +104,7 @@ export function createUpdateWorktreesMeta(
           entry.executionHostId
         )
       }
-      const nextFolderWorkspaces = applyFolderWorkspaceMetaUpdates(s, folderWorkspaceUpdates)
+      const nextFolderWorkspaces = applyFolderWorkspaceManualOrders(s, folderWorkspaceUpdates)
       return nextWorktrees === s.worktreesByRepo &&
         nextDetectedWorktrees === s.detectedWorktreesByRepo &&
         nextFolderWorkspaces === s.folderWorkspaces

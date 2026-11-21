@@ -27,7 +27,7 @@ import {
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 
 const GROUP: ProjectGroup = {
   id: 'group-1',
@@ -326,6 +326,28 @@ describe('folder workspace sidebar drag groups', () => {
     expect(updateFolderWorkspace).toHaveBeenCalledWith('fw-a', updates, {
       executionHostId: 'ssh:remote-box'
     })
+  })
+
+  it('moves only the rank of a folder before its save answers', () => {
+    const store = createTestStore()
+    const updateFolderWorkspace = vi.fn(() => new Promise<boolean>(() => {}))
+    store.setState({ folderWorkspaces: FOLDERS, updateFolderWorkspace })
+    const linkedItems: WorkspaceAttachment[] = [{ provider: 'github', type: 'issue', number: 7 }]
+    void store
+      .getState()
+      .updateWorktreesMeta([
+        { worktreeId: folderWorkspaceKey('fw-a'), updates: { manualOrder: 9000, linkedItems } }
+      ])
+
+    // The save merges the new links against the stored ones, so those must not change first.
+    const [row] = store.getState().folderWorkspaces
+    expect(row.manualOrder).toBe(9000)
+    expect(row.linkedItems).toBeUndefined()
+    expect(updateFolderWorkspace).toHaveBeenCalledWith(
+      'fw-a',
+      expect.objectContaining({ linkedItems }),
+      expect.anything()
+    )
   })
 
   it('saves only the dragged group when the selection spans worktrees and folders', () => {
