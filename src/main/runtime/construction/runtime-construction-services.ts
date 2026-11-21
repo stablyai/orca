@@ -82,6 +82,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): Calls.SyncOrchestrationFederatedDispatchResult
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
   abstract forgetStructuredSessionMail(sessionId: string): void
+  abstract sleptAgentHandleForPane(paneKey: string | null | undefined): string | null
   abstract getLocalProvider(): IPtyProvider | null
   abstract removeWorktreeMetadataAndHistory(
     ...args: Calls.RemoveWorktreeMetadataAndHistoryArgs

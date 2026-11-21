@@ -73,6 +73,10 @@ export class OrchestrationMutationExecutor {
     const existingPromptReceipt = isPromptMutation
       ? db.getMutationReceipt(callerFingerprint, requestId)
       : undefined
+    if (isPromptMutation && !existingPromptReceipt) {
+      // A slept agent resumes in place first, so the prompt binds to its woken process.
+      await this.runtime.wakeSleptAgentHandle((params as { terminal: string }).terminal, {})
+    }
     if (
       existingPromptReceipt &&
       (existingPromptReceipt.method !== request.method ||

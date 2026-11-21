@@ -80,6 +80,8 @@ export type SleepingAgentSessionRecord = {
   origin?: 'worktree-sleep' | 'quit' | 'live'
   /** Explicit-sleep finished panes resume only when their own tab opens; mobile wake must not mount/respawn every slept tab (#11598). */
   restoreOnTabOpenOnly?: boolean
+  /** The handle main named this pane by when Agent Sleep stopped it; the pane answers to it again after a restart. */
+  terminalHandle?: string
 }
 
 /** A record of a slept pane (worktree sleep, or a legacy record); 'quit'/'live' resume a running agent. */

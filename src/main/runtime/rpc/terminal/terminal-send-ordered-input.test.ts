@@ -42,6 +42,7 @@ function fixture() {
     getRuntimeId: () => 'runtime',
     getTerminalPromptRequestBinding: () => binding,
     resolveLiveLeafForHandle: () => ({ ptyId: binding.ptyId }),
+    wakeSleptAgentHandle: () => null,
     getDriver: () => null,
     ensureStructuredAgentSessionHost: async () => null,
     sendTerminal,
