@@ -55,6 +55,8 @@ import {
   writeLocalPty
 } from './local-pty-session-operations'
 import { spawnLocalPty } from './local-pty-spawn'
+import { noteLocalPtyInspection, onLocalPtyAgentExit } from './local-pty-agent-exit-watch'
+import type { PtyBackgroundStreamEvent } from '../pty/events'
 import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
 import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
 
@@ -145,6 +147,22 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async inspectProcess(
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ): Promise<PtyProcessInspection> {
+    const proc = ptyProcesses.get(id)
+    const result = await this.readProcessInspection(id, options)
+    if (proc) {
+      noteLocalPtyInspection(id, ptyProcesses.get(id) === proc, proc, result.foregroundProcess)
+    }
+    return result
+  }
+
+  onBackgroundStreamEvent(callback: (event: PtyBackgroundStreamEvent) => void): () => void {
+    return onLocalPtyAgentExit(callback)
+  }
+
+  private async readProcessInspection(
     id: string,
     options?: PtyProcessInspectionOptions
   ): Promise<PtyProcessInspection> {

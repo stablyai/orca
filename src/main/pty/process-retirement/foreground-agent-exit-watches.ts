@@ -1,12 +1,14 @@
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
-import {
-  watchProcessExit,
-  type ProcessExitWatch
-} from '../../pty/process-retirement/native-process-exit-watch'
-import type { Session } from '../sessions/session'
+import { watchProcessExit, type ProcessExitWatch } from './native-process-exit-watch'
+
+/** A live PTY that can name the process whose exit ends its foreground agent. */
+export type ForegroundAgentPidSource = {
+  readonly isAlive: boolean
+  foregroundAgentPid(): number | null
+}
 
 /** An agent that exits without printing leaves no other event; the OS exit notice is that event, with no timer. */
-export class TerminalHostAgentExitWatches {
+export class ForegroundAgentExitWatches {
   private readonly watches = new Map<string, { pid: number; watch: ProcessExitWatch }>()
   /** Reported once per pid, so a read that still names a dead pid (a group outliving its leader) cannot loop. */
   private readonly reportedPids = new Map<string, number>()
@@ -14,12 +16,16 @@ export class TerminalHostAgentExitWatches {
   constructor(private readonly onAgentExit?: (sessionId: string) => void) {}
 
   /** A read that names an agent watches its process; any other read releases the watch. */
-  noteInspection(sessionId: string, session: Session | undefined, foreground: string | null): void {
-    if (!session?.isAlive || !recognizeAgentProcess(foreground)) {
+  noteInspection(
+    sessionId: string,
+    source: ForegroundAgentPidSource | undefined,
+    foreground: string | null
+  ): void {
+    if (!source?.isAlive || !recognizeAgentProcess(foreground)) {
       this.release(sessionId)
       return
     }
-    const pid = session.foregroundAgentPid()
+    const pid = source.foregroundAgentPid()
     if (pid === null) {
       this.release(sessionId)
       return

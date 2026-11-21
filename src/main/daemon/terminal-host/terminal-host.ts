@@ -46,7 +46,7 @@ import {
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
 
-import { TerminalHostAgentExitWatches } from './terminal-host-agent-exit-watches'
+import { ForegroundAgentExitWatches } from '../../pty/process-retirement/foreground-agent-exit-watches'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
@@ -66,7 +66,7 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
-  private readonly agentExitWatches: TerminalHostAgentExitWatches
+  private readonly agentExitWatches: ForegroundAgentExitWatches
   private readonly retiredIncarnations = new Map<
     string,
     { incarnationId: string; code: number; expiresAt: number }
@@ -77,7 +77,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.agentExitWatches = new TerminalHostAgentExitWatches(opts.onSessionAgentExit)
+    this.agentExitWatches = new ForegroundAgentExitWatches(opts.onSessionAgentExit)
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
