@@ -233,11 +233,9 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     )
     openDialog({ slack: { appId: 'A1', teamId: 'T1' } }, 'T1')
 
-    await screen.findByText(
-      'Slack no longer accepts this workspace’s token. Paste a new one to reconnect.'
-    )
-    expect(screen.queryByRole('button', { name: 'Use it →' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Get config token' }))
+    await screen.findByText('Paste a new token to reconnect.')
+    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Slack app settings' }))
     // No `bot`: a server's page would otherwise open in one of its bots' workspaces.
     expect(mocks.open).toHaveBeenCalledTimes(1)
     expect(mocks.open).toHaveBeenCalledWith('local', 'https://api.slack.com/apps', {
@@ -247,7 +245,7 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
       target: { value: 'xoxe-1-new' }
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Slack workspace' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
     await screen.findByRole('button', { name: 'Approve in Slack' })
     expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-new' })
     expect(mocks.hosts.local.saveGrant).not.toHaveBeenCalled()
@@ -266,6 +264,18 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(mocks.open).toHaveBeenCalledTimes(1)
     expect(mocks.open).toHaveBeenCalledWith('local', AUTHORIZE, { local: 'system' })
     expect(await screen.findByText('Waiting for Slack…')).toBeTruthy()
+
+    // Approved in this computer's browser: the server's cloud state is what the wait reads.
+    serverState({
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'UB',
+      installerUserId: 'U1',
+      teamName: 'Acme'
+    })
+    await act(() => refreshBotSlack({ hostId: SERVER, id: 'bot-1' }))
+    expect(await screen.findByText('Scout is in Slack')).toBeTruthy()
   })
 
   it("reconnects a server's workspace from Settings with Slack's page in this computer's browser", async () => {
@@ -294,6 +304,40 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     await waitFor(() =>
       expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-new' })
     )
+  })
+
+  it('puts this desktop’s token first when the server’s lapsed, with the paste behind a disclosure', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].handOff.mockResolvedValue(ok({ code: 'one-time', expiresAt: 1 }))
+    redeem.mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE }))
+    openDialog()
+
+    const use = await screen.findByRole('button', { name: 'Use it' })
+    expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
+    expect(screen.getByLabelText('Configuration refresh token')).toBeTruthy()
+
+    fireEvent.click(use)
+    await screen.findByRole('button', { name: 'Approve in Slack' })
+    expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(redeem).toHaveBeenCalledWith({ code: 'one-time' })
+    expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the paste form when Use it fails, never a dead end', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].handOff.mockResolvedValue(ok({ code: 'one-time', expiresAt: 1 }))
+    redeem.mockResolvedValue({ ok: false, error: 'cloud_error' })
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use it' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    // Back on the reconnect step: Use it again, or paste a token.
+    await screen.findByRole('button', { name: 'Use it' })
+    fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
+    expect(screen.getByLabelText('Configuration refresh token')).toBeTruthy()
+    expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledTimes(1)
+    expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
   })
 
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {

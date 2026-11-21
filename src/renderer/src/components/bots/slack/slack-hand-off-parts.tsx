@@ -61,6 +61,32 @@ function SlackHandOffLine({
   )
 }
 
+/** While Use it runs: whose token makes the app, and that the computer gets only this bot's app. */
+export function SlackHandOffConfirm({
+  email,
+  host
+}: {
+  email: string
+  host: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <p className="text-sm">
+      {isMac
+        ? t(
+            'bots.slack.handOff.confirmMac',
+            'Orca on this Mac creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.',
+            { email, host }
+          )
+        : t(
+            'bots.slack.handOff.confirm',
+            'Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.',
+            { email, host }
+          )}
+    </p>
+  )
+}
+
 /** "Copy link (works once, until 3:42 PM).", then "Link copied". */
 export function SlackCopyLink({
   link,

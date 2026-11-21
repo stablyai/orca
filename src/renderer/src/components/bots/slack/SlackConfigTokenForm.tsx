@@ -32,7 +32,10 @@ export function SlackConfigTokenForm({
   busy,
   error,
   onSubmit,
-  aside
+  aside,
+  compact = false,
+  onCancel,
+  secondary = false
 }: {
   submitLabel: string
   busy: boolean
@@ -40,6 +43,12 @@ export function SlackConfigTokenForm({
   onSubmit: (token: string) => void
   /** A quiet line above the steps, such as another way to get the app. */
   aside?: React.ReactNode
+  /** Reconnecting a workspace: short steps with Slack's page as a link, the field without its label. */
+  compact?: boolean
+  /** A Cancel beside the submit button. */
+  onCancel?: () => void
+  /** Another of the dialog's buttons is its main action. */
+  secondary?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
@@ -74,6 +83,10 @@ export function SlackConfigTokenForm({
       setAccessPasted(true)
     }
     return kind !== null
+  }
+
+  const openSlack = (): void => {
+    awaitingCopy.current = openSlackAppsHere() !== 'unrouted'
   }
 
   useEffect(
@@ -115,40 +128,49 @@ export function SlackConfigTokenForm({
       }}
     >
       {aside}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => {
-          awaitingCopy.current = openSlackAppsHere() !== 'unrouted'
-        }}
-      >
-        {t('bots.slack.token.open', 'Get config token')}
-        <ExternalLink />
-      </Button>
-      <ol className="list-decimal space-y-1.5 pl-5 text-sm">
-        <li>
-          {t(
-            'bots.slack.token.step1',
-            'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
-          )}
-        </li>
-        <li>{t('bots.slack.token.step2', 'Select the workspace for your bot.')}</li>
-        <li>{t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}</li>
-      </ol>
-      <p className="text-sm text-muted-foreground">
-        {t(
-          'bots.slack.token.kept',
-          'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
-        )}
-      </p>
+      {compact ? (
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <li>
+            <Button type="button" variant="link" size="inline" onClick={openSlack}>
+              {t('bots.slack.token.openSettings', 'Open Slack app settings')}
+              <ExternalLink />
+            </Button>
+          </li>
+          <li>{t('bots.slack.token.generate', 'Generate a token for this workspace')}</li>
+          <li>{t('bots.slack.token.copyRefresh', 'Copy the Refresh Token')}</li>
+        </ol>
+      ) : (
+        <>
+          <Button type="button" variant="outline" className="w-full" onClick={openSlack}>
+            {t('bots.slack.token.open', 'Get config token')}
+            <ExternalLink />
+          </Button>
+          <ol className="list-decimal space-y-1.5 pl-5 text-sm">
+            <li>
+              {t(
+                'bots.slack.token.step1',
+                'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
+              )}
+            </li>
+            <li>{t('bots.slack.token.step2', 'Select the workspace for your bot.')}</li>
+            <li>{t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}</li>
+          </ol>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'bots.slack.token.kept',
+              'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
+            )}
+          </p>
+        </>
+      )}
       <div className="space-y-1.5">
-        <Label htmlFor={inputId}>
+        <Label htmlFor={inputId} className={compact ? 'sr-only' : undefined}>
           {t('bots.slack.token.label', 'Configuration refresh token')}
         </Label>
         <Input
           id={inputId}
           type="password"
+          placeholder={compact ? `${SLACK_CONFIG_REFRESH_TOKEN_PREFIX}…` : undefined}
           autoComplete="off"
           spellCheck={false}
           value={token}
@@ -177,7 +199,16 @@ export function SlackConfigTokenForm({
         ) : null}
       </div>
       <DialogFooter>
-        <Button type="submit" disabled={busy || !trimmed}>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {t('bots.slack.setup.cancel', 'Cancel')}
+          </Button>
+        ) : null}
+        <Button
+          type="submit"
+          variant={secondary ? 'outline' : 'default'}
+          disabled={busy || !trimmed}
+        >
           {submitLabel}
         </Button>
       </DialogFooter>
