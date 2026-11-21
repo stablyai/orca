@@ -1,4 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react'
+import { ConnectionIdCopy } from './connection-id-copy'
 import { ConnectionDiagnosticsView } from './connection-diagnostics-view'
 import {
   diagnoseConnection,
@@ -100,7 +101,12 @@ export function ConnectionDiagnosticsScreen({
       submissionState={submissionState}
       sendDiagnostics={sendDiagnostics}
       onBack={onBack}
-      hostPicker={hostPicker}
+      hostPicker={
+        <>
+          {hostPicker}
+          <ConnectionIdCopy hostId={hostId} writeClipboard={writeClipboard} />
+        </>
+      }
     />
   )
 }
