@@ -60,7 +60,7 @@ describe("a bot's journal lines", () => {
     )
     const unread: BotItemLinkView = { kind: 'pr', ref: 'pr:o/r#7', pr: null }
     expect(journalLines(item([unread]))).toEqual([
-      '- 2026-11-21 | item #1006 | pr:o/r#7 state unknown | Sidebar search fix'
+      '- 2026-11-21 | item #1006 | PR #7 state unknown | Sidebar search fix'
     ])
   })
 
@@ -71,9 +71,9 @@ describe("a bot's journal lines", () => {
       await appendJournalLines(fs, '/home', [line, '- 2026-12-01 | item #7 | done | Ship'])
     ).toBe(2)
     expect(await appendJournalLines(fs, '/home', [line])).toBe(0)
-    // The same close with a state the cache learned later is not a new line.
-    const later = '- 2026-11-21 | item #1006 | PR #4417 merged | Fix'
-    const earlier = '- 2026-11-21 | item #1006 | PR #4417 open at close | Fix'
+    // A close is journaled once: the same close seen again with a newer PR state adds nothing.
+    const later = '- 2026-11-21 | item #1007 | PR #4417 merged | Fix'
+    const earlier = '- 2026-11-21 | item #1007 | PR #4417 open at close | Fix'
     expect(await appendJournalLines(fs, '/home', [earlier])).toBe(1)
     expect(await appendJournalLines(fs, '/home', [later])).toBe(0)
     expect(fs.files.get(join('/home', 'memory', 'journal', '2026-11.md'))).toBe(
@@ -83,6 +83,29 @@ describe("a bot's journal lines", () => {
 })
 
 describe("the host's journal pass", () => {
+  it('writes a close once even when the cache learns its PR between passes', async () => {
+    const fs = memoryFs()
+    const unread: BotItemLinkView = { kind: 'pr', ref: 'pr:o/r#7', pr: null }
+    let links: BotItemLinkView[] = [unread]
+    const journal = createBotMemoryJournal({
+      bots: () => [makeTestBot({ id: 'b1' })],
+      closedItems: async () => [item(links)],
+      ownerChat: () => true,
+      folder: () => '/home',
+      serialize: async (_botId, step) => step(),
+      fs,
+      now: () => CLOSED + 1_000
+    })
+    journal.itemsChanged(['b1'])
+    await journal.settled()
+    links = [pr(7, 'merged')]
+    journal.itemsChanged(['b1'])
+    await journal.settled()
+    expect(fs.files.get(join('/home', 'memory', 'journal', '2026-11.md'))).toBe(
+      '# Journal 2026-11\n- 2026-11-21 | item #1006 | PR #7 state unknown | Sidebar search fix\n'
+    )
+  })
+
   it('tries lines again on the next pass when the file kept changing', async () => {
     const fs = memoryFs()
     let busy = true

@@ -11,7 +11,7 @@ import { appendJournalLines, type JournalItem, journalLines } from './bot-memory
 
 /** How far back a pass looks the first time after a start, so closes while Orca was down count. */
 const FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
-/** Closed items read per pass, newest first: each close notices on its own, so a pass rarely has
+/** Closed items read per pass, by latest activity: each close notices on its own, so a pass rarely has
  *  more than a few new ones. */
 const CLOSED_READ = 100
 
@@ -19,7 +19,7 @@ export type JournalCandidate = JournalItem & { chatId: string }
 
 export function createBotMemoryJournal(deps: {
   bots: () => readonly Bot[]
-  /** The bot's items closed lately, newest first. */
+  /** The bot's closed items with the latest activity first. */
   closedItems: (botId: string) => Promise<JournalCandidate[]>
   /** Whether the chat an item came from acts for the bot's owner (unrecorded counts as the owner's). */
   ownerChat: (chatId: string) => boolean
@@ -86,7 +86,7 @@ export function createBotMemoryJournal(deps: {
 export function journaledItemsNotice(
   runtime: {
     bots: { list: () => readonly Bot[]; memory: Pick<BotMemoryRecord, 'after'> }
-    botItems: Pick<BotItemsHost, 'store' | 'views'>
+    botItems: Pick<BotItemsHost, 'store' | 'views' | 'chatRootOf'>
     getOrchestrationDb: () => OrchestrationDb
   },
   notify: (scope: BotChangeScope) => void
@@ -106,8 +106,10 @@ export function journaledItemsNotice(
           : []
       })
     },
+    // Keyed by the conversation's /clear root, as every acts-for check reads it.
     ownerChat: (chatId) => {
-      const recorded = runtime.getOrchestrationDb().getBotConversationActsFor(chatId)
+      const root = runtime.botItems.chatRootOf(chatId)
+      const recorded = runtime.getOrchestrationDb().getBotConversationActsFor(root)
       return !recorded || actsForOwner(recorded.actsFor)
     },
     folder: (bot) => botHomeFolder(bot),

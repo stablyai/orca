@@ -32,7 +32,9 @@ export function journalLines(item: JournalItem): string[] {
     return [`${head} | ${item.status} | ${title}`]
   }
   return prs.map(([number, pr], index) => {
-    const name = typeof number === 'number' ? `PR #${number}` : number
+    // An unread PR is named by its number too, so it reads the same once the cache learns it.
+    const parsed = typeof number === 'number' ? number : /#(\d+)$/.exec(number)?.[1]
+    const name = parsed !== undefined ? `PR #${parsed}` : number
     const state =
       index >= JOURNAL_PRS_PER_ITEM
         ? 'state not read'
@@ -45,15 +47,15 @@ export function journalLines(item: JournalItem): string[] {
   })
 }
 
-/** A line's identity: its date, item and PR (or close status), not the PR's state, so a state the
- *  cache learned later never writes the same close twice. */
-function journalKey(line: string): string {
-  const [date = '', item = '', what = ''] = line.split(' | ')
-  return [date, item, /^(PR #\d+|\S+)/.exec(what)?.[1] ?? what].join(' | ')
+/** The close a line belongs to: its date and item. A close is journaled once, all its lines in
+ *  one append, so a pass that sees it again (a PR's state or links changed since) adds nothing. */
+function closeKey(line: string): string {
+  const [date = '', item = ''] = line.split(' | ')
+  return `${date} | ${item}`
 }
 
-/** Adds `lines` to their months' journal files, each once by its identity; throws when a file kept
- *  changing under it, so the caller tries those lines again later. */
+/** Adds `lines` to their months' journal files, each close once; throws when a file kept changing
+ *  under it, so the caller tries those lines again later. */
 export async function appendJournalLines(
   fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>,
   folder: string,
@@ -73,10 +75,8 @@ export async function appendJournalLines(
     let done = false
     for (let attempt = 0; attempt < 3 && !done; attempt += 1) {
       const before = await fs.readText(path)
-      const have = new Set((before ?? '').split(/\r?\n/).map(journalKey))
-      const fresh = [...new Map(adding.map((line) => [journalKey(line), line])).entries()]
-        .filter(([key]) => !have.has(key))
-        .map(([, line]) => line)
+      const have = new Set((before ?? '').split(/\r?\n/).map(closeKey))
+      const fresh = [...new Set(adding)].filter((line) => !have.has(closeKey(line)))
       if (fresh.length === 0) {
         done = true
         break
