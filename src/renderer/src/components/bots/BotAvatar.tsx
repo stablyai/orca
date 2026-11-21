@@ -10,15 +10,18 @@ import { BOT_MASCOT_URLS } from './bot-mascots'
 export function BotAvatar({
   bot,
   className,
-  style
+  style,
+  skipOffline = false
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
+  /** See useBotAvatarSrc. */
+  skipOffline?: boolean
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot)}
+      src={useBotAvatarSrc(bot, skipOffline)}
       fallback={botFallback(bot)}
       className={className}
       style={style}
