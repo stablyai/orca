@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { staleChatCoordinatorAliasSql } from '../runs/run-coordinator-session-alias'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { readRemovedWorkWatermark } from '../reset/removed-orchestration-work-read'
 import { forgetUnownedRemovedWork, RETENTION_AGE, RETIRED_RUN_SQL } from './settled-run-retention'
@@ -11,6 +12,9 @@ import {
 } from './run-retirement-write-watch'
 
 const DISPATCH_IDS = 'SELECT id FROM dispatch_contexts WHERE run_id = ?1'
+// A chat that used to coordinate is not a live party of the Run. Its stale session address must not keep the Run.
+const COORDINATOR_HANDLES = `SELECT terminal_handle FROM run_coordinator_handles
+  WHERE run_id = ?1 AND NOT ${staleChatCoordinatorAliasSql('run_coordinator_handles')}`
 const MESSAGE_IDS = 'SELECT id FROM messages WHERE run_id = ?1'
 const LEGACY_PRINCIPAL_IDS = 'SELECT id FROM legacy_compatibility_principals WHERE run_id = ?1'
 
@@ -71,7 +75,7 @@ export type RunPartyLiveness = {
 // A worker terminal still open, such as one handed to the user, keeps its Run as well.
 const RUN_PARTIES_EXCEPT_SENDER_PANES = `SELECT 'handle' AS kind, 'run:' || ?1 AS party
   UNION SELECT 'handle', coordinator_handle FROM runs WHERE id = ?1
-  UNION SELECT 'handle', terminal_handle FROM run_coordinator_handles WHERE run_id = ?1
+  UNION SELECT 'handle', terminal_handle FROM (${COORDINATOR_HANDLES})
   UNION SELECT 'handle', to_handle FROM messages
     WHERE run_id = ?1 AND read = 0 AND delivery_contract = 'current_delivery'
   UNION SELECT 'pane', coordinator_pane_key FROM runs WHERE id = ?1
@@ -82,11 +86,10 @@ const RUN_PARTIES_EXCEPT_SENDER_PANES = `SELECT 'handle' AS kind, 'run:' || ?1 A
   UNION SELECT 'pane', pane_key FROM worker_terminal_resources
     WHERE owner_dispatch_id IN (${DISPATCH_IDS})`
 const COORDINATOR_SENDER_PANES = `SELECT sender_pane_key FROM messages
-  WHERE run_id = ?1 AND from_handle IN (
-    SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?1)`
+  WHERE run_id = ?1 AND from_handle IN (${COORDINATOR_HANDLES})`
 // Reading every message of a Run with thousands of them takes over 100 ms, so the first read pages.
 const SENDER_PANE_PAGE = `SELECT sequence, sender_pane_key,
-    from_handle IN (SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?1) AS coordinator
+    from_handle IN (${COORDINATOR_HANDLES}) AS coordinator
   FROM messages WHERE run_id = ?1 AND sequence > ?2 ORDER BY sequence LIMIT ?3`
 const SENDER_PANES_PER_STEP = 256
 

@@ -273,6 +273,7 @@ export function resolveBareOrchestrationRecipient(params: {
     fallback: () => {
       if (session) {
         const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db, terminal)
+        // Direct mail stays addressed to the chat, filed on the sender's Run.
         return refusal
           ? refused(params.handle, refusal)
           : { ok: true, to: handle, runId: params.senderRunId }

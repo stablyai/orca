@@ -6,10 +6,12 @@ import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { findCallerWorkerDispatches, workerRunBindingRefusal } from './worker-run-binding'
 import {
+  chatCoordinatorAddress,
   mailboxAddressOf,
   runBoundToCoordinator,
   runCoordinatorKey
 } from '../../addressing/orchestration-caller-identity'
+import { dropStaleChatCoordinatorAlias } from './run-coordinator-session-alias'
 
 export function bindRun(
   this: OrchestrationDb,
@@ -155,12 +157,27 @@ export function bindRun(
     for (const address of this.unbindOtherRunsForCoordinator(coordinator, params.runId)) {
       changed.add(address)
     }
-    for (const address of new Set([
-      mailboxAddressOf(runCoordinatorKey(run)),
-      mailboxAddressOf(coordinator)
-    ])) {
+    const previousKey = runCoordinatorKey(run)
+    const nextAddress = mailboxAddressOf(coordinator)
+    const releasedChat = chatCoordinatorAddress(previousKey)
+    const incomingChat = chatCoordinatorAddress(coordinator)
+    for (const address of new Set([mailboxAddressOf(previousKey), nextAddress])) {
       if (address === null) {
         continue
+      }
+      // Pending mail followed the Run. The chat's address is that chat again, not this Run's alias.
+      if (releasedChat === address && releasedChat !== nextAddress) {
+        if (this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address) > 0) {
+          changed.add(runMailbox).add(address)
+        }
+        if (this.forgetRunCoordinatorHandle(params.runId, address)) {
+          changed.add(runMailbox).add(address)
+        }
+        continue
+      }
+      // A pre-upgrade row for this chat keeps its old watermark. Replace it so this binding starts now.
+      if (address === incomingChat) {
+        dropStaleChatCoordinatorAlias(this.db, params.runId, address)
       }
       const remembered = this.rememberRunCoordinatorHandle(params.runId, address)
       if (this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address) > 0 || remembered) {
@@ -200,10 +217,9 @@ export function bindRun(
         )
       changed.add(runMailbox)
       this.fenceUnacknowledgedMailboxDeliveries(`run:${params.runId}`)
-      const previous = runCoordinatorKey(run)
       if (
-        previous.orcaSessionId !== coordinator.orcaSessionId ||
-        previous.terminalHandle !== coordinator.terminalHandle
+        previousKey.orcaSessionId !== coordinator.orcaSessionId ||
+        previousKey.terminalHandle !== coordinator.terminalHandle
       ) {
         // A pointer the old coordinator was handed points the new one at nothing: unread mail
         // it never took is pointed at again. Cards still in a chat move by their own custody.

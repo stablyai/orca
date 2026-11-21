@@ -6,6 +6,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import {
   exposeMessages,
@@ -20,19 +21,23 @@ type Answer = {
   next?: string
 }
 
-/** The caller's unread direct mail that no Run owns, outside `runId`. */
+/** The caller's unread direct mail that no Run owns: outside `runId`, plus pre-binding chat mail on `runId`. */
 export function ownDirectMail(
   db: OrchestrationDb,
   handle: string,
   runId: string,
   typeFilter: MessageType[] | undefined
 ): MessageRow[] {
+  const sessionAddress = parseOrcaSessionAddress(handle) !== null
   return (
     db
       .getUnreadMessages(handle, typeFilter, { excludeRunOwnedDirect: true })
-      // Legacy mail is inspect-only, as a direct check treats it.
+      // Legacy mail is inspect-only, as a direct check treats it. A re-minted terminal's uncached
+      // Run mail still belongs to runId, while a chat's pre-binding mail does not.
       .filter(
-        (message) => message.run_id !== runId && message.run_id !== ORCHESTRATION_LEGACY_RUN_ID
+        (message) =>
+          message.run_id !== ORCHESTRATION_LEGACY_RUN_ID &&
+          (sessionAddress || message.run_id !== runId)
       )
   )
 }
