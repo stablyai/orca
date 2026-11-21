@@ -56,6 +56,15 @@ describe('bot memory lines', () => {
       '* * *',
       '===',
       '<!-- note -->',
+      '````md',
+      '```',
+      'inner',
+      '```',
+      '````',
+      '~~~',
+      'tilde inner',
+      '```',
+      '~~~',
       'after the fence'
     ].join('\n')
     expect(parseBotMemoryFacts(mixed).map(({ text }) => text)).toEqual([
@@ -174,6 +183,16 @@ describe('an undashed line', () => {
     const file = 'releases on Tuesdays\n'
     const [fact] = parseBotMemoryFacts(file)
     expect(editBotMemoryFact(file, fact, '# not a heading')).toBe('- # not a heading\n')
+    // Text no line can state as a fact leaves the line as it was.
+    for (const rule of ['***', '---', '===', '* * *']) {
+      expect(
+        editBotMemoryFact(
+          `- releases\nother\n`,
+          parseBotMemoryFacts('- releases\nother\n')[0],
+          rule
+        )
+      ).toBe('- releases\nother\n')
+    }
   })
 
   it('keeps its own shape when edited, and its mark when a chat rewrites it', () => {

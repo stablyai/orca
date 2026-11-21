@@ -22,7 +22,7 @@ export const BOT_MEMORY_SEED_INTRO =
   'One line per fact, newest first. Longer notes go in memory/<topic>.md.'
 // Headings ("# x", never "#123"), table rows, HTML comments and rules (---, ***, ===, * * *).
 const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
-const FENCE = /^\s*(?:```|~~~)/
+const FENCE = /^\s*(`{3,}|~{3,})/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
 function splitLines(text: string): { lines: string[]; eol: string } {
@@ -48,13 +48,15 @@ type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
 
 /** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
 function lineFacts(lines: readonly string[]): (FactParts | null)[] {
-  let fenced = false
+  // The open fence, if any: it closes only on the same character at least as many times.
+  let open: string | null = null
   return lines.map((raw) => {
-    if (FENCE.test(raw)) {
-      fenced = !fenced
+    const fence = FENCE.exec(raw)?.[1]
+    if (fence && (open === null || (fence[0] === open[0] && fence.length >= open.length))) {
+      open = open === null ? fence : null
       return null
     }
-    return fenced ? null : factParts(raw)
+    return open !== null ? null : factParts(raw)
   })
 }
 
@@ -302,8 +304,14 @@ export function editBotMemoryFact(text: string, fact: BotMemoryFact, nextText: s
   } else {
     const prefix = lineFacts(lines)[fact.line]?.prefix ?? '- '
     const line = factLine(prefix, fact.date, next, fact.source)
-    // An undashed line edited to look like a heading or rule would stop being a fact: dash it.
-    lines[fact.line] = factParts(line) ? line : factLine('- ', fact.date, next, fact.source)
+    // An undashed line edited to look like a heading or rule would stop being a fact: dash it;
+    // text that is no fact even dashed ("***") leaves the line as it was.
+    const dashed = factLine('- ', fact.date, next, fact.source)
+    if (factParts(line)) {
+      lines[fact.line] = line
+    } else if (factParts(dashed)) {
+      lines[fact.line] = dashed
+    }
   }
   return lines.join(eol)
 }
