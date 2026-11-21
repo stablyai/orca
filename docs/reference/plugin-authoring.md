@@ -734,7 +734,9 @@ arbitrary plugin UI:
 - `hooks`: agent lifecycle hooks for the agents Orca launches.
 
 `skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
-Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
+Claude Code's (agent-format hooks, distinct from `contributes.hooks`). Orca does not reserve
+`agents`, because those formats use it for subagent files.
+Until those declarative keys ship, a `trusted-worker` plugin (for example in a subdirectory referenced via `source.path`) can subscribe to shipped worker hooks such as `agent.prompt.before` and `agent.tool.before` via `contributes.hooks` (since `1.4.248`, handled with `orca.hooks.on`), not `contributes.events`. Orca does not suppress these worker hooks when host `settings.json` hooks are configured, so a prompt or tool call can receive injection from both; assign each injection responsibility to either the host hook or the worker hook rather than both.
 
 See [the manifest reference](plugin-manifest.md#planned-contribution-points) for details.
 
