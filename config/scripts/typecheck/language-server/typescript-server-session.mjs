@@ -169,12 +169,21 @@ export function createServerSession({
     killTimer = setTimer(retire, SHUTDOWN_GRACE_MS)
   }
 
+  // Requests either way (the agent's to the server, the server's to the agent) count as unanswered.
+  const drained = () => pending.size === 0 && relayed.size === 0
+
+  const stopIfIdle = () => {
+    if (idleExpired && drained() && state === 'ready') {
+      stop()
+    }
+  }
+
   // With requests still out, the stop waits for the last answer, or one more idle period at most.
   function onIdle() {
     if (state !== 'ready' || registered) {
       return
     }
-    if (pending.size === 0 || idleExpired) {
+    if (drained() || idleExpired) {
       stop()
     } else {
       idleExpired = true
@@ -304,6 +313,7 @@ export function createServerSession({
           }
         }
         server.write({ ...message, id: serverId })
+        stopIfIdle()
       }
       return
     }
@@ -427,9 +437,7 @@ export function createServerSession({
       server.write({ jsonrpc: '2.0', method: 'exit' })
     } else if (!message.method && pending.delete(message.id)) {
       toClient(message)
-      if (idleExpired && pending.size === 0 && state === 'ready') {
-        stop()
-      }
+      stopIfIdle()
     } else if (message.method === 'client/registerCapability' && message.id !== undefined) {
       register(message)
     } else if (message.method && message.id !== undefined) {
