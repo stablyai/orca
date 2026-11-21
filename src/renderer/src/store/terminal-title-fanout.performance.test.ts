@@ -11,6 +11,7 @@ import { readRuntimeStatuses } from './slices/runtime-status/views/runtime-statu
 import { getRuntimeMobileSessionSyncKey } from '@/runtime/sync-runtime-graph/sync-key'
 import { getTerminalTabOwners } from './terminals/ownership/terminal-tab-owner-index'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { terminalTabNamesChanged } from '@/lib/agent-session/history/session-names/terminal-session-name-sync'
 
 // Perf contract (#44954, STA-16352): every terminal title change woke store subscribers that scanned every
 // workspace's tab bucket, ~20 ms per title at 1,900 workspaces. A title change must read only its own
@@ -133,6 +134,7 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
     shouldSyncAgentHookCompletionForStoreUpdate(state, previous)
     changedOwningPaneTitleRequests(state, previous, readRuntimeStatuses())
     aiVaultTitleSyncInputsChanged(state, previous)
+    terminalTabNamesChanged(state, previous)
     syncKey = getRuntimeMobileSessionSyncKey(state, previous, syncKey)
     selectVisibleAgentOrchestration(state)
     reads.measuring = false
