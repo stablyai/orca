@@ -1,18 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Badge } from '../../ui/badge'
 import { translate } from '../../../i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/class-names'
-import type {
-  MobileRelayStatus,
-  MobileRelayStatusDetail
-} from '../../../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { MobileRelayStatus } from '../../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
 import { relayClockSkewMessage } from '../relay-clock-skew-message'
+import { useMobileRelayStatus } from '../use-mobile-relay-status'
 
 function relayStatusLabel(status: MobileRelayStatus, t: Translate = translate): string {
   if (status === 'registered') {
@@ -55,7 +53,7 @@ export function MobilePairingConnectionOptions({
 }): React.JSX.Element {
   const t = useTranslate()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const [relayStatus, setRelayStatus] = useState<MobileRelayStatusDetail>({ status: 'offline' })
+  const relayStatus = useMobileRelayStatus()
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Unconfigured builds have no Relay sign-in endpoint; mark unavailable instead of offering a dead CTA.
@@ -91,32 +89,6 @@ export function MobilePairingConnectionOptions({
   const relayCell = relayStatus.cellUrl ? relayCellLabel(relayStatus.cellUrl) : null
 
   useOrcaProfileAuthStatusRefresh()
-
-  useEffect(() => {
-    let receivedEvent = false
-    let active = true
-    const apply = (detail: MobileRelayStatusDetail): void => {
-      setRelayStatus(detail)
-    }
-    const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
-      receivedEvent = true
-      if (active) {
-        apply(detail)
-      }
-    })
-    void window.api.mobile
-      .getRelayStatus()
-      .then((detail) => {
-        if (active && !receivedEvent) {
-          apply(detail)
-        }
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [])
 
   return (
     <div className={cn('space-y-2', compact && 'space-y-1.5')}>

@@ -151,10 +151,24 @@ function sweepOver(
 // Bot chats and kept-open structured workers run with no tab.
 const TABLESS = { tabs: [], background: ['bot-chat', 'worker-chat'] }
 
-it('continues both visible and tabless chats whose limit reset in the same pass', async () => {
+it('continues both visible and tabless chats whose limit reset', async () => {
   const sent: string[] = []
   await sweepOver({ ...TABLESS, tabs: ['chat-a'] }, sent).tick()
-  expect(sent).toEqual(['chat-a', 'bot-chat', 'worker-chat'])
+  expect(sent).toEqual(['chat-a', 'bot-chat'])
+})
+
+it('continues at most two chats per pass and the rest on later passes', async () => {
+  const sent: string[] = []
+  const sweep = sweepOver(
+    { tabs: ['chat-a', 'chat-b', 'chat-c', 'chat-d', 'chat-e'], background: [] },
+    sent
+  )
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-b'])
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-b', 'chat-c', 'chat-d'])
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-b', 'chat-c', 'chat-d', 'chat-e'])
 })
 
 it('continues no tabless chat while automatic continue is off', async () => {
@@ -176,4 +190,30 @@ it('still continues the other chats when one chat cannot be read', async () => {
   })
   await sweep.tick()
   expect(sent).toEqual(['chat-a', 'chat-c'])
+})
+
+it('says a chat’s continue may have ended once the chat closes, loaded or not', async () => {
+  const open: { tabs: string[]; background: string[] } = {
+    tabs: ['chat-a', 'chat-b'],
+    background: []
+  }
+  const sweep = sweepOver(open, [], { loaded: false })
+  const told: (string | undefined)[] = []
+  sweep.onDispositionChange((id) => told.push(id))
+  await sweep.tick()
+  open.tabs = ['chat-a']
+  await sweep.tick()
+  expect(told).toEqual(['chat-b'])
+})
+
+it('says a chat closed before the first sweep may have ended too', async () => {
+  const open: { tabs: string[]; background: string[] } = { tabs: ['chat-a'], background: [] }
+  const sweep = sweepOver(open, [], { loaded: false })
+  const told: (string | undefined)[] = []
+  sweep.onDispositionChange((id) => told.push(id))
+  sweep.start()
+  open.tabs = []
+  await sweep.tick()
+  sweep.dispose()
+  expect(told).toEqual(['chat-a'])
 })

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { GET_PAGE_STATE } from '../../../browser/guest-lifecycle/manager/registration/browser-page-state-form-data.test-fixture'
 import { expect, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './browser-commands'
 import type { BrowserTabBarEntry } from '../tabs/browser-tab-listing'
@@ -81,8 +82,11 @@ export function createModalAdmissionFixture(
       debugger: Object.assign(new EventEmitter(), { isAttached: () => false }),
       loadURL: load,
       navigationHistory: {
-        getAllEntries: () => [{ url: 'https://localhost/app', title: 'Modal' }],
+        getAllEntries: () => [
+          { url: 'https://localhost/app', title: 'Modal', pageState: GET_PAGE_STATE }
+        ],
         getActiveIndex: () => 0,
+        getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
         restore: () => new Promise<void>(() => {})
       },
       close: () => {

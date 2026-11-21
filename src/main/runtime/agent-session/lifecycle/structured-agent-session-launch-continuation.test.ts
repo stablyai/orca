@@ -193,6 +193,16 @@ describe('continuing interrupted chats at launch', () => {
     await vi.waitFor(() => expect(restartResume.continueAfterRestart).toHaveBeenCalledTimes(2))
   })
 
+  it('settles what it continued with nothing when the start had no host, but waits for a failed restoration’s retry', async () => {
+    const hostless = new StructuredAgentSessionLaunchContinuationOnce()
+    hostless.start(undefined)
+    expect((await hostless.continued).continued).toEqual(new Set())
+    const failed = new StructuredAgentSessionLaunchContinuationOnce()
+    failed.start(undefined, { retryable: true })
+    failed.start(launch(true).deps)
+    expect((await failed.continued).continued).toEqual(new Set(['continued']))
+  })
+
   it('gives a retried restoration its own outcome, since waiters went on with nothing', async () => {
     const once = new StructuredAgentSessionLaunchContinuationOnce()
     const retried = Promise.withResolvers<ReadonlySet<string>>()

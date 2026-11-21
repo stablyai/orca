@@ -9,6 +9,7 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useAppStore } from '@/store/index'
+import { useDeleteOrcaChat } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
 import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { forgetAiVaultSessionResult } from '../scanning/ai-vault-session-result-cache'
 import '../session-list/ai-vault-session-filters'
@@ -79,8 +80,24 @@ export function useAiVaultSessionDeleteAction({
   const confirm = useConfirmationDialog()
   const pendingSessionIds = useRef(new Set<string>())
 
+  const deleteChat = useDeleteOrcaChat()
   const runDelete = useCallback(
     async (session: AiVaultSession) => {
+      const chat = session.structuredSession
+      if (chat) {
+        if (
+          await deleteChat({
+            hostId: session.executionHostId,
+            sessionId: chat.sessionId,
+            pairingRevision: session.hostPairingRevision
+          })
+        ) {
+          forgetAiVaultSessionResult(session.id)
+          onDeleted?.(session)
+          void refresh({ force: true })
+        }
+        return
+      }
       const environmentId = aiVaultSessionRuntimeEnvironmentId(session)
       // Fence to the pairing that listed this row (or its same-host rotation), never a re-pair elsewhere.
       const pairingRevision = environmentId
@@ -150,7 +167,7 @@ export function useAiVaultSessionDeleteAction({
         )
       }
     },
-    [confirm, refresh, onDeleted]
+    [confirm, refresh, onDeleted, deleteChat]
   )
 
   return useCallback(

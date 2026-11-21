@@ -4,8 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
-import type { BotItemsClosedPage } from './use-bot-items-closed-pages'
-import type { BotItemsShownList } from './use-bot-items-shown-list'
+import type { BotItemsClosedPage, BotItemsShownList } from './use-bot-items-shown-list'
 import { useBotItemWalk } from './use-bot-item-walk'
 
 const open = (uid: string) => makeTestBotItem(1, { uid, status: 'working' })
@@ -18,7 +17,7 @@ function list(
 ): BotItemsShownList {
   return {
     read: null,
-    chatRead: { read: null, failed: false, retry: () => {} },
+    chatRead: { read: null, failed: false, retry: () => {}, readMore: async () => null },
     items: [],
     shown: [],
     groups: {

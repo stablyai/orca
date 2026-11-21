@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 const DOT = 8
@@ -163,12 +163,6 @@ export const mcpPanelStyles = themedStyleSheet(() => ({
   buttonPlain: {
     paddingHorizontal: spacing.sm
   },
-  buttonPressed: {
-    opacity: feedback.pressedOpacity
-  },
-  buttonDisabled: {
-    opacity: feedback.disabledOpacity
-  },
   buttonLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -180,11 +174,5 @@ export const mcpPanelStyles = themedStyleSheet(() => ({
   buttonLabelPlain: {
     fontWeight: '500',
     color: colors.textSecondary
-  },
-  buttonLabelHidden: {
-    opacity: 0
-  },
-  buttonSpinner: {
-    position: 'absolute'
   }
 }))

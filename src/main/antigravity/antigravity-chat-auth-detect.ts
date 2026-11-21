@@ -11,7 +11,7 @@ import {
   agentPlatformCredentialsFile,
   resolveAgentPlatformProject
 } from './antigravity-agent-platform-project'
-import { hasSavedAntigravityGoogleSignIn } from './antigravity-chat-saved-sign-in'
+import { hasSavedAntigravityGoogleSignIn } from './antigravity-saved-google-token'
 
 type DetectSources = {
   /** The saved config; null while it is malformed or being saved. */

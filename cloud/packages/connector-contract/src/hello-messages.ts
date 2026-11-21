@@ -200,6 +200,9 @@ export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 // out of CONNECTOR_CLOUD_FEATURES: the cloud lists it only while its switch is on). Under a hello
 // whose answer doesn't list it, the machine posts the same outcomes through replies instead.
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
+// The cloud shows a usage-limit pause that will resume (a turn-ended's `resumes`) as paused. Kept out
+// of CONNECTOR_CLOUD_FEATURES: only the code that renders it lists it, behind its switch.
+export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'
 // A machine feature: it answers a byReply prompt from an answer delivery's text.
 export const CONNECTOR_ANSWER_TEXT_FEATURE = 'answer.text'
 export const ConnectorHelloResponseSchema = z.object({

@@ -17,7 +17,6 @@ import { ListRow } from '../components/list/ListGroup'
 import { SettingsSection } from '../settings/settings-screen-frame'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
-import { memberSourceLabel } from './mobile-bot-sheet-copy'
 
 // The phone can't read the app's chat permission, nor turn Google off: those stay on the desktop.
 const PHONE_FIXES: Record<
@@ -38,7 +37,6 @@ export function MobileBotMemberRow(props: {
   return (
     <ListRow
       title={props.member.name}
-      subtitle={memberSourceLabel(props.member)}
       accessory={
         <MobileBotTextButton
           label={t('bots.settings.remove', 'Remove')}
@@ -59,7 +57,7 @@ export function MobileBotWhoCanAsk(props: {
   disabled: boolean
   onKeepOnlyMe: () => void
   onAskForApproval: () => void
-  /** The people rows, under the summary in its group. */
+  /** Each connector's people, under the summary. */
   children: ReactNode
 }) {
   const { bot } = props
@@ -88,8 +86,8 @@ export function MobileBotWhoCanAsk(props: {
         footer={botAccessCopy(control.id, { ...control.values, name, ...place })}
       >
         <ListRow title={botAccessCopy(who.id, { ...who.values, name })} wrapTitle />
-        {props.children}
       </SettingsSection>
+      {props.children}
       {others.length > 0 ? (
         <SettingsSection title={botAccessCopy('reachHeading', { name })}>
           {phoneBotReachLines(bot).map((line) => (
