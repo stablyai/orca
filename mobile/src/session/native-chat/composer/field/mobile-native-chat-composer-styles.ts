@@ -14,6 +14,8 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm
   },
   bar: composerInputStyles.box,
+  fieldRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
+  fieldBody: { flex: 1, minWidth: 0 },
   leadingControls: {
     flex: 1,
     minWidth: 0,

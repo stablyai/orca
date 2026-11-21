@@ -2885,6 +2885,12 @@
       "updateToVersion": "Orca {{version}} 버전으로 업데이트"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "채팅 에이전트 아이콘",
+        "model": "모델 이름 옆",
+        "field": "메시지 입력창 첫 줄",
+        "off": "끄기"
+      },
       "language": {
         "description": "시스템을 선택하면 이 기기의 언어를 따릅니다. 권한 요청은 항상 기기 언어로 표시됩니다.",
         "heading": "언어",

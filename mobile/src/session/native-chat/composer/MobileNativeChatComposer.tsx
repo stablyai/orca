@@ -1,3 +1,5 @@
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
+import { useComposerAgentIconPosition } from '../preferences/composer-agent-icon-position'
 import { MobileSlackMirrorItem } from '../slack-mirror/MobileSlackMirrorItem'
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
@@ -91,6 +93,13 @@ export function MobileNativeChatComposer({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const iconPosition = useComposerAgentIconPosition()
+  const agentIcon =
+    agent && !editSession && iconPosition !== 'off' ? (
+      <View accessible accessibilityRole="image" accessibilityLabel={agent}>
+        <MobileAgentIcon agentId={agent} size={16} />
+      </View>
+    ) : null
   const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const groupRef = useRef<HostInstance>(null)
@@ -259,51 +268,56 @@ export function MobileNativeChatComposer({
             onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
             onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
           />
-          <MobileNativeChatComposerField
-            ref={fieldRef}
-            value={value}
-            skillToken={menu.skillToken}
-            onChangeText={menu.onFieldChange}
-            onKeyboardSubmit={() => {
-              const first = menu.rows[0]
-              if (first) {
-                menu.pick(first)
-              } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
-                void handleSend(editSession ? undefined : { alternate: true }, true)
-              } else {
-                // Nothing of its own to send, so the head card goes; the queue decides whether it may.
-                headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
-              }
-            }}
-            onFocus={() => {
-              setFocused(true)
-              if (draftScopeKey) {
-                focusMobileNativeChatTextDestination(draftScopeKey)
-              }
-            }}
-            onBlur={() => setFocused(false)}
-            onWebPaste={onWebPaste}
-            // Controlled only transiently right after an autocomplete insert.
-            selection={menu.pendingSelection ?? undefined}
-            dictationPreview={dictation.preview}
-            onSelectionChange={(e) => {
-              dictation.readSelection(e)
-              menu.onSelectionChange(e.nativeEvent.selection)
-            }}
-            placeholder={
-              goal.placeholder ??
-              placeholder ??
-              t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands')
-            }
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            multiline
-            editable={!editSession?.locked}
-            // Why: never revoke `editable` — iOS resigns first responder on a focused
-            // field, so a transient lock would yank the keyboard mid-typing (#10681).
-            // The lock gates sending; the draft survives and rides the next send.
-            textAlignVertical="top"
-          />
+          <View style={styles.fieldRow}>
+            {iconPosition === 'field' ? agentIcon : null}
+            <View style={styles.fieldBody}>
+              <MobileNativeChatComposerField
+                ref={fieldRef}
+                value={value}
+                skillToken={menu.skillToken}
+                onChangeText={menu.onFieldChange}
+                onKeyboardSubmit={() => {
+                  const first = menu.rows[0]
+                  if (first) {
+                    menu.pick(first)
+                  } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
+                    void handleSend(editSession ? undefined : { alternate: true }, true)
+                  } else {
+                    // Nothing of its own to send, so the head card goes; the queue decides whether it may.
+                    headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
+                  }
+                }}
+                onFocus={() => {
+                  setFocused(true)
+                  if (draftScopeKey) {
+                    focusMobileNativeChatTextDestination(draftScopeKey)
+                  }
+                }}
+                onBlur={() => setFocused(false)}
+                onWebPaste={onWebPaste}
+                // Controlled only transiently right after an autocomplete insert.
+                selection={menu.pendingSelection ?? undefined}
+                dictationPreview={dictation.preview}
+                onSelectionChange={(e) => {
+                  dictation.readSelection(e)
+                  menu.onSelectionChange(e.nativeEvent.selection)
+                }}
+                placeholder={
+                  goal.placeholder ??
+                  placeholder ??
+                  t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands')
+                }
+                placeholderTextColor={colors.textMuted}
+                selectionColor={colors.accentBlue}
+                multiline
+                editable={!editSession?.locked}
+                // Why: never revoke `editable` — iOS resigns first responder on a focused
+                // field, so a transient lock would yank the keyboard mid-typing (#10681).
+                // The lock gates sending; the draft survives and rides the next send.
+                textAlignVertical="top"
+              />
+            </View>
+          </View>
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             <MobileNativeChatDictationLeading
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
@@ -317,6 +331,7 @@ export function MobileNativeChatComposer({
                 menu={menu}
               />
               {roomReplies}
+              {iconPosition === 'model' ? agentIcon : null}
               {sessionOptions ? (
                 <MobileNativeChatSessionOptionPickers
                   {...sessionOptions}

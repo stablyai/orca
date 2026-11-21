@@ -2886,6 +2886,12 @@
       "updateToVersion": "Orca {{version}} に更新"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "チャットのエージェントアイコン",
+        "model": "モデル名の横",
+        "field": "メッセージ入力欄の先頭",
+        "off": "オフ"
+      },
       "language": {
         "description": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
         "heading": "言語",

@@ -3363,6 +3363,12 @@
       "updateToVersion": "Atualizar para o Orca {{version}}"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "ÍCONE DO AGENTE",
+        "model": "Ao lado do nome do modelo",
+        "field": "No início do campo de mensagem",
+        "off": "Desativado"
+      },
       "language": {
         "description": "A opção Sistema segue o idioma deste dispositivo. As solicitações de permissão sempre usam o idioma do dispositivo.",
         "heading": "IDIOMA",

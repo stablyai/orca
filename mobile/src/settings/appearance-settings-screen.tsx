@@ -11,6 +11,10 @@ import {
   setUsagePercentageDisplay,
   useUsagePercentageDisplay
 } from '../accounts/usage/usage-percentage-display-preference'
+import {
+  setComposerAgentIconPosition,
+  useComposerAgentIconPosition
+} from '../session/native-chat/preferences/composer-agent-icon-position'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsScreen, SettingsSection } from './settings-screen-frame'
@@ -36,6 +40,7 @@ export default function AppearanceSettingsScreen() {
   const t = useMobileTranslation()
   const router = useRouter()
   const preference = useMobileAppearancePreference()
+  const iconPosition = useComposerAgentIconPosition()
   const usageDisplay = useUsagePercentageDisplay()
 
   return (
@@ -78,6 +83,26 @@ export default function AppearanceSettingsScreen() {
             title={label}
             selected={usageDisplay === value}
             onPress={() => setUsagePercentageDisplay(value)}
+          />
+        ))}
+      </SettingsSection>
+
+      <SettingsSection
+        radioGroup
+        title={t('settings.appearance.agentIcon.heading', 'CHAT AGENT ICON')}
+      >
+        {(
+          [
+            ['model', t('settings.appearance.agentIcon.model', 'Next to model name')],
+            ['field', t('settings.appearance.agentIcon.field', 'At start of message field')],
+            ['off', t('settings.appearance.agentIcon.off', 'Off')]
+          ] as const
+        ).map(([value, label]) => (
+          <ListRow
+            key={value}
+            title={label}
+            selected={iconPosition === value}
+            onPress={() => setComposerAgentIconPosition(value)}
           />
         ))}
       </SettingsSection>

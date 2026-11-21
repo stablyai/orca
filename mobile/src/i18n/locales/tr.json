@@ -2889,6 +2889,12 @@
       "updateToVersion": "Orca {{version}} sürümüne güncelle"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "SOHBET ARACISI SİMGESİ",
+        "model": "Model adının yanında",
+        "field": "İleti alanının başında",
+        "off": "Kapalı"
+      },
       "language": {
         "description": "Sistem seçeneği bu cihazın dilini kullanır. İzin istekleri her zaman cihazın dilinde gösterilir.",
         "heading": "DİL",

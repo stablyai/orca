@@ -1,6 +1,12 @@
 {
   "settings": {
     "appearance": {
+      "agentIcon": {
+        "heading": "CHAT AGENT ICON",
+        "model": "Next to model name",
+        "field": "At start of message field",
+        "off": "Off"
+      },
       "theme": {
         "system": "System",
         "light": "Light",
