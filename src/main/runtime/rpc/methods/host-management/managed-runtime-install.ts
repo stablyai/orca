@@ -29,16 +29,17 @@ import {
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
   onManagedAgentUse,
-  installedManagedAgentCommand,
-  managedAgentStandsInFor,
   rememberManagedAgentRelease,
   type ManagedAgentCliId
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { createRevisionClock, type RevisionClock } from '../../../events/revisioned-state'
 import { streamManagedRuntimeInstall } from './managed-runtime-install-stream'
-import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
-import type { ManagedCopySettings } from '../../../../acp/launch/acp-launch-contract'
-import { runtimeReleaseMayBePublished } from '../../../../node-runtime/managed-runtime-release'
+import {
+  managedCopyMayRun,
+  noteManagedReleasesRead,
+  provideManagedAgentDetection,
+  standInSpec
+} from './managed-copy-detection'
 import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 
 const installations = new Map<string, ManagedRuntimeInstallation>()
@@ -157,22 +158,6 @@ function acpInstallation(
   })
 }
 
-/** ACP agents name their own program and search their installers' folders after PATH, as launches
- *  do; an agent with a host program is looked for as that program. */
-function standInSpec(agent: ManagedAgentCliId) {
-  const outer = acpLaunchSpecFor(agent)
-  return [outer, outer?.hostBackend?.spec].find(
-    (each) => each && managedAgentStandsInFor(agent, each.command)
-  )
-}
-
-/** The settings whether Orca's copies may run comes from. */
-type ManagedCopySettingsSource = { requireStore(): { getSettings(): ManagedCopySettings } }
-
-function managedCopyMayRun(agent: ManagedAgentCliId, runtime: ManagedCopySettingsSource): boolean {
-  return standInSpec(agent)?.managedCopyAllowed?.(runtime.requireStore().getSettings()) !== false
-}
-
 /** These chats run the user's own install when the host has one, so Orca's copy is the fallback. */
 function agentCliInstallation(
   agent: ManagedAgentCliId,
@@ -205,29 +190,6 @@ function agentCliInstallation(
   })
 }
 
-// Set once launch reclaim has read every release, which installs and removals then keep current.
-let releasesRead = false
-
-/** An installed copy that may run is an installed agent to menus and Settings. Until launch reclaim
- *  has read Orca's releases, detection looks for them itself, so no reader waits for that read. */
-export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource): void {
-  provideInstalledManagedAgents(async () => {
-    const dataDirectory = getProfileUserDataPath()
-    const present = await Promise.all(
-      MANAGED_AGENT_CLI_IDS.map(
-        async (agent) =>
-          managedCopyMayRun(agent, runtime) &&
-          (releasesRead
-            ? installedManagedAgentCommand(agent) !== null
-            : await runtimeReleaseMayBePublished(
-                managedAgentCli(agent).runtime.root(dataDirectory)
-              ))
-      )
-    )
-    return MANAGED_AGENT_CLI_IDS.filter((_, index) => present[index])
-  })
-}
-
 /** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
   provideManagedAgentDetection(runtime)
@@ -244,7 +206,7 @@ export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeServic
       }
     }
   }
-  releasesRead = true
+  noteManagedReleasesRead()
 }
 
 const AUTO_UPDATE_FIRST_CHECK_MS = 2 * 60_000

@@ -457,7 +457,7 @@ it.each(['startup', 'ordinary', 'scoped', 'committed'] as const)(
   }
 )
 
-it('delivers a failure edge even when a later source step replaces its turn with success', async () => {
+it('reports a captured failure edge and suppresses a later failure once the worker retries', async () => {
   const r = await rig()
   await r.journal.appendSteps(
     ['failure', 'success'].map((outcome) => ({
@@ -478,10 +478,7 @@ it('delivers a failure edge even when a later source step replaces its turn with
     { requestId: 'orca:transient', turnOutcome: 'failure' }
   ])
   expect(await r.journal.reads.itemBody('orca:transient')).toMatchObject({ outcome: 'success' })
-})
 
-it('does not report a failed request as a stop once the worker has started its retry', async () => {
-  const r = await rig()
   const releaseReads = r.holdFailureReads()
   await batch(r.journal, 'A', [turn('A', 'failure'), words('A', 'capacity from A')])
   observeChatWorkerWorking(SESSION, {
@@ -491,7 +488,7 @@ it('does not report a failed request as a stop once the worker has started its r
   })
   releaseReads()
   await tick()
-  expect(r.mail()).toEqual([])
+  expect(r.mail()).toHaveLength(1)
 })
 
 it('never mails a capability or credential a failed request echoed', async () => {

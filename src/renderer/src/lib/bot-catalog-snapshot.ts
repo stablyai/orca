@@ -8,14 +8,10 @@ import {
 import { keepBotHostList, readKeptBotHostList } from './bot-host-kept-lists'
 import { reuseEqualJson } from '../../../shared/reuse-equal-json'
 import type { BotNeedsYouCounts } from '../../../shared/bots/bot-change-scope'
+import type { ConnectorCloudStatus } from '../../../shared/bots/connector-cloud-status'
 
-/** What a host's bots.list says of its link to Orca Cloud (the host's ConnectorCloudStatus). */
-export type BotHostConnectorStatus =
-  | 'signed-out'
-  | 'needs-sign-in'
-  | 'unreachable'
-  | 'refused'
-  | 'ok'
+/** What a host's bots.list says of its link to Orca Cloud. */
+export type BotHostConnectorStatus = ConnectorCloudStatus
 
 /** A listed host is read while connected; a disconnected one keeps its last read, shown dimmed. */
 export type BotHostState = 'live' | 'offline'

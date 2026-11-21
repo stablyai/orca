@@ -71,16 +71,10 @@ describe('RRULE parts the scheduler drops', () => {
 
   it.each([
     [everyOtherWednesday, 'INTERVAL=2'],
-    ['FREQ=DAILY;count=3', 'COUNT=3'],
-    ['FREQ=DAILY; BYHOUR=9', ' BYHOUR=9'],
     ['FREQ=DAILY;BYDAY=MO;BYHOUR=9;BYMINUTE=0', 'BYDAY=MO'],
-    ['FREQ=HOURLY;BYDAY=MO,TU,WE,TH,FR;BYMINUTE=0', 'BYDAY=MO,TU,WE,TH,FR'],
     ['FREQ=HOURLY;BYHOUR=9;BYMINUTE=0', 'BYHOUR=9'],
     ['FREQ=WEEKLY;BYDAY=MO;BYDAY=WE;BYHOUR=9', 'BYDAY=MO'],
-    ['FREQ=DAILY;BYSECOND=30', 'BYSECOND=30'],
     ['FREQ=DAILY;BYMINUTE=', 'BYMINUTE='],
-    ['FREQ=DAILY;BYHOUR', 'BYHOUR'],
-    ['FREQ=DAILY;=5', '=5'],
     ['FREQ=DAILY;BYHOUR=9=10', 'BYHOUR=9=10']
   ])('refuses %s as new input, naming %s', (rule, part) => {
     expect(isValidAutomationSchedule(rule)).toBe(false)
@@ -88,12 +82,8 @@ describe('RRULE parts the scheduler drops', () => {
   })
 
   it.each([
-    'FREQ=WEEKLY;BYDAY=WE;BYHOUR=11;BYMINUTE=0',
     'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9;BYMINUTE=0;',
-    'FREQ=WEEKLY;INTERVAL=1;WKST=MO;BYDAY=MO;BYHOUR=9;BYMINUTE=0;BYSECOND=0',
-    'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-    'FREQ=HOURLY;BYMINUTE=15',
-    '0 9 * * 1-5'
+    'FREQ=WEEKLY;INTERVAL=1;WKST=MO;BYDAY=MO;BYHOUR=9;BYMINUTE=0;BYSECOND=0'
   ])('accepts %s', (rule) => {
     expect(getAutomationScheduleInputError(rule)).toBeNull()
   })

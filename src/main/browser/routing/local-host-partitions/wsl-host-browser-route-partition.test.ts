@@ -166,11 +166,9 @@ afterEach(() => {
 })
 
 describe('WSL host browser route partition', () => {
-  it('is the partition the host pages later use, across an orcad relaunch and re-pair', async () => {
-    const seeded = bindWslHostBrowserRoutePartition(
-      stableStorage(environment({ revision: 10, device: 'a' })),
-      'default'
-    )
+  it('reuses the host partition across re-pairing and a legacy binding rewrite', async () => {
+    const storage = stableStorage(environment({ revision: 10, device: 'a' }))
+    const seeded = bindWslHostBrowserRoutePartition(storage, 'default')
 
     const afterRelaunch = await pagePartition(environment({ revision: 20, device: 'b' }), 'rt-b')
     const afterAnother = await pagePartition(environment({ revision: 30, device: 'c' }), 'rt-c')
@@ -183,17 +181,13 @@ describe('WSL host browser route partition', () => {
         'default'
       )
     ).toBe(seeded)
-  })
 
-  // Only this identity derives that name, so the page path re-adopts it; the copy must agree.
-  it('keeps its own partition after an older build rewrote the binding without its alias', async () => {
-    const storage = stableStorage(environment({ revision: 10, device: 'a' }))
-    const partition = bindWslHostBrowserRoutePartition(storage, 'default')
+    // Older builds persisted the binding without the route alias.
     const store = new BrowserRoutePartitionBindingStore({ filePath: bindings.filePath })
-    store.remove([partition])
-    store.set(partition, 'f'.repeat(64), storage.storageScope)
+    store.remove([seeded])
+    store.set(seeded, 'f'.repeat(64), storage.storageScope)
 
-    expect(bindWslHostBrowserRoutePartition(storage, 'default')).toBe(partition)
-    expect(await pagePartition(environment({ revision: 20, device: 'b' }), 'rt-b')).toBe(partition)
+    expect(bindWslHostBrowserRoutePartition(storage, 'default')).toBe(seeded)
+    expect(await pagePartition(environment({ revision: 50, device: 'e' }), 'rt-e')).toBe(seeded)
   })
 })

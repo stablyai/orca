@@ -73,7 +73,13 @@ export type BotConnectorSources = {
 /** One row; its title tells it from the bot's other rows of the same service. */
 export type BotConnectorEntry = UntitledEntry & { title: BotConnectorTitle }
 
-const NO_ENTRIES: BotConnectorEntry[] = []
+type BotConnectorInventory = {
+  entries: BotConnectorEntry[]
+  /** Absent rows from these services may still be configured on the host. */
+  unresolved: string[]
+}
+
+const EMPTY_INVENTORY: BotConnectorInventory = { entries: [], unresolved: [] }
 
 /**
  * The bot's connector rows in list order; null (no bot shown) reads nothing. Only a shown list
@@ -83,6 +89,13 @@ export function useBotConnectorEntries(
   bot: Bot | null,
   appsCheck: Extract<BotToolsCheck, 'apps' | 'finished'> = 'finished'
 ): BotConnectorEntry[] {
+  return useBotConnectorInventory(bot, appsCheck).entries
+}
+
+export function useBotConnectorInventory(
+  bot: Bot | null,
+  appsCheck: Extract<BotToolsCheck, 'apps' | 'finished'>
+): BotConnectorInventory {
   const shown = bot !== null
   const slack = useBotSlack(bot)
   const hostId = bot?.hostId ?? ownBotHost().hostId
@@ -95,13 +108,28 @@ export function useBotConnectorEntries(
   // Changes with the UI language, so the translated titles follow a switch.
   const t = useTranslate()
   // The panel header, tab and toggle all read it, so one list per change of its sources.
-  return useMemo(
-    () =>
-      bot
-        ? botConnectorEntries(bot, { slack, linear, github, google, composio, tools }, t)
-        : NO_ENTRIES,
-    [bot, slack, linear, github, google, composio, tools, t]
-  )
+  return useMemo(() => {
+    if (!bot) {
+      return EMPTY_INVENTORY
+    }
+    const unresolved: string[] = []
+    if (bot.google && google.status !== 'ready') {
+      unresolved.push('google')
+    }
+    if (bot.github && github.status !== 'ready') {
+      unresolved.push('github')
+    }
+    if (!composio.status || (composio.status.key !== 'none' && !composio.connections)) {
+      unresolved.push('composio')
+    }
+    if (tools.status !== 'ready') {
+      unresolved.push('app')
+    }
+    return {
+      entries: botConnectorEntries(bot, { slack, linear, github, google, composio, tools }, t),
+      unresolved
+    }
+  }, [bot, slack, linear, github, google, composio, tools, t])
 }
 
 /** The list itself, from the bot and its sources. */
@@ -175,13 +203,13 @@ export function botConnectorEntries(
       )
     }
   }
-  if (bot.google === true) {
-    const accounts = google.status === 'ready' ? google.google.accounts : []
+  if (bot.google === true && google.status === 'ready') {
+    const accounts = google.google.accounts
     add(
       {
         kind: 'google',
         key: 'google',
-        needsOwner: google.status === 'ready' && accounts.length === 0
+        needsOwner: accounts.length === 0
       },
       // One row for every account, so it names none unless another row is also Google.
       { service: 'Google', hints: [accounts.map((account) => account.email).join(', ')] }
