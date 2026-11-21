@@ -95,8 +95,15 @@ export function BotPictureCarousel({
     setSlideOver(null)
   }
   const sliding = slideOver === order
-  // Every face in view since the slide began, so faces leaving view keep their outfit until it ends.
+  // Every face in view since the slide began, so faces leaving view keep their outfit until it ends,
+  // whatever moved the current face (an arrow, or a pasted picture taking Generate).
   const [dressed, setDressed] = useState<ReadonlySet<string>>(() => new Set())
+  const [seenIndex, setSeenIndex] = useState(index)
+  if (index !== seenIndex) {
+    setSeenIndex(index)
+    const left = faces.filter((_, i) => Math.abs(faceOffset(i, seenIndex, count)) <= 1)
+    setDressed((was) => (sliding ? new Set([...was, ...left.map((face) => face.key)]) : new Set()))
+  }
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -108,8 +115,9 @@ export function BotPictureCarousel({
   )
   const go = (next: number): void => {
     setSlideOver(order)
-    const inView = faces.filter((_, i) => Math.abs(faceOffset(i, index, count)) <= 1)
-    setDressed((was) => new Set([...(sliding ? was : []), ...inView.map((face) => face.key)]))
+    if (!sliding) {
+      setDressed(new Set())
+    }
     if (settle.current) {
       clearTimeout(settle.current)
     }
