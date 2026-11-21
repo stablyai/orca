@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { getQuestionTaker } from '../../../../../orchestration/db/messages/mail-taker'
 import { linkWorkerToQuestion } from './worker-question-link'
-import type { OrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const caller = {
   address: 'term_docs',
@@ -51,8 +51,9 @@ describe('worker-start --for', () => {
 
   it('links a structured worker to the question its chat took', () => {
     const id = question('term_docs', 'card')
-    db.markAsRead([id], { kind: 'session', sessionId: 'session-docs' })
-    const structured = { ...caller, orcaSessionId: 'session-docs' as OrcaSessionId }
+    const session = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
+    db.markAsRead([id], { kind: 'session', sessionId: session })
+    const structured = { ...caller, orcaSessionId: session }
     expect(linkWorkerToQuestion(db, id, structured, false)).toEqual({ question: id, linked: true })
   })
 

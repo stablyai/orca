@@ -96,8 +96,11 @@ export async function startWorker(
     if (!questionLink || !started || typeof started !== 'object') {
       return started
     }
-    const { take, ...link } = questionLink as WorkerQuestionLink & { take?: () => void }
-    take?.()
+    let link: WorkerQuestionLink = questionLink
+    if (questionLink.linked) {
+      questionLink.take?.()
+      link = { question: questionLink.question, linked: true }
+    }
     return { ...started, forQuestion: link }
   }
   const mode = decideWorkerStartMode({
