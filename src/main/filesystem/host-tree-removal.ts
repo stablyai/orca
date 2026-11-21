@@ -95,10 +95,11 @@ export async function removeHostCheckout(
   targetPath: string,
   authorize: (checkClean: boolean) => Promise<boolean>,
   signal?: AbortSignal,
-  verifyBeforeChildDelete?: () => Promise<boolean>
+  verifyBeforeChildDelete?: () => Promise<boolean>,
+  expectedRoot?: { dev?: bigint; ino?: bigint }
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
-  let initialRoot: { dev?: bigint; ino?: bigint } | undefined
+  let initialRoot = expectedRoot
   let markerGone = false
   try {
     await removeTree(root, {
@@ -236,7 +237,7 @@ export async function removeUnregisteredHostCheckout(
     throw differentCheckoutAtPathError(targetPath)
   }
   if (initial) {
-    const verifyInitialMarker = async (): Promise<boolean> => {
+    const verifyMarker = async (): Promise<boolean> => {
       if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
         return false
       }
@@ -244,16 +245,13 @@ export async function removeUnregisteredHostCheckout(
       if (!current) {
         return false
       }
-      if (
-        current.dev !== initial.dev ||
-        current.ino !== initial.ino ||
-        current.identity !== initial.identity
-      ) {
+      // The identity already carries the inode.
+      if (current.dev !== initial.dev || current.identity !== initial.identity) {
         throw differentCheckoutAtPathError(targetPath)
       }
       return true
     }
-    await removeHostCheckout(targetPath, verifyInitialMarker, signal, verifyInitialMarker)
+    await removeHostCheckout(targetPath, verifyMarker, signal, verifyMarker, initialRoot)
     return
   }
 

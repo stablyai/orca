@@ -87,6 +87,7 @@ export async function removeWindowsCheckout(
       }
       if (pinnedMarker !== undefined) {
         const current = await readCheckoutMarkerState(root, options)
+        throwIfSignalAborted(options.checkoutDeleteSignal)
         if (current.kind === 'absent') {
           return false
         }
@@ -95,7 +96,9 @@ export async function removeWindowsCheckout(
         }
         return true
       }
-      return !(await nativeWindowsMarkerMissing(root, options))
+      const markerMissing = await nativeWindowsMarkerMissing(root, options)
+      throwIfSignalAborted(options.checkoutDeleteSignal)
+      return !markerMissing
     }
   )
 }

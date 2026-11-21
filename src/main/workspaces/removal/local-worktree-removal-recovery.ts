@@ -21,6 +21,8 @@ import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePaths,
+  type CheckoutMarkerState,
+  type CheckoutRootState,
   type RemoveLocalWorktreeMarkerOptions
 } from './local-worktree-filesystem'
 import { readCheckoutMarkerState, readCheckoutRootState } from './worktree-removal-gitdir-identity'
@@ -146,11 +148,17 @@ export async function recoverPartialLocalWorktreeRemoval(
     return undefined
   }
 
+  // Watcher teardown awaits; pin the leftover first so a folder swapped in meanwhile is refused.
+  const leftover = {
+    root: await readCheckoutRootState(args.canonicalWorktreePath, args.localWorktreeGitOptions),
+    marker: await readCheckoutMarkerState(args.canonicalWorktreePath, args.localWorktreeGitOptions)
+  }
+  throwIfSignalAborted(args.signal)
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   throwIfSignalAborted(args.signal)
   await args.beforeLeftoverDelete?.()
-  const verifiedMarkerOptions = await assertRemainingMarkerBelongsToRepoWorktree(args)
+  const verifiedMarkerOptions = await assertRemainingMarkerBelongsToRepoWorktree(args, leftover)
   if (verifiedMarkerOptions) {
     try {
       await removeLocalWorktreePath(
@@ -160,7 +168,7 @@ export async function recoverPartialLocalWorktreeRemoval(
         {
           markerLast: true,
           expectedMarker: args.expectedMarker ?? verifiedMarkerOptions.expectedMarker,
-          forbidAnyMarker: args.forbidAnyMarker ?? verifiedMarkerOptions.forbidAnyMarker,
+          forbidAnyMarker: args.forbidAnyMarker || verifiedMarkerOptions.forbidAnyMarker,
           expectedRoot: verifiedMarkerOptions.expectedRoot,
           requireMarker: verifiedMarkerOptions.requireMarker
         }
@@ -184,8 +192,12 @@ export async function recoverPartialLocalWorktreeRemoval(
 }
 
 async function assertRemainingMarkerBelongsToRepoWorktree(
-  args: LocalPartialRemovalRecoveryArgs
+  args: LocalPartialRemovalRecoveryArgs,
+  leftover: { root: CheckoutRootState; marker: CheckoutMarkerState }
 ): Promise<Omit<RemoveLocalWorktreeMarkerOptions, 'markerLast'> | null> {
+  const expectedMarker =
+    args.expectedMarker ?? (leftover.marker.kind === 'file' ? leftover.marker.identity : undefined)
+  const forbidAnyMarker = args.forbidAnyMarker || leftover.marker.kind === 'absent'
   const access = getLocalWorktreePathAccess(
     args.localWorktreeGitOptions,
     args.canonicalWorktreePath
@@ -207,7 +219,13 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   if (rootBefore.kind === 'absent') {
     return null
   }
-  if (rootBefore.kind !== 'directory') {
+  if (
+    rootBefore.kind !== 'directory' ||
+    leftover.root.kind !== 'directory' ||
+    (leftover.root.identity &&
+      rootBefore.identity &&
+      rootBefore.identity !== leftover.root.identity)
+  ) {
     throw differentCheckoutAtPathError(args.canonicalWorktreePath)
   }
   const before = await readCheckoutMarkerState(
@@ -218,13 +236,15 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   if (before.kind === 'absent') {
     return {
       forbidAnyMarker: true,
+      // Inodes get reused: a marker that vanished during teardown only leaves an empty folder removable.
+      ...(leftover.marker.kind === 'file' ? { requireMarker: true } : {}),
       ...(rootBefore.identity ? { expectedRoot: rootBefore.identity } : {})
     }
   }
   if (
-    args.forbidAnyMarker ||
+    forbidAnyMarker ||
     before.kind !== 'file' ||
-    (args.expectedMarker !== undefined && before.identity !== args.expectedMarker)
+    (expectedMarker !== undefined && before.identity !== expectedMarker)
   ) {
     throw differentCheckoutAtPathError(args.canonicalWorktreePath)
   }

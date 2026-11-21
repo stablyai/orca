@@ -1,4 +1,5 @@
-/** Match Git read_gitfile_gently: gitdir: must start the file, payload padding is stripped, and dot excludes newlines so later lines cannot match. */
+/** Match Git read_gitfile_gently: gitdir: must start the file and only the first line counts. Strip ASCII padding only, like the WSL shell parser, so both name one marker the same way. */
 export function parseGitdirMarkerPayload(content: string): string | null {
-  return content.match(/^gitdir:(.*)/i)?.[1].trim() || null
+  const payload = content.match(/^gitdir:([^\n]*)/i)?.[1]
+  return payload?.replace(/^[ \t\v\f\r]+|[ \t\v\f\r]+$/g, '') || null
 }
