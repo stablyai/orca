@@ -5,7 +5,8 @@ name: Fork sync
 # CI passes; the push to main then runs Fork build. A conflict opens an issue instead.
 #
 # Needs the FORK_SYNC_TOKEN secret (a token with repo + workflow scopes): GITHUB_TOKEN can neither
-# push upstream's workflow changes nor start the PR's checks.
+# push upstream's workflow changes nor start the PR's checks. Only this workflow reads it; it runs on
+# schedule/dispatch, never on pull_request, so no PR (least of all one from another fork) sees it.
 
 on:
   schedule:
@@ -34,15 +35,18 @@ jobs:
       GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
       UPSTREAM: stablyai/orca
     steps:
-      - name: Require the sync token
-        if: env.GH_TOKEN == ''
+      - name: Require a working sync token
         env:
+          SYNC_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          title='Fork sync needs the FORK_SYNC_TOKEN secret'
+          if [ -n "$SYNC_TOKEN" ] && GH_TOKEN="$SYNC_TOKEN" gh api "repos/$GITHUB_REPOSITORY" -q .permissions.push | grep -qx true; then
+            exit 0
+          fi
+          title='Fork sync needs a working FORK_SYNC_TOKEN secret'
           if [ -z "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
-              --body "Add a repository secret FORK_SYNC_TOKEN (classic token with \`repo\` and \`workflow\` scopes, or a fine-grained token with Contents, Pull requests, Issues and Workflows write on this repo)."
+              --body "The FORK_SYNC_TOKEN secret is missing, expired or can't push to this repo, so upstream releases aren't being merged. Replace it with a token that has \`repo\` and \`workflow\` scopes (or a fine-grained token with Contents, Pull requests, Issues and Workflows write on this repo): \`gh auth token | gh secret set FORK_SYNC_TOKEN --repo $GITHUB_REPOSITORY\`."
           fi
           exit 1
       - uses: actions/checkout@v6
