@@ -3,28 +3,72 @@ import { isRecord } from '../../../agent-status/child-work/agent-status-child-wo
 import {
   recordAntigravityHelpersDrain,
   retireAntigravityChild,
+  type AntigravityLaunch,
   type AntigravityPaneChildState
 } from './antigravity-pane-state'
 
+const PRE_TOOL_USE = 1
+const POST_TOOL_USE = 2
+const PAIRED = PRE_TOOL_USE | POST_TOOL_USE
+
+function releasePairedLaunch(
+  pane: AntigravityPaneChildState,
+  step: number,
+  launch: AntigravityLaunch
+): void {
+  pane.settledLaunches.delete(step)
+  // A conflicting hook can leave this step held even after the original pair arrives.
+  if (!pane.pendingLaunches.has(step)) {
+    pane.launchStepsByCall.delete(launch.callId)
+  }
+  if (pane.currentLaunch === launch) {
+    pane.currentLaunch = undefined
+  }
+}
+
 export function trackAntigravityLaunch(
   pane: AntigravityPaneChildState,
+  eventName: 'PreToolUse' | 'PostToolUse',
   step: unknown,
   callId: string | undefined,
   toolName: string,
-  args: unknown
-): void {
+  args: unknown,
+  completedBookkeepingOnly = false
+): 'current' | 'stale' {
+  const phase = eventName === 'PreToolUse' ? PRE_TOOL_USE : POST_TOOL_USE
   const key = typeof step === 'number' && Number.isSafeInteger(step) && step >= 0 ? step : undefined
   const tasks = toolName === 'swarm' && isRecord(args) ? args.tasks : undefined
   const swarmSize = toolName === 'swarm' ? (Array.isArray(tasks) && tasks.length) || 1 : undefined
   const pending = pane.pendingLaunches.get(key)
-  const prior = pending === undefined && key !== undefined ? pane.settledLaunches.get(key) : pending
+  const settled = key === undefined ? undefined : pane.settledLaunches.get(key)
+  const prior = settled ?? pending
   if (
     prior &&
     prior.callId === callId &&
     prior.toolName === toolName &&
     prior.swarmSize === swarmSize
   ) {
-    return
+    if (settled && key !== undefined) {
+      const finishesCurrentLaunch =
+        !completedBookkeepingOnly &&
+        pending === undefined &&
+        pane.currentLaunch === settled &&
+        phase === POST_TOOL_USE &&
+        (settled.phases & phase) === 0
+      settled.phases |= phase
+      if (settled.phases === PAIRED) {
+        releasePairedLaunch(pane, key, settled)
+      }
+      return finishesCurrentLaunch ? 'current' : 'stale'
+    }
+    if (!completedBookkeepingOnly) {
+      prior.phases |= phase
+      pane.currentLaunch = prior
+      return 'current'
+    }
+  }
+  if (completedBookkeepingOnly) {
+    return 'stale'
   }
   const priorStep = callId ? pane.launchStepsByCall.get(callId) : undefined
   if (priorStep !== undefined && priorStep !== key) {
@@ -32,16 +76,17 @@ export function trackAntigravityLaunch(
   } else if (callId && key !== undefined) {
     pane.launchStepsByCall.set(callId, key)
   }
-  pane.pendingLaunches.set(
-    key,
+  const launch =
     key !== undefined &&
-      callId &&
-      prior === undefined &&
-      (priorStep === undefined || priorStep === key)
-      ? { callId, toolName, swarmSize }
+    callId &&
+    prior === undefined &&
+    (priorStep === undefined || priorStep === key)
+      ? { callId, toolName, swarmSize, phases: phase }
       : null
-  )
+  pane.pendingLaunches.set(key, launch)
+  pane.currentLaunch = launch ?? undefined
   pane.helpersIdleAt = undefined
+  return 'current'
 }
 
 export function applyAntigravityLaunchResults(
@@ -76,7 +121,11 @@ export function applyAntigravityLaunchResults(
       }
     }
     pane.pendingLaunches.delete(step)
-    pane.settledLaunches.set(step, launch)
+    if (launch.phases === PAIRED) {
+      releasePairedLaunch(pane, step, launch)
+    } else {
+      pane.settledLaunches.set(step, launch)
+    }
     settled ||= result.children.length > 0 || pane.leadState === 'done'
   }
   if (settled) {

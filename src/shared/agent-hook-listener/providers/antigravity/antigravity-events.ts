@@ -132,27 +132,33 @@ export function normalizeAntigravityEvent(
   }
 
   const { toolCallId, toolName, toolInputSource } = readAntigravityToolCall(hookPayload)
-  const spawnsHelpers = isAntigravityHelperSpawnCall(toolName, toolInputSource)
+  const launchPhase =
+    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
+    isAntigravityHelperSpawnCall(toolName, toolInputSource)
+      ? eventName
+      : undefined
   const isCompletedBookkeeping = Boolean(
     transcriptPath &&
     eventName !== 'Stop' &&
     state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
   )
-  if (eventName === 'PreInvocation') {
-    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
-  } else if (isCompletedBookkeeping && !(eventName === 'PostToolUse' && spawnsHelpers)) {
-    if (
-      !existingPaneState?.verifiedChildren.size &&
-      (!existingPaneState || !antigravityHasPendingLaunch(existingPaneState))
-    ) {
-      // Ignore bookkeeping PostToolUse after Stop so finished rows do not resurrect.
-      return null
-    }
+  const completedBookkeepingOnly =
+    isCompletedBookkeeping &&
+    eventName !== 'PreInvocation' &&
+    launchPhase !== 'PostToolUse' &&
+    !existingPaneState?.verifiedChildren.size &&
+    (!existingPaneState || !antigravityHasPendingLaunch(existingPaneState))
+  if (
+    completedBookkeepingOnly &&
+    (!launchPhase ||
+      !existingPaneState?.rootConversationId ||
+      existingPaneState.rootConversationId !== conversationId)
+  ) {
+    // Ignore bookkeeping after Stop so finished rows do not resurrect.
+    return null
   }
 
   const paneState = getOrCreateAntigravityPaneState(state, paneKey)
-  paneState.leadObservedAt = now
-  const brainDir = resolveAntigravityBrainDirectory(hookPayload, transcriptPath)
   if (
     conversationId &&
     !paneState.rootConversationId &&
@@ -164,6 +170,32 @@ export function normalizeAntigravityEvent(
   ) {
     paneState.rootConversationId = conversationId
   }
+  if (
+    launchPhase &&
+    toolName &&
+    conversationId &&
+    conversationId === paneState.rootConversationId
+  ) {
+    const disposition = trackAntigravityLaunch(
+      paneState,
+      launchPhase,
+      hookPayload.stepIdx,
+      toolCallId,
+      toolName,
+      toolInputSource,
+      completedBookkeepingOnly
+    )
+    if (disposition === 'stale') {
+      return null
+    }
+  } else {
+    paneState.currentLaunch = undefined
+  }
+  if (eventName === 'PreInvocation') {
+    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  }
+  paneState.leadObservedAt = now
+  const brainDir = resolveAntigravityBrainDirectory(hookPayload, transcriptPath)
   if (brainDir && paneState.rootConversationId === conversationId) {
     if (
       paneState.rootBrainDir !== brainDir ||
@@ -187,15 +219,6 @@ export function normalizeAntigravityEvent(
   }
   if (!idleBookkeeping) {
     paneState.rootStop = eventName === 'Stop' ? (stopStillBusy ? 'busy' : 'idle') : undefined
-  }
-  if (
-    paneState.rootConversationId &&
-    conversationId === paneState.rootConversationId &&
-    toolName &&
-    spawnsHelpers &&
-    (eventName === 'PreToolUse' || eventName === 'PostToolUse')
-  ) {
-    trackAntigravityLaunch(paneState, hookPayload.stepIdx, toolCallId, toolName, toolInputSource)
   }
   const finishedBackgroundCommand = trackAntigravityBackgroundCommand(
     paneState,

@@ -17,7 +17,12 @@ import { isAntigravityFeedbackTool, isAntigravityStopStillBusy } from './antigra
 import { readAntigravityToolCall } from './antigravity-tool-fields'
 import { antigravityTranscriptFilePath } from './antigravity-child-transcript'
 
-type AntigravityLaunch = { callId: string; toolName: string; swarmSize?: number }
+export type AntigravityLaunch = {
+  callId: string
+  toolName: string
+  swarmSize?: number
+  phases: number
+}
 
 export type TrackedAntigravityChild = {
   id: string
@@ -39,6 +44,7 @@ export type AntigravityPaneChildState = {
   pendingLaunches: Map<number | undefined, AntigravityLaunch | null>
   settledLaunches: Map<number, AntigravityLaunch>
   launchStepsByCall: Map<string, number>
+  currentLaunch?: AntigravityLaunch
   expectedChildren: Set<string>
   helpersIdleAt?: number
   /** The relay dropped this pane's roster to fit a frame, so its children are unknown, not gone. */

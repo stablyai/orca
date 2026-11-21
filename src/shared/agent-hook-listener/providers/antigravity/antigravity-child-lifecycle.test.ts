@@ -466,21 +466,66 @@ it('retires a quiet Swarm member when its previously missing descriptor reports 
 
 it('settles only the launch whose root result reports a failure', async () => {
   spawn(undefined, 5)
-  spawn(undefined, 6)
-  expect(row.payload.antigravitySpawnPending).toBe(true)
+  const failedInvoke = 'subagent "x" not found or not allowed to be invoked'
   hook('root', 'PostToolUse', {
     ...launch(6),
-    error: 'subagent "x" not found or not allowed to be invoked'
+    error: failedInvoke
   })
-  const error =
-    'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+  expect(row.payload.antigravitySpawnPending).toBe(true)
+  const error = `Encountered error in step execution: ${failedInvoke}`
   launchResult(6, error, 'ERROR')
   expect((await poll())?.payload.antigravitySpawnPending).toBe(true)
   launchResult(5, error, 'ERROR')
   expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
-  hook('root', 'PostToolUse', launch(6))
+  expect(hook('root', 'Stop', { fullyIdle: true })?.payload.state).toBe('done')
+  expect(hook('root', 'PreToolUse', launch(6))).toBeNull()
+  expect(hook('root', 'PostToolUse', launch(5))).toBeNull()
+  expect(row.payload.state).toBe('done')
   expect(row.payload.antigravitySpawnPending).toBeUndefined()
 })
+
+it.each([
+  ['PreToolUse', 'PostToolUse'],
+  ['PostToolUse', 'PreToolUse']
+])(
+  'keeps the root question visible after a settled launch delivers %s then %s',
+  async (first, late) => {
+    const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
+    const failure =
+      'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+    hook('root', first, oldLaunch)
+    launchResult(5, failure, 'ERROR')
+    expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+
+    hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
+    const question = {
+      stepIdx: 7,
+      toolCall: { id: 'question-7', name: 'ask_question', args: { question: 'Continue?' } }
+    }
+    const waiting = {
+      state: 'waiting',
+      toolName: 'ask_question',
+      toolInput: 'Continue?',
+      prompt: 'Current task',
+      model: 'model-b'
+    }
+    expect(hook('root', 'PreToolUse', question)?.payload).toMatchObject(waiting)
+    expect(hook('root', late, oldLaunch)).toBeNull()
+    expect(row.payload).toMatchObject(waiting)
+
+    expect(hook('root', 'PostToolUse', question)?.payload.state).toBe('working')
+    spawn(undefined, 8)
+    launchResult(8, failure, 'ERROR')
+    expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+    expect(
+      hook('root', 'PostToolUse', { ...launch(8), modelName: 'model-c' })?.payload
+    ).toMatchObject({
+      state: 'working',
+      toolName: 'invoke_subagent',
+      model: 'model-c'
+    })
+  }
+)
 
 it('counts only a swarm add as a spawn that holds the parent', async () => {
   transcript('child')
