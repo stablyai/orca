@@ -30,6 +30,7 @@ import {
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { findLonePaneSourceGroupId } from '@/store/slices/tabs/lone-pane-split-source'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent-picker-inventory-source'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -129,6 +130,9 @@ export function useTabAgentMenuLaunch({
           : {}),
         worktreeId,
         groupId,
+        // Why: once split, a panel's own + launches in that panel; a lone pane's + still opens beside it.
+        placementFixed:
+          findLonePaneSourceGroupId(useAppStore.getState(), worktreeId, groupId) === null,
         // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.
         ...(prompt !== undefined ? { prompt } : draft?.prompt ? { prompt: draft.prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),

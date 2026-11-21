@@ -66,7 +66,8 @@ export function createOpenFileAction(
           scratch.editorItemIsPreview,
           scratch.editorItemTargetGroupId,
           options?.selection,
-          options?.groupIndex
+          options?.groupIndex,
+          options?.placementFixed
         )
       ) ?? scratch.editorItemFileId
     const settled: { ran: boolean; result: EditorOpenResult | null } = { ran: false, result: null }

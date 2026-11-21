@@ -123,7 +123,9 @@ export async function openLocalBrowserLink(params: {
         sessionPartition: destination.sessionPartition,
         activate: false,
         focusAddressBar: false,
-        validateLinkPlacement: validate
+        validateLinkPlacement: validate,
+        // Why: a link that names its group is refused anywhere else, so automatic placement must not move it.
+        ...(context.linkIntent?.targetGroupId ? { placementFixed: true } : {})
       })
       createdTabId = created.id
       createdPageId = created.activePageId ?? undefined

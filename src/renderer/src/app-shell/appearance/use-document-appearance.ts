@@ -31,6 +31,7 @@ import { usePluginFontRegistration } from '../../store/plugins/appearance/plugin
 import { scheduleRuntimeGraphSync } from '../../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../../store/index'
 import { useReduceVisualEffects } from '@/hooks/theme/use-reduce-visual-effects'
+import { applySinglePaneCapVariables } from './single-pane-cap-variables'
 
 export function useDocumentAppearance(): void {
   const {
@@ -71,6 +72,7 @@ export function useDocumentAppearance(): void {
     () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
     [registeredBackground]
   )
+  const singlePaneMaxWidth = useAppStore((s) => s.settings?.terminalSinglePaneMaxWidth)
 
   useEffect(() => {
     if (theme === 'system') {
@@ -171,4 +173,8 @@ export function useDocumentAppearance(): void {
       rebuildAllTerminalWebglRenderers('code-font-smoothing')
     }
   }, [codeFontSmoothing])
+
+  useEffect(() => {
+    applySinglePaneCapVariables(document.documentElement, singlePaneMaxWidth)
+  }, [singlePaneMaxWidth])
 }
