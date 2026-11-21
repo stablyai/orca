@@ -25,10 +25,15 @@ Additionally, in `src/main/acp/launch/acp-private-temp.ts`, `removeFolder()` inv
 - [x] Task 8 (task-8): Add test verification for resilient folder removal under Windows lock contention. (Verified in `acp-private-temp-retry.test.ts`)
 - [x] Task 9 (task-9): Create work-unit commit for the `EBUSY` fix.
 - [x] Task 10 (task-10): Generate the PR package for this enhancement.
+- [x] Task 11 (task-11): Address CodeRabbit nitpicks: add behavioral lister unit test in `agent-model-catalog-lister.test.ts` and deterministic platform/rm options test in `acp-private-temp-retry.test.ts`.
 
 ## Verification Evidence
-- Observed outcome: 5/5 model catalog assertions passed; 2/2 temp cleanup retry assertions passed.
+- Observed outcome:
+  - 5/5 model catalog failure assertions passed.
+  - 2/2 lister behavioral trace assertions passed (`span.end()` on stopped error without failure; `span.fail()` on generic error).
+  - 3/3 temp cleanup retry assertions passed (deterministic platform options + rm invocation spy + lifecycle).
 - Stress testing: 1,000 in-memory failure state cycles and 50 Windows filesystem I/O lock contention cycles completed with 100% success (0 failures, 4.18s).
 - Effective TDD Mode: Enabled (Observed RED on unhandled error, GREEN after fix).
 - Commit identity 1: `4b28a9dd44` (Model catalog discovery fix)
 - Commit identity 2: `31c93cd35c` (Resilient temp folder cleanup with retry)
+- Commit identity 3: `9892614523` (Docs & stress test evidence)
