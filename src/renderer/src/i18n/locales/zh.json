@@ -8379,9 +8379,8 @@
           "ceb579abaf": "检查应用程序更新并安装较新的 Orca 版本",
           "bd79d412f0": "更新检查失败，{{value0}}",
           "b9ad70c30d": "更新错误，{{value0}}",
-          "2a48034c4c": "正在下载 v{{value0}}... {{value1}}%",
           "f40d88390d": "您使用的是最新版本",
-          "31fd7150cf": "正在检查更新...",
+          "31fd7150cf": "正在检查更新…",
           "d69a09b672": "启动时会自动检查更新",
           "6d27bd46e3": "检查更新",
           "downloadUpdate": "下载更新",
@@ -8389,7 +8388,8 @@
           "versionAvailable": "版本 {{version}} 已可用。",
           "externallyManagedVersionAvailable": "版本 {{version}} 已可用。Orca 无法自行安装此版本，请通过系统软件包管理器更新。",
           "versionReadyToInstall": "版本 {{version}} 已准备就绪，可以安装。",
-          "versionInstalling": "正在安装版本 {{version}}。"
+          "versionInstalling": "正在安装版本 {{version}}。",
+          "downloadingVersion": "正在下载版本 {{version}}（{{percent}}%）…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "从工作区的\"打开方式\"菜单中选择可用的应用程序",
@@ -12689,7 +12689,7 @@
         "ReleaseChannelSection": {
           "switchFailed": "无法切换到此版本。",
           "title": "更新渠道",
-          "description": "可更换更新渠道，也可切换到任意已发布版本，包括旧版本。未经验证的版本可能无法正常运行。",
+          "description": "可更换更新渠道或切换到已发布的版本，包括旧版。未经验证的版本可能无法运行。",
           "devOnly": "仅供开发",
           "adhocWarning": "Windows 版未签名。发布者可能停止维护，请留一个稳定版备用。",
           "loadingBuilds": "正在加载版本…",
@@ -12701,9 +12701,9 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "只能在桌面应用中切换版本。",
           "devChannelUnsupportedAria": "{{value0}}（仅限 {{value1}}）",
-          "devChannelUnsupported": "「{{value0}}」渠道仅适用于 {{value1}}。Linux 仍可使用 {{stable}} 或 {{rc}}。",
+          "devChannelUnsupported": "“{{value0}}”渠道仅适用于 {{value1}}。Linux 仍可使用{{stable}}或 {{rc}}。",
           "downloadInstaller": "下载安装程序",
-          "manualInstallHint": "「{{value0}}」渠道的 Windows 版本未签名，应用内更新无法将其安装到已签名的版本上。请运行一次下载的安装程序，Windows 会提示发布者未知。此后可以在这里切换版本，包括切回{{stable}}。",
+          "manualInstallHint": "“{{value0}}”渠道的 Windows 版本未签名，应用内更新无法将其安装到已签名的版本上。请运行一次下载的安装程序，Windows 会提示发布者未知。此后可以在这里切换版本，包括切回{{stable}}。",
           "stableLabel": "稳定版",
           "stableDescription": "面向日常使用的稳定版本。",
           "rcLabel": "RC",
@@ -12715,7 +12715,7 @@
           "adhocLabel": "分支版",
           "adhocDescription": "从分支单独打包，可试用尚未合并的改动。",
           "devChannelPlatforms": "macOS 和 Windows",
-          "scheduledWarning": "此渠道的版本无须通过测试即可发布。Windows 版未签名。请留一个稳定版备用。"
+          "scheduledWarning": "发布前不要求通过测试。Windows 版未签名。请留一个稳定版备用。"
         },
         "TerminalTccAttributionNotice": {
           "body": "终端守护进程由已卸载的 Orca 启动，macOS 无法正确归因权限，重启守护进程可修复(运行中会话会关闭)",
@@ -24458,7 +24458,7 @@
       "waitingLabel": "更新等待中",
       "busyTitle": "另一个 Orca 正在更新",
       "busySummary": "另一个 Orca 实例已在安装更新",
-      "busyGuidance": "请稍候片刻再重试，你下载的更新已就绪",
+      "busyGuidance": "请稍候片刻后重试。已下载的更新可继续安装。",
       "unresponsiveTitle": "正在等待后台服务器",
       "unresponsiveSummary": "Orca 未能为更新暂停其后台服务器",
       "unresponsiveGuidance": "请从启动它的终端或服务中停止它，然后重试，已连接的设备将断开连接",
@@ -24479,8 +24479,8 @@
     "failure": {
       "releaseNotReady": "此设备暂时还无法获取更新的版本。请稍后再检查",
       "updateServerUnreachable": "无法连接更新服务器。请几分钟后重试",
-      "channelUnsupportedPlatform": "「{{channel}}」渠道仅适用于 macOS 和 Windows。",
-      "unsignedDevChannel": "「{{channel}}」渠道的版本未签名。当前版本已签名，只能安装 Orca 发布者签名的更新。请从版本发布页面下载安装程序并运行一次，此后即可正常更新，包括切回稳定版。",
+      "channelUnsupportedPlatform": "“{{channel}}”渠道仅适用于 macOS 和 Windows。",
+      "unsignedDevChannel": "“{{channel}}”渠道的版本未签名。当前版本已签名，只能安装 Orca 发布者签名的更新。请从版本发布页面下载安装程序并运行一次，此后即可正常更新，包括切回稳定版。",
       "linuxPackageMissing": "下载的安装包已不在更新缓存中。请重新下载更新，或从官方版本发布页面获取",
       "linuxPackageNotRegular": "更新缓存中下载的安装包已不再是有效文件。请重新下载更新，或从官方版本发布页面获取",
       "linuxPackageHashMismatch": "下载的安装包与已验证的版本不再匹配，因此 Orca 不会将其交给包管理器。请重新下载更新，或从官方版本发布页面获取",
@@ -24495,8 +24495,8 @@
       "unknownReleaseChannel": "未知的发布渠道“{{channel}}”",
       "invalidReleaseTag": "“{{tag}}”不是有效的发布标签",
       "releaseRepoNotFound": "在 {{repo}} 未找到发布版本的仓库",
-      "releaseListFailed": "无法获取「{{channel}}」渠道的版本列表（HTTP {{status}}）。",
-      "releaseListUnreadable": "无法读取「{{channel}}」渠道的版本列表。",
+      "releaseListFailed": "无法获取“{{channel}}”渠道的版本列表（HTTP {{status}}）。",
+      "releaseListUnreadable": "无法读取“{{channel}}”渠道的版本列表。",
       "rateLimitedSoon": "已达到 GitHub 速率限制。请几分钟后重试",
       "rateLimitedSoonSignedOut": "已达到 GitHub 速率限制。请几分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
       "rateLimitedInMinute": "已达到 GitHub 速率限制。请约一分钟后重试",

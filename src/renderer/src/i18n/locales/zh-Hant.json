@@ -8000,9 +8000,8 @@
           "ceb579abaf": "檢查應用程式更新並安裝較新的 Orca 版本。",
           "bd79d412f0": "更新檢查失敗。 {{value0}}",
           "b9ad70c30d": "更新錯誤。 {{value0}}",
-          "2a48034c4c": "正在下載 v{{value0}}... {{value1}}%",
           "f40d88390d": "您使用的是最新版本。",
-          "31fd7150cf": "正在檢查更新...",
+          "31fd7150cf": "正在檢查更新…",
           "d69a09b672": "啟動時會自動檢查更新。",
           "6d27bd46e3": "檢查更新",
           "downloadUpdate": "下載更新",
@@ -8010,7 +8009,8 @@
           "versionAvailable": "版本 {{version}} 已可使用。",
           "externallyManagedVersionAvailable": "版本 {{version}} 已可使用。Orca 無法自行安裝此版本，請透過系統的套件管理程式更新。",
           "versionReadyToInstall": "版本 {{version}} 已可安裝。",
-          "versionInstalling": "正在安裝版本 {{version}}。"
+          "versionInstalling": "正在安裝版本 {{version}}。",
+          "downloadingVersion": "正在下載版本 {{version}}（{{percent}}%）…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "選擇工作區「開啟方式」選單中可用的應用程式。",

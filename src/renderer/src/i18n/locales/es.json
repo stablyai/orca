@@ -7794,7 +7794,6 @@
           "ceb579abaf": "Busca actualizaciones de la app e instala una versión más reciente de Orca.",
           "bd79d412f0": "No se pudo buscar actualizaciones. {{value0}}",
           "b9ad70c30d": "Error al actualizar. {{value0}}",
-          "2a48034c4c": "Descargando v{{value0}}... {{value1}}%",
           "f40d88390d": "Estás en la última versión.",
           "31fd7150cf": "Buscando actualizaciones...",
           "d69a09b672": "Las actualizaciones se verifican automáticamente al iniciarse.",
@@ -7804,7 +7803,8 @@
           "versionAvailable": "La versión {{version}} está disponible.",
           "externallyManagedVersionAvailable": "La versión {{version}} está disponible. Actualiza Orca con el gestor de paquetes del sistema. Orca no puede instalar esta versión por su cuenta.",
           "versionReadyToInstall": "La versión {{version}} está lista para instalar.",
-          "versionInstalling": "Se está instalando la versión {{version}}."
+          "versionInstalling": "Se está instalando la versión {{version}}.",
+          "downloadingVersion": "Descargando la versión {{version}} ({{percent}} %)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Elige las apps disponibles en el menú Abrir en de un espacio de trabajo.",
@@ -12284,10 +12284,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "No se pudo cambiar a esa versión.",
-          "title": "Canal de lanzamiento",
+          "title": "Canal de actualización",
           "description": "Cambia de canal de actualización o a cualquier versión publicada, incluidas las anteriores. Puedes volver a una versión anterior; las versiones sin verificar pueden no funcionar correctamente.",
           "devOnly": "Solo para desarrollo",
-          "adhocWarning": "Las compilaciones de Windows no están firmadas. Quien las publique puede dejar de mantenerlas. Ten a mano una versión estable.",
+          "adhocWarning": "Las versiones para Windows no están firmadas. Quien las publique puede dejar de mantenerlas. Ten a mano una versión estable.",
           "loadingBuilds": "Cargando versiones…",
           "noBuilds": "No se encontraron versiones",
           "refresh": "Actualizar lista de versiones",
@@ -12297,9 +12297,9 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Solo puedes cambiar de versión en la aplicación de escritorio.",
           "devChannelUnsupportedAria": "{{value0}} (solo {{value1}})",
-          "devChannelUnsupported": "Las compilaciones del canal «{{value0}}» solo están disponibles para {{value1}}. En Linux solo se ofrecen {{stable}} y {{rc}}.",
+          "devChannelUnsupported": "Las versiones del canal «{{value0}}» solo están disponibles para {{value1}}. En Linux solo se ofrecen {{stable}} y {{rc}}.",
           "downloadInstaller": "Descargar instalador",
-          "manualInstallHint": "Las compilaciones del canal «{{value0}}» no están firmadas en Windows, por lo que el actualizador de la aplicación no puede instalarlas sobre una versión firmada. Ejecuta una vez el instalador descargado; Windows mostrará una advertencia de editor desconocido. Después podrás cambiar de versión desde aquí, incluso para volver al canal «{{stable}}».",
+          "manualInstallHint": "Las versiones del canal «{{value0}}» no están firmadas en Windows, por lo que el actualizador de la aplicación no puede instalarlas sobre una versión firmada. Ejecuta una vez el instalador descargado; Windows mostrará una advertencia de editor desconocido. Después podrás cambiar de versión desde aquí, incluso para volver al canal «{{stable}}».",
           "stableLabel": "Estable",
           "stableDescription": "Versiones estables para uso general.",
           "rcLabel": "RC",
@@ -12309,9 +12309,9 @@
           "dailyLabel": "Diario",
           "dailyDescription": "Se compila una vez al día desde main.",
           "adhocLabel": "Puntual",
-          "adhocDescription": "Compilaciones puntuales de una rama para probar cambios antes de integrarlos.",
+          "adhocDescription": "Versiones puntuales de una rama para probar cambios antes de integrarlos.",
           "devChannelPlatforms": "macOS y Windows",
-          "scheduledWarning": "Estas compilaciones se publican sin pruebas previas. Las de Windows no están firmadas. Ten a mano una versión estable."
+          "scheduledWarning": "Estas versiones se publican sin pruebas previas. Las de Windows no están firmadas. Ten a mano una versión estable."
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Muestre imágenes directamente en el terminal utilizando los protocolos gráficos SIXEL, iTerm2 (IIP) y Kitty.",

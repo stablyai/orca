@@ -8260,7 +8260,6 @@
           "ceb579abaf": "Uygulama güncellemelerini kontrol edin ve daha yeni bir Orca sürümü yükleyin.",
           "bd79d412f0": "Güncelleme kontrolü başarısız oldu. {{value0}}",
           "b9ad70c30d": "Güncelleme hatası. {{value0}}",
-          "2a48034c4c": "v{{value0}} indiriliyor... %{{value1}}",
           "f40d88390d": "En son sürümdesiniz.",
           "31fd7150cf": "Güncellemeler kontrol ediliyor...",
           "d69a09b672": "Güncellemeler açılışta otomatik olarak kontrol edilir.",
@@ -8270,7 +8269,8 @@
           "versionAvailable": "{{version}} sürümü kullanılabilir.",
           "externallyManagedVersionAvailable": "{{version}} sürümü kullanılabilir. Orca bu sürümü kendi başına yükleyemediği için sistem paket yöneticisini kullanarak güncelleyin.",
           "versionReadyToInstall": "{{version}} sürümü yüklemeye hazır.",
-          "versionInstalling": "{{version}} sürümü yükleniyor."
+          "versionInstalling": "{{version}} sürümü yükleniyor.",
+          "downloadingVersion": "{{version}} sürümü indiriliyor (%{{percent}})…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Bir çalışma alanının Şunda Aç menüsünden kullanılabilir uygulamaları seçin.",
@@ -12376,10 +12376,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "O sürüme geçilemedi.",
-          "title": "Yayın kanalı",
-          "description": "Güncelleme kanallarını değiştirin veya daha eskiler dahil yayınlanmış herhangi bir sürüme geçin. Eski sürüme dönmeye izin verilir ve incelenmemiş sürümler bozuk olabilir.",
-          "devOnly": "Yalnızca geliştirici",
-          "adhocWarning": "Windows derlemeleri imzasızdır. Derlemeyi oluşturan kişi desteği bırakabilir. Kararlı bir sürümü elinizin altında bulundurun.",
+          "title": "Güncelleme kanalı",
+          "description": "Güncelleme kanalını değiştirin veya daha eski sürümler de dahil olmak üzere yayımlanmış bir sürüme geçin. Doğrulanmamış sürümler çalışmayabilir.",
+          "devOnly": "Geliştirme için",
+          "adhocWarning": "Windows sürümleri imzasızdır. Sürümü hazırlayan kişi desteği bırakabilir. Elinizin altında kararlı bir sürüm bulundurun.",
           "loadingBuilds": "Sürümler yükleniyor…",
           "noBuilds": "Sürüm bulunamadı",
           "refresh": "Sürüm listesini yenile",
@@ -12389,9 +12389,9 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Sürüm değiştirme yalnızca masaüstü uygulamasında kullanılabilir.",
           "devChannelUnsupportedAria": "{{value0}} (yalnızca {{value1}})",
-          "devChannelUnsupported": "“{{value0}}” kanalındaki derlemeler yalnızca {{value1}} için üretilir. Linux’ta {{stable}} ve {{rc}} kanallarını kullanabilirsiniz.",
+          "devChannelUnsupported": "“{{value0}}” kanalındaki sürümler yalnızca {{value1}} için üretilir. Linux’ta {{stable}} ve {{rc}} kanallarını kullanabilirsiniz.",
           "downloadInstaller": "Yükleyiciyi indir",
-          "manualInstallHint": "“{{value0}}” kanalındaki derlemeler Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve “{{stable}}” kanalına dönüş dahil sonraki her geçiş buradan çalışır.",
+          "manualInstallHint": "“{{value0}}” kanalındaki sürümler Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve “{{stable}}” kanalına dönüş dahil sonraki her geçiş buradan çalışır.",
           "stableLabel": "Kararlı",
           "stableDescription": "Genel kullanım için kararlı sürümler.",
           "rcLabel": "RC",
@@ -12401,9 +12401,9 @@
           "dailyLabel": "Günlük",
           "dailyDescription": "main dalından günde bir kez derlenir.",
           "adhocLabel": "Tek seferlik",
-          "adhocDescription": "Değişiklikleri birleştirmeden önce denemek için bir daldan alınan tek seferlik derlemeler.",
+          "adhocDescription": "Değişiklikleri birleştirilmeden önce denemek için bir daldan üretilen tek seferlik sürümler.",
           "devChannelPlatforms": "macOS ve Windows",
-          "scheduledWarning": "Bu derlemeler zorunlu test olmadan yayımlanır. Windows derlemeleri imzasızdır. Kararlı bir sürümü elinizin altında bulundurun."
+          "scheduledWarning": "Bu sürümler zorunlu test olmadan yayımlanır. Windows sürümleri imzasızdır. Elinizin altında kararlı bir sürüm bulundurun."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Sistem varsayılanı",

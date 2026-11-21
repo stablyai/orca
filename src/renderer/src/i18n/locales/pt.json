@@ -7475,7 +7475,6 @@
           "ceb579abaf": "Verifica atualizações do app e instala uma versão mais recente do Orca.",
           "bd79d412f0": "Falha na verificação de atualização. {{value0}}",
           "b9ad70c30d": "Erro de atualização. {{value0}}",
-          "2a48034c4c": "Baixando v{{value0}}... {{value1}}%",
           "f40d88390d": "Você está na versão mais recente.",
           "31fd7150cf": "Verificando atualizações...",
           "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
@@ -7485,7 +7484,8 @@
           "versionAvailable": "A versão {{version}} está disponível.",
           "externallyManagedVersionAvailable": "A versão {{version}} está disponível. Atualize o Orca pelo gerenciador de pacotes do sistema. O Orca não pode instalar essa versão por conta própria.",
           "versionReadyToInstall": "A versão {{version}} está pronta para instalar.",
-          "versionInstalling": "Instalando a versão {{version}}."
+          "versionInstalling": "Instalando a versão {{version}}.",
+          "downloadingVersion": "Baixando a versão {{version}} ({{percent}}%)…"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -7724,35 +7724,35 @@
           "empty": "Os catálogos configurados não listam nenhum plugin."
         },
         "ReleaseChannelSection": {
-          "switchFailed": "Não foi possível alternar para essa build.",
-          "title": "Canal de lançamento",
-          "description": "Mude o canal de atualização ou escolha qualquer build publicada, incluindo versões anteriores. Builds não verificadas podem não funcionar corretamente.",
+          "switchFailed": "Não foi possível mudar para essa versão.",
+          "title": "Canal de atualização",
+          "description": "Mude de canal de atualização ou escolha uma versão publicada, inclusive uma anterior. Versões não verificadas podem falhar.",
           "devOnly": "Somente dev",
-          "adhocWarning": "As builds para Windows não são assinadas. Quem criou a build pode deixar de mantê-la. Tenha uma versão estável à mão.",
-          "loadingBuilds": "Carregando builds…",
-          "noBuilds": "Nenhuma build encontrada",
-          "refresh": "Atualizar lista de builds",
-          "switchTo": "Mudar de build",
-          "alreadyRunning": "Esta é a build que você está executando.",
+          "adhocWarning": "As versões para Windows não são assinadas. Quem gerou a versão pode deixar de mantê-la. Tenha uma versão estável à mão.",
+          "loadingBuilds": "Carregando versões…",
+          "noBuilds": "Nenhuma versão encontrada",
+          "refresh": "Atualizar lista de versões",
+          "switchTo": "Mudar de versão",
+          "alreadyRunning": "Esta é a versão em uso.",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "Alternar builds só está disponível no app desktop.",
+          "webUnavailable": "Só é possível mudar de versão no aplicativo para computador.",
           "devChannelUnsupportedAria": "{{value0}} (somente {{value1}})",
-          "devChannelUnsupported": "As builds do canal “{{value0}}” são produzidas somente para {{value1}}. No Linux, use {{stable}} ou {{rc}}.",
+          "devChannelUnsupported": "As versões do canal “{{value0}}” estão disponíveis apenas para {{value1}}. No Linux, use {{stable}} ou {{rc}}.",
           "downloadInstaller": "Baixar instalador",
-          "manualInstallHint": "As builds do canal “{{value0}}” não são assinadas no Windows, então o atualizador do app não consegue instalar uma sobre uma build assinada. Execute o instalador baixado uma vez — o Windows vai avisar sobre um publicador desconhecido — e toda troca posterior, inclusive de volta ao canal “{{stable}}”, funciona a partir daí.",
-          "cacheHint": "A lista de builds fica em cache por 5 minutos. Atualize a lista para procurar novas builds.",
+          "manualInstallHint": "As versões do canal “{{value0}}” não são assinadas no Windows. O atualizador do aplicativo não consegue instalá-las sobre uma versão assinada. Execute o instalador baixado uma vez. O Windows vai avisar sobre um editor desconhecido. Depois, você pode mudar de versão aqui, inclusive voltar ao canal “{{stable}}”.",
+          "cacheHint": "A lista de versões fica em cache por 5 minutos. Atualize a lista para procurar novas versões.",
           "stableLabel": "Estável",
           "stableDescription": "Versões estáveis para uso geral.",
           "rcLabel": "RC",
           "rcDescription": "Versões candidatas publicadas antes de uma versão estável.",
           "hourlyLabel": "Por hora",
-          "hourlyDescription": "Build gerada a cada hora a partir de main.",
+          "hourlyDescription": "Versão gerada a cada hora a partir de main.",
           "dailyLabel": "Diário",
-          "dailyDescription": "Build gerada uma vez por dia a partir de main.",
+          "dailyDescription": "Versão gerada uma vez por dia a partir de main.",
           "adhocLabel": "Pontual",
-          "adhocDescription": "Builds pontuais de uma branch para experimentar alterações antes de integrá-las.",
+          "adhocDescription": "Versões pontuais de uma branch para experimentar alterações antes de integrá-las.",
           "devChannelPlatforms": "macOS e Windows",
-          "scheduledWarning": "Essas builds são publicadas sem testes obrigatórios. As builds para Windows não são assinadas. Tenha uma versão estável à mão."
+          "scheduledWarning": "Essas versões são publicadas sem testes obrigatórios. As versões para Windows não são assinadas. Tenha uma versão estável à mão."
         },
         "ManageSessionsSection": {
           "33c2a1e1b4": "Encerrar sessão {{value0}}",
@@ -9703,10 +9703,10 @@
           "resultUpdateSkippedAgent": "{{result}} · Atualização ignorada em {{agent}}: {{reason}}"
         },
         "ReleaseBuildPicker": {
-          "build": "Build",
-          "searchLabel": "Pesquisar builds",
-          "searchPlaceholder": "Pesquisar builds…",
-          "noMatches": "Nenhuma build encontrada."
+          "build": "Versão",
+          "searchLabel": "Pesquisar versões",
+          "searchPlaceholder": "Pesquisar versões…",
+          "noMatches": "Nenhuma versão correspondente."
         },
         "pluginInstallAction": {
           "installed": "{{value0}} instalado",

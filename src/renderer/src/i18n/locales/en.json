@@ -9322,7 +9322,6 @@
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
-          "2a48034c4c": "Downloading v{{value0}}... {{value1}}%",
           "f40d88390d": "You’re on the latest version.",
           "31fd7150cf": "Checking for updates...",
           "d69a09b672": "Updates are checked automatically on launch.",
@@ -9332,7 +9331,8 @@
           "versionAvailable": "Version {{version}} is available.",
           "externallyManagedVersionAvailable": "Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.",
           "versionReadyToInstall": "Version {{version}} is ready to install.",
-          "versionInstalling": "Version {{version}} is being installed."
+          "versionInstalling": "Version {{version}} is being installed.",
+          "downloadingVersion": "Downloading version {{version}} ({{percent}}%)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
@@ -13527,7 +13527,7 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Could not switch to that build.",
-          "title": "Release channel",
+          "title": "Update channel",
           "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
           "devOnly": "Dev only",
           "adhocWarning": "Windows builds are unsigned. The author may stop maintaining a build, so keep a stable build handy.",

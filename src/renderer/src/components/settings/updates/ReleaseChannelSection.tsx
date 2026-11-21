@@ -170,7 +170,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
     void window.api.shell.openUrl(build.installerUrl ?? build.releaseUrl)
   }
 
-  const title = t('auto.components.settings.ReleaseChannelSection.title', 'Release channel')
+  const title = t('auto.components.settings.ReleaseChannelSection.title', 'Update channel')
   const platformLabel = t(
     'auto.components.settings.ReleaseChannelSection.devChannelPlatforms',
     DEV_CHANNEL_PLATFORM_LABEL

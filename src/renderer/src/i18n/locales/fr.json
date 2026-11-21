@@ -8063,7 +8063,6 @@
           "ceb579abaf": "Recherche les mises à jour de l'application et installe une version plus récente d'Orca.",
           "bd79d412f0": "Échec de la vérification des mises à jour. {{value0}}",
           "b9ad70c30d": "Erreur de mise à jour. {{value0}}",
-          "2a48034c4c": "Téléchargement v{{value0}}... {{value1}} %",
           "f40d88390d": "Vous utilisez la dernière version.",
           "31fd7150cf": "Recherche de mises à jour...",
           "d69a09b672": "Les mises à jour sont vérifiées automatiquement au lancement.",
@@ -8073,7 +8072,8 @@
           "versionAvailable": "La version {{version}} est disponible.",
           "externallyManagedVersionAvailable": "La version {{version}} est disponible. Mettez Orca à jour avec le gestionnaire de paquets de votre système. Orca ne peut pas installer cette version lui-même.",
           "versionReadyToInstall": "La version {{version}} est prête à être installée.",
-          "versionInstalling": "Installation de la version {{version}} en cours."
+          "versionInstalling": "Installation de la version {{version}} en cours.",
+          "downloadingVersion": "Téléchargement de la version {{version}} ({{percent}} %)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choisissez les applications proposées dans le menu « Ouvrir dans » d'un espace de travail.",
@@ -12228,10 +12228,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Impossible de passer à cette version.",
-          "title": "Canal de publication",
+          "title": "Canal de mise à jour",
           "description": "Changez de canal de mise à jour ou passez à n’importe quelle version publiée, même ancienne. Vous pouvez revenir à une version antérieure ; les versions non vérifiées peuvent ne pas fonctionner correctement.",
-          "devOnly": "Développement",
-          "adhocWarning": "Les builds Windows ne sont pas signés. Leur auteur peut cesser de les maintenir. Gardez une version stable à portée de main.",
+          "devOnly": "Dév. uniquement",
+          "adhocWarning": "Les versions pour Windows ne sont pas signées. Leur auteur peut cesser de les maintenir. Gardez une version stable à portée de main.",
           "loadingBuilds": "Chargement des versions…",
           "noBuilds": "Aucune version trouvée",
           "refresh": "Actualiser la liste des versions",
@@ -12241,7 +12241,7 @@
           "webUnavailable": "Le changement de version est uniquement disponible dans l’application de bureau.",
           "devChannelUnsupportedAria": "{{value0}} ({{value1}} uniquement)",
           "devChannelUnsupported": "Les versions du canal « {{value0}} » sont uniquement disponibles pour {{value1}}. Sous Linux, utilisez {{stable}} ou {{rc}}.",
-          "downloadInstaller": "Télécharger l'installateur",
+          "downloadInstaller": "Télécharger l’installateur",
           "manualInstallHint": "Les versions du canal « {{value0}} » ne sont pas signées sous Windows. La mise à jour intégrée ne peut donc pas les installer par-dessus une version signée. Exécutez une fois le programme d’installation téléchargé ; Windows affichera un avertissement concernant un éditeur inconnu. Vous pourrez ensuite changer de version depuis ici, y compris pour revenir au canal « {{stable}} ».",
           "cacheHint": "La liste des versions est mise en cache pendant 5 minutes. Actualisez-la pour rechercher de nouvelles versions.",
           "stableLabel": "Stable",
@@ -12249,13 +12249,13 @@
           "rcLabel": "RC",
           "rcDescription": "Versions candidates publiées avant une version stable.",
           "hourlyLabel": "Horaire",
-          "hourlyDescription": "Build produit toutes les heures à partir de main.",
+          "hourlyDescription": "Une version générée chaque heure à partir de main.",
           "dailyLabel": "Quotidien",
-          "dailyDescription": "Build produit une fois par jour à partir de main.",
+          "dailyDescription": "Une version générée chaque jour à partir de main.",
           "adhocLabel": "Ponctuel",
-          "adhocDescription": "Builds ponctuels issus d’une branche pour essayer des changements avant leur fusion.",
+          "adhocDescription": "Versions ponctuelles issues d’une branche pour essayer des changements avant leur fusion.",
           "devChannelPlatforms": "macOS et Windows",
-          "scheduledWarning": "Ces builds sont publiés sans tests préalables. Les builds Windows ne sont pas signés. Gardez une version stable à portée de main."
+          "scheduledWarning": "Ces versions sont publiées sans tests préalables. Les versions pour Windows ne sont pas signées. Gardez une version stable à portée de main."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Valeur par défaut du système",

@@ -8090,7 +8090,6 @@
           "ceb579abaf": "アプリのアップデートを確認し、新規 Orca バージョンをインストールします。",
           "bd79d412f0": "更新チェックに失敗しました。 {{value0}}",
           "b9ad70c30d": "アップデートエラー。 {{value0}}",
-          "2a48034c4c": "v{{value0}}... {{value1}}% をダウンロード中",
           "f40d88390d": "最新バージョンを使用しています。",
           "31fd7150cf": "アップデートをチェックしています…",
           "d69a09b672": "アップデートは起動時に自動的にチェックされます。",
@@ -8100,7 +8099,8 @@
           "versionAvailable": "バージョン {{version}} が利用できます。",
           "externallyManagedVersionAvailable": "バージョン {{version}} が利用できます。このバージョンは Orca からインストールできないため、システムのパッケージマネージャーで更新してください。",
           "versionReadyToInstall": "バージョン {{version}} をインストールできます。",
-          "versionInstalling": "バージョン {{version}} をインストールしています。"
+          "versionInstalling": "バージョン {{version}} をインストールしています。",
+          "downloadingVersion": "バージョン {{version}} をダウンロード中（{{percent}}%）…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "ワークスペースの「開く」メニューから利用可能なアプリを選択します。",
@@ -11930,7 +11930,7 @@
           "serverCountOne": "ペアリング済みサーバー 1 台",
           "fdd271abf0": "リモート Orca サーバー",
           "e4e5937469": "アップデートをチェックする",
-          "newerCount": "このアプリより新しいサーバー {{value0}} 台"
+          "newerCount": "このアプリより新しいサーバー {{value0}} 台"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "バージョンを取得できません",
@@ -12371,7 +12371,7 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "そのバージョンに切り替えられませんでした。",
-          "title": "リリースチャンネル",
+          "title": "更新チャンネル",
           "description": "更新チャンネルや、旧バージョンを含む公開済みのバージョンに切り替えられます。ダウングレードも可能ですが、未検証のバージョンは正常に動作しない場合があります。",
           "devOnly": "開発用",
           "adhocWarning": "Windows 版は署名されていません。作成者が保守を終了することがあるため、安定版を手元に用意しておいてください。",
@@ -12392,13 +12392,13 @@
           "rcLabel": "RC",
           "rcDescription": "安定版の公開前に提供されるリリース候補版です。",
           "hourlyLabel": "毎時",
-          "hourlyDescription": "main から毎時ビルドされます。",
+          "hourlyDescription": "main から 1 時間ごとに作成されます。",
           "dailyLabel": "毎日",
-          "dailyDescription": "main から毎日 1 回ビルドされます。",
-          "adhocLabel": "臨時",
-          "adhocDescription": "マージ前の変更を試すため、ブランチから個別に作成するビルドです。",
+          "dailyDescription": "main から毎日 1 回作成されます。",
+          "adhocLabel": "ブランチ版",
+          "adhocDescription": "マージ前の変更を試すため、ブランチから個別に作成したバージョンです。",
           "devChannelPlatforms": "macOS と Windows",
-          "scheduledWarning": "このビルドの公開前に必須のテストはありません。Windows 版は署名されていません。安定版を手元に用意しておいてください。"
+          "scheduledWarning": "このバージョンの公開前に必須のテストはありません。Windows 版は署名されていません。安定版を手元に用意しておいてください。"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "システムのデフォルト",

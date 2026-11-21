@@ -205,7 +205,7 @@ export function GeneralUpdateSettingsSection({
                   target="_blank"
                   onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
-                  className="ms-1 underline hover:text-foreground"
+                  className="ms-1 whitespace-nowrap underline hover:text-foreground"
                 >
                   {t(
                     'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
@@ -247,9 +247,9 @@ export function GeneralUpdateSettingsSection({
                   ))}
           {updateStatus.state === 'downloading' &&
             t(
-              'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',
-              'Downloading v{{value0}}... {{value1}}%',
-              { value0: updateStatus.version, value1: updateStatus.percent }
+              'auto.components.settings.GeneralUpdateSettingsSection.downloadingVersion',
+              'Downloading version {{version}} ({{percent}}%)…',
+              { version: updateStatus.version, percent: updateStatus.percent }
             )}
           {updateStatus.state === 'downloaded' && (
             <>
@@ -272,7 +272,7 @@ export function GeneralUpdateSettingsSection({
                   target="_blank"
                   onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
-                  className="ms-1 underline hover:text-foreground"
+                  className="ms-1 whitespace-nowrap underline hover:text-foreground"
                 >
                   {t(
                     'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',

@@ -8171,7 +8171,6 @@
           "ceb579abaf": "Nach App-Updates suchen und eine neuere Orca-Version installieren.",
           "bd79d412f0": "Suche nach Updates fehlgeschlagen. {{value0}}",
           "b9ad70c30d": "Update-Fehler. {{value0}}",
-          "2a48034c4c": "v{{value0}} wird heruntergeladen… {{value1}}%",
           "f40d88390d": "Die neueste Version ist installiert.",
           "31fd7150cf": "Nach Updates wird gesucht…",
           "d69a09b672": "Beim Start wird automatisch nach Updates gesucht.",
@@ -8181,7 +8180,8 @@
           "versionAvailable": "Version {{version}} ist verfügbar.",
           "externallyManagedVersionAvailable": "Version {{version}} ist verfügbar. Aktualisiere Orca über die Paketverwaltung deines Systems. Orca kann diese Version nicht selbst installieren.",
           "versionReadyToInstall": "Version {{version}} ist bereit zur Installation.",
-          "versionInstalling": "Version {{version}} wird installiert."
+          "versionInstalling": "Version {{version}} wird installiert.",
+          "downloadingVersion": "Version {{version}} wird heruntergeladen ({{percent}} %)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Apps auswählen, die im Menü „Öffnen in“ eines Arbeitsbereichs verfügbar sind.",
@@ -12276,29 +12276,29 @@
           "setUpRecipes": "Rezepte einrichten"
         },
         "ReleaseBuildPicker": {
-          "build": "Build",
-          "searchLabel": "Builds suchen",
-          "searchPlaceholder": "Builds suchen…",
-          "noMatches": "Keine passenden Builds."
+          "build": "Version",
+          "searchLabel": "Versionen suchen",
+          "searchPlaceholder": "Versionen suchen…",
+          "noMatches": "Keine passenden Versionen."
         },
         "ReleaseChannelSection": {
-          "switchFailed": "Zu diesem Build konnte nicht gewechselt werden.",
-          "title": "Veröffentlichungskanal",
-          "description": "Update-Kanal wechseln oder zu einem beliebigen veröffentlichten Build wechseln, auch zu älteren. Ein Wechsel zu älteren Versionen ist zulässig; ungeprüfte Builds können fehlerhaft sein.",
+          "switchFailed": "Wechsel zu dieser Version fehlgeschlagen.",
+          "title": "Update-Kanal",
+          "description": "Update-Kanal wechseln oder eine veröffentlichte Version auswählen, auch eine ältere. Ungeprüfte Versionen funktionieren möglicherweise nicht.",
           "devOnly": "Nur für die Entwicklung",
-          "adhocWarning": "Builds für Windows sind nicht signiert. Die Verantwortlichen können die Pflege einstellen. Halte eine stabile Version bereit.",
-          "loadingBuilds": "Builds werden geladen…",
-          "noBuilds": "Keine Builds gefunden",
-          "refresh": "Build-Liste aktualisieren",
-          "cacheHint": "Build-Listen werden 5 Minuten lang zwischengespeichert. Zum Suchen nach neuen Builds aktualisieren.",
-          "switchTo": "Zu diesem Build wechseln",
-          "alreadyRunning": "Dieser Build wird derzeit ausgeführt.",
+          "adhocWarning": "Versionen für Windows sind nicht signiert. Die Verantwortlichen können die Pflege einstellen. Halte eine stabile Version bereit.",
+          "loadingBuilds": "Versionen werden geladen…",
+          "noBuilds": "Keine Versionen gefunden",
+          "refresh": "Versionsliste aktualisieren",
+          "cacheHint": "Die Versionsliste bleibt 5 Minuten im Cache. Aktualisiere sie, um nach neuen Versionen zu suchen.",
+          "switchTo": "Version wechseln",
+          "alreadyRunning": "Diese Version läuft bereits.",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "Ein Build-Wechsel ist nur in der Desktop-App möglich.",
+          "webUnavailable": "Ein Versionswechsel ist nur in der Desktop-App möglich.",
           "devChannelUnsupportedAria": "{{value0}} (nur {{value1}})",
-          "devChannelUnsupported": "Builds aus dem Kanal „{{value0}}“ werden nur für {{value1}} erstellt. Unter Linux sind {{stable}} und {{rc}} verfügbar.",
+          "devChannelUnsupported": "Versionen aus dem Kanal „{{value0}}“ sind nur für {{value1}} verfügbar. Unter Linux sind „{{stable}}“ und „{{rc}}“ verfügbar.",
           "downloadInstaller": "Installationsprogramm herunterladen",
-          "manualInstallHint": "Builds aus dem Kanal „{{value0}}“ sind unter Windows nicht signiert und können daher vom integrierten Updater nicht über einen signierten Build installiert werden. Das heruntergeladene Installationsprogramm einmal ausführen – Windows warnt dabei vor einem unbekannten Herausgeber – danach funktioniert jeder weitere Wechsel, auch zurück zum Kanal „{{stable}}“, von hier aus.",
+          "manualInstallHint": "Windows-Versionen aus dem Kanal „{{value0}}“ sind nicht signiert. Der integrierte Updater kann sie nicht über eine signierte Version installieren. Führe das heruntergeladene Installationsprogramm einmal aus. Windows warnt dabei vor einem unbekannten Herausgeber. Danach kannst du hier die Version wechseln, auch zurück zum Kanal „{{stable}}“.",
           "stableLabel": "Stabil",
           "stableDescription": "Stabile Versionen für den allgemeinen Einsatz.",
           "rcLabel": "RC",
@@ -12308,9 +12308,9 @@
           "dailyLabel": "Täglich",
           "dailyDescription": "Wird einmal täglich aus main gebaut.",
           "adhocLabel": "Ad hoc",
-          "adhocDescription": "Einmalige Builds aus einem Branch, um Änderungen vor dem Merge auszuprobieren.",
+          "adhocDescription": "Einmalige Versionen aus einem Branch, um Änderungen vor dem Merge auszuprobieren.",
           "devChannelPlatforms": "macOS und Windows",
-          "scheduledWarning": "Diese Builds werden ohne vorgeschaltete Tests veröffentlicht. Builds für Windows sind nicht signiert. Halte eine stabile Version bereit."
+          "scheduledWarning": "Diese Versionen werden ohne vorgeschaltete Tests veröffentlicht. Versionen für Windows sind nicht signiert. Halte eine stabile Version bereit."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Systemstandard",
