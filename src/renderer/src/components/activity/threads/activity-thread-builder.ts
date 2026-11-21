@@ -21,10 +21,12 @@ export type AgentPaneThreadReuseCache = {
   previousByPaneKey: Map<string, PaneThreadInputs & { thread: AgentPaneThread }>
   previousList: AgentPaneThread[]
   generatedTitlesEnabled?: boolean
+  /** Panes whose thread was added, replaced or dropped by the last build. */
+  changedPaneKeys: ReadonlySet<string>
 }
 
 export function createAgentPaneThreadReuseCache(): AgentPaneThreadReuseCache {
-  return { previousByPaneKey: new Map(), previousList: [] }
+  return { previousByPaneKey: new Map(), previousList: [], changedPaneKeys: new Set() }
 }
 
 const NO_EVENTS: readonly ActivityEvent[] = []
@@ -186,6 +188,8 @@ export function buildAgentPaneThreads(
   // A thread depends only on its pane's inputs, so unchanged panes keep their thread without rebuilding it.
   const reusable = reuseCache?.generatedTitlesEnabled === generatedTitlesEnabled
   const nextByPaneKey = new Map<string, PaneThreadInputs & { thread: AgentPaneThread }>()
+  const changedPaneKeys = new Set<string>()
+  let keptPaneCount = 0
   const built = paneKeys
     .map((paneKey) => {
       const inputs: PaneThreadInputs = {
@@ -208,6 +212,10 @@ export function buildAgentPaneThreads(
               buildPaneThread(paneKey, inputs, generatedTitlesEnabled)
             )
       nextByPaneKey.set(paneKey, { ...inputs, thread })
+      keptPaneCount += Number(previous !== undefined)
+      if (previous?.thread !== thread) {
+        changedPaneKeys.add(paneKey)
+      }
       return thread
     })
     .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
@@ -216,6 +224,14 @@ export function buildAgentPaneThreads(
     return built
   }
   const result = arrayItemsEqual(reuseCache.previousList, built) ? reuseCache.previousList : built
+  if (keptPaneCount < reuseCache.previousByPaneKey.size) {
+    for (const paneKey of reuseCache.previousByPaneKey.keys()) {
+      if (!nextByPaneKey.has(paneKey)) {
+        changedPaneKeys.add(paneKey)
+      }
+    }
+  }
+  reuseCache.changedPaneKeys = changedPaneKeys
   reuseCache.previousList = result
   reuseCache.previousByPaneKey = nextByPaneKey
   reuseCache.generatedTitlesEnabled = generatedTitlesEnabled
