@@ -59,6 +59,7 @@ export function createNativeChatComposerWorkspaceSelector(
   let presentation: {
     worktreeId?: string
     repoId?: string
+    projectName?: string
     hostId?: ExecutionHostId
     machine?: string
     checkout?: string
@@ -132,6 +133,7 @@ export function createNativeChatComposerWorkspaceSelector(
       presentation = {
         worktreeId: row?.id,
         repoId: repo?.id,
+        projectName: repo?.displayName,
         checkout: row?.displayName,
         kind: row
           ? (repo && isFolderRepo(repo)) ||
