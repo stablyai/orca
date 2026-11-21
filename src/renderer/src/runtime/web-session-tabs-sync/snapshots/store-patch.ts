@@ -31,6 +31,10 @@ import {
   type HostSessionMirrorSettle
 } from '../hydration/mirror-settle'
 import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
+import { settleAttentionRemovedBy } from '../../../store/slices/workspace-attention/attention-removal-follow-up'
+import { settleWorkspaceUnreadFlag } from '../../../store/slices/workspace-attention/workspace-unread-flag'
+import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
@@ -205,7 +209,27 @@ export function applyWebSessionTabsStorePatch(
     return patch
   }
 
-  useAppStore.getState().updateAgentStatusState(runStorePatch)
+  // Local closeTab settles inside the marker write. A paired host removes the tab in this patch instead.
+  settleAttentionRemovedBy(useAppStore.setState, useAppStore.getState, () => {
+    useAppStore.getState().updateAgentStatusState(runStorePatch)
+  })
+  for (const frame of hostMirrorVerdict.frames) {
+    if (
+      !frame.decision.apply ||
+      !frame.source ||
+      !hostSnapshotAffirmsWorktreeContents(frame.source) ||
+      isWebSessionTabsWorktreeRemovalFrame(frame.source)
+    ) {
+      continue
+    }
+    // A removal the marker diff cannot attribute (the row was already gone) still lowers a marker-raised flag.
+    settleWorkspaceUnreadFlag(
+      useAppStore.setState,
+      useAppStore.getState,
+      frame.worktreeId,
+      'markers'
+    )
+  }
 
   for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
     if (decision.apply && source) {
