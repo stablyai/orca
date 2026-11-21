@@ -91,8 +91,11 @@ export class BotSalvageStore {
   private all(): Promise<Map<string, BotSalvage>> {
     this.bots ??= this.io.read().then(
       (text) => {
+        // Only a missing file (null) is an empty record; an empty file is unreadable.
         try {
-          return new Map(Object.entries(text ? FileSchema.parse(JSON.parse(text)).bots : {}))
+          return new Map(
+            Object.entries(text !== null ? FileSchema.parse(JSON.parse(text)).bots : {})
+          )
         } catch (error) {
           return this.unreadable(error)
         }
