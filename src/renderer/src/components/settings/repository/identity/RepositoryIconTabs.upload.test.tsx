@@ -206,11 +206,11 @@ it('shows delayed progress without allowing repeated uploads', async () => {
   })
   expect(upload.disabled).toBe(true)
   expect(upload.getAttribute('aria-busy')).toBe('true')
-  expect(upload.querySelector('.animate-spin')).toBeNull()
+  expect(upload.querySelector('.loading-spinner')).toBeNull()
   await act(async () => {
     await vi.advanceTimersByTimeAsync(200)
   })
-  expect(upload.querySelector('.animate-spin')).not.toBeNull()
+  expect(upload.querySelector('.loading-spinner')).not.toBeNull()
   await act(async () => {
     upload.click()
   })
