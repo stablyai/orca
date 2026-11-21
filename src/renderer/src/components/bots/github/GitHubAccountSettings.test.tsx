@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/bot-catalog', () => ({ useHostBots: () => [] }))
 
 import { refreshBotGitHub } from '@/lib/bot-github-state'
+import type { ConnectorGitHubState } from '../../../../../shared/connector-bot-github-contract'
 import { GitHubAccountSettings } from './GitHubAccountSettings'
 
-const STATE = {
+const STATE: ConnectorGitHubState = {
   installUrl: 'https://github.com/apps/orca/installations/new',
   account: { userId: '42', login: 'dana-acme' },
   installations: [{ installationId: '1', accountLogin: 'acme-corp', repositories: null }],
@@ -17,7 +18,7 @@ const STATE = {
 }
 const api = { botGitHub: { state: vi.fn(), unlink: vi.fn() } }
 
-async function renderWith(state: object): Promise<void> {
+async function renderWith(state: ConnectorGitHubState): Promise<void> {
   api.botGitHub.state.mockResolvedValue({ ok: true, value: state })
   await refreshBotGitHub('local')
   render(<GitHubAccountSettings hostId="local" hostName={null} />)
