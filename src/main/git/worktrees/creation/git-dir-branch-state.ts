@@ -13,8 +13,7 @@ export type GitDirState = {
 }
 
 // Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
-/** `fullRef` reserved skips the symlink probes: nothing else can change the answer. */
-export async function readGitDirState(commonDir: string, fullRef: string): Promise<GitDirState> {
+export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   // Fail closed: an unreadable common dir must not look like "nothing in use".
   if (!(await stat(commonDir)).isDirectory()) {
     throw new Error(`${commonDir} is not a Git directory`)
@@ -33,40 +32,24 @@ export async function readGitDirState(commonDir: string, fullRef: string): Promi
   }
   const heads = new Map<string, string>()
   const reserved = new Set<string>()
-  await Promise.all(
-    gitDirs.map(async (gitDir) => {
-      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-        readOptional(join(gitDir, 'HEAD')),
-        readOptional(join(gitDir, 'rebase-merge', 'head-name')),
-        readOptional(join(gitDir, 'rebase-apply', 'head-name')),
-        readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
-        readOptional(join(gitDir, 'BISECT_START'))
-      ])
-      heads.set(gitDir, normalizeHead(head))
-      for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
-        text.split('\n')
-      )) {
-        if (line.startsWith('refs/heads/')) {
-          reserved.add(line.trim())
-        }
+  // Bounded: thousands of worktrees must not flood the main process's file system pool.
+  await forEachBounded(gitDirs, async (gitDir) => {
+    const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
+      readOptional(join(gitDir, 'HEAD')),
+      readOptional(join(gitDir, 'rebase-merge', 'head-name')),
+      readOptional(join(gitDir, 'rebase-apply', 'head-name')),
+      readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
+      readOptional(join(gitDir, 'BISECT_START'))
+    ])
+    heads.set(gitDir, normalizeHead(head))
+    for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) => text.split('\n'))) {
+      if (line.startsWith('refs/heads/')) {
+        reserved.add(line.trim())
       }
-      const bisected = bisectStart.trim()
-      if (bisected) {
-        reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
-      }
-    })
-  )
-  if (reserved.has(fullRef)) {
-    return { heads, reserved }
-  }
-  // Only once the sweep succeeded: a HEAD without a `ref:` line may be a symlink naming a ref.
-  const unnamed = [...heads]
-    .filter(([, head]) => !head.startsWith('ref: '))
-    .map(([gitDir]) => gitDir)
-  await forEachBounded(unnamed, async (gitDir) => {
-    const link = await readRefLink(join(gitDir, 'HEAD'))
-    if (link !== undefined) {
-      heads.set(gitDir, link)
+    }
+    const bisected = bisectStart.trim()
+    if (bisected) {
+      reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
     }
   })
   return { heads, reserved }

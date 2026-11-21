@@ -32,16 +32,15 @@ const PER_WORKTREE_REF = /^refs\/(?:worktree|bisect|rewritten)\//
 
 /** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
 export async function resolveBranchCheckouts(
-  { heads }: GitDirState,
+  state: GitDirState,
   commonDir: string,
   fullRef: string,
   { bareCommonDir, firstOwnerSettles = false }: ResolveOptions
 ): Promise<BranchCheckouts> {
-  // A case-insensitive file system resolves `refs/heads/Main` to a loose `main`; packed refs stay distinct.
-  const foldRef =
-    (await pathExists(join(commonDir, 'head'))) && (await pathExists(join(commonDir, fullRef)))
-      ? (ref: string) => ref.toLowerCase()
-      : (ref: string) => ref
+  // A case-insensitive file system resolves `refs/heads/Main` to a loose `main`, which the write itself may create.
+  const foldRef = (await pathExists(join(commonDir, 'head')))
+    ? (ref: string) => ref.toLowerCase()
+    : (ref: string) => ref
   const target = foldRef(fullRef)
   const looseRefs = new Map<string, Promise<string>>()
   // Per-worktree refs (refs/worktree/, refs/bisect/, refs/rewritten/) live in their own git dir.
@@ -55,6 +54,15 @@ export async function resolveBranchCheckouts(
   if ((await readLooseRef(fullRef, commonDir)).startsWith('ref: ')) {
     return { kind: 'unknown' }
   }
+  // A HEAD without a `ref:` line may be a symlink naming a ref.
+  const heads = new Map(state.heads)
+  const unnamed = [...heads].filter(([, head]) => !head.startsWith('ref: ')).map(([dir]) => dir)
+  await forEachBounded(unnamed, async (gitDir) => {
+    const link = await readRefLink(join(gitDir, 'HEAD'))
+    if (link !== undefined) {
+      heads.set(gitDir, link)
+    }
+  })
   const owners: string[] = []
   const branches: [gitDir: string, ref: string][] = []
   for (const [gitDir, head] of heads) {
@@ -130,11 +138,6 @@ async function pathExists(path: string): Promise<boolean> {
     rethrowUnlessMissing(error)
     return false
   }
-}
-
-/** Whether two HEAD snapshots name the same thing in every git dir. */
-export function sameHeads(left: GitDirState['heads'], right: GitDirState['heads']): boolean {
-  return left.size === right.size && [...left].every(([gitDir, head]) => right.get(gitDir) === head)
 }
 
 /** The checkout a sole owning git dir belongs to; undefined when the files cannot prove it. */
