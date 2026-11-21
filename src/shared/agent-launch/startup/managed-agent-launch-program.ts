@@ -9,9 +9,13 @@ import {
 /** Full paths to Orca's copies, reported by a host only for agents it has no CLI of its own for. */
 export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
 
-/** A program path as the head of a launch: cmd takes it in plain double quotes (carets inside
- *  quotes stay literal), PowerShell through its call operator. */
-function programHead(path: string, shell: AgentStartupShell): string {
+/** A program as the head of a launch: a path in plain double quotes for cmd (carets inside quotes
+ *  stay literal), through its call operator for PowerShell. */
+export function launchProgramHead(path: string, shell: AgentStartupShell): string {
+  // A plain name reads alike in every shell.
+  if (/^[\w.-]+$/.test(path)) {
+    return path
+  }
   return shell === 'cmd' ? `"${path}"` : buildShellCommandFromArgv([path], shell)
 }
 
@@ -25,11 +29,14 @@ export function replaceLaunchProgram(
   if (!parsed.ok) {
     return command
   }
+  // PowerShell runs a quoted path through its call operator, which the head is rebuilt with.
   const head = shell === 'powershell' && parsed.tokens[0] === '&' ? 1 : 0
   const program = parsed.tokens[head]
   const next = program === undefined ? null : replace(program)
   return next && next !== program
-    ? programHead(next, shell) + command.slice(parsed.spans[head].end)
+    ? command.slice(0, parsed.spans[0].start) +
+        launchProgramHead(next, shell) +
+        command.slice(parsed.spans[head].end)
     : command
 }
 

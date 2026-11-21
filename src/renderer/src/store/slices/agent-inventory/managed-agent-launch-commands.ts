@@ -36,8 +36,15 @@ export function beginAgentDetection(
     return {
       agents: ('agents' in reply ? reply.agents : reply).filter(isTuiAgent),
       keepManagedAgentCommands: () => {
-        if (paths && started > (byHost.get(host)?.started ?? 0)) {
-          byHost.set(host, { started, commands: typedCommands(paths) })
+        const kept = byHost.get(host)
+        if (!paths || started <= (kept?.started ?? 0)) {
+          return
+        }
+        const commands = typedCommands(paths)
+        const changed = !kept || !sameCommands(kept.commands, commands)
+        // An unchanged reply keeps the same object, so readers see no change.
+        byHost.set(host, { started, commands: changed ? commands : kept.commands })
+        if (changed) {
           listeners.forEach((listener) => listener())
         }
       }
@@ -61,6 +68,14 @@ export function agentDetectionReader(host: string): {
   }
 }
 
+function sameCommands(a: ManagedAgentCommands, b: ManagedAgentCommands): boolean {
+  const keys = Object.keys(a)
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((agent) => isTuiAgent(agent) && a[agent] === b[agent])
+  )
+}
+
 function typedCommands(paths: Record<string, string>): ManagedAgentCommands {
   const typed: ManagedAgentCommands = {}
   for (const [agent, path] of Object.entries(paths)) {
@@ -76,10 +91,11 @@ export function readManagedAgentCommands(host: string): ManagedAgentCommands | u
 }
 
 export function forgetManagedAgentCommands(drop: (host: string) => boolean): void {
-  for (const host of [...byHost.keys()].filter(drop)) {
-    byHost.delete(host)
+  const dropped = [...byHost.keys()].filter(drop)
+  dropped.forEach((host) => byHost.delete(host))
+  if (dropped.length > 0) {
+    listeners.forEach((listener) => listener())
   }
-  listeners.forEach((listener) => listener())
 }
 
 export function forgetRuntimeManagedAgentCommands(drop: (environmentId: string) => boolean): void {

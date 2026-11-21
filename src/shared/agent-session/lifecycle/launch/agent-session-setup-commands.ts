@@ -1,10 +1,10 @@
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../agent-launch/catalog/tui-agent-display-names'
 import type { AgentSessionAccountKind } from '../../failures/agent-session-availability'
 import {
-  buildShellCommandFromArgv,
   quoteStartupArg,
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
+import { launchProgramHead } from '../../../agent-launch/startup/managed-agent-launch-program'
 
 /** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
@@ -105,10 +105,9 @@ export function agentSessionSignInCommand(
   }
   // Orca's copy is run by its full path, quoted for the host's shell.
   if (options.managedCommand && options.shell !== null) {
-    return buildShellCommandFromArgv(
-      [options.managedCommand, ...argv.slice(1)],
-      options.shell ?? 'posix'
-    )
+    const shell = options.shell ?? 'posix'
+    const args = argv.slice(1).map((arg) => quoteStartupArg(arg, shell))
+    return [launchProgramHead(options.managedCommand, shell), ...args].join(' ')
   }
   // Why a plain join: every word is a bare token, which POSIX, PowerShell and cmd all read alike.
   return argv.join(' ')
@@ -127,7 +126,7 @@ function claudeSystemSignInCommand(
   shell: AgentStartupShell,
   managedCommand?: string | null
 ): string {
-  const program = managedCommand ? buildShellCommandFromArgv([managedCommand], shell) : null
+  const program = managedCommand ? launchProgramHead(managedCommand, shell) : null
   if (shell === 'powershell') {
     return [
       "& { $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR', 'ORCA_CLAUDE_PROFILE_POINTER'); $saved = @{};",

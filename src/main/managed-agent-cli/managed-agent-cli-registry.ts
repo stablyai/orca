@@ -131,6 +131,11 @@ export function managedAgentCommandFor(
   return use ? managedAgentCommand(agent) : installedManagedAgentCommand(agent)
 }
 
+/** The release folder of Orca's installed copy of `agent`; null without one. */
+export function installedManagedAgentFolder(agent: ManagedAgentCliId): string | null {
+  return installedFolders.get(agent) ?? null
+}
+
 /** The program a terminal launch of Orca's installed copy runs, by full path; null without one. */
 export function installedManagedAgentLauncher(agent: ManagedAgentCliId): string | null {
   const folder = installedFolders.get(agent)
