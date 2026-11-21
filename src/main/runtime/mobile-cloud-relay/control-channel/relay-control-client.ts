@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: the renewal held while connecting belongs to the same connect state machine (state, socket, hello-ack); splitting it out would spread one state guard across files. */
 import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
@@ -18,7 +17,7 @@ import {
 import { RelayControlRequests } from './relay-control-requests'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 
-import { answerRelayHostChallenge } from './relay-host-proof'
+import { proveRelayHostChallenge } from './relay-control-challenge'
 import { RelayControlLiveness } from './relay-control-liveness'
 import { closeRelayControlSocket } from './relay-control-socket-close'
 import { createRelayControlSocket } from './relay-control-socket-factory'
@@ -237,27 +236,9 @@ export class RelayControlClient {
   private handleProofMessage(message: Record<string, unknown>): void {
     const challenge = RelayHostChallengeMessageSchema.safeParse(message)
     if (challenge.success) {
-      const invalid: { reason: string | Error } = { reason: 'unknown' }
-      const proofB64 = answerRelayHostChallenge(challenge.data, {
-        relayOrigin: this.relayOrigin,
-        ...this.options.identity,
-        relayHostId: this.options.relayHostId,
-        hostPublicKey: this.options.keypair.publicKey,
-        hostSecretKey: this.options.keypair.secretKey,
-        assignmentEpoch: this.options.assignmentEpoch,
-        previousGeneration: this.options.previousGeneration,
-        resumeRequested: Boolean(this.options.controlResumeSecret),
-        onInvalid: (reason, error) => {
-          invalid.reason = error ?? reason
-        }
-      })
-      if (!proofB64) {
-        // Report failing check names, never challenge field values.
-        this.failProtocol(
-          invalid.reason instanceof Error
-            ? invalid.reason
-            : `invalid host challenge: ${invalid.reason} origin=${this.relayOrigin}`
-        )
+      const proof = proveRelayHostChallenge(challenge.data, this.options, this.relayOrigin)
+      if ('failure' in proof) {
+        this.failProtocol(proof.failure)
         return
       }
       // Connect race: only the first path to deliver a valid challenge answers; the rest close unanswered.
@@ -269,7 +250,7 @@ export class RelayControlClient {
         JSON.stringify({
           type: 'host-challenge-ack',
           challengeId: challenge.data.challengeId,
-          proofB64
+          proofB64: proof.proofB64
         })
       )
       return
