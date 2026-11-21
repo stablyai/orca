@@ -12,6 +12,17 @@ export const styles = themedStyleSheet(() => ({
     gap: spacing.md,
     paddingLeft: LIST_ROW_PADDING
   },
+  editTarget: {
+    flex: 1,
+    height: '100%',
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  editTargetPressed: {
+    opacity: feedback.pressedOpacity
+  },
   rowContent: {
     flex: 1,
     minWidth: 0
