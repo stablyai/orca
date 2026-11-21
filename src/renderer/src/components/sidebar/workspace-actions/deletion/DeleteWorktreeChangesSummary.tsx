@@ -68,10 +68,6 @@ export function deleteWorktreeLossLine(
 
 type StatusTone = 'checking' | 'clean' | 'warning'
 
-// gap-1.5 between the line's items; the note's pl-1.5 matches it.
-const GAP_PX = 6
-const NOTE_PAD_PX = 6
-
 /** An element's untransformed, fractional layout width. */
 function layoutWidth(el: Element): number {
   return parseFloat(getComputedStyle(el).width) || 0
@@ -84,7 +80,7 @@ function naturalWidth(el: HTMLElement): number {
   return range.getBoundingClientRect().width
 }
 // size-3.5 chevron plus the trigger's gap-1.5.
-const CHEVRON_ROOM_PX = 20
+const CHEVRON_ROOM_REM = 1.25
 
 /** What deleting one workspace loses, as one fixed-height line; the files sit behind it. */
 export function DeleteWorktreeChangesSummary({
@@ -104,7 +100,7 @@ export function DeleteWorktreeChangesSummary({
 }): JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const [fit, setFit] = useState({ need: 0, room: 0 })
+  const [fit, setFit] = useState({ need: 0, room: 0, chevronRoom: 0 })
   const [focused, setFocused] = useState(false)
   const [opened, setOpened] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -125,8 +121,12 @@ export function DeleteWorktreeChangesSummary({
     // are scaled while the dialog's open animation runs, so divide the transform back out.
     const rowWidth = layoutWidth(row)
     const scale = row.getBoundingClientRect().width / rowWidth || 1
-    const need =
-      (naturalWidth(text) + (note ? naturalWidth(note) : 0)) / scale + (note ? NOTE_PAD_PX : 0)
+    // Gaps and padding are rem-based, so read them rather than assume 16px type.
+    const gap = parseFloat(getComputedStyle(line).columnGap) || 0
+    const notePad = note ? parseFloat(getComputedStyle(note).paddingLeft) || 0 : 0
+    const rootFont = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+    const chevronRoom = CHEVRON_ROOM_REM * rootFont
+    const need = (naturalWidth(text) + (note ? naturalWidth(note) : 0)) / scale + notePad
     let fixed = 0
     let items = 0
     for (const child of line.children) {
@@ -139,9 +139,13 @@ export function DeleteWorktreeChangesSummary({
       }
     }
     // The note cancels its own gap with a negative margin.
-    const gaps = (items - 1 - (note ? 1 : 0)) * GAP_PX
+    const gaps = (items - 1 - (note ? 1 : 0)) * gap
     const room = rowWidth - fixed - gaps
-    setFit((current) => (current.need === need && current.room === room ? current : { need, room }))
+    setFit((current) =>
+      current.need === need && current.room === room && current.chevronRoom === chevronRoom
+        ? current
+        : { need, room, chevronRoom }
+    )
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
   useLayoutEffect(measureClipped)
@@ -208,7 +212,7 @@ export function DeleteWorktreeChangesSummary({
   const keepsToggle = hasDetails || open || focused
   // A toggle that exists only because of clipping takes the chevron's room from the text itself.
   // A toggle kept for its file list also loses the chevron's room.
-  const clipped = fit.need > fit.room - (keepsToggle ? CHEVRON_ROOM_PX : 0)
+  const clipped = fit.need > fit.room - (keepsToggle ? fit.chevronRoom : 0)
   const expandable = keepsToggle || clipped
   const hasRow = tone !== null
   useEffect(() => {
