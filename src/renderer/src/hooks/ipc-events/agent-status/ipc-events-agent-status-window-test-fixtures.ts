@@ -54,6 +54,7 @@ export function buildWindowApi(args: {
         onRequestTerminalCreate: () => () => {},
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
+        onScrollSessionTab: () => () => {},
         onApplyAgentPaneActivity: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
         onLaunchRecipe: () => () => {},

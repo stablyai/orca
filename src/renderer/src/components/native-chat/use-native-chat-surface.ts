@@ -20,6 +20,7 @@ import {
 import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-actions'
 import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
 import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
+import { useNativeChatTabScroll } from './viewport/scroll/use-native-chat-tab-scroll'
 import { useNativeChatFind } from './viewport/find/use-native-chat-find'
 import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
 import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
@@ -30,7 +31,7 @@ import {
 import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
 
 export type NativeChatSurfaceTranscript = Pick<NativeChatMessageListHandle, 'revealFindMatch'> &
-  Partial<Pick<NativeChatMessageListHandle, 'messageCopyText'>>
+  Partial<Pick<NativeChatMessageListHandle, 'messageCopyText' | 'scrollBy'>>
 
 /** A screen's own context-menu rows; the surface supplies find, paste, and the transcript targets. */
 export type NativeChatSurfaceMenu = Omit<
@@ -46,6 +47,8 @@ export type NativeChatSurfaceMenu = Omit<
 
 export type NativeChatSurfaceArgs = {
   tabId: string
+  /** The terminal pane a chat over a TUI stands in for, so outside scrolls naming another split leaf pass it by. */
+  paneKey?: string | null
   /** Scopes the link popover: it closes when the conversation changes. */
   sessionId: string | null
   isVisible: boolean
@@ -73,6 +76,7 @@ export type NativeChatSurfaceArgs = {
  *  typing and paste into the composer, zoom keys, split keys, and the chat's appearance. */
 export function useNativeChatSurface({
   tabId,
+  paneKey = null,
   sessionId,
   isVisible,
   isFocusedGroup,
@@ -109,6 +113,7 @@ export function useNativeChatSurface({
     composerReady,
     surfaceReady
   })
+  useNativeChatTabScroll({ tabId, paneKey, isVisible, messageListRef: transcriptRef })
   const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
   const contextMenu = useNativeChatContextMenu({
     fileLinkContext,
