@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
-  botItemFilterChat,
   botItemChats,
   botItemStaleDays,
   botItemsNeedingOwner,
@@ -118,7 +117,7 @@ export function MobileBotPanel(props: {
   const items = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatId: botItemFilterChat(filter),
+    chatIds: filter.chatIds,
     showing: visible,
     reads: props.routeBot.itemReads
   })
@@ -126,7 +125,7 @@ export function MobileBotPanel(props: {
   const allItems = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatId: null,
+    chatIds: null,
     showing: visible && filter.chatIds !== null,
     reads: props.routeBot.itemReads
   })
