@@ -39,6 +39,7 @@ import {
   StripGroupHeading
 } from './NativeChatCrewStripGroups'
 import type { NativeChatCrew } from '../../../orchestration-crew/use-native-chat-crew'
+import { NativeChatForegroundTaskAction } from '../../NativeChatForegroundTaskAction'
 
 /** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
 const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
@@ -142,6 +143,7 @@ function BackgroundTaskRow(props: {
             {say('stop')}
           </Button>
         ) : null}
+        <NativeChatForegroundTaskAction taskId={row.providerId} />
       </li>
       {row.owned.length > 0 ? (
         // Work a child owns (its shell, a nested agent) reads beneath it, not in its kind's group.

@@ -28,6 +28,7 @@ export type AgentSessionWriteKind =
   | 'stop'
   | 'stop-task'
   | 'stop-tasks'
+  | 'background-task'
   | 'answer'
   | 'option'
   | 'command'
@@ -48,6 +49,9 @@ export function agentSessionWriteKindForMethod(
     fingerprintMethod === 'agentSession.queuedMessageSend'
   ) {
     return 'send'
+  }
+  if (fingerprintMethod === 'agentSession.backgroundTask') {
+    return 'background-task'
   }
   if (fingerprintMethod === 'agentSession.cancel') {
     // A background-task stop never asked the agent to stop.

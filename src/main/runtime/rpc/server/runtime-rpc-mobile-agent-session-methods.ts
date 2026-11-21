@@ -8,6 +8,7 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.reveal',
   'agentSession.send',
   'agentSession.cancel',
+  'agentSession.backgroundTask',
   // Continue a turn Orca's own stop cut off; phones gate on agent-session.continue-interrupted.phone.v1.
   'agentSession.continueInterrupted',
   'agentSession.queuedMessageSend',

@@ -6,6 +6,7 @@ import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './catalog
 import { STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS } from './conversation/structured-agent-session-skip-async-questions'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './conversation/structured-agent-session-close-method'
 import { STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD } from './subscriptions/structured-agent-session-subscribe-method'
+import { STRUCTURED_AGENT_SESSION_BACKGROUND_ACTION_METHOD } from '../structured-agent-session-background-action'
 import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
@@ -66,6 +67,7 @@ import * as queuedImages from './attachments/structured-agent-session-queued-ima
 import { projectReceiptDeviceHistory } from './subscriptions/structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
+  STRUCTURED_AGENT_SESSION_BACKGROUND_ACTION_METHOD,
   defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',

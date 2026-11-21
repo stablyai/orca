@@ -49,6 +49,7 @@ import {
   mobileAgentChildRowText
 } from '../../../../worktree/agent-lineage/mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
+import { MobileNativeChatForegroundTaskAction } from '../MobileNativeChatForegroundTaskAction'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 
@@ -134,6 +135,7 @@ function TaskRow({
             onPress={() => onStop(stopId)}
           />
         ) : null}
+        <MobileNativeChatForegroundTaskAction taskId={row.providerId} />
       </View>
       {row.owned.length > 0 ? (
         // Work a child owns (its shell, a nested agent) reads beneath it, not in its kind's group.

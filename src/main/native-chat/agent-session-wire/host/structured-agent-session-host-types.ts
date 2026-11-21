@@ -1,3 +1,4 @@
+export type { AgentSessionSubscribeInput as SubscribeInput } from '../publication/subscribers/agent-session-subscribe-input'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentModelCatalogSource,

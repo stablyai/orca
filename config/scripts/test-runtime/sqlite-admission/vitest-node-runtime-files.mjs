@@ -116,6 +116,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
+  'src/main/claude/claude-background-task-control-contract.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Restarts a file-backed database; Bun's SQLite close keeps the file open until its statements are
