@@ -63,7 +63,7 @@ export class JournalCheckpointWorkerSupervisor {
   private retiring: Promise<void> = Promise.resolve()
   private deadline: ReturnType<typeof setTimeout> | undefined
   private restartTimer: ReturnType<typeof setTimeout> | undefined
-  private closePromise: Promise<void> | undefined
+  private closed = false
   private permanent = false
   private warned = false
   private failedStarts = 0
@@ -89,7 +89,7 @@ export class JournalCheckpointWorkerSupervisor {
   }
 
   start(): void {
-    if (this.closePromise) {
+    if (this.closed) {
       return
     }
     const liveness = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
@@ -134,7 +134,7 @@ export class JournalCheckpointWorkerSupervisor {
     }
     this.current = attached
     worker.on('message', (message: unknown) => {
-      if (this.current === attached && !this.closePromise) {
+      if (this.current === attached && !this.closed) {
         attached.busySince = undefined
         attached.silent = false
         attached.stuck = false
@@ -223,14 +223,14 @@ export class JournalCheckpointWorkerSupervisor {
 
   /** Stops timers and reports an open outage at once; the promise settles once the thread exits. */
   close(): Promise<void> {
-    if (!this.closePromise) {
+    if (!this.closed) {
+      this.closed = true
       this.unwatch()
       clearTimeout(this.restartTimer)
       this.restartTimer = undefined
       this.outages.end(false)
-      this.closePromise = this.retire()
     }
-    return this.closePromise
+    return this.retire()
   }
 
   private async retire(): Promise<void> {
@@ -244,7 +244,7 @@ export class JournalCheckpointWorkerSupervisor {
   }
 
   private scheduleRestart(): void {
-    if (this.permanent || this.closePromise || this.restartTimer) {
+    if (this.permanent || this.closed || this.restartTimer) {
       return
     }
     const base = this.options.restartBaseMs ?? RESTART_BASE_MS
@@ -254,7 +254,7 @@ export class JournalCheckpointWorkerSupervisor {
     this.restartTimer = setTimeout(() => {
       void retiring.then(() => {
         this.restartTimer = undefined
-        if (!this.closePromise && !this.current) {
+        if (!this.closed && !this.current) {
           this.outages.restarts++
           this.start()
         }
