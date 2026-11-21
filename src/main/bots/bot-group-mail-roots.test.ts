@@ -5,6 +5,7 @@ import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mail
 import { OrchestrationStructuredMailboxPointerDelivery } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { BOT_GROUP_MAIL_NEVER_STARTED } from './bot-group-dead-mail-turns'
+import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
 
 /** Two members, a peer request mailed from Scout to Forge for each human post given. */
 async function room(posts: number) {
@@ -235,6 +236,37 @@ describe('group mail roots', () => {
     expect(() => groups.reserveMailTurn(notice('legacy', ['peer-0']))).not.toThrow()
     const lines = groups.store.messages(group.id).filter((message) => message.turns[0]?.mailbox)
     expect(lines.map((line) => line.id)).toEqual([template.id, 'mail:legacy'])
+  })
+
+  it("wakes an idle member with its owner's item answer, as a follow-up to its latest request", async () => {
+    const { groups, group, mails, source, roots, notice } = await room(2)
+    const answer = { id: 'item-mail-1', thread_id: null, from_handle: BOT_ITEM_MAIL_SENDER }
+    mails.set(answer.id, { ...answer, type: 'status' })
+    expect(groups.narrowMailBatch(source.sessionId, [answer])).toEqual({
+      messages: [answer],
+      ended: []
+    })
+    groups.reserveMailTurn({ ...notice('item-answer', [answer.id]), sessionId: source.sessionId })
+    const line = groups.store.operationMessage('item-answer')
+    expect(line).toMatchObject({
+      groupId: group.id,
+      rootRequestId: roots[1].id,
+      text: 'Scout followed up',
+      turns: [{ sessionId: source.sessionId, mailbox: true }]
+    })
+  })
+
+  it('leaves item mail to a member with no turn in the room, and ends it once the member is stopped', async () => {
+    const { groups, group, mails, source, target } = await room(1)
+    const answer = { id: 'item-mail-1', thread_id: null, from_handle: BOT_ITEM_MAIL_SENDER }
+    mails.set(answer.id, { ...answer, type: 'status' })
+    // Forge never took a turn here, so no request of its own continues.
+    expect(groups.narrowMailBatch(target.sessionId, [answer])).toEqual({ messages: [], ended: [] })
+    await groups.stop(group.id, 'bot-0')
+    expect(groups.narrowMailBatch(source.sessionId, [answer])).toEqual({
+      messages: [],
+      ended: [answer.id]
+    })
   })
 
   it('holds a worker report that arrives before its worker is recorded', async () => {

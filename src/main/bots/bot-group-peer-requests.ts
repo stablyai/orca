@@ -6,6 +6,8 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
+import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
+import { itemMailRoot } from './bot-group-item-mail'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
@@ -92,6 +94,7 @@ export function assertGroupPeerScope(groups: BotGroupRuntime, scope: GroupPeerSc
  *  a worker one of this member's turns started. */
 function mailRoot(
   groups: BotGroupRuntime,
+  groupId: string,
   member: BotGroupMember,
   mail: Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>
 ): BotGroupPeerScope | null {
@@ -104,6 +107,10 @@ function mailRoot(
       typeof parsed === 'object' && parsed !== null && 'group' in parsed ? parsed.group : null
     )
     return scope.success ? scope.data : null
+  }
+  // Orca's own item mail: callers can't send as its sender (callerMailProvenance refuses it).
+  if (mail.from_handle === BOT_ITEM_MAIL_SENDER) {
+    return itemMailRoot(groups, groupId, member)
   }
   // A worker's final report settles its Dispatch as it lands, so its recorded sender comes first.
   const dispatch =
@@ -145,7 +152,7 @@ export function narrowGroupMailBatch<
   const live: { mail: T; root: BotGroupPeerScope }[] = []
   const ended: string[] = []
   for (const mail of messages) {
-    const root = mailRoot(groups, found.member, mail)
+    const root = mailRoot(groups, found.group.id, found.member, mail)
     if (root && rootActive(found.group, found.member, root)) {
       live.push({ mail, root })
     } else if (root) {
@@ -195,7 +202,7 @@ export function reserveGroupMailTurn(
   const mails = notice.messages
     .map(({ messageId }) => db.getMessageById(messageId))
     .filter((mail) => mail !== undefined)
-  const roots = mails.flatMap((mail) => mailRoot(groups, member, mail) ?? [])
+  const roots = mails.flatMap((mail) => mailRoot(groups, group.id, member, mail) ?? [])
   const [first] = roots
   if (
     !first ||
