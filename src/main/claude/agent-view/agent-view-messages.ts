@@ -34,8 +34,30 @@ export type ClaudeAgentViewReply = {
   registered?: true
   durable?: true
   observed?: true
+  unbound?: true
   unknown?: true
   requestId?: string
   agentId?: string
   expiresAt?: number
+}
+
+/** The mod's take (claim the request) or ack (report the switch) for a pane's waiting view. */
+export function answerPendingView(
+  request: PendingView | undefined,
+  message: z.infer<typeof ClaudeAgentViewMessage>
+): ClaudeAgentViewReply {
+  if (!request) {
+    return {}
+  }
+  if (message.action === 'take') {
+    if (request.taken || request.expiresAt < Date.now()) {
+      return {}
+    }
+    request.taken = true
+    return { requestId: request.requestId, agentId: request.agentId, expiresAt: request.expiresAt }
+  }
+  if (message.action === 'ack' && request.taken && message.requestId === request.requestId) {
+    request.finish(message.deny ? { status: 'denied', reason: message.deny } : { status: 'viewed' })
+  }
+  return {}
 }

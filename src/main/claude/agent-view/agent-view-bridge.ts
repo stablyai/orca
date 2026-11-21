@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import { claudeAgentViewChord, readClaudeAgentViewChord } from './agent-view-keybindings'
 import {
+  answerPendingView,
   ClaudeAgentViewMessage,
   type ClaudeAgentViewReply,
   type PendingView
@@ -47,7 +48,10 @@ export class ClaudeAgentViewBridge {
     return registry.restore((saved) => {
       let changed = false
       for (const session of saved) {
-        const keep = !this.sessions.has(session.paneKey) && isLive(session)
+        const keep =
+          !this.sessions.has(session.paneKey) &&
+          this.sessions.size < MAX_CLAUDE_AGENT_VIEW_SESSIONS &&
+          isLive(session)
         changed ||= !keep
         if (keep) {
           this.sessions.set(session.paneKey, session)
@@ -105,16 +109,17 @@ export class ClaudeAgentViewBridge {
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
       const chord = claudeAgentViewChord(message.keybindings)
-      if (!chord) {
+      const configDir = options.sameMachine ? message.configDir : undefined
+      // A local pane stays without a binding: each click reads the binding from configDir.
+      if (!chord && !configDir) {
         if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
           this.forget(message.paneKey)
         }
-        return {}
+        return { unbound: true }
       }
       if (!current && this.sessions.size >= MAX_CLAUDE_AGENT_VIEW_SESSIONS) {
         this.evictOldest()
       }
-      const configDir = options.sameMachine ? message.configDir : undefined
       if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
         current.seenAt = Date.now()
         if (current.chord !== chord || current.configDir !== configDir) {
@@ -128,8 +133,8 @@ export class ClaudeAgentViewBridge {
           paneKey: message.paneKey,
           sessionId: message.sessionId,
           instanceId: message.instanceId,
-          chord,
           seenAt: Date.now(),
+          ...(chord ? { chord } : {}),
           ...(configDir ? { configDir } : {})
         })
         this.publish()
@@ -157,27 +162,12 @@ export class ClaudeAgentViewBridge {
       this.observe(current, message.view)
       return { observed: true }
     }
-    const request = current.pending
-    if (!request) {
-      return {}
-    }
-    if (message.action === 'take') {
-      if (request.taken || request.expiresAt < Date.now()) {
-        return {}
-      }
-      request.taken = true
-      return {
-        requestId: request.requestId,
-        agentId: request.agentId,
-        expiresAt: request.expiresAt
-      }
-    }
-    if (request.taken && message.requestId === request.requestId) {
-      request.finish(
-        message.deny ? { status: 'denied', reason: message.deny } : { status: 'viewed' }
-      )
-    }
-    return {}
+    return answerPendingView(current.pending, message)
+  }
+
+  /** Whether memory is on disk, so an idle mod may stop checking in. */
+  saved(): Promise<boolean> {
+    return this.registry?.settled() ?? Promise.resolve(false)
   }
 
   async view(args: {
@@ -194,13 +184,12 @@ export class ClaudeAgentViewBridge {
       if (chord === undefined) {
         return { status: 'unavailable' }
       }
-      if (this.sessions.get(args.paneKey) === registered && registered.chord !== chord) {
-        if (chord) {
-          registered.chord = chord
-          this.save()
-        } else {
-          this.forget(args.paneKey)
-        }
+      if (
+        this.sessions.get(args.paneKey) === registered &&
+        registered.chord !== (chord ?? undefined)
+      ) {
+        registered.chord = chord ?? undefined
+        this.save()
       }
     }
     const session = this.sessions.get(args.paneKey)

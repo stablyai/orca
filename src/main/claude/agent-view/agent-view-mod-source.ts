@@ -70,15 +70,9 @@ let announcedAt = 0
         identity = { paneKey, sessionId, instanceId: String(await $.clock.now()) + '-' + String(Math.random()) }
       }
       const session = identity
-      let keybindings
-      try {
-        keybindings = await $.fs.read(configDir + '/keybindings.json')
-      } catch {
-        // Gone or mid-edit: Orca drops the pane now, and the read is retried with backoff.
-        if (!retryDelay) try { await post($, 'end') } catch {}
-        await retry($)
-        return {}
-      }
+      // Unreadable (gone or mid-edit) registers no binding; Orca reads the file itself on a click.
+      let keybindings = ''
+      try { keybindings = await $.fs.read(configDir + '/keybindings.json') } catch {}
       if (identity !== session || endedSessionId === sessionId) return {}
       let result
       try {
@@ -88,6 +82,7 @@ let announcedAt = 0
           ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
         }, session)
       } catch {}
+      if (result?.unbound) return result
       // A relay that could not forward answers {} with no registered.
       if (!result?.registered) {
         await retry($)

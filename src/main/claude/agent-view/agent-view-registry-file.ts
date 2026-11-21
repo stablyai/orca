@@ -20,7 +20,10 @@ export const ClaudeAgentViewIdentity = z.object({
 })
 
 const RegisteredView = ClaudeAgentViewIdentity.extend({
-  chord: z.string().refine((chord) => CLAUDE_AGENT_VIEW_SHORTCUTS.some((s) => s.chord === chord)),
+  chord: z
+    .string()
+    .refine((chord) => CLAUDE_AGENT_VIEW_SHORTCUTS.some((s) => s.chord === chord))
+    .optional(),
   seenAt: z.number(),
   configDir: z.string().min(1).max(4096).optional(),
   view: ClaudeAgentViewObservation.optional()
@@ -62,6 +65,7 @@ export class ClaudeAgentViewRegistryFile {
   private restoring = false
   private savedDuringRestore = false
   private closed = false
+  private restored: Promise<void> = Promise.resolve()
 
   constructor(
     readonly filePath: string,
@@ -70,8 +74,13 @@ export class ClaudeAgentViewRegistryFile {
 
   /** `merge` folds the saved entries into memory and says whether memory now differs from the file.
    *  Saves wait until then, so an early registration cannot overwrite entries not merged yet. */
-  async restore(merge: (saved: RegisteredClaudeAgentView[]) => boolean): Promise<void> {
+  restore(merge: (saved: RegisteredClaudeAgentView[]) => boolean): Promise<void> {
     this.restoring = true
+    this.restored = this.merge(merge)
+    return this.restored
+  }
+
+  private async merge(merge: (saved: RegisteredClaudeAgentView[]) => boolean): Promise<void> {
     const saved = await readRegistry(this.filePath)
     this.restoring = false
     if (this.closed) {
@@ -82,6 +91,26 @@ export class ClaudeAgentViewRegistryFile {
       void this.save()
     }
     this.savedDuringRestore = false
+  }
+
+  /** Whether memory is on disk, waiting up to `ms` for the restore and the writes in flight. */
+  async settled(ms = 2000): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), ms)
+    })
+    const done = (async () => {
+      await this.restored
+      while (this.writing) {
+        await this.writing
+      }
+      return !this.failed && !this.closed
+    })()
+    try {
+      return await Promise.race([done, timeout])
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   /** Stop: a write already queued still lands; nothing new is written. */

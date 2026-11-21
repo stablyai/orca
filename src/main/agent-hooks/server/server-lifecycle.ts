@@ -107,8 +107,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+          const { durable, ...reply } = this.claudeAgentViews.receive(body, { sameMachine: true })
+          // Durable only once saved: a quit before the save must not strand an idle Claude.
+          const saved = durable && (await this.claudeAgentViews.saved())
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(this.claudeAgentViews.receive(body, { sameMachine: true })))
+          res.end(JSON.stringify(saved ? { ...reply, durable } : reply))
           return
         }
         await this.initializeStatusHookOwner()
