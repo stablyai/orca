@@ -26,6 +26,8 @@ export type AgentCardScope = {
   settings: AgentLaunchSettings
   mutate: (mutation: AgentLaunchSettingsMutation) => Promise<void>
   local?: LocalAgentSettings
+  /** An agent copy's card, whose editors never wait on its agent's CLI detection. */
+  isCopy?: true
 }
 
 type AgentCardRows = (agent: AgentCatalogEntry, listedInstalled: boolean) => AgentCatalogRowProps
@@ -47,6 +49,7 @@ export function agentCopyCardRows(args: {
   ): AgentCatalogRowProps => {
     const view = applyAgentCopy(base.settings, copy)
     const row = card({
+      isCopy: true,
       settings: projectAgentLaunchSettings(view, platform),
       mutate: copies.mutate(copy.id),
       local: {
