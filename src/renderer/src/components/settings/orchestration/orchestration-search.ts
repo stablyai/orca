@@ -25,6 +25,7 @@ const NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID = 'nested-worker-depth'
 const WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID = 'worker-auto-release'
 const COORDINATOR_APPROVALS_SEARCH_ENTRY_ID = 'coordinator-approvals'
 const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
+  'worker-roles',
   NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
   WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID,
   COORDINATOR_APPROVALS_SEARCH_ENTRY_ID
@@ -95,6 +96,28 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.orchestration.search.f5d39af41e',
         'child agents'
       )
+    ]
+  },
+  {
+    id: 'worker-roles',
+    title: translate('settings.orchestration.roles.title', 'Worker roles'),
+    description: translate(
+      'settings.orchestration.roles.search',
+      'Configure research, implementation and review agents, models, reasoning effort and Fast.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.role', 'role'),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.profile', 'profile'),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.research', 'research'),
+      ...translateSearchKeyword(
+        'settings.orchestration.roles.keyword.implementation',
+        'implementation'
+      ),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.review', 'review'),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.model', 'model'),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.effort', 'effort'),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.fast', 'fast'),
+      ...translateSearchKeyword('settings.orchestration.roles.keyword.provider', 'provider')
     ]
   },
   {

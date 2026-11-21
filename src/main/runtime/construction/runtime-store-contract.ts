@@ -138,6 +138,7 @@ export type RuntimeStore = {
     codexSessionSourceHome?: GlobalSettings['codexSessionSourceHome']
     deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
+    orchestrationWorkerRoles?: GlobalSettings['orchestrationWorkerRoles']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
     orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
     workspaceDir: string

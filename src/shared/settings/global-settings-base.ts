@@ -1,3 +1,4 @@
+import type { WorkerRoleSettings } from '../orchestration-worker-roles'
 import type { AntigravityChatAuthSettings } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from '../emulator/emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from '../browser/extensions/browser-extension-settings'
@@ -53,6 +54,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
   BrowserLinkOpeningSettings &
+  WorkerRoleSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
   EditorTypographySettings &

@@ -19,6 +19,7 @@ import {
 } from './start/admission/worker-start-authority'
 import { parseTaskDeps } from './start/admission/task-deps-argument'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
+import { resolveWorkerRoleParams } from '../../../../../../shared/orchestration-worker-roles'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -135,6 +136,20 @@ export async function prepareWorkerStart(
   }: Omit<WorkerStartContext, 'orchestrationMutation'>,
   followUp?: WorkerFollowUp
 ) {
+  if (params.role) {
+    try {
+      params = resolveWorkerRoleParams(
+        params,
+        runtime.requireStore().getSettings().orchestrationWorkerRoles
+      )
+    } catch (error) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        error instanceof Error ? error.message : 'Invalid worker role profile.',
+        { effectsApplied: false }
+      )
+    }
+  }
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
