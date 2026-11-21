@@ -1,12 +1,15 @@
+import { useEffect, useMemo } from 'react'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
+import { forgetBotAvatarFailure } from '../bot-avatar-image'
 
 const FACE_CLASS = 'size-4 rounded-full text-[9px]'
 
 /** The row's bot in a group's merged list, beside its status glyph: item numbers repeat across bots.
- *  `windowed`: the row mounts as its list scrolls, so while the bot's host is offline its picture isn't
- *  read (each row scrolled in would read it again); it's read when the host is back. */
+ *  `windowed`: the row mounts as its list scrolls, so a failed picture read isn't retried by each row
+ *  scrolled in: it's read again once the host is back (or another face reads it), and not while the
+ *  host is offline. */
 export function BotItemRowFace({
   bot,
   windowed = false
@@ -23,5 +26,12 @@ export function BotItemRowFace({
 
 function WindowedFace({ bot }: { bot: Bot }): React.JSX.Element {
   const offline = useBotHostOffline(bot.hostId)
-  return <BotAvatar bot={bot} className={FACE_CLASS} paused={offline} />
+  const { hostId, id } = bot
+  useEffect(() => {
+    if (offline) {
+      forgetBotAvatarFailure({ hostId, id })
+    }
+  }, [offline, hostId, id])
+  const read = useMemo(() => ({ paused: offline, keepFailure: true }), [offline])
+  return <BotAvatar bot={bot} className={FACE_CLASS} read={read} />
 }

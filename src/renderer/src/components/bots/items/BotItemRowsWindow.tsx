@@ -20,7 +20,8 @@ const DEFAULT_ROW_SIZES: RowSizes = { row: 30, placed: 46 }
 const OVERSCAN_PX = 300
 /** Rows drawn while the panel's scroller isn't known yet. */
 const FIRST_ROWS = 40
-/** A group this short draws every row and keeps each in the Tab order, as a plain list would. */
+/** A group this short (and never longer while shown) draws every row and keeps each in the Tab order,
+ *  as a plain list would. */
 const ALL_ROWS = 50
 
 type Geometry = {
@@ -161,7 +162,13 @@ export function BotItemRowsWindow({
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
   const count = items.length
-  const all = count <= ALL_ROWS
+  // Once long, a group keeps windowing while it's shown, so updates around 50 rows don't mount and
+  // unmount the rows out of view each time.
+  const [windowed, setWindowed] = useState(count > ALL_ROWS)
+  if (count > ALL_ROWS && !windowed) {
+    setWindowed(true)
+  }
+  const all = !windowed
   // Heights follow from which rows have a chat line: in one bot's list none do, so positions are a count.
   // Keyed by those heights alone, so content changes leave the positions as they were.
   const tallKey = useMemo(

@@ -1,6 +1,6 @@
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../shared/bot-types'
-import { useBotAvatarSrc } from './bot-avatar-image'
+import { useBotAvatarSrc, type BotAvatarRead } from './bot-avatar-image'
 import type { BotOnHost } from '@/lib/bot-hosts'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
@@ -11,17 +11,17 @@ export function BotAvatar({
   bot,
   className,
   style,
-  paused
+  read
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
-  /** Don't read the picture now (its host is offline); it's read when this turns false. */
-  paused?: boolean
+  /** How it reads its picture; see BotAvatarRead. */
+  read?: BotAvatarRead
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot, paused)}
+      src={useBotAvatarSrc(bot, read)}
       fallback={botFallback(bot)}
       className={className}
       style={style}
