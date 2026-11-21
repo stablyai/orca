@@ -17,11 +17,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
 import { botShareCheckSummary } from './bot-share-flags'
+import { allMemory, pickedOf } from '../../../../../shared/bots/bot-share-pick-lists'
+import { unpackableSkills } from '../../../../../shared/bots/bot-share-skill-picks'
 import {
-  allMemory,
-  pickedOf,
   pickedSkills,
-  unpackableSkills,
   type BotShareContext,
   type BotShareList,
   type BotSharePage

@@ -2472,7 +2472,8 @@
             "new": {
               "tab": {
                 "11cce5cc77": "Could not launch {{value0}} in a new terminal.",
-                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready."
+                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready.",
+                "agentExited": "The agent exited before your prompt was sent."
               }
             }
           },

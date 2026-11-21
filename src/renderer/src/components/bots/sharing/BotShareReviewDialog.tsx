@@ -18,19 +18,10 @@ import { BOT_MASCOT_URLS } from '../bot-mascots'
 import { BotAvatarTile } from '../BotAvatar'
 import { useBotMascotLayers } from '../bot-mascot-look'
 import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
-import {
-  botShareCheckSummary,
-  botShareFlagLabel,
-  botShareFlagPage,
-  type BotShareFlagSpot
-} from './bot-share-flags'
-import {
-  reviewByline,
-  reviewFlagPage,
-  reviewFlagSpots,
-  reviewPartFiles,
-  type BotShareReviewPage
-} from './bot-share-review-parts'
+import { botShareCheckSummary, botShareFlagLabel, botShareFlagPage } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
+import { reviewFlagSpots, reviewPartFiles } from '../../../../../shared/bots/bot-share-review-files'
+import { reviewByline, reviewFlagPage, type BotShareReviewPage } from './bot-share-review-parts'
 import { BotShareFileList } from './BotSharePartView'
 import { BotShareBack } from './BotShareRows'
 import {
