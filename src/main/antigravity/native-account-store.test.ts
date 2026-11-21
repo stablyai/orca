@@ -18,6 +18,7 @@ import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
 } from '../../shared/secure-storage/windows-security-addon'
+import { createOrcadSecretStore } from '../orcad/credentials/orcad-secret-store'
 
 let dir: string
 beforeEach(() => {
@@ -242,6 +243,38 @@ describe('protected Antigravity account snapshots', () => {
       expect(readFileSync(path).equals(before)).toBe(true)
     }
   )
+
+  it('persists and reads snapshots with a prepared headless orcad host-key secret store', async () => {
+    const h = harness()
+    await h.service.addCurrentAccount()
+    const vault = h.getVault()
+    const orcadStore = createOrcadSecretStore(() => {})
+    const ready = await orcadStore.prepare({
+      keyDir: join(dir, 'orcad-keys'),
+      platform: 'linux',
+      env: {},
+      legacyKeyring: null,
+      machineIdentity: () => '0123456789abcdef0123456789abcdef',
+      isTemporaryKeyDir: () => false
+    })
+    expect(ready).toBe(true)
+    setSecretStore(orcadStore)
+
+    const path = join(dir, 'headless-vault')
+    const store = createEncryptedAntigravityAccountStore(path)
+    await store.write(vault)
+    expect(readFileSync(path, 'utf8')).not.toContain('synthetic-1')
+    expect(await store.read()).toEqual(vault)
+
+    const saved = readFileSync(path)
+    // An unprepared orcad store still reports isEncryptionAvailable() === true but sealing kind 'none'.
+    setSecretStore(createOrcadSecretStore(() => {}))
+    await expect(store.write({ accounts: [], selectedAccountId: null })).rejects.toThrow(
+      'Protected secret storage'
+    )
+    await expect(store.read()).rejects.toThrow('Protected secret storage')
+    expect(readFileSync(path).equals(saved)).toBe(true)
+  })
 
   it('keeps the selected account launchable across refreshes and a verified grant rotation', async () => {
     const h = harness()

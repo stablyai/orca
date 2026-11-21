@@ -63,7 +63,12 @@ function isStoredUsage(value: unknown): value is StoredAntigravityUsage {
 
 function requireProtection(): void {
   const secrets = getSecretStore()
-  if (!secrets.isEncryptionAvailable() || secrets.describeProtectionGap() !== null) {
+  const sealing = secrets.describeSealing?.()
+  // Accept os-keychain and headless orcad's host-key seal; refuse unsealed or basic_text stores.
+  const sealed =
+    secrets.isEncryptionAvailable() &&
+    (sealing !== undefined ? sealing.kind !== 'none' : secrets.describeProtectionGap() === null)
+  if (!sealed) {
     throw new Error(
       'Protected secret storage is unavailable; Antigravity accounts were not changed.'
     )
