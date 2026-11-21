@@ -1,18 +1,21 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
 import { useEffect, useState } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
-import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botMascotSrc } from './bot-mascot-color'
 
+type Upload = { version: string; src: Promise<string | null>; read?: string | null }
+
 // Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
 // `read`: the finished read, so a face drawn again (a row scrolled back into view) shows it at once.
-const uploads = new Map<
-  string,
-  { version: string; src: Promise<string | null>; read?: string | null }
->()
+const uploads = new Map<string, Upload>()
+
+// Each bot's last failed read (by botRefKey), which row faces mounting as a list scrolls don't send again
+// for RETRY_MS. One per bot, dropped as a read succeeds.
+const failures = new Map<string, { version: string; at: number }>()
+const RETRY_MS = 10_000
 
 function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
   const key = botRefKey(bot)
@@ -20,23 +23,25 @@ function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
   if (cached?.version === version) {
     return cached.src
   }
-  const entry: { version: string; src: Promise<string | null>; read?: string | null } = {
+  const upload: Upload = {
     version,
     src: readBotAvatarPng(bot).then(
       (png) => {
-        entry.read = png ? `data:image/png;base64,${png}` : null
-        return entry.read
+        failures.delete(key)
+        upload.read = png ? `data:image/png;base64,${png}` : null
+        return upload.read
       },
       () => {
-        if (uploads.get(key) === entry) {
+        failures.set(key, { version, at: Date.now() })
+        if (uploads.get(key) === upload) {
           uploads.delete(key)
         }
         return null
       }
     )
   }
-  uploads.set(key, entry)
-  return entry.src
+  uploads.set(key, upload)
+  return upload.src
 }
 
 function readUpload(bot: BotRef, version: string | null): string | null | undefined {
@@ -44,11 +49,16 @@ function readUpload(bot: BotRef, version: string | null): string | null | undefi
   return cached?.version === version ? cached.read : undefined
 }
 
-/** The picture's URL; null shows the emoji or initial. `skipOffline`: no read while the bot's host is
- *  known offline (rows that mount as a list scrolls would each read again). */
+function failedLately(bot: BotRef, version: string): boolean {
+  const failure = failures.get(botRefKey(bot))
+  return failure?.version === version && Date.now() - failure.at < RETRY_MS
+}
+
+/** The picture's URL; null shows the emoji or initial. `backoff`: a version whose read just failed isn't
+ *  read again for a while (rows that mount as a list scrolls would each read it). */
 export function useBotAvatarSrc(
   bot: Pick<Bot, 'id' | 'avatar' | 'avatarColor'> & BotOnHost,
-  skipOffline = false
+  backoff = false
 ): string | null {
   const parsed = parseBotAvatar(bot.avatar)
   const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
@@ -58,23 +68,34 @@ export function useBotAvatarSrc(
     const read = readUpload({ hostId, id }, uploadKey)
     return uploadKey && read !== undefined ? { key: uploadKey, src: read } : null
   })
-  const done = uploadKey !== null && upload?.key === uploadKey
   useEffect(() => {
-    if (!uploadKey || done || (skipOffline && readBotHostState(hostId) === 'offline')) {
+    if (!uploadKey) {
+      return
+    }
+    const show = (src: string | null): void =>
+      setUpload((prev) =>
+        prev?.key === uploadKey && prev.src === src ? prev : { key: uploadKey, src }
+      )
+    const read = readUpload({ hostId, id }, uploadKey)
+    if (read !== undefined) {
+      show(read)
+      return
+    }
+    if (backoff && failedLately({ hostId, id }, uploadKey)) {
       return
     }
     let live = true
     void uploadSrc({ hostId, id }, uploadKey).then((src) => {
       if (live) {
-        setUpload({ key: uploadKey, src })
+        show(src)
       }
     })
     return () => {
       live = false
     }
-  }, [hostId, id, uploadKey, done, skipOffline])
+  }, [hostId, id, uploadKey, backoff])
   if (mascotSrc) {
     return mascotSrc
   }
-  return done && upload ? upload.src : null
+  return uploadKey && upload?.key === uploadKey ? upload.src : null
 }

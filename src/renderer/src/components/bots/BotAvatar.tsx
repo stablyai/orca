@@ -11,17 +11,17 @@ export function BotAvatar({
   bot,
   className,
   style,
-  skipOffline = false
+  backoff = false
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
   /** See useBotAvatarSrc. */
-  skipOffline?: boolean
+  backoff?: boolean
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot, skipOffline)}
+      src={useBotAvatarSrc(bot, backoff)}
       fallback={botFallback(bot)}
       className={className}
       style={style}

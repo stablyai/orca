@@ -18,8 +18,8 @@ export type BotItemsViewport = {
   read: () => BotItemsViewportBox | null
   /** The first listener starts listening to the scroller; the last one leaving stops. */
   subscribe: (listener: () => void) => () => void
-  /** Notifies every listener now: the list's groups changed shape, which can move a group into view
-   *  without the list changing height. */
+  /** Notifies every listener now, once per commit: the list's groups changed shape, which can move a
+   *  group into view without the list changing height. */
   flush: () => void
   /** The scroller to read and the list whose height moves the groups; null to let them go. Changing
    *  them leaves the viewport the same object, so nothing reading it renders again for it. */
@@ -116,6 +116,7 @@ function createViewport(): BotItemsViewport {
   // This frame's box, shared by every group a notice reaches.
   let frameBox: BotItemsViewportBox | null = null
   let stop: (() => void) | null = null
+  let flushed = false
   const onFrame = (): void => {
     if (scroller) {
       frameBox = readBox(scroller)
@@ -142,9 +143,15 @@ function createViewport(): BotItemsViewport {
       }
     },
     flush: () => {
-      if (listeners.size > 0 && !botItemsDocumentHidden()) {
-        onFrame()
+      // Every group changing in one commit flushes; the first measures them all, after every change is in.
+      if (flushed || listeners.size === 0 || botItemsDocumentHidden()) {
+        return
       }
+      flushed = true
+      queueMicrotask(() => {
+        flushed = false
+      })
+      onFrame()
     },
     attach: (nextScroller, nextList) => {
       if (nextScroller !== scroller || nextList !== list) {

@@ -5,7 +5,7 @@ import { BotAvatar } from '../BotAvatar'
 export function BotItemRowFace({ bot }: { bot: Bot }): React.JSX.Element {
   return (
     <span className="flex h-5 shrink-0 items-center" title={bot.name}>
-      <BotAvatar bot={bot} className="size-4 rounded-full text-[9px]" skipOffline />
+      <BotAvatar bot={bot} className="size-4 rounded-full text-[9px]" backoff />
     </span>
   )
 }
