@@ -294,6 +294,10 @@ it('keeps `@` open past spaces while the words still name a bot, so a later one 
     'runtime:air:off',
     '[Bot: Official](bot:off@air)'
   )
+  // Without a recentKey the pick is remembered by name, the key the ranking reads.
+  expect(JSON.parse(localStorage.getItem('orca.nativeChat.recentMentions') ?? '[]')[0]).toBe(
+    'Eng - Reviewer - Official'
+  )
 
   // A finished name followed by more words, an `@` inside a word, and a bare punctuation query
   // are text, so the real detector closes the list for each.

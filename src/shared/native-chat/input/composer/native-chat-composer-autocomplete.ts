@@ -241,6 +241,8 @@ export function matchMentionTrigger(
     start === -1 ||
     query.length > MAX_SPACED_MENTION ||
     (start > 0 && !/\s/.test(before[start - 1])) ||
+    // A new `/` or `$` token starts a command or skill, not more of the bot's name.
+    /\s[/$]\S*$/.test(query) ||
     !/^[^\s][^\n]*$/.test(query) ||
     !nameMatches(query)
   ) {

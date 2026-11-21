@@ -184,7 +184,8 @@ export function useNativeChatComposerMentions(
       const token = ownRoom ? undefined : botChatRoom?.token?.(value)
       const member = memberOf(room, value)
       if (member) {
-        recordNativeChatRecentMention(member.recentKey ?? value)
+        // Keyed the way the ranking reads it, so a member with a key but no recentKey still leads.
+        recordNativeChatRecentMention(member.recentKey ?? member.name)
       }
       // Back from a bot's chats, the pick replaces the `@` and the filter typed after it.
       const picked = member ? (token ?? `@${member.name}`) : undefined

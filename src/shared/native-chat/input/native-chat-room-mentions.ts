@@ -31,6 +31,13 @@ type RankableMember = {
 
 type Word = LocaleLowercaseIndex & { start: number }
 
+/** Lowercase for matching. Final and medial sigma compare equal, so `@ΟΣ` (folded to `ος`) still
+ *  starts `ΟΣΚΑΡ` (`οσκαρ`); both are one UTF-16 unit, so hit offsets are unchanged. */
+function fold(text: string): LocaleLowercaseIndex {
+  const index = buildContextualLocaleLowercaseIndex(text)
+  return index.text.includes('ς') ? { ...index, text: index.text.replaceAll('ς', 'σ') } : index
+}
+
 /** Space, `-`, `_`, `.`, `/` and any other punctuation split words. */
 const WORD = /[\p{L}\p{N}\p{M}]+/gu
 // Scripts written without spaces can't be split into words, so they fall back to substring matching.
@@ -41,7 +48,7 @@ const MAX_JOINED = 64
 
 function wordsOf(text: string): Word[] {
   return Array.from(text.matchAll(WORD), (match) => ({
-    ...buildContextualLocaleLowercaseIndex(match[0]),
+    ...fold(match[0]),
     start: match.index
   }))
 }
@@ -61,7 +68,7 @@ function matchUnspaced(text: string, raw: string): NativeChatMentionHit | null {
   if (!UNSPACED_SCRIPT.test(raw)) {
     return null
   }
-  const normalized = buildContextualLocaleLowercaseIndex(text)
+  const normalized = fold(text)
   const index = normalized.text.indexOf(raw)
   return index === -1 ? null : originalHit(normalized, index, raw.length)
 }
@@ -172,11 +179,10 @@ function matchName(
 function matchDetail(
   detail: string,
   query: readonly string[],
-  compact: string,
+  whole: boolean,
   raw: string
 ): NativeChatMentionHit[] | null {
   const words = wordsOf(detail)
-  const whole = compact.length < 3
   const fits = (part: string, word: Word): boolean =>
     whole ? word.text === part : word.text.startsWith(part)
   // Bipartite matching (augmenting paths), so `rev reviewing` finds "reviewing review" whatever the order.
@@ -211,11 +217,11 @@ export function nativeChatRoomNameMatches(
 ): boolean {
   const words = wordsOf(query).map((word) => word.text)
   const compact = words.join('')
-  const raw = buildContextualLocaleLowercaseIndex(query.trim()).text
+  const raw = fold(query.trim()).text
   // A finished name plus a space is message text; an unfinished one (`@eng `) still needs the list.
   if (
     /\s$/.test(query) &&
-    members.some((member) => !member.unavailable && member.name.toLocaleLowerCase() === raw)
+    members.some((member) => !member.unavailable && fold(member.name).text === raw)
   ) {
     return false
   }
@@ -247,15 +253,21 @@ export function rankNativeChatRoomMembers(
   const keys = new Map(members.map((member) => [member.name, sortKey(member.name)]))
   const byName = (a: NativeChatRoomMemberMatch, b: NativeChatRoomMemberMatch): number =>
     (keys.get(a.name) ?? '').localeCompare(keys.get(b.name) ?? '')
+  const words = wordsOf(query).map((word) => word.text)
+  const compact = words.join('')
+  const raw = fold(query.trim()).text
+  // The name exactly as typed, punctuation included, leads names equal only once it is ignored.
+  const literal = (match: NativeChatRoomMemberMatch): boolean =>
+    match.tier === 1 && fold(match.name).text === raw
   const order = (a: NativeChatRoomMemberMatch, b: NativeChatRoomMemberMatch): number =>
     Number(a.unavailable) - Number(b.unavailable) ||
     a.tier - b.tier ||
+    Number(literal(b)) - Number(literal(a)) ||
     recency(a.value) - recency(b.value) ||
     byName(a, b)
-
-  const words = wordsOf(query).map((word) => word.text)
-  const compact = words.join('')
-  const raw = buildContextualLocaleLowercaseIndex(query.trim()).text
+  // Counted as typed: case folding can lengthen a letter (`İ`), which must not lift `@İn` past
+  // the whole-word rule for 1–2 letter purpose queries.
+  const wholeDetailWords = (query.match(WORD) ?? []).join('').length < 3
   const entry = (
     member: RankableMember,
     tier: NativeChatMentionTier,
@@ -305,7 +317,7 @@ export function rankNativeChatRoomMembers(
   for (const member of members) {
     const hits =
       member.detail && !named.some((match) => match.value === (member.key ?? member.name))
-        ? matchDetail(member.detail, words, compact, raw)
+        ? matchDetail(member.detail, words, wholeDetailWords, raw)
         : null
     if (hits) {
       described.push(entry(member, 4, [], hits))

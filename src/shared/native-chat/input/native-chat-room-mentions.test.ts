@@ -194,6 +194,15 @@ describe('rankNativeChatRoomMembers', () => {
     expect(bufo.detailHits).toEqual([{ start: 52, length: 2 }])
   })
 
+  it('puts the name exactly as typed ahead of one equal only without its punctuation', () => {
+    const { matches } = rankNativeChatRoomMembers(
+      [{ name: 'Eng Reviewer' }, { name: 'Eng - Reviewer' }],
+      'eng - reviewer',
+      ['Eng Reviewer']
+    )
+    expect(matches.map((match) => match.name)).toEqual(['Eng - Reviewer', 'Eng Reviewer'])
+  })
+
   it('finds an apostrophized name from its unpunctuated spelling', () => {
     expect(rankNativeChatRoomMembers([{ name: 'O’Dell' }], 'odell').matches[0]?.nameHits).toEqual([
       { start: 0, length: 1 },
@@ -202,6 +211,10 @@ describe('rankNativeChatRoomMembers', () => {
   })
 
   it('preserves contextual Greek lowercase matching and spaced query capture', () => {
+    // A typed final sigma still starts a name word with a medial one.
+    expect(rankNativeChatRoomMembers([{ name: 'ΟΣΚΑΡ' }], 'ΟΣ').matches[0]?.nameHits).toEqual([
+      { start: 0, length: 2 }
+    ])
     expect(rankNativeChatRoomMembers([{ name: 'ΝΙΚΟΣ' }], 'νικος').matches[0]?.nameHits).toEqual([
       { start: 0, length: 5 }
     ])
@@ -220,7 +233,7 @@ describe('rankNativeChatRoomMembers', () => {
       rankNativeChatRoomMembers([{ name: 'ΟΣ审查员' }], 'ος审查').matches[0]?.nameHits
     ).toEqual([{ start: 0, length: 4 }])
     expect(
-      rankNativeChatRoomMembers([{ name: 'İΟΣ审查员' }], 'i̇ος审查').matches[0]?.nameHits
+      rankNativeChatRoomMembers([{ name: 'İΟΣ审查员' }], 'İος审查').matches[0]?.nameHits
     ).toEqual([{ start: 0, length: 5 }])
     expect(
       deriveComposerAutocomplete(
@@ -259,8 +272,13 @@ describe('rankNativeChatRoomMembers', () => {
       { start: 0, length: 2 },
       { start: 5, length: 1 }
     ])
+    // Two typed letters: a purpose word must equal them, however long `İ` folds.
+    expect(rankNativeChatRoomMembers([{ name: 'Critic', detail: 'İnci' }], 'İn').matches).toEqual(
+      []
+    )
     expect(
-      rankNativeChatRoomMembers([{ name: 'Critic', detail: 'İnci' }], 'İn').matches[0]?.detailHits
+      rankNativeChatRoomMembers([{ name: 'Critic', detail: 'İn charge' }], 'İn').matches[0]
+        ?.detailHits
     ).toEqual([{ start: 0, length: 2 }])
     expect(
       rankNativeChatRoomMembers([{ name: 'Critic', detail: 'CODE review' }], 'rev').matches[0]
