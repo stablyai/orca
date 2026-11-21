@@ -21,7 +21,7 @@ const WORD_FADE_MS = 300
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly (one long document) leaves most of the thread to typing and scrolling. */
-const REVEAL_BUSY_SHARE = 1 / 16
+const REVEAL_BUSY_SHARE = 1 / 12
 
 export type NativeChatPacedText = {
   text: string
