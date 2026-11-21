@@ -58,14 +58,19 @@ export function dashboardCardChangesSince(
 }
 
 export function dashboardCardIndex(cards: DashboardCard[], paneKey: string): number {
-  const { owner } = revision(cards)
+  const current = revisions.get(cards)
+  if (!current) {
+    return cards.findIndex((card) => card.paneKey === paneKey)
+  }
+  const { owner } = current
   if (!owner.indexes) {
-    owner.indexes = new Map()
+    const indexes = new Map<string, number>()
     cards.forEach((card, index) => {
-      if (!owner.indexes!.has(card.paneKey)) {
-        owner.indexes!.set(card.paneKey, index)
+      if (!indexes.has(card.paneKey)) {
+        indexes.set(card.paneKey, index)
       }
     })
+    owner.indexes = indexes
   }
   return owner.indexes.get(paneKey) ?? -1
 }

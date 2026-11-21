@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   EMPTY_DASHBOARD_SNAPSHOT,
+  type DashboardCard,
   type DashboardSnapshot
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
@@ -11,6 +12,25 @@ import { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadline
 
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 250
 const TOPOLOGY_REFRESH_MAX_WAIT_MS = 1_000
+
+function cardDeadline({ statusUpdatedAt, dotState }: DashboardCard): number | undefined {
+  if (
+    statusUpdatedAt !== undefined &&
+    (dotState === 'working' || dotState === 'blocked' || dotState === 'waiting')
+  ) {
+    return statusUpdatedAt + AGENT_STATUS_STALE_AFTER_MS
+  }
+  return undefined
+}
+
+function* cardDeadlines(cards: DashboardCard[]): Iterable<[string, number]> {
+  for (const [index, card] of cards.entries()) {
+    const at = cardDeadline(card)
+    if (at !== undefined) {
+      yield [String(index), at]
+    }
+  }
+}
 
 /** Animate column membership changes only, not content updates. */
 function columnSignature(snapshot: DashboardSnapshot): string {
@@ -45,7 +65,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
     let topologyRefreshTimer: ReturnType<typeof setTimeout> | null = null
     let topologyRefreshStartedAt: number | null = null
     let staleRefreshTimer: ReturnType<typeof setTimeout> | null = null
-    const deadlines = new KeyedDeadlines()
+    let deadlines = new KeyedDeadlines()
     const transientClearWatermarks = new Map<string, number>()
 
     const requestTopologyRefresh = (): void => {
@@ -75,23 +95,12 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         clearTimeout(staleRefreshTimer)
         staleRefreshTimer = null
       }
-      const update = (index: number): void => {
-        const card = next.cards[index]
-        const active =
-          card.statusUpdatedAt !== undefined &&
-          (card.dotState === 'working' ||
-            card.dotState === 'blocked' ||
-            card.dotState === 'waiting')
-        deadlines.set(
-          String(index),
-          active ? card.statusUpdatedAt! + AGENT_STATUS_STALE_AFTER_MS : undefined
-        )
-      }
       if (changes) {
-        changes.forEach(update)
+        for (const index of changes) {
+          deadlines.set(String(index), cardDeadline(next.cards[index]))
+        }
       } else {
-        deadlines.clear()
-        next.cards.forEach((_, index) => update(index))
+        deadlines = KeyedDeadlines.fromUniqueEntries(cardDeadlines(next.cards))
       }
       const nextDeadline = deadlines.next
       if (Number.isFinite(nextDeadline)) {

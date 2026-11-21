@@ -22,7 +22,7 @@ export function createDashboardBoardProjection() {
     | undefined
   let visibleCards: DashboardCard[] = []
   let lanes: Record<DashboardBucket, DashboardLane>
-  let timestampCount = 0
+  let timestampIndex = -1
   return (cards: DashboardCard[], showIdle: boolean, search: string, filters: DashboardFilters) => {
     const query = search.trim().toLowerCase()
     const before = previous
@@ -30,13 +30,16 @@ export function createDashboardBoardProjection() {
     const visible = (card: DashboardCard) => showIdle || card.bucket !== 'idle'
     const matches = (card: DashboardCard) =>
       visible(card) && matchesDashboardCard(card, query, filters)
-    if (!before || !changed) {
-      timestampCount = cards.reduce((count, card) => count + Number(hasTimestamp(card)), 0)
-    } else {
-      for (const index of changed) {
-        timestampCount +=
-          Number(hasTimestamp(cards[index])) - Number(hasTimestamp(before.cards[index]))
-      }
+    // Keep a known timestamp across local changes until its own card loses it.
+    if (
+      !changed ||
+      (timestampIndex !== -1 &&
+        changed.includes(timestampIndex) &&
+        !hasTimestamp(cards[timestampIndex]))
+    ) {
+      timestampIndex = cards.findIndex(hasTimestamp)
+    } else if (timestampIndex === -1) {
+      timestampIndex = changed.find((index) => hasTimestamp(cards[index])) ?? -1
     }
     if (
       !before ||
@@ -114,6 +117,6 @@ export function createDashboardBoardProjection() {
       }
     }
     previous = { cards, showIdle, query, filters }
-    return { lanes: lanes!, visibleCards, hasRelativeTimestamps: timestampCount > 0 }
+    return { lanes: lanes!, visibleCards, hasRelativeTimestamps: timestampIndex !== -1 }
   }
 }
