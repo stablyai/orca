@@ -62,7 +62,9 @@ export function validateComputerTarget(
 
 export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
   // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
-  rootElementIndex: OptionalNonNegativeInt
+  rootElementIndex: OptionalNonNegativeInt,
+  // macOS shows only the on-screen part of long text values unless this is set; other providers ignore it.
+  fullValues: OptionalBoolean
 }).superRefine(validateComputerTarget)
 
 export const ListApps = z.object({}).strict()

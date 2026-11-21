@@ -1603,6 +1603,8 @@ const ORCA_COMPUTER_USE_MARKDOWN = [
   "ORCA computer get-app-state --app com.apple.Safari --element-index 312 --json",
   "```",
   "",
+  "On macOS, a long text value (a document, a log) shows only what the window shows, after `[truncated to visible range: chars a-b of N]`, and a long list or table shows its on-screen rows followed by a `... N more rows offscreen` line. Scroll to bring other parts on screen, or read the element with `get-app-state --element-index <n>`, which shows its full value. `wait --text` always matches full values.",
+  "",
   "## Waiting",
   "",
   "Never `sleep` between actions. When the UI changes on its own after an action (a save finishes, a dialog opens, a button becomes clickable), wait for the change with `wait`. It returns as soon as the condition holds and prints the matching elements or windows; it fails with `wait_timeout` if the condition does not hold in time (default 10 s, `--timeout <ms>` up to 120000).",

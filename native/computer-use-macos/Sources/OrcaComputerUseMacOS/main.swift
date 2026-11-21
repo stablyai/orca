@@ -528,6 +528,7 @@ final class Provider {
             windowId: subtree.map(\.base.windowId) ?? windowId,
             windowIndex: subtree == nil ? windowIndex : nil,
             subtree: subtree,
+            fullValues: params["fullValues"]?.bool == true,
             previousSnapshot: { [snapshots] resolvedWindowId in
                 // Why: indexes carry over from this caller's own last view of exactly this window.
                 snapshots[namespacedSnapshotKey(namespace, snapshotCanonicalWindowIdKey(resolvedWindowId))]
@@ -973,6 +974,7 @@ final class Provider {
         windowId: CGWindowID?,
         windowIndex: Int?,
         subtree: (root: ElementRecord, base: Snapshot)?,
+        fullValues: Bool = false,
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
@@ -1031,7 +1033,8 @@ final class Provider {
         let renderer = TreeRenderer(
             windowBounds: capture.bounds,
             focused: focusedElement(appElement: appElement),
-            compactBrowserTabs: app.isKnownBrowser
+            compactBrowserTabs: app.isKnownBrowser,
+            fullValues: fullValues || subtree != nil
         )
         if let subtree {
             guard let ancestors = ancestorChain(of: subtree.root.element, in: window) else {
@@ -2741,6 +2744,7 @@ private final class TreeRenderer {
     let windowBounds: CGRect
     let focused: AXUIElement?
     let compactBrowserTabs: Bool
+    let fullValues: Bool
     var lines: [String] = []
     var records: [Int: ElementRecord] = [:]
     var focusedSummary: String?
@@ -2754,10 +2758,11 @@ private final class TreeRenderer {
 
     var appStoppedResponding: Bool { reader.appStoppedResponding }
 
-    init(windowBounds: CGRect, focused: AXUIElement?, compactBrowserTabs: Bool) {
+    init(windowBounds: CGRect, focused: AXUIElement?, compactBrowserTabs: Bool, fullValues: Bool) {
         self.windowBounds = windowBounds
         self.focused = focused
         self.compactBrowserTabs = compactBrowserTabs
+        self.fullValues = fullValues
     }
 
     func render(_ element: AXUIElement, depth: Int = 0, ancestors: [AXUIElement] = []) {
@@ -2765,8 +2770,12 @@ private final class TreeRenderer {
         guard !ancestors.contains(where: { CFEqual($0, element) }) else { return }
 
         let role = reader.stringAttribute(element, kAXRoleAttribute as String) ?? "AXUnknown"
-        let children = reader.primaryChildren(element, role: role, windowBounds: windowBounds)
-        let value = reader.valueString(element, role: role)
+        let (children, omittedRowsNote) = reader.primaryChildren(element, role: role, windowBounds: windowBounds)
+        var value = reader.valueString(element, role: role)
+        // Why: a long document or log would fill the snapshot; the agent sees what the window shows, and --element-index reads it all.
+        if !fullValues, let fullValue = value, VisibleRangeTruncation.isLong(fullValue), let visible = reader.visibleValue(element) {
+            value = visible
+        }
         let placeholder = reader.placeholderString(element)
         let rawActions = reader.actions(element)
         let rowSummary = reader.rowTextSummary(element, role: role)
@@ -2848,6 +2857,9 @@ private final class TreeRenderer {
         renderChildren(children, depth: depth + 1, ancestors: ancestors + [element])
         if compactBrowserTabs {
             compactRenderedBrowserTabs(parent: node, startLine: childLineStart, depth: depth + 1)
+        }
+        if let omittedRowsNote {
+            lines.append(String(repeating: "\t", count: depth + 1) + omittedRowsNote)
         }
     }
 
@@ -3025,11 +3037,36 @@ private final class AXSnapshotReader {
         )
     }
 
-    func primaryChildren(_ element: AXUIElement, role: String, windowBounds: CGRect) -> [AXUIElement] {
+    /// A list's rows are the ones it shows, with the line that stands in for the rest.
+    func primaryChildren(_ element: AXUIElement, role: String, windowBounds: CGRect) -> (children: [AXUIElement], omittedNote: String?) {
         if usesRowsAsPrimaryChildren(role: role), let rows = copyArray(element, kAXRowsAttribute as String), !rows.isEmpty {
-            return visibleRows(rows, parent: element, windowBounds: windowBounds)
+            let parentFrame = frame(element, windowBounds: windowBounds)
+            let shown = VisibleRangeTruncation.shownRows(
+                rows,
+                appVisibleRows: copyArray(element, kAXVisibleRowsAttribute as String),
+                isOnScreen: parentFrame.map { parentFrame in
+                    { row in self.frame(row, windowBounds: windowBounds)?.intersects(parentFrame) == true }
+                },
+                limit: 20
+            )
+            let note = VisibleRangeTruncation.omittedRowsNote(totalRows: rows.count, visibleRows: shown.visibleCount, shownRows: shown.rows.count)
+            return (shown.rows, note)
         }
-        return copyArray(element, kAXChildrenAttribute as String) ?? []
+        return (copyArray(element, kAXChildrenAttribute as String) ?? [], nil)
+    }
+
+    /// The on-screen part of a long text value, or nil when the element does not say which part that is.
+    func visibleValue(_ element: AXUIElement) -> String? {
+        // Why: AXVisibleCharacterRange counts from the untrimmed value; the cached copy costs no extra read.
+        guard let raw = copyAttribute(element, kAXValueAttribute as String) as? String,
+              let rangeValue = copyAttribute(element, kAXVisibleCharacterRangeAttribute as String),
+              CFGetTypeID(rangeValue) == AXValueGetTypeID()
+        else {
+            return nil
+        }
+        var range = CFRange()
+        guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &range) else { return nil }
+        return VisibleRangeTruncation.visibleValue(raw, visibleRange: range)
     }
 
     func valueString(_ element: AXUIElement, role: String) -> String? {
@@ -3184,17 +3221,6 @@ private final class AXSnapshotReader {
         return CGRect(origin: point, size: size)
     }
 
-    private func visibleRows(_ rows: [AXUIElement], parent: AXUIElement, windowBounds: CGRect) -> [AXUIElement] {
-        guard let parentFrame = frame(parent, windowBounds: windowBounds) else {
-            return Array(rows.prefix(20))
-        }
-        let visible = rows.filter { row in
-            guard let rowFrame = frame(row, windowBounds: windowBounds) else { return false }
-            return rowFrame.intersects(parentFrame)
-        }
-        return Array((visible.isEmpty ? rows : visible).prefix(20))
-    }
-
     func isSecureTextElement(_ element: AXUIElement) -> Bool {
         isSecureTextElement(element, role: stringAttribute(element, kAXRoleAttribute as String) ?? "")
     }
@@ -3232,6 +3258,11 @@ private final class AXSnapshotReader {
             let role = stringAttribute(node, kAXRoleAttribute as String) ?? "AXUnknown"
             guard allowedContainerRoles.contains(role) else { return false }
             if role == kAXStaticTextRole as String || role == "AXLink" {
+                // Why: a summary keeps only the start of each text; a long one must render on its own line,
+                // where the visible-range substitution shows the part the window displays.
+                if let value = stringAttribute(node, kAXValueAttribute as String), VisibleRangeTruncation.isLong(value) {
+                    return false
+                }
                 sawText = true
             }
             guard SnapshotRenderHeuristics.meaningfulActions(actions(node), role: role).isEmpty else { return false }
