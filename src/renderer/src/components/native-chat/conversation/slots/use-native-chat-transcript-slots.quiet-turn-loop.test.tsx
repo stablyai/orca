@@ -35,7 +35,7 @@ const RUNNING = {}
 const stable = {
   receipts: new Map(),
   turnDiffs: new Map(),
-  expandedTurnKeys: new Set<string>(),
+  scopeKey: 'chat',
   line: { tailRow: null, thinking: false }
 } satisfies Partial<Input>
 

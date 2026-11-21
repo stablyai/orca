@@ -4,7 +4,7 @@ import type { MobileNativeChatTurnRow } from '../projection/use-mobile-native-ch
 import { useCallback, useMemo } from 'react'
 import { nativeChatAutomationTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-automation-turns'
 import { nativeChatActingTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-acting-turns'
-import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
+import { useMobileNativeChatScopedOpenKeys } from '../viewport/mobile-native-chat-disclosure-store'
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
@@ -21,7 +21,7 @@ import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
+import { mobileNativeChatWaitingRows } from './mobile-native-chat-waiting-rows'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
@@ -134,26 +134,10 @@ export function useMobileNativeChatTurnDisclosure({
     () => (enabled ? mobileNativeChatQuietTurns(rows, turnKeys, completedByTurn, summaries) : null),
     [completedByTurn, enabled, rows, summaries, turnKeys]
   )
-  const waiting = useMemo(() => {
-    const ids = enabled
-      ? nativeChatMessagesWaitingBehindLiveTurn(
-          rows,
-          turnJournal?.items,
-          stopping,
-          turnJournal?.submissions,
-          turnJournal ?? {}
-        )
-      : null
-    if (!ids?.size && !quiet?.ids.size) {
-      return { listMessages: rows, waitingRows: [], indexById: null }
-    }
-    return {
-      // Rows merged into a later one are among the quiet ids, and draw inside it.
-      listMessages: (quiet?.shown ?? rows).filter((m) => !ids?.has(m.id) && !quiet?.ids.has(m.id)),
-      waitingRows: rows.flatMap((item, index) => (ids?.has(item.id) ? [{ item, index }] : [])),
-      indexById: new Map(rows.map((message, index) => [message.id, index]))
-    }
-  }, [enabled, quiet, rows, stopping, turnJournal])
+  const waiting = useMemo(
+    () => mobileNativeChatWaitingRows(rows, enabled, stopping, turnJournal, quiet),
+    [enabled, quiet, rows, stopping, turnJournal]
+  )
   const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useMobileNativeChatScopedOpenKeys(scopeKey)
@@ -198,8 +182,10 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const { fold, trailingRunIndex, workRuns, itemNoteJoins } = useMobileNativeChatTranscriptRows({
+  const transcript = useMobileNativeChatTranscriptRows({
     enabled,
+    scopeKey,
+    historyHead: turnJournal?.items[0]?.itemId,
     rows,
     turnKeys,
     receipts,
@@ -208,6 +194,12 @@ export function useMobileNativeChatTurnDisclosure({
     liveReasoningId,
     turnDiffs: summaries
   })
+  const { fold, trailingRunIndex, workRuns, itemNoteJoins } = transcript
+  const historyExpandedTurns = transcript.expandedTurnKeys
+  const toggleHistoryTurn = useCallback(
+    (key: string) => toggleExpandedTurn(key, historyExpandedTurns),
+    [toggleExpandedTurn, historyExpandedTurns]
+  )
   const presentation = useMemo(
     () => ({ rows, workRuns, turnKeys, receipts }),
     [rows, workRuns, turnKeys, receipts]
@@ -231,7 +223,7 @@ export function useMobileNativeChatTurnDisclosure({
         turnDiff: summaries.get(message.id),
         turnStatus,
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
-        turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
+        turnExpanded: turnKey ? historyExpandedTurns.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
         ...(turnKey === message.id ? { opensTurn: true as const } : {}),
@@ -276,7 +268,7 @@ export function useMobileNativeChatTurnDisclosure({
       activeTurnKey,
       active,
       completedByTurn,
-      expandedTurnIds,
+      historyExpandedTurns,
       inLiveWorkingTurn,
       trailingRunIndex,
       workRuns,
@@ -298,7 +290,7 @@ export function useMobileNativeChatTurnDisclosure({
     active,
     presentation,
     activeActivityText,
-    onToggleTurn: toggleExpandedTurn,
+    onToggleTurn: toggleHistoryTurn,
     resolveRow,
     listMessages: waiting.listMessages,
     waitingRows: waiting.waitingRows,

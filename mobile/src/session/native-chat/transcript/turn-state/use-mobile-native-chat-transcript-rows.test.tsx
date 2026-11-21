@@ -256,6 +256,7 @@ describe('how the structured lane draws its rows, as desktop does', () => {
     function Rows({ turnDiffs }: { turnDiffs: ReadonlyMap<string, unknown> }) {
       joins = useMobileNativeChatTranscriptRows({
         enabled: true,
+        scopeKey: 'chat',
         rows,
         turnKeys: ['t1', 't2'],
         receipts: null,
