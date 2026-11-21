@@ -49,7 +49,7 @@ const FEATURES = [
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.
-const SOURCES = ['slack', 'linear', 'github']
+const SOURCES = ['slack', 'discord', 'linear', 'github']
 
 // The answer as this machine reads it: the shared contract's wake offer beside the rest.
 export const ConnectorHelloAnswer = lazyZodSchema(() =>

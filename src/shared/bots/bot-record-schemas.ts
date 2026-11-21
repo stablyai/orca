@@ -14,6 +14,7 @@ import { BotAvatarColorSchema } from './bot-avatar-color'
 import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { BOT_AGENT_SUCCESSORS, BOT_RETIRED_AGENTS, isBotRetiredAgent } from './bot-retired-agents'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
+import { BotDiscordGuildSchema } from './bot-discord-guild'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -125,8 +126,19 @@ const createBotLinkOwner = () => ({ ownerUserId: z.string().min(1).optional() })
 /** Workspaces one connector can hold for a bot. */
 export const BOT_MAX_CONNECTOR_WORKSPACES = 8
 export const BOT_MAX_SKILL_PROJECTS = 20
+
+/** The bot's own Discord bot (an application its owner made; Orca Cloud keeps its token) and the
+ *  servers it is in, as the cloud last reported them. */
+export const BotDiscordSchema = lazyZodSchema(() =>
+  z.object({
+    applicationId: z.string().min(1),
+    guilds: z.array(BotDiscordGuildSchema).max(BOT_MAX_CONNECTOR_WORKSPACES)
+  })
+)
+
 const BotSlackLinkSchema = lazyZodSchema(() => BotSlackAppSchema.extend(createBotLinkOwner()))
 const BotLinearLinkSchema = lazyZodSchema(() => BotLinearSchema.extend(createBotLinkOwner()))
+const BotDiscordLinkSchema = lazyZodSchema(() => BotDiscordSchema.extend(createBotLinkOwner()))
 
 /** Its choices in order, as Settings offers them. */
 export const BOT_ITEMS_STALE_CHOICES = [3, 5, 7, 14, 'never'] as const
@@ -175,6 +187,8 @@ export const BotSchema = lazyZodSchema(() =>
     linear: BotLinearLinkSchema.nullable().default(null),
     linearWorkspaces: z.array(BotLinearLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
     github: BotGitHubSchema.extend(createBotLinkOwner()).nullable().default(null),
+    /** Its own Discord bot and the servers it is in; older hosts drop it. Null: removed. */
+    discord: BotDiscordLinkSchema.nullable().optional(),
     /** Whether a new Slack thread the owner starts posts the owner's Orca messages back to it; absent is on.
      *  Threads others start, and the owner's teammates' DMs, start off whatever this says. */
     slackMirror: z.boolean().optional().catch(undefined),
@@ -249,3 +263,6 @@ export type BotGitHub = z.infer<typeof BotGitHubSchema>
 export type Bot = z.infer<typeof BotSchema>
 export type BotSlackLink = z.infer<typeof BotSlackLinkSchema>
 export type BotLinearLink = z.infer<typeof BotLinearLinkSchema>
+export type BotDiscord = z.infer<typeof BotDiscordSchema>
+export type BotDiscordGuild = z.infer<typeof BotDiscordGuildSchema>
+export type BotDiscordLink = z.infer<typeof BotDiscordLinkSchema>

@@ -12,6 +12,8 @@ export const CONNECTOR_PATHS = {
   // `${bots}/<bot id>/slack`: GET its state, DELETE its install; POST `…/apps`; GET `…/members?q=`.
   // POST `${bots}/<bot id>/posts` posts as the bot; POST `…/linear/comments` comments on an issue.
   // `${bots}/<bot id>/shares/<share id>`: PUT `…/offer`; PUT and DELETE `…/devices/<device id>`.
+  // Discord: POST `…/discord/app` {v:1, token}; DELETE `…/discord`; GET and DELETE
+  // `…/discord/guilds/<guild id>`; GET `…/discord/members?guild=&q=`.
   bots: '/v1/connector/bots',
   // PUT one page of this machine's bots, to a cloud listing `bots.pages`; its hello names them all.
   botPages: '/v1/connector/bot-pages',
@@ -30,5 +32,7 @@ export const CONNECTOR_PATHS = {
   // GET lists the account's linked Slack, GitHub and Linear people; DELETE `…/<source>/<workspace id>/<user id>`.
   links: '/v1/connector/links',
   // GET `${shares}/mine`; POST `…/<share id>/accept`; POST and GET `…/<share id>/messages` (share-messages.ts).
-  shares: '/v1/shares'
+  shares: '/v1/shares',
+  // GET `${discord}/bots`: the account's bots with their own Discord bot, each with its state.
+  discord: '/v1/connector/discord'
 } as const

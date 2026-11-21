@@ -1872,6 +1872,12 @@
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
       "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
+      "discordStatus": {
+        "checking": "Checking",
+        "unknown": "Can’t check",
+        "needsToken": "Needs a new token",
+        "noServer": "Not in a server"
+      },
       "teamDisabled": "Bots are turned off by your team."
     },
     "windowMaterial": {
@@ -28588,6 +28594,7 @@
       "thisServer": "this server",
       "there": "there",
       "executionComputer": "the computer this agent runs on",
+      "reachDiscord": "Post in Discord as {{name}}",
       "yourComputer": "your computer"
     },
     "accessRequest": {
@@ -30105,6 +30112,7 @@
         "slack": "Messages and mentions",
         "linear": "Assigned issues and mentions",
         "google": "Gmail, Calendar and Drive, as you",
+        "discord": "Mentions, threads and direct messages",
         "vercel": "Check deployments and read their logs",
         "sentry": "Look into errors and the events behind them",
         "datadog": "Search logs, metrics and monitors",
@@ -30392,6 +30400,7 @@
       "replying": "Replying…",
       "replyingState": "Replying",
       "kindSlack": "Slack thread",
+      "kindDiscord": "Discord thread",
       "kindLinear": "Linear issue",
       "kindGithub": "GitHub thread",
       "kindAutomation": "Automation run",
@@ -30461,7 +30470,8 @@
       "eventsChat": "{{source}} events need Orca Cloud sign-in. I’ll save this rule once you’re in.",
       "webhooksHostChat": "Webhooks need {{host}} signed in to Orca Cloud. I’ll make it once it is.",
       "eventsHostChat": "{{source}} events need {{host}} signed in to Orca Cloud. I’ll save this rule once it is.",
-      "webhooksNotReaching": "Orca Cloud isn’t reaching {{name}}, so it can’t make webhooks yet."
+      "webhooksNotReaching": "Orca Cloud isn’t reaching {{name}}, so it can’t make webhooks yet.",
+      "discord": "Discord connects through Orca Cloud. Sign in to Orca to continue."
     },
     "tabs": {
       "homeDetail": "Home: the bot's main chat. Its memory, automations and requests from others land here.",
@@ -30792,6 +30802,74 @@
       "itemsNeedYou_other": "{{count}} items it flagged for you",
       "review": "Review",
       "openHome": "Open {{name}}’s Home"
+    },
+    "discord": {
+      "connection": {
+        "tokenRevoked": "Discord no longer accepts its bot token. Paste a new one.",
+        "setUpAgain": "Its Discord bot stopped answering. Set it up again.",
+        "noServer": "Add {{name}} to a server so people can reach it.",
+        "leaveNote": "Its Discord bot leaves {{server}}, and its people and limits there are cleared.",
+        "removeNote": "Orca Cloud forgets its bot token. The application stays in your Developer Portal.",
+        "removeConfirm": "Remove",
+        "finishSetup": "Finish setup",
+        "addServer": "Add to another server"
+      },
+      "setup": {
+        "titleOn": "{{name}} in Discord",
+        "title": "Add {{name}} to Discord",
+        "close": "Close",
+        "isOn": "{{name}} is on Discord",
+        "checking": "Checking Discord…",
+        "retry": "Try again",
+        "tryIt": "Try it in {{server}}",
+        "whoNote": "Only you can ask it until you add people or roles under Discord on its page.",
+        "openDiscord": "Open Discord",
+        "finish": "Done"
+      },
+      "invite": {
+        "text": "Add {{botName}} to a server you manage. Discord asks which one, and what it may do there.",
+        "waiting": "Finish adding it in Discord…",
+        "unchanged": "Discord hasn’t added it to a server yet.",
+        "newToken": "Use another token",
+        "button": "Add to a server"
+      },
+      "token": {
+        "stepApp": "In Discord’s Developer Portal, choose New Application and name it {{name}}.",
+        "stepBot": "Open Bot, choose Reset Token, and copy the token.",
+        "stepPaste": "Paste it below. Orca Cloud keeps it encrypted and never shows it again.",
+        "intro": "{{name}} gets its own bot in Discord. Discord makes bots only in its Developer Portal:",
+        "openPortal": "Open the Developer Portal",
+        "label": "Bot token",
+        "notToken": "That isn’t a bot token. Copy it from Bot, not the application ID or client secret.",
+        "save": "Turn on {{name}}"
+      },
+      "limits": {
+        "roles": "Roles that can ask",
+        "noRoles": "No roles. Only the people above can ask.",
+        "channels": "Channels it answers in",
+        "anyChannel": "Any channel it can see. Add channels to answer only there.",
+        "add": "Add",
+        "search": "Search",
+        "loading": "Reading the server…",
+        "none": "Nothing more to add.",
+        "remove": "Remove {{name}}"
+      },
+      "errors": {
+        "off": "Discord is coming soon.",
+        "tokenInvalid": "Discord didn’t accept that token. Copy a new one from the Bot page of your application.",
+        "tokenInUse": "Another of your bots already uses this Discord application. Make a new application for this one.",
+        "refused": "Discord refused. Check that the bot is still in the server, then try again.",
+        "unavailable": "Discord did not answer. Try again.",
+        "rateLimited": "Too many tries. Wait a minute, then try again.",
+        "signedOut": "Sign in to Orca to connect Discord.",
+        "unreachable": "Orca Cloud could not be reached. Check your connection and try again."
+      },
+      "howToAsk": "Mention <code>{{mention}}</code> in a channel or thread, or send it a direct message.",
+      "whoCanAsk": {
+        "noMatchDetail": "Members of {{server}} can be added. To let a whole group ask, add their role below.",
+        "outsiders": "Everyone else in {{server}} is ignored, unless they hold a role below.",
+        "needsSetup": "Finish setup so {{server}} can reach the bot, then pick people here."
+      }
     },
     "pairedServers": {
       "add": "Add a paired server",

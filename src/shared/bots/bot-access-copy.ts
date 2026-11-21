@@ -69,6 +69,7 @@ export const BOT_ACCESS_COPY = {
   whoeverAskedApproves: 'If it asks, whoever asked can approve.',
   reachLinear: 'Comment on, update and create Linear issues as you',
   reachSlack: 'Post in Slack as {{name}}',
+  reachDiscord: 'Post in Discord as {{name}}',
   reachGitHub: 'Comment, review and push on GitHub as you',
   reachGoogleEmail: 'Read and send your email',
   reachGoogleCalendar: 'Use your calendar',

@@ -9,6 +9,7 @@ import { Webhook } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { useBotLinear } from '@/lib/bot-linear-state'
+import { useBotDiscordHost } from '@/lib/bot-discord-state'
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../../shared/bot-types'
 import { DiscordIcon } from '../icons/DiscordIcon'
 import { GitHubIcon } from '../icons/GitHubIcon'
@@ -21,7 +22,7 @@ export type BotConnector = {
   id: 'slack' | 'discord' | 'google' | 'linear' | 'github' | 'webhooks'
   label: string
   Icon: ComponentType<{ className?: string }>
-  /** False shows the connector as "Coming soon"; see useBotConnectorAvailable for Linear and GitHub. */
+  /** False shows the connector as "Coming soon"; see useBotConnectorAvailable for Linear, GitHub and Discord. */
   available: boolean
   /** link: an account the connector list links. chat: set up by asking the bot in its Chat. */
   add: 'link' | 'chat'
@@ -30,7 +31,7 @@ export type BotConnector = {
 /** Where people can reach a bot, in the order every connector list shows them. */
 export const BOT_CONNECTORS: readonly BotConnector[] = [
   { id: 'slack', label: 'Slack', Icon: SlackIcon, available: true, add: 'link' },
-  { id: 'discord', label: 'Discord', Icon: DiscordIcon, available: false, add: 'link' },
+  { id: 'discord', label: 'Discord', Icon: DiscordIcon, available: true, add: 'link' },
   { id: 'google', label: 'Google', Icon: GoogleIcon, available: true, add: 'link' },
   { id: 'linear', label: 'Linear', Icon: LinearIcon, available: true, add: 'link' },
   { id: 'github', label: 'GitHub', Icon: GitHubIcon, available: true, add: 'link' },
@@ -48,17 +49,26 @@ export const BOT_CONNECTORS: readonly BotConnector[] = [
 /** The connectors that link an account, for lists of linked accounts across bots. */
 export const ACCOUNT_CONNECTORS = BOT_CONNECTORS.filter((connector) => connector.add === 'link')
 
-/** Whether an account connector can be added now on the host: Linear and GitHub also wait for its cloud. */
+/** Whether an account connector can be added now on the host: Linear, GitHub and Discord also wait for its cloud. */
 export function useBotConnectorAvailable(
   hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): (connector: BotConnector) => boolean {
   const linear = useBotLinear(hostId)
   const github = useBotGitHub(hostId)
-  const cloudOn = { linear: cloudHasIt(linear.status), github: cloudHasIt(github.status) }
+  const discord = useBotDiscordHost(hostId)
+  const cloudOn = {
+    linear: cloudHasIt(linear.status),
+    github: cloudHasIt(github.status),
+    // Only the cloud's own answer offers Discord: a failed read can't tell a cloud that has it from
+    // one that doesn't, and Discord ships dark until the cloud does.
+    discord: discord.status === 'ready'
+  }
   return (connector) =>
     connector.available &&
     connector.add === 'link' &&
-    (connector.id === 'linear' || connector.id === 'github' ? cloudOn[connector.id] : true)
+    (connector.id === 'linear' || connector.id === 'github' || connector.id === 'discord'
+      ? cloudOn[connector.id]
+      : true)
 }
 
 /** The same test the bot's Connectors settings use, for connectors a bot's own record shows. */
@@ -67,7 +77,8 @@ export function connectorAdded(bot: Bot, id: BotConnector['id']): boolean {
     (id === 'slack' && botSlackApps(bot).length > 0) ||
     (id === 'linear' && botLinearWorkspaces(bot).length > 0) ||
     (id === 'github' && bot.github !== null) ||
-    (id === 'google' && bot.google === true)
+    (id === 'google' && bot.google === true) ||
+    (id === 'discord' && Boolean(bot.discord))
   )
 }
 

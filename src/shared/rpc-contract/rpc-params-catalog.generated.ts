@@ -165,6 +165,10 @@ import {
   ComposioStartSetup
 } from './bots-composio-params'
 import {
+  BotDiscordBot,
+  BotDiscordGuild,
+  BotDiscordMembers,
+  BotDiscordSetUp,
   BotGitHubDefaultBot,
   BotGitHubUnlink,
   BotGitHubUsers,
@@ -1334,6 +1338,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.create': BotCreate,
   'bots.createOffer': BotCreateOfferRequest,
   'bots.delete': BotDelete,
+  'bots.discord.bots': null,
+  'bots.discord.guild': BotDiscordGuild,
+  'bots.discord.leaveGuild': BotDiscordGuild,
+  'bots.discord.members': BotDiscordMembers,
+  'bots.discord.remove': BotDiscordBot,
+  'bots.discord.setUp': BotDiscordSetUp,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
   'bots.github.unlink': BotGitHubUnlink,

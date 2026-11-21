@@ -12,6 +12,7 @@ import {
 } from '../bot-types'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
+import { membersInDiscordGuilds } from '../bots/bot-discord-members'
 import { botLookAround, patchLookAround } from '../bots/bot-look-around'
 import { withBotOfferAnswer } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
@@ -231,6 +232,9 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
         member.workspaceId === undefined ||
         teams.has(member.workspaceId)
     )
+  }
+  if (rest.discord !== undefined) {
+    next.members = membersInDiscordGuilds(next)
   }
   if (rest.linearWorkspaces) {
     next.linear = rest.linearWorkspaces[0] ?? null

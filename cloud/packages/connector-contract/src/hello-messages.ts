@@ -38,15 +38,25 @@ const CapabilityList = z.array(z.string().min(1))
 // Display strings are capped so a hello's size is predictable; the machine shortens longer ones.
 const DisplayText = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
 
+const WorkspaceIds = z
+  .array(z.string().min(1).max(CONNECTOR_LIMITS.maxBotWorkspaceMemberIdLength))
+  .max(CONNECTOR_LIMITS.maxBotWorkspaceMembers)
+
 // A workspace of a source with one shared app for every bot (Linear, GitHub) where the owner turned
 // the bot on, and the people there (that source's user ids) the owner lets ask it.
+// A Discord row is a server (guild) the bot's own Discord bot is in. Anyone in `members` or holding
+// one of `roles` may ask it there; `channels`, when given, are the only channels it answers in (a
+// thread counts as its parent channel). A DM is taken from someone listed, or holding a listed role,
+// in one of the bot's servers. The cloud checks these before it starts a turn.
 export const ConnectorBotWorkspaceSchema = z
   .object({
     source: z.enum(CONNECTOR_PLACE_SOURCES),
     workspaceId: z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength),
     members: z
       .array(z.string().min(1).max(CONNECTOR_LIMITS.maxBotWorkspaceMemberIdLength))
-      .max(CONNECTOR_LIMITS.maxBotMembers)
+      .max(CONNECTOR_LIMITS.maxBotMembers),
+    roles: WorkspaceIds.optional(),
+    channels: WorkspaceIds.optional()
   })
   // A Slack row splits the bot's Slack list by workspace, so it takes as many as that list.
   .refine(
@@ -171,6 +181,9 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'refs',
   'triggers.people',
   'slack.teams',
+  // Discord rows in a bot's sharedAppWorkspaces (with their roles and channels), Discord
+  // conversations and the bot's discord routes (discord-messages.ts).
+  'discord',
   // The places verb, and workspace refs (slack:T1:workspace) as a rule's place.
   'places',
   // find's `search`, on the sources whose find capability lists it.

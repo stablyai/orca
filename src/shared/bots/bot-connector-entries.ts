@@ -1,11 +1,13 @@
-// A bot's connectors as one list: each Slack workspace, Linear workspace and GitHub org it is in,
+// A bot's connectors as one list: each Slack workspace, Discord server, Linear workspace and GitHub org it is in,
 // Google, Webhooks, the apps it signed in to through Composio, and the apps it has as tools. The
 // desktop and the phone both list these rows, each from what its own reads say of every service.
 import {
+  botDiscordGuilds,
   botLinearWorkspaces,
   botMembersFrom,
   botSlackApps,
   type Bot,
+  type BotDiscordGuild,
   type BotLinear
 } from '../bot-types'
 import type { BotOwnTool, BotToolProblem } from '../bot-tools'
@@ -50,6 +52,8 @@ type UntitledEntry<Connection, Tool extends AppTool> = { key: string; needsOwner
       /** Its app is installed but needs Slack's update, not a sign-in. */ updateNeeded?: true
     }
   | { kind: 'linear'; linear: BotLinear }
+  /** Null: its Discord bot is in no server yet. */
+  | { kind: 'discord'; guild: BotDiscordGuild | null }
   | {
       kind: 'github'
       /** None: GitHub as a whole, until it is linked and installed. */ installation?: ConnectorGitHubInstallation
@@ -76,6 +80,8 @@ export type BotConnectorFacts<Connection extends ComposioSignIn, Tool extends Ap
     needsOwner: boolean
     updateNeeded: boolean
   }
+  /** Absent on a side that doesn't read Discord yet: it lists no Discord rows. */
+  discordNeedsOwner?: (guild: BotDiscordGuild | null) => boolean
   linearNeedsOwner: (workspace: BotLinear) => boolean
   github: {
     /** The orgs Orca is installed in where the host is linked; none until read. */
@@ -101,7 +107,14 @@ export type BotConnectorFacts<Connection extends ComposioSignIn, Tool extends Ap
 
 type ConnectorBot = Pick<
   Bot,
-  'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'members' | 'github' | 'google'
+  | 'slack'
+  | 'slackApps'
+  | 'discord'
+  | 'linear'
+  | 'linearWorkspaces'
+  | 'members'
+  | 'github'
+  | 'google'
 >
 
 /** URL servers other than Composio's own, which is drawn as its apps. */
@@ -161,6 +174,21 @@ export function botConnectorEntries<Connection extends ComposioSignIn, Tool exte
   // People added in Slack stay listed even after the app is removed, so they can be removed too.
   if (slackApps.length === 0 && botMembersFrom(bot.members, 'slack').length > 0) {
     add({ kind: 'slack', key: 'slack', needsOwner: false }, { service: 'Slack' })
+  }
+  const { discordNeedsOwner } = facts
+  if (bot.discord && discordNeedsOwner) {
+    const guilds = botDiscordGuilds(bot)
+    for (const guild of guilds.length > 0 ? guilds : [null]) {
+      add(
+        {
+          kind: 'discord',
+          key: guild ? `discord:${guild.guildId}` : 'discord',
+          guild,
+          needsOwner: discordNeedsOwner(guild)
+        },
+        { service: 'Discord', ...(guild ? { place: guild.guildName || guild.guildId } : {}) }
+      )
+    }
   }
   for (const workspace of botLinearWorkspaces(bot)) {
     add(

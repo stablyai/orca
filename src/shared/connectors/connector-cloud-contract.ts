@@ -154,6 +154,10 @@ export type ConnectorBotWorkspace = {
   source: ConnectorConversation['source']
   workspaceId: string
   members: string[]
+  /** Discord: holders of these roles may ask too. */
+  roles?: string[]
+  /** Discord: the only channels it answers in; absent is any. */
+  channels?: string[]
 }
 
 export type ConnectorDeliveryResult =

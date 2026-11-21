@@ -40,6 +40,7 @@ import {
   ConnectorConnectStartSchema
 } from '../../../cloud/packages/connector-contract/src/connect-messages'
 import type { ConnectorCloud } from './connector-cloud'
+import { discordCloudClient } from './discord-cloud-client'
 import type { ConnectorResult } from './connector-cloud-request'
 
 // Creating an app makes several Slack calls in a row.
@@ -52,7 +53,7 @@ const SLACK_HAND_OFF_REDEEM = '/v1/connector/slack/handoffs/redeem'
 const teamQuery = (teamId: string | undefined, separator: '?' | '&'): string =>
   teamId === undefined ? '' : `${separator}team=${encodeURIComponent(teamId)}`
 
-function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
+export function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
   if (result.ok) {
     return result
   }
@@ -101,6 +102,7 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
   const botSlack = (botId: string): string =>
     `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/slack`
   return {
+    ...discordCloudClient(cloud),
     /** Hands the cloud a config refresh token; it keeps only its rotation, encrypted, for this workspace. */
     saveSlackGrant: async (refreshToken: string) =>
       answer(
