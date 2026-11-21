@@ -16,9 +16,10 @@ export type NativeChatHistoryJumpTarget =
 /** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */
 type HistoryJumpResult = 'landed' | 'missing' | 'aborted'
 
+/** `wait`: the step changed the transcript (it expanded a turn); try again after the next commit. */
 export type NativeChatHistoryJumpStep = (
   target: NativeChatHistoryJumpTarget
-) => 'landed' | 'page' | 'stop'
+) => 'landed' | 'page' | 'wait' | 'stop'
 
 /** A rail pick lands once its message has a slot; an omitted one stops. */
 export function nativeChatRailJumpStep(
@@ -92,6 +93,7 @@ export function useNativeChatHistoryJump({
       target: NativeChatHistoryJumpTarget,
       signal: AbortSignal
     ): Promise<HistoryJumpResult> => {
+      let superseded = false
       for (let pages = 0; ; pages += 1) {
         if (signal.aborted) {
           return 'aborted'
@@ -103,10 +105,25 @@ export function useNativeChatHistoryJump({
         if (next === 'stop' || pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
           return 'missing'
         }
+        if (next === 'wait') {
+          await nextCommit(signal)
+          continue
+        }
         const result = await committedRef.current.loadEarlier()
-        if (signal.aborted || result === 'superseded') {
+        if (signal.aborted) {
           return 'aborted'
         }
+        // A trim or a new read moved the history: page once more from the committed one. A second
+        // one in a row stops the jump as an abort does.
+        if (result === 'superseded') {
+          if (superseded) {
+            return 'aborted'
+          }
+          superseded = true
+          await nextCommit(signal)
+          continue
+        }
+        superseded = false
         if (result !== 'applied') {
           return 'missing'
         }

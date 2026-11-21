@@ -2,6 +2,8 @@ import type { OrchestrationAgentReference } from '../../../../../../shared/orche
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
+import { NativeChatQuotePill } from './NativeChatQuotePill'
+import { nativeChatQuoteLayout } from './native-chat-quote-layout'
 import { NativeChatBotMentionPill } from './NativeChatBotMentionPill'
 import { NativeChatPromptPillKeys } from './native-chat-prompt-pill-keys'
 import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
@@ -11,6 +13,7 @@ import {
   FILE_REFERENCE_NODE,
   IMAGE_REFERENCE_NODE,
   promptLeafString,
+  QUOTE_NODE,
   promptTextContent
 } from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type Editor, type JSONContent } from '@tiptap/react'
@@ -70,6 +73,20 @@ export const NativeChatImageReference = Node.create({
   ]
 })
 
+/** A quote "Add to chat" took; `token` is the Markdown blockquote and the blank line after it. */
+export const NativeChatQuote = Node.create({
+  name: QUOTE_NODE,
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addNodeView: () => ReactNodeViewRenderer(NativeChatQuotePill),
+  addAttributes: () => ({ token: { default: '' } }),
+  renderText: ({ node }) => node.attrs.token,
+  renderHTML: ({ node }) => ['span', { 'data-native-chat-quote': node.attrs.token }],
+  addProseMirrorPlugins: () => [nativeChatQuoteLayout]
+})
+
 /** A bot picked under `@`: the pill shows it; the text stays its `[Bot: <name>](bot:<id>)` token. */
 export const NativeChatBotMention = Node.create({
   name: BOT_MENTION_NODE,
@@ -100,6 +117,7 @@ export const nativeChatPromptPills = [
   NativeChatFileReference,
   NativeChatImageReference,
   NativeChatBotMention,
+  NativeChatQuote,
   NativeChatPromptPillKeys
 ]
 

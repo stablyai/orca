@@ -7,10 +7,7 @@ import {
   type RefObject
 } from 'react'
 import { flushSync } from 'react-dom'
-import {
-  formatNativeChatQuote,
-  nativeChatSelectionText
-} from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { nativeChatSelectionText } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { readNativeChatTranscriptSelection } from '../../selection-quotes/native-chat-transcript-selection'
 import { Clipboard, Copy, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
@@ -33,7 +30,10 @@ import { useAppStore } from '@/store'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/clipboard/primary-selection/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
-import { NativeChatSelectionQuote } from '../../selection-quotes/NativeChatSelectionQuote'
+import {
+  addTranscriptQuote,
+  NativeChatSelectionQuote
+} from '../../selection-quotes/NativeChatSelectionQuote'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
@@ -298,7 +298,7 @@ export function useNativeChatContextMenu({
             target={target}
             onQuote={(text) => {
               flushSync(() => setState((prev) => ({ ...prev, open: false })))
-              composerRef.current?.appendText(formatNativeChatQuote(text))
+              addTranscriptQuote(composerRef.current, text, target.quoteSource)
             }}
             rewind={rewind}
           />

@@ -89,7 +89,8 @@ function Transcript({
     scrollRef,
     scrollMessageToTop,
     readerLeavesEnd,
-    scrollToBottom: returnToEnd
+    scrollToBottom: returnToEnd,
+    unfoldTurnOf: () => false
   })
   useLayoutEffect(() => {
     if (following && scrollRef.current) {

@@ -23,6 +23,7 @@ export function NativeChatPromptPill({
   muted?: boolean
   selected: boolean
   title?: string
+  className?: string
   /** What the pill names inside its label's owner, after `›` (a bot's chat); only it is cut short. */
   detail?: ReactNode
   /** A control at the pill's end, such as a bot pill's ⌄. */

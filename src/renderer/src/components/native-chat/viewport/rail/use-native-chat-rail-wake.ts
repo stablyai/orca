@@ -66,3 +66,17 @@ export function useNativeChatRailWake(): {
 
   return { railRef, wake, sustain }
 }
+
+/** The transcript's scroll handler: it runs `onScroll` and keeps a woken rail awake. */
+export function useNativeChatRailSustainedScroll(
+  onScroll: (event: React.UIEvent<HTMLDivElement>) => void,
+  sustain: () => void
+): (event: React.UIEvent<HTMLDivElement>) => void {
+  return useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onScroll(event)
+      sustain()
+    },
+    [onScroll, sustain]
+  )
+}

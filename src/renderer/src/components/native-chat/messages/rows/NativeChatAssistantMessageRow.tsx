@@ -9,7 +9,7 @@ import type { deriveNativeChatRowContent } from '../../../../../../shared/native
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { withLegacyNativeChatIdeasAsList } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
-import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { nativeChatQuoteSourceProps } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { NativeChatToolRun } from '../../tools/runs/NativeChatToolRun'
 import { useBotForWorkspace } from '../../../bots/bot-workspace'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
@@ -114,7 +114,7 @@ export function NativeChatAssistantMessageRow({
           className="text-sm"
           renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
           linkifyFilePaths
-          {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
+          {...(isSystem ? {} : nativeChatQuoteSourceProps(message.id))}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
           // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
           streaming={streaming}

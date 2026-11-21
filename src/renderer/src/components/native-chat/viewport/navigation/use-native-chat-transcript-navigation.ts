@@ -23,6 +23,7 @@ import { nativeChatSlotIndexOf } from '../../conversation/slots/native-chat-tran
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatRailJumpStep, useNativeChatHistoryJump } from './use-native-chat-history-jump'
 import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
+import { useNativeChatQuoteJump } from '../../selection-quotes/use-native-chat-quote-jump'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 type NavigationRequest =
@@ -79,7 +80,8 @@ export function useNativeChatNavigation({
   scrollRef,
   scrollMessageToTop,
   readerLeavesEnd,
-  scrollToBottom
+  scrollToBottom,
+  unfoldTurnOf
 }: {
   request: NativeChatNavigationRequest
   rail: { items: readonly NativeChatRailItem[]; onActivate: (id: string) => void }
@@ -102,6 +104,8 @@ export function useNativeChatNavigation({
   scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   readerLeavesEnd: () => void
   scrollToBottom: () => void
+  /** Expands the collapsed turn that hides a loaded message; false when no turn hides it. */
+  unfoldTurnOf: (messageId: string) => boolean
 }) {
   const { issue, nextRequestId } = request
   const requestRailJump = useCallback(
@@ -119,6 +123,9 @@ export function useNativeChatNavigation({
           pending.resolution.state === 'pending'
         ) {
           return 'landed'
+        }
+        if (unfoldTurnOf(target.id)) {
+          return 'wait'
         }
         const index = nativeChatSlotIndexOf(slots, target.id)
         if (index < 0) {
@@ -211,6 +218,16 @@ export function useNativeChatNavigation({
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
+  const jumpToQuote = useNativeChatQuoteJump({
+    slots,
+    scrollRef,
+    request,
+    beginNavigation,
+    readerLeavesEnd,
+    startHistoryJump,
+    sessionKey,
+    unfoldTurnOf
+  })
   useNativeChatRailJumpLanding({
     railJump: request.railJump,
     slots,
@@ -225,6 +242,7 @@ export function useNativeChatNavigation({
     selectRailItem,
     revealDiff,
     jumpToLatest,
+    jumpToQuote,
     pendingRailId: historyJump.pending?.kind === 'rail' ? historyJump.pending.id : null
   }
 }
