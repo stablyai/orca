@@ -4,6 +4,7 @@ import {
   botMemoryDate,
   countBotMemoryLines,
   editBotMemoryFact,
+  onlyBotMemoryFactsChanged,
   findBotMemoryFact,
   forgetBotMemoryFact,
   parseBotMemoryFacts,
@@ -40,9 +41,26 @@ describe('bot memory lines', () => {
       { line: 5, date: null, text: 'refresh-retry test is flaky on slow clocks.', source: null },
       { line: 7, date: null, text: 'See memory/release.md.', source: null }
     ])
-    // A new bot's how-to line, headings, fences and table rules are not facts.
-    expect(parseBotMemoryFacts(`${SEEDED}\n\`\`\`\n| a | b |\n|---|---|\n---\n`)).toEqual([
-      { line: 5, date: null, text: '| a | b |', source: null }
+    expect(parseBotMemoryFacts(SEEDED)).toEqual([])
+    // Headings, fenced code, tables, rules and comments are not facts; "#123 …" is.
+    const mixed = [
+      '## Owners',
+      '#4417 owns checkout',
+      '```',
+      '- a list line inside a fence',
+      'npm run build',
+      '```',
+      '| a | b |',
+      '|---|---|',
+      '***',
+      '* * *',
+      '===',
+      '<!-- note -->',
+      'after the fence'
+    ].join('\n')
+    expect(parseBotMemoryFacts(mixed).map(({ text }) => text)).toEqual([
+      '#4417 owns checkout',
+      'after the fence'
     ])
   })
 
@@ -147,6 +165,17 @@ describe('bot memory lines', () => {
 })
 
 describe('an undashed line', () => {
+  it('is a fact-only change when a chat rewrites it, so the change can be said line by line', () => {
+    expect(onlyBotMemoryFactsChanged('# M\nold prose\n', '# M\nnew prose\n')).toBe(true)
+    expect(onlyBotMemoryFactsChanged('# M\nprose\n', '# N\nprose\n')).toBe(false)
+  })
+
+  it('gets a dash when an edit would make it read as a heading', () => {
+    const file = 'releases on Tuesdays\n'
+    const [fact] = parseBotMemoryFacts(file)
+    expect(editBotMemoryFact(file, fact, '# not a heading')).toBe('- # not a heading\n')
+  })
+
   it('keeps its own shape when edited, and its mark when a chat rewrites it', () => {
     const file = '# Notes\n2026-11-01 releases on Tuesdays\n'
     const [fact] = parseBotMemoryFacts(file)
