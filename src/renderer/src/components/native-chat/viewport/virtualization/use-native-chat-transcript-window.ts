@@ -155,14 +155,17 @@ export function useNativeChatTranscriptWindow({
     }
     if (rowToggled && container.scrollTop > 0) {
       const previous = container.scrollTop
-      container.scrollTop = previous + offset - measuredScrollMargin.current
+      // Near the end the shrink has already clamped scrollTop; start from the offset the virtualizer meant.
+      const atEnd = previous >= container.scrollHeight - container.clientHeight - UNSEEN_SCROLL_PX
+      const base = atEnd ? Math.max(previous, virtualizer.scrollOffset ?? previous) : previous
+      container.scrollTop = base + offset - measuredScrollMargin.current
       if (container.scrollTop !== previous) {
         programmaticScrollMarks.mark(container.scrollTop)
       }
     }
     measuredScrollMargin.current = offset
     setScrollMargin(offset)
-  }, [programmaticScrollMarks, scrollRef])
+  }, [programmaticScrollMarks, scrollRef, virtualizer])
   // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
   useLayoutEffect(() => {
     if (isVisible) {

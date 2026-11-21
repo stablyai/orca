@@ -101,9 +101,9 @@ function laterMessages(): NativeChatMessage[] {
 /** Holds the last page until the scene has scrolled and measured; each render gets a fresh gate. */
 let lastPageGate = Promise.withResolvers<void>()
 
-/** A long chat whose last older page is still to load. */
-function longMessages(): NativeChatMessage[] {
-  return Array.from({ length: 24 }, (_, index) =>
+/** A chat whose last older page is still to load. */
+function longMessages(length = 24): NativeChatMessage[] {
+  return Array.from({ length }, (_, index) =>
     text(
       `l${index}`,
       index % 2 === 0 ? 'user' : 'assistant',
@@ -120,7 +120,8 @@ function oldestMessages(): NativeChatMessage[] {
   ]
 }
 
-type OlderHistory = 'loading' | 'failed' | 'lastPage'
+/** `emptyLastPage`: a short chat whose last read finds nothing older. */
+type OlderHistory = 'loading' | 'failed' | 'lastPage' | 'emptyLastPage'
 
 function Chat({
   intro,
@@ -133,10 +134,11 @@ function Chat({
 }): React.JSX.Element {
   const chatTab = side ? sideTab : tab
   const [oldest, setOldest] = useState<NativeChatMessage[] | null>(null)
-  const lastPage = olderHistory === 'lastPage'
+  const empty = olderHistory === 'emptyLastPage'
+  const lastPage = olderHistory === 'lastPage' || empty
   const session: NativeChatLiveSession = {
     messages: lastPage
-      ? [...(oldest ?? []), ...longMessages()]
+      ? [...(oldest ?? []), ...longMessages(empty ? 8 : 24)]
       : olderHistory
         ? laterMessages()
         : messages(intro),
@@ -153,7 +155,7 @@ function Chat({
       }
       if (lastPage) {
         await lastPageGate.promise
-        setOldest(oldestMessages())
+        setOldest(empty ? [] : oldestMessages())
         return 'exhausted'
       }
       return 'applied'
@@ -243,7 +245,7 @@ const nextFrame = (): Promise<void> =>
 const wait = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms))
 
 /** Scrolled up, the last page lands and its row leaves; the rows the reader sees must not move. */
-function lastPageScene(width: number, side = false) {
+function lastPageScene(width: number, side = false, nearEnd = false) {
   return defineFixture({
     width,
     store: {
@@ -254,16 +256,23 @@ function lastPageScene(width: number, side = false) {
       lastPageGate = Promise.withResolvers<void>()
       stubBots([SHORT])
     },
-    render: () => <Chat intro={GREETING} side={side} olderHistory="lastPage" />,
+    render: () => (
+      <Chat intro={GREETING} side={side} olderHistory={nearEnd ? 'emptyLastPage' : 'lastPage'} />
+    ),
     interact: async (frame) => {
       const scroller = frame.querySelector<HTMLElement>('[data-native-chat-scroll]')!
       await wait(300)
       scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -900, bubbles: true }))
-      // Near the top the last page starts loading. It lands once the reader has moved past the
-      // rows it adds, so their first measurement can't move the view and only the row's space counts.
-      scroller.scrollTop = 500
-      await wait(200)
-      scroller.scrollTop = 800
+      if (nearEnd) {
+        // A short chat, read just above its end: the row's space leaving would clamp the view.
+        scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight - 10
+      } else {
+        // Near the top the last page starts loading. It lands once the reader has moved past the
+        // rows it adds, so their first measurement can't move the view and only the row's space counts.
+        scroller.scrollTop = 500
+        await wait(200)
+        scroller.scrollTop = 800
+      }
       await wait(200)
       await nextFrame()
       await nextFrame()
@@ -286,3 +295,7 @@ export const olderHistoryLastPage = lastPageScene(720)
 export const olderHistoryLastPageNarrow = lastPageScene(300)
 export const sideOlderHistoryLastPage = lastPageScene(720, true)
 export const sideOlderHistoryLastPageNarrow = lastPageScene(300, true)
+export const olderHistoryLastPageNearEnd = lastPageScene(720, false, true)
+
+/** At 260px the pane hides the pill, so the row keeps its old place and the transcript its 40px. */
+export const olderHistoryLoadingPillHidden = olderHistoryScene(260, 'loading')
