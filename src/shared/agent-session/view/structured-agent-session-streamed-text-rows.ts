@@ -75,11 +75,11 @@ const lastProjection = new WeakMap<
 
 /** Links `projected`, built from `rows` and `inputs`, to the last projection of the rows `rows`
  *  revised only in streamed text, when the inputs and the count are the same. */
-export function noteStreamedTextProjection<T extends object>(
+export function noteStreamedTextProjection<P extends readonly object[]>(
   rows: readonly AgentJournalRenderItem[],
   inputs: readonly unknown[],
-  projected: readonly T[]
-): readonly T[] {
+  projected: P
+): P {
   const base = rowsBesideStreamedText(rows)
   const prior = lastProjection.get(base)
   if (

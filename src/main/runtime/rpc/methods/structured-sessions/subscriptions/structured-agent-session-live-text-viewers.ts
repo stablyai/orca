@@ -1,5 +1,9 @@
-// A viewer's word on whether it is shown reaches each of its streams of the chat on that connection.
+// A viewer's word on whether it is shown reaches each of its streams of the chat. Its id is random
+// per read, so only the client that opened the streams can name them.
 const viewers = new Map<string, Set<(shown: boolean) => void>>()
+
+export const liveTextViewerKey = (sessionId: string, viewerId: string): string =>
+  `${sessionId}:${viewerId}`
 
 /** Registers one stream's setter under its viewer, until the stream closes. */
 export function registerLiveTextViewer(viewer: string, set: (shown: boolean) => void): () => void {

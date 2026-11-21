@@ -15,7 +15,7 @@ import {
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
 import { useNativeChatQuestionReceipts } from './conversation/projection/use-native-chat-question-receipts'
-import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/task-lists/native-chat-task-list-history'
+import { useNativeChatTaskListPredecessors } from './tools/use-native-chat-task-list-predecessors'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
@@ -173,7 +173,7 @@ export function NativeChatMessageList({
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready' && scope.pagesHistory
   const loadedMessageIds = useMemo(() => new Set(messages.map(({ id }) => id)), [messages])
-  const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
+  const taskListPredecessors = useNativeChatTaskListPredecessors(messages)
   const { liveTurnKey } = turnRows
   const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
   // Hidden lines leave the transcript entirely, so they reserve no row or gap.

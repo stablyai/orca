@@ -13,11 +13,22 @@ export type StructuredAgentSessionLiveTextViewer = {
  *  capabilities; once that stream is registered (its first frame), each change goes out as a call. */
 let viewers = 0
 
+/** Random enough that no other client can guess it, from the platform's crypto where there is one. */
+function randomViewerPart(): string {
+  const bytes = new Uint8Array(12)
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes)
+  } else {
+    bytes.forEach((_, index) => (bytes[index] = Math.floor(Math.random() * 256)))
+  }
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 export function createLiveTextViewerReport(
   viewer: StructuredAgentSessionLiveTextViewer | undefined
 ) {
   // What the current open's stream holds, or null before it is registered.
-  const id = `${(viewers++).toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  const id = `${(viewers++).toString(36)}-${randomViewerPart()}`
   let told: boolean | null = null
   let opened: boolean | null = null
   const tell = (): void => {

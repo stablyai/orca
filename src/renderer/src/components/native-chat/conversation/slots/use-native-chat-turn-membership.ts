@@ -7,6 +7,10 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
 import { nativeChatTurnMembership } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { nativeChatRowsInDrawOrder } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
+import {
+  projectionBesideStreamedText,
+  rowsBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 export type NativeChatTurnRows = {
   messages: readonly NativeChatMessage[]
@@ -25,20 +29,25 @@ export function useNativeChatTurnMembership(
   journalSubmissions: readonly AgentJournalSubmission[] | undefined,
   latestTurn?: AgentSessionLatestTurn | null
 ): NativeChatTurnRows {
-  return useMemo(() => {
+  // Membership reads message order and turns, never reply text, so it holds while one streams.
+  const structure = projectionBesideStreamedText(messages)
+  const items = journalItems && rowsBesideStreamedText(journalItems)
+  const membership = useMemo(() => {
     const { turnKeys, liveTurnKey, drawOrder, partialTurnKey, unresolvedRowIds } =
       nativeChatTurnMembership(
-        messages,
-        journalItems
-          ? { items: journalItems, submissions: journalSubmissions ?? [], latestTurn }
-          : null
+        structure,
+        items ? { items, submissions: journalSubmissions ?? [], latestTurn } : null
       )
     return {
-      messages: nativeChatRowsInDrawOrder(messages, drawOrder),
+      drawOrder,
       turnKeys: nativeChatRowsInDrawOrder(turnKeys, drawOrder),
       liveTurnKey,
       unresolvedRowIds,
       ...(partialTurnKey !== undefined ? { partialTurnKey } : {})
     }
-  }, [journalItems, journalSubmissions, latestTurn, messages])
+  }, [items, journalSubmissions, latestTurn, structure])
+  return useMemo(() => {
+    const { drawOrder, ...turns } = membership
+    return { ...turns, messages: nativeChatRowsInDrawOrder(messages, drawOrder) }
+  }, [membership, messages])
 }

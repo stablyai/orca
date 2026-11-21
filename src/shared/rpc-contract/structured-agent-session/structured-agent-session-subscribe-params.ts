@@ -8,7 +8,7 @@ const SubscribeCapabilities = z.object({
   // This reader shows suggestions on screen; the host pauses generating them while none does.
   promptSuggestions: z.literal(1).optional(),
   // This reader takes live text only while it says it is shown: now, then via `agentSession.liveTextShown`.
-  liveTextViewer: z.object({ id: z.string().min(1).max(64), shown: z.boolean() }).optional()
+  liveTextViewer: z.object({ id: z.string().min(16).max(64), shown: z.boolean() }).optional()
 })
 
 export const SubscribeParams = z
@@ -23,8 +23,8 @@ export const SubscribeParams = z
 export const LiveTextShownParams = z
   .object({
     sessionId: SessionId,
-    // The viewer's own id from its subscribe, since windows can share one connection.
-    viewerId: z.string().min(1).max(64),
+    // The viewer's own id from its subscribe: random, and on whatever connection the call takes.
+    viewerId: z.string().min(16).max(64),
     shown: z.boolean()
   })
   .strict()

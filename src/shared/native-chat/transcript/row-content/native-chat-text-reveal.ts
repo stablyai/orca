@@ -58,9 +58,10 @@ const PARK_FRAMES = 2
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
 const HIDDEN_STEP_MS = 100
 
-/** A reveal frame clock that steps at most every `stepMs`, and slower when a step is slow to
- *  render: the surface reports each step's own render time, and the median of the last few is
- *  kept to at most `busyShare` of the time between steps. Restarting a request keeps the spacing. */
+/** A reveal frame clock that steps every `stepMs` on the display frame nearest that time (so up
+ *  to half a frame sooner), and slower when a step is slow to render: the surface reports each
+ *  step's own render time, and the median of the last few is kept to at most `busyShare` of the
+ *  time between steps. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
   stepMs: number,
   busyShare = 1

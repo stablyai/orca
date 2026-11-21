@@ -8,14 +8,14 @@ import { projectBackgroundTaskEvent } from '../history/structured-agent-session-
 import { projectTurnItemEvent } from '../history/structured-agent-session-turn-item-capability'
 import { requireInstalledStructuredHost as requireInstalledHost } from '../creation/structured-agent-session-gate'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
-import {
-  structuredAgentSessionSubscriptionBase,
-  structuredAgentSessionSubscriptionId as subscriptionIdFor
-} from './structured-agent-session-subscription-id'
+import { structuredAgentSessionSubscriptionId as subscriptionIdFor } from './structured-agent-session-subscription-id'
 import { SubscribeParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-subscribe-params'
 import * as queuedImages from '../attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
-import { registerLiveTextViewer } from './structured-agent-session-live-text-viewers'
+import {
+  liveTextViewerKey,
+  registerLiveTextViewer
+} from './structured-agent-session-live-text-viewers'
 
 export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   name: 'agentSession.subscribe',
@@ -33,7 +33,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     let releaseViewer = (): void => {}
     const viewer =
       capabilities?.liveTextViewer !== undefined
-        ? `${structuredAgentSessionSubscriptionBase(ctx, params.sessionId)}:${capabilities.liveTextViewer.id}`
+        ? liveTextViewerKey(params.sessionId, capabilities.liveTextViewer.id)
         : undefined
     const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
       releaseViewer()
