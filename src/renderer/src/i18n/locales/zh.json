@@ -8324,6 +8324,8 @@
           "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动",
           "94a479cef3": "显示差异中行首和行尾空白字符的区别",
           "collapseUnchangedDescription": "在文件差异中仅显示更改行和少量上下文，其余内容隐藏在可展开区域中，“查看所有更改”差异始终采用此方式折叠",
+          "editorLineNumbersTitle": "编辑器行号",
+          "editorLineNumbersDescription": "在代码、文本和差异编辑器中显示行号。",
           "a37865966c": "自动保存文件",
           "8b3f8e6b83": "Markdown 评审笔记",
           "89ba15b474": "自动保存延迟",
@@ -16572,6 +16574,8 @@
           "dde325ddfe": "关闭换行",
           "2e91bc89d1": "开启空白字符显示",
           "2bf19c54ad": "关闭空白字符显示",
+          "linesOn": "行号开",
+          "linesOff": "行号关",
           "untrackedFiles": "未跟踪文件",
           "noExtension": "（无扩展名）",
           "diffLoadTimedOut": "差异加载未完成",
@@ -16671,7 +16675,10 @@
           "f0fd4174b5": "打开文件选项卡以使用富文本 Markdown 编辑",
           "a10d9b8337": "打开文件",
           "2076ecfc9c": "上一个更改",
-          "631dab0df3": "下一个更改"
+          "631dab0df3": "下一个更改",
+          "hideLineNumbers": "隐藏行号",
+          "showLineNumbers": "显示行号",
+          "lineNumbersUnavailable": "行号可在源码或差异模式下使用"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "导出为 PDF",
@@ -17306,7 +17313,8 @@
           "listFailed": "无法列出 Markdown 文档"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "文件操作"
+          "fileActions": "文件操作",
+          "lineNumbers": "行号"
         },
         "ReviewNotesSendMenu": {
           "terminalGone": "终端已不可用",

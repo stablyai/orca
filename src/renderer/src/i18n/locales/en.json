@@ -9273,6 +9273,9 @@
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+          "editorLineNumbersTitle": "Editor Line Numbers",
+          "editorLineNumbersDescription": "Show line numbers in code, text, and diff editors.",
+          "markdownDefaultView": "Default Markdown View",
           "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
           "a37865966c": "Auto save files",
           "8b3f8e6b83": "Markdown review notes",
@@ -17556,6 +17559,8 @@
           "dde325ddfe": "Wrap Off",
           "2e91bc89d1": "Whitespace On",
           "2bf19c54ad": "Whitespace Off",
+          "linesOn": "Lines On",
+          "linesOff": "Lines Off",
           "untrackedFiles": "Untracked Files",
           "noExtension": "(no extension)",
           "diffLoadTimedOut": "Diff did not finish loading.",
@@ -17663,10 +17668,14 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "631dab0df3": "Next change",
+          "hideLineNumbers": "Hide line numbers",
+          "showLineNumbers": "Show line numbers",
+          "lineNumbersUnavailable": "Line numbers are available in source or diff mode"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "File actions"
+          "fileActions": "File actions",
+          "lineNumbers": "Line Numbers"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",

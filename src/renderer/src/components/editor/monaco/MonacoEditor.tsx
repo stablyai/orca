@@ -120,6 +120,7 @@ export default function MonacoEditor({
   // Mirrors Monaco's automatic spacing closely enough to size before mount.
   const autoHeightLineHeight = typography.lineHeight || Math.ceil(typography.fontSize * 1.45)
   const editorWordWrap = settings?.editorWordWrap
+  const editorLineNumbers = settings?.editorLineNumbers !== false
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
     return file
@@ -198,9 +199,10 @@ export default function MonacoEditor({
     editorRef.current.updateOptions({
       ...typographyOptions,
       ...buildFileEditorWordWrapOptions(editorWordWrap),
+      lineNumbers: editorLineNumbers ? 'on' : 'off',
       readOnly
     })
-  }, [typographyOptions, editorWordWrap, readOnly])
+  }, [typographyOptions, editorLineNumbers, editorWordWrap, readOnly])
 
   useMonacoGitBlame({
     mountedEditor,
@@ -318,7 +320,7 @@ export default function MonacoEditor({
           ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
           ...buildFileEditorWordWrapOptions(editorWordWrap),
           ...typographyOptions,
-          lineNumbers: 'on',
+          lineNumbers: editorLineNumbers ? 'on' : 'off',
           renderLineHighlight: 'line',
           automaticLayout: true,
           unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
