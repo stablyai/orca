@@ -18,6 +18,7 @@ import {
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -65,9 +66,11 @@ export function wireStructuredAgentSessionQueuedMessages(
                   acquisitionGeneration: child.generation
                 }) ?? { kind: 'codex-unavailable' })
               : { kind: 'codex-unavailable' },
-        // A provider that takes input mid-turn only by cancelling its prompt gets mail after the turn.
+        // Providers that steer by cancelling, and bot-group members whose reserved mail lines each
+        // own a room turn, take mail after the running turn ends.
         mailJoinsTurn:
-          !record || ctx.deps.agents.capabilities(record.provider)?.steering !== 'queue'
+          !isBotGroupMemberSession(sessionId) &&
+          (!record || ctx.deps.agents.capabilities(record.provider)?.steering !== 'queue')
       }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),

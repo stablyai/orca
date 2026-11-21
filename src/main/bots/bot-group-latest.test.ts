@@ -239,4 +239,30 @@ describe('a group as the sidebar lists it', () => {
     groups.store.put({ ...group })
     expect(groups.store.listing()[0]).not.toHaveProperty('sidebarOrder')
   })
+
+  it('does not overwrite the sidebar preview with NO_REPLY when a turn ends quietly', async () => {
+    const { groups, runtime } = fixture()
+    const group = await groups.create({ name: 'Review', botIds: ['bot-0'] })
+    const asked = await groups.send({
+      groupId: group.id,
+      revision: group.revision,
+      messageId: randomUUID(),
+      text: '@Scout check'
+    })
+    mocks.snapshot.mockImplementation(async (sessionId) =>
+      journal(sessionId, [
+        { operationId: asked.turns[0]!.operationId, text: 'NO_REPLY', at: asked.createdAt + 1 }
+      ])
+    )
+    await noteBotGroupMemberReply(
+      runtime,
+      group.members[0]!.sessionId,
+      `t-${asked.turns[0]!.operationId}`
+    )
+    expect(groups.store.listing()[0]?.latest).toEqual({
+      authorName: null,
+      text: '@Scout check',
+      at: asked.createdAt
+    })
+  })
 })

@@ -7,8 +7,10 @@ import {
   type indexBotGroupJournal,
   type BotGroupTurn
 } from '../../../../shared/bots/bot-group'
+import { botGroupSteeredOperations } from '../../../../shared/bots/bot-group-visible-turns'
 export type BotGroupSession = ReturnType<typeof useStructuredAgentSession> & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
+  steeredOperations: ReadonlySet<string>
 }
 export const BotGroupSessionReader = memo(function BotGroupSessionReader({
   target,
@@ -38,6 +40,14 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
       ),
     [indexJournal, controller.journalItems, controller.submissions, turn.operationIds]
   )
+  const steeredOperations = useMemo(
+    () =>
+      botGroupSteeredOperations(
+        { items: controller.journalItems, submissions: controller.submissions },
+        turn.operationIds
+      ),
+    [controller.journalItems, controller.submissions, turn.operationIds]
+  )
   const { readCurrent, hasOlder, loadingOlder, loadOlder } = controller
   useEffect(() => {
     if (
@@ -66,7 +76,10 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     controller.journalItems,
     controller.submissions
   ])
-  const session = useMemo(() => ({ ...controller, groupTurnItems }), [controller, groupTurnItems])
+  const session = useMemo(
+    () => ({ ...controller, groupTurnItems, steeredOperations }),
+    [controller, groupTurnItems, steeredOperations]
+  )
   useEffect(() => {
     report(turn.sessionId, session)
   }, [turn.sessionId, report, session])

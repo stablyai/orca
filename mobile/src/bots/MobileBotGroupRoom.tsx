@@ -22,6 +22,7 @@ import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
 import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
 import { botGroupMenuActions } from './bot-group-menu-actions'
 import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
+import { visibleBotGroupMessages } from '../../../src/shared/bots/bot-group-visible-turns'
 import { MobileBotGroupPeerRequestLine } from './MobileBotGroupPeerRequestLine'
 import { groupNewThread, groupSend, groupStop } from './bot-group-operations'
 import { MobileBotGroupRoomBar } from './MobileBotGroupRoomBar'
@@ -221,36 +222,38 @@ export function MobileBotGroupRoom({
             </Text>
           </Pressable>
         ) : null}
-        {botGroupRoomOrder(data?.messages ?? []).map((message) => (
-          <View key={message.id}>
-            {message.author.kind === 'owner' ? (
-              <MobileNativeChatMessage
-                message={{
-                  id: message.id,
-                  role: 'user',
-                  blocks: botGroupOwnerMessageBlocks(message),
-                  timestamp: message.createdAt,
-                  source: 'transcript'
-                }}
-              />
-            ) : (
-              <MobileBotGroupPeerRequestLine message={message} />
-            )}
-            {message.turns.map((turn) => (
-              <MobileBotGroupTurn
-                key={turn.operationId}
-                turn={turn}
-                client={client}
-                folderId={bots.find((bot) => bot.id === turn.botId)?.folderWorkspaceId}
-                session={sessions.get(turn.sessionId)}
-                onStop={() => void stop(turn.botId)}
-                onReply={() =>
-                  group && setDraft(botGroupReplyDraft(turn.botId, draft, group, bots))
-                }
-              />
-            ))}
-          </View>
-        ))}
+        {visibleBotGroupMessages(botGroupRoomOrder(data?.messages ?? []), sessions).map(
+          (message) => (
+            <View key={message.id}>
+              {message.author.kind === 'owner' ? (
+                <MobileNativeChatMessage
+                  message={{
+                    id: message.id,
+                    role: 'user',
+                    blocks: botGroupOwnerMessageBlocks(message),
+                    timestamp: message.createdAt,
+                    source: 'transcript'
+                  }}
+                />
+              ) : (
+                <MobileBotGroupPeerRequestLine message={message} />
+              )}
+              {message.turns.map((turn) => (
+                <MobileBotGroupTurn
+                  key={turn.operationId}
+                  turn={turn}
+                  client={client}
+                  folderId={bots.find((bot) => bot.id === turn.botId)?.folderWorkspaceId}
+                  session={sessions.get(turn.sessionId)}
+                  onStop={() => void stop(turn.botId)}
+                  onReply={() =>
+                    group && setDraft(botGroupReplyDraft(turn.botId, draft, group, bots))
+                  }
+                />
+              ))}
+            </View>
+          )
+        )}
       </MobileBotGroupTranscript>
       {group ? <MobileBotGroupApprovalDock group={group} bots={bots} sessions={sessions} /> : null}
       <MobileNativeChatInputLockStatus

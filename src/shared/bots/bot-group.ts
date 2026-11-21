@@ -202,7 +202,8 @@ export function botGroupTurnOperation(snapshot: GroupJournal, turnItemId: string
   const anchor = structuredAgentTurnAnchors(snapshot.items, snapshot.submissions).get(turnItemId)
   const submission = snapshot.submissions.find(
     (submission) =>
-      submission.answeredInTurn?.turnItemId === turnItemId ||
+      (submission.answeredInTurn?.turnItemId === turnItemId &&
+        submission.answeredInTurn.via !== 'steer') ||
       (anchor !== undefined &&
         (submission.providerItemId === anchor ||
           agentJournalSubmissionKey(submission.clientMessageId) === anchor))

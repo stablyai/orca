@@ -9,7 +9,7 @@ import { NativeChatWorkingStatus } from '../native-chat/conversation/turns/Nativ
 import type { NativeChatTranscriptRowContext } from '../native-chat/messages/rows/NativeChatTranscriptRow'
 import { NativeChatTranscriptRowStack } from '../native-chat/viewport/virtualization/NativeChatTranscriptItems'
 import { desktopStructuredTranscript } from '../native-chat/conversation/projection/structured-agent-session-message-projection'
-import { buildNativeChatTranscriptSlots } from '../native-chat/conversation/slots/native-chat-transcript-slots'
+import { buildNativeChatTranscript } from '../native-chat/conversation/slots/native-chat-transcript-slots'
 import { useNativeChatSubagentScope } from '../native-chat/subagents/use-native-chat-subagent-scope'
 import {
   closeNativeChatSubagentOnEscape,
@@ -152,9 +152,9 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     () => (expanded ? new Set([turn.operationId]) : new Set<string>()),
     [expanded, turn.operationId]
   )
-  const slots = useMemo(
+  const transcript = useMemo(
     () =>
-      buildNativeChatTranscriptSlots({
+      buildNativeChatTranscript({
         messages: scopeMessages,
         // A subagent's own rows sit in no turn of the room's.
         turnKeys: scopeMessages.map(() => (subagentOpen ? undefined : turn.operationId)),
@@ -182,10 +182,14 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       subagentHeads
     ]
   )
+  const quietTurn = !subagentOpen && transcript.quietTurnKeys.has(turn.operationId)
   // The turn's own header line draws its status; its rows must not draw it again.
   const rows = useMemo(
-    () => slots.map((slot) => (slot.kind === 'message' ? { ...slot, status: undefined } : slot)),
-    [slots]
+    () =>
+      transcript.slots.map((slot) =>
+        slot.kind === 'message' ? { ...slot, status: undefined } : slot
+      ),
+    [transcript.slots]
   )
   useRecheckNativeChatFileLinksWhenSettled(files?.existence ?? null, working)
   const openFileLink = useNativeChatFileLinkClick(
@@ -251,7 +255,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
             pendingLabel={pendingLabel}
             workedSeconds={membershipEnded || waiting || rejection ? 0 : status.workedSeconds}
             expanded={expanded}
-            onToggleExpanded={lifecycle ? () => setExpanded(!expanded) : undefined}
+            onToggleExpanded={lifecycle && !quietTurn ? () => setExpanded(!expanded) : undefined}
             actions={
               <>
                 {!turn.revoked && !rejection && (working || waiting) ? (

@@ -3,6 +3,7 @@ import {
   botGroupCompletedReply,
   botGroupTurnItems,
   botGroupTurnOperation,
+  botGroupTurnReplyText,
   isBotGroupMemberSession
 } from '../../shared/bots/bot-group'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -56,16 +57,19 @@ export async function noteBotGroupMemberReply(
       candidate === turn ? { ...candidate, reply: finished?.text ?? null } : candidate
     )
   })
+  const latestText = botGroupTurnReplyText(finished?.text, turn.answer)
+  if (latestText) {
+    const kept = groups.store.setLatest(
+      owner.group.id,
+      { authorName: turn.botName, text: latestText, at: finished?.completedAt ?? endedAt },
+      { after, reply }
+    )
+    if (kept) {
+      groups.changed()
+    }
+  }
   if (!finished) {
     return
-  }
-  const kept = groups.store.setLatest(
-    owner.group.id,
-    { authorName: turn.botName, text: finished.text, at: finished.completedAt ?? endedAt },
-    { after, reply }
-  )
-  if (kept) {
-    groups.changed()
   }
   await handOffGroupMentions(groups, message, turn, { full: finished.full, saved: finished.text })
 }
