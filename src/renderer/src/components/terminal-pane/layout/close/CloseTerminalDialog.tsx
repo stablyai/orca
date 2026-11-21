@@ -1,11 +1,12 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  focusDialogConfirmButton
 } from '@/components/ui/dialog'
 import { DialogCancel } from '@/components/ui/dialog-parts'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ export default function CloseTerminalDialog({
     rearmReturnFocus()
     onCancel()
   }
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [previousOpen, setPreviousOpen] = useState(open)
   const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
@@ -74,7 +76,13 @@ export default function CloseTerminalDialog({
         }
       }}
     >
-      <DialogContent size="confirm" initialFocus="cancel" onOpenAutoFocus={captureReturnFocus}>
+      <DialogContent
+        size="confirm"
+        onOpenAutoFocus={(event) => {
+          captureReturnFocus()
+          focusDialogConfirmButton(event, confirmButtonRef.current)
+        }}
+      >
         <CloseTerminalDialogBody
           copyKind={copyKind}
           workspaceName={workspaceName}
@@ -87,6 +95,7 @@ export default function CloseTerminalDialog({
               : undefined
           }
           checkboxId={checkboxId}
+          confirmButtonRef={confirmButtonRef}
           dontAskAgain={dontAskAgain}
           setDontAskAgain={setDontAskAgain}
           onCancel={cancel}
@@ -106,6 +115,7 @@ function CloseTerminalDialogBody({
   workspaceName,
   onSleepInstead,
   checkboxId,
+  confirmButtonRef,
   dontAskAgain,
   setDontAskAgain,
   onCancel,
@@ -115,6 +125,7 @@ function CloseTerminalDialogBody({
   workspaceName?: string
   onSleepInstead?: () => void
   checkboxId: string
+  confirmButtonRef: React.RefObject<HTMLButtonElement | null>
   dontAskAgain: boolean
   setDontAskAgain: (value: boolean) => void
   onCancel: () => void
@@ -192,9 +203,11 @@ function CloseTerminalDialogBody({
           {t('auto.components.terminal.pane.CloseTerminalDialog.1d1a7a9c1f', 'Cancel')}
         </DialogCancel>
         <Button
+          ref={confirmButtonRef}
           type="button"
           variant="destructive"
           size="sm"
+          autoFocus
           onClick={() => onConfirm(dontAskAgain)}
         >
           {isAgent

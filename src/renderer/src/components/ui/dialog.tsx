@@ -110,6 +110,18 @@ const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
   list: 'sm:max-w-[520px]'
 }
 
+/** Override Radix's initial Cancel focus so Enter confirms a destructive action. */
+export function focusDialogConfirmButton(
+  event: Event,
+  confirmButton: HTMLButtonElement | null
+): void {
+  if (!confirmButton) {
+    return
+  }
+  event.preventDefault()
+  confirmButton.focus()
+}
+
 function DialogContent({
   className,
   children,
