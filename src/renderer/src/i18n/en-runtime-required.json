@@ -1772,6 +1772,7 @@
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
+        "savedChromeProfileUnavailable": "The saved Chrome profile is unavailable. Use Import cookies to choose a profile again.",
         "serverRepaired": "This server was re-paired during the import. Try again."
       },
       "notice": {

@@ -1,17 +1,25 @@
 import type {
   BrowserCookieImportResult,
+  BrowserCookieImportSelection,
   BrowserSessionProfileSource
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserCookieImportFailure,
   type BrowserCookieImportFailure
 } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
-import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
+import { importedBrowserProfileSource } from '../sources/browser-cookie-source-profiles'
+import {
+  detectInstalledBrowsers,
+  resolveBrowserImportSelection,
+  selectBrowserProfile
+} from '../sources/browser-cookie-detection'
 import { importCookiesFromBrowser } from '../browser-cookie-import'
 import { importCookiesFromFile } from '../imports/import-cookie-file'
-import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 
-import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
+import {
+  clientRouteCookieImportSources,
+  recordClientRouteCookieImportSource
+} from './client-route-cookie-import-source-store'
 import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
 import { currentBrowserRoutePartitionBindingStore } from '../../routing/partitions/browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from '../../routing/partitions/browser-route-partition-migration'
@@ -23,31 +31,35 @@ type ClientRouteCookieImportTarget = {
   browserProfileId: string
 }
 
-export type ClientRouteCookieImportRequest = ClientRouteCookieImportTarget & {
-  browserFamily: string
-  browserProfile?: string
-}
+export type ClientRouteCookieImportRequest = ClientRouteCookieImportTarget &
+  BrowserCookieImportSelection
 
 type ClientRouteCookieSource = {
   importInto: (partition: string) => Promise<BrowserCookieImportResult>
-  badge: Omit<BrowserSessionProfileSource, 'importedAt'>
+  importedSource: () => BrowserSessionProfileSource
 }
 
 /** Main derives the destination partition; null delegates to the server-side import RPC. */
 export async function importCookiesIntoClientRoutePartition(
   request: ClientRouteCookieImportRequest
 ): Promise<BrowserCookieImportResult | null> {
-  return importIntoClientRoutePartition(request, async () => {
-    const browser = resolveImportSource(request)
+  return importIntoClientRoutePartition(request, async (authority) => {
+    const previous =
+      'refreshSourceId' in request
+        ? clientRouteCookieImportSources(request.environmentId, authority)[request.browserProfileId]
+        : null
+    const selection = resolveBrowserImportSelection(request, previous)
+    if ('reason' in selection) {
+      return selection
+    }
+    const [detected] = detectInstalledBrowsers(selection.browserFamily)
+    const browser = selectBrowserProfile(detected, selection)
     if ('reason' in browser) {
       return browser
     }
     return {
-      importInto: (partition) => importCookiesFromBrowser(browser.source, partition),
-      badge: {
-        browserFamily: browser.source.family,
-        profileName: importedProfileName(browser.source)
-      }
+      importInto: (partition) => importCookiesFromBrowser(browser, partition),
+      importedSource: () => importedBrowserProfileSource(browser)
     }
   })
 }
@@ -64,14 +76,16 @@ export async function importCookieFileIntoClientRoutePartition(
     }
     return {
       importInto: (partition) => importCookiesFromFile(filePath, partition),
-      badge: { browserFamily: 'manual' }
+      importedSource: () => ({ browserFamily: 'manual', importedAt: Date.now() })
     }
   })
 }
 
 async function importIntoClientRoutePartition(
   target: ClientRouteCookieImportTarget,
-  resolveSource: () => Promise<ClientRouteCookieSource | BrowserCookieImportFailure>
+  resolveSource: (
+    authority: string
+  ) => Promise<ClientRouteCookieSource | BrowserCookieImportFailure>
 ): Promise<BrowserCookieImportResult | null> {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(target.environmentId)
   if (!routeIdentity) {
@@ -81,7 +95,7 @@ async function importIntoClientRoutePartition(
   if (!profile) {
     return browserCookieImportFailure('profileNotFound')
   }
-  const source = await resolveSource()
+  const source = await resolveSource(routeIdentity.authorityConnectionIdentity)
   if ('reason' in source) {
     return source
   }
@@ -106,7 +120,8 @@ async function importIntoClientRoutePartition(
   recordClientRouteCookieImportSource({
     environmentId: target.environmentId,
     profileId: target.browserProfileId,
-    source: { ...source.badge, importedAt: Date.now() }
+    authority: routeIdentity.authorityConnectionIdentity,
+    source: source.importedSource()
   })
   return {
     ...result,
@@ -175,37 +190,4 @@ export function bindRoutePartition(
     throw new Error('browser_route_partition_binding_conflict')
   }
   return derived.partition
-}
-
-function resolveImportSource(
-  request: ClientRouteCookieImportRequest
-): { source: DetectedBrowser } | BrowserCookieImportFailure {
-  // Profile names become filesystem path segments.
-  if (
-    request.browserProfile &&
-    (/[/\\]/.test(request.browserProfile) || request.browserProfile.includes('..'))
-  ) {
-    return browserCookieImportFailure('invalidBrowserProfile')
-  }
-  const browser = detectInstalledBrowsers().find((entry) => entry.family === request.browserFamily)
-  if (!browser) {
-    return browserCookieImportFailure('browserNotFound')
-  }
-  if (!request.browserProfile || request.browserProfile === browser.selectedProfile) {
-    return { source: browser }
-  }
-  const reselected = selectBrowserProfile(browser, request.browserProfile)
-  if (!reselected) {
-    return browserCookieImportFailure('browserProfileDatabaseMissing', {
-      profile: request.browserProfile
-    })
-  }
-  return { source: reselected }
-}
-
-function importedProfileName(browser: DetectedBrowser): string {
-  return (
-    browser.profiles.find((entry) => entry.directory === browser.selectedProfile)?.name ??
-    browser.selectedProfile
-  )
 }

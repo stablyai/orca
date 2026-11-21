@@ -1,5 +1,8 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+import { useAppStore } from '@/store'
+import { refreshChromeProfileCookies } from '@/lib/browser/cookies/refresh-chrome-profile-cookies'
 import { useState } from 'react'
-import { Check, Import, Plus, UserRound } from 'lucide-react'
+import { Check, Import, Plus, RefreshCw, UserRound } from 'lucide-react'
 import {
   DropdownMenuItem,
   DropdownMenuPortal,
@@ -54,6 +57,15 @@ export function BrowserToolbarProfileSub({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const currentProfile = allProfiles.find((profile) => profile.id === effectiveProfileId)
+  // This submenu only appears on local pages, even while Settings shows another host.
+  const localProfile = useAppStore((s) =>
+    s.browserSessionProfilesByHostId[LOCAL_EXECUTION_HOST_ID]?.find(
+      (p) => p.id === effectiveProfileId
+    )
+  )
+  const isImporting =
+    browserSessionImportState?.profileId === effectiveProfileId &&
+    browserSessionImportState.status === 'importing'
   const fromBrowserLabel = (label: string): string =>
     t('auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11', 'From {{value0}}', {
       value0: label
@@ -96,6 +108,17 @@ export function BrowserToolbarProfileSub({
             <Plus className="size-3.5" />
             {t('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
           </DropdownMenuItem>
+          {localProfile?.source?.chromeProfile && (
+            <DropdownMenuItem
+              disabled={isImporting}
+              onSelect={() =>
+                void refreshChromeProfileCookies(localProfile, LOCAL_EXECUTION_HOST_ID)
+              }
+            >
+              <RefreshCw className="size-3.5" />
+              {t('browser.cookieImport.refreshChrome', 'Refresh from Chrome')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSub
             onOpenChange={(open) => {
               if (open) {
@@ -105,10 +128,7 @@ export function BrowserToolbarProfileSub({
             }}
           >
             <DropdownMenuSubTrigger
-              disabled={
-                browserSessionImportState?.profileId === effectiveProfileId &&
-                browserSessionImportState.status === 'importing'
-              }
+              disabled={isImporting}
               data-contextual-tour-target="browser-import-cookies-control"
             >
               <Import className="size-3.5" />

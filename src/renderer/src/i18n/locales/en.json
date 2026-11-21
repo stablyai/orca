@@ -531,11 +531,14 @@
       "desktop": "Desktop — 1920 × 1080"
     },
     "cookieImport": {
+      "refreshChrome": "Refresh from Chrome",
+      "refreshedChrome": "Refreshed {{profile}} from Chrome.",
       "errors": {
         "notAuthorized": "Not authorized",
         "profileNotFound": "Session profile not found.",
         "invalidBrowserProfile": "Invalid browser profile name.",
         "browserNotFound": "Browser not found on this system.",
+        "savedChromeProfileUnavailable": "The saved Chrome profile is unavailable. Use Import cookies to choose a profile again.",
         "browserProfileDatabaseMissing": "No cookies database found for profile \"{{profile}}\".",
         "fileUnreadable": "Could not read the selected file.",
         "fileInvalidJson": "File is not valid JSON.",

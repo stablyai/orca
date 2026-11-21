@@ -1,6 +1,10 @@
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
-import type { BrowserCookieImportResult } from '../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserCookieImportResult,
+  BrowserCookieImportSelection
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
@@ -23,22 +27,12 @@ export function registerClientHostCookieImportHandlers(): void {
     'browser:session:importFromBrowserForClientHost',
     async (
       event,
-      args: {
-        environmentId: string
-        profileId: string
-        browserFamily: string
-        browserProfile?: string
-      }
+      args: { environmentId: string; profileId: string } & BrowserCookieImportSelection
     ): Promise<BrowserCookieImportResult | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
       }
-      return importCookiesIntoClientRoutePartition({
-        environmentId: args.environmentId,
-        browserProfileId: args.profileId,
-        browserFamily: args.browserFamily,
-        browserProfile: args.browserProfile
-      })
+      return importCookiesIntoClientRoutePartition({ ...args, browserProfileId: args.profileId })
     }
   )
 
@@ -67,7 +61,10 @@ export function registerClientHostCookieImportHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
         return {}
       }
-      return clientRouteCookieImportSources(args.environmentId)
+      const route = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
+      return route
+        ? clientRouteCookieImportSources(args.environmentId, route.authorityConnectionIdentity)
+        : null
     }
   )
 }

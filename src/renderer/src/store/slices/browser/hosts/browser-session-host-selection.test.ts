@@ -32,6 +32,21 @@ describe('createBrowserSlice runtime guard', () => {
     vi.unstubAllGlobals()
   })
 
+  it('refreshes a local page on this device while settings shows a server', async () => {
+    const store = createTestStore()
+    store.setState({ browserSessionHostIdOverride: 'runtime:windows-2' })
+    const result = await store.getState().importCookiesFromBrowser('work', {
+      hostId: 'local',
+      refreshSourceId: '228e99e3-ed6b-44d4-ae26-c16141b871c6'
+    })
+
+    expect(mockApi.browser.sessionImportFromBrowser).toHaveBeenCalledWith({
+      profileId: 'work',
+      refreshSourceId: '228e99e3-ed6b-44d4-ae26-c16141b871c6'
+    })
+    expect(result.executionHostId).toBe('local')
+  })
+
   it('does not let a slower server response overwrite the newly selected host', async () => {
     let resolveWindowsProfiles: ((value: unknown) => void) | undefined
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {

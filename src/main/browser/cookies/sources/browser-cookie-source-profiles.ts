@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
@@ -15,6 +16,19 @@ export type DetectedBrowser = {
   keychainAccount?: string
   profiles: BrowserProfile[]
   selectedProfile: string
+}
+
+export function importedBrowserProfileSource(
+  browser: DetectedBrowser
+): BrowserSessionProfileSource {
+  const directory = browser.selectedProfile
+  return {
+    browserFamily: browser.family,
+    profileName:
+      browser.profiles.find((profile) => profile.directory === directory)?.name ?? directory,
+    ...(browser.family === 'chrome' && { chromeProfile: { directory, id: randomUUID() } }),
+    importedAt: Date.now()
+  }
 }
 
 export type ChromiumBrowserDef = {
@@ -118,8 +132,9 @@ export function browserRootPath(def: ChromiumBrowserDef): string | null {
   return join(configHome, def.linuxRoot)
 }
 
-export function isSafeBrowserProfileDirectory(directory: string): boolean {
+export function isSafeBrowserProfileDirectory(directory: unknown): directory is string {
   return (
+    typeof directory === 'string' &&
     directory.length > 0 &&
     directory !== '.' &&
     !directory.includes('\0') &&

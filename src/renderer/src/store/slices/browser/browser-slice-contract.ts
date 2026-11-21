@@ -286,7 +286,7 @@ export type BrowserSlice = {
   fetchDetectedBrowsers: () => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
-    browserFamily: string,
+    source: string | { refreshSourceId: string; hostId: ExecutionHostId },
     browserProfile?: string
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>

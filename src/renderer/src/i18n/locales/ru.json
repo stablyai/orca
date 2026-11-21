@@ -523,11 +523,14 @@
       "tablet": "Планшет — 768 × 1024"
     },
     "cookieImport": {
+      "refreshChrome": "Обновить из Chrome",
+      "refreshedChrome": "Профиль «{{profile}}» обновлён из Chrome.",
       "errors": {
         "notAuthorized": "Нет доступа",
         "profileNotFound": "Профиль сессии не найден.",
         "invalidBrowserProfile": "Недопустимое имя профиля браузера.",
         "browserNotFound": "Браузер не найден в этой системе.",
+        "savedChromeProfileUnavailable": "Сохранённый профиль Chrome недоступен. Выберите профиль заново через меню импорта файлов cookie.",
         "browserProfileDatabaseMissing": "База данных файлов cookie для профиля «{{profile}}» не найдена.",
         "fileUnreadable": "Не удалось прочитать выбранный файл.",
         "fileInvalidJson": "Файл содержит некорректный JSON.",

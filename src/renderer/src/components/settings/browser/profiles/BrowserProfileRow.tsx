@@ -1,10 +1,12 @@
-import { Import, Loader2, Trash2 } from 'lucide-react'
+import { refreshChromeProfileCookies } from '@/lib/browser/cookies/refresh-chrome-profile-cookies'
+import { Import, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import type {
   BrowserCookieImportSummary,
   BrowserSessionProfile
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { Button } from '../../../ui/button'
 import {
   DropdownMenu,
@@ -36,6 +38,7 @@ type DetectedBrowser = {
 }
 
 export type BrowserProfileRowProps = {
+  hostId: ExecutionHostId
   profile: BrowserSessionProfile
   detectedBrowsers: DetectedBrowser[]
   importState: {
@@ -50,6 +53,7 @@ export type BrowserProfileRowProps = {
 }
 
 export function BrowserProfileRow({
+  hostId,
   profile,
   detectedBrowsers,
   importState,
@@ -160,7 +164,7 @@ export function BrowserProfileRow({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
           onSelect()
         }
@@ -185,6 +189,18 @@ export function BrowserProfileRow({
         <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        {profile.source?.chromeProfile && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground"
+            disabled={isImporting}
+            onClick={() => void refreshChromeProfileCookies(profile, hostId)}
+          >
+            <RefreshCw className="size-3" />
+            {t('browser.cookieImport.refreshChrome', 'Refresh from Chrome')}
+          </Button>
+        )}
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) {

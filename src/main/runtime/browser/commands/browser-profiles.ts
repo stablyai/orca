@@ -18,8 +18,11 @@ import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-sur
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
+  resolveBrowserImportSelection,
   selectBrowserProfile
 } from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importedBrowserProfileSource } from '../../../browser/cookies/sources/browser-cookie-source-profiles'
+import type { BrowserCookieImportSelection } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
@@ -219,37 +222,24 @@ export class RuntimeBrowserProfiles {
     }
   }
 
-  async browserProfileImportFromBrowser(params: {
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-    supportsPartitionSkippedCookies?: true
-  }): Promise<BrowserProfileImportFromBrowserResult> {
+  async browserProfileImportFromBrowser(
+    params: {
+      profileId: string
+      supportsPartitionSkippedCookies?: true
+    } & BrowserCookieImportSelection
+  ): Promise<BrowserProfileImportFromBrowserResult> {
     const profile = browserSessionRegistry.getProfile(params.profileId)
     if (!profile) {
       return browserCookieImportFailure('profileNotFound')
     }
-    if (
-      params.browserProfile &&
-      (/[/\\]/.test(params.browserProfile) || params.browserProfile.includes('..'))
-    ) {
-      return browserCookieImportFailure('invalidBrowserProfile')
+    const selection = resolveBrowserImportSelection(params, profile.source)
+    if ('reason' in selection) {
+      return selection
     }
-
-    const browsers = detectInstalledBrowsers()
-    let browser = browsers.find((candidate) => candidate.family === params.browserFamily)
-    if (!browser) {
-      return browserCookieImportFailure('browserNotFound')
-    }
-
-    if (params.browserProfile && params.browserProfile !== browser.selectedProfile) {
-      const reselected = selectBrowserProfile(browser, params.browserProfile)
-      if (!reselected) {
-        return browserCookieImportFailure('browserProfileDatabaseMissing', {
-          profile: params.browserProfile
-        })
-      }
-      browser = reselected
+    const [detected] = detectInstalledBrowsers(selection.browserFamily)
+    const browser = selectBrowserProfile(detected, selection)
+    if ('reason' in browser) {
+      return browser
     }
 
     const result = await importCookiesFromBrowser(browser, profile.partition, {
@@ -259,14 +249,10 @@ export class RuntimeBrowserProfiles {
       return result
     }
 
-    const profileName =
-      browser.profiles.find((candidate) => candidate.directory === browser.selectedProfile)?.name ??
-      browser.selectedProfile
-    browserSessionRegistry.updateProfileSource(params.profileId, {
-      browserFamily: browser.family,
-      profileName,
-      importedAt: Date.now()
-    })
+    browserSessionRegistry.updateProfileSource(
+      params.profileId,
+      importedBrowserProfileSource(browser)
+    )
     return { ...result, profileId: params.profileId, executorRuntimeId: this.host.getRuntimeId() }
   }
 

@@ -1,3 +1,11 @@
+import {
+  browserCookieImportFailure,
+  type BrowserCookieImportFailure
+} from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
+import type {
+  BrowserCookieImportSelection,
+  BrowserSessionProfileSource
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveChromiumCookiesPath } from '../chromium/chromium-cookie-path'
@@ -43,9 +51,12 @@ export function detectSafari(): DetectedBrowser | null {
   return null
 }
 
-export function detectInstalledBrowsers(): DetectedBrowser[] {
+export function detectInstalledBrowsers(family?: string): DetectedBrowser[] {
   const detected: DetectedBrowser[] = []
   for (const browser of CHROMIUM_BROWSERS) {
+    if (family && browser.family !== family) {
+      continue
+    }
     const root = browserRootPath(browser)
     if (!root) {
       continue
@@ -69,12 +80,12 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
     }
   }
 
-  const firefox = detectFirefox()
+  const firefox = !family || family === 'firefox' ? detectFirefox() : null
   if (firefox) {
     detected.push(firefox)
   }
 
-  const safari = detectSafari()
+  const safari = !family || family === 'safari' ? detectSafari() : null
   if (safari) {
     detected.push(safari)
   }
@@ -82,41 +93,72 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
   return detected
 }
 
-export function selectBrowserProfile(
-  browser: DetectedBrowser,
-  profileDirectory: string
-): DetectedBrowser | null {
-  if (!isSafeBrowserProfileDirectory(profileDirectory)) {
-    return null
+type BrowserImportProfile = {
+  browserFamily: string
+  browserProfile?: string
+  refresh?: true
+}
+
+export function resolveBrowserImportSelection(
+  selection: BrowserCookieImportSelection,
+  previous: BrowserSessionProfileSource | null | undefined
+): BrowserImportProfile | BrowserCookieImportFailure {
+  if ('refreshSourceId' in selection) {
+    const saved = previous?.browserFamily === 'chrome' ? previous.chromeProfile : undefined
+    if (
+      !saved?.id ||
+      saved.id !== selection.refreshSourceId ||
+      !isSafeBrowserProfileDirectory(saved.directory)
+    ) {
+      return browserCookieImportFailure('savedChromeProfileUnavailable')
+    }
+    return { browserFamily: 'chrome', browserProfile: saved.directory, refresh: true }
   }
-  if (browser.family === 'firefox') {
-    const profilesRoot = firefoxProfilesRoot()
-    if (!profilesRoot) {
-      return null
-    }
-    const cookiesPath = join(profilesRoot, profileDirectory, 'cookies.sqlite')
-    if (!existsSync(cookiesPath)) {
-      return null
-    }
-    return { ...browser, cookiesPath, selectedProfile: profileDirectory }
+  if (selection.browserProfile && !isSafeBrowserProfileDirectory(selection.browserProfile)) {
+    return browserCookieImportFailure('invalidBrowserProfile')
+  }
+  if (!selection.browserFamily) {
+    return browserCookieImportFailure('browserNotFound')
+  }
+  return selection
+}
+
+export function selectBrowserProfile(
+  browser: DetectedBrowser | undefined,
+  selection: BrowserImportProfile
+): DetectedBrowser | BrowserCookieImportFailure {
+  const directory = selection.browserProfile
+  if (directory && !isSafeBrowserProfileDirectory(directory)) {
+    return browserCookieImportFailure('invalidBrowserProfile')
+  }
+  if (selection.refresh && !browser?.profiles.some((profile) => profile.directory === directory)) {
+    return browserCookieImportFailure('savedChromeProfileUnavailable')
+  }
+  if (!browser) {
+    return browserCookieImportFailure('browserNotFound')
+  }
+  if (!directory || directory === browser.selectedProfile) {
+    return browser
   }
 
-  const browserDef = CHROMIUM_BROWSERS.find((b) => b.family === browser.family)
-  if (!browserDef) {
-    return null
+  let cookiesPath: string | null = null
+  if (browser.family === 'firefox') {
+    const root = firefoxProfilesRoot()
+    const path = root && join(root, directory, 'cookies.sqlite')
+    if (path && existsSync(path)) {
+      cookiesPath = path
+    }
+  } else {
+    const def = CHROMIUM_BROWSERS.find((candidate) => candidate.family === browser.family)
+    const root = def && browserRootPath(def)
+    if (root) {
+      cookiesPath = resolveChromiumCookiesPath(join(root, directory))
+    }
   }
-  const root = browserRootPath(browserDef)
-  if (!root) {
-    return null
-  }
-  const profileDir = join(root, profileDirectory)
-  const cookiesPath = resolveChromiumCookiesPath(profileDir)
   if (!cookiesPath) {
-    return null
+    return selection.refresh
+      ? browserCookieImportFailure('savedChromeProfileUnavailable')
+      : browserCookieImportFailure('browserProfileDatabaseMissing', { profile: directory })
   }
-  return {
-    ...browser,
-    cookiesPath,
-    selectedProfile: profileDirectory
-  }
+  return { ...browser, cookiesPath, selectedProfile: directory }
 }

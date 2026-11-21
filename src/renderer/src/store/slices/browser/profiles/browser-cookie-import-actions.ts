@@ -1,11 +1,11 @@
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserCookieImportResult } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileClearDefaultCookiesResult
 } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import {
   getBrowserSettingsHostId,
@@ -20,11 +20,24 @@ export function createBrowserCookieImportActions(
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
+    importCookiesFromBrowser: async (profileId, source, browserProfile?) => {
       const initialState = get()
-      const hostId = getBrowserSettingsHostId(initialState)
+      const selection =
+        typeof source === 'string'
+          ? { browserFamily: source, browserProfile }
+          : { refreshSourceId: source.refreshSourceId }
+      const hostId =
+        typeof source === 'string' ? getBrowserSettingsHostId(initialState) : source.hostId
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
+      const target = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId = target?.kind === 'runtime' ? target.environmentId : null
+      const refreshProfiles = async (): Promise<void> => {
+        if (typeof source !== 'string' || getBrowserSettingsHostId(get()) === hostId) {
+          await get()
+            .fetchBrowserSessionProfiles(hostId)
+            .catch(() => {})
+        }
+      }
       if (runtimeEnvironmentId) {
         set((state) =>
           browserImportStateForHostUpdate(state, hostId, {
@@ -41,8 +54,7 @@ export function createBrowserCookieImportActions(
           const clientHostResult = await window.api.browser.sessionImportFromBrowserForClientHost({
             environmentId: runtimeEnvironmentId,
             profileId,
-            browserFamily,
-            browserProfile
+            ...selection
           })
           ranOnClient = clientHostResult != null
           const pairingRevision = captureRuntimeEnvironmentRequestRevision(runtimeEnvironmentId)
@@ -51,7 +63,7 @@ export function createBrowserCookieImportActions(
             (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
               { kind: 'environment', environmentId: runtimeEnvironmentId },
               'browser.profileImportFromBrowser',
-              { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
+              { profileId, ...selection, supportsPartitionSkippedCookies: true },
               { timeoutMs: 30_000, expectedEnvironmentPairingRevision: pairingRevision }
             ))
           if (result.ok) {
@@ -63,11 +75,7 @@ export function createBrowserCookieImportActions(
                 error: null
               })
             )
-            if (getBrowserSettingsHostId(get()) === hostId) {
-              await get()
-                .fetchBrowserSessionProfiles()
-                .catch(() => {})
-            }
+            await refreshProfiles()
           } else {
             set((state) =>
               browserImportStateForHostUpdate(state, hostId, {
@@ -111,11 +119,10 @@ export function createBrowserCookieImportActions(
         })
       )
       try {
-        const result = (await window.api.browser.sessionImportFromBrowser({
+        const result = await window.api.browser.sessionImportFromBrowser({
           profileId,
-          browserFamily,
-          browserProfile
-        })) as BrowserCookieImportResult
+          ...selection
+        })
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
@@ -126,11 +133,7 @@ export function createBrowserCookieImportActions(
               error: null
             })
           )
-          if (getBrowserSettingsHostId(get()) === hostId) {
-            await get()
-              .fetchBrowserSessionProfiles()
-              .catch(() => {})
-          }
+          await refreshProfiles()
         } else {
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {

@@ -148,6 +148,8 @@ export type BrowserSessionProfileSource = {
     | 'vivaldi'
     | 'manual'
   profileName?: string
+  /** The id binds refresh to this successful import on the destination host. */
+  chromeProfile?: { directory: string; id: string }
   importedAt: number
 }
 
@@ -185,6 +187,10 @@ export type BrowserCookieImportSummary = {
     keyringFailure?: { cause: LinuxCookieKeyFailure; browser: string }
   }
 }
+
+export type BrowserCookieImportSelection =
+  | { browserFamily: string; browserProfile?: string }
+  | { refreshSourceId: string }
 
 export type BrowserCookieImportResult =
   | {

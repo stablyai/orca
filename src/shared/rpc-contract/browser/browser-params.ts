@@ -128,12 +128,18 @@ export const ProfileClearGoogleCookies = ProfileDelete.extend({
   executorRuntimeId: z.string().min(1)
 })
 
-export const ProfileImportFromBrowser = z.object({
-  profileId: requiredString('Missing required --profile'),
-  browserFamily: requiredString('Missing required --browser-family'),
-  browserProfile: OptionalString,
+const CookieImportTarget = ProfileDelete.extend({
   supportsPartitionSkippedCookies: z.literal(true).optional()
 })
+
+export const ProfileImportFromBrowser = z.union([
+  CookieImportTarget.extend({ refreshSourceId: z.uuid() }),
+  CookieImportTarget.extend({
+    refreshSourceId: z.never().optional(),
+    browserFamily: requiredString('Missing required --browser-family'),
+    browserProfile: OptionalString
+  })
+])
 
 export const Drag = ExpectUrlBrowserTarget.extend({
   from: requiredString('Missing required --from and --to element refs'),
