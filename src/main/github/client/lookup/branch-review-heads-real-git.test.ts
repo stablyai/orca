@@ -36,8 +36,11 @@ vi.mock('./tracked-upstream-branch', () => ({
 
 vi.mock('../../repositories/github-api-repository-remote-probe', () => ({
   getGitHubApiRepositoryForRemote: async () => null,
-  // The local bare repository stands in for a verified fork identity; no network is involved.
-  getGitHubApiRepositoryForRemoteUrl: async () => ({ owner: 'contributor', repo: 'orca' })
+  // Local bare repositories stand in for verified upstream/fork identities; no network is involved.
+  getGitHubApiRepositoryForRemoteUrl: async (_repoPath: string, remoteUrl: string) =>
+    remoteUrl.includes('base.git')
+      ? { owner: 'stablyai', repo: 'orca' }
+      : { owner: 'contributor', repo: 'orca' }
 }))
 
 import { getConfiguredPushHead } from './branch-review-heads'
@@ -203,6 +206,130 @@ const cases: PushCase[] = [
     destination: null,
     pushSucceeds: true,
     noUpstream: true
+  },
+  {
+    name: 'simple refuses duplicate upstream merges',
+    config: [
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'automatic setup still refuses multiple upstream merges',
+    config: [
+      ['push.default', 'simple'],
+      ['push.autoSetupRemote', 'true'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'upstream mode refuses multiple merges',
+    config: [
+      ['push.default', 'upstream'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/published']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'tracking refuses multiple upstream merges',
+    config: [
+      ['push.default', 'tracking'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'tracking with split pushRemote refuses multiple upstream merges',
+    config: [
+      ['push.default', 'tracking'],
+      ['push.autoSetupRemote', 'true'],
+      ['branch.feature.remote', 'origin'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'tracking with local upstream and pushRemote refuses multiple merges',
+    config: [
+      ['push.default', 'tracking'],
+      ['branch.feature.remote', '.'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'blank extra merge still counts as multiple',
+    config: [
+      ['push.autoSetupRemote', 'true'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['--add', 'branch.feature.merge', '']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'shorthand multiple merges are still unknown',
+    config: [
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'feature'],
+      ['--add', 'branch.feature.merge', 'other']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'same-remote pushRemote does not escape multiple merges',
+    config: [
+      ['push.default', 'simple'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'mirror remote still publishes when merges are multiple',
+    config: [
+      ['push.default', 'simple'],
+      ['remote.fork.mirror', 'true'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true
   }
 ]
 it.for(cases)(
@@ -260,8 +387,8 @@ it.for(cases)(
         await git(['config', 'branch.feature.remote', 'fork'])
         await git(['config', 'branch.feature.merge', 'refs/heads/other'])
       }
-      for (const [key, value] of config) {
-        await git(['config', key, value])
+      for (const entry of config) {
+        await git(['config', ...entry])
       }
       const configuredHead = await getConfiguredPushHead(repo, 'feature', null, {})
       const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')
@@ -294,3 +421,127 @@ it.for(cases)(
     }
   }
 )
+
+it.for([
+  {
+    name: 'literal URL remote does not inherit origin mirror when merges are multiple',
+    buildConfig: ({ baseUrl }: { base: string; baseUrl: string; forkUrl: string }) => [
+      ['remote.origin.url', baseUrl],
+      ['remote.origin.mirror', 'true'],
+      ['branch.feature.remote', baseUrl],
+      ['branch.feature.pushRemote', baseUrl],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature'],
+      ['push.default', 'simple']
+    ],
+    destination: null,
+    expectedOwner: null,
+    pushSucceeds: false
+  },
+  {
+    name: 'literal URL pushRemote stays triangular and ignores origin.pushurl when merges are multiple',
+    buildConfig: ({ baseUrl, forkUrl }: { base: string; baseUrl: string; forkUrl: string }) => [
+      ['remote.origin.url', baseUrl],
+      ['remote.origin.pushurl', forkUrl],
+      ['branch.feature.remote', 'origin'],
+      ['branch.feature.pushRemote', baseUrl],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other'],
+      ['push.default', 'simple']
+    ],
+    destination: 'feature',
+    expectedOwner: 'stablyai',
+    pushSucceeds: true
+  },
+  {
+    name: 'plain local-path pushRemote matching origin.url ignores origin.pushurl when merges are multiple',
+    buildConfig: ({ base, forkUrl }: { base: string; baseUrl: string; forkUrl: string }) => [
+      ['remote.origin.url', base],
+      ['remote.origin.pushurl', forkUrl],
+      ['branch.feature.remote', 'origin'],
+      ['branch.feature.pushRemote', base],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other'],
+      ['push.default', 'simple']
+    ],
+    destination: 'feature',
+    expectedOwner: 'stablyai',
+    pushSucceeds: true
+  }
+])('preserves raw Git remote identity before URL normalization: $name', async (entry) => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'push-head-url-'))
+  const repo = path.join(directory, 'checkout')
+  const base = path.join(directory, 'base.git')
+  const fork = path.join(directory, 'fork.git')
+  const baseUrl = `file://${base.replaceAll('\\', '/')}`
+  const forkUrl = `file://${fork.replaceAll('\\', '/')}`
+  const run = (cwd: string, args: string[]) =>
+    runProcess({
+      program: 'git',
+      args,
+      cwd,
+      env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' }
+    })
+  const git = async (args: string[]) => {
+    const result = await run(repo, args)
+    if (result.code !== 0) {
+      throw new Error(result.stderr)
+    }
+    return result
+  }
+  try {
+    await run(directory, ['init', '--quiet', '--bare', base])
+    await run(directory, ['init', '--quiet', '--bare', fork])
+    await run(directory, ['init', '--quiet', repo])
+    await git(['checkout', '-b', 'feature'])
+    await git([
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      'commit',
+      '--allow-empty',
+      '-m',
+      'initial'
+    ])
+    await git(['remote', 'add', 'origin', baseUrl])
+    for (const item of entry.buildConfig({ base, baseUrl, forkUrl })) {
+      await git(['config', ...item])
+    }
+    const configuredHead = await getConfiguredPushHead(repo, 'feature', null, {})
+    const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')
+    const push = await run(repo, ['push'])
+    expect(push.code === 0, push.stderr).toBe(entry.pushSucceeds)
+    if (entry.destination === null) {
+      expect(source).toMatchObject({
+        remoteName: 'origin',
+        branchName: 'feature',
+        pushBranchName: null
+      })
+      expect(configuredHead).toBeNull()
+    } else {
+      const baseRef = await run(directory, [
+        '--git-dir',
+        base,
+        'rev-parse',
+        '--verify',
+        `refs/heads/${entry.destination}`
+      ])
+      const forkRef = await run(directory, [
+        '--git-dir',
+        fork,
+        'rev-parse',
+        '--verify',
+        `refs/heads/${entry.destination}`
+      ])
+      expect(baseRef.code).toBe(0)
+      expect(forkRef.code).not.toBe(0)
+      expect(configuredHead).toMatchObject({
+        headRepo: { owner: entry.expectedOwner, repo: 'orca' },
+        branch: { remoteName: 'origin', branchName: entry.destination }
+      })
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
