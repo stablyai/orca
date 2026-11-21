@@ -23,7 +23,8 @@ import {
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpAnswersRequests, acpLaunchPermission } from '../launch/acp-launch-permission-modes'
+import { acpAutoApprovePermission } from '../options/acp-live-permission-mode'
+import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
@@ -78,11 +79,11 @@ export async function acquireAcpStructuredSession(input: {
     reattaching: boolean
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
-  const options = new AcpStructuredOptions(spec.dialect)
+  const options = new AcpStructuredOptions(spec.dialect, spec.permissionModeConfig?.configId)
   const launchPermission = acpLaunchPermission(spec, launch.fullAccess, acquire.permissionMode)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
-    () => childState.isAcpReadySession(session) && session.turns?.acceptsRequests === true
+    () => childState.isAcpReadySession(session) && Boolean(session.turns?.acceptsRequests)
   )
   const early: (() => void)[] = []
   const whenLane = (deliver: () => void): void => {
@@ -112,13 +113,9 @@ export async function acquireAcpStructuredSession(input: {
           // Nobody can answer during Stop, a steer or teardown.
           return { outcome: { outcome: 'cancelled' } }
         }
-        // Do not auto-approve questions or permissions enforced by the agent's own mode.
-        const claimed = spec.dialect.request?.('session/request_permission', request)
-        if (session.permission === 'full-access' && acpAnswersRequests(spec) && !claimed) {
-          const allow = request.options.find((option) => option.kind === 'allow_once')
-          if (allow) {
-            return { outcome: { outcome: 'selected', optionId: allow.optionId } }
-          }
+        const auto = acpAutoApprovePermission(session, request)
+        if (auto) {
+          return auto
         }
         return prompts
           .handle('session/request_permission', request, context)

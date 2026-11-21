@@ -33,6 +33,7 @@ import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
 import { acpNoModelSelected } from '../../turns/acp-model-command'
+import { confirmAcpPermissionModeWrite } from '../../launch/acp-launch-permission-modes'
 import {
   assertAcpStartingSession,
   isAcpReadySession,
@@ -247,13 +248,10 @@ export async function initializeAcpStructuredSession(
     if (requested === undefined) {
       throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
     }
-    const configId = options.modeConfigId()
+    const configId = options.modeConfigId(mode.configId)
     await connection.setConfigOption(configId, requested, undefined, ({ configOptions }) => {
       assertStarting()
-      if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
-        throw new Error('Permission mode could not be confirmed')
-      }
-      options.adoptConfigOptions(configOptions)
+      confirmAcpPermissionModeWrite(mode, configId, requested, configOptions, options)
     })
     assertStarting()
   }

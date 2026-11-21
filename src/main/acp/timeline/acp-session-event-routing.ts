@@ -1,6 +1,5 @@
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { SessionUpdate } from '../generated/acp-protocol.generated'
-import { acpWithCurrentMode } from '../options/acp-select-choices'
 import { absorbsAcpModelCommandOutput } from '../turns/acp-model-command'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
 import { asReattachHistory } from '../history/acp-reattach-history'
@@ -31,9 +30,7 @@ export function routeAcpSessionEvent(
       session.options.adoptConfigOptions(update.configOptions)
     } else if (update.sessionUpdate === 'current_mode_update') {
       // A mode the agent switched to itself, e.g. after an approval that allows every edit.
-      session.options.adoptConfigOptions(
-        acpWithCurrentMode(session.options.configOptions, update.currentModeId)
-      )
+      session.options.adoptCurrentMode(update.currentModeId)
     }
   }
   if (absorbsAcpModelCommandOutput(session.options, event)) {

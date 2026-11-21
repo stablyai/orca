@@ -15,6 +15,7 @@ import {
 } from './hermes-default-home'
 import { HERMES_TRANSCRIPT_IMPORT } from './hermes-transcript-import'
 import { deliverHermesInstructions } from '../acp/launch/acp-instructions'
+import { discardHermesListingSession } from './hermes-listing-session'
 
 // Chats and terminals share the profile's session store; `--resume` also takes a session title.
 const HERMES_SESSION_HISTORY: StructuredAgentSessionHistory = {
@@ -66,12 +67,18 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   // Its modes only gate edits; command approvals follow the profile, so Orca answers them in full access.
   permissionModeConfig: {
     values: { ask: 'ask', 'accept-edits': 'workspace_session', 'full-access': 'session' },
-    fullAccessAnswersRequests: true
+    fullAccessAnswersRequests: true,
+    // Gateway ACP returns configOptions for this policy; in-process writes may return none.
+    configId: 'edit_approval_policy',
+    emptyConfigMenuConfirms: true
   },
-  // Hermes cannot delete sessions, so a listing session would stay in the profile's store.
+  // 0.23.0 deletes the disposable listing session after the probe process exits.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'Hermes lists its models only inside a session it cannot delete'
+    kind: 'session',
+    listingNamesConfiguredModel: false,
+    inPrivateFolder: true,
+    listsOnDemand: true,
+    discardSession: discardHermesListingSession
   },
   instructions: deliverHermesInstructions,
   instructionsInWorkspace: true,

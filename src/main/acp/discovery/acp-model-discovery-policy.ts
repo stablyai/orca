@@ -29,17 +29,27 @@ export type AcpModelDiscovery =
 export type AcpSessionModelDiscovery = {
   kind: 'session'
   listingNamesConfiguredModel: boolean
-  sessionFolderArgs?(folder: string): string[]
+  sessionFolderArgs?: (folder: string) => string[]
   /** Models follow the account, not the project, so the session runs in a private folder. */
   inPrivateFolder?: true
   /** Starting the agent is heavy, so it lists only when a picker asks, never in warm-up. */
   listsOnDemand?: true
-  /** Removes a listing session's files, after its process exits, from an agent that can't delete
-   *  sessions; `cwd` is the private folder it ran in, so only that session matches. */
-  discardSession?(session: AcpListingSession): Promise<void>
+  /** Removes a listing session after its process exits. `cwd` is the folder it ran in. */
+  discardSession?: (session: AcpListingSession) => Promise<void>
 }
 
-export type AcpListingSession = { sessionId: string; cwd: string; accountHomePath: string }
+export type AcpListingSession = {
+  sessionId: string
+  cwd: string
+  /** Launch working directory that resolved `command`/`prefixArgs`, when different from `cwd`. */
+  launchCwd?: string
+  accountHomePath: string
+  /** The launch that opened the session, so a CLI delete uses the same program and env. */
+  command: string
+  prefixArgs: readonly string[]
+  env: Readonly<Record<string, string>>
+  envToDelete?: readonly string[]
+}
 
 export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean {
   return (
