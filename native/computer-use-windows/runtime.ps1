@@ -196,6 +196,9 @@ public static class OrcaDesktopWin32 {
     private static extern bool ClientToScreen(IntPtr hwnd, ref POINT point);
 
     [DllImport("user32.dll")]
+    private static extern IntPtr GetWindowDpiAwarenessContext(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
 
     [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
@@ -413,8 +416,8 @@ public static class OrcaDesktopWin32 {
     private static System.Drawing.Bitmap RenderWindow(IntPtr hwnd, int width, int height) {
         var previousDpiContext = IntPtr.Zero;
         try {
-            // Per-monitor-aware V2: a DPI-unaware caller would get a scaled rect but a full-size render.
-            previousDpiContext = SetThreadDpiAwarenessContext(new IntPtr(-4));
+            // PrintWindow paints in the target's DPI space; measure its bitmap in that same space.
+            previousDpiContext = SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(hwnd));
         } catch (EntryPointNotFoundException) {}
         System.Drawing.Bitmap rendered = null;
         try {
@@ -1645,6 +1648,14 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap, $Reque
 
 function Get-OrcaScreenshot($ScreenshotRequest, $WindowFrame, [IntPtr]$WindowHandle) {
     if ($null -eq $ScreenshotRequest -or $null -eq $WindowFrame) { return $null }
+    if ([OrcaDesktopWin32]::IsIconic($WindowHandle)) {
+        return [pscustomobject]@{
+            error = [pscustomobject]@{
+                code = "screenshot_failed"
+                message = "the window is minimized; its contents are unavailable for capture"
+            }
+        }
+    }
     $bitmap = $null
     $graphics = $null
     try {
@@ -1739,7 +1750,7 @@ function Get-OrcaWindowList([string]$Query) {
             y = $y
             width = $width
             height = $height
-            isMinimized = $false
+            isMinimized = [OrcaDesktopWin32]::IsIconic($handle)
             isOffscreen = $false
             screenIndex = $null
             platform = [pscustomobject]@{ backend = "uia"; nativeWindowHandle = [int64]$handle }

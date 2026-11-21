@@ -1,7 +1,10 @@
+import { PNG } from 'pngjs'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { DesktopScriptProviderClient } from '../../../../src/main/computer/desktop-script/desktop-script-provider-client'
 import type { ComputerActionResult } from '../../../../src/shared/computer/computer-use-runtime-types'
 import './computer-driver'
 import { ensureOrcaRuntimeLaunched, runOrcaCli, stopOrcaRuntime } from './computer-cli-driver'
+import { closeWindowFixture, launchWindowFixture } from './windows-form-fixture'
 import { elementIndex, runPatternAction } from './windows-fixture-actions'
 import {
   launchWindowsFormsFixture,
@@ -13,6 +16,70 @@ import {
 
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
+
+describe.skipIf(!isWindows || !e2eOptIn)('Windows helper window screenshots', () => {
+  let provider: DesktopScriptProviderClient
+  beforeAll(() => {
+    provider = new DesktopScriptProviderClient()
+  })
+  afterAll(() => provider.shutdown())
+
+  test('a DPI-unaware window paints its lower-right swatch in window coordinates', async () => {
+    const fixture = await launchWindowFixture(
+      [
+        'Add-Type -Name Dpi -Namespace Fixture -MemberDefinition \'[DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);\'',
+        '[void][Fixture.Dpi]::SetThreadDpiAwarenessContext([IntPtr](-1))',
+        "$form.Text = 'Swatch sample'",
+        "$form.FormBorderStyle = 'FixedSingle'",
+        "$form.AutoScaleMode = 'None'",
+        '$form.ClientSize = New-Object System.Drawing.Size(280, 160)',
+        '$form.BackColor = [System.Drawing.Color]::White',
+        '$corner = New-Object System.Windows.Forms.Panel',
+        '$corner.Bounds = New-Object System.Drawing.Rectangle(210, 120, 70, 40)',
+        '$corner.BackColor = [System.Drawing.Color]::FromArgb(25, 130, 85)',
+        '$form.Controls.Add($corner)'
+      ].join('\n')
+    )
+    try {
+      for (const screenshotMaxEdge of [undefined, 160]) {
+        const state = await provider.snapshot({
+          app: `pid:${fixture.pid}`,
+          windowId: fixture.windowId,
+          screenshotMaxEdge
+        })
+        if (!state.screenshot?.data) {
+          throw new Error(`Missing swatch screenshot: ${JSON.stringify(state.screenshotStatus)}`)
+        }
+        const image = PNG.sync.read(Buffer.from(state.screenshot.data, 'base64'))
+        const x = Math.floor((image.width * 7) / 8)
+        const y = Math.floor((image.height * 7) / 8)
+        const offset = (y * image.width + x) * 4
+        expect([...image.data.subarray(offset, offset + 3)]).toEqual([25, 130, 85])
+      }
+    } finally {
+      await closeWindowFixture(fixture)
+    }
+  })
+
+  test('a minimized window stays minimized and supplies no screenshot', async () => {
+    const fixture = await launchWindowFixture("$form.WindowState = 'Minimized'")
+    try {
+      const app = `pid:${fixture.pid}`
+      const [window] = (await provider.listWindows({ app })).windows
+      expect(window.id).toBe(fixture.windowId)
+      const state = await provider.snapshot({ app, windowId: fixture.windowId })
+      expect.soft(window.isMinimized).toBe(true)
+      expect(state.screenshotStatus).toMatchObject({ state: 'failed', code: 'screenshot_failed' })
+      expect(state.screenshot).toBeNull()
+      expect((await provider.listWindows({ app })).windows[0]).toMatchObject({
+        id: window.id,
+        isMinimized: true
+      })
+    } finally {
+      await closeWindowFixture(fixture)
+    }
+  })
+})
 
 let fixture: WindowsSemanticFixture | null = null
 
