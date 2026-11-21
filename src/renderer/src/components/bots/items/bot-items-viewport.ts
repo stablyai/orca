@@ -113,5 +113,5 @@ function createViewport(): BotItemsViewport {
 
 /** One per list, for its lifetime: the list attaches its scroller once both are in the page. */
 export function useBotItemsViewport(): BotItemsViewport {
-  return useMemo(createViewport, [])
+  return useMemo(() => createViewport(), [])
 }
