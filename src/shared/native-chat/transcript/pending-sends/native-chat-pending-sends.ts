@@ -8,13 +8,14 @@ import {
   matchingNativeChatUserRows,
   nativeChatPendingContentKey,
   nativeChatPendingMatchKey,
-  nativeChatPendingMatchingAfter,
   nativeChatPendingOccurrence,
+  nativeChatUserMessageContentKey,
   normalizeNativeChatPendingText,
   selectPendingIndicesRepresentedByUserRows,
   type NativeChatGluedUserRow,
   type NativeChatUserRow
 } from './native-chat-pending-occurrence'
+import { messagesAfterPendingBoundary } from './native-chat-pending-boundary'
 
 // Bounds reconciliation cost; each open send rescans the transcript.
 export const NATIVE_CHAT_PENDING_SEND_LIMIT = 8
@@ -42,29 +43,9 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  beforeMessage?: NativeChatMessage['pendingBeforeMessage']
   /** Pathless image rows already claimed by pruned sends, so this send cannot reclaim them. */
   claimedImageRowIds?: readonly string[]
-}
-
-function messagesAfterPendingBoundary(
-  messages: readonly NativeChatMessage[],
-  pending: NativeChatPendingSend
-): readonly NativeChatMessage[] {
-  if (pending.afterMessageId === undefined) {
-    return messages
-  }
-  if (pending.afterMessageId === null) {
-    // Why: the send time is this client's clock and row timestamps are the host's (#11519).
-    return pending.afterEmptyTranscriptSessionId
-      ? messages
-      : messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
-  }
-  const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
-  if (boundaryIndex !== -1) {
-    return messages.slice(boundaryIndex + 1)
-  }
-  // If paging drops the boundary, use send time rather than binding arbitrary older identical prompts.
-  return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
 }
 
 /** Release claims from other provider sessions so resumed history cannot retire a newer identical send. */
@@ -91,21 +72,6 @@ export function releaseEmptyTranscriptClaims(
     const { afterEmptyTranscriptSessionId: _released, ...rest } = entry
     return rest
   })
-}
-
-function messageIsAfterPendingTimestamp(
-  message: NativeChatMessage,
-  pending: NativeChatPendingSend
-): boolean {
-  // Timestampless transcripts must still retire echoes or queued bubbles remain pinned forever.
-  if (message.timestamp === null) {
-    return true
-  }
-  const boundary = nativeChatPendingMatchingAfter(pending)
-  // Exclude ties to existing transcript-clock boundaries; local send-time boundaries stay inclusive.
-  return pending.afterMessageTimestamp == null
-    ? message.timestamp >= boundary
-    : message.timestamp > boundary
 }
 
 /** Require each glued send’s own boundary; missing row boundaries fall back to send time, as exact matching does (#14663). */
@@ -143,7 +109,7 @@ function claimPathlessImageRow(
   allMessages: readonly NativeChatMessage[],
   claimed: Set<string>,
   advancedOnly: boolean
-): boolean {
+): NativeChatMessage | undefined {
   const count = entry.imagePaths?.filter(Boolean).length ?? 0
   if (
     count === 0 ||
@@ -153,7 +119,7 @@ function claimPathlessImageRow(
     entry.writeUnconfirmedAt !== undefined ||
     normalizeNativeChatPendingText(entry.text)
   ) {
-    return false
+    return undefined
   }
   const messages = messagesAfterPendingBoundary(allMessages, entry)
   const lastNonUser = messages.findLastIndex((message) => message.role !== 'user')
@@ -175,11 +141,62 @@ function claimPathlessImageRow(
   if (row) {
     claimed.add(row.id)
   }
-  return Boolean(row)
+  return row
 }
 
 function carriedImageRowClaims(pending: readonly NativeChatPendingSend[]): Set<string> {
   return new Set(pending.flatMap((entry) => entry.claimedImageRowIds ?? []))
+}
+
+/** Older unmatched sends stay before the earliest recorded later send; anchors only move earlier. */
+export function anchorNativeChatPendingSends<T extends NativeChatPendingSend>(
+  pending: T[],
+  messages: readonly NativeChatMessage[]
+): T[] {
+  if (pending.length < 2) {
+    return pending
+  }
+  const consumed = new Map<string, number>()
+  const claimedImageRows = carriedImageRowClaims(pending)
+  const matches = pending.map((entry) => {
+    const key = nativeChatPendingMatchKey(entry)
+    const used = consumed.get(key) ?? 0
+    const occurrence = nativeChatPendingOccurrence(entry, used)
+    consumed.set(key, Math.max(used, occurrence))
+    const contentKey = nativeChatPendingContentKey(entry)
+    // Claim in the same order as visibility so a pathless image row anchors the send it hides.
+    const match =
+      messagesAfterPendingBoundary(messages, entry).filter(
+        (message) => nativeChatUserMessageContentKey(message, entry.imagePaths) === contentKey
+      )[occurrence - 1] ?? claimPathlessImageRow(entry, messages, claimedImageRows, false)
+    return entry.afterMessageId === undefined ? undefined : match
+  })
+  let changed = false
+  const next = pending.map((entry, index) => {
+    const eligible = messagesAfterPendingBoundary(messages, entry)
+    const anchorIndex = Math.min(
+      ...matches
+        .slice(index + 1)
+        .map((match) => (match && eligible.includes(match) ? messages.indexOf(match) : Infinity))
+    )
+    const anchor = messages[anchorIndex]
+    const stored = entry.beforeMessage
+    // An anchor paged out of view cannot be ordered against this page, so it is kept.
+    const storedIndex = stored ? messages.findIndex((message) => message.id === stored.id) : -1
+    if (!anchor || (stored && (storedIndex === -1 || storedIndex <= anchorIndex))) {
+      return entry
+    }
+    changed = true
+    return {
+      ...entry,
+      beforeMessage: {
+        id: anchor.id,
+        timestamp: anchor.timestamp,
+        ...(anchor.transcriptOrder !== undefined ? { transcriptOrder: anchor.transcriptOrder } : {})
+      }
+    }
+  })
+  return changed ? next : pending
 }
 
 /** Keep echoes until a later non-user turn to avoid first-turn flashes during transient empty reads. */
@@ -290,7 +307,10 @@ export function pendingSendsAsMessages(
   existingMessages: readonly NativeChatMessage[] = [],
   workingEpoch?: number | null
 ): NativeChatMessage[] {
-  return visibleNativeChatPendingSends(pending, existingMessages).map((entry) => ({
+  return visibleNativeChatPendingSends(
+    anchorNativeChatPendingSends(pending, existingMessages),
+    existingMessages
+  ).map((entry) => ({
     id: `pending:${entry.id}`,
     role: 'user' as const,
     blocks: [
@@ -299,6 +319,7 @@ export function pendingSendsAsMessages(
     ],
     timestamp: entry.sentAt,
     pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch),
+    ...(entry.beforeMessage ? { pendingBeforeMessage: entry.beforeMessage } : {}),
     source: 'scrape' as const
   }))
 }

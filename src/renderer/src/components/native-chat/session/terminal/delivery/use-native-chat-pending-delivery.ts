@@ -6,6 +6,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import {
+  anchorNativeChatPendingSends,
   pendingSendsAsMessages,
   prunePendingSends,
   releaseEmptyTranscriptClaims,
@@ -69,7 +70,12 @@ export function useNativeChatPendingDelivery(args: {
     [scope]
   )
   useEffect(() => {
-    save((entries) => prunePendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages))
+    save((entries) =>
+      prunePendingSends(
+        anchorNativeChatPendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages),
+        messages
+      )
+    )
   }, [messages, save, sessionId])
   const record = useCallback(
     (text: string, imagePaths?: string[], recovery = false) => {
