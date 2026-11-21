@@ -233,8 +233,10 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     )
     openDialog({ slack: { appId: 'A1', teamId: 'T1' } }, 'T1')
 
+    // The bot's own app is in T1, so no hand-off: the short paste form leads, with no Use it in any form.
     await screen.findByText('Paste a new token to reconnect.')
-    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Use it/ })).toBeNull()
+    expect(screen.queryByText(/already has a token for/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Open Slack app settings' }))
     // No `bot`: a server's page would otherwise open in one of its bots' workspaces.
     expect(mocks.open).toHaveBeenCalledTimes(1)

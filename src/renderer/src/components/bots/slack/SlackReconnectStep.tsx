@@ -150,7 +150,8 @@ export function SlackReconnectStep({
             <Button type="button" variant="outline" onClick={onCancel}>
               {t('bots.slack.setup.cancel', 'Cancel')}
             </Button>
-            <Button type="button" autoFocus onClick={() => onUse(offer.teamId)}>
+            {/* Not autofocused: Enter must never hand off this account's token unseen. */}
+            <Button type="button" onClick={() => onUse(offer.teamId)}>
               {t('bots.slack.reconnect.use', 'Use it')}
             </Button>
           </DialogFooter>

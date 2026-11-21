@@ -13,12 +13,18 @@ afterEach(() => {
 
 describe('slack-page-here', () => {
   it('accepts only Slack’s own https approval page', () => {
+    // Hosts are case-insensitive: the URL parser lowercases them, so this is still Slack's page.
+    expect(isSlackAuthorizeUrl('https://SLACK.com/oauth/v2/authorize?state=s')).toBe(true)
     expect(isSlackAuthorizeUrl('https://slack.com/oauth/v2/authorize?client_id=1&state=s')).toBe(
       true
     )
     for (const url of [
       'http://slack.com/oauth/v2/authorize?state=s',
       'https://slack.com.example.test/oauth/v2/authorize',
+      'https://slack.com.evil.test/oauth/v2/authorize',
+      'https://evilslack.com/oauth/v2/authorize',
+      'https://slack.com./oauth/v2/authorize',
+      'https://slack.com/oauth/v2/authorizex',
       'https://evil.test/?https://slack.com/oauth/v2/authorize',
       'https://user@slack.com/oauth/v2/authorize',
       'https://slack.com:8443/oauth/v2/authorize',
