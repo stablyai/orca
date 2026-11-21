@@ -349,6 +349,27 @@ describe('ACP launch: standing instructions', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32').each([
+    ['hermes', '.hermes.md'],
+    ['qwen-code', 'QWEN.md']
+  ] as const)(
+    "makes %s's %s readable only by this user when the folder already had a world-readable one",
+    async (agent, contextFile) => {
+      const home = await mkdtemp(join(tmpdir(), `acp-instructions-${agent}-`))
+      try {
+        const contextPath = join(home, contextFile)
+        await writeFile(contextPath, 'My own rules.\n', { mode: 0o644 })
+        await launch(agent, { instructions: PREAMBLE, workspacePath: home })
+        const written = await readFile(contextPath, 'utf8')
+        expect(written.startsWith('My own rules.')).toBe(true)
+        expect(written).toContain(PREAMBLE)
+        expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  )
+
   it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
     const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))
     try {
