@@ -1,5 +1,9 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useLayoutEffect, useRef, useState } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
@@ -23,6 +27,8 @@ import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
 export type NativeChatApprovalCardProps = {
   approval: ChatApproval
+  /** Names this prompt within its chat tab, so a released chat returns with its detail as the reader left it. */
+  memoryKey?: string
   /** Deliver the option's transport-specific response token. */
   onChoose: (option: string) => void
   /** Cancel the active provider turn while this card owns the composer region. */
@@ -49,6 +55,7 @@ export type NativeChatApprovalCardProps = {
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
+  memoryKey,
   onChoose,
   onCancel,
   onCollapse,
@@ -85,7 +92,11 @@ export function NativeChatApprovalCard({
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
-  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useNativeChatViewState(
+    memoryKey === undefined ? undefined : `approval-detail:${memoryKey}`,
+    false,
+    KEPT_PROMPT_VIEWS
+  )
   const [detailClamped, setDetailClamped] = useState(false)
   const detailRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {

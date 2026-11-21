@@ -52,12 +52,12 @@ import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPane
 
 const WORKTREE_ID = 'wt-1'
 const GROUP_ID = 'group-1'
-const TAB_IDS = ['chat-1', 'chat-2', 'chat-3']
+const TAB_IDS = ['chat-1', 'chat-2', 'chat-3', 'chat-4', 'chat-5', 'chat-6']
 
 describe('StructuredAgentSessionPaneOverlayLayer', () => {
   afterEach(cleanup)
 
-  it('mounts a chat when first shown, keeps it when hidden, and forgets it when closed', () => {
+  it('mounts a chat when first shown and keeps only the three most recent hidden ones', () => {
     mocks.mounts.length = 0
     mocks.store?.setState({
       unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) },
@@ -69,22 +69,17 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     )
     expect(mountedChats(view.container)).toEqual(['chat-1'])
 
-    act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-2')] } }))
-    expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-2'])
+    for (const id of ['chat-2', 'chat-3', 'chat-4']) {
+      act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group(id)] } }))
+    }
+    expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-2', 'chat-3', 'chat-4'])
+
+    act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-5')] } }))
+    expect(mountedChats(view.container)).toEqual(['chat-2', 'chat-3', 'chat-4', 'chat-5'])
 
     act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-1')] } }))
-    expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-2'])
-    expect(mocks.mounts).toEqual(['chat-1', 'chat-2'])
-
-    act(() =>
-      mocks.store?.setState({
-        unifiedTabsByWorktree: { [WORKTREE_ID]: ['chat-1', 'chat-3'].map(chatTab) }
-      })
-    )
-    act(() =>
-      mocks.store?.setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) } })
-    )
-    expect(mountedChats(view.container)).toEqual(['chat-1'])
+    expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-3', 'chat-4', 'chat-5'])
+    expect(mocks.mounts).toEqual(['chat-1', 'chat-2', 'chat-3', 'chat-4', 'chat-5', 'chat-1'])
   })
 })
 

@@ -61,7 +61,8 @@ export function useNativeChatViewportAlign({
   holdJumpDrawnAbove: (px: number) => void
 }): {
   /** `end` brings the row's end to the viewport's bottom instead, for the newest of a run. */
-  alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
+  /** `inset` lands that many pixels into the row, for a reader returning mid-message. */
+  alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge, inset?: number) => void
   isAlignPending: () => boolean
   /** Another write, or the reader, took the scroll. */
   endAlign: () => void
@@ -88,7 +89,7 @@ export function useNativeChatViewportAlign({
   >(null)
 
   const alignToViewportTop = useCallback(
-    (element: HTMLElement, edge: NativeChatAlignEdge = 'start') => {
+    (element: HTMLElement, edge: NativeChatAlignEdge = 'start', inset = 0) => {
       const container = scrollRef.current
       if (!container) {
         return
@@ -96,7 +97,7 @@ export function useNativeChatViewportAlign({
       finishReaderTakeover()
       const index = Number.parseInt(element.dataset.index ?? '', 10)
       // A row drawn above its own top lands by what it draws, so its first line stays in view.
-      const drawnAbove = edge === 'start' ? nativeChatRowDrawnAbove(element) : 0
+      const drawnAbove = edge === 'start' ? nativeChatRowDrawnAbove(element) - inset : 0
       // Use the virtualizer to replace its pending jump reconciliation instead of racing it.
       if (virtualizer.scrollElement && !Number.isNaN(index)) {
         // Target the row's index so measurements can correct its landing offset. Only these jumps

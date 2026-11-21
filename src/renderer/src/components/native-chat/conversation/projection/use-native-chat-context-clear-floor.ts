@@ -33,6 +33,8 @@ export function useNativeChatContextClearFloor(
   rows: readonly AgentJournalRenderItem[]
   clearing: boolean
   clears: number
+  /** The sequence of the latest `/clear` this transcript starts from, 0 for none. */
+  floor: number
   /** Call as this view's /clear goes out; the returned restore shows the transcript again if refused. */
   onClearSent: () => () => void
 } {
@@ -116,5 +118,11 @@ export function useNativeChatContextClearFloor(
 
   const floor = current.floor
   const rows = useMemo(() => agentSessionTranscriptRows(items, floor), [floor, items])
-  return { rows, clearing: fading !== null || awaitingDivider, clears: current.clears, onClearSent }
+  return {
+    rows,
+    clearing: fading !== null || awaitingDivider,
+    clears: current.clears,
+    floor,
+    onClearSent
+  }
 }

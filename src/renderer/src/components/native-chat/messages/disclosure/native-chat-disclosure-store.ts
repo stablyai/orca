@@ -1,6 +1,11 @@
 // Keep disclosures outside windowed rows so scrolling cannot erase reader choices; standalone rows fall back to local state.
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import {
+  KEPT_TRANSCRIPTS_PER_TAB,
+  useNativeChatViewMemory,
+  useNativeChatViewState
+} from '../../pane/ownership/native-chat-view-memory'
 
 /** A reader's place in an opened run's box: a row, and how far into that row its top edge sits. */
 export type NativeChatRunPosition = { key: string; offset: number }
@@ -26,9 +31,22 @@ export const NativeChatDisclosureContext = createContext<NativeChatDisclosureSto
 /** Bound disclosure memory across long-lived sessions. */
 export const MAX_NATIVE_CHAT_DISCLOSURES = 512
 
-export function useNativeChatDisclosures(): NativeChatDisclosureStore {
-  const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() => new Map())
-  const [runScroll] = useState(() => new Map<string, NativeChatRunScroll>())
+const NO_DISCLOSURES: ReadonlyMap<string, boolean> = new Map()
+
+/** `memoryKey` names the transcript within its chat tab, so a released chat view returns with its disclosures. */
+export function useNativeChatDisclosures(memoryKey?: string): NativeChatDisclosureStore {
+  const [open, setOpen] = useNativeChatViewState<ReadonlyMap<string, boolean>>(
+    `disclosures:${memoryKey ?? ''}`,
+    NO_DISCLOSURES,
+    KEPT_TRANSCRIPTS_PER_TAB
+  )
+  const keptRunScroll = useNativeChatViewMemory<Map<string, NativeChatRunScroll>>(
+    memoryKey === undefined ? undefined : `run-scroll:${memoryKey}`,
+    KEPT_TRANSCRIPTS_PER_TAB
+  )
+  const [runScroll] = useState(() => keptRunScroll.saved ?? new Map<string, NativeChatRunScroll>())
+  const { write: keepRunScroll } = keptRunScroll
+  useEffect(() => keepRunScroll(runScroll), [keepRunScroll, runScroll])
   const write = useCallback(
     (key: string, next: boolean, group?: string) => {
       runScroll.delete(key)
@@ -56,7 +74,7 @@ export function useNativeChatDisclosures(): NativeChatDisclosureStore {
         return updated
       })
     },
-    [runScroll]
+    [runScroll, setOpen]
   )
   return useMemo(
     () => ({ read: (key: string) => open.get(key), write, runScroll }),

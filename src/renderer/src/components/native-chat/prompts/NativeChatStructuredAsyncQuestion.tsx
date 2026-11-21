@@ -73,6 +73,7 @@ export function NativeChatStructuredAsyncQuestion({
     <NativeChatQuestionCard
       key={promptKey}
       prompt={prompt}
+      memoryKey={`async-question:${promptKey}`}
       isSubmitting={
         answerPending ||
         nativeChatAnswerOperationPending(
