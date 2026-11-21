@@ -37,14 +37,17 @@ import { holdPassiveRestoreOfStoppedWslDistro } from '../wsl/daemon-wsl-passive-
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   // Checked again in doSpawn: retirement can close admission while spawn awaits.
-  private assertSpawnAdmission(): void {
-    if (this.idleRetirementAdmissionClosed) {
+  private assertSpawnAdmission(opts: PtySpawnOptions): void {
+    // Why: an unverified retirement may have fenced a live daemon, and reattaching an
+    // existing session creates nothing for one that is already leaving.
+    const attachRecovers = opts.attachOnly === true && this.idleRetirementState === 'unverifiable'
+    if (this.idleRetirementAdmissionClosed && !attachRecovers) {
       throw new Error('Terminal daemon is decommissioning')
     }
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    this.assertSpawnAdmission()
+    this.assertSpawnAdmission(opts)
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
     const operation: PendingDaemonSpawnOperation = {
@@ -124,7 +127,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
-    this.assertSpawnAdmission()
+    this.assertSpawnAdmission(opts)
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
