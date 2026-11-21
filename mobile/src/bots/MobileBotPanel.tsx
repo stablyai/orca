@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
-  botItemFilterChat,
   botItemChats,
   botItemStaleDays,
   botItemsNeedingOwner,
@@ -54,7 +53,7 @@ import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 
 type PanelPage = 'settings' | `item:${string}`
 
-export type BotPanelOpen = { tab: 'items' } | { item: string }
+export type BotPanelOpen = { tab: 'items' } | { item: string } | { access: string }
 
 export function MobileBotPanel(props: {
   /** What the panel opens on; null while closed. */
@@ -118,7 +117,7 @@ export function MobileBotPanel(props: {
   const items = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatId: botItemFilterChat(filter),
+    chatIds: filter.chatIds,
     showing: visible,
     reads: props.routeBot.itemReads
   })
@@ -126,7 +125,7 @@ export function MobileBotPanel(props: {
   const allItems = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatId: null,
+    chatIds: null,
     showing: visible && filter.chatIds !== null,
     reads: props.routeBot.itemReads
   })
@@ -145,7 +144,7 @@ export function MobileBotPanel(props: {
     showing: visible,
     reads: props.routeBot.reads
   })
-  const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot)
+  const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
   const { shown: asks, count: needsYou } = usePhoneNeedsYouAsks({
     client: visible ? props.client : null,
     access: props.accessRequests,
@@ -354,6 +353,7 @@ export function MobileBotPanel(props: {
         key={shownItem.uid}
         {...shownItem}
         client={props.client}
+        hostKey={props.hostKey}
         bot={bot}
         showToast={showToast}
         reads={props.routeBot.itemReads}

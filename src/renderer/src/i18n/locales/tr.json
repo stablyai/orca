@@ -19636,6 +19636,7 @@
         "optionUpdateFailed": "Seçenek güncellenemedi",
         "optionValue": {
           "none": "Yok",
+          "off": "Kapalı",
           "fast": "Hızlı",
           "minimal": "Minimal",
           "low": "Düşük",
@@ -22768,6 +22769,9 @@
     "linkedMessageMissing": "Bu mesaj bulunamadı.",
     "math": {
       "scrollDisplayEquation": "Denklemi kaydır"
+    },
+    "messageTime": {
+      "yesterday": "Dün {{time}}"
     }
   },
   "quitAndStopAllSessions": {

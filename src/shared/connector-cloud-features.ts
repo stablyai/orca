@@ -65,3 +65,7 @@ export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
+
+/** The cloud shows a usage-limit pause this Orca will resume (turn-ended `resumes`) as paused. Its
+ *  own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'

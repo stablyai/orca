@@ -761,6 +761,9 @@
     "selectionQuote": {
       "action": "Цитировать",
       "hint": "Добавляет выделенный текст в сообщение как цитату"
+    },
+    "messageTime": {
+      "yesterday": "Вчера {{time}}"
     }
   },
   "common": {

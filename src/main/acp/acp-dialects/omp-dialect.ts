@@ -129,6 +129,14 @@ function errorDetails(error: AcpAgentError): string | undefined {
     : undefined
 }
 
+/** Pi's prompt failure when the model has no key; Auggie, built on Pi too, fails a signed-out prompt so. */
+export function reportsNoApiKey(error: AcpAgentError): boolean {
+  const details = errorDetails(error)
+  return (
+    details !== undefined && SIGNED_OUT_DETAIL_PREFIXES.some((prefix) => details.startsWith(prefix))
+  )
+}
+
 export const OMP_ACP_DIALECT: AcpDialect = {
   // OMP resolves any thinking level against the selected model (model-controls.ts setThinkingLevel).
   clampsUnlistedEffort: true,
@@ -146,13 +154,7 @@ export const OMP_ACP_DIALECT: AcpDialect = {
     text: (value) => `/model ${value}`,
     reply: modelCommandReply
   },
-  authenticationRequired: (error) => {
-    const details = errorDetails(error)
-    return (
-      details !== undefined &&
-      SIGNED_OUT_DETAIL_PREFIXES.some((prefix) => details.startsWith(prefix))
-    )
-  },
+  authenticationRequired: reportsNoApiKey,
   // A timed-out cancel cleanup closes the session; later prompts get "Unsupported ACP session".
   sessionLost: (error, sessionId) => {
     const details = errorDetails(error)

@@ -11,7 +11,8 @@ import {
 } from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
-import { botAnswerPayload } from './bot-request-outcome'
+import { botAnswerPayload, groupAnswerTurn } from './bot-request-outcome'
+import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { resolveCheckedReplyRecipient } from './reply-follow-up'
 import { replyAccess } from './reply-access'
 import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
@@ -161,6 +162,12 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       terminalRecipient
     })
     const replyFrom = params.from ?? original.to_handle
+    const answerTurn = await groupAnswerTurn(
+      runtime,
+      original,
+      sessionCallerOf(orchestrationCaller)?.sessionId,
+      params.body
+    )
     const reply = db.insertMessage({
       from: replyFrom,
       senderDispatchId: db.getActiveDispatchForIdentity(
@@ -173,9 +180,13 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       threadId: original.thread_id ?? original.id,
       runId: recipient.runId,
       // Refuses a second answer to a bot request, before the original is marked read.
-      payload: botAnswerPayload(db, original)
+      payload: botAnswerPayload(db, original, answerTurn !== null)
     })
     db.markAsRead([original.id])
+    // Written only now, so a reply refused above (a second answer) never shows in the room.
+    if (answerTurn) {
+      runtimeBotGroups(runtime).saveAnswer(answerTurn, params.body)
+    }
 
     const receipt = {
       message: exposeMessage(reply),

@@ -19720,6 +19720,7 @@
         "optionUpdateFailed": "オプションを更新できませんでした",
         "optionValue": {
           "none": "なし",
+          "off": "オフ",
           "ultracode": "Ultracode",
           "fast": "高速",
           "minimal": "最小",
@@ -24176,6 +24177,9 @@
     "linkedMessageMissing": "そのメッセージが見つかりませんでした。",
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
+    },
+    "messageTime": {
+      "yesterday": "昨日 {{time}}"
     }
   },
   "runtime": {

@@ -9,11 +9,7 @@ import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-c
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { BotItemCommentMicContext } from '../bots/items/bot-item-comment-mic'
-import { navigateToMobileFilePreview } from '../files/preview/mobile-file-preview-navigation'
-import {
-  isChatAttachmentStorePath,
-  isCommittedChatAttachmentCandidate
-} from '../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
+import { openBotItemFile } from '../bots/items/bot-item-file-open'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -216,46 +212,17 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
                   chatTabScope
                 )
               }}
-              onOpenFile={(path, toast) => {
-                // A comment's text file opens from the bot host's attachment store, as in chat.
-                if (isCommittedChatAttachmentCandidate(path)) {
-                  navigateToMobileFilePreview(
-                    router,
-                    { hostId, worktreeId, source: 'chatAttachment', absolutePath: path },
-                    { embedded: true, onRequestClose: closePanel }
-                  )
-                  return
-                }
-                // Other attachment files (a PDF, say) have no phone preview.
-                if (isChatAttachmentStorePath(path)) {
-                  const name = path.split(/[\\/]/).at(-1) ?? path
-                  toast(
-                    t('bots.items.comment.fileOnComputer', 'Open {{name}} on your computer.', {
-                      name
-                    })
-                  )
-                  return
-                }
-                // Only a file in the bot's folder opens, as on the desktop.
-                if (!isBotFolderPath(path)) {
-                  toast(
-                    t('bots.items.link.fileOutside', "{{path}} isn't in this bot's folder", {
-                      path
-                    })
-                  )
-                  return
-                }
-                navigateToMobileFilePreview(
+              onOpenFile={(path, toast) =>
+                openBotItemFile({
+                  path,
                   router,
-                  {
-                    hostId,
-                    worktreeId,
-                    relativePath: path.replace(/^\.\//, ''),
-                    name: path.split('/').at(-1) ?? path
-                  },
-                  { embedded: true, onRequestClose: closePanel }
-                )
-              }}
+                  hostId,
+                  worktreeId,
+                  t,
+                  toast,
+                  onRequestClose: closePanel
+                })
+              }
               onStartSuggestion={startSuggestion}
               onNewAutomation={newAutomation}
               home={home}
@@ -282,9 +249,4 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       home={home}
     />
   )
-}
-
-/** A link to a file in the bot's folder: relative, never climbing out of it. */
-function isBotFolderPath(path: string): boolean {
-  return !path.startsWith('/') && !path.startsWith('~') && !path.split(/[\\/]/).includes('..')
 }

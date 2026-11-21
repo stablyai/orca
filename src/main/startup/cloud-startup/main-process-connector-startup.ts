@@ -1,21 +1,12 @@
 import { powerMonitor } from 'electron'
+import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
 import { registerGoogleSetupHandlers } from '../../ipc/google-setup'
 import { registerSlackHandOffHandlers } from '../../ipc/slack-hand-off'
 import { registerAvatarGenerationHandlers } from '../../avatar-generation/avatar-generation-ipc'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { getGoogleConnect } from '../../google/google-connect'
-import {
-  googleSetupKeyDownloadClaim,
-  googleSetupWithholdsPageText
-} from '../../google/google-setup-key-download'
-import { googleSetupRuns } from '../../google/google-setup-runs'
-import { setPageTextWithheld } from '../../browser/agent-browser/agent-browser-withheld-page-text'
-import {
-  answerGoogleSetupCard,
-  recordGoogleSetupKeyMissed
-} from '../../runtime/rpc/methods/bots-google-setup'
+import { installGoogleSetupHostWatch } from '../../google/google-setup-host-watch'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { mainProcessState as state } from '../main-process-state'
 
@@ -36,6 +27,12 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     kind: serve ? 'serve' : 'desktop',
     isFenced: () => state.isQuitting
   })
+  // `orca serve` runs agents too, with its own offscreen browser or a paired desktop's.
+  installGoogleSetupHostWatch(runtime, {
+    setStandingDownloadClaim: (resolver) => browserManager.setStandingDownloadClaim(resolver),
+    getWorktreeIdForTab: (id) => browserManager.getWorktreeIdForTab(id),
+    keyStagingDir: join(userDataPath, 'google-setup-keys')
+  })
   if (serve) {
     return
   }
@@ -43,23 +40,6 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   registerGoogleSetupHandlers()
   registerSlackHandOffHandlers(() => runtime.getConnectorCloud())
   registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers())
-  browserManager.setStandingDownloadClaim(
-    googleSetupKeyDownloadClaim({
-      runs: () => googleSetupRuns().list(),
-      importKey: async (text) => {
-        const connect = getGoogleConnect()
-        if (!connect) {
-          throw new Error("Google isn't available on this computer.")
-        }
-        await connect.importClient(text)
-      },
-      keyArrived: (botId) =>
-        answerGoogleSetupCard(runtime, botId, 'owner', 'step', ['done', 'client']),
-      keyRefused: (botId, reason) => recordGoogleSetupKeyMissed(runtime, botId, reason)
-    })
-  )
-  // The Create dialog shows the client secret: no click's effects may read that page back.
-  setPageTextWithheld((page) => googleSetupWithholdsPageText(googleSetupRuns().list(), page))
 }
 
 /** This process's connector, for the startup, auth and quit hooks. */
