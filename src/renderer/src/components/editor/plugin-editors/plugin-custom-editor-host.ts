@@ -38,6 +38,7 @@ import type {
   CustomEditorHostOptions,
   CustomEditorUnappliedEdit
 } from './plugin-custom-editor-host-types'
+import { createCustomEditorViewStateLane } from './plugin-custom-editor-view-state'
 
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
@@ -48,6 +49,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       ...CUSTOM_EDITOR_EDIT_RATE_LIMIT
     })
   const now = options.now ?? (() => Date.now())
+  const viewState = createCustomEditorViewStateLane(options)
   const flushTimeoutMs = options.flushTimeoutMs ?? CUSTOM_EDITOR_FLUSH_TIMEOUT_MS
   let ready = false
   // What the frame is known to hold, so its own edits are never echoed back.
@@ -229,6 +231,9 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   return {
     channel: {
       claim(data) {
+        if (viewState.claim(data)) {
+          return true
+        }
         if (!isCustomEditorEditAttempt(data)) {
           return false
         }
@@ -250,6 +255,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       },
       onReady() {
         ready = true
+        // Before the document, so the editor has its view when it first draws.
+        viewState.replay(post)
         pushDocument(true)
       },
       onEvent(event, context) {

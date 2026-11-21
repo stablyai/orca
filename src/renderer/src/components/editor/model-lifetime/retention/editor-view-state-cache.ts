@@ -45,3 +45,6 @@ export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()
 
 // Full Monaco view state carries folds and horizontal scroll that scrollTop/selection caches miss.
 export const editorViewStateCache = new Map<string, editor.ICodeEditorViewState>()
+
+// A plugin custom editor's own view (scroll, zoom) as JSON text, handed back when its frame remounts.
+export const pluginEditorViewStateCache = new Map<string, string>()

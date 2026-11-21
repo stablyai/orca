@@ -33,11 +33,17 @@ import type {
   CustomEditorBinaryDocument,
   CustomEditorEditRefusal
 } from './plugin-custom-editor-host-types'
+import {
+  pluginEditorViewStateCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 type PluginCustomEditorFrameProps = {
   editor: ActivePluginCustomEditor
   /** The tab's file id; every save of it first flushes this frame. */
   fileId?: string
+  /** Pane-scoped key for the view the editor posts, so it reopens where the person left it. */
+  viewStateKey: string
   content: string
   readOnly: boolean
   onContentChange: (content: string) => void
@@ -61,6 +67,7 @@ function FrameMessage({ children }: { children: React.ReactNode }): React.JSX.El
 export default function PluginCustomEditorFrame({
   editor,
   fileId,
+  viewStateKey,
   content,
   readOnly,
   onContentChange,
@@ -81,6 +88,7 @@ export default function PluginCustomEditorFrame({
   const latestRef = useRef({
     content,
     readOnly,
+    viewStateKey,
     onContentChange,
     onSave,
     onDirtyHint,
@@ -91,6 +99,7 @@ export default function PluginCustomEditorFrame({
     latestRef.current = {
       content,
       readOnly,
+      viewStateKey,
       onContentChange,
       onSave,
       onDirtyHint,
@@ -138,6 +147,15 @@ export default function PluginCustomEditorFrame({
       },
       onFrameProgress: (step) => progressRef.current(step),
       onMergesOutside: () => mergingRef.current(true),
+      getViewState: () => pluginEditorViewStateCache.get(latestRef.current.viewStateKey) ?? null,
+      onViewState: (json) => {
+        const key = latestRef.current.viewStateKey
+        if (json === null) {
+          pluginEditorViewStateCache.delete(key)
+        } else {
+          setWithLRU(pluginEditorViewStateCache, key, json)
+        }
+      },
       onKeyChord: (chord, context) => {
         const event = new KeyboardEvent('keydown', chord)
         // Why: chords are posted by frame code, so only one riding real user input may save.

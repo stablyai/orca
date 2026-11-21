@@ -4,6 +4,7 @@ import { PLUGIN_DECLARATIVE_POST_GLOBAL, PLUGIN_FRAME_TRANSPORT_GLOBAL } from '.
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
 import { PLUGIN_FRAME_FACADES_SCRIPT } from './plugin-panel-shell-facades'
 import { PLUGIN_FRAME_DOCUMENT_SCRIPT } from './plugin-panel-shell-document'
+import { CUSTOM_EDITOR_VIEW_STATE_MAX_CHARS } from './plugin-custom-editor-bridge'
 import {
   PLUGIN_FRAME_USER_METHODS,
   pluginFrameMethodsFor,
@@ -52,6 +53,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     codes: PLUGIN_ERROR_CODES,
     events: FRAME_EVENTS,
     editor: EDITOR_METHODS,
+    viewStateMaxChars: CUSTOM_EDITOR_VIEW_STATE_MAX_CHARS,
     // Iframes get no user-gesture API at all: Orca cannot verify their gestures. A components
     // panel's hidden guest never has activation; its `orca` module routes these through the
     // press grant with host.call instead.
@@ -73,6 +75,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   var api = Object.freeze(C.api)
   var methods = C.methods.slice()
   var latest = null
+  var viewState = null
   var waiting = []
   var helloSeen = false
   var starting = []
@@ -178,6 +181,9 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
       applyTheme(m.payload)
     } else if (m.kind === 'evt' && m.event === E.push) {
       receivePush(m.payload)
+    } else if (m.kind === 'evt' && m.event === E.editorViewState && C.surface === 'editor') {
+      viewState = null
+      if (typeof m.payload === 'string') try { viewState = JSON.parse(m.payload) } catch (_) {}
     } else if (m.kind === 'evt' && m.event === E.editorDocument && C.surface === 'editor') {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })
