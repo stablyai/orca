@@ -76,6 +76,8 @@ export function buildInheritedLocalPtyEnvironment(
   removeAppImageRuntimeEnv(spawnEnv)
   removeChromiumDisabledSessionBus(spawnEnv)
   removeInheritedNoColor(spawnEnv)
+  // LaunchServices treats children inheriting __CFBundleIdentifier as Orca instances (#21768).
+  delete spawnEnv.__CFBundleIdentifier
   stripInheritedAgentSessionEnv(spawnEnv, { launchEnv: explicitEnv, envToDelete })
   for (const key of envToDelete) {
     delete spawnEnv[key]
@@ -96,6 +98,7 @@ export function enforceLocalPtySpawnEnvironmentOverrides(
   finalEnv: Record<string, string>
 ): void {
   stripPiProcessOwnerEnv(finalEnv)
+  delete finalEnv.__CFBundleIdentifier
   stripInheritedAgentSessionEnv(finalEnv, {
     launchEnv: spawn.env,
     envToDelete: spawn.envToDelete
