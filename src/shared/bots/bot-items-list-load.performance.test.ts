@@ -64,6 +64,27 @@ describe('loadBotItemsList work', () => {
     }
   })
 
+  it('pages on from where a read stopped for a newer ask, each page once', async () => {
+    const items = seeded()
+    const inner = host(items)
+    let read = await loadBotItemsList(inner, null, WHOLE)
+    read = await loadBotItemsList(inner, read, MORE)
+    read = await loadBotItemsList(inner, read, MORE)
+    Object.assign(items[0]!, { status: 'needs_you', version: 2 })
+    const cursors: unknown[] = []
+    const call: BotItemsListCall = (params) => {
+      cursors.push(params.closedCursor ?? 'first')
+      return inner(params)
+    }
+    read = await loadBotItemsList(call, read, WHOLE, { waiting: () => true })
+    // Its first page unchanged, the next whole read pages only what the last left.
+    read = await loadBotItemsList(call, read, WHOLE)
+    expect(cursors).toEqual(['first', '251:251', 'first', '201:201'])
+    cursors.length = 0
+    expect(await loadBotItemsList(call, read, WHOLE)).toBe(read)
+    expect(cursors).toEqual(['first'])
+  })
+
   it('stops paging down the depth once nothing shows the list', async () => {
     const older = host(seeded(), true)
     let read = await loadBotItemsList(older, null, WHOLE)

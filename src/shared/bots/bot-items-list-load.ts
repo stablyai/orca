@@ -13,6 +13,7 @@ import {
 } from './bot-item-merge'
 import { reuseEqualJson } from '../reuse-equal-json'
 import { BOT_ITEMS_WORKER_LINKED } from './bot-items-notice-parts'
+import { BotReadMoreFailed } from './bot-read-more-failed'
 
 /** One `bots.items.owner.list` call with these params (the bot, its chats and `summary` added). */
 export type BotItemsListCall = (params: Record<string, unknown>) => Promise<BotItemsListRead>
@@ -43,12 +44,27 @@ export async function loadBotItemsList(
   ask: BotItemsListAsk,
   options: BotItemsListLoadOptions = {}
 ): Promise<BotItemsListRead> {
-  const value = await loadAsked(call, previous, ask, options)
   const from = previous && !ask.whole ? unread.get(previous) : undefined
-  if (!from || !isLive(options)) {
+  const value = await loadAsked(call, previous, ask, options).catch((error: unknown) => {
+    // The rows below where the last read stopped are still to page.
+    if (from && error instanceof BotReadMoreFailed) {
+      unread.set(error.landed as BotItemsListRead, from)
+    }
+    throw error
+  })
+  return from ? readOnBelow(call, value, from, options) : value
+}
+
+/** A read that stopped for a newer ask goes on below where it stopped (`from`), once that ask is in. */
+function readOnBelow(
+  call: BotItemsListCall,
+  value: BotItemsListRead,
+  from: string,
+  options: BotItemsListLoadOptions
+): Promise<BotItemsListRead> | BotItemsListRead {
+  if (!isLive(options)) {
     return value
   }
-  // A read that stopped for a newer ask goes on below where it stopped, once that ask is in.
   options.show?.(value)
   const place = botItemCursorPlace(from)
   const top: BotItemsListRead = {
@@ -82,9 +98,9 @@ async function loadAsked(
       return merged
     }
     // A failed page fails only Show more: the named items stand.
-    return loadAsked(call, merged, { whole: false, parts: [], more: true }, options).catch(
-      () => merged
-    )
+    return loadAsked(call, merged, { whole: false, parts: [], more: true }, options).catch(() => {
+      throw new BotReadMoreFailed(merged)
+    })
   }
   if (ask.whole || !previous) {
     // The depth loaded so far, a page more when asked, a page per call: no answer is larger than one
@@ -93,21 +109,23 @@ async function loadAsked(
     const want = (previous ? botItemsClosedDepth(previous) : page) + more
     const first = await call({})
     // When the first page is as loaded, the pages below it are read again only once it moves (as
-    // before), or when the last read stopped above them: the next page is all that more asks.
-    if (
-      previous &&
-      !options.pageUnmoved &&
-      !unread.has(previous) &&
-      sameFirstPage(previous, first)
-    ) {
-      return more && live()
-        ? loadAsked(call, previous, { whole: false, parts: [], more: true }, options)
-        : previous
+    // before), or from where the last read stopped above them: the next page is all that more asks.
+    if (previous && !options.pageUnmoved && sameFirstPage(previous, first)) {
+      const value =
+        more && live()
+          ? await loadAsked(call, previous, { whole: false, parts: [], more: true }, options).catch(
+              () => {
+                throw new BotReadMoreFailed(previous)
+              }
+            )
+          : previous
+      const from = unread.get(previous)
+      return from ? readOnBelow(call, value, from, options) : value
     }
     if (show && previous && first.nextClosedCursor && botItemsClosedLoaded(first) < want) {
       show(reuseEqualJson(previous, withLoadedBelow(first, previous)))
     }
-    return readBelow(call, first, previous, want, options, true)
+    return readBelow(call, first, previous, want, options, more > 0)
   }
   let value = previous
   if (ask.more && value.nextClosedCursor) {
@@ -120,21 +138,21 @@ async function loadAsked(
 }
 
 /** `top` (fresh down to its Closed cursor) with the pages below it read, a page per call, down to
- *  `want` Closed rows. A newer ask waiting stops it after a page (or at once, when `top` was just
- *  read): `kept`'s rows below stand until the next read pages them. Equal parts keep `kept`'s identity. A failed page leaves `top`; the
- *  pages below it load again through Show more (as before). */
+ *  `want` Closed rows. A newer ask waiting stops it after a page: `kept`'s rows below stand until the next read pages them. A failed page leaves `top`, the
+ *  pages below it to load again through Show more (as before), and fails a Show more asked with it.
+ *  Equal parts keep `kept`'s identity. */
 async function readBelow(
   call: BotItemsListCall,
   top: BotItemsListRead,
   kept: BotItemsListRead | null,
   want: number,
   options: BotItemsListLoadOptions,
-  topIsFresh: boolean
+  more = false
 ): Promise<BotItemsListRead> {
   const below: BotItem[] = []
   let loaded = botItemsClosedLoaded(top)
   let last: BotItemsListRead = top
-  let paged = topIsFresh
+  let paged = false
   const joined = () =>
     last === top ? top : appendBotItemsClosedPage(top, { ...last, items: below })
   while (isLive(options) && last.nextClosedCursor && loaded < want) {
@@ -151,14 +169,24 @@ async function readBelow(
         closedLimit: Math.min(want - loaded, BOT_ITEM_LIMITS.listPage)
       })
     } catch {
-      return reuseEqualJson(kept, top)
+      const value = readThrough(reuseEqualJson(kept, top))
+      if (more) {
+        throw new BotReadMoreFailed(value)
+      }
+      return value
     }
     paged = true
     const closedRows = last.items.filter(isClosedRow)
     below.push(...closedRows)
     loaded += closedRows.length
   }
-  return reuseEqualJson(kept, joined())
+  return readThrough(reuseEqualJson(kept, joined()))
+}
+
+/** A value read down its whole loaded depth (or as deep as it holds): nothing below is left to page. */
+function readThrough(value: BotItemsListRead): BotItemsListRead {
+  unread.delete(value)
+  return value
 }
 
 function isLive(options: BotItemsListLoadOptions): boolean {

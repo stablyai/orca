@@ -13,6 +13,7 @@ import {
 } from '../../../../../shared/bots/bot-items-list-load'
 import type { BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
 import { botItemsNoticeParts } from '../../../../../shared/bots/bot-items-notice-parts'
+import { BotReadMoreFailed } from '../../../../../shared/bots/bot-read-more-failed'
 import { addBotReadAsk, botReadLoadAsk, type BotReadAsk } from '../bot-host-read-asks'
 import { createBotHostRead, useBotHostRead, type BotHostReadState } from '../use-bot-host-read'
 import { useBotHostReadState } from '../use-bot-host-read-state'
@@ -178,8 +179,10 @@ export function useBotChatItems(
         })
         .catch((error: unknown) => {
           console.warn('[bots] items: reading a chat’s items failed', error)
-          // A failed read of only more fails just that ask (its caller says so); the list stands.
-          if (ask.whole || ask.parts.length > 0) {
+          // What a read with a failed Show more read stands; that ask fails (its caller says so).
+          if (error instanceof BotReadMoreFailed) {
+            land(error.landed as BotItemsRead)
+          } else if (ask.whole || ask.parts.length > 0) {
             missed = true
             if (live) {
               setFailed(true)

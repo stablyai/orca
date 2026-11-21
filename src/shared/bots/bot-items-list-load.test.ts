@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BotItemsListRead } from './bot-item-schema'
 import { loadBotItemsList, type BotItemsListCall } from './bot-items-list-load'
+import { BotReadMoreFailed } from './bot-read-more-failed'
 import { MORE, WHOLE, closed, host, seeded } from './bot-items-list-load.test-fixture'
 
 async function drain(call: BotItemsListCall, read: BotItemsListRead): Promise<BotItemsListRead> {
@@ -99,8 +100,14 @@ describe('loadBotItemsList', () => {
     Object.assign(items[1]!, { status: 'needs_you', version: 2 })
     const failing: BotItemsListCall = (params) =>
       params.closedCursor ? Promise.reject(new Error('offline')) : inner(params)
-    read = await loadBotItemsList(failing, read, { whole: false, parts: ['i2'], more: true })
-    expect(read.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
+    const failed = await loadBotItemsList(failing, read, {
+      whole: false,
+      parts: ['i2'],
+      more: true
+    }).catch((error: unknown) => error)
+    expect(failed).toBeInstanceOf(BotReadMoreFailed)
+    const landed = (failed as BotReadMoreFailed<BotItemsListRead>).landed
+    expect(landed.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
   })
 
   it('stops paging for a newer ask and pages the rest on the next read', async () => {
@@ -116,9 +123,9 @@ describe('loadBotItemsList', () => {
       calls += 1
       return inner(params)
     }
-    // A newer ask waits: the fresh first page lands, the rows below it as they were.
+    // A newer ask waits: the fresh first page and the next land, the rows below them as they were.
     read = await loadBotItemsList(call, read, WHOLE, { waiting: () => true })
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
     expect(read.items.find((item) => item.uid === 'i1')?.status).toBe('needs_you')
     expect(read.items.filter(closed)).toHaveLength(150)
     expect(read.items.find((item) => item.uid === 'i160')?.title).not.toBe('Renamed deep')
@@ -128,7 +135,14 @@ describe('loadBotItemsList', () => {
     expect(read.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
     expect(read.items.find((item) => item.uid === 'i160')?.title).toBe('Renamed deep')
     expect(read.items.filter(closed)).toHaveLength(150)
-    // Paged through, a whole read of an unchanged list reads its first page alone again.
+    // Paged through, a whole read of an unchanged list reads its first page alone again, also when
+    // the pages it went on with were unchanged.
+    calls = 0
+    expect(await loadBotItemsList(call, read, WHOLE)).toBe(read)
+    expect(calls).toBe(1)
+    Object.assign(items[2]!, { status: 'needs_you', version: 2 })
+    read = await loadBotItemsList(call, read, WHOLE, { waiting: () => true })
+    read = await loadBotItemsList(call, read, { whole: false, parts: ['i3'], more: false })
     calls = 0
     expect(await loadBotItemsList(call, read, WHOLE)).toBe(read)
     expect(calls).toBe(1)

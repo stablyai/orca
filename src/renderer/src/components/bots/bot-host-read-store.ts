@@ -3,6 +3,7 @@
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
+import { BotReadMoreFailed } from '../../../../shared/bots/bot-read-more-failed'
 import {
   addBotReadAsk,
   botReadLoadAsk,
@@ -113,6 +114,17 @@ export function createBotHostRead<T>(
         entry.listeners.forEach((listener) => listener())
       }
     }
+    // A read's value: told to its surfaces when it changed (an unchanged answer tells no one).
+    const land = (value: T): void => {
+      if (value !== entry.value || entry.failure) {
+        entry.value = value
+        entry.failure = null
+        if (keepLast && value) {
+          lastValues.set(key, value)
+        }
+        entry.listeners.forEach((listener) => listener())
+      }
+    }
     try {
       const value = options
         ? await options.load(entry.bot, previous, ask, show, live, () => entry.again)
@@ -121,21 +133,17 @@ export function createBotHostRead<T>(
             live() ? reuseEqualJson(previous, pick(result)) : previous
           )
       if (live()) {
-        // An unchanged answer tells no one.
-        if (value !== entry.value || entry.failure) {
-          entry.value = value
-          entry.failure = null
-          if (keepLast && value) {
-            lastValues.set(key, value)
-          }
-          entry.listeners.forEach((listener) => listener())
-        }
+        land(value)
         landed = value
       }
     } catch (error) {
       console.error(failure, error)
+      // What a read with a failed Show more read stands; that ask fails (its caller says so).
+      if (error instanceof BotReadMoreFailed && live()) {
+        land(error.landed as T)
+      }
       // A failed read of only more fails just that ask (its caller says so); the list stands.
-      const onlyMore = !ask.whole && ask.parts.length === 0
+      const onlyMore = (!ask.whole && ask.parts.length === 0) || error instanceof BotReadMoreFailed
       if (
         !onlyMore &&
         current === entry.latest &&
