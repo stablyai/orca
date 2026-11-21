@@ -725,6 +725,10 @@
           "monaco": "monaco",
           "syntax": "sözdizimi"
         }
+      },
+      "pasteThumbnail": {
+        "title": "Pano görseli önizlemelerini göster",
+        "description": "Dosya gezgininde Yapıştır üzerine gelince küçük bir önizleme göster."
       }
     },
     "browser": {
@@ -15146,6 +15150,14 @@
             "createInProgress": "PR oluşturuluyor...",
             "workspaceHostUnresolved": "Çalışma alanının sunucusu çözümlenemedi. Çalışma alanını yenileyip tekrar deneyin.",
             "branchDiscoveryFailed": "Branch'ler keşfedilemedi."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "Küçük resmi Görünüm ayarlarından devre dışı bırakabilirsin.",
+            "paste": "Yapıştır",
+            "clipboardFile": "dosya",
+            "clipboardText": "metin",
+            "clipboardImage": "görsel",
+            "clipboardImageTitle": "Panodaki görsel"
           }
         }
       },

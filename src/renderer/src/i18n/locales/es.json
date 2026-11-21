@@ -224,6 +224,10 @@
           "monaco": "monaco",
           "syntax": "sintaxis"
         }
+      },
+      "pasteThumbnail": {
+        "title": "Mostrar vistas previas de imágenes del portapapeles",
+        "description": "Muestra una vista previa pequeña al pasar el cursor sobre Pegar en el explorador de archivos."
       }
     },
     "browser": {
@@ -14685,6 +14689,14 @@
             "createInProgress": "Creación del PR en curso...",
             "workspaceHostUnresolved": "No se ha podido resolver el host del espacio de trabajo. Actualiza el espacio de trabajo e inténtalo de nuevo.",
             "branchDiscoveryFailed": "No se pudieron detectar las ramas."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "Puedes desactivar la miniatura en los ajustes de apariencia.",
+            "paste": "Pegar",
+            "clipboardFile": "archivo",
+            "clipboardText": "Texto",
+            "clipboardImage": "Imagen",
+            "clipboardImageTitle": "Imagen del portapapeles"
           }
         }
       },

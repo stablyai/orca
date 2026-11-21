@@ -733,6 +733,10 @@
           "monaco": "monaco",
           "syntax": "Syntax"
         }
+      },
+      "pasteThumbnail": {
+        "title": "Zwischenablage-Bildvorschauen anzeigen",
+        "description": "Beim Überfahren von Einfügen im Datei-Explorer eine kleine Bildvorschau erstellen."
       }
     },
     "browser": {
@@ -14997,6 +15001,14 @@
             "createInProgress": "PR wird erstellt...",
             "workspaceHostUnresolved": "Der Host des Arbeitsbereichs konnte nicht ermittelt werden. Den Arbeitsbereich aktualisieren und erneut versuchen.",
             "branchDiscoveryFailed": "Branch-Erkennung fehlgeschlagen."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "Du kannst die Miniaturansicht in den Darstellungseinstellungen deaktivieren.",
+            "paste": "Einfügen",
+            "clipboardFile": "Datei",
+            "clipboardText": "Text",
+            "clipboardImage": "Bild",
+            "clipboardImageTitle": "Bild in der Zwischenablage"
           }
         }
       },

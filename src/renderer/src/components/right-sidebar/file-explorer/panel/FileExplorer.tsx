@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
@@ -20,6 +20,7 @@ import { cn } from '@/lib/class-names'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
+import { FileExplorerKeyboardPasteConfirmationDialog } from './FileExplorerKeyboardPasteConfirmationDialog'
 import { FileExplorerFilesTreePane } from '../tree/FileExplorerFilesTreePane'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
@@ -219,6 +220,10 @@ function FileExplorerFiles(): React.JSX.Element {
     startNew: inlineInputState.startNew
   })
 
+  useEffect(() => {
+    setBgMenuOpen(false)
+  }, [activeWorktreeId, setBgMenuOpen])
+
   useFileExplorerScopeTransition({
     displayRootPath,
     activeWorktreeId,
@@ -359,6 +364,12 @@ function FileExplorerFiles(): React.JSX.Element {
         worktreePath={displayRootPath ?? worktreePath}
         displayDepth={displayDepth}
         onStartNew={inlineInputState.startNew}
+        onPaste={() => paneState.pasteToDirectory(displayRootPath)}
+      />
+      <FileExplorerKeyboardPasteConfirmationDialog
+        open={paneState.keyboardPasteConfirmationOpen}
+        onCancel={paneState.cancelKeyboardPasteConfirmation}
+        onConfirm={paneState.confirmKeyboardPasteConfirmation}
       />
     </>
   )

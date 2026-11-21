@@ -29,6 +29,10 @@ import {
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
+import {
+  usePasteThumbnailAppearanceEntry,
+  PasteThumbnailAppearanceSetting
+} from './PasteThumbnailAppearanceSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -121,10 +125,13 @@ export function AppearanceWindowSidebarSection({
     workspaceCardLayoutEntry,
     ...sidebarEntries
   ])
-  const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, layoutEntries)
+  const pasteThumbnailEntry = usePasteThumbnailAppearanceEntry()
+  const showFileExplorerAdvanced =
+    !isSearching ||
+    matchesSettingsSearch(searchQuery, layoutEntries) ||
+    matchesSettingsSearch(searchQuery, pasteThumbnailEntry)
   const showStatusBarControls = !isSearching || statusBarSectionMatches || statusBarControlMatches
   const showSidebarAdvanced = !isSearching || sidebarAdvancedMatches
-  const showFileExplorerAdvanced = !isSearching || fileExplorerAdvancedMatches
   const showAdvanced = showSidebarAdvanced || showFileExplorerAdvanced
 
   return (
@@ -368,6 +375,11 @@ export function AppearanceWindowSidebarSection({
             <SettingsGroupSubsection
               title={t('auto.components.settings.AppearancePane.8e374ce9a3', 'File explorer')}
             >
+              <PasteThumbnailAppearanceSetting
+                entry={pasteThumbnailEntry}
+                settings={settings}
+                updateSettings={updateSettings}
+              />
               <SearchableSetting
                 title={
                   layoutEntries[0]?.title ??

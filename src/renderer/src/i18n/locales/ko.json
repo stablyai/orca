@@ -224,6 +224,10 @@
           "monaco": "monaco",
           "syntax": "구문"
         }
+      },
+      "pasteThumbnail": {
+        "title": "클립보드 이미지 미리보기 표시",
+        "description": "파일 탐색기에서 붙여넣기에 마우스를 올리면 작은 이미지 미리보기를 표시합니다."
       }
     },
     "browser": {
@@ -14323,6 +14327,14 @@
             "createInProgress": "PR 생성 중...",
             "workspaceHostUnresolved": "워크스페이스 호스트를 확인할 수 없습니다. 워크스페이스를 새로 고친 후 다시 시도하세요.",
             "branchDiscoveryFailed": "브랜치를 감지하지 못했습니다."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "모양 설정에서 썸네일을 끌 수 있습니다.",
+            "paste": "붙여넣기",
+            "clipboardFile": "파일",
+            "clipboardText": "텍스트",
+            "clipboardImage": "이미지",
+            "clipboardImageTitle": "클립보드 이미지"
           }
         }
       },

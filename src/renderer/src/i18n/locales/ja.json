@@ -257,6 +257,10 @@
           "undecodable": "選択した画像をデコードできませんでした。",
           "saveFailed": "カスタムアイコンを保存できませんでした。"
         }
+      },
+      "pasteThumbnail": {
+        "title": "クリップボードの画像プレビューを表示",
+        "description": "ファイルエクスプローラーの「貼り付け」にカーソルを合わせると、小さな画像プレビューを表示します。"
       }
     },
     "browser": {
@@ -15125,6 +15129,14 @@
             "createInProgress": "PR を作成中…",
             "workspaceHostUnresolved": "ワークスペースのホストを特定できません。ワークスペースを更新して再試行してください。",
             "branchDiscoveryFailed": "ブランチの検出に失敗しました。"
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "外観設定でサムネイルを無効にできます。",
+            "paste": "貼り付け",
+            "clipboardFile": "ファイル",
+            "clipboardText": "テキスト",
+            "clipboardImage": "画像",
+            "clipboardImageTitle": "クリップボードの画像"
           }
         }
       },

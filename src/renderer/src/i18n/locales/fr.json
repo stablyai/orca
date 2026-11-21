@@ -478,6 +478,10 @@
           "monaco": "monaco",
           "syntax": "syntaxe"
         }
+      },
+      "pasteThumbnail": {
+        "title": "Afficher les aperçus des images du presse-papiers",
+        "description": "Afficher un petit aperçu en survolant Coller dans l’explorateur de fichiers."
       }
     },
     "browser": {
@@ -14954,6 +14958,14 @@
             "createInProgress": "Création de la PR en cours...",
             "workspaceHostUnresolved": "L'hôte de l'espace de travail n'a pas pu être résolu. Actualisez l'espace de travail et réessayez.",
             "branchDiscoveryFailed": "Échec de la détection des branches."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "Vous pouvez désactiver la miniature dans les paramètres d’apparence.",
+            "paste": "Coller",
+            "clipboardFile": "fichier",
+            "clipboardText": "Texte",
+            "clipboardImage": "Image",
+            "clipboardImageTitle": "Image du presse-papiers"
           }
         }
       },

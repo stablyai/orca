@@ -1,5 +1,14 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { File } from 'lucide-react'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { useTranslate } from '@/i18n/use-translate'
+import { pasteTextIntoTextControl } from '@/lib/text-input/paste/text-control-paste'
+import { FileExplorerPasteMenuItem } from '../panel/file-explorer-paste-menu-item'
 import { FolderIcon } from '@/components/icons/FileTypeIcon'
 import {
   isImeCompositionKeyDown,
@@ -16,6 +25,12 @@ export type InlineInput = {
   operationOwner?: TreeNode['operationOwner']
 }
 
+type InputSelection = {
+  start: number
+  end: number
+  direction: NonNullable<HTMLInputElement['selectionDirection']>
+}
+
 export function InlineInputRow({
   depth,
   inlineInput,
@@ -27,6 +42,11 @@ export function InlineInputRow({
   onSubmit: (value: string) => void
   onCancel: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const [clipboardText, setClipboardText] = useState('')
+  const menuTarget = useRef<HTMLInputElement | null>(null)
+  const menuSelection = useRef<InputSelection | null>(null)
+  const menuRequest = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitted = useRef(false)
@@ -58,6 +78,28 @@ export function InlineInputRow({
       inputRef.current?.focus()
     })
   }, [cancelRefocusFrame])
+
+  const captureInputSelection = useCallback((input: HTMLInputElement): void => {
+    const start = input.selectionStart ?? input.value.length
+    menuSelection.current = {
+      start,
+      end: input.selectionEnd ?? start,
+      direction: input.selectionDirection ?? 'none'
+    }
+  }, [])
+
+  const restoreInputSelection = useCallback((): void => {
+    const input = inputRef.current
+    const selection = menuSelection.current
+    menuSelection.current = null
+    if (!input) {
+      return
+    }
+    input.focus()
+    if (selection) {
+      input.setSelectionRange(selection.start, selection.end, selection.direction)
+    }
+  }, [])
 
   const clearInlineInputTimers = useCallback(() => {
     if (focusFrame.current !== null) {
@@ -143,42 +185,106 @@ export function InlineInputRow({
       ) : (
         <File className="size-3 shrink-0 text-muted-foreground" />
       )}
-      <input
+      <ContextMenu
         key={inlineInputKey}
-        ref={setInputRef}
-        className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
-        defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
-        onKeyDown={(e) => {
-          // Leave composing keys, including the IME's Enter and Escape, to the input method.
-          if (imeEnter.ownsKeyDown(e) || imeEnter.isComposing() || isImeCompositionKeyDown(e)) {
-            return
-          }
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            submit(e.currentTarget.value)
-          } else if (e.key === 'Escape') {
+        onOpenChange={(open) => {
+          const request = ++menuRequest.current
+          setClipboardText('')
+          menuTarget.current = open ? inputRef.current : null
+          if (open) {
+            if (!menuSelection.current && inputRef.current) {
+              captureInputSelection(inputRef.current)
+            }
             clearBlurTimeout()
-            submitted.current = true
-            onCancel()
+            cancelRefocusFrame()
+            void window.api.ui
+              .readClipboardText()
+              .then((text) => {
+                if (request === menuRequest.current && menuTarget.current === inputRef.current) {
+                  setClipboardText(text)
+                }
+              })
+              .catch(() => {})
           }
         }}
-        onCompositionStart={() => imeEnter.setComposing(true)}
-        onCompositionEnd={() => imeEnter.setComposing(false)}
-        onFocus={clearBlurTimeout}
-        onBlur={(e) => {
-          imeEnter.reset()
-          // Refocus only during menu-close grace; afterward commit on blur, since relatedTarget cannot distinguish Radix cleanup from row clicks.
-          if (!focusSettled.current) {
-            scheduleInputRefocus()
-            return
-          }
-          const value = e.currentTarget.value
-          blurTimeout.current = setTimeout(() => {
-            blurTimeout.current = null
-            submit(value)
-          }, 150)
-        }}
-      />
+      >
+        <ContextMenuTrigger asChild>
+          <input
+            ref={setInputRef}
+            className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
+            defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
+            onPointerDownCapture={(event) => {
+              if (event.button === 2) {
+                captureInputSelection(event.currentTarget)
+              }
+            }}
+            onContextMenuCapture={(event) => {
+              if (!menuSelection.current) {
+                captureInputSelection(event.currentTarget)
+              }
+            }}
+            onKeyDown={(e) => {
+              // Leave composing keys, including the IME's Enter and Escape, to the input method.
+              if (imeEnter.ownsKeyDown(e) || imeEnter.isComposing() || isImeCompositionKeyDown(e)) {
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                submit(e.currentTarget.value)
+              } else if (e.key === 'Escape') {
+                clearBlurTimeout()
+                submitted.current = true
+                onCancel()
+              }
+            }}
+            onCompositionStart={() => imeEnter.setComposing(true)}
+            onCompositionEnd={() => imeEnter.setComposing(false)}
+            onFocus={clearBlurTimeout}
+            onBlur={(e) => {
+              imeEnter.reset()
+              if (menuTarget.current === e.currentTarget) {
+                return
+              }
+              // Refocus only during menu-close grace; afterward commit on blur, since relatedTarget cannot distinguish Radix cleanup from row clicks.
+              if (!focusSettled.current) {
+                scheduleInputRefocus()
+                return
+              }
+              const value = e.currentTarget.value
+              blurTimeout.current = setTimeout(() => {
+                blurTimeout.current = null
+                submit(value)
+              }, 150)
+            }}
+          />
+        </ContextMenuTrigger>
+        <ContextMenuContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            restoreInputSelection()
+          }}
+        >
+          {clipboardText && (
+            <FileExplorerPasteMenuItem
+              preview={{ kind: 'text', text: clipboardText }}
+              onSelect={() => {
+                restoreInputSelection()
+                if (inputRef.current) {
+                  void pasteTextIntoTextControl(inputRef.current, clipboardText)
+                }
+              }}
+            />
+          )}
+          <ContextMenuItem
+            onSelect={() => {
+              menuSelection.current = null
+              inputRef.current?.select()
+            }}
+          >
+            {t('auto.components.right.sidebar.FileExplorerPaste.selectAll', 'Select All')}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </div>
   )
 }

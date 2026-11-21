@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/class-names'
@@ -19,6 +19,10 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-a
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { createMultiSelectDragGhost } from '../mutations/file-explorer-multi-drag-image'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
+import {
+  readClipboardPastePreview,
+  type ClipboardPastePreview
+} from '../mutations/file-explorer-clipboard-import'
 
 export type FileExplorerRowProps = {
   node: TreeNode
@@ -60,6 +64,7 @@ export type FileExplorerRowProps = {
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
+  onPasteToDirectory: (directory?: string | null) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -105,6 +110,7 @@ export function FileExplorerRow({
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
+  onPasteToDirectory,
   onMoveDrop,
   onDragTargetChange,
   onDragSourceChange,
@@ -113,6 +119,8 @@ export function FileExplorerRow({
   onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
   const t = useTranslate()
+  const [pastePreview, setPastePreview] = useState<ClipboardPastePreview | null>(null)
+  const pasteCheckIdRef = useRef(0)
   const showLoadError = node.isDirectory && isExpanded && !isLoading && loadError !== null
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
@@ -132,8 +140,16 @@ export function FileExplorerRow({
     <ContextMenu
       onOpenChange={(open) => {
         if (!open) {
+          pasteCheckIdRef.current += 1
+          setPastePreview(null)
           return
         }
+        const checkId = ++pasteCheckIdRef.current
+        void readClipboardPastePreview().then((preview) => {
+          if (pasteCheckIdRef.current === checkId) {
+            setPastePreview(preview)
+          }
+        })
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         onContextMenuSelect()
       }}
@@ -152,6 +168,7 @@ export function FileExplorerRow({
           ref={setRowDragNode}
           // The OS-drop owner reads the target folder here at drop time.
           data-file-explorer-drop-dir={rowDropDir}
+          data-file-explorer-drop-directory={node.isDirectory ? '' : undefined}
           // Let wheel capture rescue scrolling Chromium swallows over draggable rows (file-explorer-drag-scroll-marker).
           data-explorer-draggable="true"
           draggable
@@ -288,6 +305,8 @@ export function FileExplorerRow({
         onRequestDelete={onRequestDelete}
         onCollapseFolderSubtree={onCollapseFolderSubtree}
         onFindInFolder={onFindInFolder}
+        onPasteToDirectory={onPasteToDirectory}
+        pastePreview={pastePreview}
       />
     </ContextMenu>
   )
