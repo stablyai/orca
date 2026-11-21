@@ -28,6 +28,7 @@ import type { ExactWorkerProviderSession } from '../../../../shared/orchestratio
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { AGENT_COPY_OPTION_ID } from '../../../../shared/agent-launch/catalog/agent-copies'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import {
@@ -258,6 +259,8 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
   async probeOrchestrationOpenCodeModelLaunchSupport(target: {
     worktree?: string
     model?: string
+    /** An OpenCode copy's id: the probe checks the route with the copy's own command and env. */
+    agentCopy?: string
   }): Promise<boolean> {
     if (!target.model || !target.worktree) {
       return false
@@ -296,7 +299,10 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         platform: launchRuntime.platform,
         isRemote: false,
         shell: undefined,
-        sessionOptions: { model: target.model }
+        sessionOptions: {
+          model: target.model,
+          ...(target.agentCopy ? { [AGENT_COPY_OPTION_ID]: target.agentCopy } : {})
+        }
       }),
       cwd: path,
       hostIdentity: this.getRuntimeId()

@@ -14,13 +14,18 @@ export async function probeWorkerOpenCodeModelLaunchSupport(
   params: { agent?: string; model?: string },
   target: { worktree?: string }
 ): Promise<boolean> {
-  // A copy launches its base agent, so an OpenCode copy takes the same model probe.
-  const agent = params.agent && (agentCopyBase(params.agent) ?? params.agent)
+  // An OpenCode copy is probed on the route it launches with: its own command and env.
+  const copyBase = params.agent ? agentCopyBase(params.agent) : null
+  const agent = copyBase ?? params.agent
   return Boolean(
     params.model &&
     agent &&
     runtime.resolveOrchestrationAgentLauncher(agent) === 'opencode' &&
-    (await runtime.probeOrchestrationOpenCodeModelLaunchSupport({ ...target, model: params.model }))
+    (await runtime.probeOrchestrationOpenCodeModelLaunchSupport({
+      ...target,
+      model: params.model,
+      ...(copyBase ? { agentCopy: params.agent } : {})
+    }))
   )
 }
 

@@ -22,7 +22,18 @@ function runtimeProbing(): {
 }
 
 describe('probeWorkerOpenCodeModelLaunchSupport', () => {
-  it('probes an OpenCode copy as its base agent', async () => {
+  it('probes OpenCode itself on the base route', async () => {
+    const { runtime, probe } = runtimeProbing()
+
+    await probeWorkerOpenCodeModelLaunchSupport(
+      runtime,
+      { agent: 'opencode', model: 'openai/gpt-5' },
+      { worktree: 'id:wt' }
+    )
+    expect(probe).toHaveBeenCalledWith({ worktree: 'id:wt', model: 'openai/gpt-5' })
+  })
+
+  it('probes an OpenCode copy on its own launch route', async () => {
     const { runtime, probe } = runtimeProbing()
 
     await expect(
@@ -32,7 +43,11 @@ describe('probeWorkerOpenCodeModelLaunchSupport', () => {
         { worktree: 'id:wt' }
       )
     ).resolves.toBe(true)
-    expect(probe).toHaveBeenCalledWith({ worktree: 'id:wt', model: 'openai/gpt-5' })
+    expect(probe).toHaveBeenCalledWith({
+      worktree: 'id:wt',
+      model: 'openai/gpt-5',
+      agentCopy: 'opencode.fast'
+    })
   })
 
   it('does not probe a copy of another agent', async () => {
