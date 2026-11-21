@@ -22,12 +22,12 @@ type Upload = {
 export type BotAvatarFailures = Map<string, { version: string; hostId: BotRef['hostId'] }>
 const MAX_FAILURES = 64
 
-/** `paused`: don't read now (the host is offline). `failures`: a failed read is listed there and a
- *  successful one unlisted; with `skipFailed`, a version listed for its bot isn't read again. */
+/** `paused`: don't read now (the host is offline). `failures`: a group's failed reads: one listed for
+ *  its bot isn't read again while the group is shown, a failed read is listed and a successful one
+ *  unlisted. */
 export type BotAvatarRead = {
   paused: boolean
   failures: BotAvatarFailures | null
-  skipFailed: boolean
 }
 
 /** A group's failures leaving (it folded or closed): pending reads stop holding them. */
@@ -71,10 +71,24 @@ const uploads = new Map<string, Upload>()
 const pendingByFailures = new WeakMap<BotAvatarFailures, Set<Upload>>()
 
 /** The bot's picture version in the catalog now; null for none or a bot not listed. */
+// Each host bot list's upload versions by bot id, built once per list (the catalog makes a new one as
+// it changes), so a turn asking costs one lookup.
+const versionsByList = new WeakMap<readonly Bot[], Map<string, string>>()
+
 function currentUploadVersion(bot: BotRef): string | null {
-  const current = readHostBots(bot.hostId).find((listed) => listed.id === bot.id)
-  const parsed = parseBotAvatar(current?.avatar ?? null)
-  return parsed?.kind === 'upload' ? parsed.version : null
+  const listed = readHostBots(bot.hostId)
+  let versions = versionsByList.get(listed)
+  if (!versions) {
+    versions = new Map()
+    for (const each of listed) {
+      const parsed = parseBotAvatar(each.avatar)
+      if (parsed?.kind === 'upload') {
+        versions.set(each.id, parsed.version)
+      }
+    }
+    versionsByList.set(listed, versions)
+  }
+  return versions.get(bot.id) ?? null
 }
 
 /** A chat turn from before the picture changed asks for an old version, which the host can't give: it
@@ -169,7 +183,6 @@ export function useBotAvatarSrc(
 ): string | null {
   const paused = read?.paused === true
   const failures = read?.failures ?? null
-  const skipFailed = read?.skipFailed === true
   const parsed = parseBotAvatar(bot.avatar)
   const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
@@ -177,7 +190,7 @@ export function useBotAvatarSrc(
   const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey))
   useEffect(() => {
     const key = botRefKey({ hostId, id })
-    if (!uploadKey || paused || (skipFailed && failures?.get(key)?.version === uploadKey)) {
+    if (!uploadKey || paused || failures?.get(key)?.version === uploadKey) {
       return
     }
     return readUpload({ hostId, id }, uploadKey, failures, (src) => {
@@ -185,7 +198,7 @@ export function useBotAvatarSrc(
         shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
       )
     })
-  }, [hostId, id, uploadKey, paused, failures, skipFailed])
+  }, [hostId, id, uploadKey, paused, failures])
   if (mascotSrc) {
     return mascotSrc
   }

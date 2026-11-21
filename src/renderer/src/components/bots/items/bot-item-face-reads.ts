@@ -1,6 +1,6 @@
 // The failed picture reads of a group's row faces: the latest failed version per bot (at most 64).
-// Rows in a long group mount as it scrolls, and each would read a failed picture again, so they don't;
-// rows in a short group record failures too, so a group growing long doesn't read them again. Owned by
+// Rows in a long group mount as it scrolls, and each would read a failed picture again, so no row of a
+// group does (one kind of face at every size, so a group growing or shrinking reads none again). Owned by
 // the group, so reopening it (or the panel) reads them again, and a host going away lets its go.
 import { createContext, useEffect, useState } from 'react'
 import { isBotHostLive, subscribeToBotHostLive } from '@/lib/bot-host-views'

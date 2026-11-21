@@ -20,10 +20,7 @@ export function BotItemRowFace({
   const failures = useContext(BotItemFaceFailuresContext)
   // Only a face showing an upload reads anything, so only it hears its host and the window.
   const live = useBotHostLive(bot.hostId, windowed && parseBotAvatar(bot.avatar)?.kind === 'upload')
-  const read = useMemo(
-    () => ({ paused: !live, failures, skipFailed: windowed }),
-    [live, failures, windowed]
-  )
+  const read = useMemo(() => ({ paused: !live, failures }), [live, failures])
   return (
     <span className="flex h-5 shrink-0 items-center" title={bot.name}>
       <BotAvatar bot={bot} className="size-4 rounded-full text-[9px]" read={read} />
