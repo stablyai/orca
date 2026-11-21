@@ -28102,6 +28102,12 @@
       "stopped": "已停止分享 {{name}}",
       "webhookNotShared": "Webhook · 未分享",
       "commandNotShared": "命令 · 未分享",
+      "fileLinkNotShared": "含符号链接或硬链接 · 未分享",
+      "outsideSkill": "来自 {{project}} 外",
+      "outsideSkillWith": "来自 {{project}} 外 · {{description}}",
+      "tooLargeNotShared": "过大 · 未分享",
+      "unreadableNotShared": "无法读取 · 未分享",
+      "overLimitNotShared": "超出技能数量上限 · 未分享",
       "notShared": "未分享",
       "setupNote": "设置说明",
       "skills": "技能",
@@ -28752,7 +28758,8 @@
         "removeNote": "大家将无法再在 GitHub 上向它提问，它的 GitHub 人员名单也会被清空。Orca 应用不会被卸载",
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
-        "orgDescription": "{{repos}} · 已以 @{{login}} 身份登录"
+        "orgDescription": "{{repos}} · 已以 @{{login}} 身份登录",
+        "addAccount": "添加另一个 GitHub 账户"
       },
       "setup": {
         "install": "安装 Orca 应用",
@@ -28788,6 +28795,8 @@
         "unlink": "取消关联",
         "unlinked": "请在机器人的“连接器”中添加 GitHub，以关联你的账户",
         "descriptionOnHost": "{{host}} 上的机器人以此 GitHub 用户的身份工作，并归其所有",
+        "descriptionPlural": "你的 GitHub 账户，让机器人知道哪些评论是你发的",
+        "descriptionOnHostPlural": "{{host}} 上的机器人以这些 GitHub 用户的身份工作，并归他们所有",
         "linkedAs": "已关联为 {{login}}",
         "reconnect": "重新连接",
         "linkFromApp": "请在与 {{host}} 配对的电脑上通过 Orca 关联 GitHub",
@@ -29279,8 +29288,6 @@
         "checking": "正在检查 Slack…",
         "retry": "重试",
         "settingUp": "正在设置你的 Slack 应用…",
-        "reconnect": "Slack 不再接受此工作区的令牌。请粘贴新令牌以重新连接",
-        "reconnectSubmit": "重新连接 Slack 工作区",
         "create": "创建 Slack 应用",
         "waiting": "正在等待 Slack…",
         "waitingDetail": "请在 Slack 中完成操作。如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用",
@@ -29308,7 +29315,8 @@
         "tryIt": "在任意频道或私信中试试",
         "connectAnother": "连接其他 Slack 工作区",
         "connect": "连接 Slack",
-        "openInSlack": "在 Slack 中给它发消息"
+        "openInSlack": "在 Slack 中给它发消息",
+        "cancel": "取消"
       },
       "connection": {
         "appSettings": "Slack 应用设置",
@@ -29332,7 +29340,10 @@
         "step3": "复制 Refresh Token 并粘贴到下方",
         "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加机器人只需点击一下",
         "label": "配置刷新令牌",
-        "accessPasted": "这是 Access Token。请复制它旁边的 Refresh Token"
+        "accessPasted": "这是 Access Token。请复制它旁边的 Refresh Token",
+        "openSettings": "打开 Slack 应用设置",
+        "generate": "为此工作区生成令牌",
+        "copyRefresh": "复制 Refresh Token"
       },
       "workspaces": {
         "otherTeam": "该令牌属于另一个工作区。Orca 会为那个工作区保留它",
@@ -29364,7 +29375,6 @@
       "handOff": {
         "confirmMac": "此 Mac 上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此机器人的应用",
         "confirm": "此电脑上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此机器人的应用",
-        "reconnect": "Slack 不再接受 {{email}} 在此工作区的令牌。请粘贴新令牌以重新连接",
         "offerMac": "此 Mac 已以 {{email}} 身份登录 Orca，该账户已有 {{workspace}} 的令牌",
         "offer": "此电脑已以 {{email}} 身份登录 Orca，该账户已有 {{workspace}} 的令牌",
         "use": "使用它 →"
@@ -29382,7 +29392,26 @@
         "waitingOn": "切换为 {{name}} 需要 {{installer}} 在 Slack 中批准",
         "waiting": "切换为 {{name}} 需要在 Slack 中获得批准"
       },
-      "mentionLine": "在频道或私信中提及 <code>@{{name}}</code>"
+      "mentionLine": "在频道或私信中提及 <code>@{{name}}</code>",
+      "reconnect": {
+        "expiredTitle": "Slack 令牌已过期",
+        "useTitleMac": "使用你的 Mac 上的令牌？",
+        "useTitle": "使用这台电脑上的令牌？",
+        "whyMine": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{email}} 使用的令牌",
+        "whyHost": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{host}} 使用的令牌",
+        "why": "Slack 已不再接受此工作区保存的令牌",
+        "submit": "重新连接",
+        "about": "关于 Slack 令牌",
+        "useDetail": "“使用”会用 {{email}} 的令牌设置此机器人的 Slack 应用。{{host}} 只会获得此机器人的应用",
+        "hostExpiredMac": "<host>{{host}}</host> 的令牌已过期。这台 Mac 上的令牌可用",
+        "hostExpired": "<host>{{host}}</host> 的令牌已过期。这台电脑上的令牌可用",
+        "pasteInstead": "改为粘贴令牌",
+        "use": "使用",
+        "kept": "Orca Cloud 会加密保存新令牌，以后在这里创建机器人只需点击一下",
+        "mineMac": "这台 Mac 上的令牌已过期。请粘贴新令牌",
+        "mine": "这台电脑上的令牌已过期。请粘贴新令牌",
+        "paste": "粘贴新令牌以重新连接"
+      }
     },
     "page": {
       "serverDownTitle": "无法连接到 {{host}}",

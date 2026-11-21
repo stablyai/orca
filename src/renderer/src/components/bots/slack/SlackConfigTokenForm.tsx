@@ -36,7 +36,12 @@ export function SlackConfigTokenForm({
   busy,
   error,
   onSubmit,
-  aside
+  aside,
+  compact = false,
+  onCancel,
+  inlineSubmit = false,
+  autoFocusField = false,
+  onTokenChange
 }: {
   hostId: ExecutionHostId
   submitLabel: string
@@ -45,10 +50,24 @@ export function SlackConfigTokenForm({
   onSubmit: (token: string) => void
   /** A quiet line above the steps, such as another way to get the app. */
   aside?: React.ReactNode
+  /** Reconnecting a workspace: short steps with Slack's page as a link, the field without its label. */
+  compact?: boolean
+  /** A Cancel beside the submit button. */
+  onCancel?: () => void
+  /** Another of the dialog's buttons is its main action: a quiet submit beside the field. */
+  inlineSubmit?: boolean
+  /** The field takes focus when it appears: pasting is what is left to do. */
+  autoFocusField?: boolean
+  /** Told each time the field's token changes, typed, pasted, read off the clipboard or sent. */
+  onTokenChange?: (token: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
-  const [token, setToken] = useState('')
+  const [token, setTokenState] = useState('')
+  const setToken = (value: string): void => {
+    setTokenState(value)
+    onTokenChange?.(value)
+  }
   const [accessPasted, setAccessPasted] = useState(false)
   const trimmed = token.trim()
   // Set once Slack's page is opened from here: the token copied there fills the field on the way back.
@@ -81,6 +100,11 @@ export function SlackConfigTokenForm({
     return kind !== null
   }
 
+  const openSlack = (): void => {
+    awaitingCopy.current =
+      openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' }) !== 'unrouted'
+  }
+
   useEffect(
     () => () => {
       reads.current++
@@ -108,6 +132,39 @@ export function SlackConfigTokenForm({
     return () => window.removeEventListener('focus', onFocus)
   })
 
+  const field = (
+    <Input
+      id={inputId}
+      autoFocus={autoFocusField}
+      type="password"
+      placeholder={compact ? `${SLACK_CONFIG_REFRESH_TOKEN_PREFIX}…` : undefined}
+      autoComplete="off"
+      spellCheck={false}
+      value={token}
+      aria-invalid={error !== null}
+      onChange={(event) => {
+        // What is typed wins over a clipboard read still pending.
+        reads.current++
+        setAccessPasted(false)
+        setToken(event.target.value)
+      }}
+      onPaste={(event) => {
+        if (take(event.clipboardData.getData('text'), true)) {
+          event.preventDefault()
+        }
+      }}
+    />
+  )
+  const submit = (
+    <Button
+      type="submit"
+      variant={inlineSubmit ? 'outline' : 'default'}
+      disabled={busy || !trimmed}
+    >
+      {submitLabel}
+    </Button>
+  )
+
   return (
     <form
       className="space-y-4"
@@ -120,57 +177,50 @@ export function SlackConfigTokenForm({
       }}
     >
       {aside}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => {
-          awaitingCopy.current =
-            openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' }) !== 'unrouted'
-        }}
-      >
-        {t('bots.slack.token.open', 'Get config token')}
-        <ExternalLink />
-      </Button>
-      <ol className="list-decimal space-y-1.5 pl-5 text-sm">
-        <li>
-          {t(
-            'bots.slack.token.step1',
-            'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
-          )}
-        </li>
-        <li>{t('bots.slack.token.step2', 'Select the workspace for your bot.')}</li>
-        <li>{t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}</li>
-      </ol>
-      <p className="text-sm text-muted-foreground">
-        {t(
-          'bots.slack.token.kept',
-          'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
-        )}
-      </p>
+      {compact ? (
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <li>
+            <Button type="button" variant="link" size="inline" onClick={openSlack}>
+              {t('bots.slack.token.openSettings', 'Open Slack app settings')}
+              <ExternalLink />
+            </Button>
+          </li>
+          <li>{t('bots.slack.token.generate', 'Generate a token for this workspace')}</li>
+          <li>{t('bots.slack.token.copyRefresh', 'Copy the Refresh Token')}</li>
+        </ol>
+      ) : (
+        <>
+          <Button type="button" variant="outline" className="w-full" onClick={openSlack}>
+            {t('bots.slack.token.open', 'Get config token')}
+            <ExternalLink />
+          </Button>
+          <ol className="list-decimal space-y-1.5 pl-5 text-sm">
+            <li>
+              {t(
+                'bots.slack.token.step1',
+                'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
+              )}
+            </li>
+            <li>{t('bots.slack.token.step2', 'Select the workspace for your bot.')}</li>
+            <li>{t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}</li>
+          </ol>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'bots.slack.token.kept',
+              'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
+            )}
+          </p>
+        </>
+      )}
       <div className="space-y-1.5">
-        <Label htmlFor={inputId}>
+        <Label htmlFor={inputId} className={compact ? 'sr-only' : undefined}>
           {t('bots.slack.token.label', 'Configuration refresh token')}
         </Label>
-        <Input
-          id={inputId}
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          value={token}
-          aria-invalid={error !== null}
-          onChange={(event) => {
-            // What is typed wins over a clipboard read still pending.
-            reads.current++
-            setAccessPasted(false)
-            setToken(event.target.value)
-          }}
-          onPaste={(event) => {
-            if (take(event.clipboardData.getData('text'), true)) {
-              event.preventDefault()
-            }
-          }}
-        />
+        {/* The same wrappers either way: switching to an inline submit keeps the field, and its focus. */}
+        <div className={inlineSubmit ? 'flex items-center gap-2' : undefined}>
+          <div className={inlineSubmit ? 'min-w-0 flex-1' : undefined}>{field}</div>
+          {inlineSubmit ? submit : null}
+        </div>
         {accessPasted ? (
           <p className="text-xs text-destructive">
             {t(
@@ -182,11 +232,16 @@ export function SlackConfigTokenForm({
           <p className="text-xs text-destructive">{error}</p>
         ) : null}
       </div>
-      <DialogFooter>
-        <Button type="submit" disabled={busy || !trimmed}>
-          {submitLabel}
-        </Button>
-      </DialogFooter>
+      {inlineSubmit ? null : (
+        <DialogFooter>
+          {onCancel ? (
+            <Button type="button" variant="outline" onClick={onCancel}>
+              {t('bots.slack.setup.cancel', 'Cancel')}
+            </Button>
+          ) : null}
+          {submit}
+        </DialogFooter>
+      )}
     </form>
   )
 }

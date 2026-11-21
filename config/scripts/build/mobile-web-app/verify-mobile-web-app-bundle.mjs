@@ -78,18 +78,18 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
   ['./h/[hostId]/automations.tsx', 13],
   ['./h/[hostId]/edit.tsx', 14],
-  ['./h/[hostId]/files/[worktreeId].tsx', 19],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 24],
-  ['./h/[hostId]/group/[groupId].tsx', 30],
-  ['./h/[hostId]/history/[worktreeId].tsx', 31],
-  ['./h/[hostId]/index.tsx', 39],
-  ['./h/[hostId]/new-workspace.tsx', 42],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 43],
-  ['./h/[hostId]/review/[worktreeId].tsx', 52],
-  ['./h/[hostId]/session/[worktreeId].tsx', 73],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 75],
-  ['./h/[hostId]/tasks.tsx', 80],
-  ['./h/_layout.tsx', 85]
+  ['./h/[hostId]/files/[worktreeId].tsx', 18],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
+  ['./h/[hostId]/group/[groupId].tsx', 29],
+  ['./h/[hostId]/history/[worktreeId].tsx', 30],
+  ['./h/[hostId]/index.tsx', 38],
+  ['./h/[hostId]/new-workspace.tsx', 43],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 44],
+  ['./h/[hostId]/review/[worktreeId].tsx', 54],
+  ['./h/[hostId]/session/[worktreeId].tsx', 77],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 79],
+  ['./h/[hostId]/tasks.tsx', 86],
+  ['./h/_layout.tsx', 90]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
