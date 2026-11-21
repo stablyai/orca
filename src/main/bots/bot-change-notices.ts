@@ -192,7 +192,7 @@ export function followAgentPhasesForBots(
       const scopes = botPhaseChangeScopes(change, facts, dispatchId)
       const tell = (): void => scopes.forEach((scope) => notices.changed(scope))
       // After its items' notice, so the two go out as one.
-      if (dispatchId) {
+      if (dispatchId !== null) {
         afterItemsNamed(facts.workerChanged(dispatchId), tell)
       } else {
         tell()

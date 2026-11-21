@@ -113,6 +113,20 @@ describe('loadBotItemsList', () => {
     }
   })
 
+  it('stops paging down the depth once nothing shows the list', async () => {
+    const older = host(seeded(), true)
+    let read = await loadBotItemsList(older, null, WHOLE)
+    read = await loadBotItemsList(older, read, MORE)
+    read = await loadBotItemsList(older, read, MORE)
+    let calls = 0
+    const counted: BotItemsListCall = (params) => {
+      calls += 1
+      return older(params)
+    }
+    await loadBotItemsList(counted, read, WHOLE, undefined, () => calls === 0)
+    expect(calls).toBe(1)
+  })
+
   it('keeps loaded Closed items when an older host answers a named read whole', async () => {
     const items = seeded()
     const call = host(items, true)

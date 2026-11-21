@@ -18,12 +18,14 @@ export type BotItemsListCall = (params: Record<string, unknown>) => Promise<BotI
 export type BotItemsListAsk = { whole: boolean; parts: readonly string[]; more: boolean }
 
 /** `show`: a value to show while the read goes on (a host before `closedLimit` pages down the
- *  depth): its first page, with the rows loaded before it below that page kept until theirs land. */
+ *  depth): its first page, with the rows loaded before it below that page kept until theirs land.
+ *  `live`: false once nothing will show the value, so no further call is made for it. */
 export async function loadBotItemsList(
   call: BotItemsListCall,
   previous: BotItemsListRead | null,
   ask: BotItemsListAsk,
-  show?: (value: BotItemsListRead) => void
+  show?: (value: BotItemsListRead) => void,
+  live: () => boolean = () => true
 ): Promise<BotItemsListRead> {
   const page = BOT_ITEM_LIMITS.listPage
   if (!ask.whole && previous && ask.parts.length > 0) {
@@ -32,11 +34,13 @@ export async function loadBotItemsList(
     // A Closed cursor or an item not asked for is a host before `uids` answering whole: what it left
     // out isn't gone, so the list is read whole.
     if (named.nextClosedCursor || named.items.some((item) => !asked.has(item.uid))) {
-      return loadBotItemsList(call, previous, { ...ask, whole: true }, show)
+      return live()
+        ? loadBotItemsList(call, previous, { ...ask, whole: true }, show, live)
+        : previous
     }
     const merged = mergeNamedBotItems(previous, named, ask.parts)
-    return ask.more
-      ? loadBotItemsList(call, merged, { whole: false, parts: [], more: true })
+    return ask.more && live()
+      ? loadBotItemsList(call, merged, { whole: false, parts: [], more: true }, show, live)
       : merged
   }
   if (ask.whole || !previous) {
@@ -49,7 +53,7 @@ export async function loadBotItemsList(
     if (show && previous && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
       show(reuseEqualJson(previous, withLoadedBelow(value, previous)))
     }
-    while (value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
+    while (live() && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
       const rest = want - botItemsClosedLoaded(value)
       value = appendBotItemsClosedPage(
         value,
