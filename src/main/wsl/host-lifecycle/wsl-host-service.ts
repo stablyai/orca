@@ -3,13 +3,13 @@
  * Add/Connect, or when the user switches to one of its workspaces. After a confirmed stop the host is
  * parked: polls and visible work keep it down until the user acts or the distro runs again.
  */
+import type { WslHostConnectRequest } from './wsl-host-connect-request'
 import { assertWslHostRunAllowed } from './wsl-host-gate'
 import { focusReachability } from './wsl-host-focus-reachability'
 import { ensureWslHostForRuntimeCall } from './wsl-host-runtime-call'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type {
   WslHostAddResult,
-  WslHostConnectIntent,
   WslHostDistro,
   WslHostServerStop,
   WslHostStatus
@@ -189,10 +189,7 @@ export class WslHostService {
    */
   async connect(
     environmentId: string,
-    {
-      withdrawPendingRemoval = false,
-      ...options
-    }: { intent?: WslHostConnectIntent; withdrawPendingRemoval?: boolean } = {}
+    { withdrawPendingRemoval = false, ...options }: WslHostConnectRequest = {}
   ): Promise<void> {
     const record = await this.recordForEnvironment(environmentId)
     if (!record) {

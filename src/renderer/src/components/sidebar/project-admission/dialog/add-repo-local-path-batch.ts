@@ -9,7 +9,12 @@ import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner
 
 export type LocalPathAddResult =
   | { status: 'completed'; repo: Repo }
-  | { status: 'cancelled' | 'paused' | 'skipped' | 'failed' }
+  | {
+      status: 'paused'
+      /** Set when the add waits on "Open as Folder": the folder it added, or null if none was. */
+      folderAdded?: Promise<Repo | null>
+    }
+  | { status: 'cancelled' | 'skipped' | 'failed' }
 
 export type LocalPathAddMode = 'single' | 'batch'
 
