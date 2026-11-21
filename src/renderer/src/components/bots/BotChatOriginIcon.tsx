@@ -1,5 +1,5 @@
 // A bot chat's row glyphs, the same in the Activity panel and the sidebar; never the bot's picture.
-import { CalendarClock, Gauge, House, MessageSquare } from 'lucide-react'
+import { CalendarClock, Gauge, House, MessageCircle, MessageSquare } from 'lucide-react'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -16,6 +16,7 @@ const ORIGIN_ICONS = {
   slack: SlackIcon,
   linear: LinearIcon,
   github: GitHubIcon,
+  dingtalk: MessageCircle,
   automation: CalendarClock,
   side: MessageSquare
 } as const
@@ -31,6 +32,8 @@ function useChatKindLabel(origin: BotChatOrigin): string {
       return t('bots.chats.kindLinear', 'Linear issue')
     case 'github':
       return t('bots.chats.kindGithub', 'GitHub thread')
+    case 'dingtalk':
+      return t('bots.chats.kindDingtalk', 'DingTalk group')
     case 'automation':
       return t('bots.chats.kindAutomation', 'Automation run')
     case 'side':

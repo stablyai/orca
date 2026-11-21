@@ -23,6 +23,7 @@ import type { ConversationKey } from '../external-conversations/external-convers
 import type { AutomationLaunch } from '../automations/launch/automation-launch'
 import type { BotRunResults } from '../automations/bot-automation-launch'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { toCloudConversation } from '../../shared/connectors/external-conversation-link'
 import {
   alertBotCouldNotStart,
   BOT_COULD_NOT_FINISH_COPY,
@@ -303,10 +304,15 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
               noteId,
               { kind: 'status', text }
             ),
-          replyInThread: (conversation, replyId, text, turnFor) =>
-            runtime
-              .getConnectorCloud()
-              ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null,
+          replyInThread: (conversation, replyId, text, turnFor) => {
+            const cloud = toCloudConversation(conversation)
+            return cloud
+              ? (runtime
+                  .getConnectorCloud()
+                  ?.reply({ replyId, conversation: cloud, turnId: Date.now(), text, turnFor }) ??
+                  null)
+              : null
+          },
           turnForOf: (sessionId) => botTurnFor(runtime, sessionId, undefined),
           ...runtimeBotOwnerNotice(runtime)
         },

@@ -33,6 +33,11 @@ export function connectorDescription(id: BotConnectorId): string {
         'bots.connectors.discord',
         'Chat with the bot from Discord channels, threads, and direct messages.'
       )
+    case 'dingtalk':
+      return translate(
+        'bots.connectors.dingtalk',
+        'Chat with the bot from selected DingTalk groups on this computer.'
+      )
     case 'google':
       return translate(
         'bots.connectors.google',
