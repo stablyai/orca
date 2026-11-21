@@ -19,7 +19,13 @@ const ATLAS_MEMORY_REBUILD_ENABLED =
 // xterm's shared TextureAtlas, read from the addon's private renderer; only its identity is used.
 type GlyphAtlas = { readonly pages: readonly unknown[] }
 type PaneFilter = (pane: ManagedPaneInternal) => boolean
-type AtlasRebuilder = (panes: ManagedPaneInternal[], shouldReattach: PaneFilter) => void
+/** Rechecked on each pane's own frame: 'skip' leaves it detached until reveal, 'wait' holds it a frame. */
+export type DeferredReattachVerdict = 'now' | 'wait' | 'skip'
+type AtlasRebuilder = (
+  panes: ManagedPaneInternal[],
+  shouldReattach: PaneFilter,
+  verdictOnItsFrame: (pane: ManagedPaneInternal) => DeferredReattachVerdict
+) => void
 
 let rebuildPanes: AtlasRebuilder | null = null
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
@@ -110,6 +116,18 @@ function shownPaneFilter(): PaneFilter {
     isElementInVisiblePaneManager(pane.container) && pane.container.getClientRects().length > 0
 }
 
+/** A pane hidden, covered or mid synchronized-output frame since the rebuild must not get its context yet. */
+function deferredReattachVerdict(pane: ManagedPaneInternal): DeferredReattachVerdict {
+  if (!shownPaneFilter()(pane)) {
+    return 'skip'
+  }
+  if (paneIsCoveredByNativeChat(pane)) {
+    coveredDetachedPanes.set(pane.terminal, pane)
+    return 'skip'
+  }
+  return pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now'
+}
+
 function rebuildDueAtlases(): void {
   rebuildTimer = null
   if (dueAtlases.size === 0) {
@@ -165,7 +183,7 @@ function rebuildDueAtlases(): void {
   }
   // Every owner of a due atlas detaches before any reattaches, or a remaining owner keeps it alive; only on-screen owners reattach now.
   const startedAt = performance.now()
-  rebuildPanes?.(panes, (pane) => reattach.has(pane))
+  rebuildPanes?.(panes, (pane) => reattach.has(pane), deferredReattachVerdict)
   recordTerminalWebglDiagnostic('webgl-renderer-rebuild', {
     panes: panes.length,
     reattached: reattach.size,

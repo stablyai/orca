@@ -3,7 +3,8 @@ import { attachWebgl, clearTerminalWebglAttachBackoff, disposeWebgl } from './pa
 import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-policy'
 import {
   setTerminalWebglAtlasRebuilder,
-  takeCoveredDetachedPane
+  takeCoveredDetachedPane,
+  type DeferredReattachVerdict
 } from './terminal-webgl-atlas-memory-rebuild'
 import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
 import { paintReplacementCanvasNow } from './terminal-render-pause-release'
@@ -82,29 +83,50 @@ export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>)
   return () => reattach.forEach(reattachDetachedWebgl)
 }
 
+// xterm's own watchdog ends a synchronized frame within a second; past this, attach anyway rather than strand a shown pane.
+const MAX_SYNC_WAIT_FRAMES = 120
+
 /** One context per frame: recreating every context in one task stalls the renderer for hundreds of ms. */
-function reattachAcrossFrames(panes: ManagedPaneInternal[]): void {
+function reattachAcrossFrames(
+  panes: ManagedPaneInternal[],
+  verdictOf: (pane: ManagedPaneInternal) => DeferredReattachVerdict,
+  waitedFrames = 0
+): void {
   const [pane, ...rest] = panes
   if (!pane) {
     return
   }
   // The pane may have closed, been reattached by reveal or fit, or lost its DOM since the rebuild.
   if (!pane.webglAddon && pane.container.isConnected && !isXtermInstanceDisposed(pane.terminal)) {
-    reattachDetachedWebgl(pane)
-    if (pane.webglAddon) {
-      paintReplacementCanvasNow(pane.terminal)
+    const verdict = verdictOf(pane)
+    if (verdict === 'wait' && waitedFrames < MAX_SYNC_WAIT_FRAMES) {
+      requestAnimationFrame(() => reattachAcrossFrames(panes, verdictOf, waitedFrames + 1))
+      return
+    }
+    if (verdict !== 'skip') {
+      reattachDetachedWebgl(pane)
+      if (pane.webglAddon) {
+        paintReplacementCanvasNow(pane.terminal)
+      }
     }
   }
   if (rest.length > 0) {
-    requestAnimationFrame(() => reattachAcrossFrames(rest))
+    requestAnimationFrame(() => reattachAcrossFrames(rest, verdictOf))
   }
 }
 
-setTerminalWebglAtlasRebuilder((panes, shouldReattach) => {
+setTerminalWebglAtlasRebuilder((panes, shouldReattach, verdictOnItsFrame) => {
   const reattach = detachPanesWebgl(panes, shouldReattach)
   // Waiting panes show xterm's DOM renderer until their frame; paint it now so a synchronized-output frame can't hold it blank.
   for (const pane of reattach.slice(1)) {
     paintReplacementCanvasNow(pane.terminal)
   }
-  reattachAcrossFrames(reattach)
+  // The first pane was checked in this task; the rest are rechecked on their own frame.
+  const [first, ...rest] = reattach
+  if (first) {
+    reattachAcrossFrames([first], () => 'now')
+  }
+  if (rest.length > 0) {
+    requestAnimationFrame(() => reattachAcrossFrames(rest, verdictOnItsFrame))
+  }
 })
