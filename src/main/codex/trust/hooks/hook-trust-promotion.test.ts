@@ -343,7 +343,12 @@ describe('codex hook trust write-back promotion', () => {
     const service = new CodexHookService()
     await service.install()
     // An older Orca could not record session_end approvals in its version 1 provenance.
-    simulateCodexApproval({ ...runtimeUserStopEntry(), eventLabel: 'session_end', groupIndex: 0 })
+    simulateCodexApproval({
+      ...runtimeUserStopEntry(),
+      eventLabel: 'session_end',
+      groupIndex: 0,
+      enabled: true
+    })
     writeFileSync(
       join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'),
       `${JSON.stringify({ version: 1, entries: {} })}\n`
