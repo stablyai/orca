@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Page command schemas mirror runtime browser-core and adjacent pointer/keyboard/dialog methods.
 
@@ -12,3 +12,9 @@ export const browserNavigationSettledSchema = z
 
 // Twelve other commands inspect refusal only (back/forward/reload, five pointer, two keyboard, two dialog); do not require unread result members.
 export const browserCommandUnreadReplySchema = z.unknown()
+
+// Reason stays an open string so a newer host's reason still reads as a refusal.
+export const browserCertificateProceedReplySchema = z.looseObject({
+  ok: z.boolean(),
+  reason: salvagedOptional('reason', z.string())
+})

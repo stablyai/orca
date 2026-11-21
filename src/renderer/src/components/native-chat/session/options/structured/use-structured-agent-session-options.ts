@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
@@ -14,6 +15,7 @@ import {
 } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
 import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
+import { useNativeChatCliUpdate } from '../../../host-access/native-chat-cli-update'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
@@ -143,7 +145,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     () => createStructuredAgentSessionOptionsWriteOwner(() => writeContextRef.current()),
     []
   )
-  useLayoutEffect(() => () => writer.detach(), [writer])
+  useNativeChatPaneLifetimeEffect(useCallback(() => () => writer.detach(), [writer]))
   const setStructuredOption = writer.setOption
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
@@ -158,16 +160,48 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
+  const { demandModelCatalog } = hostCatalog
+  // The updated CLI lists the models it was too old for.
+  const cliUpdate = useNativeChatCliUpdate(target, agent, demandModelCatalog)
+  const cliUpdateModels = cliUpdate?.update?.models
+  const cliUpdateAgent = cliUpdateModels?.length ? cliUpdate?.update?.agent : undefined
+  const cliUpdateRunnable = cliUpdate?.update?.runnable === true
+  const cliUpdatePhase = cliUpdate?.run?.phase ?? 'idle'
+  const startCliUpdate = cliUpdate?.start
+  const openCliUpdateFailure = cliUpdate?.openFailure
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
-      demandModelCatalog: hostCatalog.demandModelCatalog,
+      demandModelCatalog,
+      ...(cliUpdateAgent && cliUpdateModels && startCliUpdate && openCliUpdateFailure
+        ? {
+            cliUpdate: {
+              agent: cliUpdateAgent,
+              models: cliUpdateModels,
+              runnable: cliUpdateRunnable,
+              phase: cliUpdatePhase,
+              start: () => void startCliUpdate(),
+              openFailure: () => openCliUpdateFailure()
+            }
+          }
+        : {}),
       admits: writer.admits,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot, hostCatalog.demandModelCatalog, writer]
+    [
+      setOption,
+      optionSnapshot,
+      demandModelCatalog,
+      writer,
+      cliUpdateAgent,
+      cliUpdateModels,
+      cliUpdateRunnable,
+      cliUpdatePhase,
+      startCliUpdate,
+      openCliUpdateFailure
+    ]
   )
 
   return {

@@ -12,7 +12,7 @@ import type {
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
@@ -202,7 +202,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const submits = submitWithPaste
       ? 1
       : 1 +
-        (await this.resubmitHeldAgentPrompt(
+        (await this.resubmitHeldAgentPromptForSend(
           ptyId,
           generation,
           {

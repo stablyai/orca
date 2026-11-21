@@ -1,5 +1,8 @@
 import { setTimeout as delay } from 'node:timers/promises'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../concurrency/abort-signal-reason'
 import { readGitCommandFailureStderr } from '../commands/git-command-failure-text'
 import { findGitSubcommandIndex } from '../commands/git-command-classification'
 import { isExecKilledError, stripCredentialsFromMessage } from '../remotes/git-remote-error'
@@ -61,6 +64,10 @@ export async function retryGitFetchRefRace<T>(
       throw error
     }
     throwIfSignalAborted(signal)
+    // A caller that can't start again shouldn't wait on the previous child first.
+    if (canStart?.() === false) {
+      throw error
+    }
     if (retry === 2) {
       const detail = stripCredentialsFromMessage(
         stderr

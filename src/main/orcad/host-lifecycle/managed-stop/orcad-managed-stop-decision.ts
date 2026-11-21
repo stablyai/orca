@@ -7,7 +7,7 @@ import {
   OrcadManagedStopRequestSchema,
   type OrcadManagedStopDecision,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { orcadStopReceiptPath, readOrcadStopReceipt } from './orcad-completed-stop-receipt'
 import { hasErrorCode } from '../../../daemon/endpoint/identity/daemon-process-inspection'
 

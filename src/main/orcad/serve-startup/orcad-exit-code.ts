@@ -1,10 +1,10 @@
-import { OrcadBindAddressError } from '../../../shared/orcad-bind-address'
+import { OrcadBindAddressError } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-bind-address'
 import { OrcadBundledRuntimeError } from '../runtime-launch/orcad-bundled-runtime'
 import { OrcadInstanceLockError } from '../instance-lock/orcad-data-root-privacy'
 import { ProfileStateAccessError } from '../../persistence/profile-state/access/profile-state-access-error'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/single-instance-exit-code'
-import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../../shared/serve-supervised-terminal-durability'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 import { OrcadTerminalsNotDurableError } from './orcad-serve-supervision'
 
 export const ORCAD_EXIT_FAILED = 1

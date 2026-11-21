@@ -17,7 +17,7 @@ import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-r
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
 import { cn } from '@/lib/class-names'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerFilesTreePane } from '../tree/FileExplorerFilesTreePane'
@@ -114,6 +114,7 @@ function FileExplorerFiles(): React.JSX.Element {
     nameFilterCollapsedPaths,
     setNameFilterCollapsedPaths,
     hasNameFilter,
+    hasNameFilterQuery,
     nameFilterFiles,
     nameFilterSource,
     handleClearNameFilter
@@ -193,6 +194,7 @@ function FileExplorerFiles(): React.JSX.Element {
     activeFileId,
     openFiles,
     hasNameFilter,
+    hasNameFilterQuery,
     setNameFilterQuery,
     handleToggleNameFilterDir,
     tree,

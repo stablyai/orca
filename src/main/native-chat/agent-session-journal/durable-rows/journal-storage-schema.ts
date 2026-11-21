@@ -11,6 +11,15 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StorageDeclaresAll, UndeclaredStorageKeys } from './journal-storage-strict'
+import {
+  storedAutomationSaved,
+  storedBotStatusNotes,
+  storedWaitEnded,
+  storedConnectorAsker,
+  storedAutomationRun,
+  storedAutomationRunNotStarted,
+  storedBotItemNote
+} from '../journal-storage-bot-schema'
 
 // What saved outcomes declare beyond the wire's open schemas, which read only the keys their
 // readers use: the shared definitions are reused and completed here. A persisted type gaining a key
@@ -36,7 +45,12 @@ const [
   approvalBody,
   questionBody,
   statusBody,
-  turnBody
+  turnBody,
+  automationSavedBody,
+  toolAddedBody,
+  waitEndedBody,
+  automationRunNotStartedBody,
+  botItemNoteBody
 ] = AgentJournalKnownSchemas.bodies
 
 const text = z.string().optional()
@@ -57,6 +71,7 @@ const refusalDetails = z.object({
     .object({ installedVersion: z.string().nullable(), minimumVersion: z.string() })
     .optional(),
   expiredAttachments: z.array(z.object({ uploadId: z.string(), name: z.string() })).optional(),
+  otherFolder: z.literal(true).optional(),
   currentFence: count,
   currentRevision: count,
   resolution: AgentJournalKnownSchemas.resolution.optional(),
@@ -85,7 +100,11 @@ const sender = z.object({
     .optional(),
   name: salvaged,
   agent: salvaged,
-  relation: salvaged
+  relation: salvaged,
+  toConversation: salvaged,
+  bot: salvaged,
+  host: salvaged,
+  botAvatar: salvaged
 })
 const orchestration = z.discriminatedUnion('message', [
   z.object({
@@ -123,7 +142,15 @@ const block = z.discriminatedUnion('type', [
     failure: storedFailureFact.optional(),
     orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),
     usageLimitTurnItemId: text,
-    forkedFrom: z.object({ sessionId: z.string() }).optional()
+    ...storedBotStatusNotes,
+    automationResultCleared: z.literal(true).optional(),
+    forkedFrom: z
+      .object({
+        sessionId: z.string(),
+        sourceForked: z.literal(true).optional(),
+        sourceMissing: z.literal(true).optional()
+      })
+      .optional()
   }),
   toolCallBlock.extend({ state: text, endedAs: text }),
   toolResultBlock.extend({
@@ -152,13 +179,48 @@ const block = z.discriminatedUnion('type', [
 
 export const storedMessageBody = messageBody.extend({
   blocks: z.array(block),
-  from: messageSource.nullable().optional()
+  from: messageSource.nullable().optional(),
+  typedBy: z
+    .discriminatedUnion('by', [
+      z.object({ by: z.literal('host') }),
+      z.object({
+        by: z.literal('device'),
+        deviceId: z.string(),
+        account: z.string().optional(),
+        accountId: z.string().optional(),
+        own: z.boolean().optional(),
+        computer: z.string().optional(),
+        phone: z.string().optional()
+      }),
+      z.object({ by: z.literal('agent') })
+    ])
+    .optional(),
+  origin: text,
+  asker: storedConnectorAsker.optional(),
+  connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
+  connectorDelivery: z
+    .object({
+      account: z.string(),
+      conversation: z.object({ source: z.string(), externalId: z.string() }),
+      deliveryId: z.string(),
+      carried: z.array(z.string()).optional()
+    })
+    .optional(),
+  tookOver: z
+    .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
+    .optional(),
+  memorySource: text,
+  triggeredBy: z
+    .object({ source: z.string(), event: text, actor: text, actorId: text, place: text })
+    .optional(),
+  automationRun: storedAutomationRun.optional()
 })
 
 export const storedItemBody = z.discriminatedUnion('kind', [
   storedMessageBody,
   agentStartBody.extend({
     worker: sender.nullable().optional(),
+    agent: text,
     followUp: z.object({ of: z.string(), reopened: z.boolean() }).optional()
   }),
   agentHandoffBody.extend({ agent: sender.nullable().optional() }),
@@ -167,10 +229,16 @@ export const storedItemBody = z.discriminatedUnion('kind', [
   approvalBody,
   questionBody,
   statusBody.extend({
+    ...storedBotStatusNotes,
     failure: storedFailureFact.optional(),
     turnLifecycle: turnBody.omit({ kind: true }).optional()
   }),
-  turnBody
+  turnBody,
+  automationSavedBody.extend(storedAutomationSaved),
+  toolAddedBody,
+  waitEndedBody.extend(storedWaitEnded),
+  automationRunNotStartedBody.extend(storedAutomationRunNotStarted),
+  botItemNoteBody.extend(storedBotItemNote)
 ])
 
 export const storedProviderHandle = z.discriminatedUnion('kind', [

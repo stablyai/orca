@@ -5,9 +5,9 @@ import { join } from 'node:path'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { FolderWorkspacePersistenceOperations } from '../../persistence/restoring-sessions/folder-workspace-operations'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 
 const unused = (): never => {
   throw new Error('unused')
@@ -61,7 +61,9 @@ function createController(
     setWorktreeMeta: unused,
     removeWorktreeMeta: unused,
     getGitHubCache: unused,
-    getSettings: unused
+    getSettings: unused,
+    getWorkspaceSessionHostIds: () => ['local'],
+    getWorkspaceSession: () => state.workspaceSession
   }
   const controller = new RuntimeProjectGroupController({
     getStore: () => store,
@@ -92,6 +94,39 @@ describe('folder workspace deletion with requireUniqueId', () => {
       'added during teardown'
     ])
   })
+})
+
+it('refuses to delete a folder workspace whose open file holds an unsaved draft', async () => {
+  const deps = createController([folderRow({})])
+  deps.state.workspaceSession = {
+    ...deps.state.workspaceSession,
+    openFilesByWorktree: {
+      'folder:hub-a': [
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the draft field is read.
+        { filePath: '/f/a.md', dirtyDraftContent: 'unsaved' } as never
+      ]
+    }
+  }
+  await expect(deps.controller.deleteFolderWorkspace('hub-a', {})).rejects.toThrow(
+    /Unsaved editor changes/
+  )
+  expect(deps.state.folderWorkspaces.map((row) => row.id)).toEqual(['hub-a'])
+})
+
+it('keeps the folder workspace when a draft lands during teardown', async () => {
+  const deps = createController([folderRow({})], () => {
+    deps.state.workspaceSession = {
+      ...deps.state.workspaceSession,
+      openFilesByWorktree: {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the draft field is read.
+        'folder:hub-a': [{ filePath: '/f/a.md', dirtyDraftContent: 'late' } as never]
+      }
+    }
+  })
+  await expect(deps.controller.deleteFolderWorkspace('hub-a', {})).rejects.toThrow(
+    /Unsaved editor changes/
+  )
+  expect(deps.state.folderWorkspaces.map((row) => row.id)).toEqual(['hub-a'])
 })
 
 function archiveGroup(root: string, exitCode: number): ProjectGroup {

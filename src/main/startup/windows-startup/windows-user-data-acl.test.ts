@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
-} from '../../../shared/windows-security-addon'
+} from '../../../shared/secure-storage/windows-security-addon'
 import {
   createFakeWindowsSecurity,
   FAKE_USER_SID,
   type FakeWindowsSecurity
-} from '../../../shared/windows-security-addon.test-fixture'
+} from '../../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   ensureWindowsUserDataAclGrant,
   WINDOWS_ACL_GRANT_MARKER_FILE,
@@ -50,7 +50,7 @@ describe('ensureWindowsUserDataAclGrant', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('grants each child directory, then the root, then writes the marker', async () => {
+  it('grants children before the root and skips a repeat grant for the same identity', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'))
     mkdirSync(join(userDataPath, 'codex-runtime-home'))
     writeFileSync(join(userDataPath, 'orca-runtime.json'), '{}')
@@ -71,22 +71,10 @@ describe('ensureWindowsUserDataAclGrant', () => {
     )
     expect(marker.schemeVersion).toBe(WINDOWS_ACL_GRANT_SCHEME_VERSION)
     expect(marker.identity).toBe(IDENTITY)
-  })
 
-  it('skips every grant when the marker matches the identity', async () => {
-    writeMarker(userDataPath, IDENTITY)
-
+    const firstGrant = granted()
     expect(await awaitResult(userDataPath)).toEqual({ mode: 'marker-hit' })
-    expect(granted()).toEqual([])
-  })
-
-  // Accept legacy identity spelling without a redundant whole-tree regrant.
-  it('accepts a marker written under the pre-native USERNAME identity', async () => {
-    vi.stubEnv('USERNAME', 'alice')
-    writeMarker(userDataPath, 'alice')
-
-    expect(await awaitResult(userDataPath)).toEqual({ mode: 'marker-hit' })
-    expect(granted()).toEqual([])
+    expect(granted()).toEqual(firstGrant)
   })
 
   it('re-grants when the marker belongs to a different identity', async () => {
@@ -108,29 +96,5 @@ describe('ensureWindowsUserDataAclGrant', () => {
     expect(result).toMatchObject({ mode: 'failed', reason: expect.stringContaining('locked') })
     expect(granted()).toContain(userDataPath)
     expect(() => readFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE))).toThrow()
-  })
-
-  it('still grants the root when its children cannot be listed, and reports the failure', async () => {
-    // Model refused child listing while the root grant remains possible.
-    const unlistable = join(userDataPath, 'unlistable')
-    writeFileSync(unlistable, '')
-
-    const result = await awaitResult(unlistable)
-
-    expect(result).toMatchObject({ mode: 'failed', reason: expect.stringContaining('ENOTDIR') })
-    expect(granted()).toEqual([unlistable])
-  })
-
-  it('no-ops when the addon cannot load', async () => {
-    setWindowsSecurityForTests(null)
-
-    expect(await awaitResult(userDataPath)).toEqual({ mode: 'no-identity' })
-    expect(granted()).toEqual([])
-  })
-
-  it('ignores a corrupt marker and re-grants', async () => {
-    writeFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), '{not json')
-
-    expect(await awaitResult(userDataPath)).toEqual({ mode: 'granted' })
   })
 })

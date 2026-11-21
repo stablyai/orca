@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 type TestNotification = EventEmitter & {
-  close: ReturnType<typeof vi.fn>
-  show: ReturnType<typeof vi.fn>
+  close: ReturnType<typeof vi.fn<() => void>>
+  show: ReturnType<typeof vi.fn<() => void>>
 }
 
 const mocks = vi.hoisted(() => {
@@ -29,6 +29,10 @@ vi.mock('electron', async () => {
 })
 vi.mock('../../../window/activation/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => mocks.background
+}))
+vi.mock('../../../notifications/desktop-notification', () => ({
+  showDesktopNotification: (notification: TestNotification) => notification.show(),
+  closeDesktopNotification: (notification: TestNotification) => notification.close()
 }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
 vi.mock('../permissions/browser-extension-user-gesture', () => ({

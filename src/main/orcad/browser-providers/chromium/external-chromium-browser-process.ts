@@ -8,7 +8,7 @@ import {
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
 } from './external-chromium-browser-session'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import {
   externalChromiumCommandArguments,
   externalChromiumWaitCommand,
@@ -222,6 +222,12 @@ export class ExternalChromiumBrowserProcess {
     const input = await runExternalChromiumPageInput(session, method, params)
     if (input !== null) {
       return input
+    }
+    if (method === 'browserReload' && params.ignoreCache === true) {
+      throw new BrowserError(
+        'browser_command_unavailable',
+        'This browser provider cannot reload without the cache.'
+      )
     }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {
       await session.run([method.slice('browser'.length).toLowerCase()])

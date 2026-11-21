@@ -1,91 +1,83 @@
-import {
-  JournalLegacyRetentionError,
-  JournalLegacyIneligibleError
-} from './journal-legacy-retention-error'
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import {
   completeJournalLegacyProof,
   createLegacyProofFrontier
 } from './journal-legacy-proof-frontier'
 import {
+  decodeLegacySourceProving,
   decodeLegacySourceRefusal,
+  LEGACY_PROOF_COPIES_TABLE,
+  LEGACY_PROOF_LAYOUT,
   LEGACY_SOURCE_REFUSAL_POLICY,
-  type LegacySourceRefusal,
-  type Retirement
+  type LegacySourceProving,
+  type LegacySourceRefusal
 } from './journal-legacy-retirement-state'
-import { journalDatabasePath } from './database/journal-host-database'
-import { journalDomainDatabasePath } from './database/journal-domain-database'
-import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
-import { legacyDestinationMain } from './journal-legacy-retirement-files'
-import type { createJournalLegacyFileEligibility } from './journal-legacy-file-lock'
+import type { LegacyProofCursor } from './journal-legacy-source-proof'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 
-type Observation = { proof: string; observed: string; destination: string }
+/** The original as its receipt shows it, and the store the proof converts into. */
+export type LegacyProofObservation = {
+  proof: string
+  store: string
+}
 
-/** One descriptor owns verified work, negative evidence and pending conversion progress. */
+/** One observation owns verified work, a refusal and pending conversion progress. */
 export class JournalLegacyProof {
   private descriptor?: string
-  private receipt = ''
   private refusal?: LegacySourceRefusal
   private refusalSaved = false
-  private ineligible = false
-  private eligible = false
   private proven = false
-  private restamping = false
   private frontier = createLegacyProofFrontier()
 
   constructor(
-    private readonly directory: string,
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<JournalSqlReaderPool, 'legacyProof' | 'importState'>,
     private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
     private readonly boundary: () => Promise<boolean>,
     private readonly signal: AbortSignal,
-    private readonly rest: (started: number) => Promise<void>,
-    private readonly eligibility: ReturnType<typeof createJournalLegacyFileEligibility>
+    private readonly rest: (started: number) => Promise<void>
   ) {}
 
-  get terminal(): boolean {
-    return !!this.refusal || this.ineligible
-  }
-
-  async retained(): Promise<boolean> {
-    if (!this.terminal) {
-      return false
-    }
-    await this.observe(this.receipt)
-    if (!this.terminal) {
-      return false
-    }
-    await this.saveRefusal()
-    return true
-  }
-
-  async observe(proof: string): Promise<Observation> {
-    const observed = JSON.stringify(
-      await readJournalLegacySourceReceipt(journalDatabasePath(this.directory))
-    )
-    const destination = await legacyDestinationMain(journalDomainDatabasePath(this.directory))
-    const descriptor = `${proof}\n${observed}\n${destination}`
+  /** A changed original or store discards progress; the same one keeps it across attempts. */
+  observe(observation: LegacyProofObservation): void {
+    const descriptor = `${observation.proof}\n${observation.store}`
     if (descriptor !== this.descriptor) {
       this.descriptor = descriptor
-      this.receipt = proof
       this.refusal = undefined
-      this.refusalSaved = this.ineligible = this.eligible = this.proven = this.restamping = false
+      this.refusalSaved = this.proven = false
       this.frontier = createLegacyProofFrontier()
     }
-    return { proof, observed, destination }
   }
 
-  restore(value: string | null, observation: Observation): boolean {
-    const refusal = decodeLegacySourceRefusal(value)
-    if (
-      !refusal ||
-      refusal.proof !== observation.proof ||
-      refusal.observed !== observation.observed ||
-      refusal.destination !== observation.destination
-    ) {
+  /**
+   * Picks up where an earlier launch's proof of this same original into this same store stopped,
+   * or, after a deletion that didn't go through, at the copies it ends with. Pages already proven
+   * stay proven: the original is unchanged, the store keeps what it converted and kept, and a
+   * person's own edits here since supersede what it showed. What an older-Orca pass can add
+   * since (compares due, failures) is checked again first, and copies are walked from the start.
+   */
+  resume(saved: string | null, observation: LegacyProofObservation): void {
+    const fresh =
+      this.frontier.pages === 0 &&
+      !this.frontier.page &&
+      this.frontier.cursor?.table === 0 &&
+      this.frontier.cursor.after === null
+    const at = fresh ? savedCursor(saved, observation) : null
+    if (at) {
+      this.frontier = createLegacyProofFrontier({ ...at, check: true })
+    }
+  }
+
+  /** True when this exact original was refused before; the proof isn't run again for it. */
+  refused(saved: string | null, observation: LegacyProofObservation): boolean {
+    // An unsaved refusal proves again, which saves it; only a saved one ends this process's attempts.
+    if (this.refusal) {
+      return this.refusalSaved
+    }
+    const refusal = decodeLegacySourceRefusal(saved)
+    if (!refusal || refusal.proof !== observation.proof || refusal.store !== observation.store) {
       return false
     }
     this.refusal = refusal
@@ -93,29 +85,7 @@ export class JournalLegacyProof {
     return true
   }
 
-  async checkEligibility(): Promise<void> {
-    if (this.eligible) {
-      return
-    }
-    try {
-      await this.eligibility.check(journalDatabasePath(this.directory), this.signal)
-    } catch (error) {
-      this.ineligible = error instanceof JournalLegacyIneligibleError
-      throw error
-    }
-    this.eligible = true
-  }
-
-  restamped(): void {
-    this.restamping = false
-  }
-
-  async run(observation: Observation, state: Retirement | null, fresh = false): Promise<void> {
-    if (fresh && !this.restamping) {
-      this.proven = false
-      this.frontier = createLegacyProofFrontier()
-      this.restamping = true
-    }
+  async run(observation: LegacyProofObservation): Promise<void> {
     if (this.proven) {
       return
     }
@@ -127,26 +97,43 @@ export class JournalLegacyProof {
         this.boundary,
         this.signal,
         this.rest,
-        this.frontier
+        this.frontier,
+        (cursor) => this.saveProgress(observation, cursor)
       )
     } catch (error) {
       if (error instanceof JournalLegacyRetentionError && error.reason) {
         this.refusal = {
-          version: 1,
+          version: 2,
           phase: 'refused',
           policy: LEGACY_SOURCE_REFUSAL_POLICY,
           proof: observation.proof,
-          observed: observation.observed,
-          destination: observation.destination,
+          store: observation.store,
           reason: error.reason
         }
-        // Partial unlink still owes its original manifest, even when a later proof refuses.
-        this.refusalSaved = state?.phase === 'prepared' || state?.phase === 'complete'
         await this.saveRefusal()
       }
       throw error
     }
     this.proven = true
+  }
+
+  private async saveProgress(
+    observation: LegacyProofObservation,
+    { check: _check, ...cursor }: LegacyProofCursor
+  ): Promise<void> {
+    const proving: LegacySourceProving = {
+      version: 2,
+      phase: 'proving',
+      layout: LEGACY_PROOF_LAYOUT,
+      proof: observation.proof,
+      store: observation.store,
+      cursor
+    }
+    await this.writer.maintain({
+      kind: 'legacy-retirement-save',
+      value: JSON.stringify(proving),
+      durable: false
+    })
   }
 
   private async saveRefusal(): Promise<void> {
@@ -164,4 +151,39 @@ export class JournalLegacyProof {
     }
     this.refusalSaved = true
   }
+}
+
+/** Where a saved proof of this original into this store resumes; null starts from the beginning. */
+function savedCursor(
+  saved: string | null,
+  observation: LegacyProofObservation
+): LegacyProofCursor | null {
+  const proving = decodeLegacySourceProving(saved)
+  if (proving) {
+    if (proving.proof !== observation.proof || proving.store !== observation.store) {
+      return null
+    }
+    // Copies the reconcile keeps can sort anywhere, so their pages are always walked whole.
+    return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
+      ? { table: LEGACY_PROOF_COPIES_TABLE, after: null }
+      : proving.cursor
+  }
+  let retiring: unknown
+  try {
+    retiring = saved ? JSON.parse(saved) : null
+  } catch {
+    return null
+  }
+  const proven =
+    typeof retiring === 'object' &&
+    retiring !== null &&
+    'phase' in retiring &&
+    retiring.phase === 'retiring' &&
+    'layout' in retiring &&
+    retiring.layout === LEGACY_PROOF_LAYOUT &&
+    'proof' in retiring &&
+    retiring.proof === observation.proof &&
+    'store' in retiring &&
+    retiring.store === observation.store
+  return proven ? { table: LEGACY_PROOF_COPIES_TABLE, after: null } : null
 }

@@ -3,7 +3,7 @@ import type { AiVaultScanProgress } from '../../../../../../shared/ai-vault/scan
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
 const MAX_PROGRESS_ENTRIES = 8
 const progressByKey = new Map<string, AiVaultScanProgress>()

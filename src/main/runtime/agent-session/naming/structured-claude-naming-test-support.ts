@@ -20,7 +20,7 @@ import {
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../installation/structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionRuntimeDeps } from '../installation/structured-agent-session-runtime-contract'
 
@@ -76,6 +76,7 @@ export async function createClaudeNamingRuntime(
     beforeOpen?: (launch: ClaudeStreamJsonLaunch, connection: FakeConnection) => Promise<void>
     beforeClose?: (connection: FakeConnection) => Promise<boolean>
     beforeControl?: (connection: FakeConnection, name: string) => Promise<void>
+    onNamed?: (workspaceId: string, sessionId: string) => void
     deps?: Partial<StructuredAgentSessionRuntimeDeps>
   } = {}
 ) {
@@ -95,7 +96,7 @@ export async function createClaudeNamingRuntime(
     readJournalFirstPrompt: async () => '',
     workerTaskTitle: () => null,
     generate: async () => null,
-    onNamed: () => {},
+    onNamed: options.onNamed ?? (() => {}),
     logger
   })
   let operation = 0

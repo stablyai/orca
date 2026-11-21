@@ -1,16 +1,19 @@
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskSourceContext,
   WorkspaceRunContext
 } from '../../../shared/work-items/task-source-context'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   hostStableKey,
   parseHostStableKey
 } from '../../../shared/automations/ownership/automation-owner-key'
-import { sanitizeSshTargetGeneration } from '../../../shared/ssh-target-generation'
+import { sanitizeSshTargetGeneration } from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 
 // Re-adopt automation references with repos, using the matched registration’s current generation.
 

@@ -7,11 +7,11 @@ import {
   scaleDirectory,
   scaleRecord
 } from '../agent-session/records/agent-session-scale.test-fixture'
+import { openTestAgentSessionRecordStore } from '../agent-session/records/agent-session-record-store-test-harness'
 import {
   editPersistedTestAgentSessionStore,
-  openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../agent-session/records/agent-session-record-store-test-harness'
+} from '../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { readAgentSenderSessions } from './agent-sender-chat-sessions'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 /** A committed /clear: the durable forward pointer the reverse index is derived from. */

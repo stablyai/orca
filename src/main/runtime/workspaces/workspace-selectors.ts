@@ -8,26 +8,25 @@ import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import {
   runtimeRepoSelectorHostId,
   runtimeRepoSelectorText,
   type RuntimeRepoSelector
 } from './catalog/runtime-repo-selector'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
-import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
+import { resolvedWorktreeForHost, resolvedWorktreeRow } from './catalog/resolved-worktree-row'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import {
   createRepoRowExecutionHostLookup,
   type RepoRowExecutionHostLookup
 } from '../../../shared/execution-host/worktree-execution-host-resolution'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
-import { folderIdOfSelector } from '../../../shared/workspace-scope'
+import { folderIdOfSelector } from '../../../shared/workspace/identity/workspace-scope'
 import {
   folderCandidate,
   folderCatalogOf,
@@ -35,7 +34,8 @@ import {
   resolveKeyedFolderWorkspace,
   selectWorkspaceCandidate,
   type WorkspaceSelectorCandidate,
-  type WorkspaceSelectorOptions
+  type WorkspaceSelectorOptions,
+  WORKSPACE_SELECTOR_NOT_FOUND
 } from './catalog/workspace-selector-candidates'
 export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchContext {
   protected abstract hasFreshResolvedWorktreeCache(
@@ -89,7 +89,7 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     if (candidates.length > 1) {
       throw new Error('selector_ambiguous')
     }
-    throw new Error('selector_not_found')
+    throw new Error(WORKSPACE_SELECTOR_NOT_FOUND)
   }
 
   /** Every repo-backed row the selector names; duplicate registrations of one checkout count once. */
@@ -287,28 +287,20 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     if (!owner) {
       return null
     }
-    const repo = repos.byHost(parsed.repoId, owner.hostId)
-    const git = {
-      path: parsed.worktreePath,
-      head: '',
-      branch: '',
-      isBare: false,
-      isMainWorktree: repo ? areWorktreePathsEqual(parsed.worktreePath, repo.path) : false
-    }
-    const meta = this.store?.getWorktreeMeta(worktreeId)
-    const merged = {
-      ...mergeWorktree(parsed.repoId, git, meta, repo?.displayName),
-      hostId: owner.hostId
-    }
-    return {
-      ...merged,
-      id: worktreeId,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git,
-      displayName: merged.displayName,
-      comment: merged.comment
-    }
+    return resolvedWorktreeRow(
+      worktreeId,
+      owner.hostId,
+      repos.byHost(parsed.repoId, owner.hostId),
+      this.store?.getWorktreeMeta(worktreeId)
+    )
+  }
+
+  /** One known place's row from its own host's records: the repo registered there (keyed) and
+   *  that host's metadata. Null when no repo is registered on that host. */
+  protected buildResolvedWorktreeForHost(
+    worktreeId: string,
+    hostId: ExecutionHostId
+  ): ResolvedWorktree | null {
+    return this.store ? resolvedWorktreeForHost(this.store, worktreeId, hostId) : null
   }
 }

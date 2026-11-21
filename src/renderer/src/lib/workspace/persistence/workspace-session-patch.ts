@@ -6,18 +6,18 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/works
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
-import {
-  buildEditorSessionData,
-  buildSanitizedTabsByWorktree,
-  buildTerminalSessionData
-} from './workspace-session'
+import { buildEditorSessionData, buildTerminalSessionData } from './workspace-session'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import {
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree
 } from './workspace-session-browser-tabs'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
-import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
+import {
+  buildPersistedUnifiedTabSessionData,
+  type UnifiedTabSessionCache
+} from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
@@ -53,7 +53,8 @@ function buildPrunedTerminalScrollback(
 
 export function buildWorkspaceSessionPatch(
   fullSnapshot: WorkspaceSessionSnapshot,
-  changedFields: Iterable<SessionRelevantField>
+  changedFields: Iterable<SessionRelevantField>,
+  unifiedTabSessionCache?: UnifiedTabSessionCache
 ): WorkspaceSessionPatch {
   const snapshot = withoutStagedBrowserTabs(fullSnapshot)
   const changed = new Set(changedFields)
@@ -134,7 +135,8 @@ export function buildWorkspaceSessionPatch(
       'editorDrafts',
       'markdownFrontmatterVisible',
       'activeFileIdByWorktree',
-      'activeTabTypeByWorktree'
+      'activeTabTypeByWorktree',
+      'strandedEditorDrafts'
     ] as const)
   ) {
     Object.assign(
@@ -144,7 +146,8 @@ export function buildWorkspaceSessionPatch(
         snapshot.editorDrafts,
         snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
-        snapshot.activeTabTypeByWorktree
+        snapshot.activeTabTypeByWorktree,
+        snapshot.strandedEditorDrafts
       )
     )
   }
@@ -192,7 +195,7 @@ export function buildWorkspaceSessionPatch(
       'unifiedTabsByWorktree'
     ] as const)
   ) {
-    Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))
+    Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot, unifiedTabSessionCache))
   }
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)

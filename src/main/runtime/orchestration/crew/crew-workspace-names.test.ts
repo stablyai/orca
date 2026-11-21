@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { fixture } from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import {
   makeTerminalTab,
@@ -65,5 +65,39 @@ it('invalidates every naming input through workspace writes without copying buff
     expect(wake.mock.calls.some(([facets]) => facets.has('names'))).toBe(true)
   } finally {
     stop()
+  }
+})
+
+it('compares workspace writes made while nobody listens once, on resume', async () => {
+  const { store } = await fixture()
+  const session = getDefaultWorkspaceSession()
+  session.tabsByWorktree = { folder: [makeTerminalTab({ id: 'tab', worktreeId: 'folder' })] }
+  store.setWorkspaceSession(session)
+  const wake = vi.fn()
+  let idle = false
+  const watch = watchCrewRuntimeSources(
+    {
+      store,
+      watchChanges: () => () => {},
+      watchTransitions: () => () => {},
+      watchClient: () => () => {}
+    },
+    wake,
+    () => null,
+    () => idle
+  )
+  try {
+    idle = true
+    for (const title of ['One', 'Two']) {
+      const next = structuredClone(store.getWorkspaceSession())
+      next.tabsByWorktree!.folder[0].generatedTitle = title
+      store.setWorkspaceSession(next)
+    }
+    expect(wake).not.toHaveBeenCalled()
+    idle = false
+    watch.resume()
+    expect(wake.mock.calls.map(([facets]) => [...facets])).toEqual([['names']])
+  } finally {
+    watch()
   }
 })

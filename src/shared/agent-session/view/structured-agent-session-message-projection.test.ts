@@ -1,57 +1,68 @@
-// A send the host kept as a card is drawn only as that card: the rule rides on the submission's
-// own fact, never on the card still being there.
-
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
-import { structuredAgentSessionSendBody } from '../requests/structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
-const KEPT_ID = 'client-kept'
+const failure = {
+  kind: 'startFailed',
+  refusal: { code: 'agent_session_operation_invalid', details: { ownerVerdict: 'exited' } }
+} as const
 
-function rejected(fields: Partial<AgentJournalSubmission> = {}): AgentJournalSubmission {
+function send(id: string, sequence: number): AgentJournalRenderItem {
   return {
-    clientMessageId: KEPT_ID,
-    fence: 1,
-    payloadFingerprint: 'fingerprint-kept',
-    dispatchState: 'rejected',
-    providerItemId: null,
-    reason: 'Orca restarted before this message was sent.',
-    rejection: { kind: 'hostRestarted' },
-    submittedAt: 1,
-    resolvedAt: 2,
-    ...fields
+    itemId: `orca:${id}`,
+    revision: 0,
+    sequence,
+    observedAt: sequence,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hello' }] },
+    turnScope: { kind: 'thread' }
   }
 }
 
-function userItem(id: string, text: string, sequence: number): AgentJournalRenderItem {
+function startFailureRow(id: string, sequence: number): AgentJournalRenderItem {
   return {
-    itemId: agentJournalSubmissionKey(id),
+    itemId: `orca:start-failure%3A${id}`,
     revision: 1,
     sequence,
     observedAt: sequence,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+    body: { kind: 'status', text: "Claude couldn't start.", tone: 'error' },
+    turnScope: { kind: 'thread' }
   }
 }
 
-/** The sending desktop's own bubble, had it not settled yet. */
-const lingeringCopy = {
-  clientMessageId: KEPT_ID,
-  body: structuredAgentSessionSendBody('the kept words', []),
-  queuedAt: 1
+function rejected(id: string, submittedAt: number, resolvedAt: number): AgentJournalSubmission {
+  return {
+    clientMessageId: id,
+    fence: 1,
+    payloadFingerprint: 'same-text',
+    dispatchState: 'rejected',
+    providerItemId: null,
+    reason: "Claude couldn't start.",
+    rejection: failure,
+    submittedAt,
+    resolvedAt,
+    acceptedSequence: submittedAt
+  }
 }
 
-describe('a send kept as a card', () => {
-  it('shows nothing of the original send, even beside its own local copy', () => {
-    const kept = rejected({ keptAsQueuedMessageId: KEPT_ID })
-    const items = [userItem(KEPT_ID, 'the kept words', 1)]
-    expect(projectStructuredAgentSessionMessages(items, [lingeringCopy], [kept])).toEqual([])
-    // A rejection with no card is drawn from the host's row, marked not sent.
-    expect(projectStructuredAgentSessionMessages(items, [lingeringCopy], [rejected()])).toEqual([
-      expect.objectContaining({ id: agentJournalSubmissionKey(KEPT_ID), unsent: true })
+describe('a message resent after its agent could not start', () => {
+  it('shows one copy and only the resend’s start failure', () => {
+    const messages = projectStructuredAgentSessionMessages(
+      [
+        send('first', 2),
+        startFailureRow('first', 3),
+        send('again', 5),
+        startFailureRow('again', 6)
+      ],
+      [],
+      [rejected('first', 1, 3), rejected('again', 4, 6)]
+    )
+
+    expect(messages.map((message) => message.id)).toEqual([
+      'orca:again',
+      'orca:start-failure%3Aagain'
     ])
   })
 })

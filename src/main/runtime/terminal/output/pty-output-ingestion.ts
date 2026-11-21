@@ -4,7 +4,7 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
 } from '../records/runtime-terminal-state-records'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
@@ -19,7 +19,8 @@ import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
 } from '../wait/terminal-wait-tail-state'
-import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+import { extractOscTitleScanTail } from '../../../../shared/agent-status/title/osc-title-scan-tail'
+import { recordPtyExplicitAgentStatus } from './pty-explicit-agent-status'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   protected abstract recordOsc7MetadataForPty(
@@ -136,7 +137,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       ptyNormalized = normalized
       pty.tailPendingAnsi = normalized.pendingAnsi
-      observeTerminalCommandPaint(pty, data, normalized.text)
+      observeTerminalCommandPaint(pty, data, normalized.text, at)
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
@@ -264,28 +265,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
       }
       // Background CLI PTYs may lack pane keys; retain first-party status on the always-addressable PTY record.
-      const latestAgentStatus = agentStatusChunk.payloads.at(-1)
-      if (latestAgentStatus) {
-        const ptyRecord = this.ptysById.get(ptyId)
-        if (ptyRecord) {
-          const fromProgram = agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
-          const signInSince = ptyRecord.lastExplicitAgentStatus?.programSignInRequiredSince
-          // The facet rides only chunks where it changed; repeats keep the kind and first stamp.
-          const signInRequired =
-            fromProgram &&
-            latestAgentStatus.state === 'blocked' &&
-            (agentStatusChunk.programStatusFacet !== undefined
-              ? agentStatusChunk.programStatusFacet?.kind === 'auth'
-              : signInSince !== undefined)
-          ptyRecord.lastExplicitAgentStatus = {
-            state: latestAgentStatus.state,
-            updatedAt: Date.now(),
-            sessionBoundary: latestAgentStatus.sessionBoundary,
-            ...(latestAgentStatus.state === 'done' && fromProgram ? { programAtRest: true } : {}),
-            ...(signInRequired ? { programSignInRequiredSince: signInSince ?? Date.now() } : {})
-          }
-        }
-      }
+      recordPtyExplicitAgentStatus(this.ptysById.get(ptyId), agentStatusChunk)
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput,
         programActivity: agentStatusChunk.programActivity

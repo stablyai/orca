@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { normalizeCodexRuntimeSelection } from '../account-management/runtime-selection'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import { recoverInterruptedGuardedFileOperation } from '../../filesystem/atomic-file-publication'
 import type { CodexSharedRuntimeAuthProvenanceStatus } from './runtime-home-service-types'
 import { codexAuthIsMonotonicallyFresher } from './credentials/runtime-home-service-auth-sync-identity'
@@ -136,7 +136,7 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
 
   protected safeRecoverInterruptedRuntimeAuthOperation(): void {
     try {
-      recoverInterruptedGuardedFileOperation(this.getRuntimeAuthPath())
+      recoverInterruptedGuardedFileOperation(this.getRuntimeAuthPath(), { credential: true })
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to recover interrupted auth update:', error)
     }

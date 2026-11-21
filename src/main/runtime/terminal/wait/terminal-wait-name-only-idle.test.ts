@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
-import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 
 // #6011: name-only Codex/Devin titles were stored as idle and prematurely satisfied tui-idle; distinguish settling, corroborating and veto evidence.
 
@@ -61,7 +61,7 @@ async function makeRuntime(launchAgent?: TuiAgent) {
     getForegroundProcess: async () => 'codex'
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, E2E_GRAPH)
+  await runtime.syncWindowGraph(1, E2E_GRAPH)
   if (launchAgent) {
     registerBoundPty(runtime, E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',
@@ -88,25 +88,19 @@ describe('tui-idle over the live OSC title pipeline', () => {
     vi.useRealTimers()
   })
 
-  it('does not settle on a name-only title arriving mid-stream', async () => {
+  it('requires an explicit idle title after the name-only title arrives mid-turn', async () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
 
-    const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 250 })
+    const earlyWait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 250 })
     // The agent is mid-turn and repaints its title to the bare product name.
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}more output\n`, Date.now())
 
-    const assertion = expect(waiting).rejects.toThrow('timeout')
+    const assertion = expect(earlyWait).rejects.toThrow('timeout')
     await vi.advanceTimersByTimeAsync(250)
     await assertion
-  })
-
-  it('settles when the agent reports idle explicitly', async () => {
-    const { runtime, handle } = await makeRuntime('codex')
-    runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
 
     const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_000 })
-    runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}more output\n`, Date.now())
     runtime.onPtyData(E2E_PTY_ID, oscTitle(EXPLICIT_IDLE_TITLE), Date.now())
 
     await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })

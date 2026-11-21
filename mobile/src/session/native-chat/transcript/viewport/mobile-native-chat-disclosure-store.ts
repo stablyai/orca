@@ -1,7 +1,9 @@
 // Store disclosures above recycled transcript rows so opened tools remain open when rows remount.
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
+import { MAX_CACHED_TRANSCRIPTS } from '../persistence/mobile-native-chat-transcript-cache'
 import type { MobileNativeChatRootPosition } from './mobile-native-chat-scroll-root-handle'
 
 export type MobileNativeChatRunScroll = MobileNativeChatRootPosition
@@ -29,23 +31,31 @@ type ScopedDisclosures = {
   roots: MobileNativeChatScrollRoots
 }
 
-function emptyDisclosures(scopeKey: string): ScopedDisclosures {
-  const runScroll = new Map<string, MobileNativeChatRunScroll>()
+type KeptDisclosures = Map<string, Pick<ScopedDisclosures, 'open' | 'runScroll'>>
+
+function chatDisclosuresOf(kept: KeptDisclosures, scopeKey: string): ScopedDisclosures {
+  const chat = kept.get(scopeKey)
+  const runScroll = chat?.runScroll ?? new Map<string, MobileNativeChatRunScroll>()
   return {
     scopeKey,
-    open: new Map(),
+    open: chat?.open ?? new Map(),
     runScroll,
     roots: new MobileNativeChatScrollRoots(runScroll, MAX_DISCLOSURES)
   }
 }
 
 export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeChatDisclosureStore {
-  const [state, setState] = useState(() => emptyDisclosures(scopeKey))
+  // One view serves every tab, so each chat keeps what the reader opened, under the run keys this view gave it.
+  const [kept] = useState<KeptDisclosures>(() => new Map())
+  const [state, setState] = useState(() => chatDisclosuresOf(kept, scopeKey))
   if (state.scopeKey !== scopeKey) {
-    setState(emptyDisclosures(scopeKey))
+    setState(chatDisclosuresOf(kept, scopeKey))
   }
   const { open, runScroll, roots } = state
   useLayoutEffect(() => () => roots.dispose(), [roots])
+  useLayoutEffect(() => {
+    setBoundedScopeCacheEntry(kept, state.scopeKey, { open, runScroll }, MAX_CACHED_TRANSCRIPTS)
+  }, [kept, state.scopeKey, open, runScroll])
   const write = useCallback(
     (key: string, next: boolean) => {
       if (!next) {

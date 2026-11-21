@@ -1,9 +1,9 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionProviderOpenInput,
@@ -21,7 +21,8 @@ import type { CodexJournalTranslator } from '../journal/codex-structured-journal
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
-import { withCodexVisualsThreadConfig } from '../launch/codex-structured-visuals'
+import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
+import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
 import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   restoredCodexSessionOptions,
@@ -93,11 +94,20 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  // A read-only thread opens only with every MCP server its config has turned off.
+  const mcpOff = launch.readOnly
+    ? await waitForPromiseWithSignal(codexReadOnlyMcpOff(connection, launch.cwd), openInput.signal)
+    : null
+  current()
   const threadLaunch = await waitForPromiseWithSignal(
-    withCodexVisualsThreadConfig(connection, launch, {
-      sessionId,
-      ...(deps.logger ? { logger: deps.logger } : {})
-    }),
+    withCodexSkillRootsThreadConfig(
+      connection,
+      mcpOff ? { ...launch, threadConfig: { ...launch.threadConfig, ...mcpOff } } : launch,
+      {
+        sessionId,
+        ...(deps.logger ? { logger: deps.logger } : {})
+      }
+    ),
     openInput.signal
   )
   current()
@@ -163,6 +173,7 @@ export async function openCodexStructuredSession(
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
+    ...(launch.readOnly ? { readOnly: launch.readOnly } : {}),
     events: input.events,
     account: start.account,
     codexHome: launch.codexHome,

@@ -8,7 +8,7 @@ import {
   parseOrcadInstanceLockRecord,
   type OrcadLockRecord
 } from './orcad-instance-lock-record'
-import type { OrcadUnexpectedExit } from '../../../shared/orcad-unexpected-exit'
+import type { OrcadUnexpectedExit } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-unexpected-exit'
 
 export type OrcadInstanceLock = {
   readonly path: string

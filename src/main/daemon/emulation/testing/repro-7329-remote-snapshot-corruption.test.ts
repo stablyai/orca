@@ -60,4 +60,28 @@ describe('#7329 remote-server snapshot corruption', () => {
       term.dispose()
     }
   })
+
+  it.each([
+    ['OSC 52 clipboard copy (#44623)', `\x1b]52;c;${'6K6h'.repeat(2000)}`, '5Lu2', '\x07'],
+    ['DCS image', `\x1bPq${'#0;2;0;0;0'.repeat(800)}`, '5Lu2', '\x1b\\'],
+    ['CSI', `\x1b[${'1;'.repeat(2500)}`, '2;54', 'm']
+  ])(
+    'keeps the rest of an oversized %s split by the snapshot off the screen',
+    async (_name, head, continuation, terminator) => {
+      const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
+      const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+      try {
+        await emulatorWrite(emu, `$ copy\r\n${head}`)
+        await replayRemoteSnapshot(term, emu.getSnapshot({ scrollbackRows: 0 }))
+        await writeXterm(term, `${continuation.repeat(500)}${terminator}done\r\n`)
+
+        const visible = renderVisible(term)
+        expect(visible).not.toContain(continuation)
+        expect(visible).toContain('done')
+      } finally {
+        emu.dispose()
+        term.dispose()
+      }
+    }
+  )
 })

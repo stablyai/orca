@@ -20,11 +20,17 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       composeStructuredLaunch(
         PI_RPC_AGENT,
         structuredAgentLaunchSources(context),
-        piRpcLaunchPart({ logger: deps.logger })
+        piRpcLaunchPart({
+          logger: deps.logger,
+          dataDirectory: deps.stateDirectory,
+          managedExtensionsEnabled: deps.piManagedExtensionsEnabled
+        })
       ),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     onLifecycle: context.deliverLifecycle,
+    onChildWorkEvidence: (sessionId, evidence, producer) =>
+      context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onSettled: ({ sessionId, clientMessageId, outcome }) => {
       if (outcome.state === 'admitted') {
         return

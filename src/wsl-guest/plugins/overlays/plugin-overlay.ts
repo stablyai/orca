@@ -4,18 +4,18 @@ import { mirrorOpenCodeConfig } from '../opencode/opencode-overlay-mirror'
 import {
   writeOpenCodeStartupPromptPlugin,
   OPENCODE_STARTUP_PROMPT_PLUGIN_DIRECTORY
-} from '../../../shared/opencode-startup-prompt-install'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
+} from '../../../shared/agent-launch/plugins/opencode/opencode-startup-prompt-install'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 import { materializeOmpFreshConfig } from '../../../shared/agent-launch/startup/omp-fresh-config'
 // Install remotely because host paths and Electron services are unavailable to the relay.
 // Receive plugin source at session-ready: relay and desktop update independently, so bundled copies could stay stale.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { writeOverlayOpenCodePluginAtomically } from '../../../shared/opencode-plugin-atomic-write'
+import { writeOverlayOpenCodePluginAtomically } from '../../../shared/agent-launch/plugins/opencode/opencode-plugin-atomic-write'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { safeRemoveOverlay } from '../../../main/pty/scrollback/overlay-mirror'
-import type { PiAgentKind } from '../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 import {
   installOpenCodePluginInCanonicalConfig,
   isRelayOpenCodeOverlayPath,
@@ -25,7 +25,7 @@ import { writeRelayOmpStatusExtension } from './omp-status-extension'
 import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
-} from '../../../shared/opencode-tui-plugin-install'
+} from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'

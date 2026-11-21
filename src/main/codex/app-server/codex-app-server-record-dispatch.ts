@@ -1,13 +1,19 @@
-import type { NdjsonRejectedRecord } from '../../../shared/main-process-ndjson-framer'
+import type { NdjsonRejectedRecord } from '../../../shared/json-stream/main-process-ndjson-framer'
 import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
-import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
+import {
+  CodexAppServerFrameSizeError,
+  oversizedLineError
+} from './codex-app-server-frame-size-error'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
 } from './codex-app-server-session'
-import { classifyJsonRpcPrefix } from '../../../shared/json-rpc-record-prefix'
+import {
+  classifyJsonRpcPrefix,
+  type JsonRpcPrefix
+} from '../../../shared/json-stream/json-rpc-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64
@@ -35,6 +41,7 @@ export function createCodexAppServerRecordDispatcher(input: {
 } {
   const pending = new Map<number, CodexPendingRequest>()
   const timedOutMethods = new Map<number, string>()
+  let highestIssued = -1
 
   const timeOutPending = (id: number): void => {
     const waiter = pending.get(id)
@@ -54,18 +61,6 @@ export function createCodexAppServerRecordDispatcher(input: {
     for (const waiter of pending.values()) {
       clearTimeout(waiter.timer)
       waiter.reject(error)
-    }
-    pending.clear()
-  }
-
-  const failPendingForOversizedUnknown = (
-    record: NdjsonRejectedRecord & { kind: 'line-too-long' }
-  ): void => {
-    for (const waiter of pending.values()) {
-      clearTimeout(waiter.timer)
-      waiter.reject(
-        new CodexAppServerFrameSizeError(waiter.method, record.observedBytes, record.maxLineBytes)
-      )
     }
     pending.clear()
   }
@@ -128,7 +123,10 @@ export function createCodexAppServerRecordDispatcher(input: {
   }
 
   const rejectOversized = (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }): void => {
-    const classification = classifyJsonRpcPrefix(rejected.prefix)
+    // Whole records were lost with it, so no single request can absorb the failure.
+    const classification: JsonRpcPrefix = rejected.droppedCompleteRecords
+      ? { kind: 'unknown' }
+      : classifyJsonRpcPrefix(rejected.prefix)
     const payload = {
       reason: 'record-too-large',
       observedBytes: rejected.observedBytes,
@@ -149,14 +147,13 @@ export function createCodexAppServerRecordDispatcher(input: {
             rejected.maxLineBytes
           )
         )
+      } else if (classification.id <= highestIssued) {
+        // Ids only grow, so this answers a request that timed out; dropped like any late reply.
+        timedOutMethods.delete(classification.id)
       } else {
+        // No request ever had this id, so nothing can take the blame alone.
         input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)
-        failPendingForOversizedUnknown(rejected)
-        input.onProtocolFailure(
-          new Error(
-            `codex app-server oversized response ${classification.id} had no pending request`
-          )
-        )
+        input.onProtocolFailure(oversizedLineError(rejected))
         return
       }
       input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)
@@ -173,22 +170,26 @@ export function createCodexAppServerRecordDispatcher(input: {
       input.handlers.onUnhandledFrame?.('frame:oversized-request', payload)
       return
     }
-    if (classification.kind === 'notification') {
-      input.handlers.onUnhandledFrame?.('frame:oversized-notification', payload)
-      return
-    }
-    input.handlers.onUnhandledFrame?.('frame:oversized-unclassified', payload)
-    input.onProtocolFailure(
-      new Error(
-        classification.kind === 'response-unknown'
-          ? 'codex app-server emitted an oversized response with an unknown shape'
-          : 'codex app-server emitted an oversized unclassifiable JSONL record'
-      )
+    // Dropping a notification could lose a finished item or a turn's end, so the session ends.
+    const notification = classification.kind === 'notification'
+    input.handlers.onUnhandledFrame?.(
+      notification ? 'frame:oversized-notification' : 'frame:oversized-unclassified',
+      payload
     )
+    const oversized = new CodexAppServerFrameSizeError(
+      'method' in classification ? classification.method : null,
+      rejected.observedBytes,
+      rejected.maxLineBytes,
+      notification ? 'notification' : 'message'
+    )
+    input.onProtocolFailure(oversized)
   }
 
   return {
-    addPending: (id, waiter) => pending.set(id, waiter),
+    addPending: (id, waiter) => {
+      highestIssued = Math.max(highestIssued, id)
+      pending.set(id, waiter)
+    },
     deletePending: (id) => pending.delete(id),
     timeOutPending,
     failPending,

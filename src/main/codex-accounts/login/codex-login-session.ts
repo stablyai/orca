@@ -1,12 +1,12 @@
 import { join } from 'node:path'
-import type { WindowsHostInteractiveLoginSpawn } from '../../../shared/windows-interactive-login-spawn'
-import { buildWindowsHostInteractiveLoginSpawn } from '../../../shared/windows-interactive-login-spawn'
-import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../shared/codex-auth-errors'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import type { WindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
+import { buildWindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
+import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../shared/agent-accounts/codex/codex-auth-errors'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { resolveCodexCommand } from '../../codex-cli/command'
 import { codexSpawnEnoent } from '../../codex-cli/windows-only-agent-cli'
-import { getSpawnArgsForWindows } from '../../../shared/windows-batch-spawn'
+import { getSpawnArgsForWindows } from '../../../shared/shell/launch/windows-batch-spawn'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
 import { DEVICE_AUTH_TIMEOUT_MS, parseCodexDeviceAuthPrompt } from './codex-device-auth-prompt'
@@ -196,7 +196,7 @@ async function runCodexLoginProcess(
       child.stderr?.off('data', readStderr)
       child.off('error', onError)
       child.off('close', onClose)
-      spawnConfig.interactiveLogin?.cleanup?.()
+      void spawnConfig.interactiveLogin?.cleanup()
     }
 
     const settle = (callback: () => void): void => {
@@ -256,7 +256,8 @@ async function runCodexLoginProcess(
       })
     }
 
-    const onClose = (code: number | null): void => {
+    const onClose = async (closeEventCode: number | null): Promise<void> => {
+      const code = (await spawnConfig.interactiveLogin?.readExitCode()) ?? closeEventCode
       settle(() => {
         // A forced post-auth exit remains successful unless credentials are definitively absent.
         // An unreadable snapshot cannot revoke success and trigger destructive rollback.

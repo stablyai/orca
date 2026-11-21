@@ -15,6 +15,7 @@ import {
   fakeCodex
 } from '../../../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import {
+  closeTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -74,6 +75,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestAgentSessionDatabase(root)
   await rm(root, { recursive: true, force: true })
 })
 

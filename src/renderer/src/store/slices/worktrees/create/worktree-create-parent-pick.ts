@@ -6,19 +6,22 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { readBots } from '@/lib/bot-catalog-snapshot'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { isHome } from '../../../../../../shared/bots/bot-homes'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,
@@ -28,7 +31,7 @@ import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-work
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CreatedWorktreeResult } from './worktree-create-payload'
 
 export type CreateAttemptOutcome = {
@@ -132,6 +135,10 @@ export function resolveWorktreeCreateParent(
           state.activeWorkspaceExecutionHostId ?? undefined
         )
       : undefined
+  // A bot's or group's home parents only its own workers' workspaces, never one made while it is open.
+  if (activeFolder && isHome(activeFolder, [...readBots(), ...readBotGroups()])) {
+    return { pickedDisplayName, staleBeforeCreate: Boolean(requestedParentWorktreeId) }
+  }
   const activeFolderRow = activeFolder ? getFolderWorkspaceWorktree(activeFolder) : undefined
   const childStore = lineageStoreKeyOfRow({ id: '', hostId: executionHostId })
   const folderStore = activeFolderRow ? lineageStoreKeyOfRow(activeFolderRow) : undefined

@@ -8,14 +8,15 @@ import {
   getRepoSshConnectionId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
   MCP_CONFIG_CANDIDATES,
   MCP_STARTER_CONFIG
-} from '../../../../../../shared/mcp-config'
+} from '../../../../../../shared/mcp/configuration/mcp-config'
 import { useAppStore } from '../../../../store/index'
+import { useAppStoreWithHostStatuses } from '../../../../store/slices/runtime-status/views/use-runtime-status-view'
 import { selectRuntimeAwareSshStatus } from '../../../../store/slices/ssh/runtime-environment-ssh-selectors'
 import {
   worktreeHostMatchOptions,
@@ -40,7 +41,7 @@ import {
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
@@ -72,8 +73,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       worktreeMatchesHost(worktree, repoHostId, options)
     )
   }, [allWorktreesForRepo, repo.id, repoHostId, repos])
-  const sshConnectionStatus = useAppStore((state) =>
-    connectionId ? selectRuntimeAwareSshStatus(state, runtimeEnvironmentId, connectionId) : null
+  const sshConnectionStatus = useAppStoreWithHostStatuses((state, statuses) =>
+    connectionId
+      ? selectRuntimeAwareSshStatus(state, statuses, runtimeEnvironmentId, connectionId)
+      : null
   )
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)

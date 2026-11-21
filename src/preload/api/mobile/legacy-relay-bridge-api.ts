@@ -8,7 +8,7 @@ import {
   type LegacyRelayBridgeAttachResult,
   type LegacyRelayBridgeCloseResult,
   type LegacyRelayBridgedPane
-} from '../../../shared/legacy-relay-bridge-contract'
+} from '../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 
 export type LegacyRelayBridgeApi = {
   listPanes: () => Promise<LegacyRelayBridgedPane[]>
@@ -21,7 +21,7 @@ export type LegacyRelayBridgeApi = {
   resize: (args: { ptyId: string; cols: number; rows: number }) => void
   detach: (args: { ptyId: string; acquisitionId: number }) => void
   close: (args: { ptyId: string }) => Promise<LegacyRelayBridgeCloseResult>
-  setOutputPaused: (args: { ptyId: string; paused: boolean }) => void
+  setOutputPaused: (args: { ptyId: string; paused: boolean; replayNeeded?: boolean }) => void
   onPanes: (callback: (panes: LegacyRelayBridgedPane[]) => void) => () => void
   onData: (callback: (event: { ptyId: string; data: string }) => void) => () => void
   onReplay: (callback: (event: { ptyId: string; replay: string }) => void) => () => void

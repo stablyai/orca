@@ -3,7 +3,7 @@ import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/g
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { removeHostTree } from '../../../filesystem/host-tree-removal'
 import { withSpan } from '../../../observability/tracer'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
@@ -98,6 +98,8 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
+    // Inside the slot: a checkout swapped in while this request queued must still be refused.
+    await options.beforeCheckoutDelete?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,

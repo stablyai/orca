@@ -7,6 +7,7 @@ import { resolvePersistedStablePaneOwner } from './stable-owner'
 import { adoptStablePane } from './adopt-stable'
 import { PtyHostNotDispatchableError } from '../provider/registry'
 import {
+  closeTestStores,
   testState,
   createStoreWithSshRemotePtyLeases
 } from '../../../persistence/persistence-test-harness'
@@ -67,7 +68,8 @@ describe('a pane whose SSH lease expired can still be re-adopted', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -108,7 +110,8 @@ describe('recovery through createTerminal on an SSH host this process cannot rea
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

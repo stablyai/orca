@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
@@ -36,11 +37,15 @@ function reconnectErrorText(
   return sshConnectFailureText(state.sshConnectionStates.get(targetId), error)
 }
 
-function computeTerminalPaneHostState(state: AppState, worktreeId: string): TerminalPaneHostState {
+function computeTerminalPaneHostState(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  worktreeId: string
+): TerminalPaneHostState {
   const connectionId = getConnectionIdFromState(state, worktreeId)
   const nativeChatTranscriptIsLocalReadableResult =
     isNativeChatTranscriptLocalReadable(connectionId)
-  const host = resolveWorktreeHostConnection(state, worktreeId, connectionId)
+  const host = resolveWorktreeHostConnection(state, statuses, worktreeId, connectionId)
   if (!host.targetId) {
     return {
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
@@ -60,7 +65,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
       state,
       sshReconnectEnvironmentId,
       sshReconnectTargetId,
-      selectRuntimeAwareSshError(state, sshReconnectEnvironmentId, sshReconnectTargetId)
+      selectRuntimeAwareSshError(state, statuses, sshReconnectEnvironmentId, sshReconnectTargetId)
     ),
     sshReconnectStatus: host.publishedStatus,
     sshReconnectTargetId,
@@ -71,6 +76,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
     ),
     sshReconnectTargetRemoved: selectRuntimeAwareSshTargetRemoved(
       state,
+      statuses,
       sshReconnectEnvironmentId,
       sshReconnectTargetId
     )
@@ -91,24 +97,27 @@ function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): bo
 
 // Identity checks must not keep a retired store alive after the last pane unmounts.
 let cachedState: WeakRef<AppState> | null = null
+let cachedStatuses: WeakRef<RuntimeStatuses> | null = null
 let cachedByWorktreeId = new Map<string, TerminalPaneHostState>()
 let previousByWorktreeId = new Map<string, TerminalPaneHostState>()
 
 /** Memoize host resolution by whole store identity: ownership spans repo, folder, runtime and SSH state, so narrower keys can miss changes. Resolve once per worktree/publication and reuse unchanged results to avoid per-pane allocations. */
 export function selectTerminalPaneHostState(
   state: AppState,
+  statuses: RuntimeStatuses,
   worktreeId: string
 ): TerminalPaneHostState {
-  if (state !== cachedState?.deref()) {
+  if (state !== cachedState?.deref() || statuses !== cachedStatuses?.deref()) {
     previousByWorktreeId = cachedByWorktreeId
     cachedByWorktreeId = new Map()
     cachedState = new WeakRef(state)
+    cachedStatuses = new WeakRef(statuses)
   }
   const cached = cachedByWorktreeId.get(worktreeId)
   if (cached) {
     return cached
   }
-  const next = computeTerminalPaneHostState(state, worktreeId)
+  const next = computeTerminalPaneHostState(state, statuses, worktreeId)
   const previous = previousByWorktreeId.get(worktreeId)
   const result = previous && isSameHostState(previous, next) ? previous : next
   cachedByWorktreeId.set(worktreeId, result)
@@ -117,6 +126,7 @@ export function selectTerminalPaneHostState(
 
 export function resetTerminalPaneHostStateMemoForTests(): void {
   cachedState = null
+  cachedStatuses = null
   cachedByWorktreeId = new Map()
   previousByWorktreeId = new Map()
 }

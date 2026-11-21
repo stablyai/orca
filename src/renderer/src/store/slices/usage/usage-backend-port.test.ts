@@ -1,10 +1,10 @@
 import { MessageChannel, type MessagePort } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
-import { BackendPortRpc, type BackendPort } from '../../../../../shared/backend-port-rpc'
+import { BackendPortRpc, type BackendPort } from '../../../../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY
-} from '../../../../../shared/backend-service-contract'
+} from '../../../../../shared/backend/backend-service-contract'
 
 const electron = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => void>(),
@@ -44,7 +44,11 @@ function deliver(invoke: (method: string, params?: unknown) => Promise<unknown>)
     close: () => channel.port1.close()
   }
   servers.push(new BackendPortRpc(adapter, 'backend', invoke))
-  emit(BACKEND_PORT_DELIVERY, { token: electron.invoke.mock.lastCall?.[1] }, [channel.port2])
+  emit(
+    BACKEND_PORT_DELIVERY,
+    { token: electron.invoke.mock.lastCall?.[1], incarnation: 'backend' },
+    [channel.port2]
+  )
   const close = added.mock.calls.find(([event]) => event === 'close')?.[1]
   return () => {
     if (typeof close === 'function') {

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { ActionSheetModal } from '../../../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { mobileNativeChatAttachActions } from './mobile-native-chat-attach-actions'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -24,7 +24,8 @@ export function MobileNativeChatComposerAttachButton({
   structured: boolean
   isAttaching: boolean
   disabled: boolean
-  menu: {
+  /** A structured chat's add-to-message sheet; without it the button opens the photo library. */
+  menu?: {
     openFileMenu: () => void
     openSlashMenu: (kind: 'skill' | 'command') => void
     skillCount: number
@@ -33,7 +34,8 @@ export function MobileNativeChatComposerAttachButton({
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
-  const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
+  const sheet = structured ? menu : undefined
+  const attachPress = sheet ? () => setAttachOpen(true) : onAttachImage
   if (!attachPress) {
     return null
   }
@@ -41,7 +43,7 @@ export function MobileNativeChatComposerAttachButton({
     <>
       <Pressable
         accessibilityLabel={
-          structured
+          sheet
             ? t('chat.composer.addToMessage', 'Add to message')
             : t('chat.composer.attachImage', 'Attach image')
         }
@@ -56,17 +58,17 @@ export function MobileNativeChatComposerAttachButton({
           <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
         )}
       </Pressable>
-      {structured ? (
+      {sheet ? (
         <ActionSheetModal
           visible={attachOpen}
           onClose={() => setAttachOpen(false)}
           actions={mobileNativeChatAttachActions({
             onPhotos: onAttachImage,
             onFiles: onAttachFiles,
-            onWorkspaceFile: menu.openFileMenu,
-            onSkills: () => menu.openSlashMenu('skill'),
-            onCommands: () => menu.openSlashMenu('command'),
-            skillCount: menu.skillCount
+            onWorkspaceFile: sheet.openFileMenu,
+            onSkills: () => sheet.openSlashMenu('skill'),
+            onCommands: () => sheet.openSlashMenu('command'),
+            skillCount: sheet.skillCount
           })}
         />
       ) : null}

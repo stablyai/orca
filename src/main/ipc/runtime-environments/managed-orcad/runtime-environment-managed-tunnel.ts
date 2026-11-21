@@ -8,7 +8,7 @@ import type {
   SshManagedServerStatus,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../../shared/ssh-types'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { managedServerUpdateDeps } from '../../../ssh/host-server/managed-server-update-deps'
 import {
   ensureOrcadManagedTunnel,
@@ -33,7 +33,7 @@ import {
   setSshHostServerStatus
 } from '../../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../../ssh/targets/ssh-target-registry'
-import { connectionManager, getCurrentMainWindow } from '../../ssh/ssh-ipc-context'
+import { connectionManager } from '../../ssh/ssh-ipc-context'
 import {
   getWslHostPhoneGate,
   getWslHostService
@@ -56,7 +56,7 @@ export async function resolveManagedRuntimeEnvironment(
   /** The request that needs the server: only one that opens a workspace wakes a sleeping recipe VM. */
   method?: string,
   signal?: AbortSignal
-): Promise<ReturnType<typeof resolveEnvironment>> {
+): Promise<Awaited<ReturnType<typeof resolveEnvironment>>> {
   return (await prepareManagedRuntimeRequest(userDataPath, selector, preparation, method, signal))
     .environment
 }
@@ -69,7 +69,7 @@ export async function prepareManagedRuntimeRequest(
   method?: string,
   signal?: AbortSignal
 ): Promise<PreparedManagedRuntimeRequest> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   // Enforce the WSL gate for calls, subscriptions and status probes.
   assertWslHostReachable(environment)
   const vm = await prepareRecipeVm(
@@ -89,7 +89,7 @@ export async function prepareManagedRuntimeRequest(
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }
-  const prepared = resolveEnvironment(userDataPath, environment.id)
+  const prepared = await resolveEnvironment(userDataPath, environment.id)
   return {
     environment: prepared,
     before: environment,
@@ -111,7 +111,7 @@ export async function requireWslHostWithoutStart(
   selector: string,
   preparation: ManagedRuntimeCallPreparation
 ): Promise<void> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   if (classifyRuntimeEnvironmentHost(environment).kind === 'wsl') {
     assertWslHostReachable(environment)
     await prepareWslHostForCall(environment, preparation)
@@ -245,7 +245,6 @@ export function publishResolvedChangedHostStatus(
   })
   // Moves release the relay session; publish even when its stale status line is disconnected.
   broadcastSshState(
-    getCurrentMainWindow,
     target.id,
     connectionManager?.getState(target.id) ?? {
       targetId: target.id,
@@ -261,7 +260,7 @@ export function publishHostServerStatus(targetId: string, status: SshManagedServ
   // Only a host with a connection state has a status line to refresh.
   const state = connectionManager?.getState(targetId)
   if (state) {
-    broadcastSshState(getCurrentMainWindow, targetId, { ...state, managedServer: status })
+    broadcastSshState(targetId, { ...state, managedServer: status })
   }
 }
 

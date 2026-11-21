@@ -1,54 +1,100 @@
+import type { ConversationReplyFill } from './external-conversation-reply-fill'
+import type { SlackMirrorTurn } from './slack-mirror'
+import { setPromptPublication } from './external-conversation-prompt-publication'
+import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
-import { agentMainAgentVerdict } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { hookRowAgentPhase } from '../../shared/agent-status/lifecycle/agent-transitions'
 import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type {
-  ConnectorAgent,
-  ExternalConversationLink
-} from '../../shared/external-conversation-link'
-import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
-import {
-  TerminalAgentTurnNews,
-  type TerminalAgentTurnNewsItem
-} from '../runtime/push/notifications/terminal-agent-turn-news'
+  ConnectorActsFor,
+  ConnectorFailure,
+  ConnectorPrompt,
+  ConnectorTurnFor,
+  ConnectorTurnOrigin
+} from '../../shared/connectors/connector-cloud-contract'
+import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { ChatNews } from './external-conversation-chat'
+import { ChatTurns, conversationWorking } from './external-conversation-chat-turns'
 import {
   allLinks,
+  findLinkForPane,
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-links'
-import type { AgentPromptExpectedBinding } from '../runtime/terminal/input/agent-prompt-write-options'
-import { sameBinding } from './external-conversation-send'
-import { workingStampedTurn } from './external-conversation-turn-id'
-import type { ConversationKey } from './external-conversation-types'
-
-type ConversationPane = { conversation: ConversationKey; worktreeId: string; paneKey: string }
+import { writeLinkFact } from './external-conversation-link-writes'
+import { AnsweredPrompts } from './external-conversation-answered-prompts'
+import { ShownPrompts, type SnapshotEntryTrace } from './external-conversation-snapshot-prompts'
+import type { StructuredAgentSessionPromptStanding } from '../native-chat/agent-session-wire/observations/structured-agent-session-prompt-standing'
+import type { ConversationWorkersDeps } from './external-conversation-workers'
+import { ConversationTurnActivity, type ActivityEvent } from './external-conversation-turn-activity'
+import {
+  conversationPane,
+  replyTargetOf,
+  type ConversationPane,
+  type ReplyTarget
+} from './external-conversation-types'
 
 export type ConversationEvent =
-  | (ConversationPane & { kind: 'linked'; agent: ConnectorAgent })
-  | (ConversationPane & { kind: 'prompt'; prompt: PendingPrompt })
-  | (ConversationPane & { kind: 'turn-started'; at: number })
+  // actsFor: whom the linked chat acts for, once Orca recorded it.
+  | (ConversationPane & {
+      kind: 'linked'
+      agent: ExternalConversationLink['agent']
+      actsFor?: ConnectorActsFor
+    })
+  // The linked chat was deleted, so its thread is free.
+  | (ConversationPane & { kind: 'unlinked' })
+  // answered: the agent worked past this prompt, so someone answered it in Orca.
+  | (ConversationPane & {
+      kind: 'prompt'
+      prompt: ConnectorPrompt
+      answered?: true
+      answeredWith?: string
+    })
+  // deliveryId: the delivery the turn answers, when exactly one started it.
+  | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
   | (ConversationPane & {
       kind: 'turn-ended'
-      /** The ended turn's turn-started `at`; null when its start predates this watch and the row kept none. */
+      /** The ended turn's turn-started `at`; null when its start predates this watch. */
       turnId: number | null
       /** Host verdict; null means none was recorded. */
       stopReason: AgentTurnOutcome | null
       lastAssistantMessage?: string
       at: number
+      /** Whether a connector delivery or someone in Orca asked for the turn. */
+      origin?: ConnectorTurnOrigin
+      /** Why a failed turn failed. */
+      failure?: ConnectorFailure
+      /** Pull requests the conversation's bot work opened. */
+      links?: ConnectorWorkLink[]
+      /** An Orca-typed turn whose owner's words posted to the Slack thread: its reply posts too. */
+      mirror?: true
+      /** Whom a turn no delivery started acts for, so its final post counts as them on Slack. */
+      turnFor?: ConnectorTurnFor
+      /** The thread's turn state only: its answer goes through the reply outbox. */
+      stateOnly?: true
     })
+  // Whether orchestration workers the chat started still run, told on each change.
+  | (ConversationPane & { kind: 'workers'; running: boolean })
+  // What a heard turn is doing now (the tool it is inside), a few seconds apart at most.
+  | ActivityEvent
 
 export type ConversationSnapshot = {
   kind: 'snapshot'
   conversations: (ConversationPane & {
-    agent: ConnectorAgent
+    agent: ExternalConversationLink['agent']
     working: boolean
-    prompt: PendingPrompt | null
+    prompt: ConnectorPrompt | null
     /** The pane's latest turn, as its turn events name it; null before any. */
     turnId: number | null
-    /** When the conversation last showed activity: its link, or its agent's latest hook report. */
+    /** When the conversation last showed activity: its link, or its agent's latest status report. */
     activeAt: number
+    /** Once the chat's workers were read. */
+    workersRunning?: boolean
+    /** Why the entry reads as it does, for the snapshot's trace only; never sent. */
+    trace?: SnapshotEntryTrace
   })[]
 }
 
@@ -57,67 +103,111 @@ export type ConversationWatchListener = (event: ConversationSnapshot | Conversat
 export type ConversationEventsDeps = {
   store: ExternalConversationLinkStore
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
-  readBinding: (paneKey: string) => AgentPromptExpectedBinding | null
   onAgentPaneChange: (listener: (change: AgentPaneChange) => void) => () => void
   pendingPrompt: (link: ExternalConversationLink) => PendingPrompt | null
+  /** A shown prompt's standing in the chat's journal; `unknown` when the chat can't tell now. */
+  promptStanding: (
+    link: ExternalConversationLink,
+    promptId: string,
+    cursor?: AgentJournalCursor
+  ) => StructuredAgentSessionPromptStanding
+  promptCursor?: (
+    link: ExternalConversationLink,
+    promptId: string
+  ) => AgentJournalCursor | undefined
+  /** Native chats' prompts and turn ends; returns the release. */
+  onChatNews: (listener: (news: ChatNews) => void) => () => void
+  onWatchDisposed?: () => void
+  /** Read once per ended chat turn. */
+  chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
+  /** Whether a delivery was sent to the chat and its turn hasn't ended. */
+  chatTurnDelivered: (sessionId: string) => boolean
+  /** The delivery a chat turn that began at `turnAt` answers; taken once. */
+  chatTurnDelivery: (sessionId: string, turnAt: number) => string | undefined
+  /** Whether a delivery the chat took waits for a turn to name it. */
+  chatTurnWaiting: (sessionId: string) => boolean
+  /** Whether reports from workers its conversation's turns started opened the chat's running turn. */
+  runningTurnReported: (sessionId: string) => boolean
+  /** The pull requests a bot conversation's work opened, read once per ended turn. */
+  workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
+  workerActivities: ConversationWorkersDeps['workerActivities']
+  /** Whether the cloud routes a bot's prompts by who raised them (prompts.audience). */
+  promptsAudience: () => boolean
+  /** The ended turn's owner posts to its Slack thread, taken once; null when none posted. */
+  mirrorTurn?: (sessionId: string) => SlackMirrorTurn | null
+  /** Whom a chat's conversation acts for, as Orca recorded it. */
+  actsForOf?: (sessionId: string) => ConnectorActsFor | undefined
+  replyFill?: () => ConversationReplyFill | null
+  /** The message that opened the chat's running turn; null when none runs. */
+  turnOpener: (sessionId: string) => AgentJournalRenderItem | null
+  turnPlan?: ConstructorParameters<typeof ConversationTurnActivity>[0]['turnPlan']
+  turnStartedAt?: (sessionId: string) => number | null
+  resolvedPrompt?: (
+    sessionId: string,
+    itemId: string
+  ) => AgentJournalRenderItem | null | Promise<AgentJournalRenderItem | null>
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
   now: () => number
 }
 
-// Pending finishes must not keep the process alive.
-export const HOST_CLOCK: Pick<ConversationEventsDeps, 'setTimer' | 'now'> = {
-  setTimer: (run, delayMs) => {
-    const timer = setTimeout(run, delayMs)
-    timer.unref?.()
-    return { cancel: () => clearTimeout(timer) }
-  },
-  now: Date.now
-}
-
-/** Watch-scoped turn news shares mobile push detection and automation completion verdicts. */
+/** Linked chats' events: turn starts from their status rows, prompts and ends from their host's feed. */
 export class ConversationEvents {
   private readonly listeners = new Set<ConversationWatchListener>()
-  // A started turn's id only where the host stamps none; the host's stamp is the id everywhere else.
-  private readonly unstampedTurn = new Map<string, number>()
-  // The stamped turn last announced per pane, only so a start is told once; never read as an id.
-  private readonly announcedTurn = new Map<string, number>()
-  // Prompts our cancel rejected, by pane: Claude's hooks report no end for that turn.
-  private readonly rejected = new Map<
-    string,
-    { row: AgentStatusIpcPayload; binding: AgentPromptExpectedBinding; at: number }
-  >()
+  private readonly chats: ChatTurns
+  private readonly answered = new AnsweredPrompts({
+    working: (paneKey) =>
+      this.linkedFor(paneKey) !== null && conversationWorking(this.deps.readHookRow(paneKey)),
+    emit: (event) => this.emit(event),
+    resolvedPrompt: (sessionId, itemId) => this.deps.resolvedPrompt?.(sessionId, itemId) ?? null
+  })
+  // What each told turn is doing, from its status row's tool.
+  private readonly activity: ConversationTurnActivity
+  // Outlives a watch, so a reconnect never withdraws a prompt the chat still holds.
+  private readonly shown = new ShownPrompts()
   private release: (() => void) | null = null
 
-  constructor(private readonly deps: ConversationEventsDeps) {}
+  constructor(private readonly deps: ConversationEventsDeps) {
+    this.activity = new ConversationTurnActivity({
+      ...deps,
+      emit: (event) => this.emit(event),
+      toldTurn: (paneKey) => this.chats.toldTurn(paneKey),
+      linkedFor: (paneKey) => this.linkedFor(paneKey)
+    })
+    this.chats = new ChatTurns({
+      ...deps,
+      linkedFor: (paneKey) => this.linkedFor(paneKey),
+      emit: (event) => this.emit(event),
+      keepAdoptedTurn: ({ link, workspace }, adoptedTurn) => {
+        try {
+          writeLinkFact(deps.store, link, { adoptedTurn }, workspace)
+        } catch (error) {
+          // Only a restarted watch reads it back; this one keeps the adoption in memory.
+          console.warn('[connector] could not keep an adopted turn on its link', error)
+        }
+      },
+      turnEnded: (paneKey) => this.shown.forgetPane(paneKey)
+    })
+  }
 
   watch(listener: ConversationWatchListener): () => void {
     if (!this.release) {
-      const news = new TerminalAgentTurnNews<TerminalAgentTurnNewsItem>({
-        readHookRow: (paneKey) => this.deps.readHookRow(paneKey),
-        prepare: (item) => item,
-        deliver: (item) => this.told(item),
-        setTimer: (run, delayMs) => this.deps.setTimer(run, delayMs),
-        started: (item) => this.started(item),
-        stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row)),
-        everyLeadTurn: true
-      })
       const unsubscribe = this.deps.onAgentPaneChange((change) => {
-        this.settleRejected(change.paneKey)
-        news.observe(change)
-        // A working row's stamp is told once, whether or not news reported its start.
-        const stamp = workingStampedTurn(this.deps.readHookRow(change.paneKey))
-        if (stamp !== null && change.workspace) {
-          this.announceStamp(change.paneKey, change.workspace.worktreeId, stamp)
-        }
+        // The turn's start first, then what that turn is doing.
+        ;[this.chats, this.activity].forEach((watcher) => watcher.observe(change.paneKey))
+        this.answered.settle(change.paneKey)
       })
+      const releaseChats = this.deps.onChatNews((news) => this.chats.news(news))
       this.release = () => {
         unsubscribe()
-        news.dispose()
+        releaseChats()
       }
     }
     this.listeners.add(listener)
     // Subscribe before reading the snapshot to avoid losing intervening changes.
-    listener(this.snapshot())
+    const snapshot = this.snapshot()
+    this.answered.saw(snapshot)
+    listener(snapshot)
+    this.chats.workers.watched(snapshot.conversations)
     return () => {
       this.listeners.delete(listener)
       if (this.listeners.size === 0) {
@@ -126,209 +216,143 @@ export class ConversationEvents {
     }
   }
 
-  linked({ workspace, link }: LinkedConversation): void {
+  linked({ workspace, link }: LinkedConversation, actsFor?: ConnectorActsFor): void {
     this.emit({
       kind: 'linked',
-      ...pane(link, workspace.worktreeId),
-      agent: link.agent
+      ...conversationPane(link, workspace.worktreeId),
+      agent: link.agent,
+      ...(actsFor ? { actsFor } : {})
     })
+    this.chats.joined(link.paneKey, link.sessionId)
   }
 
-  rejectedByCancel(
-    paneKey: string,
-    row: AgentStatusIpcPayload,
-    binding: AgentPromptExpectedBinding,
-    at: number
-  ): void {
-    if (!this.release || row.agentType !== 'claude' || row.programStatus?.state !== 'blocked') {
-      return
-    }
-    this.rejected.set(paneKey, { row, binding, at })
-    // The idle observation can arrive before the write acknowledgment.
-    this.settleRejected(paneKey)
+  /** A link dropped because its chat is gone. */
+  unlinked({ workspace, link }: LinkedConversation): void {
+    this.shown.forgetConversation(link)
+    this.emit({ kind: 'unlinked', ...conversationPane(link, workspace.worktreeId) })
   }
 
-  forgetUnlinked(): void {
-    for (const paneKey of this.rejected.keys()) {
-      if (!this.linkedFor(paneKey)) {
-        this.rejected.delete(paneKey)
+  /** A delivery an already linked chat took. */
+  delivered(link: ExternalConversationLink): void {
+    this.chats.delivered(link.paneKey, link.sessionId)
+  }
+
+  /** Before a connector answers a prompt; call the result if the answer didn't land. */
+  answering(paneKey: string, promptId: string): () => void {
+    const { generation } = this.shown
+    const restoreAnswered = this.answered.answering(paneKey, promptId)
+    const restoreShown = this.shown.take(paneKey, promptId)
+    // An answer that lands after an account reset restores nothing of the old account.
+    return () => {
+      if (generation === this.shown.generation && restoreShown()) {
+        restoreAnswered()
       }
     }
   }
 
+  /** The last watch went: what the chat's turns were is read afresh next time; shown prompts stay. */
   dispose(): void {
     this.release?.()
     this.release = null
     this.listeners.clear()
-    this.unstampedTurn.clear()
-    this.announcedTurn.clear()
-    this.rejected.clear()
+    this.chats.clear()
+    this.activity.clear()
+    this.answered.clear()
+    this.deps.onWatchDisposed?.()
   }
 
-  /**
-   * The rejected turn ended when Claude's own activity report goes idle while the host still shows
-   * that prompt; once the host's row moves on, its own news tells the turn.
-   */
-  private settleRejected(paneKey: string): void {
-    const rejected = this.rejected.get(paneKey)
-    if (!rejected) {
-      return
-    }
-    const row = this.deps.readHookRow(paneKey)
-    const linked = this.linkedFor(paneKey)
-    const binding = this.deps.readBinding(paneKey)
-    if (
-      !row ||
-      !linked ||
-      linked.link.agent !== 'claude' ||
-      !binding ||
-      !sameBinding(binding, rejected.binding) ||
-      row.agentType !== rejected.row.agentType ||
-      row.state !== rejected.row.state ||
-      row.stateStartedAt !== rejected.row.stateStartedAt ||
-      row.interactivePrompt !== rejected.row.interactivePrompt ||
-      row.toolName !== rejected.row.toolName
-    ) {
-      this.rejected.delete(paneKey)
-      return
-    }
-    const activity = row.programStatus
-    if (
-      activity?.state !== 'idle' ||
-      activity.observedAt < rejected.at ||
-      activity.observedAt <= (rejected.row.programStatus?.observedAt ?? 0)
-    ) {
-      return
-    }
-    this.rejected.delete(paneKey)
-    this.emit({
-      kind: 'turn-ended',
-      ...pane(linked.link, linked.workspace.worktreeId),
-      turnId: this.takeTurnId(paneKey, row),
-      stopReason: 'cancellation',
-      at: activity.observedAt
-    })
+  /** Signed out or another account: nothing the last one was told carries over. */
+  reset(): void {
+    this.dispose()
+    this.chats.reset()
+    this.shown.reset()
   }
 
   private snapshot(): ConversationSnapshot {
     return {
       kind: 'snapshot',
-      conversations: [...allLinks(this.deps.store)].map(({ workspace, link }) => {
+      conversations: [...allLinks(this.deps.store)].map((linked) => {
+        const { workspace, link } = linked
         const row = this.deps.readHookRow(link.paneKey)
-        const working = row ? hookRowAgentPhase(row) === 'working' : false
-        return {
-          ...pane(link, workspace.worktreeId),
+        // First, as showing a prompt can adopt the turn that raised it.
+        const live = this.chats.shownPrompt(linked, false)
+        const hears = this.chats.hears(link)
+        // A prompt the cloud shows stays shown while the chat's journal still holds it.
+        const restated = live
+          ? null
+          : this.shown.restate(link, (promptId, cursor) =>
+              this.deps.promptStanding(link, promptId, cursor)
+            )
+        const prompt = live ?? restated?.prompt ?? null
+        const entry: ConversationSnapshot['conversations'][number] = {
+          ...conversationPane(link, workspace.worktreeId),
           agent: link.agent,
-          working,
-          prompt: this.deps.pendingPrompt(link),
-          // Unstamped and unseen: the working phase's start, as before stamps.
-          turnId: this.turnIdOf(link.paneKey, row) ?? (row && working ? row.stateStartedAt : null),
-          activeAt: Math.max(link.createdAt, row?.receivedAt ?? 0)
+          working: hears && conversationWorking(row),
+          prompt,
+          turnId: hears ? this.chats.adopt(link.paneKey) : null,
+          activeAt: Math.max(link.createdAt, row?.receivedAt ?? 0),
+          ...this.chats.workers.snapshotOf(link.paneKey),
+          trace: {
+            sessionId: link.sessionId,
+            promptId: live?.promptId ?? restated?.promptId ?? null,
+            heard: this.chats.heardBy(link),
+            prompt: live ? 'live' : restated?.prompt ? 'restated' : 'none',
+            ...(restated ? { standing: restated.standing } : {})
+          }
         }
+        if (prompt) {
+          setPromptPublication(
+            entry,
+            this.shown.offer(
+              link,
+              prompt.promptId,
+              live ? () => this.deps.promptCursor?.(link, prompt.promptId) : undefined
+            )
+          )
+        }
+        return entry
       })
     }
   }
 
-  private started(item: TerminalAgentTurnNewsItem): void {
-    const link = this.linkedFor(item.paneKey)?.link
-    if (!link) {
-      return
-    }
-    if (item.row.turnStartedAt !== undefined) {
-      this.announceStamp(item.paneKey, item.worktreeId, item.row.turnStartedAt)
-      return
-    }
-    this.unstampedTurn.set(item.paneKey, item.row.stateStartedAt)
-    this.emit({ kind: 'turn-started', ...pane(link, item.worktreeId), at: item.row.stateStartedAt })
-  }
-
-  /** Told once per stamp; the cloud applies a start only if it is newer than its own anyway. */
-  private announceStamp(paneKey: string, worktreeId: string, at: number): void {
-    const link = this.linkedFor(paneKey)?.link
-    if (!link || this.announcedTurn.get(paneKey) === at) {
-      return
-    }
-    this.announcedTurn.set(paneKey, at)
-    // The host stamps this pane, so a start recorded before its first stamp names nothing.
-    this.unstampedTurn.delete(paneKey)
-    this.emit({ kind: 'turn-started', ...pane(link, worktreeId), at })
-  }
-
-  private told(item: TerminalAgentTurnNewsItem): void {
-    const link = this.linkedFor(item.paneKey)?.link
-    if (!link) {
-      return
-    }
-    if (hookRowAgentPhase(item.row) === 'needs-you') {
-      const prompt = this.deps.pendingPrompt(link)
-      if (prompt) {
-        this.emit({ kind: 'prompt', ...pane(link, item.worktreeId), prompt })
-      }
-      return
-    }
-    // Only done signals since this turn began count; reused panes can retain earlier verdicts.
-    const verdict = judgeIdleAgentTurn(
-      {
-        rows: [item.row],
-        sentAt: this.turnIdOf(item.paneKey, item.row) ?? 0,
-        tail: [],
-        readAgentCommands: () => []
-      },
-      this.deps.now()
-    )
-    if (verdict.kind === 'completed') {
-      this.ended(item, agentMainAgentVerdict(item.row))
-    }
-  }
-
-  private ended(item: TerminalAgentTurnNewsItem, stopReason: AgentTurnOutcome | null): void {
-    const link = this.linkedFor(item.paneKey)?.link
-    if (!link) {
-      return
-    }
-    const message = item.row.lastAssistantMessage
-    this.emit({
-      kind: 'turn-ended',
-      ...pane(link, item.worktreeId),
-      turnId: this.takeTurnId(item.paneKey, item.row),
-      stopReason,
-      ...(message ? { lastAssistantMessage: message } : {}),
-      at: item.row.stateStartedAt
-    })
-  }
-
-  /** Where this pane's agent replies: its conversation and the turn it is in, as turn events name it. */
-  replyTarget(paneKey: string): { key: ConversationKey; turnId: number | null } | null {
-    const link = this.linkedFor(paneKey)?.link
-    if (!link) {
-      return null
-    }
-    const turnId = this.turnIdOf(paneKey, this.deps.readHookRow(paneKey))
-    return { key: { source: link.source, externalId: link.externalId }, turnId }
-  }
-
-  /** The turn a pane is in: the host's stamp, else the unstamped start news reported. */
-  private turnIdOf(paneKey: string, row: AgentStatusIpcPayload | null): number | null {
-    return row?.turnStartedAt ?? this.unstampedTurn.get(paneKey) ?? null
-  }
-
-  /** An ending turn's id; an unstamped one's start is forgotten with it, as before. */
-  private takeTurnId(paneKey: string, row: AgentStatusIpcPayload): number | null {
-    const turnId = this.turnIdOf(paneKey, row)
-    this.unstampedTurn.delete(paneKey)
-    return turnId
+  /** Where this chat's agent replies: its conversation and the turn it is in, as turn events name it. */
+  replyTarget(paneKey: string): ReplyTarget | null {
+    const linked = this.linkedFor(paneKey)
+    const opener = linked && this.deps.turnOpener(linked.link.sessionId)
+    return linked && replyTargetOf(linked, this.chats.turnOf(paneKey), opener)
   }
 
   private linkedFor(paneKey: string): LinkedConversation | null {
-    for (const linked of allLinks(this.deps.store)) {
-      if (linked.link.paneKey === paneKey) {
-        return linked
-      }
+    return findLinkForPane(this.deps.store, paneKey)
+  }
+
+  /** A turn end told from outside the chats' feed (one the Slack mirror held); false with no watcher. */
+  tell(event: Extract<ConversationEvent, { kind: 'turn-ended' }>): boolean {
+    if (this.listeners.size === 0) {
+      return false
     }
-    return null
+    this.emit(event)
+    return true
   }
 
   private emit(event: ConversationEvent): void {
+    this.answered.saw(event)
+    if (event.kind === 'prompt') {
+      if (event.answered) {
+        this.shown.forgetPrompt(event.paneKey, event.prompt.promptId)
+      } else {
+        const linked = this.linkedFor(event.paneKey)
+        if (linked) {
+          const promptId = event.prompt.promptId
+          setPromptPublication(
+            event,
+            this.shown.offer(linked.link, promptId, () =>
+              this.deps.promptCursor?.(linked.link, promptId)
+            )
+          )
+        }
+      }
+    }
     for (const listener of this.listeners) {
       // Isolate listener failures so other watchers still receive the event.
       try {
@@ -337,13 +361,5 @@ export class ConversationEvents {
         console.error('[connector] watch listener threw', error)
       }
     }
-  }
-}
-
-function pane(link: ExternalConversationLink, worktreeId: string): ConversationPane {
-  return {
-    conversation: { source: link.source, externalId: link.externalId },
-    worktreeId,
-    paneKey: link.paneKey
   }
 }

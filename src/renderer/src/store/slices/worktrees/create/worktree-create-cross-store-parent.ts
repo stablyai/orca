@@ -1,13 +1,14 @@
 import type { AppState } from '../../../types'
+import type { RuntimeStatuses } from '../../runtime-status/views/runtime-status-owner'
 import { buildCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
 import type { WorktreeCreateParentPick } from './worktree-create-parent-pick'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../../../../../shared/worktree/lineage-types'
-import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'
+import { supportsCrossStoreLineage } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../../../runtime/rpc/calls/runtime-rpc-result'
 
@@ -24,6 +25,7 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
  */
 export async function resolveCreateCrossStoreParent(
   state: AppState,
+  statuses: RuntimeStatuses,
   target: RuntimeClientTarget,
   create: {
     pick: WorktreeCreateParentPick
@@ -36,7 +38,12 @@ export async function resolveCreateCrossStoreParent(
   if (pick.crossStoreParentRow) {
     try {
       return {
-        crossStoreParent: await buildCrossStoreParentRef(state, target, pick.crossStoreParentRow)
+        crossStoreParent: await buildCrossStoreParentRef(
+          state,
+          statuses,
+          target,
+          pick.crossStoreParentRow
+        )
       }
     } catch (error) {
       if (!pick.crossStoreParentIsActiveFolder) {

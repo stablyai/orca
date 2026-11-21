@@ -1,6 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
 import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
+
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
 
 const { spawnMock, signalMock, forceMock, resolveSelectedMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -8,8 +11,17 @@ const { spawnMock, signalMock, forceMock, resolveSelectedMock } = vi.hoisted(() 
   forceMock: vi.fn(),
   resolveSelectedMock: vi.fn((command: string) => command)
 }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
@@ -30,11 +42,13 @@ function finish(value: ChildProcess, code = 0, stdout = '', stderr = ''): void {
   value.stdout?.emit('data', Buffer.from(stdout))
   value.stderr?.emit('data', Buffer.from(stderr))
   value.emit('exit', code, null)
+  groupExists.mockReturnValue(false)
   value.emit('close', code, null)
 }
 
 describe('tracked gh capture lifetime', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     spawnMock.mockReset()
     signalMock.mockResolvedValue(false)
@@ -59,9 +73,11 @@ describe('tracked gh capture lifetime', () => {
     )
     await vi.advanceTimersByTimeAsync(30_000)
     expect(spawnMock).toHaveBeenCalledOnce()
+    groupExists.mockReturnValue(false)
     values[0].emit('close', 1, null)
     await vi.advanceTimersByTimeAsync(5_000)
     expect(spawnMock).toHaveBeenCalledTimes(2)
+    groupExists.mockReturnValue(false)
     values[0].emit('close', 1, null)
     owner.seal()
     let terminated = false

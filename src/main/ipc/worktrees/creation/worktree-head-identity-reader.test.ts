@@ -46,13 +46,21 @@ describe('readGitCommonHeadIdentities', () => {
     await writeFile(join(entry, 'gitdir'), `${join(worktreePath, '.git')}\n`)
   }
 
-  it('resolves the primary checkout and linked worktrees from loose refs', async () => {
+  it('reads loose and packed HEAD refs for primary and linked worktrees', async () => {
     const commonDir = await makeCommonDir()
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
     await writeLooseRef(commonDir, 'refs/heads/main', OID_A)
-    await writeLooseRef(commonDir, 'refs/heads/feature', OID_B)
+    await writeLooseRef(commonDir, 'refs/heads/relative', OID_B)
+    await writeFile(
+      join(commonDir, 'packed-refs'),
+      `# pack-refs with: peeled fully-peeled sorted\n${OID_C} refs/heads/feature\n^${OID_A}\n${OID_C} refs/heads/main\n`
+    )
     const linkedPath = join(dirname(commonDir), '..', 'linked-wt')
     await addLinkedWorktree(commonDir, 'linked-wt', linkedPath, 'ref: refs/heads/feature')
+    const relative = join(commonDir, 'worktrees', 'rel-wt')
+    await mkdir(relative, { recursive: true })
+    await writeFile(join(relative, 'HEAD'), 'ref: refs/heads/relative\n')
+    await writeFile(join(relative, 'gitdir'), `${join('..', '..', '..', '..', 'rel-wt', '.git')}\n`)
 
     const identities = await readIdentities(commonDir)
 
@@ -63,43 +71,14 @@ describe('readGitCommonHeadIdentities', () => {
     })
     expect(identities).toContainEqual({
       worktreePath: linkedPath,
-      head: OID_B,
+      head: OID_C,
       branch: 'refs/heads/feature'
     })
-  })
-
-  it('falls back to packed-refs when the loose ref is absent', async () => {
-    const commonDir = await makeCommonDir()
-    await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
-    await writeFile(
-      join(commonDir, 'packed-refs'),
-      `# pack-refs with: peeled fully-peeled sorted\n${OID_C} refs/heads/main\n^${OID_A}\n`
-    )
-
-    const identities = await readIdentities(commonDir)
-
-    expect(identities).toEqual([
-      { worktreePath: dirname(commonDir), head: OID_C, branch: 'refs/heads/main' }
-    ])
-  })
-
-  it('resolves relative gitdir entries against the metadata dir', async () => {
-    const commonDir = await makeCommonDir()
-    await writeLooseRef(commonDir, 'refs/heads/feature', OID_B)
-    const entry = join(commonDir, 'worktrees', 'rel-wt')
-    await mkdir(entry, { recursive: true })
-    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/feature\n')
-    await writeFile(join(entry, 'gitdir'), `${join('..', '..', '..', '..', 'rel-wt', '.git')}\n`)
-
-    const identities = await readIdentities(commonDir)
-
-    expect(identities).toEqual([
-      {
-        worktreePath: join(dirname(commonDir), '..', 'rel-wt'),
-        head: OID_B,
-        branch: 'refs/heads/feature'
-      }
-    ])
+    expect(identities).toContainEqual({
+      worktreePath: join(dirname(commonDir), '..', 'rel-wt'),
+      head: OID_B,
+      branch: 'refs/heads/relative'
+    })
   })
 
   it('rejects traversal-shaped symrefs instead of reading outside the common dir', async () => {

@@ -22,7 +22,7 @@ import {
   LOCAL_LAYOUT_APPLY_ORIGIN,
   type LayoutApplyOrigin
 } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { SplitRatioIntent } from '../../../../../shared/workspace-layout/tab-groups/split-ratio-intents'
 import type { PaneSide } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
@@ -99,7 +99,7 @@ export type WindowLayoutCommand =
       split?: NewGroupSplit
     }
   | { type: 'openBrowserPage' | 'closeBrowserPage'; browserTabId: string; pageId: string }
-  | { type: 'replaceBrowserPage'; browserTabId: string; pageId: string; newPageId: string }
+  | Omit<CommandOf<'replaceTabContent'>, 'workspace'>
   | {
       type: 'setBrowserTabProfile'
       browserTabId: string
@@ -132,6 +132,16 @@ export type WindowLayoutCommand =
       split?: NewGroupSplit
     }
   | { type: 'promotePreviewTab'; tabId: string }
+  | {
+      type: 'openRoomTab'
+      tabId: string
+      botGroupId: string
+      groupId: string
+      afterTabId?: string
+      index?: number
+      createdAt?: number
+      split?: NewGroupSplit
+    }
   | {
       type: 'openSimulatorTab'
       tabId: string
@@ -198,10 +208,11 @@ function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnT
     case 'openBrowserTab':
     case 'openBrowserPage':
     case 'closeBrowserPage':
-    case 'replaceBrowserPage':
+    case 'replaceTabContent':
     case 'setBrowserTabProfile':
     case 'openAgentSessionTab':
     case 'openSimulatorTab':
+    case 'openRoomTab':
     case 'openEditorTab':
     case 'promotePreviewTab':
     case 'moveTabToWorkspace':

@@ -10,8 +10,9 @@ import { repositionOverlay } from '../selection/selection-overlay'
 import { cancelSelect } from '../selection/selection-mode'
 import { resetEvictionCounter } from '../selection/selection-state-and-eviction'
 import { applyTerminalTheme } from '../engine/terminal-theme'
+import { applyTerminalHostSettings } from '../engine/terminal-host-settings'
 import { init, resize, write } from '../engine/terminal-init'
-import { applyTextScale } from '../viewport/text-scaling'
+import { applyTerminalFontStyle, applyTextScale } from '../viewport/text-scaling'
 import { afterQueuedWrites, resetWriteQueue } from '../engine/write-queue'
 
 export type TerminalHostMessage = {
@@ -23,7 +24,12 @@ export type TerminalHostMessage = {
   initialData?: unknown
   terminalTheme?: Parameters<typeof applyTerminalTheme>[1]
   fontScale?: number
+  fontStyle?: unknown
+  // Native hosts only: the picked bundled face, which a WebView without an asset server cannot fetch.
+  fontFaceCss?: unknown
   preserveScroll?: boolean
+  scrollbackRows?: unknown
+  wordSeparator?: unknown
   oscLinks?: unknown
   kittyKeyboardFlags?: unknown
   data?: string
@@ -57,6 +63,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     notify(scope, { type: 'pong', pingId: msg.id })
   } else if (msg.type === 'init') {
     holdHostFrame(scope, msg)
+    applyTerminalHostSettings(scope, msg.scrollbackRows, msg.wordSeparator)
     init(
       scope,
       msg.cols!,
@@ -66,7 +73,9 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       msg.fontScale,
       msg.preserveScroll!,
       msg.oscLinks,
-      msg.kittyKeyboardFlags
+      msg.kittyKeyboardFlags,
+      msg.fontStyle,
+      msg.fontFaceCss
     )
   } else if (msg.type === 'set-font-scale') {
     // Ignore the host echo of a pinch value so it cannot reset post-pinch state.
@@ -80,6 +89,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       scope.panY = 0
       applyTextScale(scope, msg.fontScale)
     }
+  } else if (msg.type === 'set-font-style') {
+    applyTerminalFontStyle(scope, msg.fontStyle, msg.fontFaceCss)
   } else if (msg.type === 'resize') {
     holdHostFrame(scope, msg)
     resize(scope, msg.cols!, msg.rows!)
@@ -136,6 +147,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   } else if (msg.type === 'set-theme') {
     applyTerminalTheme(scope, msg.terminalTheme)
+  } else if (msg.type === 'set-host-settings') {
+    applyTerminalHostSettings(scope, msg.scrollbackRows, msg.wordSeparator)
   } else if (msg.type === 'cancel-select') {
     if (scope.selMode === 'select') {
       cancelSelect(scope)

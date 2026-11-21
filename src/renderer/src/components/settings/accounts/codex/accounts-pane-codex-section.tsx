@@ -5,14 +5,14 @@ import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observat
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
-import { OpenAIIcon } from '../../../status-bar/icons'
+import { OpenAIIcon } from '../../../status-bar/accounts/provider-icons'
 import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
-import { addCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,
@@ -171,7 +171,7 @@ export function renderCodexAccountsSection(
                     trackAccountAddition('codex', accountOwner, () =>
                       // Run remote login on the account owner rather than this device.
                       accountOwner.kind === 'environment'
-                        ? addCodexAccountOnHost(accountOwner)
+                        ? signInCodexAccountOnHost(accountOwner)
                         : window.api.codexAccounts.add({
                             runtime: accountRuntime.runtime,
                             wslDistro: accountRuntime.wslDistro

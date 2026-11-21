@@ -1,35 +1,32 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 
-vi.mock('../ipc/command-path/agent-detection-shell-path', () => ({
-  hydrateShellPathForAgentDetection: vi.fn()
+const host = vi.hoisted(() => ({ wsl: false }))
+// Nothing on PATH: only Orca's own copies can make an agent installed.
+vi.mock('./agent-command-detection', () => ({ detectAgentCommandsOnHost: async () => new Set() }))
+vi.mock('../ipc/preflight/preflight-runtime-target', () => ({
+  getPreflightWslTarget: () => (host.wsl ? { distro: 'Ubuntu' } : null)
 }))
 
-import { detectInstalledAgents } from './installed-agent-detection'
+const { detectInstalledAgents } = await import('./installed-agent-detection')
+const { provideInstalledManagedAgents } = await import('./managed-agent-detection')
 
-describe('detectInstalledAgents command overrides', () => {
-  let dir: string
-  beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), 'orca agent override '))
-  })
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true })
-  })
+afterEach(() => {
+  host.wsl = false
+  provideInstalledManagedAgents(async () => [])
+})
 
-  it('lists an agent outside PATH only when its override executable exists', async () => {
-    const executable = path.join(dir, process.platform === 'win32' ? 'ante.exe' : 'ante')
-    await writeFile(executable, '#!/bin/sh\n')
-    await chmod(executable, 0o755)
+it("counts Orca's installed copies as installed agents on this host", async () => {
+  provideInstalledManagedAgents(async () => ['antigravity', 'grok'])
 
-    await expect(
-      detectInstalledAgents(undefined, { agentCmdOverrides: { ante: `"${executable}"` } })
-    ).resolves.toContain('ante')
-    await expect(
-      detectInstalledAgents(undefined, {
-        agentCmdOverrides: { ante: `"${path.join(dir, 'missing', 'ante')}"` }
-      })
-    ).resolves.not.toContain('ante')
-  })
+  expect((await detectInstalledAgents()).sort()).toEqual(['antigravity', 'grok'])
+})
+
+it('leaves out a disabled agent, and a WSL guest Orca installed nothing in', async () => {
+  provideInstalledManagedAgents(async () => ['antigravity', 'grok'])
+
+  expect(await detectInstalledAgents(undefined, { disabledTuiAgents: ['grok'] })).toEqual([
+    'antigravity'
+  ])
+  host.wsl = true
+  expect(await detectInstalledAgents()).toEqual([])
 })

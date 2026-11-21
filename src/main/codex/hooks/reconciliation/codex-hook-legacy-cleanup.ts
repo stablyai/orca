@@ -3,7 +3,6 @@ import {
   observedExistsSync as existsSync,
   observeFilePublication
 } from '../../../filesystem/file-content-observation'
-import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hookDefinitionHasManagedCommand,
@@ -14,7 +13,9 @@ import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configur
 import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
 import { findManagedTomlBlocks } from '../../../agent-hooks/installation/configuration/managed-toml-ownership'
 import type { CodexTrustEntry } from '../../trust/toml/config-toml-trust'
+import { unlinkSync } from 'node:fs'
 import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   getConfigPath,
   getSystemCodexConfigTomlPath,
@@ -152,12 +153,18 @@ function cleanupLegacyCodexProfileHooks(): void {
   if (next === existing) {
     return
   }
-  if (next.trim().length === 0) {
-    unlinkSync(profilePath)
-    observeFilePublication(profilePath, null)
-  } else {
-    writeConfigAtomically(profilePath, next)
+  // Both refuse when a save landed after the read; the next cleanup pass retries.
+  if (next.trim().length > 0) {
+    if (!writeConfigAtomically(profilePath, next, existing)) {
+      throw new ConcurrentFileEditError(profilePath)
+    }
+    return
   }
+  if (readFileSync(profilePath, 'utf-8') !== existing) {
+    throw new ConcurrentFileEditError(profilePath)
+  }
+  unlinkSync(profilePath)
+  observeFilePublication(profilePath, null)
 }
 
 export async function cleanupLegacyManagedHookRepresentations(): Promise<boolean> {

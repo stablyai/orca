@@ -6,27 +6,27 @@ import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspa
 import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 /** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
 export function getFolderWorkspaceAgentLaunchFact(
-  state: Pick<
-    AppState,
-    'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
-  >,
+  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
+  statuses: RuntimeStatuses,
   projectGroup: Pick<ProjectGroup, 'connectionId' | 'executionHostId' | 'parentPath'>
 ): ExecutionHostPlatformFact {
   return resolveRepoExecutionHostPlatform(
     state,
+    statuses,
     {
       connectionId: projectGroup.connectionId,
       executionHostId: projectGroup.executionHostId,

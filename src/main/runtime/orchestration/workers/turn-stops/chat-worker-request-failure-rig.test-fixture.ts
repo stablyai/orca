@@ -10,9 +10,9 @@ import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../../../agent-session/structured-agent-session-journal-open'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../../../agent-session/installation/structured-agent-session-journal-open'
 import { SqlAgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-sql-store'
 import type { JournalSqlDatabase } from '../../../../native-chat/agent-session-journal/database/journal-sql-database'
 import {
@@ -31,6 +31,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
+import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
 
 export const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const journals: AgentSessionJournal[] = []
@@ -106,6 +107,12 @@ export async function rig(
     sessions,
     capturePendingOutput,
     wordsContext: () => ({ agentName: 'Codex', retryControl: true }),
+    onIdleDeath: (death) =>
+      reportChatWorkerProviderDeath(death, {
+        getDb: () => db,
+        notify,
+        isWaitingForMail: () => false
+      }),
     onFailure: (failure) => {
       const capturedGate = readGate
       const read = failure.read

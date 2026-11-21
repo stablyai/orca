@@ -1,6 +1,7 @@
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
+import { BotHomeChat } from '../bots/BotHomeChat'
 
 /** Compose main-window chrome around the shared drag scope/tree; other hosts supply their own chrome. */
 export default function TabGroupSplitLayout({
@@ -22,7 +23,10 @@ export default function TabGroupSplitLayout({
           ref={setDragRootNode}
           className="workspace-sidebar-seam flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
         >
-          <div className="h-[4px] shrink-0 bg-tab-bar" data-terminal-focus-release-surface="true" />
+          <div
+            className="workspace-tab-drag-strip h-[4px] shrink-0 bg-tab-bar"
+            data-terminal-focus-release-surface="true"
+          />
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <TabGroupSplitNodeTree
               layout={layout}
@@ -33,6 +37,7 @@ export default function TabGroupSplitLayout({
               hoveredTabInsertion={hoveredTabInsertion}
             />
           </div>
+          {isWorktreeActive ? <BotHomeChat workspaceId={worktreeId} /> : null}
         </div>
       )}
     </WorkspaceTabDragLayer>

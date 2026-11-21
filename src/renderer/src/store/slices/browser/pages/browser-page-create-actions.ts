@@ -11,12 +11,12 @@ import {
   findWorkspace,
   mirrorWorkspaceFromActivePage
 } from './browser-page-records'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
-import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
 
 export function createBrowserPageCreateActions(
@@ -75,8 +75,8 @@ export function createBrowserPageCreateActions(
             },
             browserTabsByWorktree: {
               ...s.browserTabsByWorktree,
-              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map(
-                (tab) => (tab.id === workspaceId ? nextWorkspace : tab)
+              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map((tab) =>
+                tab.id === workspaceId ? nextWorkspace : tab
               )
             },
             pendingAddressBarFocusByPageId: shouldFocusAddressBar

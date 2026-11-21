@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
 import type { MobileDirEntry } from './file-tree'
 import { createOrcaQueryClient } from '../../query/orca-query-client'
-import { settleQueryNotifications } from '../../test-support/rpc-recording/hook-mount'
+import { settleQueryNotifications } from '../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
 import type { ConnectionState } from '../../transport/connection/connection-state'
@@ -97,6 +97,17 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
+  ArrowDown: 'ArrowDown',
+  ArrowDownUp: 'ArrowDownUp',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  CircleSlash: 'CircleSlash',
+  CloudUpload: 'CloudUpload',
+  GitBranch: 'GitBranch',
+  GitPullRequestArrow: 'GitPullRequestArrow',
+  History: 'History',
+  Link: 'Link',
+  RefreshCw: 'RefreshCw',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',

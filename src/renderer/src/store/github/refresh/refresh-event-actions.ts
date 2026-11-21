@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -69,6 +70,8 @@ export const createRefreshEventActions = (
           nextSequences[alias.cacheKey] ?? 0,
           prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
         )
+        // Why: a request main ends without data closes at its own sequence, while it is still the
+        // one shown loading; an older request or a repeat never overwrites a newer state.
         const completesOwnedRequest =
           event.status === 'skipped' &&
           event.sequence === previousSequence &&
@@ -91,7 +94,9 @@ export const createRefreshEventActions = (
         if (event.outcome) {
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
           const started = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
-          const contract = started?.checkContract ?? capturePRCheckContract(get, { kind: 'local' })
+          const contract =
+            started?.checkContract ??
+            capturePRCheckContract(readAppRuntimeStatuses, { kind: 'local' })
           const requestStartedEntry = started?.entry
           const requestScope = prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)
           deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
@@ -241,7 +246,7 @@ export const createRefreshEventActions = (
                     )
                   )
                 : undefined,
-              capturePRCheckContract(get, { kind: 'local' })
+              capturePRCheckContract(readAppRuntimeStatuses, { kind: 'local' })
             )
           } else {
             // Why: pause/skip can follow an in-flight broadcast with no outcome; drop the stale request-start snapshot.

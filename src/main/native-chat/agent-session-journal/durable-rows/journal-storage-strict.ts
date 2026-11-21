@@ -107,9 +107,8 @@ type Arm<T, S> = S extends object
 type Keys<A> = A extends unknown ? keyof A : never
 type ArmKeys<T, A> = [A] extends [never]
   ? 'a value no storage arm declares'
-  :
-      | Exclude<keyof T, Keys<A>>
-      | { [K in keyof T & Keys<A>]: UndeclaredStorageKeys<T[K], At<A, K>> }[keyof T & Keys<A>]
+  : | Exclude<keyof T, Keys<A>>
+    | { [K in keyof T & Keys<A>]: UndeclaredStorageKeys<T[K], At<A, K>> }[keyof T & Keys<A>]
 
 /** Keys of a persisted type, at any depth and in any union member, that its storage schema's
  * output `S` leaves undeclared; `never` when it declares them all. An unknown-kind value never

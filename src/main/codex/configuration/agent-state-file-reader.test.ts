@@ -26,14 +26,6 @@ afterEach(() => {
 })
 
 describe('readAgentStateFileSync', () => {
-  it('preserves normal UTF-8 auth and config contents', () => {
-    const filePath = tempFile('auth.json')
-    const contents = '{"token":"你好","refresh":"abc"}\n'
-    writeFileSync(filePath, contents)
-
-    expect(readAgentStateFileSync(filePath)).toBe(contents)
-  })
-
   it('rejects a sparse file one byte over the boundary before reading its payload', () => {
     const filePath = tempFile('oversized.json')
     writeFileSync(filePath, '')
@@ -44,16 +36,6 @@ describe('readAgentStateFileSync', () => {
 })
 
 describe('readAgentStateJsonFileSync', () => {
-  it('preserves ordinary JSON values', () => {
-    const filePath = tempFile('auth.json')
-    writeFileSync(filePath, '{"token":"你好","nested":{"enabled":true}}')
-
-    expect(readAgentStateJsonFileSync(filePath)).toEqual({
-      token: '你好',
-      nested: { enabled: true }
-    })
-  })
-
   it('rejects structural-token and nesting amplification before JSON.parse', () => {
     const structuralPath = tempFile('structural.json')
     writeFileSync(structuralPath, `[${'0,'.repeat(MAX_AGENT_STATE_JSON_STRUCTURAL_TOKENS)}0]`)

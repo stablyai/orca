@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type * as CodexAccountFs from '../../../filesystem/atomic-file-publication'
 
 const writeFailure = vi.hoisted(() => ({ failNextAuthWrite: false }))
@@ -52,18 +52,23 @@ afterEach(() => {
 })
 
 describe('legacy shared Codex auth migration', () => {
-  it('atomically migrates a newer unique credential once with 0600 permissions', () => {
+  it('migrates auth and MCP credentials to the identity-proven home with private permissions', () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
     const account = fixture.createAccount('account-1', 'acct-1', stale)
     fixture.writeSharedAuth(fresh)
+    const mcpStore = JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'tok-a' } } })
+    fixture.writeSharedCredentials(mcpStore)
 
     fixture.migrate([account], account.id)
 
     const accountAuthPath = join(account.managedHomePath, 'auth.json')
+    const credentialsPath = fixture.accountCredentialsPath(account)
     expect(readFileSync(accountAuthPath, 'utf-8')).toBe(fresh)
+    expect(readFileSync(credentialsPath, 'utf-8')).toBe(mcpStore)
     if (process.platform !== 'win32') {
       expect(statSync(accountAuthPath).mode & 0o777).toBe(0o600)
+      expect(statSync(credentialsPath).mode & 0o777).toBe(0o600)
     }
     expect(readFileSync(fixture.systemAuthPath, 'utf-8')).toBe(fixture.systemSentinel)
     expect(fixture.marker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
@@ -125,24 +130,6 @@ describe('legacy shared Codex auth migration', () => {
 })
 
 describe('legacy shared Codex MCP credentials migration (#8440)', () => {
-  it('carries the shared MCP .credentials.json into the identity-proven home with 0600 perms', () => {
-    const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
-    const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
-    const account = fixture.createAccount('account-1', 'acct-1', stale)
-    fixture.writeSharedAuth(fresh)
-    const mcpStore = JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'tok-a' } } })
-    fixture.writeSharedCredentials(mcpStore)
-
-    fixture.migrate([account], account.id)
-
-    const credentialsPath = fixture.accountCredentialsPath(account)
-    expect(readFileSync(credentialsPath, 'utf-8')).toBe(mcpStore)
-    if (process.platform !== 'win32') {
-      expect(statSync(credentialsPath).mode & 0o777).toBe(0o600)
-    }
-    expect(fixture.marker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
-  })
-
   it('never clobbers a newer per-account .credentials.json', () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)

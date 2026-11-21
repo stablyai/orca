@@ -49,7 +49,7 @@ describe('detectTerminalComposerDraft', () => {
   })
 
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
-    // Repaints can leave the placeholder beside typed text; do not mask that user draft.
+    // Repaints can leave the placeholder beside typed text; only its dim tail is masked, never the draft.
     const context = {
       rows: ['\u203a \uc548\ub155Ask Codex to do anything'],
       typedRows: ['\u203a \uc548\ub155'],
@@ -70,7 +70,7 @@ describe('detectTerminalComposerDraft', () => {
       endRow: 4,
       promptGlyph: '\u203a'
     })
-    expect(hasTerminalComposerPlaceholder(context)).toBe(false)
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
   })
 
   it('preserves an ordinary shell prompt that uses the Codex glyph', () => {

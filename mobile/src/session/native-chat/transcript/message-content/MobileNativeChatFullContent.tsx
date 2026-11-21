@@ -11,7 +11,7 @@ import type {
   NativeChatToolResultBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalBoundedPayload } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { styles } from '../messages/mobile-native-chat-message-styles'
 import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -141,10 +141,7 @@ export function MobileNativeChatToolOutput({
       {clipped ? (
         <ShowFull
           label={t('session.nativeChatFullContent.showFullOutput', 'Show full output')}
-          failedLabel={t(
-            'session.nativeChatFullContent.loadOutputFailed',
-            "Show full output — couldn't load, tap to retry"
-          )}
+          failedLabel={t('session.nativeChatFullContent.loadOutputFailed', 'Retry full output')}
           load={current?.load ?? 'idle'}
           onPress={showFull}
         />
@@ -200,10 +197,7 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
       ) : state === 'available' ? (
         <ShowFull
           label={t('session.nativeChatFullContent.showFullMessage', 'Show full message')}
-          failedLabel={t(
-            'session.nativeChatFullContent.loadMessageFailed',
-            "Show full message — couldn't load, tap to retry"
-          )}
+          failedLabel={t('session.nativeChatFullContent.loadMessageFailed', 'Retry full message')}
           load={load}
           onPress={showFull}
         />

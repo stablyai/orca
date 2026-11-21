@@ -1,11 +1,11 @@
 import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { GitBranch } from 'lucide-react'
-import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../shared/project/groups/project-group-types'
 import { cn } from '@/lib/class-names'
 import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath
-} from '../../../../shared/repo-display-labels'
+} from '../../../../shared/repository/appearance/repo-display-labels'
 import { useTranslate } from '@/i18n/use-translate'
 
 function NestedRepoSelectAllRow({

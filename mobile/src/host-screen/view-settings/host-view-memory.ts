@@ -3,7 +3,7 @@ import { skipToken, useQuery, useQueryClient, type QueryClient } from '@tanstack
 import * as z from 'zod'
 import { hostQueryKey } from '../../query/host-query-key'
 import type { PersistedHostFamily } from '../../query/host-query-persistence'
-import type { MobileViewState } from '../../worktree/workspace-view-settings'
+import type { MobileViewState } from '../../worktree/workspace-list/workspace-view-settings'
 import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../catalog/host-list-queries'
 
 const storedViewSchema = z.looseObject({

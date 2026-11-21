@@ -1,7 +1,8 @@
+import { installElectronNativeServices } from '../host/electron-native-services'
 import { captureBackendBootstrap } from '../backend-desktop/backend-supervisor'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon-host-relocation'
-import { app, ipcMain, powerMonitor, session } from 'electron'
+import { app } from 'electron'
 import os from 'node:os'
 import { join } from 'node:path'
 import { maybeRedirectCliLaunch } from './cli-launch/cli-launch-redirect'
@@ -21,7 +22,7 @@ import {
 } from './configure-process'
 import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
-  installUncaughtPipeErrorGuard,
+  installUncaughtExceptionQuitGuard,
   installUnhandledRejectionLogging
 } from './process-failure/main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
@@ -61,24 +62,13 @@ import {
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure
 } from './profile-startup/single-instance-lock'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
-import { setAppEnvironment } from '../../shared/app-environment'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './linux-runtime/select-linux-keyring-backend'
-import { setPtyHostBindings } from '../ipc/pty/pty-host-bindings'
-import { electronRuntimeDesktopSurface } from '../host/electron-runtime-desktop-surface'
-import { setRuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
-import { installElectronBrowserCommands } from '../host/electron-browser-commands'
-import { electronHttpClient } from '../host/electron-http-client'
-import { setMainHttpClient } from '../network/http-client'
-import { electronSpeechServiceFactories } from '../host/electron-speech-services'
-import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
-import { setWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
-import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
-import { setDefaultProxySessionResolver } from '../network/electron-default-proxy-session'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
@@ -174,7 +164,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     },
     onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
   })
-  installUncaughtPipeErrorGuard()
+  installUncaughtExceptionQuitGuard()
   // #9441: log background rejections so restore failure cannot silently kill main.
   installUnhandledRejectionLogging()
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
@@ -271,19 +261,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Select Linux os_crypt before credential reads/config initialization; install lazy secret access before Store without triggering pre-ready Keychain resolution.
   selectLinuxKeyringBackend()
   setSecretStore(new ElectronSecretStore())
-  // Bind PTY IPC/power at process scope: headless serve has no window yet and must not register no-op handlers.
-  setPtyHostBindings({ ipc: ipcMain, power: powerMonitor })
-  // Node hosts omit desktop surfaces and route notifications to paired clients instead.
-  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
-  // Install Chromium browser commands only in Electron; Node hosts advertise no browser capability and reject those RPCs.
-  installElectronBrowserCommands()
-  // Electron consults default-session proxy config; Node hosts use environment only.
-  setDefaultProxySessionResolver(() => session.defaultSession)
-  // Desktop integrations use Chromium networking; Node differs in proxy environment and user agent.
-  setMainHttpClient(electronHttpClient)
-  // Only Electron supplies streaming speech services; other hosts reject speech calls.
-  setSpeechServiceFactories(electronSpeechServiceFactories)
-  setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
+  installElectronNativeServices()
   // Couple only dev desktop lifetime; serve must outlive its CLI shim/background-shell parent.
   const shouldCoupleToDevParent = isDev && !state.isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)

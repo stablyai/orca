@@ -1,7 +1,5 @@
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { resolveNativeChatHttpLinkSourceOwner } from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '../workspace/workspace-browser-route-eligibility'
 import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import { openOwnedHttpLink } from './http-link-routing'
 import type { HttpLinkDestination, HttpLinkSourceOwner } from './http-link-routing'
@@ -22,6 +20,8 @@ export type OpenAppHttpLinkOptions = {
   worktreeId?: string | null
   /** The click, so the setting's Shift escape modifier applies. */
   event?: AppHttpLinkClick
+  /** Opens in the workspace's browser whatever the link setting says. */
+  forceInApp?: boolean
   /** Explicit destination override when a surface bypasses the link setting. */
   destination?: 'orca' | 'system'
 }
@@ -64,7 +64,8 @@ export function openAppHttpLink(
     worktreeId: host?.worktreeId ?? null,
     sourceOwner: host?.owner ?? LOCAL_OWNER,
     allowRemoteInApp: true,
-    modifierHeld: isEscapeModifierClick(options.event)
+    modifierHeld: isEscapeModifierClick(options.event),
+    ...(options.forceInApp ? { forceInApp: true } : {})
   })
 }
 
@@ -80,7 +81,7 @@ function resolveBrowserHost(
     owner.kind === 'local'
       ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
         'enabled'
-      : canNativeChatOpenOwnedBrowser(state, worktreeId, owner)
+      : canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, owner)
   return canHost ? { worktreeId, owner } : null
 }
 

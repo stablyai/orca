@@ -33,7 +33,7 @@ import {
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
@@ -42,8 +42,8 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/agent-launch/star
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
-} from '../../../shared/claude-profile-routing'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
+} from '../../../shared/agent-accounts/claude/claude-profile-routing'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-readiness/shell-ready'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
@@ -183,6 +183,9 @@ export function createPtyShellLaunchPlan(
       }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
+      }
+      if (opts.env?.KITTY_WINDOW_ID !== undefined && env.KITTY_WINDOW_ID !== undefined) {
+        addWslEnvKeys(env, ['KITTY_WINDOW_ID/u'])
       }
     } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
       delete env.CODEX_HOME

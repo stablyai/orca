@@ -1,10 +1,10 @@
 import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
-import { DragReorderList } from '../../../../components/DragReorderList'
-import type { DragReorderMove } from '../../../../components/drag-reorder-positions'
+import { DragReorderList } from '../../../../components/reorder/DragReorderList'
+import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
 import { useContext, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
-import { ActionSheetModal } from '../../../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -189,7 +189,7 @@ export function MobileNativeChatQueuedMessages({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: clearBusy }}
-          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete every queued message')}
+          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete all')}
           style={({ pressed }) => [
             styles.headerAction,
             pressed && styles.pressed,
@@ -199,7 +199,7 @@ export function MobileNativeChatQueuedMessages({
           onPress={clearAll}
         >
           <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.actionLabel}>{t('chat.queuedMessages.clearAll', 'Clear all')}</Text>
+          <Text style={styles.actionLabel}>{t('chat.queuedMessages.deleteAll', 'Delete all')}</Text>
         </Pressable>
       ) : null}
       <Pressable
@@ -272,7 +272,7 @@ export function MobileNativeChatQueuedMessages({
   }
   const menuEditable =
     menuCard !== undefined &&
-    !menuCard.command &&
+    !menuCard.notEditable &&
     onEdit !== undefined &&
     editor === undefined &&
     !busyIds.has(menuCard.messageId)
@@ -404,7 +404,7 @@ export function MobileNativeChatQueuedMessages({
             ? [
                 {
                   id: 'clearAll',
-                  label: t('chat.queuedMessages.deleteAll', 'Delete every queued message'),
+                  label: t('chat.queuedMessages.deleteAll', 'Delete all'),
                   icon: Trash2,
                   destructive: true,
                   disabled: clearBusy,

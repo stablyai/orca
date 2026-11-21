@@ -1,13 +1,13 @@
 import {
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY
-} from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 // options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../../../core'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
-import { isFloatingWorkspaceSelector } from '../../../../../../shared/floating-workspace-worktree'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+import { isFloatingWorkspaceSelector } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   requireInstalledStructuredHost,
@@ -164,6 +164,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         ? {
             ...listing,
             models: structuredAgentSessionOptionModels(
+              params.agent,
               listing.models,
               own.options?.model,
               (row) => row

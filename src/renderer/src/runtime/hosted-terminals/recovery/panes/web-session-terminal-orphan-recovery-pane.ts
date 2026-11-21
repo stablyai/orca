@@ -1,6 +1,6 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalResolvePane } from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalResolvePane } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
 import {

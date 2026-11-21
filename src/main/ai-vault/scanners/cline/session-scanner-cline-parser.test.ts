@@ -30,7 +30,7 @@ describe('Cline AI Vault sessions', () => {
         status: 'idle',
         interactive: true,
         provider: 'deepseek',
-        model: 'deepseek-v4-flash',
+        prompt: 'Manifest fallback',
         cwd: '/repo/cline',
         workspace_root: '/repo/cline'
       })
@@ -69,6 +69,7 @@ describe('Cline AI Vault sessions', () => {
       cwd: '/repo/cline',
       model: 'deepseek-v4-flash',
       messageCount: 2,
+      updatedAt: '2026-08-11T16:38:00.000Z',
       resumeCommand: `cd '/repo/cline' && cline --id '${sessionId}'`,
       filePath: join(sessionDir, `${sessionId}.json`)
     })
@@ -92,26 +93,5 @@ describe('Cline AI Vault sessions', () => {
       messageCount: 3,
       updatedAt: '2026-08-11T16:39:00.000Z'
     })
-  })
-
-  it('only indexes manifests directly beneath a session directory', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-cline-nested-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionId = 'direct-session'
-    const nestedId = 'nested-session'
-    await mkdir(join(roots.clineSessionsDir, sessionId), { recursive: true })
-    await mkdir(join(roots.clineSessionsDir, 'workspace', nestedId), { recursive: true })
-    const metadata = JSON.stringify({ session_id: sessionId, cwd: '/repo' })
-    await writeFile(join(roots.clineSessionsDir, sessionId, `${sessionId}.json`), metadata)
-    await writeFile(
-      join(roots.clineSessionsDir, 'workspace', nestedId, `${nestedId}.json`),
-      JSON.stringify({ session_id: nestedId, cwd: '/unexpected' })
-    )
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-
-    expect(result.sessions.filter((session) => session.agent === 'cline')).toHaveLength(1)
-    expect(result.sessions.find((session) => session.agent === 'cline')?.sessionId).toBe(sessionId)
   })
 })

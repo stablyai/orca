@@ -4,14 +4,18 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../folder-workspaces/folder-workspace-worktree'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { getWorkspaceAttachments } from '../../workspace-attachments/workspace-attachments'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../workspace-statuses'
-import { parseWorkspaceKey, worktreeWorkspaceKey, type WorkspaceKey } from '../../workspace-scope'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../workspace/status/workspace-statuses'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey,
+  type WorkspaceKey
+} from '../../workspace/identity/workspace-scope'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey

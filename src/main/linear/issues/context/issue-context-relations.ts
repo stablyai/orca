@@ -18,7 +18,7 @@ import {
 export async function readIssueRelations(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueRelation[]; meta: LinearCollectionMeta }> {
-  const entry = getRequiredEntry(resolved.workspace.id)
+  const entry = await getRequiredEntry(resolved.workspace.id)
   const response = await readConnectionPages(LINEAR_RELATIONS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<

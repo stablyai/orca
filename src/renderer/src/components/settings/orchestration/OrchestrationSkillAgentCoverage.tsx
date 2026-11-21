@@ -1,12 +1,15 @@
 import type {
   BundledSkillObserved,
   BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
-import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource
+} from '../../../../../shared/skills/discovery/skills'
 
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import {
   type OrchestrationSkillAgentStatus,
   getOrchestrationSkillAgentStatuses,

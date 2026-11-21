@@ -1,4 +1,4 @@
-import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-capture'
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -87,7 +87,17 @@ it.skipIf(process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST !== '1')(
       await lock.close()
     }
     expect(readFileSync(filename)).toEqual(before)
-    const second = await acquireJournalLegacyFileLock(filename, signal.signal)
-    await second.close()
+    // A WAL that holds frames keeps everything; an empty one goes with the file it belongs to.
+    writeFileSync(`${filename}-wal`, 'frames')
+    const refused = await acquireJournalLegacyFileLock(filename, signal.signal)
+    await expect(refused.retire('0')).rejects.toThrow('legacy companions still hold data')
+    expect(existsSync(filename)).toBe(true)
+    writeFileSync(`${filename}-wal`, '')
+    writeFileSync(`${filename}-shm`, '')
+    const retiring = await acquireJournalLegacyFileLock(filename, signal.signal)
+    expect(await retiring.retire('0')).toBe(true)
+    expect([filename, `${filename}-wal`, `${filename}-shm`].filter((f) => existsSync(f))).toEqual(
+      []
+    )
   }
 )

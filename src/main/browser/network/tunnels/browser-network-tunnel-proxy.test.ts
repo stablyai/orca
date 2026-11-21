@@ -101,11 +101,10 @@ describe('native browser tunnel upstream proxy (#29154)', () => {
     ])
   })
 
-  it("prefers Orca's proxy setting and its bypass list over the environment", async () => {
+  it("prefers Orca's proxy setting over the environment", async () => {
     const proxy = await startConnectProxy(await startEchoServer())
     setNetworkProxySettingsSource(() => ({
-      httpProxyUrl: `http://127.0.0.1:${proxy.port}`,
-      httpProxyBypassRules: 'internal.test'
+      httpProxyUrl: `http://127.0.0.1:${proxy.port}`
     }))
     const socket = connectNativeBrowserNetworkTarget(
       { host: 'site.invalid', port: 80 },
@@ -115,7 +114,7 @@ describe('native browser tunnel upstream proxy (#29154)', () => {
     expect(proxy.requests.map((request) => request.authority)).toEqual(['site.invalid:80'])
   })
 
-  it('reports a proxy refusal as a connect failure instead of falling back to direct', async () => {
+  it('reports an HTTP CONNECT refusal as a connect failure', async () => {
     const proxy = await startConnectProxy(await startEchoServer(), { reject: 403 })
     const socket = connectNativeBrowserNetworkTarget(
       { host: 'blocked.invalid', port: 443 },

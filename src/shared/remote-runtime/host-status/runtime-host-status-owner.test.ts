@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeHostStatusOwner } from './runtime-host-status-owner'
 import { runtimeHostStatusFailure, type RuntimeHostStatusResponse } from './runtime-host-status'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 
 const owners: RuntimeHostStatusOwner[] = []
 beforeEach(() => vi.useFakeTimers())
@@ -156,4 +156,51 @@ it('re-verifies a persistent host when its transport returns, without another ex
   await vi.advanceTimersByTimeAsync(0)
   expect(owner.read().verification).toBe('verified')
   expect(request).toHaveBeenCalledTimes(2)
+})
+
+it('answers background refreshes of a failing host from its backoff until a forced check', async () => {
+  const { owner, request, publish } = createOwner()
+  request.mockResolvedValue(runtimeHostStatusFailure('runtime_unavailable', 'host down'))
+  await owner.refresh()
+  const publications = publish.mock.calls.length
+  for (let index = 0; index < 5; index += 1) {
+    expect((await owner.refresh()).ok).toBe(false)
+  }
+  // A reconnect attempt that has not reached ready keeps the backoff.
+  owner.connectionChanged('connecting')
+  const afterTransport = publish.mock.calls.length
+  expect((await owner.refresh()).ok).toBe(false)
+  expect(request).toHaveBeenCalledOnce()
+  expect(publish).toHaveBeenCalledTimes(afterTransport)
+  expect(publications).toBeLessThan(afterTransport)
+  await owner.refresh({ force: true })
+  expect(request).toHaveBeenCalledTimes(2)
+})
+
+it('lengthens the backoff for a verified host whose transport is down while a caller keeps polling', async () => {
+  const { owner, request } = createOwner(true)
+  owner.connectionChanged('ready')
+  await owner.refresh()
+  owner.connectionChanged('disconnected')
+  request.mockResolvedValue(runtimeHostStatusFailure('runtime_unavailable', 'host down'))
+  for (let tick = 0; tick < 12; tick += 1) {
+    await owner.refresh()
+    await vi.advanceTimersByTimeAsync(5_000)
+  }
+  // Probes at 0, 5, 15 and 30 s (backoff 3, 6, 12, 30 s) after the first verification.
+  expect(request).toHaveBeenCalledTimes(5)
+})
+
+it('keeps an owner retry behind the backoff that observe-only failures built', async () => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValue(runtimeHostStatusFailure('runtime_unavailable', 'host down'))
+  await owner.refresh({ observeOnly: true })
+  await vi.advanceTimersByTimeAsync(3_000)
+  await owner.refresh({ observeOnly: true })
+  await vi.advanceTimersByTimeAsync(1_000)
+  await owner.refresh()
+  await vi.advanceTimersByTimeAsync(4_000)
+  expect(request).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(request).toHaveBeenCalledTimes(3)
 })
