@@ -24122,7 +24122,8 @@
       "1524825c2c": "ワークスペースボードの切り替え",
       "d286d1ab85": "ペインのタイトルをクリア",
       "botItemPrevious": "前の項目",
-      "botItemNext": "次の項目"
+      "botItemNext": "次の項目",
+      "notificationsOpenLatest": "最新の通知を開く"
     },
     "group": {
       "global": "グローバル",

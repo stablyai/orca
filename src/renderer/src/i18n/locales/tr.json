@@ -23039,7 +23039,8 @@
       "1524825c2c": "Çalışma alanı panosunu göster/gizle",
       "d286d1ab85": "Bölme başlığını temizle",
       "botItemPrevious": "Önceki öğe",
-      "botItemNext": "Sonraki öğe"
+      "botItemNext": "Sonraki öğe",
+      "notificationsOpenLatest": "Son bildirimi aç"
     },
     "group": {
       "global": "Genel",

@@ -7,13 +7,15 @@ import {
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import type { KeybindingMatchOptions } from '../../../shared/keybindings/types'
 import {
-  getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
   nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction,
-  windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../../shared/keybindings/window-shortcut-policy'
+import {
+  getWindowShortcutActionId,
+  windowShortcutActionCapturesTerminal
+} from '../../../shared/keybindings/window-shortcut-action-ids'
 import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
@@ -24,6 +26,7 @@ import {
   textInputOwnsComposition,
   type TextShortcutInput
 } from '../../../shared/keybindings/text-input-shortcut-policy'
+import { hasOpenableNotification } from '../../ipc/notifications/openable-notifications'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -99,7 +102,15 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
-    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
+    // Nothing to open: the chord stays with the focused terminal or page.
+    if (action.type === 'openLatestNotification' && !hasOpenableNotification()) {
+      return false
+    }
+
+    if (
+      (action.type === 'toggleQuickCommandsMenu' || action.type === 'openLatestNotification') &&
+      isAutoRepeat
+    ) {
       event.preventDefault()
       return true
     }

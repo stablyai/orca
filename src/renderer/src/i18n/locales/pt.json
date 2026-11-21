@@ -23829,7 +23829,8 @@
       "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
       "d286d1ab85": "Limpar Título do Painel",
       "botItemPrevious": "Item anterior",
-      "botItemNext": "Próximo item"
+      "botItemNext": "Próximo item",
+      "notificationsOpenLatest": "Abrir notificação mais recente"
     },
     "group": {
       "global": "Global",

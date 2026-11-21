@@ -24795,7 +24795,8 @@
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
       "5468defe61": "折叠/展开所有项目",
       "botItemPrevious": "上一个条目",
-      "botItemNext": "下一个条目"
+      "botItemNext": "下一个条目",
+      "notificationsOpenLatest": "打开最新通知"
     },
     "group": {
       "global": "全局",

@@ -23294,7 +23294,8 @@
       "1524825c2c": "Afficher/masquer le tableau des espaces de travail",
       "d286d1ab85": "Effacer le titre du volet",
       "botItemPrevious": "Élément précédent",
-      "botItemNext": "Élément suivant"
+      "botItemNext": "Élément suivant",
+      "notificationsOpenLatest": "Ouvrir la dernière notification"
     },
     "group": {
       "global": "Global",

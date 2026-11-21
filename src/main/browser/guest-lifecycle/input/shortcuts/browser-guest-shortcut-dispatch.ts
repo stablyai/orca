@@ -12,6 +12,10 @@ import type { BrowserPageTabShortcut } from '../../../../../shared/browser/guest
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
 import { textInputOwnsComposition } from '../../../../../shared/keybindings/text-input-shortcut-policy'
+import {
+  hasOpenableNotification,
+  openLatestNotification
+} from '../../../../ipc/notifications/openable-notifications'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
@@ -92,6 +96,8 @@ export function forwardGuestShortcutInput(
     if (
       forwardsDictation ||
       matchesPlugins ||
+      // Held open-latest opens once; repeats stay with Orca while something is left to open.
+      (action?.type === 'openLatestNotification' && hasOpenableNotification()) ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -117,6 +123,12 @@ export function forwardGuestShortcutInput(
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:toggleFloatingTerminal')
+    return true
+  }
+
+  // Nothing to open leaves the chord to the page.
+  if (action?.type === 'openLatestNotification' && openLatestNotification()) {
+    event.preventDefault()
     return true
   }
 
