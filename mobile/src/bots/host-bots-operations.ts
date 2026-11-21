@@ -41,7 +41,10 @@ export const phoneBotSchema = z.looseObject({
   chatSessionId: BotSchema.shape.chatSessionId,
   // Its offer cards' answers and the bots made from them, so a card reads how it ended.
   offerAnswers: BotSchema.shape.offerAnswers,
-  acceptedOffers: BotSchema.shape.acceptedOffers
+  acceptedOffers: BotSchema.shape.acceptedOffers,
+  // The link a bot was made from, so opening that link again offers it.
+  sharedFrom: BotSchema.shape.sharedFrom,
+  createdAt: salvagedOptional('createdAt', z.number())
 })
 
 export type PhoneBot = z.output<typeof phoneBotSchema>
@@ -50,7 +53,8 @@ export type PhoneBot = z.output<typeof phoneBotSchema>
 export type ListedBot = Pick<
   PhoneBot,
   'id' | 'name' | 'folderWorkspaceId' | 'avatar' | 'paused' | 'chatSessionId'
->
+> &
+  Partial<Pick<PhoneBot, 'avatarColor' | 'sharedFrom' | 'createdAt'>>
 
 /** The bot's saved state as a phone edit returns it. */
 export const phoneBotReply = z.looseObject({ bot: phoneBotSchema })
