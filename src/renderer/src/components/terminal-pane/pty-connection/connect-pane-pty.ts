@@ -1,3 +1,4 @@
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isMainTerminalSideEffectAuthorityForPty } from '../pty-transport/output/terminal-side-effect-facts-handler'
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../pty-transport/delivery/terminal-hidden-delivery-gate'
@@ -250,18 +251,17 @@ export function connectPanePty(
         }
       : {}
   )
-  // xterm exposes no Kitty read; mirror the flags its encoder applies.
-  session.kittyKeyboardModes = (() => {
-    const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
-    if (existing) {
-      return existing
-    }
-    const created = new TerminalKittyKeyboardModeTracker({
-      kittyKeyboard: session.pane.terminal.options.vtExtensions?.kittyKeyboard === true
-    })
-    session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
-    return created
-  })()
+  // xterm exposes no Kitty or 9001 read; mirror what its encoder and ConPTY apply.
+  session.kittyKeyboardModes =
+    session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id) ??
+    (() => {
+      const created = new TerminalKittyKeyboardModeTracker({
+        kittyKeyboard: session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
+        win32InputMode: isWindowsUserAgent()
+      })
+      session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
+      return created
+    })()
 
   session.shellOverride = session.tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so

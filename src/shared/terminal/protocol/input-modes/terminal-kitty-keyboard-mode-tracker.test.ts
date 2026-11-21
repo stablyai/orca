@@ -54,3 +54,22 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     })
   })
 })
+
+describe('TerminalKittyKeyboardModeTracker win32 input mode', () => {
+  it('tracks DECSET 9001 across split chunks', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker({ win32InputMode: true })
+    tracker.scan('prompt\x1b[?90')
+    expect(tracker.win32InputMode).toBe(false)
+    tracker.scan('01h')
+    expect(tracker.win32InputMode).toBe(true)
+    tracker.scan('\x1b[?1004;9001')
+    tracker.scan('l')
+    expect(tracker.win32InputMode).toBe(false)
+  })
+
+  it('ignores DECSET 9001 when tracking is off', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    tracker.scan('\x1b[?9001h')
+    expect(tracker.win32InputMode).toBe(false)
+  })
+})
