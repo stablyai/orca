@@ -6,10 +6,12 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { textExtends } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
-import type {
-  LiveTextRead,
-  LiveTextReaders
-} from '../../journal-ingress/structured-agent-session-event-sink'
+import { noteShortenedRow } from './agent-session-subscriber-live-text-readers'
+export {
+  liveTextFor,
+  sessionLiveTextReaders,
+  type SubscriberLiveTextSource
+} from './agent-session-subscriber-live-text-readers'
 import {
   markBoundedBatchFits,
   subscriberHistoryReader
@@ -81,7 +83,9 @@ function sameSentForm(row: SubscriberLiveRow | undefined, sent: AgentJournalRend
 /** Record live rows a durable frame already carried, so the next live frame skips them. */
 export function noteSubscriberLiveRow(subscriber: Subscriber) {
   return (source: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number): void => {
-    ;(subscriber.liveSent ??= new Map()).set(source.itemId, { source, sent, bytes })
+    const row = { source, sent, bytes }
+    ;(subscriber.liveSent ??= new Map()).set(source.itemId, row)
+    noteShortenedRow(subscriber, row)
   }
 }
 
@@ -243,34 +247,6 @@ function fitsBoundedFrame(subscriber: Subscriber, rowBytes: number): boolean {
   )
 }
 
-export type SubscriberLiveTextSource = readonly AgentJournalRenderItem[] | LiveTextRead
-
-/** One snapshot per fan-out, shared by every subscriber; rows only an append reader takes are not
- *  built when none of them is one. */
-export function liveTextFor(
-  read: SubscriberLiveTextSource,
-  subscribers: readonly Subscriber[]
-): readonly AgentJournalRenderItem[] {
-  return typeof read === 'function' ? read(liveTextReadersOf(subscribers)) : read
-}
-
-/** Who would read a session's live text; null while nobody is subscribed. */
-export function sessionLiveTextReaders(
-  subscribers: ReadonlyMap<string, Subscriber> | undefined
-): LiveTextReaders | null {
-  return subscribers?.size ? liveTextReadersOf(subscribers.values()) : null
-}
-
-function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {
-  const appenders = [...subscribers].filter((subscriber) => subscriber.holdsTextBase !== undefined)
-  return appenders.length === 0
-    ? { appends: false }
-    : {
-        appends: true,
-        takes: (itemId) => appenders.some((reader) => !reader.liveShortened?.has(itemId))
-      }
-}
-
 /** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
 export function subscriberAtHead(subscriber: Subscriber, journal: AgentSessionJournal): boolean {
   const cursor = journal.cursor()
@@ -320,15 +296,14 @@ export async function publishSubscriberLiveText(
       // Sent whole once, the row becomes the reader's base; one the reader still can't append to
       // would go whole every window, so its save carries it.
       if (prior && subscriber.holdsTextBase?.(source.itemId) === false) {
+        noteShortenedRow(subscriber, prior)
         rows.push(prior)
         continue
       }
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
       const row = prior?.source === source ? prior : liveRow(prior, source, form, maxBytes)
       rows.push(row)
-      if (row.sent.shortened === true && isAppendOnlyLiveRow(source)) {
-        ;(subscriber.liveShortened ??= new Set()).add(source.itemId)
-      }
+      noteShortenedRow(subscriber, row)
       if (row !== prior && !sameSentForm(prior, row.sent)) {
         fresh.push(row.sent)
         freshBytes += row.bytes

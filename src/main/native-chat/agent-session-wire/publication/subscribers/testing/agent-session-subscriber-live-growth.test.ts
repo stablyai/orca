@@ -6,6 +6,7 @@ import type { SqlAgentSessionJournal } from '../../../../agent-session-journal/j
 import type { Subscriber } from '../agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from '../agent-session-subscriber-catch-up'
 import {
+  noteSubscriberLiveRow,
   publishSubscriberLiveText,
   sessionLiveTextReaders,
   withSubscriberLiveText
@@ -145,6 +146,13 @@ describe('a live reply that only grows', () => {
     await publishItems(read?.('e', readers()) ?? [])
     expect(events).toHaveLength(1)
     expect(reads).toBe(0)
+  })
+
+  it('is no longer read for a phone whose save carried it shortened', () => {
+    const { subscriber } = stream(true, () => false)
+    const saved = reply('a'.repeat(128 * 1024))
+    noteSubscriberLiveRow(subscriber)(saved, { ...saved, shortened: true }, 72 * 1024)
+    expect(sessionLiveTextReaders(new Map([['reader', subscriber]]))?.takes?.('reply')).toBe(false)
   })
 
   it('reaches an append reader as only its new text', async () => {

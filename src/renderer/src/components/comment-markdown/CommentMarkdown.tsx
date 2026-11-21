@@ -225,9 +225,10 @@ const CommentMarkdown = React.memo(
                 const blockEnd = block.start + block.text.length
                 const held =
                   fadeHold !== undefined && fadeHold.from < blockEnd && fadeHold.to > block.start
+                // A held block the window has passed keeps one value, so its memo holds.
                 const blockFadeFrom =
                   fadeFrom !== undefined && (fadeFrom < blockEnd || held)
-                    ? Math.max(0, fadeFrom - block.start)
+                    ? Math.min(block.text.length, Math.max(0, fadeFrom - block.start))
                     : undefined
                 return (
                   <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
