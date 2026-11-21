@@ -38,9 +38,13 @@ function sameBlockRender(previous: MemoizedMarkdownProps, next: MemoizedMarkdown
   if (before !== after && !holdsFade) {
     return false
   }
-  const keys = new Set([...Object.keys(previousRest), ...Object.keys(nextRest)])
-  return [...keys].every((key) =>
-    Object.is(Reflect.get(previousRest, key), Reflect.get(nextRest, key))
+  const previousEntries = Object.entries(previousRest)
+  const nextValues = new Map(Object.entries(nextRest))
+  return (
+    previousEntries.length === nextValues.size &&
+    previousEntries.every(
+      ([key, value]) => nextValues.has(key) && Object.is(nextValues.get(key), value)
+    )
   )
 }
 
