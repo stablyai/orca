@@ -81,7 +81,8 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (fresh && this.runtime.refreshPin) {
+    // A status read is not an install, so a copy Orca must not keep current is not looked up.
+    if (fresh && this.runtime.refreshPin && this.deps.updatesEnabled?.() !== false) {
       await this.runtime.refreshPin().catch((error: unknown) => {
         console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
       })

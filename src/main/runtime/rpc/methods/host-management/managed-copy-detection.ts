@@ -13,6 +13,8 @@ import { runtimeReleaseMayBePublished } from '../../../../node-runtime/managed-r
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 
 /** ACP agents name their own program and search their installers' folders after PATH, as launches
  *  do; an agent with a host program is looked for as that program. */
@@ -30,7 +32,12 @@ export function managedCopyMayRun(
   agent: ManagedAgentCliId,
   runtime: ManagedCopySettingsSource
 ): boolean {
-  return standInSpec(agent)?.managedCopyAllowed?.(runtime.requireStore().getSettings()) !== false
+  const settings = runtime.requireStore().getSettings()
+  // Turning the agent off in Settings also stops Orca keeping its own copy current.
+  if (isTuiAgent(agent) && !isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
+    return false
+  }
+  return standInSpec(agent)?.managedCopyAllowed?.(settings) !== false
 }
 
 // Set once launch reclaim has read every release, which installs and removals then keep current.
