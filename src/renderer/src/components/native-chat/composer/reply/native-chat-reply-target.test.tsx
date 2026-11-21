@@ -299,7 +299,7 @@ describe('reply quotes', () => {
       { author: 'agent', excerpt: 'Updated the cards.' },
       'Claude'
     )
-    const { rest, target } = nativeChatReplyTargetFromSentText(sent)
+    const { rest, target } = nativeChatReplyTargetFromSentText(sent, 'chat-a')
     expect(rest).toBe('Why blue?')
     expect(target).toMatchObject({
       messageId: '',
@@ -311,7 +311,7 @@ describe('reply quotes', () => {
     expect(withNativeChatReplyContext(rest, target, 'Codex')).toBe(sent)
     // The user's own indentation survives the round trip.
     const code = withNativeChatReplyContext('    first()\n    second()', target, 'Codex')
-    expect(nativeChatReplyTargetFromSentText(code).rest).toBe('    first()\n    second()')
+    expect(nativeChatReplyTargetFromSentText(code, 'chat-a').rest).toBe('    first()\n    second()')
   })
 
   it('finds a restored reply by its author and own words, never a reply bubble quoting it', () => {
@@ -353,8 +353,8 @@ describe('reply quotes', () => {
       { author: 'agent', excerpt: 'Done.' },
       'Claude'
     )
-    rememberNativeChatReplySource(sent, 'm-first')
-    expect(nativeChatReplyTargetFromSentText(sent).target?.messageId).toBe('m-first')
+    rememberNativeChatReplySource('chat-a', sent, 'm-first')
+    expect(nativeChatReplyTargetFromSentText(sent, 'chat-a').target?.messageId).toBe('m-first')
     // Without that record two identical messages can't be told apart: the original is unavailable.
     const done = (id: string) => ({ id, role: 'assistant' as const, blocks: [text('Done.')] })
     expect(

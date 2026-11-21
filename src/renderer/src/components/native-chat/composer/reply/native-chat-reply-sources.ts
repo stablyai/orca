@@ -1,8 +1,11 @@
-// Which message each accepted reply answered, keyed by the exact text sent. A reply rebuilt from that text
-// (Rewind, "not sent → Edit", a queued edit) gets its original back even when another message has
-// the same words. Small and bounded, so localStorage holds it across reloads.
+// Which message each accepted reply answered, keyed by its chat and the exact text sent. A reply
+// rebuilt from that text in the same chat (Rewind, "not sent → Edit", a queued edit) gets its
+// original back even when another message has the same words; another chat never borrows it.
+// Small and bounded, so localStorage holds it across reloads.
 
-const STORAGE_KEY = 'orca.nativeChat.replySources.v1'
+// v2 keys each record by its chat; v1 records named no chat, so they're not trusted and are dropped.
+const STORAGE_KEY = 'orca.nativeChat.replySources.v2'
+const LEGACY_STORAGE_KEY = 'orca.nativeChat.replySources.v1'
 /** Sent replies remembered at once; older ones are dropped first. */
 export const NATIVE_CHAT_REPLY_SOURCES_MAX = 200
 
@@ -28,6 +31,7 @@ function load(): void {
   }
   loaded = true
   try {
+    globalThis.localStorage?.removeItem(LEGACY_STORAGE_KEY)
     const entries: unknown = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? '[]')
     for (const entry of Array.isArray(entries) ? entries : []) {
       if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
@@ -41,12 +45,17 @@ function load(): void {
 
 /** A send carrying `sentText` was accepted: remember which message it answers. The same text sent
  *  in reply to a different message is ambiguous, so neither keeps an exact original. */
-export function rememberNativeChatReplySource(sentText: string, messageId: string): void {
-  if (!messageId) {
+export function rememberNativeChatReplySource(
+  /** The chat's message box scope: a record is only read back in the chat that sent it. */
+  conversation: string,
+  sentText: string,
+  messageId: string
+): void {
+  if (!messageId || !conversation) {
     return
   }
   load()
-  const key = keyOf(sentText)
+  const key = scopedKeyOf(conversation, sentText)
   const known = sources.get(key)
   sources.delete(key)
   sources.set(key, known === undefined || known === messageId ? messageId : AMBIGUOUS)
@@ -65,9 +74,19 @@ export function rememberNativeChatReplySource(sentText: string, messageId: strin
 }
 
 /** The message a sent reply answered, when this client sent it. */
-export function nativeChatReplySourceOf(sentText: string): string | undefined {
+export function nativeChatReplySourceOf(
+  conversation: string,
+  sentText: string
+): string | undefined {
+  if (!conversation) {
+    return undefined
+  }
   load()
-  return sources.get(keyOf(sentText))
+  return sources.get(scopedKeyOf(conversation, sentText))
+}
+
+function scopedKeyOf(conversation: string, sentText: string): string {
+  return `${conversation}\n${keyOf(sentText)}`
 }
 
 /** Test-only: forget all sources and reload from storage on next read. */

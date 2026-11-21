@@ -75,7 +75,8 @@ export function createNativeChatQueuedEditDraft(
   const kept = queuedEditKeptImages(body)
   // The card's reply quote is edited as a reply strip on this scope and put back on save.
   const { rest, target: reply } = nativeChatReplyTargetFromSentText(
-    queuedMessageEditableText(body) ?? ''
+    queuedMessageEditableText(body) ?? '',
+    destination
   )
   if (reply) {
     setNativeChatReplyTarget(scopeKey, reply, { ephemeral: true })
@@ -135,7 +136,7 @@ export function rememberNativeChatQueuedEditReplySource(
 ): void {
   const reply = readNativeChatReplyTarget(edit.scopeKey)
   if (reply) {
-    rememberNativeChatReplySource(text, reply.messageId)
+    rememberNativeChatReplySource(edit.destination, text, reply.messageId)
   }
 }
 

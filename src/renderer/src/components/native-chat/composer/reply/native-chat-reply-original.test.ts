@@ -47,9 +47,9 @@ beforeEach(() => {
 
 it('a reply rebuilt from words sent to two identical messages stays unavailable with one of them loaded', () => {
   const sent = withNativeChatReplyContext('Which one?', { author: 'agent', excerpt: 'Done.' }, 'x')
-  rememberNativeChatReplySource(sent, 'm-first')
-  rememberNativeChatReplySource(sent, 'm-second')
-  const target = nativeChatReplyTargetFromSentText(sent).target
+  rememberNativeChatReplySource('chat-a', sent, 'm-first')
+  rememberNativeChatReplySource('chat-a', sent, 'm-second')
+  const target = nativeChatReplyTargetFromSentText(sent, 'chat-a').target
   // Its words alone would pick the one duplicate loaded, which may be the wrong message. Instead it
   // names an original no loaded message has, so the transcript shows it as unavailable.
   expect(
@@ -165,4 +165,29 @@ it('a reply naming an original that isn’t loaded is unavailable, even when oth
       () => [other]
     )
   ).toBe('m-other')
+})
+
+it('the same words sent in two chats each keep their own chat’s original', () => {
+  const sent = withNativeChatReplyContext('Which one?', { author: 'agent', excerpt: 'Done.' }, 'x')
+  rememberNativeChatReplySource('chat-a', sent, 'm-a')
+  rememberNativeChatReplySource('chat-b', sent, 'm-b')
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-a').target?.messageId).toBe('m-a')
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-b').target?.messageId).toBe('m-b')
+  // Words recorded only in chat A name nothing in chat C, which finds its original by words.
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-c').target?.messageId).toBe('')
+  // Answering two messages inside one chat is still ambiguous there, and only there.
+  rememberNativeChatReplySource('chat-a', sent, 'm-a2')
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-a').target?.messageId).toBe(
+    NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS
+  )
+  resetNativeChatReplySourcesForTests()
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-b').target?.messageId).toBe('m-b')
+})
+
+it('drops records from before replies were kept per chat, rather than trusting them anywhere', () => {
+  localStorage.setItem('orca.nativeChat.replySources.v1', JSON.stringify([['3:abc', 'm-old']]))
+  resetNativeChatReplySourcesForTests()
+  const sent = withNativeChatReplyContext('Why?', { author: 'agent', excerpt: 'Done.' }, 'x')
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-a').target?.messageId).toBe('')
+  expect(localStorage.getItem('orca.nativeChat.replySources.v1')).toBeNull()
 })

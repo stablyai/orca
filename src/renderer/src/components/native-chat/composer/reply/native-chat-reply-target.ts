@@ -8,7 +8,10 @@ import {
   nativeChatReplyExcerpt,
   nativeChatReplyQuoteOf
 } from './native-chat-reply-quote'
-import { nativeChatReplySourceOf } from './native-chat-reply-sources'
+import {
+  NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS,
+  nativeChatReplySourceOf
+} from './native-chat-reply-sources'
 import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
 
 export type NativeChatReplyTarget = {
@@ -204,11 +207,13 @@ export function restoreNativeChatReplyTarget(
 ): boolean {
   const current = readNativeChatReplyTarget(scopeKey)
   if (takenAt === undefined && current) {
-    // A repeated hand-back of the same words finds its own reply already there.
+    // A repeated hand-back of the same words finds its own reply already there; the same words
+    // answering a different known message are another reply, not this one.
     return (
       current.author === target.author &&
       current.excerpt === target.excerpt &&
-      current.agentLabel === target.agentLabel
+      current.agentLabel === target.agentLabel &&
+      sameOriginal(current.messageId, target.messageId)
     )
   }
   if (takenAt !== undefined && nativeChatReplyCustody(scopeKey) !== takenAt) {
@@ -216,6 +221,12 @@ export function restoreNativeChatReplyTarget(
   }
   setNativeChatReplyTarget(scopeKey, target)
   return true
+}
+
+/** Whether two replies can be to the same message: yes unless both name different known originals. */
+function sameOriginal(a: string, b: string): boolean {
+  const unknown = (id: string): boolean => !id || id === NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS
+  return unknown(a) || unknown(b) || a === b
 }
 
 /** A send left the box: it takes the reply it quoted (if still that one) and ends any "Reply cancelled"
@@ -307,7 +318,11 @@ export function useNativeChatReplyTarget(scopeKey: string): NativeChatReplyTarge
 }
 
 /** Splits a sent reply back into the user's words and the reply it carried, so they can be edited again. */
-export function nativeChatReplyTargetFromSentText(text: string): {
+export function nativeChatReplyTargetFromSentText(
+  text: string,
+  /** The chat it was sent in, whose record of the exact original it reads. */
+  conversation: string
+): {
   rest: string
   target: NativeChatReplyTarget | null
 } {
@@ -321,7 +336,7 @@ export function nativeChatReplyTargetFromSentText(text: string): {
     target: {
       id: `${Date.now().toString(36)}-${sequence}`,
       // The original, when this client sent the reply; otherwise the transcript finds it by its words.
-      messageId: nativeChatReplySourceOf(text) ?? '',
+      messageId: nativeChatReplySourceOf(conversation, text) ?? '',
       author: quote.author,
       ...(quote.label ? { agentLabel: quote.label } : {}),
       excerpt: quote.excerpt

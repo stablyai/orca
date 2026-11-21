@@ -29,6 +29,7 @@ import {
   resetNativeChatReplySourcesForTests
 } from '../reply/native-chat-reply-sources'
 import { nativeChatReplyRevealId } from '../reply/native-chat-reply-original'
+import { structuredAgentSessionSendBody } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn()
@@ -78,7 +79,11 @@ function fixture(accept: boolean | (() => Promise<boolean>)) {
       setCaret: vi.fn()
     })
   })
-  return { transport, send: (text: string) => hook.result.current(text, []) }
+  return {
+    transport,
+    send: (text: string, images: { id: string; path: string }[] = []) =>
+      hook.result.current(text, images)
+  }
 }
 
 describe('replying to a message from a structured chat', () => {
@@ -320,6 +325,7 @@ describe('replying to a message from a terminal chat', () => {
     // The terminal never took it, so it answers nothing: no original is remembered for these words.
     expect(
       nativeChatReplySourceOf(
+        ptyScope,
         withNativeChatReplyContext('/Users/me/shot.png looks off', target, 'Codex')
       )
     ).toBeUndefined()
@@ -341,7 +347,9 @@ describe('replying to a message from a terminal chat', () => {
     await act(async () => settle('not-submitted'))
     expect(readNativeChatReplyTarget(ptyScope)).toBeNull()
     const sent = withNativeChatReplyContext('Why is it blue?', target, 'Codex')
-    expect(nativeChatReplyTargetFromSentText(sent).target?.messageId).toBe(target.messageId)
+    expect(nativeChatReplyTargetFromSentText(sent, ptyScope).target?.messageId).toBe(
+      target.messageId
+    )
   })
 
   it('remembers the original of a terminal reply once the terminal takes the write', async () => {
@@ -357,9 +365,9 @@ describe('replying to a message from a terminal chat', () => {
       send()
     })
     const sent = withNativeChatReplyContext('Is this right?', target, 'Codex')
-    expect(nativeChatReplySourceOf(sent)).toBeUndefined()
+    expect(nativeChatReplySourceOf(ptyScope, sent)).toBeUndefined()
     await act(async () => settle('submitted'))
-    expect(nativeChatReplySourceOf(sent)).toBe(target.messageId)
+    expect(nativeChatReplySourceOf(ptyScope, sent)).toBe(target.messageId)
   })
 
   it('types a command as-is, with or without an image, and keeps the reply', () => {
@@ -399,9 +407,9 @@ describe('remembering which message a reply answered', () => {
       setNativeChatReplyTarget(scope, { ...target, id: 'reply-2', messageId: 'm-9' })
       await pending
     })
-    expect(nativeChatReplySourceOf(withNativeChatReplyContext('Why blue?', target, 'Codex'))).toBe(
-      'm-7'
-    )
+    expect(
+      nativeChatReplySourceOf(scope, withNativeChatReplyContext('Why blue?', target, 'Codex'))
+    ).toBe('m-7')
   })
 
   it('a structured reply ending in a space or newline keeps its exact original among duplicates', async () => {
@@ -416,7 +424,7 @@ describe('remembering which message a reply answered', () => {
     })
     // The message stores its words without trailing whitespace; Rewind and Edit read them so.
     const stored = withNativeChatReplyContext('Which one? \n', second, 'Codex').trimEnd()
-    const rebuilt = nativeChatReplyTargetFromSentText(stored).target!
+    const rebuilt = nativeChatReplyTargetFromSentText(stored, scope).target!
     expect(rebuilt.messageId).toBe('m-second')
     const duplicates = ['m-first', 'm-second'].map((id) => ({
       id,
@@ -440,6 +448,49 @@ describe('remembering which message a reply answered', () => {
     ).toBeNull()
   })
 
+  it('a structured reply with an image keeps its exact original among duplicates when rebuilt from what was stored', async () => {
+    localStorage.clear()
+    resetNativeChatReplySourcesForTests()
+    const second = { ...target, id: 'reply-img', messageId: 'm-second' }
+    setNativeChatReplyTarget(scope, second)
+    const { transport, send } = fixture(true)
+    await act(async () => {
+      await send('[Image](orca-image:img-1) Why this spot? ', [
+        { id: 'img-1', path: '/tmp/shot.png' }
+      ])
+    })
+    // The body the message stores: the chip as its numbered marker, trailing whitespace gone.
+    const prompt = vi.mocked(transport.send).mock.calls[0]![0]
+    const stored = structuredAgentSessionSendBody(prompt, [
+      { path: '/tmp/shot.png', previewUri: '' }
+    ])
+      .blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n')
+    expect(stored).toContain('[Image #1] Why this spot?')
+    const rebuilt = nativeChatReplyTargetFromSentText(stored, scope).target!
+    expect(rebuilt.messageId).toBe('m-second')
+    const duplicate = (id: string) => ({
+      id,
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: target.excerpt }]
+    })
+    expect(
+      nativeChatReplyRevealId(
+        rebuilt,
+        () => true,
+        () => [duplicate('m-first'), duplicate('m-second')]
+      )
+    ).toBe('m-second')
+    // Only the other duplicate loaded: unavailable, never that one.
+    expect(
+      nativeChatReplyRevealId(
+        rebuilt,
+        (id) => id === 'm-first',
+        () => [duplicate('m-first')]
+      )
+    ).toBeNull()
+  })
+
   it('a refused structured send records nothing', async () => {
     localStorage.clear()
     resetNativeChatReplySourcesForTests()
@@ -449,7 +500,7 @@ describe('remembering which message a reply answered', () => {
       await send('Why blue?')
     })
     expect(
-      nativeChatReplySourceOf(withNativeChatReplyContext('Why blue?', target, 'Codex'))
+      nativeChatReplySourceOf(scope, withNativeChatReplyContext('Why blue?', target, 'Codex'))
     ).toBeUndefined()
   })
 
@@ -488,7 +539,7 @@ describe('remembering which message a reply answered', () => {
       result.current()
     })
     const quoted = withNativeChatReplyContext('Why blue?', target, 'Codex')
-    expect(nativeChatReplySourceOf(quoted)).toBeUndefined()
+    expect(nativeChatReplySourceOf('pane:unsent', quoted)).toBeUndefined()
     expect(readNativeChatReplyTarget('pane:unsent')?.messageId).toBe('m-original')
   })
 
@@ -498,9 +549,9 @@ describe('remembering which message a reply answered', () => {
       { author: 'agent', excerpt: 'Done.' },
       'Claude'
     )
-    rememberNativeChatReplySource(sent, 'm-first')
-    expect(nativeChatReplySourceOf(sent)).toBe('m-first')
-    rememberNativeChatReplySource(sent, 'm-second')
-    expect(nativeChatReplySourceOf(sent)).toBe(NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS)
+    rememberNativeChatReplySource(scope, sent, 'm-first')
+    expect(nativeChatReplySourceOf(scope, sent)).toBe('m-first')
+    rememberNativeChatReplySource(scope, sent, 'm-second')
+    expect(nativeChatReplySourceOf(scope, sent)).toBe(NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS)
   })
 })

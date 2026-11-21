@@ -16,10 +16,7 @@ import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
-import {
-  SkillRefLimitError,
-  structuredAgentSessionStoredText
-} from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { SkillRefLimitError } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   promptHasInteractionModeSkill,
   promptSkillRefs
@@ -33,7 +30,10 @@ import {
   structuredAgentSessionCommandChangesConversation
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
+import {
+  dispatchNativeChatStructuredComposerText,
+  nativeChatStructuredStoredPrompt
+} from './native-chat-structured-composer-dispatch'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
@@ -263,7 +263,11 @@ export function useNativeChatStructuredComposerSend({
           // one was picked meanwhile.
           if (reply) {
             // Keyed by the words the message stores, as Rewind and a queued edit read them back.
-            rememberNativeChatReplySource(structuredAgentSessionStoredText(text), reply.messageId)
+            rememberNativeChatReplySource(
+              draftScopeKey,
+              nativeChatStructuredStoredPrompt(text, attachments),
+              reply.messageId
+            )
           }
           return true
         })

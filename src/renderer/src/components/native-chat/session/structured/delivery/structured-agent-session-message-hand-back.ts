@@ -53,7 +53,7 @@ export function returnMessageToComposer(
   // A returned reply comes back as the user's words with its reply strip; when the box already
   // answers another message, the words keep their quote so the context isn't lost.
   const sent = structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks })
-  const { rest, target: reply } = nativeChatReplyTargetFromSentText(sent)
+  const { rest, target: reply } = nativeChatReplyTargetFromSentText(sent, composerScopeKey)
   const sentText = reply && !restoreNativeChatReplyTarget(composerScopeKey, reply) ? sent : rest
   const text = promptMarkersToImageReferences(sentText, imageIds)
   if (text === '' && images.length === 0) {

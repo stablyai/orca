@@ -202,11 +202,11 @@ export function useNativeChatPtyComposerSend(args: {
           if (outcome) {
             void outcome.then((result) => {
               if (result !== 'not-submitted') {
-                rememberNativeChatReplySource(text, reply.messageId)
+                rememberNativeChatReplySource(args.draftScopeKey, text, reply.messageId)
               }
             })
           } else {
-            rememberNativeChatReplySource(text, reply.messageId)
+            rememberNativeChatReplySource(args.draftScopeKey, text, reply.messageId)
           }
         }
         // A shown message returns as "not sent → Edit" with its quote; without one, nothing returns

@@ -21,6 +21,11 @@ import {
   updateNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
+import {
+  rememberNativeChatReplySource,
+  resetNativeChatReplySourcesForTests
+} from '../../composer/reply/native-chat-reply-sources'
+import { returnMessageToComposer } from '../../session/structured/delivery/structured-agent-session-message-hand-back'
 
 const SENT = withNativeChatReplyContext(
   'Why blue?',
@@ -36,6 +41,7 @@ const queued = () => ({
 beforeEach(() => {
   localStorage.clear()
   resetNativeChatReplyTargetsForTests()
+  resetNativeChatReplySourcesForTests()
   clearNativeChatComposerDraftsForTests()
 })
 
@@ -96,4 +102,55 @@ it('a queued edit’s reply is never saved and leaves nothing behind once the ed
   discardNativeChatQueuedEdit(edit)
   expect(readNativeChatReplyTarget(edit.scopeKey)).toBeNull()
   expect(nativeChatReplyCustody(edit.scopeKey)).toBe(0)
+})
+
+it('an edit answering A handed back to a box answering B with the same words keeps A, and B stays', () => {
+  // Two answers with identical words: only their ids tell them apart.
+  setNativeChatReplyTarget('agent-session:same', {
+    id: 'b',
+    messageId: 'm-b',
+    author: 'agent',
+    excerpt: 'Updated the cards.',
+    agentLabel: 'Claude'
+  })
+  rememberNativeChatReplySource('agent-session:same', SENT, 'm-a')
+  const edit = createNativeChatQueuedEditDraft(queued(), 'agent-session:same')
+  expect(readNativeChatReplyTarget(edit.scopeKey)?.messageId).toBe('m-a')
+  const edited = 'Why blue, really?'
+  updateNativeChatComposerDraft(
+    edit.scopeKey,
+    { text: edited, document: promptTextContent(edited) },
+    'immediate'
+  )
+  handBackNativeChatQueuedEdit(edit)
+  // A is not B: its quote stays in the words, and the strip keeps answering B.
+  expect(readNativeChatComposerDraft('agent-session:same').text).toBe(
+    SENT.replace('Why blue?', edited)
+  )
+  expect(readNativeChatReplyTarget('agent-session:same')?.messageId).toBe('m-b')
+})
+
+it('a rewound reply to A into a box answering B with the same words keeps A, and B stays', () => {
+  setNativeChatReplyTarget('agent-session:rewind', {
+    id: 'b',
+    messageId: 'm-b',
+    author: 'agent',
+    excerpt: 'Updated the cards.',
+    agentLabel: 'Claude'
+  })
+  rememberNativeChatReplySource('agent-session:rewind', SENT, 'm-a')
+  returnMessageToComposer('agent-session:rewind', 'rewound', [{ type: 'text', text: SENT }])
+  expect(readNativeChatComposerDraft('agent-session:rewind').text).toBe(SENT)
+  expect(readNativeChatReplyTarget('agent-session:rewind')?.messageId).toBe('m-b')
+  // Its own reply handed back again (same original) is found already there.
+  setNativeChatReplyTarget('agent-session:again', {
+    id: 'a',
+    messageId: 'm-a',
+    author: 'agent',
+    excerpt: 'Updated the cards.',
+    agentLabel: 'Claude'
+  })
+  rememberNativeChatReplySource('agent-session:again', SENT, 'm-a')
+  returnMessageToComposer('agent-session:again', 'rewound', [{ type: 'text', text: SENT }])
+  expect(readNativeChatComposerDraft('agent-session:again').text).toBe('Why blue?')
 })
