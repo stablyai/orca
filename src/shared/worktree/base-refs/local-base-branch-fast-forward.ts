@@ -9,7 +9,7 @@ type BranchUse = { reserved: boolean; ownerPath?: string; sharedCheckout?: true 
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
-  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when more than one does. `occupancyOnly` callers only need to know it is checked out. */
+  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when no one checkout of the branch itself can be fast-forwarded (several share it, or one has the branch it aliases). `occupancyOnly` callers only need to know it is checked out. */
   readBranchUse: (repo: string, ref: string, occupancyOnly?: boolean) => Promise<BranchUse>
   /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
   updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>

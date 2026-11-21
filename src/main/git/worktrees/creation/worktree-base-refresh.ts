@@ -18,6 +18,7 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { hasLinkedPlaceholderHead, isSamePath, readGitDirState } from './git-dir-branch-state'
 import { resolveAliasedBranch, resolveBranchCheckouts } from './branch-checkout-resolution'
 import { readOwnerCheckoutPath } from './checkout-dir-from-files'
+import { parseRemoteTrackingLocalBaseRef } from './remote-tracking-local-base-ref'
 import {
   translateWslOutputPath,
   translateWslOutputPaths
@@ -35,39 +36,6 @@ const runPerLocalBaseBranch = createCoalescingKeyedRunner<LocalBaseBranchFastFor
 
 // One checkout fast-forward per repo; creates during one share a single follow-up to the latest remote ref.
 const runPerRepoCheckoutFastForward = createCoalescingKeyedRunner<void>()
-
-export function parseRemoteTrackingLocalBaseRef(
-  baseBranch: string,
-  remoteTrackingRef: string,
-  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
-): { baseRef: string; localBranch: string; fullRef: string } | undefined {
-  if (remoteTrackingBase?.ref === remoteTrackingRef) {
-    return {
-      baseRef: remoteTrackingBase.base,
-      localBranch: remoteTrackingBase.branch,
-      fullRef: `refs/heads/${remoteTrackingBase.branch}`
-    }
-  }
-
-  const remoteRefPrefix = 'refs/remotes/'
-  if (!remoteTrackingRef.startsWith(remoteRefPrefix)) {
-    return undefined
-  }
-
-  // Only proven remote-tracking refs warrant refresh warnings, not slash-named local branches.
-  const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
-  const slashIndex = shortRemoteRef.indexOf('/')
-  if (slashIndex <= 0) {
-    return undefined
-  }
-
-  const localBranch = shortRemoteRef.slice(slashIndex + 1)
-  return {
-    baseRef: baseBranch,
-    localBranch,
-    fullRef: `refs/heads/${localBranch}`
-  }
-}
 
 export async function refreshLocalBaseRefForWorktreeCreate(
   repoPath: string,
@@ -143,8 +111,12 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   }
   const refs = { repoPath, fullRef: parsed.fullRef, remoteTrackingRef }
   const git = localBaseBranchGit(options)
-  const inspection = await inspectLocalBaseBranch(git, refs, { occupancyOnly: true })
-  return inspection.status === 'behind'
+  // Advisory: a stalled file read must not hold the create, as Git's own deadline once bounded the listing.
+  const inspection = await waitAtMost(
+    inspectLocalBaseBranch(git, refs, { occupancyOnly: true }),
+    LOCAL_BASE_REF_REFRESH_WAIT_MS
+  )
+  return inspection?.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
     : undefined
 }
@@ -234,19 +206,24 @@ function localBaseBranchGit(
         return { reserved: false, ownerPath: repoPath }
       }
       const [onlyOwner, ...others] = use.kind === 'owned' ? use.gitDirs : []
-      const ownerPath = onlyOwner && others.length === 0 ? await locate(onlyOwner) : undefined
+      // No caller acts on these paths: several checkouts, or one of the branch an alias names, have nothing to fast-forward.
+      const shared = { reserved: false, ownerPath: repoPath, sharedCheckout: true } as const
+      if (others.length > 0 || (onlyOwner && branch !== fullRef)) {
+        return shared
+      }
+      const ownerPath = onlyOwner ? await locate(onlyOwner) : undefined
       if (ownerPath !== undefined) {
         return { reserved: false, ownerPath }
-      }
-      // No caller acts on a shared checkout's path: the refresh and follow-up skip it.
-      if (others.length > 0) {
-        return { reserved: false, ownerPath: repoPath, sharedCheckout: true }
       }
       // What the files cannot tell: Git's listing decides.
       const owner = (await listWorktrees(repoPath)).find(
         (wt) => wt.branch === fullRef || wt.branch === branch
       )
-      return { reserved: false, ...(owner ? { ownerPath: owner.path } : {}) }
+      return !owner
+        ? { reserved: false }
+        : owner.branch === fullRef
+          ? { reserved: false, ownerPath: owner.path }
+          : shared
     },
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)

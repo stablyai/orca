@@ -19,6 +19,7 @@ vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importO
 }))
 
 import {
+  getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   LOCAL_BASE_REF_REFRESH_WAIT_MS,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
@@ -220,4 +221,24 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     expect(mutationCalls()).toHaveLength(1)
     warn.mockRestore()
   })
+})
+
+it('gives up on a stalled update suggestion after the bound instead of holding the create', async () => {
+  vi.useFakeTimers()
+  gitExecFileAsyncMock.mockReset()
+  gitExecFileAsyncMock.mockImplementation(() => new Promise(() => {}))
+  let result: unknown = 'pending'
+
+  const suggestion = getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+    '/repo',
+    'origin/main',
+    'refs/remotes/origin/main'
+  ).then((value) => (result = value))
+  await vi.advanceTimersByTimeAsync(LOCAL_BASE_REF_REFRESH_WAIT_MS - 1)
+  expect(result).toBe('pending')
+  await vi.advanceTimersByTimeAsync(1)
+  await suggestion
+
+  expect(result).toBeUndefined()
+  vi.useRealTimers()
 })
