@@ -5,6 +5,7 @@
 // events: the owner's comments after the ask, up to the agent's next question or the item's close.
 import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
+  botItemAnswerHead,
   botItemQuestionLine,
   botItemQuestionShape,
   botItemQuickReplyText,
@@ -25,11 +26,21 @@ export type BotItemQuestionAnswers = {
   waiting: boolean
 }
 
+export type BotItemQuestionReply = {
+  questionId: string
+  decision: BotItemDecision
+  /** The quoted line's index in the ask. */
+  line: number
+  lines: number[]
+  byOrder: boolean
+}
+
 export type BotItemQuestionPairing = {
   /** By the ask's event id. */
   questions: Map<string, BotItemQuestionAnswers>
-  /** By the owner comment's event id: the ask and the line it answered. */
-  replies: Map<string, { questionId: string; decision: BotItemDecision }>
+  /** By the owner comment's event id: the ask, the line it quotes, and every line it answered (only
+   *  by order: a comment naming no line). */
+  replies: Map<string, BotItemQuestionReply>
 }
 
 function isClose(event: BotItemEvent): boolean {
@@ -103,10 +114,39 @@ export function botItemQuestionPairing(
   events: readonly BotItemEvent[]
 ): BotItemQuestionPairing {
   const questions = new Map<string, BotItemQuestionAnswers>()
-  const replies = new Map<string, { questionId: string; decision: BotItemDecision }>()
+  const replies = new Map<string, BotItemQuestionReply>()
   let current: { id: string; entry: BotItemQuestionAnswers } | null = null
   // Every question line asked on the item so far.
   const asked = new Set<string>()
+  const pair = (
+    target: { id: string; entry: BotItemQuestionAnswers },
+    event: BotItemEvent,
+    lines: readonly number[],
+    guessed: boolean
+  ): void => {
+    const { shape, answers, byOrder } = target.entry
+    for (const line of lines) {
+      const taken = answers[line]
+      if (taken && byOrder[line]) {
+        // Named now: the comment read by order is a comment of its own again.
+        replies.delete(taken.id)
+      } else if (taken) {
+        continue
+      }
+      answers[line] = event
+      byOrder[line] = guessed
+    }
+    const quoted = quotedLine(shape, event, lines)
+    if (quoted !== undefined) {
+      replies.set(event.id, {
+        questionId: target.id,
+        decision: shape.decisions[quoted]!,
+        line: quoted,
+        lines: [...lines],
+        byOrder: guessed
+      })
+    }
+  }
   for (const event of events) {
     if (isClose(event) || isNewQuestion(event)) {
       // An ask's own Needs you move comes right after it, in the same write: its window stays open.
@@ -128,9 +168,10 @@ export function botItemQuestionPairing(
           waiting: false
         }
         questions.set(event.id, entry)
-        for (const decision of shape.decisions) {
+        shape.decisions.forEach((decision, index) => {
           asked.add(botItemQuestionLine(decision.question))
-        }
+          asked.add(botItemAnswerHead(shape, index))
+        })
         current = { id: event.id, entry }
       }
       continue
@@ -138,22 +179,13 @@ export function botItemQuestionPairing(
     if (!current) {
       continue
     }
-    const { shape, answers, byOrder } = current.entry
     const { lines, byOrder: guessed } = answeredLines(current.entry, event, asked)
-    for (const line of lines) {
-      const taken = answers[line]
-      if (taken && byOrder[line]) {
-        // Named now: the comment read by order is a comment of its own again.
-        replies.delete(taken.id)
-      } else if (taken) {
-        continue
-      }
-      answers[line] = event
-      byOrder[line] = guessed
-    }
-    const quoted = quotedLine(shape, event, lines)
-    if (quoted !== undefined) {
-      replies.set(event.id, { questionId: current.id, decision: shape.decisions[quoted]! })
+    const earlier = lines.length === 0 ? earlierAsk(questions, current, event, asked) : null
+    if (earlier) {
+      // Answers held for an ask the agent replaced, sent once it asked again: they answer that ask.
+      pair(earlier, event, earlier.lines, false)
+    } else {
+      pair(current, event, lines, guessed)
     }
   }
   if (current) {
@@ -168,6 +200,37 @@ export function botItemQuestionPairing(
       (item.question?.eventId === current.id || started)
   }
   return { questions, replies }
+}
+
+/** The latest earlier ask whose open lines a comment names: a comment of only "Question → answer"
+ *  lines, none of them the current ask's. */
+function earlierAsk(
+  questions: ReadonlyMap<string, BotItemQuestionAnswers>,
+  current: { id: string; entry: BotItemQuestionAnswers },
+  reply: BotItemEvent,
+  asked: ReadonlySet<string>
+): { id: string; entry: BotItemQuestionAnswers; lines: number[] } | null {
+  const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
+  if (
+    Array.isArray(reply.data.decisions) ||
+    !answersAskedQuestions(text, asked) ||
+    botItemNamedAnswers(current.entry.shape, text).some((words) => words !== null)
+  ) {
+    return null
+  }
+  for (const [id, entry] of [...questions].toReversed()) {
+    if (id === current.id || entry.shape.decisions.length < 2) {
+      continue
+    }
+    const named = botItemNamedAnswers(entry.shape, text)
+    const lines = named.flatMap((words, index) =>
+      words !== null && (!entry.answers[index] || entry.byOrder[index]) ? [index] : []
+    )
+    if (lines.length > 0) {
+      return { id, entry, lines }
+    }
+  }
+  return null
 }
 
 /** The line a reply quotes: the one its image is on, else the last it answers (answers held for

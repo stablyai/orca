@@ -29174,6 +29174,9 @@
         "moved": "moved this to",
         "noComments": "No comments yet.",
         "notSent": "Not sent.",
+        "notSentYet": "Not sent yet",
+        "sendNow": "Send now",
+        "answerPlace": "{{n}} of {{total}} ·",
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
@@ -29364,6 +29367,8 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "changeAnswer": "Change this answer",
+        "goToAnswer": "Go to your answer",
         "next": "Next question",
         "notSentYet": "not sent yet",
         "previous": "Previous question",

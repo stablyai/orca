@@ -1,7 +1,8 @@
-// The waiting ask of several questions, one line at a time: the lines answered so far fold above as
-// "Question → answer" (a held one reopens on click), then the open line with ‹ 2 of 4 › and its quick
-// replies. A quick reply answers the line and the step moves on; Type your answer leads to the box,
-// whose Enter answers the same line.
+// The waiting ask of several questions, one line at a time: the lines answered so far fold above, muted
+// (one sent leads to your answer; one held here, "not sent yet", reopens on click), then the open line
+// with ‹ 2 of 4 › and its quick replies. A quick reply answers the line and the step moves on; Type
+// your answer leads to the box, whose Enter answers the same line. The held answers show in your own
+// card at the end of Activity.
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -11,7 +12,11 @@ import {
   type BotItemQuestionShape,
   type BotItemQuickReply
 } from '../../../../../shared/bots/bot-item-ask'
+import type { BotItemHeldAnswer } from '../../../../../shared/bots/bot-item-answer-lines'
+import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
+import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { BotItemMarkdown } from './BotItemMarkdown'
+import type { BotItemJumpTarget } from './bot-item-jump'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
 import { BOT_ITEM_CHIPS_ATTRIBUTE, useBotItemChipStacked } from './use-bot-item-chip-stacked'
 
@@ -84,39 +89,68 @@ export function BotItemChipWords({
   )
 }
 
-/** "Question → answer", muted: an answered line, or one held on this device ("not sent yet") that
- *  reopens on click. */
-export function BotItemAnswerLine({
+/** Where a jump from an answer lands: the ask's line, by `${askId}:${index}`. */
+export const BOT_ITEM_QUESTION_LINE_ATTRIBUTE = 'data-bot-item-question-line'
+
+/** An answered line, muted, with nothing of the answer: a click leads to the answer's own card. */
+export function BotItemAnsweredQuestion({
   question,
-  words,
+  place,
   onClick
 }: {
   question: string
-  words: string
+  /** The line's `${askId}:${index}`, where it is a jump's target itself. */
+  place?: string
   onClick?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const content = (
-    <>
-      {botItemQuestionLine(question)} →{' '}
-      <span className="text-foreground/72 [overflow-wrap:anywhere]">{words}</span>
-      {onClick ? <> · {t('bots.items.ask.notSentYet', 'not sent yet')}</> : null}
-    </>
-  )
-  const line = 'block w-full text-left text-[13px] leading-[19px] text-muted-foreground'
-  return onClick ? (
+  return (
     <button
       type="button"
-      className={cn(
-        line,
-        'rounded-sm outline-none hover:[&>span]:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50'
-      )}
+      {...(place ? { [BOT_ITEM_QUESTION_LINE_ATTRIBUTE]: place } : {})}
+      title={t('bots.items.ask.goToAnswer', 'Go to your answer')}
+      disabled={!onClick}
+      className="block w-full rounded-sm text-left text-[13px] leading-[19px] font-medium text-muted-foreground outline-none [overflow-wrap:anywhere] hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring/50 disabled:hover:text-muted-foreground"
       onClick={onClick}
     >
-      {content}
+      {botItemQuestionLine(question)}
     </button>
-  ) : (
-    <p className={cn(line, 'whitespace-pre-line')}>{content}</p>
+  )
+}
+
+/** A line answered on this device, not sent yet: "Question · not sent yet", or with the answer's
+ *  words where no card of yours shows them (held for an ask the agent no longer waits on). A click
+ *  reopens it. */
+export function BotItemHeldQuestion({
+  question,
+  words,
+  place,
+  onClick
+}: {
+  question: string
+  words?: string
+  /** The line's `${askId}:${index}`, where it is a jump's target itself. */
+  place?: string
+  onClick: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <button
+      type="button"
+      {...(place ? { [BOT_ITEM_QUESTION_LINE_ATTRIBUTE]: place } : {})}
+      title={t('bots.items.ask.changeAnswer', 'Change this answer')}
+      className="block w-full rounded-sm text-left text-[13px] leading-[19px] text-muted-foreground outline-none [overflow-wrap:anywhere] hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring/50"
+      onClick={onClick}
+    >
+      {botItemQuestionLine(question)}
+      {words ? (
+        <>
+          {' '}
+          → <span className="text-foreground/72">{words}</span>
+        </>
+      ) : null}{' '}
+      · {t('bots.items.ask.notSentYet', 'not sent yet')}
+    </button>
   )
 }
 
@@ -154,53 +188,70 @@ function StepNav({ steps }: { steps: BotItemQuestionSteps }): React.JSX.Element 
 
 export function BotItemQuestionStep({
   shape,
-  answered,
+  askId,
+  answers,
   steps,
-  actions
+  actions,
+  onJump
 }: {
   shape: BotItemQuestionShape
-  /** Per line, the words a posted comment answered it with. */
-  answered: readonly (string | null)[]
+  askId: string
+  /** Per line, the owner comment that answered it. */
+  answers: readonly (BotItemEvent | null)[]
   steps: BotItemQuestionSteps
   actions: BotItemQuickReplyActions
+  onJump?: (target: BotItemJumpTarget) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const { current } = steps
   const decision = shape.decisions[current]!
   const held = steps.held[current] ?? null
-  const typed = held !== null && !decision.replies.some((reply) => reply.label === held)
+  const typed = held !== null && !decision.replies.some((reply) => reply.label === held.words)
   const folded = shape.decisions.flatMap((line, index) => {
-    const words = index === current ? null : (answered[index] ?? steps.held[index])
-    return words ? [{ line, index, words, reopens: !answered[index] }] : []
+    if (index === current) {
+      return []
+    }
+    const answer = steps.lines.includes(index) ? null : answers[index]
+    if (answer) {
+      return [
+        <BotItemAnsweredQuestion
+          key={line.question}
+          question={line.question}
+          place={`${askId}:${index}`}
+          onClick={onJump ? () => onJump({ eventId: answer.id }) : undefined}
+        />
+      ]
+    }
+    return steps.held[index]
+      ? [
+          <BotItemHeldQuestion
+            key={line.question}
+            question={line.question}
+            place={`${askId}:${index}`}
+            onClick={() => steps.edit(index)}
+          />
+        ]
+      : []
   })
   return (
     <>
-      {folded.length > 0 ? (
-        <div className="mb-3 flex flex-col gap-1">
-          {folded.map(({ line, index, words, reopens }) => (
-            <BotItemAnswerLine
-              key={line.question}
-              question={line.question}
-              words={words}
-              onClick={reopens ? () => steps.go(index) : undefined}
-            />
-          ))}
-        </div>
-      ) : null}
+      {folded.length > 0 ? <div className="mb-3 flex flex-col gap-1.5">{folded}</div> : null}
       {/* Keyed by the line: each step fades in where the last one was. */}
       <div
         key={current}
-        className="duration-[180ms] animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none"
+        {...{ [BOT_ITEM_QUESTION_LINE_ATTRIBUTE]: `${askId}:${current}` }}
+        className="rounded-sm duration-[180ms] animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none"
       >
         <div className="flex items-start gap-2">
           <div className={cn('min-w-0 flex-1', BOT_ITEM_OPEN_QUESTION)}>
             <BotItemMarkdown text={decision.question} />
           </div>
-          <StepNav steps={steps} />
+          {/* The last open line has nowhere to step. */}
+          {steps.lines.length > 1 ? <StepNav steps={steps} /> : null}
         </div>
         <div {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }} className="mt-2.5 flex flex-wrap gap-2">
           {decision.replies.map((reply) => {
-            const picked = held === reply.label
+            const picked = held?.words === reply.label
             // Filled until the owner picks one on this line; then the pick stands out instead.
             const filled = reply.recommended && held === null
             return (
@@ -230,14 +281,16 @@ export function BotItemQuestionStep({
             )
           })}
           {typed ? (
-            // Your words for this line: back into the box to change them.
+            // Your words for this line: back into the box, its images too, to change them.
             <button
               type="button"
               className={cn(BOT_ITEM_CHIP, CHIP_ACTION, CHIP_PICKED)}
-              onClick={() => actions.edit(held)}
+              onClick={() => steps.edit(current)}
             >
               <Pencil className="size-3 shrink-0" />
-              <span className="min-w-0 [overflow-wrap:anywhere]">{held}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                {botItemHeldWords(held) || held.paths[0]?.split(/[\\/]/).pop()}
+              </span>
             </button>
           ) : (
             <button
@@ -257,4 +310,9 @@ export function BotItemQuestionStep({
       </div>
     </>
   )
+}
+
+/** A held answer's words as they read, without the [Image #N] of its images. */
+export function botItemHeldWords(held: BotItemHeldAnswer): string {
+  return stripSentImagePromptMarkers(held.words, held.paths.length).trim()
 }

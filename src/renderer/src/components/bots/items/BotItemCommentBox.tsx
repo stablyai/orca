@@ -47,6 +47,7 @@ import {
   projectNativeChatPastedText
 } from '../../native-chat/paste/native-chat-composer-pasted-text-references'
 import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { fillBotItemCommentDraft, restoreBotItemCommentDraft } from './bot-item-comment-fill'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
@@ -71,8 +72,8 @@ export type BotItemCommentBoxHandle = {
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
   /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden. */
-  fill: (text: string, plain?: boolean) => void
+   *  of its own, with "Replying to" hidden. With `paths`, its [Image #N] come back as those images. */
+  fill: (text: string, plain?: boolean, paths?: readonly string[]) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
 }
@@ -242,13 +243,13 @@ export function BotItemCommentBox({
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
     },
-    fill: (text, plain) => {
+    fill: (text, plain, paths = []) => {
       if (plain) {
         reply.hide()
       }
-      setDraft(`${text} `)
+      const filled = fillBotItemCommentDraft(scopeKey, text, paths)
       if (input.current) {
-        input.current.value = `${text} `
+        input.current.value = filled
       }
       caretToEnd()
     }
@@ -278,6 +279,7 @@ export function BotItemCommentBox({
     }
     setNotice(null)
     onSend(text, paths, reply.quote?.id ?? null)
+    restoreBotItemCommentDraft(scopeKey)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {

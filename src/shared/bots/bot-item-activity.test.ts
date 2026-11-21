@@ -2,8 +2,6 @@ import { expect, it } from 'vitest'
 import type { BotItemEvent } from './bot-items'
 import { makeTestBotItem } from './bot-item.test-fixture'
 import { botItemActivity } from './bot-item-activity'
-import { botItemAnswerWords } from './bot-item-answer-lines'
-import { botItemQuestionShape } from './bot-item-ask'
 
 const BOT = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
 const OWNER = { kind: 'owner' } as const
@@ -116,12 +114,15 @@ it('keeps each question of an ask waiting until its own reply, a quick reply or 
 
   expect(halfway).toMatchObject([
     { key: 'e2', waiting: true, answers: [null, { id: 'e4' }] },
-    { key: 'e4', replyTo: { eventId: 'e2', text: 'Tell the team?' } }
+    {
+      key: 'e4',
+      answered: { askId: 'e2', lines: [{ index: 1, question: 'Tell the team?', words: 'No' }] }
+    }
   ])
   expect(done).toMatchObject([
     { key: 'e2', waiting: false, answers: [{ id: 'e6' }, { id: 'e4' }] },
     { key: 'e4' },
-    { key: 'e6', replyTo: { eventId: 'e2', text: 'Ship it?' } }
+    { key: 'e6', replyTo: { eventId: 'e2', text: 'Ship it?', line: 0 } }
   ])
 })
 
@@ -140,11 +141,11 @@ it('keeps a quick reply edited before sending with the question it names', () =>
 
   expect(entries).toMatchObject([
     { key: 'e2', waiting: true, answers: [null, { id: 'e4' }] },
-    { key: 'e4', replyTo: { text: 'Tell the team?' } }
+    { key: 'e4', answered: { lines: [{ index: 1, words: 'No, tell them tomorrow' }] } }
   ])
 })
 
-it('reads one comment answering several questions, a line each, as the answer to every line it names', () => {
+it('reads one comment answering several questions as the answer to every line it names, each line quoted in order', () => {
   const ask = {
     questions: [
       { prompt: 'Ship it?', options: [{ label: 'Ship' }, { label: 'Wait' }] },
@@ -164,11 +165,23 @@ it('reads one comment answering several questions, a line each, as the answer to
 
   expect(entries).toMatchObject([
     { key: 'e2', waiting: false, answers: [{ id: 'e4' }, { id: 'e4' }, { id: 'e4' }] },
-    { key: 'e4', onAsk: true }
+    {
+      key: 'e4',
+      answered: {
+        askId: 'e2',
+        total: 3,
+        lines: [
+          { index: 0, question: 'Ship it?', words: 'Wait' },
+          { index: 1, question: 'Tell the team?', words: 'Yes' },
+          { index: 2, question: 'Which day?', words: 'Friday' }
+        ],
+        rest: ''
+      }
+    }
   ])
 })
 
-it("never reads answers to an earlier ask's lines as the answer to the agent's new ask", () => {
+it("reads answers to an earlier ask's lines, sent after the agent asked again, as that ask's", () => {
   const first = {
     questions: [
       { prompt: 'Ship it?', options: [{ label: 'Ship' }] },
@@ -196,7 +209,12 @@ it("never reads answers to an earlier ask's lines as the answer to the agent's n
   )
 
   expect(entries.find((entry) => entry.key === 'e5')).toMatchObject({ answers: [null, null] })
-  expect(entries.find((entry) => entry.key === 'e7')).not.toHaveProperty('onAsk')
+  expect(entries.find((entry) => entry.key === 'e2')).toMatchObject({
+    answers: [{ id: 'e7' }, { id: 'e7' }]
+  })
+  expect(entries.find((entry) => entry.key === 'e7')).toMatchObject({
+    answered: { askId: 'e2', lines: [{ index: 0 }, { index: 1 }] }
+  })
 })
 
 it('gives a line a plain comment took by order to the comment that later names it', () => {
@@ -216,9 +234,9 @@ it('gives a line a plain comment took by order to the comment that later names i
   expect(entries).toMatchObject([
     { key: 'e2', waiting: false, answers: [{ id: 'e5' }, { id: 'e5' }] },
     { key: 'e4' },
-    { key: 'e5', onAsk: true }
+    { key: 'e5', answered: { lines: [{ index: 0 }, { index: 1 }] } }
   ])
-  expect(entries[1]).not.toHaveProperty('onAsk')
+  expect(entries[1]).not.toHaveProperty('answered')
 })
 
 it('reads a held answer by the question it names, with or without a question mark', () => {
@@ -248,7 +266,7 @@ it('reads a held answer by the question it names, with or without a question mar
   expect(named.find((entry) => entry.key === 'e5')).toMatchObject({ answers: [{ id: 'e7' }] })
 })
 
-it('quotes the line an answer with an image is on, and reads that line without its image mark', () => {
+it('quotes each line an answer gives, its image marks kept on their own line, and its own words after', () => {
   const ask = {
     questions: [
       { prompt: 'Fix Datadog?', options: [{ label: 'Yes' }] },
@@ -256,35 +274,99 @@ it('quotes the line an answer with an image is on, and reads that line without i
       { prompt: 'GitLab host field?', options: [{ label: 'Later' }] }
     ]
   }
-  const reply = {
-    text: 'Fix Datadog? → what do others do\nVercel: test it? → [Image #1] sign in works',
-    images: [{ path: '/store/shot.png', name: 'shot.png', bytes: 70 }]
+  const entries = botItemActivity(makeTestBotItem(6, { status: 'working' }), [
+    event('e2', 'commented', 200, { text: 'copy', ask }),
+    event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
+    owner('e4', 'commented', 250, {
+      text: 'Fix Datadog? → what do others do\nVercel: test it? → sign in works [Image #1]\nalso, ping me',
+      images: [{ path: '/store/shot.png', name: 'shot.png', bytes: 70 }]
+    })
+  ])
+
+  expect(entries[1]).toMatchObject({
+    key: 'e4',
+    answered: {
+      lines: [
+        { index: 0, question: 'Fix Datadog?', words: 'what do others do' },
+        { index: 1, question: 'Vercel: test it?', words: 'sign in works [Image #1]' }
+      ],
+      rest: 'also, ping me'
+    }
+  })
+  // The phone quotes the line its image is on.
+  expect(entries[1]).toMatchObject({
+    replyTo: { eventId: 'e2', text: 'Vercel: test it?', line: 1 }
+  })
+})
+
+it('keeps a second line for the same question in the words, as the correction the agent read', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [] },
+      { prompt: 'Which day?', options: [] }
+    ]
   }
   const entries = botItemActivity(makeTestBotItem(6, { status: 'working' }), [
     event('e2', 'commented', 200, { text: 'copy', ask }),
     event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
-    owner('e4', 'commented', 250, reply)
+    owner('e4', 'commented', 250, { text: 'Which day? → Friday\nWhich day? → Monday, sorry' })
   ])
 
-  expect(entries).toMatchObject([
-    { key: 'e2' },
-    { key: 'e4', replyTo: { eventId: 'e2', text: 'Vercel: test it?' } }
-  ])
-  expect(botItemAnswerWords(botItemQuestionShape({ ask }), 1, reply)).toBe('sign in works')
+  expect(entries[1]).toMatchObject({
+    answered: { lines: [{ index: 1, words: 'Friday' }], rest: 'Which day? → Monday, sorry' }
+  })
 })
 
-it('quotes the last line a comment carrying held answers gives', () => {
+it('reads questions that start the same way by their number, and in order where unnumbered', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Theme?\nDesktop', options: [] },
+      { prompt: 'Theme?\nPhone', options: [] }
+    ]
+  }
+  const read = (text: string) =>
+    botItemActivity(makeTestBotItem(6, { status: 'working' }), [
+      event('e2', 'commented', 200, { text: 'copy', ask }),
+      event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
+      owner('e4', 'commented', 250, { text })
+    ])[1]
+
+  expect(read('2. Theme? → dark')).toMatchObject({
+    answered: { lines: [{ index: 1, words: 'dark' }] }
+  })
+  expect(read('Theme? → light\nTheme? → dark')).toMatchObject({
+    answered: {
+      lines: [
+        { index: 0, words: 'light' },
+        { index: 1, words: 'dark' }
+      ]
+    }
+  })
+})
+
+it('pairs a comment still on its way as the answer to its lines, and lists it last', () => {
   const ask = {
     questions: [
       { prompt: 'Fix Datadog?', options: [{ label: 'Yes' }] },
       { prompt: 'Vercel: test it?', options: [{ label: 'Test it' }] }
     ]
   }
-  const entries = botItemActivity(makeTestBotItem(6, { status: 'working' }), [
-    event('e2', 'commented', 200, { text: 'copy', ask }),
-    event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
-    owner('e4', 'commented', 250, { text: 'Fix Datadog? → maybe\nVercel: test it? → works' })
-  ])
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'copy' }
+  })
+  const sent = owner('pending:1', 'commented', 999, { text: 'Fix Datadog? → Yes' })
+  const entries = botItemActivity(
+    item,
+    [
+      event('e2', 'commented', 200, { text: 'copy', ask }),
+      event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
+      event('e4', 'edited', 1500, { fields: {} })
+    ],
+    [sent]
+  )
 
-  expect(entries[1]).toMatchObject({ key: 'e4', replyTo: { text: 'Vercel: test it?' } })
+  expect(entries.map((entry) => entry.key)).toEqual(['e2', 'e4', 'pending:1'])
+  expect(entries[0]).toMatchObject({ waiting: true, answers: [{ id: 'pending:1' }, null] })
+  expect(entries[2]).toMatchObject({ answered: { lines: [{ index: 0, words: 'Yes' }] } })
 })

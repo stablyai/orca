@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { botItemNamedAnswers } from './bot-item-answer-lines'
+import { botItemLineImages, botItemNamedAnswers } from './bot-item-answer-lines'
 import type { BotItemQuestionShape } from './bot-item-ask'
 
 const shape: BotItemQuestionShape = {
@@ -18,4 +18,9 @@ describe('botItemNamedAnswers', () => {
       'eu'
     ])
   })
+})
+
+it('names each image once per line, and reads a marker in code as words', () => {
+  expect(botItemLineImages('see [Image #1] and again [Image #1]', 1)).toEqual([0])
+  expect(botItemLineImages('chat writes `[Image #1]`', 1)).toEqual([])
 })

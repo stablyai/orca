@@ -298,7 +298,7 @@ const answeredView = {
   ]
 }
 
-// After a quick reply: the line reads "Question → answer", muted, and the reply has no card of its own.
+// After a quick reply: the line is muted with nothing of the answer, which shows as your own card.
 export const answeredQuestion = defineFixture({
   width: 360,
   render: () => (

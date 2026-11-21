@@ -3,8 +3,8 @@
 // filled; the card's Needs you tag carries the color.
 // One question: a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
 // in the comment box to add to first; Type your answer leads to the box. Several: one line at a time
-// (BotItemQuestionStep), answers held until the last. Answered, a line reads "Question → answer", muted,
-// and the answer's own card is not drawn again.
+// (BotItemQuestionStep), answers held until they post. Answered, a line is muted with nothing of the
+// answer, which is the owner's own card further down; a click leads there.
 import { Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -12,108 +12,115 @@ import {
   botItemQuickReplyText,
   type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
-import {
-  botItemAnswersText,
-  botItemAnswerWords
-} from '../../../../../shared/bots/bot-item-answer-lines'
+import { botItemAnswersComment } from '../../../../../shared/bots/bot-item-answer-lines'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import {
   BOT_ITEM_CHIP,
-  BotItemAnswerLine,
+  BOT_ITEM_QUESTION_LINE_ATTRIBUTE,
+  BotItemAnsweredQuestion,
   BotItemChipWords,
   BOT_ITEM_CHIP_RECOMMENDED,
   BOT_ITEM_OPEN_QUESTION,
-  BotItemQuestionStep
+  BotItemHeldQuestion,
+  BotItemQuestionStep,
+  botItemHeldWords
 } from './BotItemQuestionStep'
+import type { BotItemJumpTarget } from './bot-item-jump'
 import { BOT_ITEM_CHIPS_ATTRIBUTE } from './use-bot-item-chip-stacked'
-import { useBotItemHeldAnswers, type BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { holdBotItemAnswer, useBotItemHeldAnswers } from './bot-item-held-answers'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
-const NO_HELD_SCOPE = 'bot-item-answers:none'
+const NO_HELD_SCOPES: readonly string[] = []
 
 export function BotItemQuestionLines({
   shape,
   askId,
-  heldScope,
+  heldScopes = NO_HELD_SCOPES,
   waiting,
   answers = NO_ANSWERS,
-  byOrder,
   actions,
+  onJump,
   className
 }: {
   shape: BotItemQuestionShape
   /** The ask's event id. */
   askId: string
-  /** Where this ask's held answers live on this device, for an ask of several questions. */
-  heldScope?: string
+  /** Per line, where its answer held on this device lives, for an ask of several questions. */
+  heldScopes?: readonly string[]
   /** The item waits on this question now. */
   waiting: boolean
   /** Per line, the owner comment that answered it. */
   answers?: readonly (BotItemEvent | null)[]
-  /** Per line, answered only by a comment naming no line: that comment shows as itself. */
-  byOrder?: readonly boolean[]
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
+  /** Leads from an answered line to its answer. */
+  onJump?: (target: BotItemJumpTarget) => void
   /** Its spacing from the body above; by default a gap under a body. */
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
-  // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
-  const stored = useBotItemHeldAnswers(heldScope ?? NO_HELD_SCOPE, shape)
-  const sent = actions?.sent?.askId === askId ? actions.sent.answers : null
-  const answered = shape.decisions.map((_, index) => {
-    // A line being stepped shows its held answer; with several questions, a comment that named no
-    // line shows as itself, not as the line's answer.
-    const answer =
-      steps?.lines.includes(index) || (several && byOrder?.[index]) ? null : answers[index]
-    return answer ? botItemAnswerWords(shape, index, answer.data) : (sent?.[index] ?? null)
-  })
+  // Answers held for an ask of an item closed since: each line's draft, until sent.
+  const stored = useBotItemHeldAnswers(heldScopes)
   const spacing = className ?? (shape.body.trim() ? 'mt-4' : undefined)
   if (waiting && several && steps && actions) {
     return (
       <div data-bot-item-question="waiting" className={spacing}>
-        <BotItemQuestionStep shape={shape} answered={answered} steps={steps} actions={actions} />
+        <BotItemQuestionStep
+          shape={shape}
+          askId={askId}
+          answers={answers}
+          steps={steps}
+          actions={actions}
+          onJump={onJump}
+        />
       </div>
     )
   }
-  const unsent = !waiting && heldScope && stored.held.some(Boolean) ? stored : null
+  const unsent = waiting ? [] : stored
   return (
     <div data-bot-item-question={waiting ? 'waiting' : 'closed'} className={spacing}>
       <div className={several ? 'space-y-1.5' : 'space-y-3'}>
         {shape.decisions.map((decision, index) => {
-          const words = answered[index]
+          const answer = answers[index]
           // Each line waits until its own reply; the agent stops waiting when it asks again or the item closes.
-          const open = waiting && !answers[index] && !words
-          const held = unsent?.held[index]
-          if (words) {
+          const open = waiting && !answer
+          const held = unsent[index]
+          const place = { [BOT_ITEM_QUESTION_LINE_ATTRIBUTE]: `${askId}:${index}` }
+          if (answer) {
             return (
-              <BotItemAnswerLine
-                key={decision.question}
-                question={decision.question}
-                words={words}
-              />
+              <div key={decision.question} {...place} className="rounded-sm outline-none">
+                <BotItemAnsweredQuestion
+                  question={decision.question}
+                  onClick={onJump ? () => onJump({ eventId: answer.id }) : undefined}
+                />
+              </div>
             )
           }
-          if (held && actions && unsent) {
+          if (held && actions) {
             return (
-              <BotItemAnswerLine
+              <BotItemHeldQuestion
                 key={decision.question}
                 question={decision.question}
-                words={held}
+                words={botItemHeldWords(held)}
                 // Not sent: into the box, to send as a comment.
                 onClick={() => {
-                  actions.recover(botItemAnswersText(shape, unsent.held))
-                  unsent.hold([])
+                  const { text, paths } = botItemAnswersComment(
+                    shape,
+                    shape.decisions.map((_, at) => (at === index ? held : null))
+                  )
+                  actions.recover(text, paths)
+                  holdBotItemAnswer(heldScopes[index]!, null)
                 }}
               />
             )
           }
           return (
             // A decision's question is unique within its ask.
-            <div key={decision.question}>
+            <div key={decision.question} {...place} className="rounded-sm outline-none">
               <div
                 className={cn(
                   open

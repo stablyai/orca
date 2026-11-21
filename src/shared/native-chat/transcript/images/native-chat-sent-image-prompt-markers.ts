@@ -114,6 +114,16 @@ function replaceSentImagePromptMarkers(
   return out.join('\n')
 }
 
+/** The numbers of the [Image #N] in `text`, in order, skipping literal ones in code. */
+export function sentImagePromptMarkerNumbers(text: string): number[] {
+  const numbers: number[] = []
+  replaceSentImagePromptMarkers(text, (number, marker) => {
+    numbers.push(number)
+    return marker
+  })
+  return numbers
+}
+
 /** Restore sent markers as image chips; leave out-of-range numbers literal. */
 export function promptMarkersToImageReferences(text: string, imageIds: readonly string[]): string {
   return replaceSentImagePromptMarkers(text, (number, marker) => {

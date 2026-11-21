@@ -8,6 +8,7 @@ import { fixtureCos as BOT } from '../../../component-fixtures/fixture-bot-panel
 import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/actions/native-chat-file-link-existence'
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemActivityList } from './BotItemActivityList'
 
 const ASKER = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
@@ -181,7 +182,7 @@ it('tags a question asked in prose Needs you too, while it is the item’s quest
   expect(screen.getByRole('article').textContent).not.toContain('Needs you')
 })
 
-it('shows an answer an older host recorded as a quoted comment, the question reading Question → pick', () => {
+it('shows an answer an older host recorded as a quoted comment, its question muted and leading to it', () => {
   const events: BotItemEvent[] = [
     ...WAITING,
     {
@@ -208,10 +209,10 @@ it('shows an answer an older host recorded as a quoted comment, the question rea
     />
   )
 
-  expect(screen.queryByRole('button', { name: /^Go ahead/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Go ahead' })).toBeNull()
   expect(screen.queryByText('Needs you')).toBeNull()
   const question = document.querySelector('[data-bot-item-question="closed"]')!
-  expect(question.textContent).toBe('Go ahead without the design review? → Wait')
+  expect(question.textContent).toBe('Go ahead without the design review?')
   expect(
     screen.getByRole('button', { name: /^Replying to: Go ahead without the design review\?/ })
   ).toBeTruthy()
@@ -258,4 +259,76 @@ it("shows an agent's comment files as file buttons that open as file links, and 
     `#orca-native-chat-file-path=${encodeURIComponent(file(9, 'install report.html'))}`
   )
   expect(screen.getByRole('link', { name: 'run.log' })).toBeTruthy()
+})
+
+it('quotes each line of an answer with its own image under it, and shows held answers as your card, not sent yet', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Which mascot?', options: [{ label: 'A1' }] },
+      { prompt: 'Anything off in dark?', options: [] },
+      { prompt: 'Ship it to everyone?', options: [] }
+    ]
+  }
+  const events: BotItemEvent[] = [
+    { id: 'e2', kind: 'commented', actor: ASKER, data: { text: 'Round 31.', ask }, at: 200 },
+    { id: 'e3', kind: 'status', actor: ASKER, data: { from: 'working', to: 'needs_you' }, at: 200 },
+    {
+      id: 'e4',
+      kind: 'commented',
+      actor: OWNER,
+      data: {
+        text: 'Which mascot? → A1\nAnything off in dark? → Next sits 2 px lower [Image #1]',
+        images: [{ path: '/store/dark.png', name: 'dark.png', bytes: 9 }]
+      },
+      at: 300
+    }
+  ]
+  const sendNow = vi.fn()
+  const edit = vi.fn()
+  const steps = {
+    askId: 'e2',
+    shape: botItemQuestionShape({ text: 'Round 31.', ask }),
+    held: [null, null, { words: 'Behind the flag [Image #1]', paths: ['/paste/flag.png'] }],
+    current: 2,
+    lines: [2],
+    go: vi.fn(),
+    answer: vi.fn(),
+    edit,
+    sendNow
+  }
+  render(
+    <BotItemActivityList
+      bot={BOT}
+      item={makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e2', text: 'x' } })}
+      events={events}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn(), steps }}
+    />
+  )
+
+  const line = (question: string) =>
+    screen.getByRole('button', { name: `Replying to: ${question}. Go to the question` })
+      .parentElement!
+  expect(line('Which mascot?').textContent).toBe('1 of 3 ·Which mascot?A1')
+  expect(line('Which mascot?').querySelector('[data-bot-item-comment-images]')).toBeNull()
+  expect(line('Anything off in dark?').textContent).toMatch(
+    /^2 of 3 ·Anything off in dark\?Next sits 2 px lower(dark\.png)+$/
+  )
+  const held = line('Ship it to everyone?').closest('[role="article"]')!
+  expect(held.textContent).toContain('Not sent yet')
+  expect(line('Ship it to everyone?').textContent).toMatch(
+    /^3 of 3 ·Ship it to everyone\?Behind the flag(flag\.png)+$/
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+  expect(sendNow).toHaveBeenCalledOnce()
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Replying to: Anything off in dark?. Go to the question' })
+  )
+  expect(document.activeElement?.getAttribute('data-bot-item-question-line')).toBe('e2:1')
+  expect(edit).not.toHaveBeenCalled()
+  // A held line opens its answer in the box, as well as leading to its question.
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Replying to: Ship it to everyone?. Go to the question' })
+  )
+  expect(edit).toHaveBeenCalledExactlyOnceWith(2)
 })

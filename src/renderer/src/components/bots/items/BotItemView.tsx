@@ -207,6 +207,9 @@ export function BotItemBody({
     jumpToLatest()
   }
   const sendLatest = useLatestHandler(sendComment)
+  const fillLatest = useLatestHandler((text: string, paths: readonly string[]) =>
+    comment.current?.fill(text, false, paths)
+  )
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
   const sourceTabId = useAppStore(
@@ -233,27 +236,25 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+  const { steps, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
     bot,
     item,
     view.events,
     sendLatest,
-    pending.shown
+    pending.shown,
+    fillLatest
   )
-  const quickReplies = useMemo(
-    () =>
-      deleted
-        ? undefined
-        : {
-            send: quick,
-            edit: (text: string) => comment.current?.fill(text),
-            recover: (text: string) => comment.current?.fill(text, true),
-            type: () => comment.current?.answer(),
-            steps,
-            sent
-          },
-    [deleted, comment, quick, steps, sent]
-  )
+  // The compiler memoizes it on `deleted` and `steps`; the box is read when a reply acts.
+  const quickReplies = deleted
+    ? undefined
+    : {
+        send: quick,
+        edit: (text: string, paths?: readonly string[]) => fillLatest(text, paths ?? []),
+        recover: (text: string, paths: readonly string[]) =>
+          comment.current?.fill(text, true, paths),
+        type: () => comment.current?.answer(),
+        steps
+      }
   // The waiting question's comment, with its words and quick replies, is read even when it is older
   // than the loaded page: earlier pages load until it shows.
   const questionId = item.question?.eventId
@@ -268,8 +269,9 @@ export function BotItemBody({
       loadEarlier()
     }
   }, [questionUnread, hasEarlier, earliest, loadEarlier])
+  // A reply on its way answers a question asked in prose; an ask's open lines still wait.
   const waitingOn =
-    waitingLine && !pending.shown.some(({ failed }) => !failed)
+    waitingLine && (steps || waitingLine.editing || !pending.shown.some(({ failed }) => !failed))
       ? { ...waitingLine, asker: item.owner.name ?? bot.name }
       : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
