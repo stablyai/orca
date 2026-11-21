@@ -87,6 +87,11 @@ function repeats(key: string, look: BotLookUpdate, landing: BotLookUpdate): BotL
   )
 }
 
+// Read through a function, since TypeScript keeps these fields narrowed to null across the await.
+function picksDuring(saves: LookSaves): Pick<LookSaves, 'repeated' | 'waiting'> {
+  return { repeated: saves.repeated, waiting: saves.waiting }
+}
+
 /** Saves `look` after any save already on its way; `onDrained` runs once nothing for this bot is left.
  *  `saved` is the bot's look as shown, so a look that changes nothing sends nothing. */
 export function saveBotLook(
@@ -146,8 +151,9 @@ export function saveBotLook(
       } else {
         unsure.delete(key)
       }
-      if (result === null && saves.repeated) {
-        saves.waiting = { ...saves.repeated, ...saves.waiting }
+      const { repeated, waiting } = picksDuring(saves)
+      if (result === null && repeated) {
+        saves.waiting = { ...repeated, ...waiting }
       }
     }
     lookSaves.delete(key)
