@@ -219,6 +219,17 @@ function FileExplorerFiles(): React.JSX.Element {
     startNew: inlineInputState.startNew
   })
 
+  const { inlineInput, startNew } = inlineInputState
+  const handleToolbarStartNew = useCallback(
+    (type: 'file' | 'folder') => {
+      if (!isFilesViewActive || !displayRootPath || inlineInput) {
+        return
+      }
+      startNew(type, displayRootPath, displayDepth)
+    },
+    [displayDepth, displayRootPath, inlineInput, isFilesViewActive, startNew]
+  )
+
   useFileExplorerScopeTransition({
     displayRootPath,
     activeWorktreeId,
@@ -257,6 +268,8 @@ function FileExplorerFiles(): React.JSX.Element {
           workspaceId={activeWorktreeId}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
+          canCreate={isFilesViewActive && displayRootPath !== null}
+          onStartNew={handleToolbarStartNew}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
