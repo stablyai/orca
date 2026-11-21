@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
@@ -8,7 +8,7 @@ import ProjectRow from './ProjectRow'
 import { ProjectItemsEmptyState } from '../view/ProjectViewStates'
 import { groupRows, sortRows } from '../../../../../shared/github/projects/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
-import { loadCollapsedGroups, saveCollapsedGroups } from '../collapsed-groups'
+import { useCollapsedGroups } from '../collapsed-groups'
 import {
   ACTION_COLUMN_WIDTH,
   loadColumnWidths,
@@ -99,34 +99,7 @@ export default function ProjectViewList({
   >({})
   const widths = widthsByScope[scopeKey] ?? persistedWidths
 
-  const persistedCollapsed = useMemo(() => loadCollapsedGroups(scopeKey), [scopeKey])
-  const [collapsedByScope, setCollapsedByScope] = useState<
-    Readonly<Record<string, ReadonlySet<string> | undefined>>
-  >({})
-  const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
-
-  useEffect(() => {
-    const current = collapsedByScope[scopeKey]
-    if (current !== undefined) {
-      saveCollapsedGroups(scopeKey, current)
-    }
-  }, [collapsedByScope, scopeKey])
-
-  const toggleGroup = useCallback(
-    (groupKey: string): void => {
-      setCollapsedByScope((prev) => {
-        const currentCollapsed = prev[scopeKey] ?? persistedCollapsed
-        const next = new Set(currentCollapsed)
-        if (next.has(groupKey)) {
-          next.delete(groupKey)
-        } else {
-          next.add(groupKey)
-        }
-        return { ...prev, [scopeKey]: next }
-      })
-    },
-    [persistedCollapsed, scopeKey]
-  )
+  const { collapsed, toggleGroup } = useCollapsedGroups(scopeKey)
 
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {

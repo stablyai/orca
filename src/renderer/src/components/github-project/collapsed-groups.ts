@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
 // Why: group collapse is a renderer-only viewing preference — GitHub's view
 // definition is the source of truth for rows and grouping, and we layer a
 // local collapse state on top. Persisted in localStorage (not settings)
@@ -7,6 +9,10 @@
 export const STORAGE_KEY = 'orca.githubProject.collapsedGroups'
 
 type CollapsedMap = Record<string, string[]>
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
 
 function readMap(): CollapsedMap {
   try {
@@ -18,11 +24,13 @@ function readMap(): CollapsedMap {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {}
     }
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        ([, value]) => Array.isArray(value) && value.every((item) => typeof item === 'string')
-      )
-    ) as CollapsedMap
+    const map: CollapsedMap = {}
+    for (const [scopeKey, value] of Object.entries(parsed)) {
+      if (isStringArray(value)) {
+        map[scopeKey] = value
+      }
+    }
+    return map
   } catch {
     return {}
   }
@@ -49,4 +57,37 @@ export function saveCollapsedGroups(scopeKey: string, collapsed: ReadonlySet<str
     map[scopeKey] = Array.from(collapsed)
   }
   writeMap(map)
+}
+
+export function useCollapsedGroups(scopeKey: string): {
+  collapsed: ReadonlySet<string>
+  toggleGroup: (groupKey: string) => void
+} {
+  const persistedCollapsed = useMemo(() => loadCollapsedGroups(scopeKey), [scopeKey])
+  const [collapsedByScope, setCollapsedByScope] = useState<
+    Readonly<Record<string, ReadonlySet<string> | undefined>>
+  >({})
+  const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
+
+  useEffect(() => {
+    const current = collapsedByScope[scopeKey]
+    if (current !== undefined) {
+      saveCollapsedGroups(scopeKey, current)
+    }
+  }, [collapsedByScope, scopeKey])
+
+  const toggleGroup = useCallback(
+    (groupKey: string): void => {
+      setCollapsedByScope((previous) => {
+        const next = new Set(previous[scopeKey] ?? persistedCollapsed)
+        if (!next.delete(groupKey)) {
+          next.add(groupKey)
+        }
+        return { ...previous, [scopeKey]: next }
+      })
+    },
+    [persistedCollapsed, scopeKey]
+  )
+
+  return { collapsed, toggleGroup }
 }

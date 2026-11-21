@@ -10,7 +10,7 @@ import { ProjectTitleCell } from '../cells/ProjectCellIdentity'
 import { ProjectItemsEmptyState } from '../view/ProjectViewStates'
 import { formatRoadmapTick } from './roadmap-tick-format'
 import { loadRoadmapZoom, saveRoadmapZoom } from './roadmap-zoom-preference'
-import { loadCollapsedGroups, saveCollapsedGroups } from '../collapsed-groups'
+import { useCollapsedGroups } from '../collapsed-groups'
 import { groupRows, sortRows } from '../../../../../shared/github/projects/project-group-sort'
 import {
   buildRoadmapTicks,
@@ -74,32 +74,7 @@ export default function ProjectRoadmap({
     return () => clearTimeout(timer)
   }, [todayMs])
   const [zoom, setZoom] = useState<RoadmapZoom>(loadRoadmapZoom)
-  const persistedCollapsed = useMemo(() => loadCollapsedGroups(scopeKey), [scopeKey])
-  const [collapsedByScope, setCollapsedByScope] = useState<
-    Readonly<Record<string, ReadonlySet<string> | undefined>>
-  >({})
-  const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
-
-  useEffect(() => {
-    const current = collapsedByScope[scopeKey]
-    if (current !== undefined) {
-      saveCollapsedGroups(scopeKey, current)
-    }
-  }, [collapsedByScope, scopeKey])
-
-  const toggleGroup = useCallback(
-    (groupKey: string): void => {
-      setCollapsedByScope((previous) => {
-        const currentCollapsed = previous[scopeKey] ?? persistedCollapsed
-        const next = new Set(currentCollapsed)
-        if (!next.delete(groupKey)) {
-          next.add(groupKey)
-        }
-        return { ...previous, [scopeKey]: next }
-      })
-    },
-    [persistedCollapsed, scopeKey]
-  )
+  const { collapsed, toggleGroup } = useCollapsedGroups(scopeKey)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   const source = useMemo(() => resolveRoadmapDateSource(view, table.rows), [view, table.rows])
