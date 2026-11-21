@@ -136,6 +136,7 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await page.setViewportSize({ width: 1920, height: 1080 })
 
   await page.evaluate(async (workspacePath) => {
+    await window.__store!.getState().updateSettings({ uiLanguage: 'en' })
     await window.__store!.getState().addRepoPath(workspacePath, 'folder')
   }, workspace)
   await page.getByRole('option').filter({ hasText: 'workspace' }).click()
