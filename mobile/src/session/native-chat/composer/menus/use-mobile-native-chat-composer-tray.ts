@@ -2,6 +2,7 @@ import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObj
 import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../../input/tasks/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../../input/tasks/MobileNativeChatDockedTaskList'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTaskList } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
@@ -11,6 +12,7 @@ import {
 import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
+import type { MobileWaitingAgentMailActionsValue } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
 import {
   createMobileQueuedCardActionStore,
   useMobileQueuedCardActions
@@ -30,11 +32,15 @@ export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInputInstance | null>
   steerHead?: MobileNativeChatSteerHead
+  /** Steer and Delete on other agents' waiting mail, which the transcript draws instead of a card. */
+  waitingAgentMail?: MobileWaitingAgentMailActionsValue
 }
 
 export type ComposerTrayProps = {
   composerTray?: MobileNativeChatComposerTray
 }
+
+const NO_ROWS: readonly NativeChatMessage[] = []
 
 // Reuse the empty tray so its default cannot trigger rerenders.
 export const NO_COMPOSER_TRAY: MobileNativeChatComposerTray = {}
@@ -47,6 +53,9 @@ export function useMobileNativeChatComposerTray({
   queued: MobileNativeChatQueuedMessagesProps & {
     /** One card list per conversation: a pending action in one never disables another's. */
     sessionKey: string
+    /** Other agents' waiting mail, which the transcript draws instead of a card. */
+    agentMail?: readonly NativeChatMessage[]
+    agentMailEditable?: (messageId: string) => boolean
   }
   taskList: NativeChatTaskList | null
   backgroundTasks: MobileStructuredBackgroundTasks | null
@@ -66,7 +75,9 @@ export function useMobileNativeChatComposerTray({
     onResume,
     sessionKey,
     steerHeld,
-    agentWorking
+    agentWorking,
+    agentMail,
+    agentMailEditable
   } = queued
   const actions = useMobileQueuedCardActions(actionStore, sessionKey)
   return useMemo(
@@ -106,6 +117,17 @@ export function useMobileNativeChatComposerTray({
         })
       ),
       composerInputRef,
+      // Shares the cards' action guard, so a press here and on a card never overlap.
+      waitingAgentMail: {
+        rows: agentMail ?? NO_ROWS,
+        actions,
+        send: onSend,
+        delete: onDelete,
+        edit: editQueuedMessage,
+        editable: agentMailEditable,
+        steerHeld,
+        agentWorking
+      },
       steerHead: {
         steers: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(
@@ -142,7 +164,9 @@ export function useMobileNativeChatComposerTray({
       steerHeld,
       headLight,
       actions,
-      agentWorking
+      agentWorking,
+      agentMail,
+      agentMailEditable
     ]
   )
 }

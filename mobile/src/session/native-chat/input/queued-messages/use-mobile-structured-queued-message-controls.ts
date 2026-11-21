@@ -17,6 +17,11 @@ import type {
 import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import { queuedMessagesQueuePause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
+  composerQueuedCards,
+  createWaitingAgentMailRows
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-waiting-agent-mail'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
 } from './mobile-structured-queued-message-cards'
@@ -42,6 +47,12 @@ export type MobileStructuredQueuedMessageControls = {
   pause: AgentSessionQueuePause | null
   resume: () => Promise<boolean>
   sessionKey: string
+  /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
+  holds: (messageId: string) => boolean
+  /** Other agents' waiting mail, drawn after the chat's live activity instead of as cards. */
+  agentMail: readonly NativeChatMessage[]
+  /** Whether a waiting agent message offers Edit, which opens it in the queue's editor. */
+  agentMailEditable: (messageId: string) => boolean
 }
 
 export function useMobileStructuredQueuedMessageControls(args: {
@@ -86,7 +97,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   })
   const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
-  const cards = useMemo(() => {
+  const allCards = useMemo(() => {
     const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
       agentWorking,
       queuePaused: queuePause !== null,
@@ -115,8 +126,18 @@ export function useMobileStructuredQueuedMessageControls(args: {
     ...args,
     enabled: args.enabled && args.editCapable === true,
     messages: queuedMessages,
-    cards
+    cards: allCards
   })
+  const agentMailRowsOf = useMemo(() => createWaitingAgentMailRows(), [])
+  const waitingAgentMail = useMemo(
+    () => agentMailRowsOf(queuedMessages, submissions),
+    [agentMailRowsOf, queuedMessages, submissions]
+  )
+  // Agent mail waits in the transcript; only one being edited joins the queue, in its editor.
+  const { cards, agentMail } = useMemo(
+    () => composerQueuedCards(allCards, waitingAgentMail, editor?.messageId),
+    [allCards, waitingAgentMail, editor?.messageId]
+  )
   const resolved = useCallback(
     (accepted: boolean): boolean => {
       if (accepted) {
@@ -209,7 +230,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
         }
         return beginInlineEdit(messageId)
       }
-      const card = cards.find((candidate) => candidate.messageId === messageId)
+      const card = allCards.find((candidate) => candidate.messageId === messageId)
       // Copy before Delete so refusal or lost reply cannot lose text; failed deletion leaves both copies visible.
       // Never delete without a copy, and never turn a command or a run into the owner's draft.
       if (!card || card.notEditable || !appendComposerText?.(card.text)) {
@@ -223,7 +244,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
       args.editCapable,
       args.enabled,
       beginInlineEdit,
-      cards,
+      allCards,
       deleteQueued,
       onSendError
     ]
@@ -241,7 +262,19 @@ export function useMobileStructuredQueuedMessageControls(args: {
       ),
     [mutate, resolved]
   )
-  const pause = queuedMessagesQueuePause(cards, queuePause)
+  const pause = queuedMessagesQueuePause(cards, queuePause, waitingAgentMail.length > 0)
+  const agentMailEditable = useCallback(
+    (messageId: string): boolean =>
+      args.editCapable === true &&
+      editor === undefined &&
+      allCards.some((card) => card.messageId === messageId && !card.notEditable),
+    [allCards, args.editCapable, editor]
+  )
+  const holds = useCallback(
+    (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),
+    [allCards]
+  )
+
   return {
     cards,
     send,
@@ -252,6 +285,9 @@ export function useMobileStructuredQueuedMessageControls(args: {
     move: composerActions.move,
     pause,
     resume,
-    sessionKey
+    sessionKey,
+    holds,
+    agentMail,
+    agentMailEditable
   }
 }

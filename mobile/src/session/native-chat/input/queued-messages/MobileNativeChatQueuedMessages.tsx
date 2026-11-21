@@ -145,7 +145,8 @@ export function MobileNativeChatQueuedMessages({
       setExpandedIds(new Set([...expandedIds].filter((messageId) => liveIds.includes(messageId))))
     }
   }
-  if (!cards || cards.length === 0) {
+  // A paused queue holding only agent mail, which the transcript draws, still offers Resume.
+  if (!cards || (cards.length === 0 && !pause)) {
     if (openChoice !== null) {
       setOpenChoice(null)
     }
@@ -164,7 +165,8 @@ export function MobileNativeChatQueuedMessages({
   const open =
     openChoice?.abovePrompt === abovePrompt ? openChoice.open : !abovePrompt || attentionHidden
   // An inline editor on a folded-away card keeps the list open so the edit stays in view.
-  const editingHidden = editor !== undefined && editor.messageId !== cards[0]!.messageId
+  const editingHidden =
+    editor !== undefined && cards.length > 0 && editor.messageId !== cards[0]!.messageId
   const showAll = open || cards.length === 1 || editingHidden
   const shownCards = showAll ? cards : cards.slice(0, 1)
   const queueBusy = busyIds.has(QUEUE_KEY)
@@ -185,7 +187,7 @@ export function MobileNativeChatQueuedMessages({
   // A paused queue keeps a header for Resume and Clear all; an unpaused one offers Clear all in each menu.
   const headerActions = pause ? (
     <>
-      {onClearAll ? (
+      {onClearAll && cards.length > 0 ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: clearBusy }}
@@ -291,14 +293,18 @@ export function MobileNativeChatQueuedMessages({
                 <Text style={[styles.headerLabel, styles.headerLabelPaused]}>
                   {t('chat.queuedMessages.pausedState', 'Paused')}
                 </Text>
-                <Text
-                  style={styles.headerLabel}
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden
-                >
-                  ·
-                </Text>
-                <Text style={styles.headerCount}>{cards.length}</Text>
+                {cards.length > 0 ? (
+                  <>
+                    <Text
+                      style={styles.headerLabel}
+                      importantForAccessibility="no"
+                      accessibilityElementsHidden
+                    >
+                      ·
+                    </Text>
+                    <Text style={styles.headerCount}>{cards.length}</Text>
+                  </>
+                ) : null}
               </View>
               {largeText ? null : headerActions}
             </View>

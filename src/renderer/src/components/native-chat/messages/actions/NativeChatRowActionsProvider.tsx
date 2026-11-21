@@ -13,9 +13,13 @@ import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/o
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import {
+  NativeChatWaitingAgentMailContext,
+  type NativeChatWaitingAgentMail
+} from '@/components/native-chat/queue/NativeChatWaitingAgentMailActions'
 
-/** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
- *  "Forked from" divider opens. */
+/** What the pane's transcript rows offer: rewind on prompts, fork on responses, the chat a
+ *  "Forked from" divider opens, and Steer and Delete on other agents' waiting mail. */
 export function NativeChatRowActionsProvider({
   pane,
   chat,
@@ -23,7 +27,10 @@ export function NativeChatRowActionsProvider({
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
-  chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
+  chat: {
+    rewind: { surface: NativeChatRewindSurface | undefined }
+    waitingAgentMail: NativeChatWaitingAgentMail
+  }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
   children: React.ReactNode
@@ -57,7 +64,9 @@ export function NativeChatRowActionsProvider({
         <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
           <NativeChatForkedFromContext.Provider value={openSource}>
             <NativeChatForkSlotContext.Provider value>
-              {children}
+              <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
+                {children}
+              </NativeChatWaitingAgentMailContext.Provider>
             </NativeChatForkSlotContext.Provider>
           </NativeChatForkedFromContext.Provider>
         </NativeChatSideChatForkPointContext.Provider>

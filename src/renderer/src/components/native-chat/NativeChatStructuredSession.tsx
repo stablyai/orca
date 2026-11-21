@@ -282,7 +282,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     tabId={props.tabId}
                   />
                 ) : (
-                  <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
+                  <NativeChatRowActionsProvider pane={props} chat={submits.rows} forks={forks}>
                     <NativeChatUsageLimitActionsProvider
                       recovery={controller}
                       pane={props}

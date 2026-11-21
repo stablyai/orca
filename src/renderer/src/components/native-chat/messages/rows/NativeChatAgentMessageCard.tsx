@@ -12,7 +12,8 @@ import {
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
-  agentMessageCanCopy
+  agentMessageCanCopy,
+  agentMessageWaitingQueuedId
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { agentMessageSessionWorker } from '../../../../../../shared/agent-session/view/messages/agent-message-dispatch'
@@ -36,6 +37,7 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
+import { NativeChatWaitingAgentMailActions } from '../../queue/NativeChatWaitingAgentMailActions'
 
 function lead(
   from: AgentMessageSource,
@@ -95,9 +97,13 @@ export function NativeChatAgentMessageCard({
   const words = lead(from, message, t)
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
+  // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
+  const waiting = message.queued === true
+  const waitingId = agentMessageWaitingQueuedId(message)
+  const notSentYet = t('components.native-chat.agentMessage.row.notSentYet', 'not sent yet')
   return (
     <NativeChatEventRow
-      className="w-full"
+      className={waiting ? 'w-full opacity-70' : 'w-full'}
       icon={
         <AgentMessageAvatar
           sender={sender}
@@ -108,9 +114,16 @@ export function NativeChatAgentMessageCard({
         />
       }
       badge={agentMessageBadge(worker, view.dot)}
-      label={expandable ? `${words} ${sender ? senderName : unnamedSenderLabel(t)}` : undefined}
-      timestamp={message.timestamp}
-      disclosureKey={`agent-message:${message.id}`}
+      label={
+        expandable
+          ? `${words} ${sender ? senderName : unnamedSenderLabel(t)}${waiting ? `, ${notSentYet}` : ''}`
+          : undefined
+      }
+      action={
+        waitingId ? <NativeChatWaitingAgentMailActions queuedMessageId={waitingId} /> : undefined
+      }
+      timestamp={waiting ? null : message.timestamp}
+      disclosureKey={`agent-message:${message.queuedMessageId ?? message.id}`}
       onOpenChange={(open) => {
         if (!open) {
           requestAnimationFrame(onRefolded)
@@ -162,6 +175,7 @@ export function NativeChatAgentMessageCard({
           />
         )}
         {more > 0 ? <span className="shrink-0">+{more}</span> : null}
+        {waiting ? <span className="sr-only">, {notSentYet}</span> : null}
       </span>
     </NativeChatEventRow>
   )

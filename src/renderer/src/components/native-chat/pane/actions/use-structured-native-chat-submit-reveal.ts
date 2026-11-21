@@ -7,11 +7,16 @@ import {
 } from '../../messages/actions/use-native-chat-reveal-latest'
 import type { useStructuredAgentSession } from '../../session/structured/use-structured-agent-session'
 import type { StructuredAgentSessionQueuedMessagesController } from '../../queue/use-structured-agent-session-queued-messages'
+import type { NativeChatWaitingAgentMail } from '../../queue/NativeChatWaitingAgentMailActions'
+import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 
 type StructuredController = ReturnType<typeof useStructuredAgentSession>
+type RowRewind = { surface: NativeChatRewindSurface | undefined }
 
 export function useStructuredNativeChatSubmitReveal(
-  controller: Pick<StructuredController, 'respond' | 'queuedMessages' | 'capturePresentation'>,
+  controller: Pick<StructuredController, 'respond' | 'queuedMessages' | 'capturePresentation'> & {
+    rewind: RowRewind
+  },
   retryLaunch: () => void,
   /** The host may take no turn: no card is sent now or resumed, and no failed start retried. */
   startsHeld = false
@@ -22,9 +27,11 @@ export function useStructuredNativeChatSubmitReveal(
   retryLaunch: () => void
   respond: StructuredController['respond']
   queuedMessages: StructuredAgentSessionQueuedMessagesController
+  /** What transcript rows act through: rewind, and other agents' waiting mail with its actions. */
+  rows: { rewind: RowRewind; waitingAgentMail: NativeChatWaitingAgentMail }
 } {
   const { messageListRef, revealLatest, captureRevealLatest } = useNativeChatRevealLatest()
-  const { respond, queuedMessages, capturePresentation } = controller
+  const { respond, queuedMessages, capturePresentation, rewind } = controller
   const revealingRetryLaunch = useCallback(() => {
     if (startsHeld) {
       return
@@ -77,12 +84,39 @@ export function useStructuredNativeChatSubmitReveal(
         })
     }
   }, [capturePresentation, captureRevealLatest, queuedMessages, revealLatest, startsHeld])
+  const { steer, remove, pending, isWorking, stopping, agentMail, agentMailEditable, edit } =
+    queuedMessages
+  const steerAgentMail = useCallback(
+    async (messageId: string) => {
+      if (!startsHeld) {
+        revealLatest()
+        await steer(messageId)
+      }
+    },
+    [revealLatest, startsHeld, steer]
+  )
+  // Narrow and stable, so the rows it reaches redraw only when the waiting mail or its actions change.
+  const waitingAgentMail = useMemo<NativeChatWaitingAgentMail>(
+    () => ({
+      rows: agentMail,
+      steer: steerAgentMail,
+      remove,
+      pending,
+      isWorking,
+      stopping,
+      editable: agentMailEditable,
+      edit
+    }),
+    [agentMail, steerAgentMail, remove, pending, isWorking, stopping, agentMailEditable, edit]
+  )
+  const rows = useMemo(() => ({ rewind, waitingAgentMail }), [rewind, waitingAgentMail])
   return {
     messageListRef,
     revealLatest,
     captureRevealLatest,
     retryLaunch: revealingRetryLaunch,
     respond: revealingRespond,
-    queuedMessages: revealingQueue
+    queuedMessages: revealingQueue,
+    rows
   }
 }

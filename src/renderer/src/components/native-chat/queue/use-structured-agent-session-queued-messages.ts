@@ -25,9 +25,10 @@ import type { StructuredAgentSessionPendingSend } from '../session/structured/de
 import {
   headSteerableQueuedMessageCard,
   projectQueuedMessageCards,
-  queuedMessagesQueuePause,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
+import { useStructuredAgentSessionWaitingAgentMail } from './use-structured-agent-session-waiting-agent-mail'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import {
   pendingQueueSendsOnTheirWay,
   sendingQueuedMessageCards
@@ -66,6 +67,14 @@ export type StructuredAgentSessionQueuedMessagesController = {
   steerHead: (() => boolean) | undefined
   /** The agent is working, so a card's send steers into its turn. */
   isWorking: boolean
+  /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
+  holds: (messageId: string) => boolean
+  /** Other agents' waiting mail, drawn after the chat's live activity instead of as cards. */
+  agentMail: readonly NativeChatMessage[]
+  /** Whether a waiting agent message offers Edit, which opens it in the queue's editor. */
+  agentMailEditable: (messageId: string) => boolean
+  /** A Stop is ending the turn: nothing steers into it. */
+  stopping: boolean
 }
 
 export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear'
@@ -90,6 +99,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   hasPendingPrompt: boolean
   /** A turn is running, whoever started it, or the queue is about to send its next card. */
   isWorking: boolean
+  stopping: boolean
   /** This pane's sends without a host record yet show as sending cards. */
   sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
@@ -102,7 +112,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   const { admit, capturePresentation, isWorking, queuePause } = args
   const sending = args.sending ?? NO_SENDS
 
-  const cards = useMemo(
+  const allCards = useMemo(
     () => [
       ...projectQueuedMessageCards(queuedMessages, submissions, {
         // A command card offers no send while the agent works.
@@ -121,6 +131,24 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     ],
     [isWorking, sending, queuePause, queuedMessages, submissions]
   )
+  const editing = useStructuredAgentSessionQueuedEdit({
+    transport: args.editTransport,
+    messages: queuedMessages,
+    cards: allCards,
+    submissions,
+    composerScopeKey,
+    promptOpen: hasPendingPrompt
+  })
+  const editingMessageId = editing.editor?.messageId
+  const mail = useStructuredAgentSessionWaitingAgentMail({
+    queuedMessages,
+    submissions,
+    queuePause,
+    allCards,
+    editingMessageId,
+    editCapable: editing.capable
+  })
+  const { cards, pause } = mail
   const reordered = useStructuredAgentSessionQueuedReorder(
     cards,
     args.editTransport,
@@ -188,16 +216,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [capturePresentation, mutate, run]
   )
 
-  const editing = useStructuredAgentSessionQueuedEdit({
-    transport: args.editTransport,
-    messages: queuedMessages,
-    cards,
-    submissions,
-    composerScopeKey,
-    promptOpen: hasPendingPrompt
-  })
-
-  const editingMessageId = editing.editor?.messageId
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
@@ -228,7 +246,11 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       }),
     [mutate, run]
   )
-  const pause = useMemo(() => queuedMessagesQueuePause(cards, queuePause), [cards, queuePause])
+
+  const pending = useCallback(
+    (messageId: string): QueuedMessagesPendingAction | null => inFlight.get(messageId) ?? null,
+    [inFlight]
+  )
 
   const clearCapable = !cards.some(
     (card) => card.hold === 'sending' || inFlight.has(card.messageId)
@@ -289,13 +311,17 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     resume,
     clear,
     queuePending: inFlight.get(QUEUE_KEY) ?? null,
-    pending: (messageId) => inFlight.get(messageId) ?? null,
+    pending,
     steer,
     remove,
     edit: editing.begin,
     editCapable: editing.capable,
     editor: editing.editor,
     steerHead: headSteers ? steerHead : undefined,
-    isWorking
+    isWorking,
+    holds: mail.holds,
+    stopping: args.stopping,
+    agentMail: mail.agentMail,
+    agentMailEditable: mail.agentMailEditable
   }
 }

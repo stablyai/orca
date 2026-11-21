@@ -127,3 +127,13 @@ export function agentMessageSenderView(
 export function agentMessageCanCopy(text: string): boolean {
   return text.length > 0
 }
+
+/** The id Steer and Delete act on while the host still holds this agent message as a queued card;
+ *  a handed-off one (its send recorded) is past them. */
+export function agentMessageWaitingQueuedId(
+  message: Pick<NativeChatMessage, 'queued' | 'queuedMessageId' | 'deliveryState'>
+): string | null {
+  return message.queued && message.deliveryState === undefined
+    ? (message.queuedMessageId ?? null)
+    : null
+}

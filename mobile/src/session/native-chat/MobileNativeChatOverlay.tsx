@@ -152,7 +152,9 @@ function MobileNativeChatOverlayContent({
       sessionKey: queued.sessionKey,
       // Hold steering while Stop ends the turn; use the session’s single display-status decision.
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
-      agentWorking: controller.nativeChatTurnActive
+      agentWorking: controller.nativeChatTurnActive,
+      agentMail: queued.agentMail,
+      agentMailEditable: queued.agentMailEditable
     },
     taskList,
     backgroundTasks: controller.nativeChatBackgroundTasks

@@ -31,12 +31,17 @@ it('sends no queued card and retries no start on a host held for its permission 
     editCapable: false,
     editor: undefined,
     steerHead: vi.fn(() => true),
-    isWorking: false
+    isWorking: false,
+    holds: () => false,
+    stopping: false,
+    agentMail: [],
+    agentMailEditable: () => false
   }
   const controller = {
     capturePresentation: () => () => true,
     respond: vi.fn(async () => null),
-    queuedMessages
+    queuedMessages,
+    rewind: { surface: undefined }
   }
   const retryLaunch = vi.fn()
   useAppStore.setState({

@@ -30,6 +30,7 @@ import {
   type AgentMessageSource
 } from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import { queuedMessageIsWaitingAgentMail } from './structured-agent-session-waiting-agent-mail'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
@@ -97,6 +98,7 @@ export function queuedMessageSteersIn(
 ): boolean {
   return (
     message.steers === true &&
+    !queuedMessageIsWaitingAgentMail(message) &&
     message.state === 'waiting' &&
     !message.paused &&
     session.agentWorking === true &&
@@ -221,16 +223,20 @@ export function queuedMessageCardNeedsAttention(
   return card.state === 'returned' || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
 }
 
-/** Offer Resume only while the queue pause holds a card it could actually send. */
+/** Offer Resume only while the queue pause holds a card it could actually send, or another agent's
+ *  waiting mail the transcript draws instead of a card. */
 export function queuedMessagesQueuePause(
   cards: readonly QueuedMessageCard[],
-  queuePause: AgentSessionQueuePause | null
+  queuePause: AgentSessionQueuePause | null,
+  agentMailWaiting = false
 ): AgentSessionQueuePause | null {
-  return cards.some((card) => card.resumeEligible) ? queuePause : null
+  return agentMailWaiting || cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
-export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
+export function queuedMessageCardSteers(
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>
+): boolean {
   return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 
