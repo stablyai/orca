@@ -1,6 +1,6 @@
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { createTerminalTabOwnerIndex } from '@/store/terminals/ownership/terminal-tab-owner-index'
-import type { SnapshotCapabilityBindingState } from './terminal-provider-snapshot-capability'
+import type { SnapshotCapabilityBindingState } from './terminal-provider-snapshot-pty-inventory'
 
 type State = SnapshotCapabilityBindingState
 type Source = {
