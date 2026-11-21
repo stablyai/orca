@@ -12,6 +12,7 @@ import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
+import { replacementPatch } from '../../native-chat/agent-session-timeline/provider-timeline-replacement-patch'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { AcpBackgroundTaskUpdate, AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
@@ -41,28 +42,6 @@ function outputText(update: ToolCallUpdate): string | undefined {
       .join('\n')
   }
   return JSON.stringify(update.rawOutput) ?? ''
-}
-
-// Whole-file replacement avoids expensive diffs for large unrelated files.
-function replacementPatch(path: string, oldText: string, newText: string): string {
-  const lines = (text: string, prefix: string): { count: number; text: string } => {
-    if (!text) {
-      return { count: 0, text: '' }
-    }
-    const entries = text.split('\n')
-    if (entries.at(-1) === '') {
-      entries.pop()
-    }
-    return {
-      count: entries.length,
-      text:
-        entries.map((line) => `${prefix}${line}\n`).join('') +
-        (text.endsWith('\n') ? '' : '\\ No newline at end of file\n')
-    }
-  }
-  const oldLines = lines(oldText, '-')
-  const newLines = lines(newText, '+')
-  return `--- ${path}\n+++ ${path}\n@@ -${oldLines.count ? 1 : 0},${oldLines.count} +${newLines.count ? 1 : 0},${newLines.count} @@\n${oldLines.text}${newLines.text}`
 }
 
 function boundedDiffPatch(path: string, oldText: string, newText: string): string {

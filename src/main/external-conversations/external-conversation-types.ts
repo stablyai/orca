@@ -48,11 +48,17 @@ export function replyTargetOf(
   // The running turn's opening message: only its own request names the answer a reply gives.
   opener?: AgentJournalRenderItem | null
 ): ReplyTarget {
-  const stamp = opener?.body.kind === 'message' ? opener.body.connectorDelivery : undefined
-  const answers =
-    stamp?.conversation.source === link.source && stamp.conversation.externalId === link.externalId
+  const body = opener?.body.kind === 'message' ? opener.body : undefined
+  // A continuation answers under the claim's first request for this conversation.
+  const stamp = [
+    ...(body?.connectorDelivery ? [body.connectorDelivery] : []),
+    ...(body?.connectorClaim?.origin ?? [])
+  ].find(
+    (entry) =>
+      entry.conversation.source === link.source && entry.conversation.externalId === link.externalId
+  )
   return {
-    ...(answers ? { answerDeliveryId: stamp.deliveryId } : {}),
+    ...(stamp ? { answerDeliveryId: stamp.deliveryId } : {}),
     key: { source: link.source, externalId: link.externalId },
     turnId,
     worktreeId: workspace.worktreeId,

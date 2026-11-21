@@ -691,6 +691,9 @@
     "selectionQuote": {
       "action": "Zitieren",
       "hint": "Fügt den markierten Text als Zitat in die Nachricht ein"
+    },
+    "messageTime": {
+      "yesterday": "Gestern {{time}}"
     }
   },
   "common": {

@@ -43,7 +43,12 @@ export const NATIVE_CHAT_AGENTS = [
   'antigravity',
   'hermes',
   'goose',
-  'aug'
+  'aug',
+  'kilo',
+  'mimo-code',
+  'gemini',
+  'droid',
+  'qwen-code'
 ] as const
 
 export type NativeChatAgent = (typeof NATIVE_CHAT_AGENTS)[number]
@@ -63,12 +68,18 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   kimi: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   kiro: ACP_CHAT_PERMISSION_MODES,
   goose: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
+  droid: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
   antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
   hermes: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
   // Auggie asks none unless its own tool permissions say so, as in its terminal.
-  aug: null
+  aug: null,
+  kilo: ACP_CHAT_PERMISSION_MODES,
+  'mimo-code': ACP_CHAT_PERMISSION_MODES,
+  gemini: ACP_CHAT_PERMISSION_MODES,
+  // Qwen's own modes: Auto Edit approves edits, and Auto has a model approve what is safe.
+  'qwen-code': CLAUDE_CHAT_PERMISSION_MODES
 }
 
 export function isNativeChatAgent(agent: string): agent is NativeChatAgent {

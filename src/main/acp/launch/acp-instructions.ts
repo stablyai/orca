@@ -74,15 +74,25 @@ export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ 
   takesSessionMeta: antigravityTakesSystemPrompt
 })
 
-/** 1.x: appended to the user's own inline instructions, never replacing them. 2.x ignores those, so
- *  they follow the user's own global AGENTS.md in a config folder that links the rest of theirs. */
-export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
-  text,
-  file,
-  emptyFolder,
-  env,
-  version
-}): Promise<AcpInstructionsLaunch | null> => {
+/** OpenCode 1.x and its forks: appended to the user's own inline instructions in `variable`, never
+ *  replacing them. */
+function inlineConfigInstructions(variable: string): AcpInstructionsDelivery {
+  return async ({ env, file }) => {
+    const content = withOpenCodeInstructionsFile(env[variable], await file())
+    return content === null ? null : { env: { [variable]: content } }
+  }
+}
+
+const deliverOpenCode1Instructions = inlineConfigInstructions('OPENCODE_CONFIG_CONTENT')
+export const deliverKiloInstructions = inlineConfigInstructions('KILO_CONFIG_CONTENT')
+export const deliverMimoInstructions = inlineConfigInstructions('MIMOCODE_CONFIG_CONTENT')
+
+/** 1.x: as its forks. 2.x ignores inline instructions, so they follow the user's own global
+ *  AGENTS.md in a config folder that links the rest of theirs. */
+export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async (
+  input
+): Promise<AcpInstructionsLaunch | null> => {
+  const { text, emptyFolder, env, version } = input
   if (openCodeTakesConfigDirInstructions(version)) {
     const configDir = await emptyFolder()
     const release = () => removeTreeKeepingLinkTargets(configDir)
@@ -96,8 +106,7 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
     })
     return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
   }
-  const content = withOpenCodeInstructionsFile(env.OPENCODE_CONFIG_CONTENT, await file())
-  return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }
+  return deliverOpenCode1Instructions(input)
 }
 
 // OMP and Auggie, both built on Pi, read the file; a path keeps the text out of the process list
@@ -109,6 +118,11 @@ export const deliverAppendSystemPromptInstructions: AcpInstructionsDelivery = as
 // Kiro keeps steering sent on `session/new` with the session, so a reopen keeps the preamble it began with.
 export const deliverKiroInstructions: AcpInstructionsDelivery = async ({ text }) => ({
   sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
+})
+
+// Droid rebuilds its system prompt at every start from the file each launch passes.
+export const deliverDroidInstructions: AcpInstructionsDelivery = async ({ file }) => ({
+  args: ['--append-system-prompt-file', await file()]
 })
 
 // Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
@@ -136,6 +150,20 @@ export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, c
 // every model call, so a reopened chat reads what its latest launch wrote (checked live on 1.60.2).
 export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, '.goosehints', 'Goose', text)
+  return {}
+}
+
+// Gemini ignores `_meta` and builds its context from the folder's GEMINI.md at every start, a
+// reopen and each compression included, but reads it only in a trusted folder, so the launch trusts it.
+export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
+  return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
+}
+
+// Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included
+// (checked live on 0.28.0), so every launch rewrites it with the current text.
+export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'QWEN.md', 'Qwen Code', text)
   return {}
 }
 

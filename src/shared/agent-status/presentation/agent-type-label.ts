@@ -15,6 +15,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
   opencode2: 'OpenCode 2',
   'mimo-code': 'MiMo Code',
+  kilo: 'Kilocode',
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',

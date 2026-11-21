@@ -104,7 +104,19 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   kiro: null,
   // Goose reports its skills as commands, at rest too.
   goose: null,
-  omp: null
+  // Orca knows no skill folders of theirs; their sessions report what they load as commands.
+  kilo: null,
+  'mimo-code': null,
+  omp: null,
+  // No folder scan until Gemini's ACP is checked to load a picked skill.
+  gemini: null,
+  // Droid reports skills only once a session starts, so resting chats rely on the scan.
+  droid: {
+    skillPrefix: '/',
+    skillSourceOwner: 'droid'
+  },
+  // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
+  'qwen-code': null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
