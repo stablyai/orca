@@ -16,6 +16,7 @@ import { createCopilotSessionResumeState } from '../scanners/copilot/session-sca
 import { createCursorSessionResumeState } from '../scanners/cursor/session-scanner-cursor-parser'
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
+import { refreshReusedPiSubagentCount } from './session-scanner-pi-subagent-reuse'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import { refreshCachedCodexTitle } from '../scanners/codex/session-scanner-codex-cached-title'
 import {
@@ -226,7 +227,9 @@ async function parseCachedInLane(
       // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
-      resume: read.resume
+      resume: read.resume,
+      // Stamps stay valid across a reparse: reuse re-stats them, so a moved directory still forces a walk.
+      piSubagentDirs: entry?.piSubagentDirs
     })
     return enriched.session
   }
@@ -268,8 +271,19 @@ async function reuseCachedSession(
     stats.reused++
   }
   let session = entry.session
-  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
-  if (session && session.messageCount === 0) {
+  let piSubagentDirs = entry.piSubagentDirs
+  // Pi children sit beside the parent file; their own directory mtimes decide whether to walk again.
+  if (session?.agent === 'pi') {
+    const refreshed = await refreshReusedPiSubagentCount(
+      candidate.file.path,
+      session,
+      piSubagentDirs,
+      signal
+    )
+    session = refreshed.session
+    piSubagentDirs = refreshed.piSubagentDirs
+  } else if (session && session.messageCount === 0) {
+    // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
     const subagentTranscriptCount =
       session.agent === 'claude'
         ? await countSubagentTranscripts(candidate.file.path, signal)
@@ -288,6 +302,6 @@ async function reuseCachedSession(
     session = await waitForAiVaultScan(refreshCachedCodexTitle(candidate, session), signal)
   }
   throwIfAiVaultScanCancelled(signal)
-  storeSessionParseCacheEntry(key, { ...entry, session })
+  storeSessionParseCacheEntry(key, { ...entry, session, piSubagentDirs })
   return session
 }

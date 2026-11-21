@@ -7,6 +7,7 @@ import {
   CODEX_FIXTURE_SESSION_ID,
   codexFixture
 } from '../scanners/codex/session-scanner-codex-fixtures'
+import { jsonLines } from '../scanner-fixtures/session-scanner-test-fixtures'
 import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from './session-parse-cache-store'
 import type { SessionFileCandidate } from '../session-scanner-types'
@@ -80,6 +81,57 @@ describe('codex-specific resume behavior', () => {
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)
     )
+  })
+})
+
+describe('pi subagent counts', () => {
+  it('recounts the children of a reused parent that already has messages', async () => {
+    const root = await makeTempDir()
+    const stem = '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000'
+    const parentPath = join(root, `${stem}.jsonl`)
+    const childDir = join(root, stem, 'd4306da3-ab96-4236-bf98-8865dc4ce978', 'run-0')
+    await mkdir(childDir, { recursive: true })
+    await writeFile(
+      parentPath,
+      jsonLines([
+        { type: 'session', version: 3, id: 'cccccccc-dddd-4eee-8fff-000000000000', cwd: '/repo' },
+        { type: 'message', message: { role: 'user', content: 'Delegate the review' } },
+        { type: 'message', message: { role: 'assistant', content: 'Delegated' } }
+      ])
+    )
+    const childTranscript = (id: string, prompt: string): string =>
+      jsonLines([
+        { type: 'session', version: 3, id, cwd: '/repo', parentSession: parentPath },
+        { type: 'message', message: { role: 'user', content: prompt } }
+      ])
+    await writeFile(
+      join(childDir, 'session.jsonl'),
+      childTranscript('child-1', 'Map the auth surface')
+    )
+
+    const stats = createSessionParseStats()
+    const seeded = await parseAgentSessionFileCached(
+      await candidateFor('pi', parentPath),
+      process.platform,
+      stats
+    )
+    expect(seeded?.subagentTranscriptCount).toBe(1)
+
+    // Children arrive beside the parent file, so its own signature never changes.
+    const laterChildDir = join(root, stem, '4684f05a-d72d-4cdf-9e88-0adc2d16a31c', 'run-0')
+    await mkdir(laterChildDir, { recursive: true })
+    await writeFile(
+      join(laterChildDir, 'session.jsonl'),
+      childTranscript('child-2', 'Read the DC API spec')
+    )
+
+    const recounted = await parseAgentSessionFileCached(
+      await candidateFor('pi', parentPath),
+      process.platform,
+      stats
+    )
+    expect(stats.reused).toBe(1)
+    expect(recounted?.subagentTranscriptCount).toBe(2)
   })
 })
 

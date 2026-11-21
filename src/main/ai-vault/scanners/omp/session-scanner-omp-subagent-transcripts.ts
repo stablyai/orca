@@ -3,10 +3,10 @@ import {
   waitForAiVaultScan
 } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import type { Dirent } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { isMissingTranscriptPathError } from '../../discovery/session-path-absence'
 import type { SubagentTranscriptPartition } from '../claude/session-scanner-subagent-transcripts'
-import type { ResumableSessionParseState } from '../../session-scanner-types'
 
 // Infer lineage from stamp_UUID artifact directories: task transcripts are label-named and omit parentSession (#9330).
 const OMP_SESSION_DIR_NAME = String.raw`\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
@@ -38,16 +38,17 @@ export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): 
 export async function countOmpSubagentTranscripts(
   transcriptFilePath: string,
   signal?: AbortSignal
-): Promise<number> {
-  let entries
+): Promise<number | null> {
+  let entries: Dirent[]
   try {
     entries = await waitForAiVaultScan(
       wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan', signal),
       signal
     )
-  } catch {
+  } catch (err) {
     throwIfAiVaultScanCancelled(signal)
-    return 0
+    // Null keeps the stored count; a missing artifact directory really is zero.
+    return isMissingTranscriptPathError(err) ? 0 : null
   }
   return entries.filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
     .length
@@ -74,32 +75,4 @@ export function partitionOmpSubagentTranscriptPaths(
     }
   }
   return { sessionFilePaths, subagentTranscriptCounts }
-}
-
-/** Count OMP rows on the transcript-owning host only; remote walks supply their own counts. */
-export function withOmpSubagentTranscriptCount(
-  state: ResumableSessionParseState,
-  transcriptFilePath: string
-): ResumableSessionParseState {
-  return {
-    consumeLine: (line) => state.consumeLine(line),
-    identity: () => state.identity?.() ?? null,
-    clone: () => withOmpSubagentTranscriptCount(state.clone(), transcriptFilePath),
-    touchFile: (file) => state.touchFile(file),
-    finalize: async (platform, options) => {
-      const session = await state.finalize(platform, options)
-      const ownsTranscriptDisk =
-        !options?.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-      if (session?.agent !== 'omp' || !ownsTranscriptDisk) {
-        return session
-      }
-      return {
-        ...session,
-        subagentTranscriptCount: await countOmpSubagentTranscripts(
-          transcriptFilePath,
-          options?.signal
-        )
-      }
-    }
-  }
 }
