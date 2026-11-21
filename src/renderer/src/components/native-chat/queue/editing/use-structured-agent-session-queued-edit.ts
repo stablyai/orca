@@ -254,7 +254,12 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
     )
     // Only an accepted update is the text that will be sent; typing and refused saves record nothing.
     if (result.kind === 'done' && result.value.status === 'updated') {
-      rememberNativeChatQueuedEditReplySource(edit, input.text)
+      // Keyed by the text the queued message now stores (trimmed when images are supported), as
+      // reopening it reads that text back.
+      rememberNativeChatQueuedEditReplySource(
+        edit,
+        queuedMessageEditableText(edited.body) ?? input.text
+      )
     }
     settle(edit, attempt, result)
   }, [close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])

@@ -36,3 +36,15 @@ it('a refused queued reply edit records no original for its words', async () => 
   await act(async () => hook.result.current.editor?.save())
   expect(nativeChatReplySourceOf(quoted('How, exactly?'))).toBeUndefined()
 })
+
+it('a queued reply edit ending in a space keeps its original under the text the card stores', async () => {
+  rememberNativeChatReplySource(quoted('When?'), 'm-orig')
+  // With images supported the card stores its words without trailing whitespace.
+  const hook = harness(true, { messages: [withText(quoted('When?'))], imagesCapable: true })
+  await begin(hook)
+  act(() => hook.result.current.editor?.change('When exactly? '))
+  script.answer = done({ status: 'updated', messageId: 'card', fingerprint: 'f'.repeat(64) })
+  await act(async () => hook.result.current.editor?.save())
+  // The card keeps the words without the trailing space; reopening it reads them back that way.
+  expect(nativeChatReplySourceOf(quoted('When exactly?'))).toBe('m-orig')
+})
