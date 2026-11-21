@@ -3,6 +3,7 @@ import {
   createMarkdownFenceTracker,
   getMarkdownFenceRanges
 } from '../../../../../../shared/markdown/markdown-fence-scanner'
+import { isFootnoteDefinitionLine } from '../../rich-markdown/footnotes/rich-markdown-footnote-source'
 
 type ReferenceLinkDefinition = {
   label: string
@@ -53,6 +54,9 @@ function unwrapReferenceUrl(rawUrl: string): string {
 }
 
 function parseReferenceDefinition(line: string): ReferenceLinkDefinition | null {
+  if (isFootnoteDefinitionLine(line)) {
+    return null
+  }
   const match = line.match(REFERENCE_DEFINITION_PATTERN)
   if (!match) {
     return null

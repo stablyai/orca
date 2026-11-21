@@ -6,6 +6,7 @@ import {
   classifyHtmlSuperscriptLinkAction,
   type RichMarkdownHtmlSuperscriptLinkContext
 } from '../citations/rich-markdown-html-superscript-link-context'
+import { FOOTNOTE_REF_ATTR } from '../footnotes/rich-markdown-footnote-navigation'
 
 export function getClickedLinkHref(view: EditorView, event: MouseEvent): string {
   const target =
@@ -76,7 +77,7 @@ export function resolveRichMarkdownDomEventPos(view: EditorView, event: MouseEve
         ? event.target.parentElement
         : null
   const linkLike = targetElement?.closest(
-    'a, sup[data-rich-markdown-html-superscript-link], [data-doc-link-target]'
+    `a, sup[data-rich-markdown-html-superscript-link], sup[${FOOTNOTE_REF_ATTR}], [data-doc-link-target]`
   )
   if (!linkLike || !view.dom.contains(linkLike)) {
     return null

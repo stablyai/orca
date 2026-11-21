@@ -29,6 +29,7 @@ import {
   outdentRichMarkdownCodeBlock
 } from '../code-blocks/rich-markdown-code-block-indent'
 import { handleRichMarkdownCitationKey } from '../citations/rich-markdown-citation-keyboard'
+import { jumpToSelectedFootnoteDefinition } from '../footnotes/rich-markdown-footnote-navigation'
 import { getRichMarkdownSelectionLinkBubble } from '../links/rich-markdown-selected-link-actions'
 import { handleRichMarkdownLinkShortcut } from '../links/rich-markdown-link-shortcut'
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
@@ -141,6 +142,14 @@ export function createRichMarkdownKeyHandler(
 
     if (event.key === 'Enter') {
       const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        jumpToSelectedFootnoteDefinition(ed, ctx.rootRef.current)
+      ) {
+        event.preventDefault()
+        return true
+      }
       if (
         ed &&
         !isComposingMarkdownInput(event, ed) &&

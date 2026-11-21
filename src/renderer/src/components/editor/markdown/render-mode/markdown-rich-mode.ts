@@ -6,6 +6,7 @@ import {
   hasRichMarkdownReferenceDefinition
 } from './markdown-round-trip'
 import { extractFrontMatter } from '../source-scanning/markdown-frontmatter'
+import { stripMarkdownCode } from '../source-scanning/markdown-code-and-comment-scan'
 import {
   canRenderMarkdownAtSize,
   exceedsMarkdownRenderOverrideSizeLimit
@@ -13,6 +14,12 @@ import {
 import { translate } from '@/i18n/i18n'
 import { encodeRawMarkdownHtmlForRichEditor } from '../../rich-markdown/raw-source/raw-markdown-html'
 import { createRichMarkdownEditorCodec } from '../../rich-markdown/document/rich-markdown-source-transport'
+import {
+  FOOTNOTE_CANDIDATE_PATTERN,
+  hasFootnoteCandidate,
+  hasNonFootnoteReferenceLinkCandidate,
+  preservesFootnotes
+} from '../../rich-markdown/footnotes/rich-markdown-footnote-eligibility'
 
 // Why: eligibility re-runs on every edit, so this caps full-document parser cost.
 const FULL_ROUND_TRIP_MAX_CODE_UNITS = 50_000
@@ -62,7 +69,7 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains footnotes.'
       )
     },
-    pattern: /^\[\^[^\]]+\]:\s+/m
+    pattern: FOOTNOTE_CANDIDATE_PATTERN
   },
   {
     reason: 'reference-links',
@@ -99,50 +106,54 @@ export function getMarkdownRichModeUnsupportedReason(
   const body = fm ? fm.body : content
 
   const contentWithoutCode = stripMarkdownCode(body)
+  const htmlPattern = UNSUPPORTED_PATTERNS[0].pattern
+  const refLinksPattern = UNSUPPORTED_PATTERNS[2].pattern
+  const hasHtml = hasHtmlOrJsx(contentWithoutCode, htmlPattern)
+  const hasFootnotes = hasFootnoteCandidate(contentWithoutCode)
 
-  // Only documents containing embedded HTML need a preservation proof.
-  const htmlMatcher = UNSUPPORTED_PATTERNS.find((m) => m.reason === 'html-or-jsx')
-  const hasHtml = htmlMatcher && hasHtmlOrJsx(contentWithoutCode, htmlMatcher.pattern)
-
-  for (const matcher of UNSUPPORTED_PATTERNS) {
-    if (matcher.reason === 'html-or-jsx') {
-      continue
-    }
-    if (!matcher.pattern.test(contentWithoutCode)) {
-      continue
-    }
-    if (
-      matcher.reason === 'reference-links' &&
-      body.length <= FULL_ROUND_TRIP_MAX_CODE_UNITS &&
-      !hasRichMarkdownReferenceDefinition(body)
-    ) {
-      continue
-    }
-    return matcher.reason
+  if (
+    body.length > FULL_ROUND_TRIP_MAX_CODE_UNITS
+      ? hasNonFootnoteReferenceLinkCandidate(contentWithoutCode)
+      : (refLinksPattern.test(contentWithoutCode) ||
+          (hasFootnotes && hasNonFootnoteReferenceLinkCandidate(contentWithoutCode))) &&
+        hasRichMarkdownReferenceDefinition(body)
+  ) {
+    return 'reference-links'
   }
 
-  if (hasHtml) {
+  if (hasHtml || hasFootnotes) {
     const roundTripOutput =
       body.length > FULL_ROUND_TRIP_MAX_CODE_UNITS
-        ? getLargeMarkdownRoundTripOutput(body, htmlMatcher!.pattern)
+        ? getLargeMarkdownRoundTripOutput(body, hasHtml ? htmlPattern : null)
         : getRichMarkdownRoundTripOutput(body)
-    if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
-      return null
+    if (
+      hasFootnotes &&
+      (!roundTripOutput ||
+        !preservesFootnotes(
+          contentWithoutCode,
+          roundTripOutput,
+          stripMarkdownCode(roundTripOutput)
+        ))
+    ) {
+      return 'footnotes'
     }
-    return htmlMatcher!.reason
+    if (
+      hasHtml &&
+      (!roundTripOutput || !preservesEmbeddedHtml(contentWithoutCode, roundTripOutput))
+    ) {
+      return 'html-or-jsx'
+    }
   }
 
   return null
 }
 
-function getLargeMarkdownRoundTripOutput(body: string, htmlPattern: RegExp): string | null {
+function getLargeMarkdownRoundTripOutput(body: string, htmlPattern: RegExp | null): string | null {
   try {
     const codec = createRichMarkdownEditorCodec()
-    const encoded = encodeRawMarkdownHtmlForRichEditor(body, codec, {
-      htmlSuperscriptLinks: true
-    })
+    const encoded = encodeRawMarkdownHtmlForRichEditor(body, codec, { htmlSuperscriptLinks: true })
     // Remaining HTML needs DOM parsing; keep large editable toggles on the bounded fallback.
-    if (hasHtmlOrJsx(stripMarkdownCode(encoded), htmlPattern)) {
+    if (htmlPattern && hasHtmlOrJsx(stripMarkdownCode(encoded), htmlPattern)) {
       return null
     }
     return getRichMarkdownPassthroughOutput(encoded, codec)
@@ -206,33 +217,6 @@ function isHtmlOrJsxFragment(fragment: string): boolean {
 
   const suffix = fragment.slice(tagName.length + 1, -1)
   return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
-}
-
-function stripMarkdownCode(content: string): string {
-  let sanitized = ''
-  let activeFence: '`' | '~' | null = null
-  let lineStart = 0
-
-  while (lineStart <= content.length) {
-    const newlineIndex = content.indexOf('\n', lineStart)
-    const index = newlineIndex === -1 ? content.length : newlineIndex
-    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
-    const line = content.slice(lineStart, lineEnd)
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
-    if (fenceMatch) {
-      const fenceMarker = fenceMatch[1][0] as '`' | '~'
-      activeFence = activeFence === fenceMarker ? null : fenceMarker
-    } else if (!activeFence) {
-      sanitized += line.replace(/`+[^`\n]*`+/g, '')
-    }
-
-    if (index < content.length) {
-      sanitized += '\n'
-    }
-    lineStart = index + 1
-  }
-
-  return sanitized
 }
 
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
