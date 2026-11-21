@@ -391,13 +391,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Workspace cleanup also deletes agent chat history whose Orca workspace folder is gone. Absent means off. */
   deleteChatHistoryWithWorkspace?: boolean
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
-   *  History-only: does not change which account/config/hooks Orca uses. */
-  codexSessionSourceHome?: {
-    /** Absolute host path; empty/undefined falls back to ~/.codex. */
-    host?: string
-    /** Per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
-    wsl?: Record<string, string>
-  }
+   *  History-only: does not change which account/config/hooks Orca uses.
+   *  `host`: absolute host path; empty/undefined falls back to ~/.codex.
+   *  `wsl`: per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
+  codexSessionSourceHome?: { host?: string; wsl?: Record<string, string> }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   agentLaunchChoices?: AgentLaunchChoices
@@ -477,8 +474,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalTerminalAttention: boolean
   /** Experimental: automatically sleep completed, resumable background agent terminals. */
   experimentalAgentHibernation?: boolean
-  /** Experimental: Codex chats share a few capped app-servers instead of one each. */
-  experimentalSharedCodexServers?: boolean
   /** Milliseconds a completed agent must stay idle before hibernation can be considered. */
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
