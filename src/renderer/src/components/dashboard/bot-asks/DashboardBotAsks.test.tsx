@@ -7,7 +7,8 @@ import {
   DashboardBotAsks,
   DashboardBotAsksFeed,
   PopoutDashboardBotAsks,
-  openRelayedDashboardBotAsk
+  openRelayedDashboardBotAsk,
+  toDashboardBotAsk
 } from './DashboardBotAsks'
 import { readDashboardBotAsks } from './dashboard-bot-asks-feed'
 
@@ -80,6 +81,18 @@ describe('DashboardBotAsks', () => {
     expect(calls.openHome).toHaveBeenCalledWith(bot)
     expect(calls.openItem).toHaveBeenCalledWith(bot, 'uid-7')
     expect(opened).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to the question text when its gist is empty, as a fresh --ask leaves it', () => {
+    const ask = toDashboardBotAsk(
+      bot,
+      makeTestBotItem(9, {
+        status: 'needs_you',
+        question: { eventId: 'e2', text: 'Lead with the dashboard?\n   - Yes', gist: '' }
+      }),
+      1_000
+    )
+    expect(ask.question).toBe('Lead with the dashboard?')
   })
 
   it('feeds the pop-out the same asks while mounted, and drops them on unmount', () => {
