@@ -119,8 +119,7 @@ describe('updateManagedOrcadEnvironment', () => {
     const result = await updateManagedOrcadEnvironment(harness.userDataPath, {
       selector: 'Managed'
     })
-    // Force passes only once the candidate proves no daemon is running.
-    expect(result).toMatchObject({ outcome: 'deferred', forceable: true })
+    expect(result).toMatchObject({ outcome: 'deferred', forceable: false })
     expect(mocks.deploy.mock.calls[0]?.[0]).toMatchObject({
       census: { liveSessions: null },
       port: 6_768,

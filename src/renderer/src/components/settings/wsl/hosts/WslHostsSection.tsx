@@ -3,6 +3,7 @@ import { FolderInput, Plus, TerminalSquare, Trash2 } from 'lucide-react'
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   type WslHostConnectIntent,
+  type WslHostPastUncountedTerminals,
   type WslHostStatus
 } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { toast } from 'sonner'
@@ -119,7 +120,11 @@ export function WslHostsSection({
     return null
   }
 
-  const connect = async (environmentId: string, intent?: WslHostConnectIntent): Promise<void> => {
+  const connect = async (
+    environmentId: string,
+    intent?: WslHostConnectIntent,
+    pastUncountedTerminals?: WslHostPastUncountedTerminals
+  ): Promise<void> => {
     const api = window.api.runtimeEnvironments?.wslHosts
     if (!api || connectingId) {
       return
@@ -127,7 +132,11 @@ export function WslHostsSection({
     setConnectingId(environmentId)
     try {
       // Update retries a deferred or skipped update behind the terminal check; Force passes it.
-      await api.connect({ environmentId, ...(intent ? { intent } : {}) })
+      await api.connect({
+        environmentId,
+        ...(intent ? { intent } : {}),
+        ...(pastUncountedTerminals ? { pastUncountedTerminals } : {})
+      })
       onChanged()
     } catch (error) {
       // The main process's message is for the user; Electron's wrapper and the class name aren't.
@@ -219,7 +228,9 @@ export function WslHostsSection({
                 }
                 status={getWslHostRowStatus(status, unavailableLabel !== null, t)}
                 footer={
-                  confirmingForceId === environment.id && deferred?.forceable ? (
+                  confirmingForceId === environment.id &&
+                  deferred?.forceable &&
+                  deferred.incumbentVersion !== undefined ? (
                     <ConfirmStrip
                       message={uncountedForceUpdateMessage(t)}
                       confirmLabel={t(
@@ -230,7 +241,10 @@ export function WslHostsSection({
                       disabled={connectingId !== null}
                       onConfirm={() => {
                         setConfirmingForceId(null)
-                        void connect(environment.id, 'force')
+                        // Update's admission, pinned to the build this deferral was decided over.
+                        void connect(environment.id, 'update', {
+                          incumbentVersion: deferred.incumbentVersion ?? null
+                        })
                       }}
                       onKeep={() => setConfirmingForceId(null)}
                     />
@@ -267,7 +281,9 @@ export function WslHostsSection({
                 }
                 menuItems={
                   <>
-                    {deferred?.forceable ? (
+                    {deferred?.forceable &&
+                    (!isOrcadUncountedTerminalsDeferral(deferred.code) ||
+                      deferred.incumbentVersion !== undefined) ? (
                       <DropdownMenuItem
                         disabled={connectingId !== null}
                         onSelect={() =>

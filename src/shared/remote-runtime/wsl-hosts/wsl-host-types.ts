@@ -52,6 +52,9 @@ export type WslHostStatus = {
 /** An explicit Update retries a skipped build behind the terminal census; Force also passes it. */
 export type WslHostConnectIntent = 'update' | 'force'
 
+/** Update anyway over an uncounted census: Update's admission, pinned to the build the user confirmed. */
+export type WslHostPastUncountedTerminals = { incumbentVersion: string | null }
+
 /** A host a newer Orca runs refused this build: only Force (or updating Orca) changes that. */
 export const ORCAD_HOST_NEWER_DEFERRAL_CODE = 'orcad_host_newer'
 
@@ -65,6 +68,8 @@ export type WslHostDeferredUpdate = {
   reason: string
   /** False when forcing cannot make the update safe (e.g. it would strand terminals). */
   forceable: boolean
+  /** The build the deferral was decided over; Update anyway is pinned to it. Absent from older mains. */
+  incumbentVersion?: string | null
 }
 
 export type WslHostCapability = {

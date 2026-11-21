@@ -17,7 +17,30 @@ type OrcadUpdateDecision =
       preservesLiveDaemon: boolean
       notes: string[]
     }
-  | { action: 'defer'; code: OrcadUpdateDeferCode; reason: string }
+  | {
+      action: 'defer'
+      code: OrcadUpdateDeferCode
+      reason: string
+      /** Full force may pass this: an answered, uncounted census, once the candidate proves no daemon. */
+      forceable?: true
+    }
+
+/** A recount that lost the first census's in-process count cannot show no in-process terminal is starting. */
+export function recountLostInProcessCount(
+  first: OrcadTerminalCensus,
+  recounted: OrcadTerminalCensus
+): OrcadUpdateDecision | null {
+  return typeof first.inProcessSessions === 'number' &&
+    typeof recounted.inProcessSessions !== 'number'
+    ? {
+        action: 'defer',
+        code: 'orcad_update_terminal_census_unavailable',
+        reason:
+          'The server could not count the terminals it runs itself right before the stop, so ' +
+          'nothing was stopped. Orca will try the update again.'
+      }
+    : null
+}
 
 /** `live-terminals` passes only a counted live-terminal deferral, never an uncounted census. */
 export type OrcadUpdateForce = boolean | 'live-terminals'
@@ -95,10 +118,13 @@ export function planOrcadUpdate(input: {
       ]
     }
   }
+  // Only an uncounted census the server answered can pass on a later force; a counted one never can.
+  const forceable = liveSessions === null && isAnsweredOrcadTerminalCensus(input.census)
   if (input.force && crossing.state === 'unverifiable') {
     return {
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable',
+      ...(forceable ? { forceable: true } : {}),
       reason:
         'The terminal daemon did not report its protocol, so this update cannot show that ' +
         `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
@@ -110,6 +136,7 @@ export function planOrcadUpdate(input: {
       return {
         action: 'defer',
         code: 'orcad_update_terminal_census_unavailable',
+        ...(forceable ? { forceable: true } : {}),
         reason:
           'The terminal daemon did not answer a session count, so this update cannot tell ' +
           'whether work is running on the host. Retry, or force the update: it goes ahead only ' +

@@ -8,7 +8,7 @@ const plan = (force: boolean, hostDaemonProtocols?: readonly number[], inProcess
     record: { ...emptyOrcadActivationRecord(), active: '0.1.0+e2c8eab1a4b9' },
     candidateVersion: '0.1.0+8cc9da34df17',
     // An answer from an orcad whose daemon never started.
-    census: { ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS, inProcessSessions },
+    census: { ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS, inProcessSessions, answered: true },
     candidateDaemonProtocol: { protocolVersion: 61, previousProtocolVersions: [60] },
     ...(hostDaemonProtocols ? { hostDaemonProtocols } : {}),
     force

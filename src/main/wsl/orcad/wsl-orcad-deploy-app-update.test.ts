@@ -189,6 +189,7 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         candidateVersion: '1.5.0+ab',
         code: 'orcad_update_terminals_running',
         reason: '2 terminals are running',
+        incumbentVersion: '1.4.0+aa',
         forceable: true
       }
     })
@@ -228,10 +229,9 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       code: 'orcad_update_terminal_census_unavailable',
       reason: 'no census'
     })
-    // Force passes only once the candidate proves no daemon is running.
     await expect(launch()).resolves.toMatchObject({
       outcome: 'deferred',
-      forceable: true
+      forceable: false
     })
   })
 

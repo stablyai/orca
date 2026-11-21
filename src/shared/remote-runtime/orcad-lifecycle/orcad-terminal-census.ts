@@ -16,7 +16,9 @@ export const OrcadTerminalCensusSchema = z.object({
   /** In-process fallback sessions end with orcad, unlike daemon sessions; absent on older hosts. */
   inProcessSessions: CountSchema.optional(),
   /** Admission-fence expiry, epoch ms; 0 means reopened. Absence never proves older servers fenced admission. */
-  admissionClosedUntil: z.number().finite().nonnegative().optional()
+  admissionClosedUntil: z.number().finite().nonnegative().optional(),
+  /** Set by the desktop's census client on a reply it parsed; absent on every census nobody answered. */
+  answered: z.literal(true).optional()
 })
 
 export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>
@@ -28,9 +30,9 @@ export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> =
   daemonProtocolVersion: null
 })
 
-/** Whether a server answered this census; clients return the frozen unverifiable census itself for no answer. */
+/** Whether a server answered this census; anything else, however it was built, reads as unanswered. */
 export function isAnsweredOrcadTerminalCensus(census: OrcadTerminalCensus): boolean {
-  return census !== UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+  return census.answered === true
 }
 
 /** The longest a census may close terminal admission; the stop that follows takes seconds. */

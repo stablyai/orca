@@ -165,7 +165,7 @@ async function launchOverTransport(
       conn,
       localOrcadDir,
       target: context.serverTarget,
-      ...managedOrcadDeployPolicy(context, appVersion, intent),
+      ...managedOrcadDeployPolicy(context, appVersion, intent, options.pastUncountedTerminals),
       ...(incumbent
         ? {
             census: incumbent.census,
@@ -173,7 +173,8 @@ async function launchOverTransport(
             releaseIncumbentAdmission: incumbent.releaseAdmission
           }
         : {}),
-      force: intent === 'force',
+      // Update anyway passes an uncounted census only with full force, pinned to the confirmed build.
+      force: intent === 'force' || options.pastUncountedTerminals !== undefined,
       appVersion,
       recordedNodeRuntimeProbe: true,
       localWslHost: true,
@@ -211,9 +212,9 @@ async function launchOverTransport(
       candidateVersion: deployed.fullVersion,
       code: await wslOrcadDeferralCode(slot, deployed, appVersion),
       reason: deployed.reason,
+      incumbentVersion,
       forceable:
-        isForceableOrcadDeferral(deployed.code) ||
-        deployed.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+        isForceableOrcadDeferral(deployed) || deployed.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
     // Live-terminal deferrals keep the incumbent serving until Update/Force.
     if (
