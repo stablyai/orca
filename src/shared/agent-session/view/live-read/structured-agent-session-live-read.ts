@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
+import * as coalescing from './structured-agent-session-coalescer'
 import {
   type AgentSessionTextAppendCapabilities,
   createAgentSessionTextAppendReader
@@ -48,8 +48,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   hydrate?: (shouldStop: () => boolean) => Promise<void>
   sessionId: string
   subscribe: StructuredAgentSessionLiveSubscribe
-  /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
-  coalesceMs?: number
+  /** How streamed text batches merge, and whether a hidden viewer holds them; defaults apply. */
+  coalesce?: coalescing.StructuredAgentSessionCoalescing
   /** The appends the host advertises; opens wait for it, and null or a rejection means none. */
   textAppend?:
     | Promise<AgentSessionTextAppendCapabilities | null>
@@ -81,11 +81,11 @@ export function startStructuredAgentSessionLiveRead(args: {
   let replacedOpenGeneration = 0
   const asks = createStructuredAgentSessionSubscribeAsks(args)
   let shouldStopCoalescedEvent = (): boolean => true
-  const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
+  const coalescer = coalescing.createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
       args.applyEvent(event)
     }
-  }, args.coalesceMs)
+  }, args.coalesce)
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()

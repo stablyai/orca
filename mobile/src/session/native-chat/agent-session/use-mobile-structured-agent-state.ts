@@ -10,6 +10,7 @@ import {
 } from '../../../../../src/shared/agent-session/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../../../src/shared/agent-session/view/structured-agent-session-holder'
 import { startStructuredAgentSessionLiveRead } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-live-read'
+import { mobileAppViewerVisibility } from './mobile-app-viewer-visibility'
 import {
   type AgentSessionTextAppendCapabilities,
   agentSessionTextAppendRequest
@@ -206,7 +207,7 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
-      coalesceMs: STREAMED_TEXT_COALESCE_MS,
+      coalesce: { ms: STREAMED_TEXT_COALESCE_MS, visibility: mobileAppViewerVisibility },
       textAppend: hostTextAppends(client),
       subscribeRetryNow: subscribeConnectionRevival
     })

@@ -52,6 +52,8 @@ function medianStepCost(costs: readonly number[]): number {
 }
 /** However slowly the reply renders, it still moves at least this often. */
 const MAX_STEP_MS = 6000
+/** A wait longer than this many frames sleeps on a timer instead of a frame per frame. */
+const PARK_FRAMES = 4
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
 const HIDDEN_STEP_MS = 100
 
@@ -82,12 +84,20 @@ export function nativeChatRevealStepFrames(
   const gaps: number[] = []
   let period = FRAME_MS
   let nextId = 0
-  const pending = new Map<number, { frame: number; timer: ReturnType<typeof setTimeout> }>()
+  const pending = new Map<
+    number,
+    {
+      frame: number
+      timer: ReturnType<typeof setTimeout>
+      park?: ReturnType<typeof setTimeout>
+    }
+  >()
   const cancel = (id: number): void => {
     const waiting = pending.get(id)
     if (waiting) {
       cancelAnimationFrame(waiting.frame)
       clearTimeout(waiting.timer)
+      clearTimeout(waiting.park)
       pending.delete(id)
     }
   }
@@ -130,8 +140,22 @@ export function nativeChatRevealStepFrames(
         lastFrame = frameStart
         activeAt = frameStart
         // Half a frame early is the nearest frame to the step's time.
-        if (frameStart < steppedAt + spacing - period / 2) {
-          pending.get(id)!.frame = requestAnimationFrame(onFrame)
+        const due = steppedAt + spacing
+        if (frameStart < due - period / 2) {
+          const waiting = pending.get(id)!
+          // A long wait sleeps until a frame before the step, instead of waking every frame.
+          if (measuring === undefined && due - frameStart > PARK_FRAMES * period) {
+            lastFrame = undefined
+            waiting.frame = -1
+            waiting.park = setTimeout(
+              () => {
+                waiting.frame = requestAnimationFrame(onFrame)
+              },
+              due - frameStart - period
+            )
+            return
+          }
+          waiting.frame = requestAnimationFrame(onFrame)
           return
         }
         fire(frameStart)
