@@ -195,14 +195,33 @@ async function readJsonlFirstRecordAsyncUnslotted(
 /** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished, 'deferred' when the batch should retry next time. */
 export function readJsonlCursorBytes(
   cursor: JsonlCursor,
-  batch: RolloutReadBatch
+  batch: RolloutReadBatch,
+  mode: 'tail' | 'forward' = 'tail'
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
-  return withRolloutReadSlot(() => readJsonlCursorBytesUnslotted(cursor, batch), batch, 'deferred')
+  return withRolloutReadSlot(
+    () => readJsonlCursorBytesUnslotted(cursor, batch, mode),
+    batch,
+    'deferred'
+  )
+}
+
+function completeUtf8Prefix(buffer: Buffer): Buffer {
+  // Leave a split character on disk so the forward cursor decodes it with the next chunk.
+  for (let index = buffer.length - 1; index >= Math.max(0, buffer.length - 3); index--) {
+    const byte = buffer[index]!
+    if ((byte & 0xc0) === 0x80) {
+      continue
+    }
+    const width = byte < 0xc0 ? 1 : byte < 0xe0 ? 2 : byte < 0xf0 ? 3 : 4
+    return buffer.length - index < width ? buffer.subarray(0, index) : buffer
+  }
+  return buffer
 }
 
 async function readJsonlCursorBytesUnslotted(
   cursor: JsonlCursor,
-  batch: RolloutReadBatch
+  batch: RolloutReadBatch,
+  mode: 'tail' | 'forward'
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   if (!cursor.filePath) {
     return undefined
@@ -218,7 +237,7 @@ async function readJsonlCursorBytesUnslotted(
   } catch {
     return undefined
   }
-  const plan = planJsonlRead(snapshot, size)
+  const plan = planJsonlRead(snapshot, size, mode)
   if (plan.length === 0) {
     return plan
   }
@@ -234,7 +253,15 @@ async function readJsonlCursorBytesUnslotted(
     }
     const buffer = Buffer.allocUnsafe(plan.length)
     const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
-    return { ...plan, bytes: buffer.subarray(0, bytesRead) }
+    const bytes = buffer.subarray(0, bytesRead)
+    if (mode === 'forward') {
+      return {
+        ...plan,
+        bytes: completeUtf8Prefix(bytes),
+        hasMore: plan.start + bytesRead < size ? true : undefined
+      }
+    }
+    return { ...plan, bytes }
   } catch {
     return { ...plan, failed: true }
   } finally {

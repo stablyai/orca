@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import { join } from 'node:path'
 import { readPathFromKeys } from '../../../agent-session/lifecycle/agent-session-resume'
 import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
@@ -25,16 +26,15 @@ export type AntigravityChildMetadata = {
   model?: string
   killed: boolean
 }
+type BrainFileFingerprint = Pick<Stats, 'mtimeMs' | 'size' | 'ino'>
+
 export type AntigravityBrainCache = {
-  jsonFiles: Map<string, { mtimeMs: number; size: number; parsed: Record<string, unknown> | null }>
+  jsonFiles: Map<string, (BrainFileFingerprint & { parsed: Record<string, unknown> | null }) | null>
   transcripts: Map<
     string,
     {
       cursor: JsonlCursor
       tail?: AntigravityChildTranscriptTail
-      model?: string
-      modelAt?: number
-      modelStep?: number
       launchResults?: Map<number, AntigravityLaunchResult | null>
     }
   >
@@ -58,6 +58,57 @@ export function normalizeAntigravityModel(raw: unknown): string | undefined {
   const normalized = normalizeOptionalField(raw, AGENT_MODEL_MAX_LENGTH)
   return normalized && normalized.toLowerCase() !== 'auto' ? normalized : undefined
 }
+
+function sameBrainFile(cached: BrainFileFingerprint | null | undefined, stats: Stats): boolean {
+  return cached?.mtimeMs === stats.mtimeMs && cached.size === stats.size && cached.ino === stats.ino
+}
+
+function isMissingBrainFile(error: unknown): boolean {
+  return isRecord(error) && error.code === 'ENOENT'
+}
+
+export function antigravitySwarmMembersPath(brain: string): string {
+  return join(brain, '.system_generated', 'swarm', 'members.json')
+}
+
+async function antigravityBrainFileUnchanged(
+  filePath: string,
+  cache: AntigravityBrainCache,
+  wanted: () => boolean
+): Promise<boolean> {
+  const cached = cache.jsonFiles.get(filePath)
+  if (cached === undefined || !wanted()) {
+    return false
+  }
+  try {
+    return sameBrainFile(cached, await stat(filePath))
+  } catch (error) {
+    return cached === null && isMissingBrainFile(error)
+  }
+}
+
+export async function antigravityMetadataUnchanged(
+  brain: string,
+  cache: AntigravityBrainCache,
+  children: ReadonlySet<string>,
+  settled: (id: string) => boolean,
+  wanted: () => boolean
+): Promise<boolean> {
+  if (
+    !children.size ||
+    !(await antigravityBrainFileUnchanged(antigravitySwarmMembersPath(brain), cache, wanted))
+  ) {
+    return false
+  }
+  for (const id of children) {
+    const path = antigravityChildDescriptorPath(brain, id)
+    if (!path || !settled(id) || !(await antigravityBrainFileUnchanged(path, cache, wanted))) {
+      return false
+    }
+  }
+  return wanted()
+}
+
 async function readBoundedJsonRecord(
   filePath: string,
   cache: AntigravityBrainCache,
@@ -69,7 +120,7 @@ async function readBoundedJsonRecord(
   try {
     const cached = cache.jsonFiles.get(filePath)
     const stats = await stat(filePath)
-    if (cached?.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+    if (cached && sameBrainFile(cached, stats)) {
       return cached.parsed ?? undefined
     }
     if (!wanted()) {
@@ -95,10 +146,18 @@ async function readBoundedJsonRecord(
     cache.jsonFiles.set(filePath, {
       mtimeMs: readStats.mtimeMs,
       size: readStats.size,
+      ino: readStats.ino,
       parsed: record
     })
     return record ?? undefined
-  } catch {
+  } catch (error) {
+    if (wanted()) {
+      if (isMissingBrainFile(error)) {
+        cache.jsonFiles.set(filePath, null)
+      } else {
+        cache.jsonFiles.delete(filePath)
+      }
+    }
     return undefined
   }
 }
@@ -136,11 +195,7 @@ export async function readAntigravitySwarmMembers(
   cache: AntigravityBrainCache,
   wanted: () => boolean = () => true
 ): Promise<ReadonlyMap<string, AntigravityChildMetadata> | undefined> {
-  const record = await readBoundedJsonRecord(
-    join(brain, '.system_generated', 'swarm', 'members.json'),
-    cache,
-    wanted
-  )
+  const record = await readBoundedJsonRecord(antigravitySwarmMembersPath(brain), cache, wanted)
   if (!record || !isRecord(record.members) || !wanted()) {
     return undefined
   }

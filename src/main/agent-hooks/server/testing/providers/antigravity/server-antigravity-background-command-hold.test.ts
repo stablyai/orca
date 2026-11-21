@@ -236,7 +236,7 @@ it('ends the run on agy done when the finished subagent leaves the row during th
   expect(state()).toBe('done')
 })
 
-function brainWithChildDescriptor(ids = ['child']): string {
+function brainWithChildDescriptor(ids = ['child'], includeResults = true): string {
   const brain = join(dir, 'brain', 'parent', '.system_generated')
   mkdirSync(join(brain, 'logs'), { recursive: true })
   mkdirSync(join(brain, 'subagents'), { recursive: true })
@@ -250,19 +250,66 @@ function brainWithChildDescriptor(ids = ['child']): string {
       join(brain, 'subagents', `${conversationId}.json`),
       JSON.stringify({ conversationId, state: 'SUBAGENT_STATE_ALIVE' })
     )
-    appendFileSync(
-      transcriptPath,
-      `${JSON.stringify({
-        step_index: index + 2,
-        type: 'GENERIC',
-        source: 'MODEL',
-        status: 'DONE',
-        content: `Created the following subagent:\n${JSON.stringify({ conversationId })}\nThe subagent will send you a message when it has completed its task or requires guidance.`
-      })}\n`
-    )
+    if (includeResults) {
+      appendInvokeResult(transcriptPath, index + 2, conversationId)
+    }
   }
   return transcriptPath
 }
+
+function appendInvokeResult(transcriptPath: string, step: number, conversationId: string): void {
+  appendFileSync(
+    transcriptPath,
+    `${JSON.stringify({
+      step_index: step,
+      type: 'GENERIC',
+      source: 'MODEL',
+      status: 'DONE',
+      content: `Created the following subagent:\n${JSON.stringify({ conversationId })}\nThe subagent will send you a message when it has completed its task or requires guidance.`
+    })}\n`
+  )
+}
+
+it('recovers a root launch result before a large backlog and waits for the other launch', async () => {
+  const transcriptPath = brainWithChildDescriptor(['C', 'sibling'], false)
+  const root = { transcriptPath }
+  await agyHook('PreInvocation', root)
+  await agyHook('PreToolUse', { ...root, ...invoke(5) })
+  await agyHook('PreToolUse', { ...root, ...invoke(6) })
+  for (const conversationId of ['C', 'sibling']) {
+    await agyHook('PreInvocation', { ...child, conversationId, modelName: 'child-model' })
+  }
+  const row = () => server.getStatusSnapshot()[0]
+  await vi.waitFor(() => expect(row()?.subagents?.map(({ id }) => id)).toEqual(['C', 'sibling']), {
+    timeout: 10000
+  })
+
+  appendInvokeResult(transcriptPath, 5, 'C')
+  appendFileSync(
+    transcriptPath,
+    `${JSON.stringify({ type: 'PLANNER_RESPONSE', content: 'x'.repeat(1024) })}\n`.repeat(1100)
+  )
+  await agyHook('Stop', { ...root, fullyIdle: true })
+  await agyHook('PostToolUse', { ...root, ...invoke(5) })
+  programDone()
+  expect(row()?.subagents?.map(({ id }) => id)).toEqual(['C', 'sibling'])
+  await agyHook('Stop', { ...child, conversationId: 'C', fullyIdle: true })
+  await vi.waitFor(
+    () =>
+      expect(row()).toMatchObject({
+        state: 'working',
+        antigravitySpawnPending: true,
+        subagents: [{ id: 'sibling' }]
+      }),
+    { timeout: 10000 }
+  )
+
+  appendInvokeResult(transcriptPath, 6, 'sibling')
+  await vi.waitFor(() => expect(row()?.antigravitySpawnPending).toBeUndefined(), { timeout: 10000 })
+  expect(row()).toMatchObject({ state: 'working', subagents: [{ id: 'sibling' }] })
+  await agyHook('Stop', { ...child, conversationId: 'sibling', fullyIdle: true })
+  await vi.waitFor(() => expect(state()).toBe('done'), { timeout: 10000 })
+})
 
 it('keeps the run working while a second spawn has not produced its subagent', async () => {
   const transcriptPath = brainWithChildDescriptor()

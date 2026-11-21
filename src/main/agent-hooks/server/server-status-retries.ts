@@ -15,9 +15,7 @@ import {
   ignoredHookTranscriptPoll,
   museLogOffset,
   nextHookTranscriptPollDelay,
-  nextMusePollDelay,
-  shouldPollHookTranscript,
-  hookTranscriptWatchPath,
+  scheduleHookTranscriptPoll,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
@@ -50,7 +48,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
-    (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
+    (paneKey, poll, wanted) => this.runTranscriptPoll(paneKey, poll, wanted)
   )
 
   protected readonly replayTranscriptPolls = new Map<
@@ -111,6 +109,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected clearTranscriptPoll(paneKey: string): void {
+    this.replayTranscriptPolls.delete(paneKey)
     this.transcriptPollScheduler.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
   }
@@ -136,25 +135,12 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     original: EnrichedAgentHookEventPayload,
     delayMs?: number
   ): void {
-    if (source === 'claude') {
-      return
-    }
-    // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
-    if (source !== 'codex' && source !== 'muse' && source !== 'antigravity') {
-      return
-    }
-    if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(original.paneKey)
-      return
-    }
-    const museDelayMs =
-      source === 'muse' || source === 'antigravity' ? (delayMs ?? nextMusePollDelay()) : undefined
-    this.transcriptPollScheduler.schedule(
-      original.paneKey,
-      { source, body, original, delayMs: museDelayMs },
-      hookTranscriptWatchPath(this.state, source, original.paneKey),
-      museDelayMs
-    )
+    scheduleHookTranscriptPoll(this.transcriptPollScheduler, this.state, {
+      source,
+      body,
+      original,
+      delayMs
+    })
   }
 
   protected rearmIgnoredHook(source: AgentHookSource, body: unknown): void {
@@ -172,7 +158,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+  private runTranscriptPoll(
+    paneKey: string,
+    poll: TranscriptPoll,
+    wanted: () => boolean
+  ): void | Promise<void> {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
@@ -188,6 +178,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       paneKey,
       poll.source,
       () =>
+        wanted() &&
         this.server === server &&
         this.statusHooksEnabled &&
         this.statusHookGeneration === generation,
@@ -234,7 +225,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (next) {
       wakeAntigravityDone(this.state, source, paneKey, this.hookSilenceRechecks)
       const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
-      const delayMs = nextHookTranscriptPollDelay(this.state, poll, paneKey, quiet)
+      const delayMs = nextHookTranscriptPollDelay(
+        this.state,
+        poll,
+        paneKey,
+        quiet,
+        reads?.antigravity?.nextPoll
+      )
       this.scheduleTranscriptPoll(source, body, next, delayMs)
     }
   }

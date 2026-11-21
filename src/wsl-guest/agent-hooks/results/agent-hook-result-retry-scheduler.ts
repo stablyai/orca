@@ -19,9 +19,7 @@ import {
   ignoredHookTranscriptPoll,
   museLogOffset,
   nextHookTranscriptPollDelay,
-  nextMusePollDelay,
-  shouldPollHookTranscript,
-  hookTranscriptWatchPath,
+  scheduleHookTranscriptPoll,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
@@ -74,7 +72,7 @@ export class AgentHookResultRetryScheduler {
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
-      (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
+      (paneKey, poll, wanted) => this.runTranscriptPoll(paneKey, poll, wanted)
     )
   }
 
@@ -137,32 +135,14 @@ export class AgentHookResultRetryScheduler {
     version?: string,
     delayMs?: number
   ): void {
-    if (source === 'claude') {
-      return
-    }
-    // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse' && source !== 'antigravity') {
-      return
-    }
-    if (!shouldPollHookTranscript(this.host.state, source, original)) {
-      this.transcriptPollScheduler.clear(original.paneKey)
-      return
-    }
-    const museDelayMs =
-      source === 'muse' || source === 'antigravity' ? (delayMs ?? nextMusePollDelay()) : undefined
-    this.transcriptPollScheduler.schedule(
-      original.paneKey,
-      {
-        source,
-        body,
-        original,
-        env,
-        version,
-        delayMs: museDelayMs
-      },
-      hookTranscriptWatchPath(this.host.state, source, original.paneKey),
-      museDelayMs
-    )
+    scheduleHookTranscriptPoll(this.transcriptPollScheduler, this.host.state, {
+      source,
+      body,
+      original,
+      env,
+      version,
+      delayMs
+    })
   }
 
   rearmIgnoredHook(source: AgentHookSource, body: unknown): void {
@@ -180,7 +160,11 @@ export class AgentHookResultRetryScheduler {
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+  private runTranscriptPoll(
+    paneKey: string,
+    poll: TranscriptPoll,
+    wanted: () => boolean
+  ): void | Promise<void> {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
@@ -190,7 +174,7 @@ export class AgentHookResultRetryScheduler {
     }
     // Why: rollout reads stay off the event loop; the next tick waits for this one.
     const generation = this.generation
-    const live = () => this.host.isListening() && this.generation === generation
+    const live = () => wanted() && this.host.isListening() && this.generation === generation
     return withHookTranscriptPoll(this.host.state, paneKey, poll.source, live, (reads) => {
       // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
       const owner = this.ownsTranscriptPoll(paneKey, poll)
@@ -227,7 +211,13 @@ export class AgentHookResultRetryScheduler {
     const next = update ? this.host.applyEvent(update, source, env, version) : original
     if (next) {
       const quiet = !update && museLogOffset(this.host.state, paneKey) === logOffset
-      const delayMs = nextHookTranscriptPollDelay(this.host.state, poll, paneKey, quiet)
+      const delayMs = nextHookTranscriptPollDelay(
+        this.host.state,
+        poll,
+        paneKey,
+        quiet,
+        reads?.antigravity?.nextPoll
+      )
       this.scheduleTranscriptPoll(source, body, next, env, version, delayMs)
     }
   }

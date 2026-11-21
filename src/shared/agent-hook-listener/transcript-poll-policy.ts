@@ -3,6 +3,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../agent-status/contracts/agent-sta
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
+import type { AgentTranscriptPollScheduler } from './transcripts/agent-transcript-poll-scheduler'
 import {
   hasAntigravityPollWork,
   antigravityDiscoveryEndsAt,
@@ -58,10 +59,17 @@ export function nextHookTranscriptPollDelay(
   state: HookListenerState,
   { source, delayMs: previousMs }: { source: AgentHookSource; delayMs?: number },
   paneKey: string,
-  quiet: boolean
+  quiet: boolean,
+  nextPoll?: 'backlog' | 'unchanged'
 ): number | undefined {
   if (source !== 'muse' && source !== 'antigravity') {
     return undefined
+  }
+  if (nextPoll === 'backlog') {
+    return MUSE_POLL_MS
+  }
+  if (nextPoll === 'unchanged') {
+    return ANTIGRAVITY_SETTLED_QUIET_POLL_MAX_MS
   }
   const pane =
     source === 'antigravity' ? state.antigravityChildWorkByPaneKey.get(paneKey) : undefined
@@ -114,6 +122,33 @@ export function hookTranscriptWatchPath(
   return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
     ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
     : undefined
+}
+
+export function scheduleHookTranscriptPoll<
+  T extends { source: AgentHookSource; original: AgentHookEventPayload; delayMs?: number }
+>(scheduler: AgentTranscriptPollScheduler<T>, state: HookListenerState, poll: T): void {
+  const { source, original } = poll
+  // Nested CLIs inherit pane keys; an unrelated provider must leave the existing poll alone.
+  if (source !== 'codex' && source !== 'muse' && source !== 'antigravity') {
+    return
+  }
+  const { paneKey } = original
+  if (!shouldPollHookTranscript(state, source, original)) {
+    scheduler.clear(paneKey)
+    return
+  }
+  const delayMs = source === 'codex' ? undefined : (poll.delayMs ?? nextMusePollDelay())
+  const owner =
+    source === 'antigravity'
+      ? state.antigravityChildWorkByPaneKey.get(paneKey)?.brainCache
+      : undefined
+  scheduler.schedule(
+    paneKey,
+    { ...poll, delayMs },
+    hookTranscriptWatchPath(state, source, paneKey),
+    delayMs,
+    owner ?? source
+  )
 }
 
 export function transcriptPollUpdate<T extends AgentHookEventPayload>(

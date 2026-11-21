@@ -11,6 +11,7 @@ const ROOT_RECONCILIATION_MS = 5_000
 type TranscriptWakeup<T> = {
   value: T
   filePath?: string
+  owner?: object | string
   watcher?: TranscriptNativeWatcher
   watcherBound: boolean
   nextBindAt: number
@@ -30,7 +31,7 @@ export class AgentTranscriptPollScheduler<T> {
 
   constructor(
     private readonly delayMs: number,
-    private readonly onDue: (key: string, value: T) => void | Promise<void>
+    private readonly onDue: (key: string, value: T, wanted: () => boolean) => void | Promise<void>
   ) {
     this.deadlines = new CodexSubagentPollScheduler(delayMs, (key, entry) => {
       if (this.entries.get(key) !== entry) {
@@ -45,7 +46,7 @@ export class AgentTranscriptPollScheduler<T> {
       entry.initialCheck = false
       let pending: void | Promise<void> = undefined
       try {
-        pending = this.onDue(key, entry.value)
+        pending = this.onDue(key, entry.value, () => this.entries.get(key) === entry)
       } finally {
         if (pending) {
           this.inFlight.set(key, entry)
@@ -81,9 +82,15 @@ export class AgentTranscriptPollScheduler<T> {
   }
 
   /** An explicit `delayMs` shorter than the pending one (a Muse hook ending a quiet back-off) replaces it. */
-  schedule(key: string, value: T, filePath?: string, delayMs?: number): void {
+  schedule(
+    key: string,
+    value: T,
+    filePath?: string,
+    delayMs?: number,
+    owner?: object | string
+  ): void {
     let entry = this.entries.get(key)
-    if (entry && entry.filePath !== filePath) {
+    if (entry && (entry.filePath !== filePath || entry.owner !== owner)) {
       this.clear(key)
       entry = undefined
     }
@@ -91,6 +98,7 @@ export class AgentTranscriptPollScheduler<T> {
       entry = {
         value,
         filePath,
+        owner,
         watcherBound: false,
         nextBindAt: 0,
         scheduled: false,

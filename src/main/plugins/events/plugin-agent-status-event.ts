@@ -15,18 +15,19 @@ export function pluginAgentStatusListener(
     if (!payload) {
       return
     }
-    const childUpdate =
+    const transcriptUpdate =
       previous?.payload.agentType === 'antigravity' &&
       enriched.payload.agentType === 'antigravity' &&
       enriched.hookEventName === undefined &&
       previous.connectionId === enriched.connectionId &&
       previous.launchToken === enriched.launchToken &&
       previous.terminalHandle === enriched.terminalHandle &&
-      !agentSubagentsEqual(previous.payload.subagents, enriched.payload.subagents)
+      (previous.payload.model !== enriched.payload.model ||
+        !agentSubagentsEqual(previous.payload.subagents, enriched.payload.subagents))
     forward(
       payload,
       enriched.terminalHandle,
-      childUpdate ? projectPluginAgentStatusChangedPayload(previous, store) : undefined
+      transcriptUpdate ? projectPluginAgentStatusChangedPayload(previous, store) : undefined
     )
   }
 }

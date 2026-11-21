@@ -49,6 +49,7 @@ export type JsonlCursorBytes = {
   from: number
   start: number
   bytes: Buffer
+  hasMore?: true
   /** The open or read failed after a size was seen; a shrink still resets the cursor. */
   failed?: true
 }
@@ -57,11 +58,12 @@ const NO_BYTES = Buffer.alloc(0)
 
 export function planJsonlRead(
   cursor: JsonlCursor & { filePath: string },
-  size: number
+  size: number,
+  mode: 'tail' | 'forward' = 'tail'
 ): JsonlCursorBytes & { length: number } {
   const from = size < cursor.offset ? 0 : cursor.offset
   const length = Math.min(size - from, TRANSCRIPT_READ_MAX_BYTES)
-  const start = size - from > length ? size - length : from
+  const start = mode === 'tail' && size - from > length ? size - length : from
   const { filePath, offset, carry } = cursor
   return { filePath, offset, carry, from, start, length, bytes: NO_BYTES }
 }

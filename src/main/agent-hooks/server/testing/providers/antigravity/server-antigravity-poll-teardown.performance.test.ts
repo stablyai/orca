@@ -28,10 +28,13 @@ vi.mock(
     return {
       ...actual,
       AgentTranscriptPollScheduler: class<T> extends actual.AgentTranscriptPollScheduler<T> {
-        constructor(delay: number, onDue: (key: string, value: T) => void | Promise<void>) {
-          super(delay, (key, value) => {
+        constructor(
+          delay: number,
+          onDue: (key: string, value: T, wanted: () => boolean) => void | Promise<void>
+        ) {
+          super(delay, (key, value, wanted) => {
             reads.callbacks++
-            return onDue(key, value)
+            return onDue(key, value, wanted)
           })
         }
       }

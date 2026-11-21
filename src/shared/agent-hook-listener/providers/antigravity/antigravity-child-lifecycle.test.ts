@@ -449,6 +449,21 @@ it('lists a subagent killed before its first poll once, then clears it', async (
   expect(row.payload.subagents).toBeUndefined()
 })
 
+it('retires a quiet Swarm member when its previously missing descriptor reports a kill', async () => {
+  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  mkdirSync(swarm, { recursive: true })
+  writeFileSync(
+    join(swarm, 'members.json'),
+    JSON.stringify({ members: { worker: { conversation_id: 'child', model: 'model-c' } } })
+  )
+  transcript('child')
+  hook('child', 'PreInvocation', { modelName: 'model-c' })
+  expect((await poll())?.payload.subagents?.map(({ id }) => id)).toEqual(['child'])
+  await poll()
+  descriptor('child', true)
+  expect((await poll())?.payload.subagents).toBeUndefined()
+})
+
 it('settles only the launch whose root result reports a failure', async () => {
   spawn(undefined, 5)
   spawn(undefined, 6)
