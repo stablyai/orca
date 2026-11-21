@@ -2,13 +2,7 @@
 // request its owner opened, never on one a bot's worker opened as them (own-pr-trigger-guard.ts).
 import { normalizeLocalBranchName } from '../runtime/workspaces/catalog/runtime-worktree-selection'
 import type { BotWorkRow } from './bot-work-store'
-import {
-  botHomeWorktreeOnBranch,
-  workerGitHubRepo,
-  type BotHomeLineage,
-  type BotWorkRuntime,
-  type runtimeBotWork
-} from './bot-work-runtime'
+import { workerGitHubRepo, type BotWorkRuntime, type runtimeBotWork } from './bot-work-runtime'
 
 /** A GitHub pull request's repository, as its webhook names it. */
 export type BotPrRepo = {
@@ -91,30 +85,24 @@ export async function botWorkHasPrBranch(work: BotWorkRows, pr: BotWorkPrHead): 
   return false
 }
 
-export async function isRuntimeBotWorkPullRequest(
+export function botWorkRowsForRuntime(
   botWork: ReturnType<typeof runtimeBotWork>,
-  runtime: BotWorkRuntime & BotHomeLineage,
-  hasBotId: (botId: string) => boolean,
-  pr: BotWorkPrHead
-): Promise<boolean> {
-  return (
-    (await botWorkHasPrBranch(
-      {
-        rows: () =>
-          botWork
-            .store()
-            .liveRows()
-            .filter((row) => hasBotId(row.botId)),
-        workspace: async (row) => {
-          const checked = await botWork.check(row)
-          const worker = checked?.worker
-          const branch = checked?.workspace?.branch
-          return worker && branch
-            ? { branch, githubRepo: () => workerGitHubRepo(runtime, worker, branch) }
-            : null
-        }
-      },
-      pr
-    )) || (await botHomeWorktreeOnBranch(runtime, pr.head, pr.headRef))
-  )
+  runtime: BotWorkRuntime,
+  hasBotId: (botId: string) => boolean
+): BotWorkRows {
+  return {
+    rows: () =>
+      botWork
+        .store()
+        .liveRows()
+        .filter((row) => hasBotId(row.botId)),
+    workspace: async (row) => {
+      const checked = await botWork.check(row)
+      const worker = checked?.worker
+      const branch = checked?.workspace?.branch
+      return worker && branch
+        ? { branch, githubRepo: () => workerGitHubRepo(runtime, worker, branch) }
+        : null
+    }
+  }
 }

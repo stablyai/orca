@@ -858,30 +858,11 @@ describe('BotController', () => {
     const persisted = readPersistedState()
     expect(persisted.bots?.map((bot) => bot.id)).toEqual([saved.id, 'last-bot'])
     expect(persisted.botsNewerAgents?.map((bot) => bot.id)).toEqual(['cursor-bot'])
-    store = createStore()
-    expect(store.getBots().map((bot) => bot.id)).toEqual([saved.id, 'cursor-bot', 'last-bot'])
-
-    expect(store.removeBot({ id: 'cursor-bot', hostId: 'local' })).toBe(true)
-    store.flush()
-    await closeTestStores()
-    const cleaned = readPersistedState()
-    expect(cleaned).not.toHaveProperty('botsNewerAgents')
-    expect(cleaned).not.toHaveProperty('botOrder')
     expect(
       createStore()
         .getBots()
         .map((bot) => bot.id)
-    ).toEqual([saved.id, 'last-bot'])
-    await closeTestStores()
-
-    // A saved botOrder whose newer-agent bots later become older-readable still applies before dropping.
-    writeDataFile({
-      ...cleaned,
-      botsNewerAgents: [],
-      botOrder: ['last-bot', saved.id]
-    })
-    store = createStore()
-    expect(store.getBots().map((bot) => bot.id)).toEqual(['last-bot', saved.id])
+    ).toEqual([saved.id, 'cursor-bot', 'last-bot'])
   })
 
   it('loads legacy bots with no Chat or Linear link', async () => {

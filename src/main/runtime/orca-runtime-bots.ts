@@ -22,13 +22,13 @@ import type { BotShareClient } from '../bots/sharing/bot-share-client'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
-import { runtimeBotWork } from '../bots/bot-work-runtime'
+import { botHomeWorktreeOnBranch, runtimeBotWork } from '../bots/bot-work-runtime'
 import type { BotHomeLineage, BotWorkRuntime } from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type { OwnPullRequest } from '../connector-cloud/own-pr-trigger-guard'
-import { isRuntimeBotWorkPullRequest } from '../bots/bot-work-pr-branch'
+import { botWorkHasPrBranch, botWorkRowsForRuntime } from '../bots/bot-work-pr-branch'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
@@ -230,11 +230,12 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Whether a bot's work on this host opened this pull request as its owner: a live worker's, or a
    *  workspace under a bot's home with its head branch checked out. */
   async isBotWorkPullRequest(pr: OwnPullRequest): Promise<boolean> {
-    return isRuntimeBotWorkPullRequest(
-      this.botWork,
-      this.botWorkRuntime,
-      (botId) => this.listedBotLookup.hasId(botId),
-      pr
+    const rows = botWorkRowsForRuntime(this.botWork, this.botWorkRuntime, (botId) =>
+      this.listedBotLookup.hasId(botId)
+    )
+    return (
+      (await botWorkHasPrBranch(rows, pr)) ||
+      (await botHomeWorktreeOnBranch(this.botWorkRuntime, pr.head, pr.headRef))
     )
   }
 
@@ -286,16 +287,18 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A chat's phone attention: muted by its workspace's filters or its bot's switches, with its group room. */
   protected botAttentionDeliveryDeps() {
     const isWorkspaceMuted = (id: string) => this.isWorkspaceNotificationMuted(id)
+    const homeBots = (id: string) => {
+      const bot = this.wiredBotLookup.byHome(id)
+      return bot ? [bot] : []
+    }
     type Muted = Parameters<typeof isStructuredAttentionMuted>
     return {
-      isMuted: (scope: Muted[1], news: Muted[2]) => {
-        const bot = this.wiredBotLookup.byHome(scope.workspaceId)
-        return isStructuredAttentionMuted(
-          { isWorkspaceMuted, bots: () => (bot ? [bot] : []) },
+      isMuted: (scope: Muted[1], news: Muted[2]) =>
+        isStructuredAttentionMuted(
+          { isWorkspaceMuted, bots: () => homeBots(scope.workspaceId) },
           scope,
           news
-        )
-      },
+        ),
       readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId),
       repliesInSlack: (id: string) => !!this.store && sessionRepliesInSlack(this.store, id)
     }

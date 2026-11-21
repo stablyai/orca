@@ -23,6 +23,9 @@ type CachedBots = {
   bots: readonly Bot[] | undefined
   botsNewerAgents: readonly Bot[] | undefined
   botOrder: readonly string[] | undefined
+  botsLength: number
+  newerLength: number
+  orderLength: number
   botsSnapshot: readonly Bot[]
   newerSnapshot: readonly Bot[]
   orderSnapshot: readonly string[]
@@ -36,16 +39,21 @@ function snapshotOf<T>(items: readonly T[] | undefined): readonly T[] {
   return isImmutableBotSnapshot(items) ? items : [...items]
 }
 
-function sameSnapshot<T>(source: readonly T[] | undefined, snapshot: readonly T[]): boolean {
+function sameSnapshot<T>(
+  source: readonly T[] | undefined,
+  snapshot: readonly T[],
+  expectedLength: number
+): boolean {
   if (!source) {
-    return snapshot.length === 0
+    return expectedLength === 0
+  }
+  if (source.length !== expectedLength) {
+    return false
   }
   if (isImmutableBotSnapshot(source)) {
-    return source.length === snapshot.length
+    return true
   }
-  return (
-    source.length === snapshot.length && source.every((entry, index) => entry === snapshot[index])
-  )
+  return source.every((entry, index) => entry === snapshot[index])
 }
 
 const botPersistenceContext = Symbol('BotPersistence')
@@ -72,13 +80,15 @@ export class BotPersistence {
       cached.bots === bots &&
       cached.botsNewerAgents === botsNewerAgents &&
       cached.botOrder === botOrder &&
-      sameSnapshot(bots, cached.botsSnapshot) &&
-      sameSnapshot(botsNewerAgents, cached.newerSnapshot) &&
-      sameSnapshot(botOrder, cached.orderSnapshot)
+      sameSnapshot(bots, cached.botsSnapshot, cached.botsLength) &&
+      sameSnapshot(botsNewerAgents, cached.newerSnapshot, cached.newerLength) &&
+      sameSnapshot(botOrder, cached.orderSnapshot, cached.orderLength)
     ) {
       return cached.ordered
     }
+    const botsLength = bots?.length ?? 0
     const newerLength = botsNewerAgents?.length ?? 0
+    const orderLength = botOrder?.length ?? 0
     let ordered: Bot[]
     if (newerLength === 0 && !botOrder) {
       ordered = bots ? (isImmutableBotSnapshot(bots) ? bots : [...bots]) : []
@@ -91,6 +101,9 @@ export class BotPersistence {
       bots,
       botsNewerAgents,
       botOrder,
+      botsLength,
+      newerLength,
+      orderLength,
       botsSnapshot: snapshotOf(bots),
       newerSnapshot: snapshotOf(botsNewerAgents),
       orderSnapshot: snapshotOf(botOrder),
@@ -115,6 +128,9 @@ export class BotPersistence {
         bots: readable,
         botsNewerAgents: newer,
         botOrder,
+        botsLength: readable.length,
+        newerLength: newer.length,
+        orderLength: botOrder.length,
         botsSnapshot: readable,
         newerSnapshot: newer,
         orderSnapshot: botOrder,
@@ -127,6 +143,9 @@ export class BotPersistence {
         bots: readable,
         botsNewerAgents: undefined,
         botOrder: undefined,
+        botsLength: readable.length,
+        newerLength: 0,
+        orderLength: 0,
         botsSnapshot: readable,
         newerSnapshot: [],
         orderSnapshot: [],
