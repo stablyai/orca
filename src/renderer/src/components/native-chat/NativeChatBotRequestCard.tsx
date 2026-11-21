@@ -1,5 +1,6 @@
 // The row Orca leaves in the owner's chat when its bot asks or hands work to another bot: who it went
 // to, which kind, and its answer or why it wasn't sent, read from Orca's record as that bot's chat changes.
+import { cn } from '@/lib/class-names'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useEffect, useState } from 'react'
 import { Send } from 'lucide-react'
@@ -102,6 +103,9 @@ export function NativeChatBotRequestCard({
   return <KnownBotRequestCard bot={bot} card={card} cardId={cardId} timestamp={timestamp} />
 }
 
+/** The name, cut at a chip's width; the subject after it gives way first. */
+const NAME = 'min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground'
+
 function KnownBotRequestCard({
   bot,
   card,
@@ -141,19 +145,29 @@ function KnownBotRequestCard({
         )
       }
     >
-      {view.heading}{' '}
+      <span className="shrink-0">{view.heading}</span>
       {view.sent ? (
         <button
           type="button"
           onClick={openChat}
-          className="rounded-sm text-chat-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title={bot.name}
+          className={cn(
+            NAME,
+            'rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          )}
         >
           {bot.name}
         </button>
       ) : (
-        <span className="text-chat-foreground">{bot.name}</span>
+        <span className={NAME} title={bot.name}>
+          {bot.name}
+        </span>
       )}
-      {subject ? ` · ${subject}` : null}
+      {subject ? (
+        <span className="min-w-0 max-w-max grow basis-0 truncate" title={subject}>
+          · {subject}
+        </span>
+      ) : null}
     </NativeChatEventRow>
   )
 }

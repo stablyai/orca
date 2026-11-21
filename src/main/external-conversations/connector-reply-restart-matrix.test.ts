@@ -28,7 +28,9 @@ import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
 import Database from '../sqlite/sync-database'
 import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-reply-outbox'
-import { conversationReplyFill } from './external-conversation-reply-fill'
+import { conversationReplyFill, journalAskedByOwner } from './external-conversation-reply-fill'
+import { readJournalDomainSubmissionBody } from '../native-chat/agent-session-journal/journal-domain-submission-records'
+import { applyJournalDomainQueueCommand } from '../native-chat/agent-session-journal/journal-domain-queue-command'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 
@@ -92,7 +94,13 @@ function openJournal() {
 }
 
 /** The journal writer's admission of one message, in its own transaction. */
-function admit(db: Database.Database, messageId: string, body: AgentJournalMessageItem): void {
+function admit(
+  db: Database.Database,
+  messageId: string,
+  body: AgentJournalMessageItem,
+  /** The queued card this send hands over, as a busy chat's delivery is sent. */
+  card?: string
+): void {
   db.exec('BEGIN IMMEDIATE')
   try {
     applyJournalDomainSubmission(
@@ -109,7 +117,8 @@ function admit(db: Database.Database, messageId: string, body: AgentJournalMessa
           handoverRecorded: true,
           origin: 'client',
           source: { kind: 'user' }
-        }
+        },
+        ...(card ? { consume: { messageId: card, expect: 'waiting' as const } } : {})
       },
       facts,
       NOW
@@ -133,13 +142,34 @@ const asked = (deliveryId: string, carried?: string[]): AgentJournalMessageItem 
   }
 })
 
+/** A delivery to a busy chat: queued as a card (its outbox row keeps the card's id). */
+function queue(db: Database.Database, cardId: string, body: AgentJournalMessageItem): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    applyJournalDomainQueueCommand(
+      db,
+      dir,
+      target,
+      { kind: 'queue-insert', input: { messageId: cardId, body } },
+      NOW
+    )
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 /** One process: the journal reopened, its recovery over the items the test says the chat holds. */
 function start(
   options: {
     continuationsSettled?: Promise<unknown>
     usageLimitDisposition?: (sessionId: string, turnItemId: string) => Promise<string>
+    /** A bot's chat: its quiet marker counts. */
+    bot?: boolean
   } = {}
 ) {
+  const { bot = false, ...recoveryOptions } = options
   const { db, journal } = openJournal()
   let items: AgentJournalRenderItem[] = []
   let submissions: AgentJournalSubmission[] = []
@@ -162,18 +192,23 @@ function start(
   const fill = conversationReplyFill(
     () => journal,
     () => {},
-    usageLimitReplyPause(() => journal, options.usageLimitDisposition ?? (async () => 'ended'))
+    usageLimitReplyPause(() => journal, options.usageLimitDisposition ?? (async () => 'ended')),
+    // The production adapter over the journal's own submission-body read.
+    journalAskedByOwner(async () => ({
+      submissionBody: async (messageId, read) =>
+        readJournalDomainSubmissionBody(db, target, messageId, read?.family)
+    }))
   )
   const recovery = new ConnectorReplyRecovery({
     journal: () => journal,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recovery calls only these chat members.
     chat: () => chat as never,
     hasSession: () => true,
-    isBot: () => false,
+    isBot: () => bot,
     agentOf: () => 'claude',
     fillTurn: fill,
     filled: () => {},
-    ...options
+    ...recoveryOptions
   })
   const message = (messageId: string) =>
     readJournalDomainDispatchItem(db, target, agentJournalSubmissionKey(messageId))!.item
@@ -540,20 +575,183 @@ describe('a usage-limit pause', () => {
   })
 })
 
-describe('no positional "answered together"', () => {
-  it('tells an unconfirmed end for a delivered send no turn proves it took, never unattributed', async () => {
-    const p = start({ continuationsSettled: Promise.resolve() })
-    admit(p.db, 'm1', asked('d1'))
-    admit(p.db, 'other', {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'unrelated' }]
+describe('a bot’s answer to its owner’s DM across a pause or a restart', () => {
+  const DM = { source: 'slack', externalId: 'T1:D0OWNER:D0OWNER:U9' }
+  const dmAsked = (deliveryId: string, role: 'owner' | 'member'): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'fix it' }],
+    origin: 'connector',
+    asker: {
+      source: 'slack',
+      userId: role === 'owner' ? 'U0OWNER' : 'U0MEMBER',
+      role,
+      place: { kind: 'direct_message', id: 'D0OWNER' }
+    },
+    connectorDelivery: { account: 'account-a', conversation: DM, deliveryId }
+  })
+  const continued = (claim: AgentJournalConnectorClaim): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'Continue.' }],
+    connectorClaim: claim
+  })
+  // The DM asks, the usage limit pauses it, and the automatic continue answers with `prose`.
+  const pausedThenContinued = async (role: 'owner' | 'member', prose: string) => {
+    const p = start({
+      bot: true,
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'pending'
     })
-    p.show([p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')])
+    admit(p.db, 'm1', dmAsked('d1', role))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'failed')])
+    const stamp = { account: 'account-a', conversation: DM, deliveryId: 'd1' }
+    expect((await p.limited('item:t1', 'm1', [stamp])).paused).toBe(true)
+    const claim = await p.recovery.claimFor('chat-1', { turnId: 'item:t1', kind: 'usage_limit' })
+    admit(p.db, 'c1', continued(claim!))
+    p.show([...p.items(), p.message('c1'), ...p.turn('item:t2', 'c1', 'completed', prose)])
+    await p.recovery.boot()
+    return p.outcomes()
+  }
+
+  it('posts the words the continue wrote before its marker, once, when the owner asked', async () => {
+    expect(await pausedThenContinued('owner', 'Both fixes landed.\n\nNO_REPLY')).toEqual({
+      d1: { outcome: 'answered', prose: 'Both fixes landed.', head: 'd1' }
+    })
+  })
+
+  it('keeps a continue that wrote only the marker quiet', async () => {
+    expect(await pausedThenContinued('owner', 'NO_REPLY')).toEqual({
+      d1: { outcome: 'quiet', head: 'd1' }
+    })
+  })
+
+  it('keeps a member’s DM quiet through the pause, as before', async () => {
+    expect(await pausedThenContinued('member', 'Owner-only note.\n\nNO_REPLY')).toEqual({
+      d1: { outcome: 'quiet', head: 'd1' }
+    })
+  })
+
+  // The DM arrives while the bot is busy: a card, handed over later as its own send.
+  const queuedThenPaused = async (role: 'owner' | 'member') => {
+    const p = start({
+      bot: true,
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'pending'
+    })
+    queue(p.db, 'q1', dmAsked('d1', role))
+    admit(p.db, 's1', dmAsked('d1', role), 'q1')
+    p.show([p.message('s1'), ...p.turn('item:t1', 's1', 'failed')])
+    const stamp = { account: 'account-a', conversation: DM, deliveryId: 'd1' }
+    expect((await p.limited('item:t1', 's1', [stamp])).paused).toBe(true)
+    const claim = await p.recovery.claimFor('chat-1', { turnId: 'item:t1', kind: 'usage_limit' })
+    admit(p.db, 'c1', continued(claim!))
+    p.show([
+      ...p.items(),
+      p.message('c1'),
+      ...p.turn('item:t2', 'c1', 'completed', 'Both fixes landed.\n\nNO_REPLY')
+    ])
+    await p.recovery.boot()
+    return p.outcomes()
+  }
+
+  it('posts the words for a DM the owner sent while the bot was busy (a queued card)', async () => {
+    expect(await queuedThenPaused('owner')).toEqual({
+      d1: { outcome: 'answered', prose: 'Both fixes landed.', head: 'd1' }
+    })
+  })
+
+  it('keeps a member’s queued DM quiet', async () => {
+    expect(await queuedThenPaused('member')).toEqual({ d1: { outcome: 'quiet', head: 'd1' } })
+  })
+
+  it('posts the owner’s answer from a restart continuation after the journal reopened', async () => {
+    const launch = Promise.withResolvers<void>()
+    const before = start({ bot: true })
+    admit(before.db, 'm1', dmAsked('d1', 'owner'))
+    before.db.close()
+    const p = start({ bot: true, continuationsSettled: launch.promise })
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'interrupted')])
+    await p.recovery.boot()
+    const claim = await p.recovery.claimFor('chat-1', {
+      turnId: 'provider-item:t1',
+      kind: 'restart'
+    })
+    admit(p.db, 'c1', continued(claim!))
+    p.show([
+      ...p.items(),
+      p.message('c1'),
+      ...p.turn('item:t2', 'c1', 'completed', 'Picked it back up.\n\nNO_REPLY')
+    ])
+    launch.resolve()
+    await p.publish()
+    expect(p.outcomes()).toEqual({
+      d1: { outcome: 'answered', prose: 'Picked it back up.', head: 'd1' }
+    })
+  })
+})
+
+describe('no positional "answered together" across a restart', () => {
+  const unrelated: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'unrelated' }]
+  }
+
+  it('tells an unconfirmed end for a send an earlier process accepted that no turn proves it took', async () => {
+    vi.setSystemTime(NOW)
+    const before = start()
+    admit(before.db, 'm1', asked('d1'))
+    before.db.close()
+    vi.setSystemTime(NOW + 60_000)
+    const p = start({ continuationsSettled: Promise.resolve() })
+    admit(p.db, 'other', unrelated)
+    p.show(
+      [p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')],
+      [submissionOf('m1', { submittedAt: NOW })]
+    )
     await p.recovery.boot()
     expect(p.outcomes()).toEqual({
       d1: { outcome: 'interrupted', head: 'd1', category: 'unconfirmed' }
     })
+  })
+
+  it('answers together a follow-up sent into a running turn once a later turn ends', async () => {
+    vi.setSystemTime(NOW - 60_000)
+    const p = start()
+    admit(p.db, 'm0', asked('d0'))
+    admit(p.db, 'm1', asked('d1'))
+    p.recovery.admitted('chat-1')
+    const first = [p.message('m0'), ...p.turn('item:t1', 'm0', 'completed', 'First answer.')]
+    const sends = [
+      submissionOf('m0', { submittedAt: NOW }),
+      submissionOf('m1', { submittedAt: NOW })
+    ]
+    p.show([...first, p.message('m1')], sends)
+    p.recovery.turnEnded('chat-1')
+    await p.publish()
+    // Orchestration mail wakes a later turn after the follow-up, and it ends.
+    admit(p.db, 'mail', unrelated)
+    p.show(
+      [...p.items(), p.message('mail'), ...p.turn('item:t2', 'mail', 'completed', 'Mail.')],
+      [...sends, submissionOf('mail', { submittedAt: NOW })]
+    )
+    p.recovery.turnEnded('chat-1')
+    await p.publish()
+    expect(p.outcomes().d1).toEqual({ outcome: 'unattributed', head: 'd1' })
+  })
+
+  it('leaves a send still queued for handover owed when an unrelated turn ends', async () => {
+    vi.setSystemTime(NOW - 60_000)
+    const p = start({ continuationsSettled: Promise.resolve() })
+    admit(p.db, 'm1', asked('d1'))
+    admit(p.db, 'other', unrelated)
+    p.show(
+      [p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')],
+      [submissionOf('m1', { dispatchState: 'pending', submittedAt: NOW, handoverRecorded: true })]
+    )
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: null } })
   })
 })
 
