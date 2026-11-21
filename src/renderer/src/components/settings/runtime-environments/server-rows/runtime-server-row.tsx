@@ -34,6 +34,8 @@ import {
 } from '../../host-rows/ServerListRow'
 import { RuntimeSshAccessControl } from '../ssh-access/RuntimeSshAccessControl'
 import { RuntimeSshAccessDialog } from '../ssh-access/runtime-ssh-access-dialog'
+import { RuntimeSettingsCopyDialog } from '../settings-copy/RuntimeSettingsCopyDialog'
+import { useSettingsCopy } from '../settings-copy/use-settings-copy'
 import {
   getManagedServerSummary,
   ManagedServerConfirmations,
@@ -111,6 +113,7 @@ export function RuntimeServerRow({
   const [repairOpen, setRepairOpen] = useState(false)
   const [sshDialogOpen, setSshDialogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const settingsCopy = useSettingsCopy(environment.id)
   const row = useRuntimeServerRowState(environment, details)
   const managedForgettable = managed ? managedServerForgettable(managed, row.serverReplaced) : false
   const actionBusy = connecting || switching || disconnecting || removing
@@ -356,6 +359,7 @@ export function RuntimeServerRow({
               onRefreshSshTargets?.()
               setSshDialogOpen(true)
             }}
+            onCopySettings={row.isReachable ? settingsCopy.start : undefined}
             onToggleDetails={() => setExpanded((v) => !v)}
             onRemove={() => onRemove(environment)}
           />
@@ -368,6 +372,7 @@ export function RuntimeServerRow({
         environmentId={environment.id}
         name={environment.name}
       />
+      <RuntimeSettingsCopyDialog name={environment.name} copy={settingsCopy} />
       {showSshAccess && sshAccessApi ? (
         <RuntimeSshAccessDialog
           open={sshDialogOpen}
