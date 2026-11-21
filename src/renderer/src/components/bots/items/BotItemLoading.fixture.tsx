@@ -26,21 +26,34 @@ function pendingRead(): void {
   })
 }
 
-function PendingPane({ short = false }: { short?: boolean }): React.JSX.Element {
+function PendingPane({
+  height = 600,
+  stepping = false
+}: {
+  height?: number
+  stepping?: boolean
+}): React.JSX.Element {
   const [home, setHome] = useState(false)
-  return (
-    <div
-      className={
-        short ? 'flex h-[360px] flex-col bg-sidebar' : 'flex h-[600px] flex-col bg-sidebar'
+  const [index, setIndex] = useState(0)
+  const uid = stepping ? `pending-item-${index}` : 'pending-item'
+  const state: BotItemWalkState = stepping
+    ? {
+        ...walk,
+        uid,
+        place: { index: index + 1, total: 3 },
+        canStep: (direction) => index + direction >= 0 && index + direction < 3,
+        step: (direction) => setIndex(index + direction)
       }
-    >
+    : walk
+  return (
+    <div className="flex flex-col bg-sidebar" style={{ height }}>
       {home ? (
         <div data-bot-home-panel="">Home</div>
       ) : (
         <BotItemPane
           bot={fixtureCos}
-          uid="pending-item"
-          walk={walk}
+          uid={uid}
+          walk={state}
           offline={false}
           onBack={() => setHome(true)}
         />
@@ -64,5 +77,17 @@ export const narrow = defineFixture({
 export const shortNarrow = defineFixture({
   width: 252,
   setup: pendingRead,
-  render: () => <PendingPane short />
+  render: () => <PendingPane height={360} />
+})
+
+export const clipped = defineFixture({
+  width: 252,
+  setup: pendingRead,
+  render: () => <PendingPane height={160} />
+})
+
+export const stepping = defineFixture({
+  width: 312,
+  setup: pendingRead,
+  render: () => <PendingPane stepping />
 })
