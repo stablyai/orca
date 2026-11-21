@@ -3,6 +3,7 @@ import type { NativeChatSendHandle } from './native-chat-runtime-send'
 
 export type NativeChatSendLifecycle = {
   cancelPendingSends: () => void
+  hasPendingSends: () => boolean
   trackPendingSend: (handle: NativeChatSendHandle, pendingId?: string) => void
 }
 
@@ -43,6 +44,7 @@ export function useNativeChatSendLifecycle(
     () => settlePendingSends(onPendingSendCanceled),
     [settlePendingSends, onPendingSendCanceled]
   )
+  const hasPendingSends = useCallback(() => pendingSendHandlesRef.current.size > 0, [])
   const trackPendingSend = useCallback((handle: NativeChatSendHandle, pendingId?: string) => {
     const entry = {
       cleanupTimer: null as ReturnType<typeof setTimeout> | null,
@@ -74,5 +76,5 @@ export function useNativeChatSendLifecycle(
     }
   }, [inputOwnedByCard, onPendingSendRetired, settlePendingSends])
 
-  return { cancelPendingSends, trackPendingSend }
+  return { cancelPendingSends, hasPendingSends, trackPendingSend }
 }

@@ -93,7 +93,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       source: recallSource,
       inputRef: textareaRef
     })
-    const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
+    const { cancelPendingSends, hasPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
       onOptimisticSendCanceled,
@@ -309,9 +309,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         sendMessage: submission.send
       })
 
-    const interrupt = useNativeChatComposerInterrupt({
+    const { interrupt, confirmEscape } = useNativeChatComposerInterrupt(draftScopeKey, draft, {
       inert: inputOwnedByCard,
       cancelPendingSends,
+      hasPendingSends,
       isWorking,
       onStop,
       resolveTarget
@@ -331,7 +332,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         ? chooseEditItem
         : goalMode.interceptPick(orcaCommands.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
-      interrupt: editSession?.cancel ?? (escapeStops ? interrupt : undefined),
+      interrupt: editSession?.cancel ?? (escapeStops ? confirmEscape : undefined),
       send,
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
