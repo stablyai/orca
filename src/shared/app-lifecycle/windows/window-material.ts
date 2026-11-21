@@ -63,8 +63,8 @@ export function hostWindowMaterial(
   if (selectable.includes(material)) {
     return material
   }
-  if (material === 'frosted' && host.platform === 'darwin') {
-    return 'blur'
+  if (material === 'frosted') {
+    return hostWindowMaterial('blur', host)
   }
   // Why only blur degrades: unblurred see-through never silently becomes a blur effect.
   return material === 'blur' && selectable.includes('translucent') ? 'translucent' : 'off'

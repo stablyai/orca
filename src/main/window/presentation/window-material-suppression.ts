@@ -8,10 +8,11 @@ import {
 import { MAC_BLUR_VIBRANCY } from './window-material-options'
 
 type FrostedGlassAddon = { setBackdrop: (windowHandle: Buffer, visible: boolean) => boolean }
+type MaterialWindow = Pick<BrowserWindow, 'getNativeWindowHandle' | 'isDestroyed' | 'setVibrancy'>
 
 const requireNative = createRequire(import.meta.url)
-const createdMaterials = new WeakMap<BrowserWindow, WindowMaterial>()
-const nativeGlassWindows = new WeakMap<BrowserWindow, FrostedGlassAddon>()
+const createdMaterials = new WeakMap<MaterialWindow, WindowMaterial>()
+const nativeGlassWindows = new WeakMap<MaterialWindow, FrostedGlassAddon>()
 
 function isFrostedGlassAddon(addon: unknown): addon is FrostedGlassAddon {
   return (
@@ -22,12 +23,7 @@ function isFrostedGlassAddon(addon: unknown): addon is FrostedGlassAddon {
   )
 }
 
-export function rememberWindowMaterial(window: BrowserWindow, material: WindowMaterial): void {
-  createdMaterials.set(window, material)
-  if (process.platform !== 'darwin' || material !== 'frosted') {
-    return
-  }
-
+function loadFrostedGlass(): FrostedGlassAddon | undefined {
   try {
     const resourcesDir = app.isPackaged
       ? process.resourcesPath
@@ -36,30 +32,63 @@ export function rememberWindowMaterial(window: BrowserWindow, material: WindowMa
     if (!isFrostedGlassAddon(addon)) {
       throw new Error('Unexpected Frosted Glass addon exports')
     }
+    return addon
+  } catch (error) {
+    console.warn('[window] Could not load Frosted Glass:', error)
+    return undefined
+  }
+}
+
+export function resolveAvailableWindowMaterial(material: WindowMaterial): WindowMaterial {
+  return material === 'frosted' && !loadFrostedGlass() ? 'blur' : material
+}
+
+function setFrostedBackdrop(
+  window: MaterialWindow,
+  addon: FrostedGlassAddon,
+  visible: boolean
+): boolean {
+  try {
+    return addon.setBackdrop(window.getNativeWindowHandle(), visible)
+  } catch (error) {
+    console.warn('[window] Could not set Frosted Glass backdrop:', error)
+    return false
+  }
+}
+
+export function rememberWindowMaterial(window: MaterialWindow, material: WindowMaterial): void {
+  createdMaterials.set(window, material)
+  if (process.platform !== 'darwin' || material !== 'frosted') {
+    return
+  }
+
+  const addon = loadFrostedGlass()
+  if (addon) {
     window.setVibrancy(null)
-    if (addon.setBackdrop(window.getNativeWindowHandle(), true)) {
+    if (setFrostedBackdrop(window, addon, true)) {
       nativeGlassWindows.set(window, addon)
       return
     }
-  } catch (error) {
-    console.warn('[window] Could not apply Frosted Glass:', error)
   }
+  createdMaterials.set(window, 'blur')
   window.setVibrancy(MAC_BLUR_VIBRANCY)
 }
 
 /** Drops macOS blur while a theme image covers it (#8482); other platforms keep their material. */
-export function setWindowMaterialSuppressed(window: BrowserWindow, suppressed: boolean): void {
-  if (
-    process.platform !== 'darwin' ||
-    !isBlurredWindowMaterial(createdMaterials.get(window)) ||
-    window.isDestroyed()
-  ) {
+export function setWindowMaterialSuppressed(
+  window: MaterialWindow,
+  suppressed: boolean
+): WindowMaterial | undefined {
+  const material = createdMaterials.get(window)
+  if (process.platform !== 'darwin' || !isBlurredWindowMaterial(material) || window.isDestroyed()) {
     return
   }
   const nativeGlass = nativeGlassWindows.get(window)
-  if (nativeGlass?.setBackdrop(window.getNativeWindowHandle(), !suppressed)) {
-    return
+  if (nativeGlass && setFrostedBackdrop(window, nativeGlass, !suppressed)) {
+    return material
   }
   nativeGlassWindows.delete(window)
+  createdMaterials.set(window, 'blur')
   window.setVibrancy(suppressed ? null : MAC_BLUR_VIBRANCY)
+  return 'blur'
 }

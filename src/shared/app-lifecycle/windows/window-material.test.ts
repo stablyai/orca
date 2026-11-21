@@ -14,10 +14,16 @@ describe('Frosted Glass window material', () => {
     expect(parseWindowMaterialArgument([formatWindowMaterialArgument(material)])).toBe('frosted')
   })
 
-  it('uses standard macOS blur on unsupported versions and stays opaque on other platforms', () => {
+  it('uses the host’s normal blur fallback where Frosted Glass is unavailable', () => {
     expect(resolveWindowMaterial(settings, { ...macOS15, osRelease: '25.0.0' }, false)).toBe('blur')
     expect(
       resolveWindowMaterial(settings, { platform: 'win32', osRelease: '10.0.22631' }, false)
+    ).toBe('blur')
+    expect(resolveWindowMaterial(settings, { platform: 'linux', osRelease: '6.1.0' }, false)).toBe(
+      'translucent'
+    )
+    expect(
+      resolveWindowMaterial(settings, { platform: 'win32', osRelease: '10.0.19045' }, false)
     ).toBe('off')
   })
 

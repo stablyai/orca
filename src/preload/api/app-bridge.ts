@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
+import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
@@ -41,7 +42,7 @@ export const appApi = {
     ),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
-  setWindowMaterialSuppressed: (suppressed: boolean): Promise<void> =>
+  setWindowMaterialSuppressed: (suppressed: boolean): Promise<WindowMaterial | void> =>
     ipcRenderer.invoke('app:setWindowMaterialSuppressed', suppressed),
   relaunch: (): Promise<void> =>
     prepareAndInvokeAppRestart(
