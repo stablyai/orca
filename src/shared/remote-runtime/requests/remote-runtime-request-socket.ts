@@ -22,6 +22,7 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { readSealedFrame } from '../remote-runtime-sealed-frame'
+import { startRemoteRuntimeRequestSocketLiveness } from './remote-runtime-request-socket-liveness'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
 import {
   prepareRuntimeSocketRequest,
@@ -88,6 +89,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         socket.off('error', onError)
         socket.off('close', onClose)
         socket.off('message', onMessage)
+        socket.off('pong', liveness.noteActivity)
+        socket.off('ping', liveness.noteActivity)
         if (socket.readyState !== WebSocket.CLOSED) {
           socket.on('error', ignoreSettledRemoteRuntimeSocketError)
         }
@@ -96,6 +99,11 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       let phaseTimeoutMs = timeoutMs
       let deadline = performance.now() + timeoutMs
       let timeout = setTimeout(onTimeout, timeoutMs)
+      const liveness = startRemoteRuntimeRequestSocketLiveness({
+        getSocket: () => ws,
+        getPairingStage: () => router.pairingStage,
+        onLost: (error) => finishError(error)
+      })
 
       function onTimeout(): void {
         finishError(
@@ -140,6 +148,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
         settled = true
         clearTimeout(timeout)
+        liveness.stop()
         try {
           cleanupSocketListeners()
           ws?.close()
@@ -245,6 +254,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         ws!.once('error', onError)
         ws!.on('close', onClose)
         ws!.on('message', onMessage)
+        ws!.on('pong', liveness.noteActivity)
+        ws!.on('ping', liveness.noteActivity)
       }
       if (prepareGuard) {
         const prepareDial = (): Promise<void> =>
@@ -293,6 +304,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         if (settled) {
           return
         }
+        liveness.noteActivity()
         router.handleFrame(readSealedFrame(data, isBinary))
       }
     })
