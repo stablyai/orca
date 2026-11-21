@@ -1,26 +1,15 @@
 import { toast } from 'sonner'
-
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-staging'
 import { translate } from '@/i18n/i18n'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../../../shared/file-access/wsl-paths'
-import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import { openWorktreeScopedToast } from '@/lib/worktree-scoped-toast'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
-import {
-  type captureTerminalDropTarget,
-  getCurrentTerminalDropTransport
-} from './terminal-drop-target'
-import {
-  getTerminalTargetShellForWorktreePath,
-  resolveTerminalDropTargetShell
-} from './terminal-drop-shell'
-import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
-import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
+import { describeDropWorkspaceIfInactive } from './terminal-drop-workspace-label'
+import { pasteResolvedDropPaths, type NativeDropFlowArgs } from './terminal-drop-paste'
+import { uploadRuntimeDropPaths } from './terminal-runtime-drop-upload'
+import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
 import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
-import { recordRecentTerminalImage } from '../recent-terminal-images'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
@@ -100,63 +89,9 @@ export async function deliverNativeTerminalFileDrop(
     pane,
     tabId,
     targetShell,
+    worktreeId,
     worktreePath
   })
-}
-
-export type NativeDropFlowArgs = {
-  dataPaths: string[]
-  dropTarget: ReturnType<typeof captureTerminalDropTarget>
-  manager: PaneManager
-  paneTransports: Map<number, PtyTransport>
-  pane: { id: number; leafId: string }
-  tabId: string
-  worktreePath: string
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
-  assertCurrent?: () => void
-}
-
-async function uploadRuntimeDropPaths(
-  args: NativeDropFlowArgs & {
-    runtimeEnvironmentId: string
-    worktreeId: string
-  }
-): Promise<void> {
-  const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
-  const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles',
-      'Uploading {{count}} files to runtime…',
-      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to runtime…' }
-    )
-  )
-  try {
-    const { staged, skipped, failed } = await stageClientFilesForAgent(
-      {
-        // Use the destination worktree’s owner, which may differ from the focused sidebar host.
-        runtimeEnvironmentId: args.runtimeEnvironmentId,
-        worktreeId: args.worktreeId,
-        worktreePath: args.worktreePath,
-        expectedExecutionHostId: args.expectedExecutionHostId,
-        expectedSshTargetId: args.expectedSshTargetId,
-        expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
-      },
-      args.dataPaths,
-      args.assertCurrent
-    )
-    await pasteResolvedDropPaths({
-      ...args,
-      paths: staged.map(({ hostPath }) => hostPath),
-      targetShell
-    })
-    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
-  } catch (err) {
-    toast.error(terminalFileDropErrorMessage(err, 'upload'))
-  } finally {
-    toast.dismiss(pending)
-  }
 }
 
 async function pasteLocalDropPaths(
@@ -199,15 +134,18 @@ async function uploadRemoteDropPaths(
   args: NativeDropFlowArgs & {
     connectionId: string
     targetShell: 'posix' | 'windows'
+    worktreeId: string
   }
 ): Promise<void> {
-  const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
-      'Uploading {{count}} files to remote…',
-      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to remote…' }
-    )
+  const message = translate(
+    'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
+    'Uploading {{count}} files to remote…',
+    { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to remote…' }
   )
+  const pending = openWorktreeScopedToast({
+    worktreeId: args.worktreeId,
+    show: (id) => (id === undefined ? toast.loading(message) : toast.loading(message, { id }))
+  })
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
       paths: args.dataPaths,
@@ -218,53 +156,16 @@ async function uploadRemoteDropPaths(
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
     })
     await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
-    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
+    reportTerminalDropUploadSkipsAndFailures(
+      skipped,
+      failed,
+      describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
+    )
   } catch (err) {
-    toast.error(terminalFileDropErrorMessage(err, 'upload'))
+    toast.error(terminalFileDropErrorMessage(err, 'upload'), {
+      description: describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
+    })
   } finally {
-    toast.dismiss(pending)
-  }
-}
-
-async function pasteResolvedDropPaths(
-  args: NativeDropFlowArgs & {
-    paths: string[]
-    previewPaths?: readonly string[]
-    targetShell: 'posix' | 'windows'
-  }
-): Promise<void> {
-  args.assertCurrent?.()
-  // Upload/resolution can outlive the pane; recheck before writing to its PTY.
-  const liveTransport = getCurrentTerminalDropTransport(
-    args.manager,
-    args.paneTransports,
-    args.dropTarget
-  )
-  if (!liveTransport) {
-    return
-  }
-  const writeResult = await writeTerminalDropPathsToCapturedTarget({
-    dropTarget: args.dropTarget,
-    manager: args.manager,
-    paneTransports: args.paneTransports,
-    paths: args.paths,
-    targetShell: args.targetShell
-  })
-  showTerminalDropWriteFailure(writeResult.failureReason)
-  if (writeResult.sentAnyPath) {
-    recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
-    if (
-      args.previewPaths &&
-      getCurrentTerminalDropTransport(args.manager, args.paneTransports, args.dropTarget)
-    ) {
-      const pane = args.manager
-        .getPanes()
-        .find((candidate) => candidate.leafId === args.pane.leafId)
-      if (pane) {
-        for (const path of args.previewPaths.slice(0, writeResult.pathsWritten)) {
-          recordRecentTerminalImage(pane.terminal, path)
-        }
-      }
-    }
+    pending.close()
   }
 }
