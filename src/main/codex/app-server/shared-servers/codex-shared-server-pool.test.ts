@@ -281,8 +281,9 @@ describe('shared Codex app-servers', () => {
       { timeoutMs: null }
     )
     servers[0]!.handlers.onNotification?.('thread/started', { thread: { id: 'thread-1' } })
-    // Other unclaimed threads push the held frames past the cap.
-    for (let i = 0; i < 2_000; i += 1) {
+    // Other unclaimed threads push the held frames past the cap, and enough of them that the
+    // record of which threads lost frames overflows too.
+    for (let i = 0; i < 8_000; i += 1) {
       servers[0]!.handlers.onNotification?.('item/started', { threadId: `stray-${i}` })
     }
     servers[0]!.releaseOpen()
@@ -443,6 +444,27 @@ describe('shared Codex app-servers', () => {
       params: { threadId: 'helper-1', turn: { id: 'h' } }
     })
     expect(requests).toEqual(['item/commandExecution/requestApproval'])
+  })
+
+  it('refuses a server request with no thread rather than hand it to some chat, except account requests', async () => {
+    const { servers, pool } = fakeCodex()
+    const requests: string[] = []
+    const a = chat()
+    await pool.open(
+      launch(),
+      { ...a.handlers, onServerRequest: (request) => requests.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const { handlers } = servers[0]!
+    handlers.onServerRequest?.({
+      id: 8,
+      method: 'item/fileChange/requestApproval',
+      params: { itemId: 'i1' }
+    })
+    handlers.onServerRequest?.({ id: 9, method: 'account/chatgptAuthTokens/refresh', params: {} })
+    expect(servers[0]!.refused).toEqual([8])
+    expect(requests).toEqual(['account/chatgptAuthTokens/refresh'])
   })
 
   it("stops the chat's own background commands on close, and reports Stop unproven when one survives", async () => {

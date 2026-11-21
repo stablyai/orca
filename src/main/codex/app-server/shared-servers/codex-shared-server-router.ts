@@ -11,6 +11,12 @@ import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
 
 const MAX_RETIRED_THREADS = 4_096
+/** The only server requests Codex sends without a thread; both are per account, and a server
+ *  never serves two accounts, so any chat on it may answer. */
+const SERVER_WIDE_REQUESTS: ReadonlySet<string> = new Set([
+  'account/chatgptAuthTokens/refresh',
+  'attestation/generate'
+])
 
 /** Which chat owns each thread on one server, and where each frame goes. */
 export class CodexSharedServerRouter {
@@ -41,7 +47,9 @@ export class CodexSharedServerRouter {
     return owner !== undefined && owner !== lease
   }
 
-  claim(threadId: string, lease: CodexSharedServerLease): void {
+  /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
+   *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
+  claim(threadId: string, lease: CodexSharedServerLease, opened = false): void {
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {
       previous.threads.delete(threadId)
@@ -58,7 +66,7 @@ export class CodexSharedServerRouter {
     }
     // Its early frames were dropped to bound memory: the chat reopens it from Codex's history
     // rather than run on with events missing.
-    if (this.unrouted.takeLost(threadId)) {
+    if (this.unrouted.takeLost(threadId) && opened) {
       lease.shed()
     }
   }
@@ -159,7 +167,10 @@ export class CodexSharedServerRouter {
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
   private routeServerWide(frame: CodexSharedServerFrame): void {
     if (frame.kind === 'request') {
-      const first = [...this.leases()].find((lease) => lease.open)
+      // Any other request without a thread can't be tied to a chat; none may answer another's.
+      const first = SERVER_WIDE_REQUESTS.has(frame.request.method)
+        ? [...this.leases()].find((lease) => lease.open)
+        : undefined
       if (first) {
         first.deliver(frame)
       } else {

@@ -16,6 +16,8 @@ export type FakeServer = {
   terminals: Map<string, Set<string>>
   /** Whether Orca stopped reading this server's output. */
   readingPaused: boolean
+  /** Server requests Orca answered with an error. */
+  refused: (number | string)[]
   /** Answers the thread/start held by `holdOpen`. */
   releaseOpen: () => void
   crash: () => void
@@ -47,6 +49,7 @@ export function fakeCodex(
       requests: [],
       terminals: new Map(),
       readingPaused: false,
+      refused: [],
       releaseOpen: () => {},
       crash: () => {
         closed = true
@@ -144,7 +147,9 @@ export function fakeCodex(
       },
       notify: () => {},
       respond: () => {},
-      respondWithError: () => {},
+      respondWithError: (id) => {
+        server.refused.push(id)
+      },
       close: async () => {
         closed = true
         closeResult = { root: 'exited', tree: closeTree }

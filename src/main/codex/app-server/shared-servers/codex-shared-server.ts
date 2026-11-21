@@ -104,8 +104,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return this.physical
   }
 
-  claim(threadId: string, lease: CodexSharedServerLease): void {
-    this.router.claim(threadId, lease)
+  claim(threadId: string, lease: CodexSharedServerLease, opened?: boolean): void {
+    this.router.claim(threadId, lease, opened)
   }
 
   backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
@@ -175,6 +175,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       } else {
         this.leases.delete(lease)
         this.turns.changed()
+        this.router.openSettled()
         this.onEnded(this)
       }
       for (const threadId of fenced) {

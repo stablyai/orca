@@ -27,7 +27,8 @@ export type CodexLeaseRequestOwner = {
   readonly outstanding: Set<(error: Error) => void>
   /** Threads this chat holds now. */
   readonly threads: ReadonlySet<string>
-  claim: (threadId: string) => void
+  /** `opened`: by the reply to a thread open, which may find the thread's early frames dropped. */
+  claim: (threadId: string, opened?: boolean) => void
   heldByOther: (threadId: string) => boolean
   /** Drops this chat's own claim on a thread it failed to open. */
   unclaim: (threadId: string) => void
@@ -100,7 +101,7 @@ export async function sendCodexLeaseRequest(
         const threadId = opensThread ? codexOpenedThreadId(result) : null
         if (threadId) {
           if (owner.open && !callerGone) {
-            owner.claim(threadId)
+            owner.claim(threadId, true)
           } else {
             owner.abandon(threadId)
           }

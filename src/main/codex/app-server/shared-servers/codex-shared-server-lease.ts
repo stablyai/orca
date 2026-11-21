@@ -26,7 +26,7 @@ export type CodexSharedLeaseHost = {
   readonly pid: number | undefined
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
-  claim: (threadId: string, lease: CodexSharedServerLease) => void
+  claim: (threadId: string, lease: CodexSharedServerLease, opened?: boolean) => void
   /** This chat's queue grew or shrank by these bytes, or it may have started waiting (0). */
   backlog: (lease: CodexSharedServerLease, deltaBytes: number) => void
   /** Whether any of these threads has a turn running. */
@@ -126,7 +126,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     return sendCodexLeaseRequest(this, method, params, options)
   }
 
-  claim = (threadId: string): void => this.host.claim(threadId, this)
+  claim = (threadId: string, opened?: boolean): void => this.host.claim(threadId, this, opened)
   heldByOther = (threadId: string): boolean => this.host.router.heldByOther(threadId, this)
   unclaim = (threadId: string): void => this.host.router.unclaim(threadId, this)
 
