@@ -34,7 +34,9 @@ export async function readGitDirState(
   const gitDirs = [commonDir]
   try {
     const linked: string[] = []
-    for (const entry of await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })) {
+    const entries = await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })
+    throwIfStopped(stop)
+    for (const entry of entries) {
       const gitDir = join(commonDir, 'worktrees', entry.name)
       if (entry.isDirectory()) {
         gitDirs.push(gitDir)

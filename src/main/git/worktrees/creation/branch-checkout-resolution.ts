@@ -55,9 +55,10 @@ async function resolveFromFiles(
   { bareCommonDir, firstOwnerSettles = false, canLocate, stop = () => false }: ResolveOptions
 ): Promise<BranchCheckouts> {
   // A case-insensitive file system resolves `refs/heads/Main` to a loose `main`, which the write itself may create.
-  const foldRef = (await pathExists(join(commonDir, 'head')))
-    ? (ref: string) => ref.toLowerCase()
-    : (ref: string) => ref
+  throwIfStopped(stop)
+  const caseInsensitive = await pathExists(join(commonDir, 'head'))
+  throwIfStopped(stop)
+  const foldRef = caseInsensitive ? (ref: string) => ref.toLowerCase() : (ref: string) => ref
   const target = foldRef(fullRef)
   const looseRefs = new Map<string, Promise<string>>()
   // Per-worktree refs (refs/worktree/, refs/bisect/, refs/rewritten/) live in their own git dir.
