@@ -1,0 +1,42 @@
+---
+title: Run OpenCode with a local model
+description: Point OpenCode at a local OpenAI-compatible inference server and run it inside an Orca workspace.
+---
+
+OpenCode owns the provider and model configuration. Orca launches the configured CLI in the workspace you select.
+
+## Start the server
+
+Start an OpenAI-compatible server on the computer that runs OpenCode. On Apple Silicon, [Rapid-MLX](https://github.com/raullenchai/Rapid-MLX#quick-start-60-seconds) is one option:
+
+```bash
+rapid-mlx serve qwen3.5-4b-4bit --host 127.0.0.1 --port 8000
+curl http://127.0.0.1:8000/v1/models
+```
+
+Use the model ID returned by `/v1/models`. In an SSH or paired-server workspace, `127.0.0.1` refers to the execution host. Run the server on that host or use an authenticated connection or private tunnel to reach it. Keep an unauthenticated server on loopback.
+
+## Configure OpenCode and start it in Orca
+
+Add a custom provider in OpenCode's `opencode.json` on the execution host. This example uses the OpenCode 1.x format. Replace `model-id-from-server` in both places with the exact ID returned by your server:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "local/model-id-from-server",
+  "provider": {
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local inference",
+      "options": { "baseURL": "http://127.0.0.1:8000/v1" },
+      "models": {
+        "model-id-from-server": { "name": "Local coding model" }
+      }
+    }
+  }
+}
+```
+
+For OpenCode versions that use `providers`, follow the current [OpenCode local-model configuration](https://opencode.ai/docs/models/#compatible). Keep API keys in the execution host's environment if the server requires one.
+
+In Orca, open the workspace and choose **OpenCode** from the agent picker. Use `/models` to confirm that the local provider is available. If OpenCode cannot connect, run the `/v1/models` check from a terminal in that same workspace. For agent tasks, choose a model and server configuration that support tool calls. A successful chat response alone does not establish that the agent can use tools.
