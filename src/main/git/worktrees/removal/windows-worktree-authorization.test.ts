@@ -145,3 +145,28 @@ it('refuses before sweeping children when a checkout replaces the pinned marker 
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+it('refuses before sweeping children when a checkout replaces the pinned marker during directory enumeration', async () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'orca-win-readdir-race-'))
+  try {
+    const gitFile = join(scratch, '.git')
+    writeFileSync(gitFile, 'gitdir: C:/repo/.git/worktrees/feature\n')
+    const initialIno = lstatSync(gitFile, { bigint: true }).ino
+    names.mockImplementationOnce(async () => {
+      unlinkSync(gitFile)
+      writeFileSync(gitFile, 'gitdir: C:/repo/.git/worktrees/restored\n')
+      return ['unsaved.txt', '.git']
+    })
+
+    await expect(
+      removeWindowsCheckout('C:/repo', scratch, true, {
+        expectedMarker: `C:/repo/.git/worktrees/feature#${initialIno}`
+      })
+    ).rejects.toThrow('A different checkout is now at')
+
+    expect(removeChild).not.toHaveBeenCalled()
+    expect(unlink).not.toHaveBeenCalled()
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

@@ -57,7 +57,8 @@ async function deleteHostChildren(root: string, names: readonly string[]): Promi
 export async function removeHostCheckout(
   targetPath: string,
   authorize: (checkClean: boolean) => Promise<boolean>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  verifyBeforeChildDelete?: () => Promise<void>
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
   let markerGone = false
@@ -71,6 +72,7 @@ export async function removeHostCheckout(
           markerGone = !(await authorize(true))
           if (!markerGone) {
             const names = await namesExceptCheckoutMarker(root)
+            await verifyBeforeChildDelete?.()
             await deleteHostChildren(root, names)
             // Child promises settled; their internal Node sibling walks may still be running.
             markerGone = !(await authorize(false))
@@ -198,24 +200,23 @@ export async function removeUnregisteredHostCheckout(
     throw differentCheckoutAtPathError(targetPath)
   }
   if (initial) {
-    await removeHostCheckout(
-      targetPath,
-      async () => {
-        const current = await inspectHostCheckoutMarker(markerPath, targetPath)
-        if (!current) {
-          return false
-        }
-        if (
-          current.dev !== initial.dev ||
-          current.ino !== initial.ino ||
-          current.identity !== initial.identity
-        ) {
-          throw differentCheckoutAtPathError(targetPath)
-        }
-        return true
-      },
-      signal
-    )
+    const verifyInitialMarker = async (): Promise<boolean> => {
+      const current = await inspectHostCheckoutMarker(markerPath, targetPath)
+      if (!current) {
+        return false
+      }
+      if (
+        current.dev !== initial.dev ||
+        current.ino !== initial.ino ||
+        current.identity !== initial.identity
+      ) {
+        throw differentCheckoutAtPathError(targetPath)
+      }
+      return true
+    }
+    await removeHostCheckout(targetPath, verifyInitialMarker, signal, async () => {
+      await verifyInitialMarker()
+    })
     return
   }
 
@@ -229,6 +230,9 @@ export async function removeUnregisteredHostCheckout(
         }
         if (!swept) {
           const names = await namesExceptCheckoutMarker(root)
+          if (await hasAnyCheckoutMarkerEntry(markerPath)) {
+            throw differentCheckoutAtPathError(targetPath)
+          }
           await deleteHostChildren(root, names)
           swept = true
           if (await hasAnyCheckoutMarkerEntry(markerPath)) {

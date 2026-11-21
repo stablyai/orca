@@ -77,7 +77,21 @@ export async function removeWindowsCheckout(
         checkClean
       )
     },
-    options.checkoutDeleteSignal
+    options.checkoutDeleteSignal,
+    async () => {
+      if (forbidMarker && !(await nativeWindowsMarkerMissing(root, options))) {
+        throw differentCheckoutAtPathError(root)
+      }
+      if (pinnedMarker !== undefined) {
+        const current = await readCheckoutMarkerState(root, options)
+        if (
+          current.kind !== 'absent' &&
+          (current.kind !== 'file' || current.identity !== pinnedMarker)
+        ) {
+          throw differentCheckoutAtPathError(root)
+        }
+      }
+    }
   )
 }
 

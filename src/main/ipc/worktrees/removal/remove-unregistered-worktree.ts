@@ -22,6 +22,7 @@ import {
   toLocalWorktreeRuntimePaths
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import {
+  captureAcceptedCheckoutGuard,
   proveOrphanedCheckoutGuard,
   type ProvenOrphanCheckoutGuard
 } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
@@ -74,6 +75,10 @@ export async function removeUnregisteredWorktree(
     if (canCleanOrphanedDirectory && !args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
+    const deletionGuard: ProvenOrphanCheckoutGuard = orphanGuard ?? {
+      markerLast: true,
+      ...(await captureAcceptedCheckoutGuard(worktreePath, localWorktreeGitOptions)).markerOptions
+    }
 
     const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
     let removalCompleted = false
@@ -84,16 +89,11 @@ export async function removeUnregisteredWorktree(
       await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
         ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
             ...localWorktreeGitOptions,
-            ...orphanGuard,
+            ...deletionGuard,
             deleteBranch: false,
             knownRemovedWorktree: null
           })
-        : removeLocalWorktreePath(
-            worktreePath,
-            localWorktreeGitOptions,
-            undefined,
-            orphanGuard ?? { markerLast: true }
-          ))
+        : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions, undefined, deletionGuard))
       removalCompleted = true
     } finally {
       await removalGate.finish(removalCompleted)
