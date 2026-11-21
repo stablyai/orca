@@ -5,7 +5,10 @@ import { continueRebase } from './rebase-continue'
 import { createConflictingRebaseRepo } from './rebase-real-git.test-fixture'
 import type * as GitExecFile from '../../command-runner/git-exec-file'
 
-const gitExecFileAsyncSpy = vi.hoisted(() => ({ calls: [] as [string[], unknown][] }))
+const gitExecFileAsyncSpy = vi.hoisted(() => {
+  const calls: [string[], unknown][] = []
+  return { calls }
+})
 vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
   const actual = await importOriginal<typeof GitExecFile>()
   return {
