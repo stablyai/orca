@@ -227,7 +227,8 @@ function PanZoomImageCanvas({
           {showTitle ? (
             <span
               aria-hidden
-              className="min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
+              // A hit target, so a click on the title never reaches the canvas and closes it.
+              className="pointer-events-auto min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
             >
               {title}
             </span>

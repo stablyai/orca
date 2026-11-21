@@ -77,9 +77,9 @@ const dialogContentSurfaceVariants = cva('', {
       'opaque-panel': 'gap-0 bg-popover p-0',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
       security: SECURITY_SURFACE_CLASS,
-      /** A full-window, see-through layer over a darker scrim, for media; it only fades, never scales. */
+      /** Media sits straight on the scrim; scaling in would make its edge controls slide. */
       media:
-        'inset-0 top-0 left-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:border-0 dark:shadow-none'
+        'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
     }
   },
   defaultVariants: { surface: 'default' }
