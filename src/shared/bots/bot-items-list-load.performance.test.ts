@@ -144,11 +144,20 @@ describe('loadBotItemsList work', () => {
     }
     read = await loadBotItemsList(call, null, WHOLE)
     read = await loadBotItemsList(call, read, MORE)
-    items[0]!.links = [{ ...link, state: 'completed' }]
+    // A worker on a row below the first page changes: the whole read reads it too.
+    items[229]!.links = [{ ...link, state: 'completed' }]
     asked.length = 0
     read = await loadBotItemsList(call, read, worker)
     expect(asked).toHaveLength(2)
-    const first = read.items.find((item) => item.uid === 'i1')?.links[0]
-    expect(first?.kind === 'dispatch' ? first.state : null).toBe('completed')
+    const deep = read.items.find((item) => item.uid === 'i230')?.links[0]
+    expect(deep?.kind === 'dispatch' ? deep.state : null).toBe('completed')
+    // Pages still owed by a read stopped for a newer ask count too, and are read once.
+    read = await loadBotItemsList(call, read, MORE)
+    items[0]!.status = 'needs_you'
+    read = await loadBotItemsList(call, read, WHOLE, { waiting: () => true })
+    asked.length = 0
+    read = await loadBotItemsList(call, read, worker)
+    expect(asked).toHaveLength(3)
+    expect(read.items.filter(closed)).toHaveLength(150)
   })
 })

@@ -45,6 +45,11 @@ export async function loadBotItemsList(
   options: BotItemsListLoadOptions = {}
 ): Promise<BotItemsListRead> {
   const from = previous && !ask.whole ? unread.get(previous) : undefined
+  // Named reads beyond a whole read's calls (one per loaded page) read every loaded page instead:
+  // each call costs the host a read of its workers, however few rows it answers.
+  if (previous && !ask.whole && namedCostsMore(previous, ask.parts, from)) {
+    return loadAsked(call, previous, { ...ask, whole: true }, { ...options, pageUnmoved: true })
+  }
   if (!from) {
     return loadAsked(call, previous, ask, options)
   }
@@ -95,6 +100,26 @@ async function readOwedThenMore(
   return deeper
 }
 
+/** Whether reading the named items, and the pages still owed below `from`, takes more calls than
+ *  reading every loaded page. */
+function namedCostsMore(
+  previous: BotItemsListRead,
+  parts: readonly string[],
+  from: string | undefined
+): boolean {
+  const page = BOT_ITEM_LIMITS.listPage
+  const named = namedParts(parts, previous).length
+  if (named === 0) {
+    return false
+  }
+  const place = from ? botItemCursorPlace(from) : null
+  const owed = place
+    ? previous.items.filter((item) => isClosedRow(item) && !botItemReaches(item, place)).length
+    : 0
+  const wholeCalls = Math.ceil(botItemsClosedDepth(previous) / page)
+  return Math.ceil(named / page) + Math.ceil(owed / page) > wholeCalls
+}
+
 /** Whether cursor `a` ends Closed above (before) cursor `b`. */
 function cursorAbove(a: string, b: string): boolean {
   const pa = botItemCursorPlace(a)
@@ -112,13 +137,6 @@ async function loadAsked(
   const live = () => isLive(options)
   const page = BOT_ITEM_LIMITS.listPage
   const parts = previous ? namedParts(ask.parts, previous) : []
-  // Named reads beyond a whole read's calls (one per loaded page) read whole instead: each call
-  // costs the host a read of its workers, however few rows it answers.
-  const namedCalls = Math.ceil(parts.length / page)
-  const wholeCalls = previous ? Math.ceil(botItemsClosedDepth(previous) / page) : 0
-  if (!ask.whole && previous && parts.length > 0 && namedCalls > wholeCalls) {
-    return loadAsked(call, previous, { ...ask, whole: true }, options)
-  }
   if (!ask.whole && previous && parts.length > 0) {
     const named = await readNamed(call, parts, live)
     // A host before `uids` answers whole: what it left out isn't gone, so the list is read whole.
