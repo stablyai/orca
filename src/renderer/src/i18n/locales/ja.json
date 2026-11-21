@@ -19720,6 +19720,7 @@
         "optionUpdateFailed": "オプションを更新できませんでした",
         "optionValue": {
           "none": "なし",
+          "off": "オフ",
           "ultracode": "Ultracode",
           "fast": "高速",
           "minimal": "最小",

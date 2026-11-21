@@ -95,6 +95,8 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   kimi: null,
   // Kiro's ACP pushes its own slash commands for each session.
   kiro: null,
+  // Goose reports its skills as commands, at rest too.
+  goose: null,
   omp: null,
   // ZCode invokes a `/name` mention by running its own Skill tool, so the text passes through.
   zcode: {
