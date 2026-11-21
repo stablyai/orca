@@ -9,7 +9,10 @@ import {
 } from '../../providers/adapter/testing/daemon-pty-adapter-test-harness'
 import { TerminalHost } from '../../terminal-host/terminal-host'
 import { handleDaemonFencedTermination } from '../daemon-fenced-termination'
-import { FENCED_TERMINATION_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  FENCED_TERMINATION_PROTOCOL_VERSION,
+  IDLE_FENCED_TERMINATION_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
 import { createProcessTableSnapshotReader } from '../../../../shared/process-observation/tables/process-snapshot-cache'
 
@@ -42,6 +45,25 @@ describe('fenced daemon kill protocol', () => {
     ).resolves.toEqual({ outcome: 'refused', reason: 'unsupported' })
     expect(request).not.toHaveBeenCalled()
     adapter.dispose()
+  })
+
+  it('advertises idle protection separately from manual fenced termination for older owners', async () => {
+    harness = await startDaemonAdapterHarness(() => createMockSubprocess())
+    const olderOwner = new DaemonPtyAdapter({
+      socketPath: '/unused',
+      tokenPath: '/unused',
+      protocolVersion: IDLE_FENCED_TERMINATION_PROTOCOL_VERSION - 1
+    })
+    vi.spyOn(olderOwner, 'listProcesses').mockResolvedValue([
+      { id: 'old-pty', incarnationId: 'old', cwd: '', title: 'old' }
+    ])
+    const router = new DaemonPtyRouter({ current: harness.adapter, legacy: [olderOwner] })
+    const current = await router.spawn({ sessionId: 'current-pty', cols: 80, rows: 24 })
+    await router.listProcesses()
+    expect(router.supportsFencedTermination('old-pty')).toBe(true)
+    expect(router.supportsFencedTermination('old-pty', true)).toBe(false)
+    expect(router.supportsFencedTermination(current.id, true)).toBe(true)
+    olderOwner.dispose()
   })
 
   it('checks identity across a real daemon control connection', async () => {

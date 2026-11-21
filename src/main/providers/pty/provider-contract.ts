@@ -131,7 +131,7 @@ export type IPtyProvider = {
   supportsAgentSessionClaims?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   /** Whether missing claim metadata in this PTY's process listing proves absence. */
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
-  supportsFencedTermination?: (id: string) => boolean
+  supportsFencedTermination?: (id: string, requireIdle?: true) => boolean
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>

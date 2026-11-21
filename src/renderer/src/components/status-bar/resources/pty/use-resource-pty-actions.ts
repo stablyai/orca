@@ -57,9 +57,18 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     active: 0
   })
   const mounted = useMountedRef()
-  const { removeSessions, invalidate, sessionsError } = inventory
-  const { sessions } = inventory.sessionInventory
-  useEffect(() => status.retireErrors(sessions), [sessions, status])
+  const { removeSessions, invalidate, sessionsError, hasSession, subscribeRemoval } = inventory
+  useEffect(
+    () =>
+      subscribeRemoval((identity) => {
+        if (identity === null) {
+          status.retireErrors(hasSession)
+        } else {
+          status.retireError(identity)
+        }
+      }),
+    [hasSession, status, subscribeRemoval]
+  )
   const flushCompletions = useCallback(() => {
     if (flushTimer.current !== null) {
       clearTimeout(flushTimer.current)
@@ -82,14 +91,14 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     if (removed.length > 0) {
       removeSessions(removed)
     }
-    status.complete(completed)
+    status.complete(completed, hasSession)
     for (const completion of completed) {
       completion.batch.unpublished -= 1
       if (completion.batch.unpublished === 0) {
         completion.batch.resolve()
       }
     }
-  }, [removeSessions, status])
+  }, [hasSession, removeSessions, status])
   useEffect(() => () => flushCompletions(), [flushCompletions])
 
   const terminate = useCallback(

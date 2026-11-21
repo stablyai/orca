@@ -5,16 +5,18 @@ import {
   IDLE_FENCED_TERMINATION_PROTOCOL_VERSION
 } from './daemon-protocol-version'
 
+export function supportsDaemonFencedTermination(protocol: number, requireIdle?: true): boolean {
+  return (
+    protocol >=
+    (requireIdle ? IDLE_FENCED_TERMINATION_PROTOCOL_VERSION : FENCED_TERMINATION_PROTOCOL_VERSION)
+  )
+}
+
 export function daemonFencedKillPayload(
   request: PtyFencedTerminationRequest,
   protocol: number
 ): KillRequest['payload'] | undefined {
-  if (
-    protocol <
-    (request.requireIdle
-      ? IDLE_FENCED_TERMINATION_PROTOCOL_VERSION
-      : FENCED_TERMINATION_PROTOCOL_VERSION)
-  ) {
+  if (!supportsDaemonFencedTermination(protocol, request.requireIdle)) {
     return undefined
   }
   const {

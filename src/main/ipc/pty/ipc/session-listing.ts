@@ -80,6 +80,10 @@ export function installPtySessionListingIpcHandler(deps: {
           }
           for (const rawSession of sessions) {
             const session = admission.admit(rawSession)
+            const fencedTermination =
+              !duplicated.has(session.id) &&
+              hostId === LOCAL_EXECUTION_HOST_ID &&
+              provider.supportsFencedTermination?.(session.id) === true
             // Rebuild routing for reconnect-discovered sessions; later kill requests carry only the PTY ID.
             ptyOwnership.set(session.id, hostId)
             deduped.set(diagnostic ? ptySessionIdentity(session) : session.id, {
@@ -97,10 +101,12 @@ export function installPtySessionListingIpcHandler(deps: {
                 ? { rootProcessId: session.rootProcessId }
                 : {}),
               ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
-              fencedTermination:
-                !duplicated.has(session.id) &&
-                hostId === LOCAL_EXECUTION_HOST_ID &&
-                provider.supportsFencedTermination?.(session.id) === true,
+              fencedTermination,
+              ...(diagnostic && {
+                idleFencedTermination:
+                  fencedTermination &&
+                  provider.supportsFencedTermination?.(session.id, true) === true
+              }),
               ...(session.worktreeId !== undefined ? { worktreeId: session.worktreeId } : {}),
               ...(session.paneKey !== undefined ? { paneKey: session.paneKey } : {}),
               ...(session.exiting === true ? { exiting: true as const } : {}),

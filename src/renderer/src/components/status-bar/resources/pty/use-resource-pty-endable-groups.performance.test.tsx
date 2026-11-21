@@ -56,7 +56,7 @@ it.each([300, 3_000])('updates a group with %i PTYs without revisiting its rows'
   expect(result.current).toBe(false)
   rerender()
   act(() => {
-    ending.complete([{ identity: 'pty-0', error: 'agent_running' }])
+    ending.complete([{ identity: 'pty-0', error: 'agent_running' }], () => true)
   })
   expect(result.current).toBe(true)
   expect(eligibilityReads).toBe(0)

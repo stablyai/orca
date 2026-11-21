@@ -22,6 +22,7 @@ function sameListedSession(before: PtyListedSession, after: PtyListedSession): b
       before.inventorySourceId === after.inventorySourceId &&
       before.routed === after.routed &&
       before.fencedTermination === after.fencedTermination &&
+      before.idleFencedTermination === after.idleFencedTermination &&
       before.rootProcessId === after.rootProcessId &&
       before.foregroundProcess === after.foregroundProcess &&
       before.cwd === after.cwd &&
@@ -47,6 +48,7 @@ export class ResourceSessionInventoryCache {
     loading: false
   }
   private listeners = new Set<() => void>()
+  private removalListeners = new Set<(identity: string | null) => void>()
   private known = new Map<string, PtyListedSession>()
   private identitiesByIncarnation = new Map<string, Set<string>>()
   // Suppression belongs only to the current listing, never to later authoritative results.
@@ -69,6 +71,12 @@ export class ResourceSessionInventoryCache {
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+  hasSession = (identity: string): boolean => this.known.has(identity)
+  /** A null identity means the complete list was replaced. */
+  subscribeRemoval = (listener: (identity: string | null) => void): (() => void) => {
+    this.removalListeners.add(listener)
+    return () => this.removalListeners.delete(listener)
   }
 
   private publish(patch: Partial<typeof this.state>): void {
@@ -206,6 +214,7 @@ export class ResourceSessionInventoryCache {
         }
         this.known = deduped
         this.identitiesByIncarnation = identitiesByIncarnation
+        this.removalListeners.forEach((listener) => listener(null))
         this.publishInventory(patch)
       })
       .catch((error: unknown) => {
@@ -283,7 +292,11 @@ export class ResourceSessionInventoryCache {
     if (identity === undefined) {
       return false
     }
-    return this.known.delete(identity)
+    const removed = this.known.delete(identity)
+    if (removed) {
+      this.removalListeners.forEach((listener) => listener(identity))
+    }
+    return removed
   }
 
   remove(id: string, incarnationId?: string): void {

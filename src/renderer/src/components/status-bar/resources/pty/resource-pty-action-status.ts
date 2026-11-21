@@ -1,8 +1,4 @@
 import type { PtyFencedTerminationOutcome } from '../../../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import {
-  ptySessionIdentity,
-  type PtyListedSession
-} from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 export type ResourcePtyEndError =
   | Extract<PtyFencedTerminationOutcome, { outcome: 'refused' }>['reason']
@@ -65,13 +61,18 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
     this.publish(identities, true)
   }
 
-  complete(completions: readonly { identity: string; error?: ResourcePtyEndError }[]): void {
+  complete(
+    completions: readonly { identity: string; error?: ResourcePtyEndError }[],
+    hasSession: (identity: string) => boolean
+  ): void {
     let count = 0
     let reason: ResourcePtyEndError | undefined
     for (const { identity, error } of completions) {
       this.ending.delete(identity)
       if (error) {
-        this.errors.set(identity, error)
+        if (hasSession(identity)) {
+          this.errors.set(identity, error)
+        }
         count += 1
         reason = error
       }
@@ -85,15 +86,16 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
     )
   }
 
-  retireErrors(sessions: readonly PtyListedSession[]): void {
-    if (this.errors.size === 0) {
-      return
+  retireError(identity: string): void {
+    if (this.errors.delete(identity)) {
+      this.publishRow(identity)
     }
-    const present = new Set(sessions.map(ptySessionIdentity))
+  }
+
+  retireErrors(hasSession: (identity: string) => boolean): void {
     for (const identity of this.errors.keys()) {
-      if (!present.has(identity)) {
-        this.errors.delete(identity)
-        this.publishRow(identity)
+      if (!hasSession(identity)) {
+        this.retireError(identity)
       }
     }
   }

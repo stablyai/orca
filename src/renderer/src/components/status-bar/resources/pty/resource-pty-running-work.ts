@@ -43,6 +43,11 @@ export async function checkResourcePtysRunningWork(
   rows: readonly ResourcePtyRow[],
   cancellation: AbortSignal
 ): Promise<ReadonlyMap<string, PtyRunningWorkObservation>> {
+  const observed = new Map<string, PtyRunningWorkObservation>()
+  const inspectable = rows.filter((row) => row.session.idleFencedTermination !== false)
+  if (inspectable.length === 0) {
+    return observed
+  }
   const runningWorkSinceMs = Date.now()
   const runningWorkCheckId = createBrowserUuid()
   const signal = AbortSignal.any([
@@ -51,8 +56,7 @@ export async function checkResourcePtysRunningWork(
   ])
   const cancel = () => window.api.pty.cancelRunningWorkCheck(runningWorkCheckId)
   signal.addEventListener('abort', cancel, { once: true })
-  const observed = new Map<string, PtyRunningWorkObservation>()
-  const pending = rows.values()
+  const pending = inspectable.values()
   const inspect = async (): Promise<void> => {
     while (!signal.aborted) {
       const next = pending.next()
@@ -67,7 +71,7 @@ export async function checkResourcePtysRunningWork(
     }
   }
   const scan = Promise.all(
-    Array.from({ length: Math.min(rows.length, MAX_CONCURRENT_INSPECTIONS) }, inspect)
+    Array.from({ length: Math.min(inspectable.length, MAX_CONCURRENT_INSPECTIONS) }, inspect)
   )
   await waitForPromiseWithSignal(scan, signal).catch(() => undefined)
   signal.removeEventListener('abort', cancel)

@@ -24,7 +24,7 @@ export async function terminateResolvedDaemonSession(
   if (resolution.kind !== 'owner') {
     return { outcome: 'refused', reason: 'unverifiable' }
   }
-  if (!resolution.provider.supportsFencedTermination?.(request.id)) {
+  if (!resolution.provider.supportsFencedTermination?.(request.id, request.requireIdle)) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
   return resolution.provider.killFenced?.(request) ?? { outcome: 'refused', reason: 'unsupported' }
