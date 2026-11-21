@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-type ExecOpts = { cwd: string; beforeStart?: () => Promise<boolean> }
+type ExecOpts = { cwd: string; beforeStart?: () => Promise<boolean>; signal?: AbortSignal }
 const { gitExecFileAsyncMock, stall } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn<(args: string[], opts: ExecOpts) => Promise<{ stdout: string }>>(),
   // Holds the read of a file ending in `path` once `skip` earlier reads have passed.
@@ -324,5 +324,27 @@ it('stops an abandoned update suggestion before it runs any more Git', async () 
   await vi.runAllTimersAsync()
 
   expect(gitExecFileAsyncMock.mock.calls.length).toBe(callsWhenAbandoned)
+  vi.useRealTimers()
+})
+
+it('aborts the Git an expired update suggestion is still waiting on', async () => {
+  vi.useFakeTimers()
+  gitExecFileAsyncMock.mockReset()
+  const signals: (AbortSignal | undefined)[] = []
+  gitExecFileAsyncMock.mockImplementation((_args, opts) => {
+    signals.push(opts.signal)
+    return new Promise(() => {})
+  })
+
+  const suggestion = getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+    '/repo-queued',
+    'origin/main',
+    'refs/remotes/origin/main'
+  )
+  await vi.advanceTimersByTimeAsync(LOCAL_BASE_REF_REFRESH_WAIT_MS)
+  await expect(suggestion).resolves.toBeUndefined()
+
+  expect(signals.length).toBeGreaterThan(0)
+  expect(signals.every((signal) => signal?.aborted)).toBe(true)
   vi.useRealTimers()
 })

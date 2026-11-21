@@ -16,25 +16,26 @@ export async function checkWithDeadline<T>(
   key: string,
   timeoutMs: number,
   fallback: T,
-  check: (stop: () => boolean) => Promise<T>
+  check: (stop: () => boolean, signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   if (stalledKeys.has(key)) {
     return fallback
   }
-  let expired = false
-  const running = check(() => expired)
-  const expiry = Symbol('expired')
+  // Aborted at expiry: queued Git aborts, and reads check it before starting.
+  const expiry = new AbortController()
+  const running = check(() => expiry.signal.aborted, expiry.signal)
+  const expired = Symbol('expired')
   let timer: ReturnType<typeof setTimeout> | undefined
   const answer = await Promise.race([
     running,
-    new Promise<typeof expiry>((resolve) => {
-      timer = setTimeout(() => resolve(expiry), timeoutMs)
+    new Promise<typeof expired>((resolve) => {
+      timer = setTimeout(() => resolve(expired), timeoutMs)
     })
   ]).finally(() => clearTimeout(timer))
-  if (answer !== expiry) {
+  if (answer !== expired) {
     return answer
   }
-  expired = true
+  expiry.abort()
   stalledKeys.set(key, (stalledKeys.get(key) ?? 0) + 1)
   void running
     .catch(() => {})

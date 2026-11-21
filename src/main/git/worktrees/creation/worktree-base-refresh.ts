@@ -118,8 +118,8 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     `${options.wslDistro ?? ''}\0${normalizeRuntimePathForComparison(repoPath)}`,
     LOCAL_BASE_REF_REFRESH_WAIT_MS,
     undefined,
-    (stop) =>
-      inspectLocalBaseBranch(localBaseBranchGit(options, {}, stop), refs, { occupancyOnly: true })
+    (_stop, signal) =>
+      inspectLocalBaseBranch(localBaseBranchGit(options, {}, signal), refs, { occupancyOnly: true })
   )
   return inspection?.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
@@ -129,9 +129,9 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
 function localBaseBranchGit(
   options: GitWorktreeExecOptions,
   admission: Pick<GitExecOptions, 'admissionExempt'> = {},
-  abandonable?: () => boolean
+  abandonSignal?: AbortSignal
 ): LocalBaseBranchGit {
-  const abandoned = abandonable ?? (() => false)
+  const abandoned = () => abandonSignal?.aborted === true
   // Shared refreshes cannot use any individual create's cancellation signal or timeout.
   const execOptions = (cwd: string): GitExecOptions => ({
     cwd,
@@ -143,7 +143,7 @@ function localBaseBranchGit(
   const runGit: typeof gitExecFileAsync = (args, opts) =>
     abandoned()
       ? Promise.reject(new Error('Inspection abandoned'))
-      : gitExecFileAsync(args, abandonable ? { ...opts, canStart: () => !abandonable() } : opts)
+      : gitExecFileAsync(args, abandonSignal ? { ...opts, signal: abandonSignal } : opts)
   // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
   const routed = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
   const listWorktrees = async (repoPath: string) => {

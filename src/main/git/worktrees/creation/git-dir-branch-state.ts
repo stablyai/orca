@@ -25,10 +25,12 @@ export async function readGitDirState(
   commonDir: string,
   stop: () => boolean = () => false
 ): Promise<GitDirState> {
+  throwIfStopped(stop)
   // Fail closed: an unreadable common dir must not look like "nothing in use".
   if (!(await stat(commonDir)).isDirectory()) {
     throw new Error(`${commonDir} is not a Git directory`)
   }
+  throwIfStopped(stop)
   const gitDirs = [commonDir]
   try {
     const linked: string[] = []
@@ -225,12 +227,13 @@ async function isDirectory(path: string): Promise<boolean> {
 
 /** Same file system entry after resolving symlinks; false when either is missing. */
 export async function isSamePath(left: string, right: string): Promise<boolean> {
-  try {
-    const [a, b] = await Promise.all([realpath(left), realpath(right)])
-    return normalizeRuntimePathForComparison(a) === normalizeRuntimePathForComparison(b)
-  } catch {
-    return false
-  }
+  // Both settle before answering, so no lookup outlives the check that started it.
+  const [a, b] = await Promise.allSettled([realpath(left), realpath(right)])
+  return (
+    a.status === 'fulfilled' &&
+    b.status === 'fulfilled' &&
+    normalizeRuntimePathForComparison(a.value) === normalizeRuntimePathForComparison(b.value)
+  )
 }
 
 // One no-follow read per ref where the platform has O_NOFOLLOW (not Windows).
