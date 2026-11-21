@@ -27,9 +27,6 @@ export function selectAuthenticatedMobileTailnetEndpoint(
   return addresses.size === 1 ? `ws://${[...addresses][0]}:${port}/` : undefined
 }
 
-const DISCOVERY_CACHE_TTL_MS = 30_000
-let discoveryCache: { key: string; at: number; value: string | undefined } | null = null
-
 export async function discoverAuthenticatedMobileTailnetEndpoint(
   boundHost: string | null,
   transports: readonly RpcTransport[]
@@ -43,18 +40,12 @@ export async function discoverAuthenticatedMobileTailnetEndpoint(
   if (!transport) {
     return undefined
   }
-  const key = `${boundHost}:${transport.resolvedPort}`
-  const now = Date.now()
-  if (discoveryCache?.key === key && now - discoveryCache.at < DISCOVERY_CACHE_TTL_MS) {
-    return discoveryCache.value
-  }
   try {
-    const value = selectAuthenticatedMobileTailnetEndpoint(
-      await getPairingNetworkInterfaces(boundHost),
+    return selectAuthenticatedMobileTailnetEndpoint(
+      // Why: only non-bridge tailnet addresses qualify, so skip the Windows PowerShell default-route probe.
+      await getPairingNetworkInterfaces(boundHost, async () => null),
       transport.resolvedPort
     )
-    discoveryCache = { key, at: now, value }
-    return value
   } catch {
     return undefined
   }
