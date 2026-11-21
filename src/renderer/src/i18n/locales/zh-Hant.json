@@ -1145,6 +1145,7 @@
       "permissionWithoutAuto": "未使用「代為核准」的代理程式",
       "permissionMixed": "混合",
       "permissionSurfaceDifference": "終端機使用代理程式自身的設定；新聊天使用 {{mode}}。",
+      "permissionModeSurfaceDifference": "終端機使用{{terminal}}；新聊天使用{{mode}}。",
       "permissionSameAsAll": "與所有代理程式相同",
       "choiceChipRemove": "移除 {{flag}}",
       "choiceChipTooltip": "由 {{choice}} 新增。移除後使用預設值。",
@@ -1189,7 +1190,8 @@
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。",
       "agentActions": "{{agent}} 操作",
       "defaultAutoBadge": "預設 · 自動",
-      "newAgentsTitle": "新代理程式"
+      "newAgentsTitle": "新代理程式",
+      "defaultSurfaceServerDescription": "由代理程式自行啟動的預設值（例如透過其 CLI 或協作工作者），適用於 {{host}} 上自行啟動的代理程式；你從這台電腦開啟的代理程式會遵循「這台電腦」的選擇。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -2467,7 +2469,8 @@
             "new": {
               "tab": {
                 "11cce5cc77": "無法在新終端機中啟動 {{value0}}。",
-                "a5a1f7033f": "您的 {{value0}} 未傳送 — 代理程式準備好後將其貼上。"
+                "a5a1f7033f": "您的 {{value0}} 未傳送 — 代理程式準備好後將其貼上。",
+                "agentExited": "代理程式在你的提示傳送前就已結束。"
               }
             }
           },
@@ -13537,9 +13540,9 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "切換版本僅在桌面應用程式中可用。",
           "devChannelUnsupportedAria": "{{value0}}（僅 {{value1}}）",
-          "devChannelUnsupported": "{{value0}} 版本僅針對 {{value1}} 產生。 Linux 保持穩定版或 RC 版。",
+          "devChannelUnsupported": "{{value0}} 版本僅為 {{value1}} 產出。Linux 仍使用 {{stable}} 或 {{rc}}。",
           "downloadInstaller": "下載安裝程式",
-          "manualInstallHint": "{{value0}} 版本在 Windows 上未簽署，因此應用程式內的更新程式無法將其覆蓋安裝到已簽署的版本上。請先執行一次下載的安裝程式 — Windows 會警告發布者不明 — 之後每次切換（包括切回穩定版）都可在此完成。",
+          "manualInstallHint": "{{value0}} 版本在 Windows 上未簽署，因此應用程式內的更新程式無法在已簽署的版本上直接安裝。請先執行一次下載的安裝程式（Windows 會提示未知發行者）；之後無論切換到其他版本或切回 {{stable}}，都可在此處操作。",
           "stableLabel": "穩定版",
           "stableDescription": "適合日常使用的穩定版本。",
           "rcLabel": "RC",
@@ -21730,7 +21733,10 @@
         "paused": "目標已暫停",
         "blocked": "目標受阻",
         "limited": "目標受限",
-        "attachmentsUnsupported": "在設定目標之前刪除附件。"
+        "attachmentsUnsupported": "在設定目標之前刪除附件。",
+        "checks_one": "{{count}} 項檢查",
+        "checks_other": "{{count}} 項檢查",
+        "last-check": "最近一次目標檢查"
       },
       "fileLinks": {
         "notFound": "未找到檔案：{{value0}}",
@@ -22070,6 +22076,7 @@
         "connectService": "連線 {{service}}",
         "connected": "已連線",
         "connectedIn": "已在 {{places}} 連線",
+        "pausedStatus": "已暫停",
         "addOrg": "新增組織",
         "addWorkspace": "新增工作區",
         "githubAsYou": "它也可以透過你的 gh 登入，以你的身分在 GitHub 中運作。",
@@ -22878,7 +22885,8 @@
           "checking": "正在檢查變更…",
           "checkingDetails": "檢查…",
           "unavailableDetails": "詳細資訊不可用",
-          "none": "沒有未提交的變更"
+          "none": "沒有未提交的變更",
+          "noUnsaved": "沒有未儲存的檔案"
         },
         "unsavedEdits": {
           "discarded_one": "將捨棄 {{count}} 個檔案中未儲存的變更：",
@@ -23548,6 +23556,20 @@
           "enabledDescription": "{{host}} 針對其代理程式與終端機傳送的警示，包括推送到你的手機的通知。",
           "sectionDescription": "{{host}} 針對其代理程式與終端機傳送的警示。"
         }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "{{host}} 執行的 Orca 帳戶，供其機器人（Slack、GitHub、Linear 以及 Webhook）使用。",
+          "unread": "無法讀取 {{host}} 上的 Orca 帳戶。請更新或重新連線 {{host}}。",
+          "signInThere": "請在 {{host}} 上執行 `orca auth login` 以登入。"
+        }
+      },
+      "hostScope": {
+        "updateHostToChange": "請在 {{host}} 上更新 Orca 後，再變更那裡的此設定。",
+        "updateFailed": "無法在 {{host}} 上更新此設定。"
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "{{host}} 上的 Git 使用者名稱"
       }
     },
     "agentChildRow": {
@@ -24999,7 +25021,13 @@
       "terminalDescription": "使用 agy 自己儲存的帳號。切換會套用至新的 agy 工作階段。",
       "terminalDescriptionChats": "使用 agy 自己儲存的帳號。切換會套用至新的 agy 工作階段與 Antigravity 聊天。",
       "terminalDescriptionNoChats": "使用 agy 自己儲存的帳號。切換會套用至新的 agy 工作階段，但不適用於 Antigravity 聊天。",
-      "addAccountHelp": "若要新增帳號，請在 agy 中執行 /logout，重新登入後再於此處儲存。"
+      "addAccountHelp": "若要新增帳號，請在 agy 中執行 /logout，重新登入後再於此處儲存。",
+      "googleSignIn": "Google 帳戶登入",
+      "googleSignInAgy": "agy 自行登入",
+      "googleSignInAgyOption": "透過執行 agy 登入",
+      "googleSignInOrca": "Orca 內建登入",
+      "googleSignInOrcaOption": "在此透過瀏覽器登入；不需要 agy",
+      "googleSignInUpdateFailed": "無法變更 Antigravity 使用 Google 登入的方式。"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於您下次啟動的 Claude。",
@@ -26623,6 +26651,8 @@
       "deletedBot": "已刪除的機器人",
       "fieldLabel": "機器人或專案",
       "fieldPlaceholder": "選擇機器人或專案",
+      "search": "搜尋機器人與專案...",
+      "searchEmpty": "沒有符合搜尋的機器人或專案。",
       "resultsToLinear": "Linear 議題",
       "resultsToLinearNeedsLinear": "Linear 議題（請先連線 Linear）",
       "linearIssuePlaceholder": "議題識別碼（例如 ENG-123）或 Linear 連結",
@@ -27099,7 +27129,22 @@
       "purposePlaceholder": "描述它的工作（選用）",
       "uploadPasteOrDrop": "或上傳、貼上或拖曳你自己的圖片",
       "pasteHint": "使用 {{shortcut}} 貼上圖片",
-      "changePicture": "更換圖片"
+      "changePicture": "更換圖片",
+      "parts": {
+        "olderHost": "{{host}} 需要更新 Orca 才能新增技能與排程",
+        "skillsKept_one": "已保留 {{kept}}/{{count}} 個技能",
+        "skillsKept_other": "已保留 {{kept}}/{{count}} 個技能",
+        "skills_one": "{{count}} 個技能",
+        "skills_other": "{{count}} 個技能",
+        "automations_one": "{{count}} 個自動化",
+        "automations_other": "{{count}} 個自動化",
+        "schedules_one": "{{count}} 個排程",
+        "schedules_other": "{{count}} 個排程",
+        "needsApp": "需要 {{app}}",
+        "needsApps_one": "需要 {{count}} 個應用程式",
+        "needsApps_other": "需要 {{count}} 個應用程式",
+        "setUpInFirstChat": "在第一次聊天中設定"
+      }
     },
     "section": {
       "title": "機器人",
@@ -27154,7 +27199,8 @@
         "tryIt": "在任何頻道或私訊中試試看",
         "connectAnother": "連線另一個 Slack 工作區",
         "connect": "連線 Slack",
-        "openInSlack": "在 Slack 中傳訊息給它"
+        "openInSlack": "在 Slack 中傳訊息給它",
+        "cancel": "取消"
       },
       "connection": {
         "appSettings": "Slack 應用程式設定",
@@ -27178,7 +27224,10 @@
         "step3": "複製 Refresh Token 並貼在下方。",
         "kept": "Orca Cloud 會將此權杖加密保存，因此你在此工作區中的下一個機器人只需按一下。",
         "label": "設定更新權杖",
-        "accessPasted": "那是存取權杖。請複製旁邊的重新整理權杖。"
+        "accessPasted": "那是存取權杖。請複製旁邊的重新整理權杖。",
+        "openSettings": "開啟 Slack 應用程式設定",
+        "generate": "為此工作區產生權杖",
+        "copyRefresh": "複製重新整理權杖"
       },
       "workspaces": {
         "otherTeam": "該權杖是給另一個工作區使用的。Orca 會為該工作區保留它。",
@@ -27227,7 +27276,26 @@
         "waitingOn": "切換至 {{name}} 需要 {{installer}} 在 Slack 中核准。",
         "waiting": "切換至 {{name}} 需要在 Slack 中核准。"
       },
-      "mentionLine": "在頻道或私訊中提及 <code>@{{name}}</code>。"
+      "mentionLine": "在頻道或私訊中提及 <code>@{{name}}</code>。",
+      "reconnect": {
+        "expiredTitle": "Slack 權杖已過期",
+        "useTitleMac": "要使用這台 Mac 的權杖嗎？",
+        "useTitle": "要使用這台電腦的權杖嗎？",
+        "whyMine": "每台電腦都會保留自己的 Slack 權杖。Slack 已停止接受 {{email}} 使用的權杖。",
+        "whyHost": "每台電腦都會保留自己的 Slack 權杖。Slack 已停止接受 {{host}} 使用的權杖。",
+        "why": "Slack 已停止接受此工作區已儲存的權杖。",
+        "submit": "重新連線",
+        "about": "關於 Slack 權杖",
+        "useDetail": "使用它會將此機器人的 Slack 應用程式設定為使用 {{email}} 的權杖。{{host}} 只會取得此機器人的應用程式設定。",
+        "hostExpiredMac": "<host>{{host}}</host> 的權杖已過期。這台 Mac 的權杖可用。",
+        "hostExpired": "<host>{{host}}</host> 的權杖已過期。這台電腦的權杖可用。",
+        "pasteInstead": "改為貼上權杖",
+        "use": "使用它",
+        "kept": "Orca Cloud 會以加密方式保留新權杖，因此你下次在此建立機器人時只需點一下即可。",
+        "mineMac": "這台 Mac 的權杖已過期。請貼上新的權杖。",
+        "mine": "這台電腦的權杖已過期。請貼上新的權杖。",
+        "paste": "請貼上新的權杖以重新連線。"
+      }
     },
     "whoCanAsk": {
       "searching": "正在搜尋…",
@@ -27379,7 +27447,7 @@
       "description": "{{name}} 的首頁聊天在 {{agent}} 上重新開始。目前的對話會保留在記錄中。",
       "kept": "保留：靈魂、記憶、自動化、連接器",
       "notKept": "不保留：目前的對話",
-      "threads": "已在執行中的 Slack 執行緒會留在 {{agent}}，直到結束",
+      "threads": "已有 Orca 聊天的 Slack 執行緒會沿用該聊天的代理程式",
       "action": "切換至 {{agent}}"
     },
     "avatar": {
@@ -27502,7 +27570,8 @@
         "removeNote": "其他人無法再在 GitHub 上向其提問，其 GitHub 人員也會被清除。Orca 應用程式仍會保持安裝。",
         "removeConfirm": "移除",
         "finishSetup": "完成設定",
-        "orgDescription": "{{repos}} · 以 @{{login}} 身分登入"
+        "orgDescription": "{{repos}} · 以 @{{login}} 身分登入",
+        "addAccount": "新增另一個 GitHub 帳戶"
       },
       "setup": {
         "install": "安裝 Orca 應用程式",
@@ -27538,6 +27607,8 @@
         "unlink": "取消連結",
         "unlinked": "從機器人的 Connectors 新增 GitHub 來連結你的帳號。",
         "descriptionOnHost": "{{host}} 的 GitHub 使用者，其機器人以該使用者的身分運作並由其擁有。",
+        "descriptionPlural": "你的 GitHub 帳戶，讓機器人知道哪些留言是你留下的。",
+        "descriptionOnHostPlural": "{{host}} 上的機器人以這些 GitHub 使用者身分運作並擁有這些機器人。",
         "linkedAs": "以 {{login}} 身分連結",
         "reconnect": "重新連線",
         "linkFromApp": "在與 {{host}} 配對的電腦上，從 Orca 連結 GitHub。",
@@ -28000,6 +28071,7 @@
       "needsYou": "· 需要你",
       "stopCouldNotBeConfirmed": "無法確認停止。",
       "useEachBotSNativeSessionForCommands": "使用每個機器人的原生工作階段執行指令。",
+      "attachmentsHostTooOld": "{{host}} 需要更新才能在群組聊天中附加檔案。",
       "loadEarlierMessages": "載入更早的訊息",
       "loadingGroup": "正在載入群組…",
       "manageMembers": "管理成員",
@@ -28638,6 +28710,12 @@
       "stopped": "已停止分享 {{name}}",
       "webhookNotShared": "Webhook · 未分享",
       "commandNotShared": "指令 · 未分享",
+      "fileLinkNotShared": "包含符號連結或硬連結 · 未分享",
+      "outsideSkill": "來自 {{project}} 以外",
+      "outsideSkillWith": "來自 {{project}} 以外 · {{description}}",
+      "tooLargeNotShared": "太大 · 未分享",
+      "unreadableNotShared": "無法讀取 · 未分享",
+      "overLimitNotShared": "超過技能限制 · 未分享",
       "notShared": "未分享",
       "setupNote": "設定說明",
       "skills": "技能",
@@ -29358,8 +29436,11 @@
         "pickCustom": "選擇日期與時間"
       },
       "ask": {
+        "next": "下一題",
         "notSentYet": "尚未傳送",
+        "previous": "上一題",
         "recommended": "建議",
+        "step": "第 {{n}} 題，共 {{total}} 題",
         "typeAnswer": "輸入你的回答",
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
       }
@@ -29692,6 +29773,11 @@
     "kimiProduct": "Kimi Code",
     "cursorProduct": "Cursor CLI",
     "hermesProduct": "Hermes Agent",
+    "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
+    "kiloProduct": "Kilo CLI",
+    "mimoCodeProduct": "MiMo Code",
+    "qwenCodeProduct": "Qwen Code",
     "commandCopied": "命令已複製",
     "commandNotCopied": "無法複製命令",
     "copyCommand": "複製",
