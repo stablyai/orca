@@ -8,6 +8,19 @@ export type OrchestrationMailboxDeliveryFlight = {
   processIncarnation?: string
 }
 
+/** A submitted pointer whose mail the agent has not checked yet. `queued`: typed mid-turn, so it
+ *  waits behind that turn; `submitted`: Enter landed at rest, its turn not seen yet; `started`. */
+type PointerAnnouncement = {
+  ptyId: string
+  messageIds: readonly string[]
+  phase: 'queued' | 'submitted' | 'started'
+  startTimer: ReturnType<typeof setTimeout> | null
+  onNeverStarted: () => void
+}
+
+/** Bounds a hold whose Enter may have been lost: no turn by then means nothing will read the mail. */
+const ANNOUNCED_TURN_START_GRACE_MS = 10_000
+
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
 type ParkedOrchestrationMailboxDeliveries = Map<string, ReadonlySet<string> | undefined>
 
@@ -20,6 +33,84 @@ export class OrchestrationMailboxPointerState {
   >()
   private readonly watermarkMailboxesByPtyId = new Map<string, Set<string>>()
   private readonly parkedTypesByMailbox = new Map<string, ReadonlySet<string> | null>()
+  private readonly announcementByMailbox = new Map<string, PointerAnnouncement>()
+
+  /** Record a pointer at its Enter, so newer mail waits for the check that pointer starts (#41854). */
+  announce(
+    mailboxHandle: string,
+    ptyId: string,
+    messageIds: readonly string[],
+    midTurn: boolean,
+    onNeverStarted: () => void
+  ): void {
+    this.forgetAnnouncement(mailboxHandle)
+    const announcement: PointerAnnouncement = {
+      ptyId,
+      messageIds,
+      phase: midTurn ? 'queued' : 'submitted',
+      startTimer: null,
+      onNeverStarted
+    }
+    this.announcementByMailbox.set(mailboxHandle, announcement)
+    if (!midTurn) {
+      this.armAnnouncementStart(mailboxHandle, announcement)
+    }
+  }
+
+  /** The announced message ids still holding this mailbox's next pointer on this PTY, if any. */
+  announcedMessageIds(mailboxHandle: string, ptyId: string): readonly string[] | null {
+    const announcement = this.announcementByMailbox.get(mailboxHandle)
+    return announcement?.ptyId === ptyId ? announcement.messageIds : null
+  }
+
+  forgetAnnouncement(mailboxHandle: string, ptyId?: string): void {
+    const announcement = this.announcementByMailbox.get(mailboxHandle)
+    if (!announcement || (ptyId !== undefined && announcement.ptyId !== ptyId)) {
+      return
+    }
+    if (announcement.startTimer != null) {
+      clearTimeout(announcement.startTimer)
+    }
+    this.announcementByMailbox.delete(mailboxHandle)
+  }
+
+  observeAnnouncedWorking(ptyId: string): void {
+    for (const announcement of this.announcementByMailbox.values()) {
+      if (announcement.ptyId === ptyId && announcement.phase === 'submitted') {
+        announcement.phase = 'started'
+        if (announcement.startTimer != null) {
+          clearTimeout(announcement.startTimer)
+          announcement.startTimer = null
+        }
+      }
+    }
+  }
+
+  /** A started turn that ended without a check frees the mailbox; a queued pointer submits now. */
+  observeAnnouncedIdle(ptyId: string): void {
+    for (const [mailboxHandle, announcement] of this.announcementByMailbox) {
+      if (announcement.ptyId !== ptyId) {
+        continue
+      }
+      if (announcement.phase === 'started') {
+        this.announcementByMailbox.delete(mailboxHandle)
+      } else if (announcement.phase === 'queued') {
+        announcement.phase = 'submitted'
+        this.armAnnouncementStart(mailboxHandle, announcement)
+      }
+    }
+  }
+
+  private armAnnouncementStart(mailboxHandle: string, announcement: PointerAnnouncement): void {
+    announcement.startTimer = setTimeout(() => {
+      announcement.startTimer = null
+      if (this.announcementByMailbox.get(mailboxHandle) === announcement) {
+        this.announcementByMailbox.delete(mailboxHandle)
+        announcement.onNeverStarted()
+      }
+    }, ANNOUNCED_TURN_START_GRACE_MS)
+    announcement.startTimer.unref?.()
+  }
 
   hasFlight(ptyId: string): boolean {
     return this.flightsByPtyId.has(ptyId)

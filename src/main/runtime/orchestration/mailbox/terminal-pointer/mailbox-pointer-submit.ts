@@ -97,6 +97,13 @@ export function submitOrchestrationMailboxPointer(
           // Unread mail lost its claim to an earlier Enter or a release; read mail still gets its Enter.
           return
         }
+        deps.state.announce(
+          input.mailboxHandle,
+          input.ptyId,
+          messageIds,
+          terminal.lastAgentStatus !== 'idle',
+          () => deps.redrive(input.mailboxHandle, true)
+        )
         const enterSettlement = await deps.writePty(input.ptyId, '\r')
         submitted = enterSettlement.outcome === 'accepted'
         if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
@@ -105,6 +112,7 @@ export function submitOrchestrationMailboxPointer(
         }
         // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
         if (enterSettlement.outcome === 'refused') {
+          deps.state.forgetAnnouncement(input.mailboxHandle, input.ptyId)
           releaseWithoutRedrive = true
         }
       }
