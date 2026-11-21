@@ -66,7 +66,7 @@ function orNullIfMissing<T>(promise: Promise<T>): Promise<T | null> {
 async function inspectHostDirectoryRoot(
   root: string,
   targetPath: string,
-  initial?: { dev?: bigint; ino?: bigint }
+  expected?: { dev?: bigint; ino?: bigint } | string
 ): Promise<{ dev?: bigint; ino?: bigint } | null> {
   const entry = await orNullIfMissing(lstatBigInt(root))
   if (!entry) {
@@ -78,11 +78,13 @@ async function inspectHostDirectoryRoot(
   ) {
     throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
   }
-  if (
-    initial?.ino !== undefined &&
-    entry.ino !== undefined &&
-    (entry.dev !== initial.dev || entry.ino !== initial.ino)
-  ) {
+  const expectedKey =
+    typeof expected === 'string'
+      ? expected
+      : expected?.ino !== undefined
+        ? `${expected.dev}:${expected.ino}`
+        : undefined
+  if (expectedKey && entry.ino !== undefined && `${entry.dev}:${entry.ino}` !== expectedKey) {
     throw differentCheckoutAtPathError(targetPath)
   }
   return entry
@@ -190,10 +192,14 @@ async function inspectHostCheckoutMarker(
     throw differentCheckoutAtPathError(targetPath)
   }
   const contents = await orNullIfMissing(readUtf8File(markerPath))
-  if (contents === null) {
+  const after = contents === null ? null : await orNullIfMissing(lstatBigInt(markerPath))
+  if (!after) {
     return null
   }
-  const gitdir = parseGitdirMarkerPayload(contents)
+  const gitdir =
+    after.isFile() && after.dev === entry.dev && after.ino === entry.ino
+      ? parseGitdirMarkerPayload(contents!)
+      : null
   if (!gitdir) {
     throw differentCheckoutAtPathError(targetPath)
   }
@@ -204,11 +210,11 @@ async function inspectHostCheckoutMarker(
 export async function removeUnregisteredHostCheckout(
   targetPath: string,
   signal?: AbortSignal,
-  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean } = {}
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean; expectedRoot?: string } = {}
 ): Promise<void> {
-  const { expectedMarker: expectedMarkerIdentity, forbidAnyMarker = false } = markerOptions
+  const { expectedMarker, forbidAnyMarker = false, expectedRoot } = markerOptions
   const root = toHostRemovalPath(targetPath)
-  const initialRoot = await inspectHostDirectoryRoot(root, targetPath)
+  const initialRoot = await inspectHostDirectoryRoot(root, targetPath, expectedRoot)
   if (!initialRoot) {
     return
   }
@@ -217,8 +223,7 @@ export async function removeUnregisteredHostCheckout(
   const initial = await inspectHostCheckoutMarker(markerPath, targetPath)
   if (
     initial &&
-    (forbidAnyMarker ||
-      (expectedMarkerIdentity !== undefined && initial.identity !== expectedMarkerIdentity))
+    (forbidAnyMarker || (expectedMarker !== undefined && initial.identity !== expectedMarker))
   ) {
     throw differentCheckoutAtPathError(targetPath)
   }
@@ -290,17 +295,9 @@ export async function removeHostEmptyDirectory(targetPath: string): Promise<void
   try {
     await rmdir(root)
   } catch (error) {
-    if (getErrorCode(error) !== 'ENOENT') {
-      throw error
-    }
     // Windows rmdir can report ENOENT for an existing regular-file replacement.
-    try {
-      await lstat(root)
-    } catch (statError) {
-      if (getErrorCode(statError) === 'ENOENT') {
-        return
-      }
-      throw statError
+    if (getErrorCode(error) === 'ENOENT' && (await orNullIfMissing(lstat(root))) === null) {
+      return
     }
     throw error
   }

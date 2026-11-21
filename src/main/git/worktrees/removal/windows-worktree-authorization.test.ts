@@ -1,4 +1,4 @@
-import { lstatSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -8,25 +8,36 @@ import {
 } from '../../../../shared/concurrency/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
-const { graph, stat, names, removeChild, unlink, rmdir, clean, readMarker, proveOrphan } =
-  vi.hoisted(() => ({
-    graph: vi.fn(),
-    stat: vi.fn(),
-    names: vi.fn(),
-    removeChild: vi.fn(),
-    unlink: vi.fn(),
-    rmdir: vi.fn(),
-    clean: vi.fn(),
-    readMarker: vi.fn(),
-    proveOrphan: vi.fn()
-  }))
+const {
+  graph,
+  stat,
+  statBigInt,
+  names,
+  removeChild,
+  unlink,
+  rmdir,
+  clean,
+  readMarker,
+  proveOrphan
+} = vi.hoisted(() => ({
+  graph: vi.fn(),
+  stat: vi.fn(),
+  statBigInt: vi.fn(),
+  names: vi.fn(),
+  removeChild: vi.fn(),
+  unlink: vi.fn(),
+  rmdir: vi.fn(),
+  clean: vi.fn(),
+  readMarker: vi.fn(),
+  proveOrphan: vi.fn()
+}))
 vi.mock('../catalog/worktree-list-reader', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   readTranslatedWorktreeGraph: graph
 }))
 vi.mock('../../../filesystem/asar-transparent-fs', () => ({
   lstat: stat,
-  lstatBigInt: stat,
+  lstatBigInt: statBigInt,
   readdir: names,
   rm: removeChild,
   unlink,
@@ -65,14 +76,24 @@ beforeEach(() => {
     if (String(path).endsWith('locked')) {
       throw missing
     }
-    return { isDirectory: () => true, isSymbolicLink: () => false }
+    return { isDirectory: () => true, isSymbolicLink: () => false, dev: 1, ino: 1 }
+  })
+  statBigInt.mockImplementation(async (path: string) => {
+    if (String(path).endsWith('locked')) {
+      throw missing
+    }
+    return { isDirectory: () => true, isSymbolicLink: () => false, dev: 1n, ino: 1n }
   })
   names.mockResolvedValue(['held', '.git'])
   removeChild.mockResolvedValue(undefined)
   unlink.mockResolvedValue(undefined)
   rmdir.mockResolvedValue(undefined)
   clean.mockResolvedValue(undefined)
-  readMarker.mockResolvedValue('gitdir: C:/repo/.git/worktrees/feature')
+  readMarker.mockImplementation(async (path: string) =>
+    String(path).startsWith(tmpdir())
+      ? readFileSync(String(path), 'utf8')
+      : 'gitdir: C:/repo/.git/worktrees/feature'
+  )
   proveOrphan.mockResolvedValue(true)
 })
 afterEach(() => {
@@ -209,14 +230,20 @@ it('refuses before sweeping children when a markerless root becomes a symlink du
     if (String(path).endsWith('.git')) {
       throw missing
     }
-    return { isDirectory: () => true, isSymbolicLink: () => false }
+    return { isDirectory: () => true, isSymbolicLink: () => false, dev: 1, ino: 1 }
+  })
+  statBigInt.mockImplementation(async (path: string) => {
+    if (String(path).endsWith('.git')) {
+      throw missing
+    }
+    return { isDirectory: () => true, isSymbolicLink: () => false, dev: 1n, ino: 1n }
   })
   names.mockImplementationOnce(async () => {
-    stat.mockImplementation(async (path: string) => {
+    statBigInt.mockImplementation(async (path: string) => {
       if (String(path).endsWith('.git')) {
         throw missing
       }
-      return { isDirectory: () => false, isSymbolicLink: () => true }
+      return { isDirectory: () => false, isSymbolicLink: () => true, dev: 1n, ino: 1n }
     })
     return ['notes.txt']
   })
@@ -225,12 +252,19 @@ it('refuses before sweeping children when a markerless root becomes a symlink du
     removeUnregisteredHostCheckout('/work/feature', undefined, { forbidAnyMarker: true })
   ).rejects.toThrow('Refusing to delete unregistered worktree path')
 
+  expect(names).toHaveBeenCalledTimes(1)
   expect(removeChild).not.toHaveBeenCalled()
 })
 
 it('distinguishes 64-bit directory inode IDs above Number.MAX_SAFE_INTEGER when rechecking root identity', async () => {
   let rootIno = 9_007_199_254_745_092n
   stat.mockImplementation(async (path: string) => {
+    if (String(path).endsWith('.git')) {
+      throw missing
+    }
+    return { isDirectory: () => true, isSymbolicLink: () => false, dev: 1, ino: Number(rootIno) }
+  })
+  statBigInt.mockImplementation(async (path: string) => {
     if (String(path).endsWith('.git')) {
       throw missing
     }
@@ -245,5 +279,6 @@ it('distinguishes 64-bit directory inode IDs above Number.MAX_SAFE_INTEGER when 
     removeUnregisteredHostCheckout('/work/feature', undefined, { forbidAnyMarker: true })
   ).rejects.toThrow('A different checkout is now at')
 
+  expect(names).toHaveBeenCalledTimes(1)
   expect(removeChild).not.toHaveBeenCalled()
 })

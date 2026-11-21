@@ -82,13 +82,13 @@ it('refuses a standalone repository whose .git is a directory instead of treatin
 it('fails closed at acceptance when .git is an unrecognized file or directory instead of disabling the guard', async () => {
   await writeFile(join(worktreePath, '.git'), '')
   await expect(captureAcceptedCheckoutGuard(worktreePath)).rejects.toThrow(
-    'A different checkout is now at'
+    'cannot confirm the checkout at'
   )
 
   await rm(join(worktreePath, '.git'))
   await mkdir(join(worktreePath, '.git'))
   await expect(captureAcceptedCheckoutGuard(worktreePath)).rejects.toThrow(
-    'A different checkout is now at'
+    'cannot confirm the checkout at'
   )
 })
 
@@ -107,7 +107,8 @@ it('binds orphan ownership proof to the initial marker and forbids new markers i
     await rm(join(worktreePath, '.git'))
     return true
   })
-  expect(vanishedGuard).toEqual({ markerLast: true, forbidAnyMarker: true })
+  expect(vanishedGuard).toMatchObject({ markerLast: true, forbidAnyMarker: true })
+  expect(vanishedGuard?.expectedRoot).toMatch(/^\d+:\d+$/)
 
   const pinned = await acceptCheckout('accepted')
   await writeFile(

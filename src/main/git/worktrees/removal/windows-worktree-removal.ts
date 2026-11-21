@@ -222,6 +222,13 @@ async function authorizeWindowsCheckoutReads(
       const markerState = await readCheckoutMarkerState(root, options)
       checkStopped()
       if (markerState.kind === 'absent') {
+        if (beforeTeardown) {
+          const names = await readdir(root)
+          checkStopped()
+          if (names.length > 0) {
+            throw unregisteredFolderRefusal(root)
+          }
+        }
         return false
       }
       if (markerState.kind !== 'file' || markerState.identity !== options.expectedMarker) {

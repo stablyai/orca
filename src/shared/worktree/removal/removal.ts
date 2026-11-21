@@ -7,12 +7,18 @@ export function unregisteredFolderRefusal(worktreePath: string): Error {
   )
 }
 
-/** The folder at the path is not provably the accepted checkout; nothing there was deleted. */
+/** The folder at the path is not provably the accepted checkout; refuses further deletion. */
 export class CheckoutIdentityRefusal extends Error {}
 
 export function differentCheckoutAtPathError(worktreePath: string): Error {
   return new CheckoutIdentityRefusal(
     `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
+  )
+}
+
+export function unconfirmedCheckoutAtPathError(worktreePath: string): Error {
+  return new CheckoutIdentityRefusal(
+    `Orca cannot confirm the checkout at ${worktreePath}, so it left the folder in place. Inspect the folder before removing it.`
   )
 }
 

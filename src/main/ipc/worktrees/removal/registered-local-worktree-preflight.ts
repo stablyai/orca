@@ -59,7 +59,7 @@ export async function prepareRegisteredLocalWorktreeRemoval(args: {
   const guard = await captureAcceptedCheckoutGuard(canonicalWorktreePath, localOptions)
   const ignoredLinkedPaths = force
     ? []
-    : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
+    : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths, localOptions)
   const markerMissing = await nativeWindowsMarkerMissing(canonicalWorktreePath, localOptions)
   await assertRegisteredLocalWorktreePreflight(
     repo.path,

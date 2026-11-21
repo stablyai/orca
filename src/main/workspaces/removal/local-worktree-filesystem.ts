@@ -4,8 +4,8 @@ import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { parseGitdirMarkerPayload } from '../../../shared/git/metadata/gitdir-marker-payload'
-import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { buildWslMarkerLastScript } from './wsl-worktree-marker-script'
 import {
   differentCheckoutAtPathError,
   unregisteredFolderRefusal
@@ -29,10 +29,16 @@ export type CheckoutMarkerState =
   | { kind: 'file'; identity: string }
   | { kind: 'other' }
 
+export type CheckoutRootState =
+  | { kind: 'absent' }
+  | { kind: 'directory'; identity?: string }
+  | { kind: 'other' }
+
 export type RemoveLocalWorktreeMarkerOptions = {
   markerLast?: boolean
   expectedMarker?: string
   forbidAnyMarker?: boolean
+  expectedRoot?: string
 }
 
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
@@ -45,12 +51,19 @@ function resolveTargetWslDistro(
 }
 
 // Coreutils need no login shell; rc/motd output would corrupt parsed stdout.
-async function runWslCommand(distro: string, command: string): Promise<string> {
+async function runWslCommand(
+  distro: string,
+  command: string,
+  signal?: AbortSignal
+): Promise<string> {
+  throwIfSignalAborted(signal)
+  // An inherited cwd may be the worktree currently being deleted (#16463).
+  const cwd = await resolveWslInteropSpawnCwdAsync()
+  throwIfSignalAborted(signal)
   const result = await runProcess({
     program: 'wsl.exe',
     args: buildWslExecArgs(distro, ['sh', '-c', command]),
-    // An inherited cwd may be the worktree currently being deleted (#16463).
-    cwd: await resolveWslInteropSpawnCwdAsync(),
+    cwd,
     timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
   if (result.timedOut) {
@@ -179,6 +192,34 @@ function createWslProofAccess(distro: string): WorktreeProofAccess {
   }
 }
 
+export async function readWslCheckoutRootState(
+  targetPath: string,
+  options: LocalWorktreeFilesystemOptions = {}
+): Promise<CheckoutRootState | null> {
+  const distro = resolveTargetWslDistro(targetPath, options)
+  if (!distro) {
+    return null
+  }
+  const stdout = await runWslCommand(
+    distro,
+    guestCommand(targetPath, (target) => `LC_ALL=C stat -c '%F#%d:%i' -- ${target}`)
+  ).catch((error: unknown) => {
+    if (isWslMissingPathError(error)) {
+      return 'absent\n'
+    }
+    throw error
+  })
+  const line = stdout.trim()
+  if (line === 'absent') {
+    return { kind: 'absent' }
+  }
+  if (!line.startsWith('directory#')) {
+    return { kind: 'other' }
+  }
+  const identity = line.slice('directory#'.length).trim()
+  return { kind: 'directory', ...(identity ? { identity } : {}) }
+}
+
 export async function readWslCheckoutMarkerState(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {}
@@ -192,7 +233,7 @@ export async function readWslCheckoutMarkerState(
     guestCommand(
       targetPath,
       (target) =>
-        `orca_git=${target}/.git; orca_meta=$(LC_ALL=C stat -c '%F#%i' -- "$orca_git") && case "$orca_meta" in 'regular file#'*|'regular empty file#'*) printf 'file:%s\\n' "\${orca_meta#*#}" && LC_ALL=C head -n 1 "$orca_git" ;; *) printf 'other\\n' ;; esac`
+        `orca_git=${target}/.git; orca_meta=$(LC_ALL=C stat -c '%F#%d:%i#%i' -- "$orca_git") && case "$orca_meta" in 'regular file#'*|'regular empty file#'*) orca_rest=\${orca_meta#*#}; orca_id=\${orca_rest%#*}; orca_ino=\${orca_rest#*#}; orca_line=$(LC_ALL=C head -n 1 "$orca_git") && orca_after=$(LC_ALL=C stat -c '%F#%d:%i' -- "$orca_git") && case "$orca_after" in 'regular file#'*|'regular empty file#'*) [ "\${orca_after#*#}" = "$orca_id" ] && printf 'file:%s\\n%s\\n' "$orca_ino" "$orca_line" || printf 'other\\n' ;; *) printf 'other\\n' ;; esac ;; *) printf 'other\\n' ;; esac`
     )
   ).catch((error: unknown) => {
     if (isWslMissingPathError(error)) {
@@ -214,61 +255,6 @@ export async function readWslCheckoutMarkerState(
   return ino && gitdir ? { kind: 'file', identity: `${gitdir}#${ino}` } : { kind: 'other' }
 }
 
-const PARSE_ORCA_GITDIR_LINE =
-  'orca_line=$(LC_ALL=C head -n 1 "$orca_target/.git") && ' +
-  'orca_line="${orca_line%"${orca_line##*[![:space:]]}"}" && ' +
-  'case "$orca_line" in [Gg][Ii][Tt][Dd][Ii][Rr]:*) orca_gitdir=${orca_line#*:}; orca_gitdir="${orca_gitdir#"${orca_gitdir%%[![:space:]]*}"}" ;; *) orca_gitdir="" ;; esac'
-
-function buildWslMarkerLastScript(
-  target: string,
-  { expectedMarker, forbidAnyMarker = false }: RemoveLocalWorktreeMarkerOptions
-): string {
-  const expectedClause = forbidAnyMarker
-    ? ' || true'
-    : expectedMarker !== undefined
-      ? ` || [ "$orca_gitdir#$orca_marker_ino" != ${quotePosixShell(expectedMarker)} ]`
-      : ''
-  // stat distinguishes ENOENT from EACCES; re-verify dev:ino and gitdir before rm -f .git, and never re-sweep before rmdir.
-  return (
-    `orca_target=${target}; ` +
-    'orca_root_meta=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $?; ' +
-    'case "$orca_root_meta" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac; ' +
-    'if orca_meta=$(LC_ALL=C stat -c \'%F#%d:%i#%i\' -- "$orca_target/.git" 2>&1); then orca_has_git=1; ' +
-    "else case \"$orca_meta\" in *': No such file or directory'|*': Not a directory') orca_has_git=0 ;; *) printf '%s\\n' \"$orca_meta\" >&2; exit 1 ;; esac; fi; " +
-    'if [ "$orca_has_git" = 1 ]; then ' +
-    "case \"$orca_meta\" in 'regular file#'*|'regular empty file#'*) ;; *) exit 4 ;; esac && " +
-    'orca_rest=${orca_meta#*#} && orca_marker_id=${orca_rest%#*} && orca_marker_ino=${orca_rest#*#} && ' +
-    `${PARSE_ORCA_GITDIR_LINE} && ` +
-    `if [ -z "$orca_gitdir" ]${expectedClause}; then exit 4; fi && ` +
-    'orca_saved_gitdir=$orca_gitdir && ' +
-    'LC_ALL=C find -P "$orca_target" -mindepth 1 -maxdepth 1 ! -samefile "$orca_target/.git" -exec rm -rf -- {} + && ' +
-    'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? && ' +
-    'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac && ' +
-    'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi && ' +
-    'if orca_after=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target/.git" 2>&1); then ' +
-    "case \"$orca_after\" in 'regular file#'*|'regular empty file#'*) ;; *) exit 4 ;; esac && " +
-    'if [ "${orca_after#*#}" != "$orca_marker_id" ]; then exit 4; fi && ' +
-    `${PARSE_ORCA_GITDIR_LINE} && ` +
-    'if [ "$orca_gitdir" != "$orca_saved_gitdir" ]; then exit 4; fi && ' +
-    'LC_ALL=C rm -f -- "$orca_target/.git"; ' +
-    "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
-    'else ' +
-    'if LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" >/dev/null 2>&1; then exit 4; fi && ' +
-    'LC_ALL=C find -P "$orca_target" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && ' +
-    'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? && ' +
-    'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac && ' +
-    'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi && ' +
-    'if orca_after=$(LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" 2>&1); then exit 4; ' +
-    "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
-    'fi && ' +
-    'if ! LC_ALL=C rmdir -- "$orca_target"; then ' +
-    'if LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" >/dev/null 2>&1; then exit 4; fi; ' +
-    'if [ -n "$(LC_ALL=C ls -A -- "$orca_target" 2>/dev/null)" ]; then exit 5; fi; ' +
-    'exit 1; ' +
-    'fi'
-  )
-}
-
 /** `markerLast` keeps the entry `.git` resolves to (matched by identity, so a case-folding mount's `.GIT` stays too, and a differently cased sibling is removed first) until everything else is gone, so a failed delete still proves whose folder it is. */
 export async function removeLocalWorktreePath(
   targetPath: string,
@@ -276,10 +262,10 @@ export async function removeLocalWorktreePath(
   signal?: AbortSignal,
   markerOptions: RemoveLocalWorktreeMarkerOptions = {}
 ): Promise<void> {
+  throwIfSignalAborted(signal)
   const { markerLast = false } = markerOptions
   const distro = resolveTargetWslDistro(targetPath, options)
   if (!distro) {
-    throwIfSignalAborted(signal)
     await (markerLast
       ? removeUnregisteredHostCheckout(targetPath, signal, markerOptions)
       : removeHostTree(targetPath, { signal }))
@@ -287,11 +273,13 @@ export async function removeLocalWorktreePath(
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
-  const inGuest = (script: (target: string) => string) =>
-    runWslCommand(distro, guestCommand(targetPath, script))
+  const inGuest = (script: (target: string) => string, opSignal?: AbortSignal) =>
+    runWslCommand(distro, guestCommand(targetPath, script), opSignal)
   try {
-    await inGuest((target) =>
-      markerLast ? buildWslMarkerLastScript(target, markerOptions) : `rm -rf -- ${target}`
+    await inGuest(
+      (target) =>
+        markerLast ? buildWslMarkerLastScript(target, markerOptions) : `rm -rf -- ${target}`,
+      signal
     )
   } catch (error) {
     if (markerLast && isWslExitCode(error, 4)) {

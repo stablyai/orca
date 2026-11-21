@@ -2,6 +2,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -412,6 +413,34 @@ describe.skipIf(process.platform === 'win32')(
       wireGuestShell()
 
       await withPlatform('win32', async () => {
+        await expect(
+          removeLocalWorktreePath(checkoutPath, { wslDistro: 'Ubuntu' }, undefined, {
+            markerLast: true
+          })
+        ).resolves.toBeUndefined()
+      })
+
+      expect(existsSync(checkoutPath)).toBe(false)
+    })
+
+    it('honors an aborted signal before spawning WSL UNC cleanup and sweeps hard links to .git', async () => {
+      const checkoutPath = join(scratchDir, 'hardlink-checkout')
+      mkdirSync(checkoutPath)
+      writeFileSync(join(checkoutPath, '.git'), 'gitdir: /repo/.git/worktrees/accepted\n')
+      linkSync(join(checkoutPath, '.git'), join(checkoutPath, 'marker-copy'))
+      const uncPath = `\\\\wsl.localhost\\Ubuntu${checkoutPath.replaceAll('/', '\\')}`
+      const aborted = new AbortController()
+      const reason = new Error('cancelled before guest delete')
+      aborted.abort(reason)
+      runProcessMock.mockClear()
+      wireGuestShell()
+
+      await withPlatform('win32', async () => {
+        await expect(
+          removeLocalWorktreePath(uncPath, {}, aborted.signal, { markerLast: true })
+        ).rejects.toBe(reason)
+        expect(runProcessMock).not.toHaveBeenCalled()
+
         await expect(
           removeLocalWorktreePath(checkoutPath, { wslDistro: 'Ubuntu' }, undefined, {
             markerLast: true

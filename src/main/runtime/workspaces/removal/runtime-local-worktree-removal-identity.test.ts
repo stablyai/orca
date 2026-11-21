@@ -192,3 +192,25 @@ it('refuses a checkout restored during orphan-cleanup watcher teardown', async (
   expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
   expect(existsSync(join(worktreePath, '.git'))).toBe(true)
 })
+
+it('refuses a markerless directory swapped in during orphan-cleanup watcher teardown', async () => {
+  const repoPath = join(scratchDir, 'repo')
+  const worktreePath = join(scratchDir, 'checkout')
+  await initRepo(repoPath)
+  await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'], repoPath)
+  const gitFile = join(worktreePath, '.git')
+  const savedGitFile = await import('node:fs/promises').then((fs) => fs.readFile(gitFile, 'utf8'))
+  await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+  await mkdir(worktreePath, { recursive: true })
+  await writeFile(gitFile, savedGitFile)
+
+  await expect(
+    cleanupLocalOrphanedWorktreeDirectory(repoPath, worktreePath, {}, async () => {
+      await removeTree(worktreePath)
+      await mkdir(worktreePath, { recursive: true })
+      await writeFile(join(worktreePath, 'work.txt'), 'unsaved\n')
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
+})
