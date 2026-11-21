@@ -5,14 +5,12 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type * as RecipientRouting from './recipient-routing'
 import {
   DOCS_CHAT,
-  DOCS_REQUEST,
   DOCS_THREAD,
   failureHeldChats,
   journals,
   message,
   noteChats,
   notes,
-  RANGER_CHAT,
   RANGER_THREAD,
   setupBotMail,
   startBotSession,
@@ -109,36 +107,39 @@ describe("a request by a bot's name when its Home Chat's last turn failed", () =
     expect(receipt.next).not.toContain('failed turn')
   })
 
-  // The stall this fixes came through --chat naming the Home Chat by its id, so a chat the sender
-  // names is redirected the same way when a failed turn holds it.
-  it('starts a chat of its own for a held chat named with --chat, noted in that chat', async () => {
-    failureHeldChats.add(RANGER_CHAT)
-    journals[DOCS_CHAT] = [message('ask')]
-    const receipt = await sent(DOCS_CHAT, { to: 'bot:Ranger', type: 'question', chat: RANGER_CHAT })
-    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
-    expect(startBotSession).toHaveBeenCalledTimes(1)
-    expect(noteChats).toEqual([RANGER_CHAT])
-    expect(receipt.next).toContain(
-      `Ranger's chat ${RANGER_CHAT} is stopped after a failed turn, so this went to a new chat of Ranger instead (--chat ${DOCS_REQUEST}).`
-    )
-  })
-
-  it('redirects a named Home Chat held by a failed turn, as the bot name does', async () => {
+  // --chat naming the Home Chat by its id queues there the same way as the agent's name.
+  it('queues in a held Home Chat named with --chat, with the same receipt', async () => {
+    for (const bot of bots.filter((entry) => entry.id === 'docs')) {
+      bot.chatSessionId = DOCS_CHAT
+    }
     failureHeldChats.add(DOCS_CHAT)
     const receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', chat: DOCS_CHAT })
-    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
-    expect(noteChats).toEqual([DOCS_CHAT])
+    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_CHAT}`)
+    expect(receipt.next).toMatch(
+      /^Docs's Home chat is paused after a failed turn, so this is queued there and runs when that chat continues\. /
+    )
     await expect(
       sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', chat: DOCS_CHAT })
     ).resolves.toMatchObject({ duplicate: true })
-    expect(startBotSession).toHaveBeenCalledTimes(1)
+    expect(startBotSession).not.toHaveBeenCalled()
+    expect(notes).toEqual([])
   })
 
-  it('leaves status in a held chat it was named for: it asks for nothing', async () => {
-    failureHeldChats.add(DOCS_CHAT)
-    const receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'status', chat: DOCS_CHAT })
-    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_CHAT}`)
+  it('queues in any other held chat named with --chat, naming that chat', async () => {
+    failureHeldChats.add(DOCS_THREAD)
+    const receipt = await sent(RANGER_THREAD, {
+      to: 'bot:Docs',
+      type: 'question',
+      chat: DOCS_THREAD
+    })
+    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_THREAD}`)
+    expect(receipt.next).toMatch(
+      new RegExp(
+        `^Docs's chat ${DOCS_THREAD} is paused after a failed turn, so this is queued there`
+      )
+    )
     expect(startBotSession).not.toHaveBeenCalled()
+    expect(notes).toEqual([])
   })
 
   it('mails a named chat no failed turn holds as before', async () => {

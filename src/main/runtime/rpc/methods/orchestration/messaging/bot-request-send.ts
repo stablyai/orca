@@ -6,9 +6,8 @@ import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
 import {
+  failureHeldChat,
   heldChatSentNext,
-  homeChatHeld,
-  namedChatHeld,
   type HeldChat
 } from '../../../../../bots/bot-held-chat-request'
 import { admitInOwnConversation, sessionAddress } from './bot-request-conversation'
@@ -247,7 +246,7 @@ async function admitBotRequestMail(
     record: JSON.stringify(record)
   }
   /** `reserved`: the request's place is already held, so only its mail is stored. */
-  /** `held`: the chat a failed turn holds, which this request was kept out of or queued in. */
+  /** `held`: the chat a failed turn holds that this request queues in, named to the sender. */
   const admit = (address: string, reserved = false, held?: HeldChat | null) => {
     const recipient =
       address.startsWith('run:') && receiving.via === 'address'
@@ -291,7 +290,7 @@ async function admitBotRequestMail(
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(
       args.recordMutationReceipt,
-      { message: exposeMessage(message), next: heldChatSentNext(record, held, recipient.to) },
+      { message: exposeMessage(message), next: heldChatSentNext(record, held) },
       () => runtime.notifyMessageArrived(message.to_handle, message.type)
     )
     if (args.held) {
@@ -302,14 +301,14 @@ async function admitBotRequestMail(
     return { sent: true, receipt: sent.receipt }
   }
   /** `home`: the owner's Chat, told where a request it would have had went; null tells none. */
-  const inOwnConversation = (home: { chat: string | null } | null, held?: HeldChat) => {
+  const inOwnConversation = (home: { chat: string | null } | null) => {
     // Held before the chat is made, so a competing send makes none.
     const reservation = db.reserveBotRequest({ ...request, messageId })
     if (reservation.kind !== 'reserved') {
       return Promise.resolve(blockedReceipt(reservation).receipt)
     }
     return admitInOwnConversation(runtime, target, record, params.subject, home, {
-      admit: (address) => admit(address, true, held),
+      admit: (address) => admit(address, true),
       release: () => db.releaseBotRequest(messageId)
     })
   }
@@ -320,16 +319,14 @@ async function admitBotRequestMail(
     // Only a teammate's request Orca kept out of the Chat is noted there; `--chat new` was the sender's choice.
     return inOwnConversation(receiving.newChat === true ? null : { chat: target.chatSessionId })
   }
+  // A chat whose last turn failed queues it like its owner's own follow-ups; the sender is told.
   if (receiving.via === 'address') {
-    // A chat named with --chat whose last turn failed starts a chat of its own; status asks for nothing,
-    // so it may wait there.
-    const held = await namedChatHeld(runtime, purpose, receiving.chat)
-    return held ? inOwnConversation({ chat: held.chat }, held) : admit(args.to).receipt
+    const home = receiving.chat !== null && receiving.chat === target.chatSessionId
+    return admit(args.to, false, await failureHeldChat(runtime, receiving.chat, home)).receipt
   }
   // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
-  // A Chat paused after a failed turn queues it like its owner's own follow-ups; the sender is told.
   return runtimeBotChats(runtime).withChat(target.id, async (sessionId) => {
-    const held = await homeChatHeld(runtime, sessionId)
+    const held = await failureHeldChat(runtime, sessionId, true)
     return admit(sessionAddress(sessionId), false, held).receipt
   })
 }
