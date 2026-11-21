@@ -29,15 +29,12 @@ export function workspaceLinkWriteOptions(
   externalConversations: unknown,
   orderPreserved = true
 ): StateWriteOptions | undefined {
-  if (orderPreserved) {
-    return changedExternalConversations
-      ? { externalConversationLinksUpdate: { workspace, externalConversations } }
-      : { preservesExternalConversationLinks: true }
+  if (!orderPreserved) {
+    return undefined
   }
-  const empty = !Array.isArray(externalConversations) || externalConversations.length === 0
-  return !changedExternalConversations && empty
-    ? { preservesExternalConversationLinks: true }
-    : undefined
+  return changedExternalConversations
+    ? { externalConversationLinksUpdate: { workspace, externalConversations } }
+    : { preservesExternalConversationLinks: true }
 }
 
 /** Undefined means any domain may have changed. */

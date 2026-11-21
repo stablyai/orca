@@ -134,7 +134,11 @@ describe('external conversation link lookups', () => {
       createdFrom: 'folder-scan'
     })
     const folder = store.createFolderWorkspace({ projectGroupId: group.id })
+    const secondFolder = store.createFolderWorkspace({ projectGroupId: group.id })
+    store.updateFolderWorkspace(folder.id, { sortOrder: 20 })
+    store.updateFolderWorkspace(secondFolder.id, { sortOrder: 10 })
     const workspace = { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }
+    const secondWorkspace = { worktreeId: folderWorkspaceKey(secondFolder.id), sshHostId: null }
     writeLink(store, workspace, link(FIRST_PANE))
     expect(findLinkForPane(store, FIRST_PANE)).toEqual({ workspace, link: link(FIRST_PANE) })
 
@@ -156,6 +160,11 @@ describe('external conversation link lookups', () => {
     expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(false)
     expect(findLinksForSession(store, `session-${SECOND_PANE}`)).toHaveLength(2)
     expect(sessionRepliesInSlack(store, `session-${SECOND_PANE}`)).toBe(true)
+
+    // Moving an empty folder above a linked one invalidates stale ranks before its first link lands.
+    store.updateFolderWorkspace(secondFolder.id, { sortOrder: 30 })
+    writeLink(store, secondWorkspace, link(FIRST_PANE))
+    expect(findLink(store, KEY)?.workspace).toEqual(secondWorkspace)
   })
 })
 

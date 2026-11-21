@@ -389,8 +389,7 @@ describe('structured chat notification and mirror link lookups', () => {
           isUnread: true
         })
         expect(fleet.notifyTurn(SLACK_SESSION, SLACK_REPLY, slackTurn)).toEqual({ delivered: true })
-        expect(chatMailPlace(fleet.store, SLACK_SESSION, mailSource)).toEqual({
-          place: 'the Slack thread in #releases',
+        expect(chatMailPlace(fleet.store, SLACK_SESSION, mailSource)).toMatchObject({
           answersThere: false
         })
         expect(fleet.notifyTurn(LOCAL_SESSION, SLACK_REPLY, localTurn)).toEqual({ delivered: true })

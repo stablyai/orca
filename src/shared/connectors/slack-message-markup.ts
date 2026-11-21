@@ -114,10 +114,9 @@ export function slackMarkupPlainText(text: string): string {
 }
 
 // A person, channel or ping written exactly as Slack writes one, ids and all.
-const SLACK_ID_TOKEN_PATTERN =
-  '<((?:@[UW][A-Z0-9]{2,}|#[CG][A-Z0-9]{2,}|!(?:here|channel|everyone)|!subteam\\^S[A-Z0-9]+)(?:\\|[^<>]*)?)>'
-const SLACK_ID_TOKEN = new RegExp(SLACK_ID_TOKEN_PATTERN, 'g')
-const SLACK_ID_TOKEN_PROBE = new RegExp(SLACK_ID_TOKEN_PATTERN)
+const SLACK_ID_TOKEN =
+  /<((?:@[UW][A-Z0-9]{2,}|#[CG][A-Z0-9]{2,}|!(?:here|channel|everyone)|!subteam\^S[A-Z0-9]+)(?:\|[^<>]*)?)>/g
+const SLACK_ID_TOKEN_PROBE = new RegExp(SLACK_ID_TOKEN.source)
 
 export function hasSlackMentionMarkup(text: string): boolean {
   return text.includes('<') && SLACK_ID_TOKEN_PROBE.test(text)
