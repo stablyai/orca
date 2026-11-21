@@ -1,3 +1,4 @@
+import { constants as bufferConstants } from 'node:buffer'
 import { constants } from 'node:fs'
 import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -93,6 +94,9 @@ async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
   return text === null ? '' : text === undefined ? UNRESOLVED_HEAD : normalizeHead(text)
 }
 
+const READ_CHUNK_BYTES = 512 * 1024
+const { MAX_STRING_LENGTH } = bufferConstants
+
 /** A regular file's content, opened without blocking on a FIFO; null for a directory, undefined when not regular or over `maxBytes`. */
 async function readBoundedFile(
   path: string,
@@ -108,14 +112,24 @@ async function readBoundedFile(
     if (!info.isFile() || (maxBytes !== undefined && info.size > maxBytes)) {
       return undefined
     }
-    if (maxBytes === undefined) {
-      // Chunked, with Node's own size ceiling.
-      return await handle.readFile('utf8')
+    // Chunked from this descriptor; a file that grows past the limit is refused.
+    const limit = maxBytes ?? MAX_STRING_LENGTH
+    const chunkSize = Math.min(info.size + 1, READ_CHUNK_BYTES)
+    const chunks: Buffer[] = []
+    let total = 0
+    for (;;) {
+      const chunk = Buffer.allocUnsafe(chunkSize)
+      const { bytesRead } = await handle.read(chunk, 0, chunkSize, null)
+      total += bytesRead
+      if (total > limit) {
+        return undefined
+      }
+      chunks.push(chunk.subarray(0, bytesRead))
+      // A short read of a regular file is its end.
+      if (bytesRead < chunkSize) {
+        return Buffer.concat(chunks, total).toString('utf8')
+      }
     }
-    // One spare byte shows a file that grew past its stat.
-    const buffer = Buffer.allocUnsafe(info.size + 1)
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-    return bytesRead > info.size ? undefined : buffer.toString('utf8', 0, bytesRead)
   } finally {
     await handle.close()
   }

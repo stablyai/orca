@@ -19,7 +19,7 @@ const refOpens = vi.hoisted(() => ({ count: 0 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   const open: typeof actual.open = (path, ...rest) => {
-    if (String(path).includes('/refs/heads/')) {
+    if (String(path).replaceAll('\\', '/').includes('/refs/heads/')) {
       refOpens.count += 1
     }
     return actual.open(path, ...rest)
@@ -218,5 +218,32 @@ it.each([3, 30])(
     await vi.waitFor(() => expect(listings()).toBe(1), { timeout: 25_000, interval: 50 })
     // Only main's own ref, never the other checkouts' branches.
     expect(refOpens.count).toBe(1)
+  }
+)
+
+it.each([3, 30])(
+  'follows only the remembered odd alias on the next create among %i branch worktrees',
+  async (linked) => {
+    const { repoPath } = await createRepo(linked)
+    for (let index = 0; index < linked; index += 1) {
+      git(join(dirname(repoPath), `wt-${index}`), ['checkout', '--quiet', '-b', `topic-${index}`])
+    }
+    const heads = join(repoPath, '.git', 'refs', 'heads')
+    await writeFile(join(heads, 'loop-a'), 'ref: refs/heads/loop-b\n')
+    await writeFile(join(heads, 'loop-b'), 'ref: refs/heads/loop-a\n')
+    await writeFile(join(repoPath, '.git', 'worktrees', 'wt-0', 'HEAD'), 'ref: refs/heads/loop-a\n')
+    const suggest = () =>
+      getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+        repoPath,
+        'origin/main',
+        'refs/remotes/origin/main'
+      )
+    await suggest()
+    refOpens.count = 0
+
+    await suggest()
+
+    // main itself plus the two-ref loop.
+    expect(refOpens.count).toBeLessThanOrEqual(3)
   }
 )

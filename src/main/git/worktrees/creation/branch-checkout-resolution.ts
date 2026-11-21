@@ -28,6 +28,8 @@ type ResolveOptions = {
 }
 
 const MAX_SYMREF_HOPS = 5
+// Per common dir, the branch whose alias chain last could not be followed: an odd ref tends to stay.
+const lastUnresolved = new Map<string, string>()
 const PER_WORKTREE_REF = /^refs\/(?:worktree|bisect|rewritten)\//
 
 /** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
@@ -136,9 +138,22 @@ export async function resolveBranchCheckouts(
         return
       }
     }
+    if (!unknown) {
+      lastUnresolved.set(commonDir, start)
+    }
     unknown = true
   }
-  await forEachBounded(branches, resolve, () => unknown || settled()).catch((error: unknown) => {
+  // Try that branch first so a lasting odd ref costs one chain, not a pass over every checkout.
+  const odd = lastUnresolved.get(commonDir)
+  const first = odd === undefined ? undefined : branches.find(([, ref]) => ref === odd)
+  if (first) {
+    await resolve(first)
+    if (unknown && !settled()) {
+      return { kind: 'unknown' }
+    }
+  }
+  const rest = first ? branches.filter((branch) => branch !== first) : branches
+  await forEachBounded(rest, resolve, () => unknown || settled()).catch((error: unknown) => {
     unknown = true
     throw error
   })
@@ -149,6 +164,7 @@ export async function resolveBranchCheckouts(
   if (unknown) {
     return { kind: 'unknown' }
   }
+  lastUnresolved.delete(commonDir)
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
 }
 
