@@ -1,3 +1,5 @@
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../src/shared/remote-runtime/session-graph/host-session-snapshot-authority'
+
 export type AppliedSnapshotMarker = { epoch: string | null; version: number }
 
 // Reject only older versions in the same epoch; equal versions must reprocess tombstone expiry, and a new publisher resets the floor.
@@ -5,6 +7,10 @@ export function acceptSessionSnapshot(
   incoming: { publicationEpoch?: string; snapshotVersion: number },
   marker: AppliedSnapshotMarker
 ): boolean {
+  // An unpublished host's "ask later" frame holds no tabs and proves none closed; keep loading and the last strip.
+  if (!hostSnapshotAffirmsWorktreeContents(incoming)) {
+    return false
+  }
   const incomingEpoch = incoming.publicationEpoch ?? null
   if (incomingEpoch === marker.epoch) {
     if (incoming.snapshotVersion < marker.version) {

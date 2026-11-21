@@ -114,8 +114,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (
         result.tabs.length > 0 &&
         confirmsMirroredTabSelection(result.publicationEpoch) &&
-        result.publicationEpoch !== 'none' &&
-        result.publicationEpoch !== 'none:client-navigation' &&
         !result.clientHostedPagesUnreconciled &&
         !result.agentSessionsUnverifiable
       ) {
