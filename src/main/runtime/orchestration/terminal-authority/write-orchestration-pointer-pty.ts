@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
     const processTitle = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
     // An idle pane never re-reports its title, so a rename must win here, not by timestamp (#24914).
-    const title = (pty && (this.getPtyManualTitle(pty, false) ?? pty.manualTitle)) || processTitle
+    const title = (pty && this.getPtyManualTitle(pty, false)) || processTitle
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
     // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
     const provenAbsent =

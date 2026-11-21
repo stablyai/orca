@@ -52,6 +52,11 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    // A pane handle takes this path; `terminal list` reads the name from the PTY, not the tab (#24914).
+    const leafPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    if (leafPty) {
+      leafPty.manualTitle = title?.trim() || null
+    }
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
   }
