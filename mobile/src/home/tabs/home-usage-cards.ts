@@ -1,6 +1,7 @@
 import {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getSystemDefaultProviderUsage,
   hasActiveProviderUsage,
   hasRenderableUsage,
   type ProviderKey
@@ -56,7 +57,7 @@ function managedAccounts(snapshot: AccountsSnapshot, provider: ProviderKey) {
       }))
 }
 
-/** One card per login on the provider: System default only while no managed account is active, then active first. */
+/** One card per login on the provider, active first; an unselected System default shows once the host has its reading. */
 export function selectHomeUsageCards(
   snapshot: AccountsSnapshot,
   provider: ProviderKey
@@ -64,15 +65,16 @@ export function selectHomeUsageCards(
   const activeId = activeAccountId(snapshot, provider)
   const activeLimits = getActiveProviderRateLimits(snapshot, provider)
   const cards: HomeUsageCard[] = []
-  if (activeId === null) {
+  const systemDefaultLimits = getSystemDefaultProviderUsage(snapshot, provider, activeId)
+  if (activeId === null || hasActiveProviderUsage(systemDefaultLimits)) {
     cards.push({
       accountId: null,
       email: null,
       subtitle: null,
-      active: true,
-      limits: activeLimits,
-      fetching: activeLimits?.status === 'fetching',
-      metered: hasActiveProviderUsage(activeLimits)
+      active: activeId === null,
+      limits: systemDefaultLimits,
+      fetching: systemDefaultLimits?.status === 'fetching',
+      metered: hasActiveProviderUsage(systemDefaultLimits)
     })
   }
   for (const account of managedAccounts(snapshot, provider)) {
