@@ -94,17 +94,42 @@ export const foldedHeader = defineFixture({
   )
 })
 
-function localizedHeader(locale: SupportedUiLocale, width = 252) {
+function localizedHeader(
+  locale: SupportedUiLocale,
+  width = 252,
+  owners = BOTS,
+  readAccessibleLabels = false
+) {
   return defineFixture({
     ...foldedHeader,
     width,
     store: {
       ...foldedHeader.store,
+      folderWorkspaces: owners.map((owner) =>
+        makeFolderWorkspace({
+          id: owner.folderWorkspaceId,
+          projectGroupId: 'bots',
+          name: owner.name,
+          folderPath: `/home/me/.orca/bots/${owner.folder}`
+        })
+      ),
       agentStatusByPaneKey: acceptedAgentStatuses(
-        BOTS.map((owner) => chat(owner, 'waiting')).map((entry) => [entry.paneKey, entry])
+        owners.map((owner) => chat(owner, 'waiting')).map((entry) => [entry.paneKey, entry])
       )
     },
-    interact: async () => setRendererUiLanguage(locale)
+    setup: () => stubBots(owners),
+    interact: async (frame) => {
+      await setRendererUiLanguage(locale)
+      if (readAccessibleLabels) {
+        const readout = document.createElement('pre')
+        readout.className = 'mt-2 whitespace-pre-wrap text-xs'
+        readout.textContent = [...frame.querySelectorAll('[aria-label]')]
+          .map((element) => element.getAttribute('aria-label'))
+          .filter(Boolean)
+          .join('\n')
+        frame.append(readout)
+      }
+    }
   })
 }
 
@@ -128,6 +153,8 @@ export const koreanNormalHeader = localizedHeader('ko', 352)
 export const portugueseNormalHeader = localizedHeader('pt', 352)
 export const russianNormalHeader = localizedHeader('ru', 352)
 export const turkishNormalHeader = localizedHeader('tr', 352)
+export const chineseOneBotLabel = localizedHeader('zh', 252, BOTS.slice(0, 1), true)
+export const chineseOneHiddenBotLabel = localizedHeader('zh', 352, BOTS.slice(0, 6), true)
 
 const HOMES = (owners: readonly Pick<Bot, 'folderWorkspaceId' | 'name' | 'folder'>[]) =>
   owners.map((owner) =>
