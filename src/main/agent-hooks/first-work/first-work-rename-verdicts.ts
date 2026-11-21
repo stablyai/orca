@@ -20,6 +20,17 @@ export function skipsInheritedAgentFailure(
   return origin === 'automatic' && !attempt.wasJoined() && isInheritedAgentUnavailable(failure)
 }
 
+/**
+ * Keeps the seed name and leaves any badge as it is. The outcome stays a failure, not a kept name,
+ * so a failure dialog that is already open keeps offering Try again, which reports the reason.
+ */
+export function skippedInheritedAgent(
+  error: string,
+  failed: FirstWorkVerdictBuilders['failed']
+): FirstWorkRenameVerdict {
+  return failed(`inherited agent unavailable: ${error}`, true)
+}
+
 /** What the generator names from: the event's prompt, or a click-time lookup. */
 export type FirstWorkContextResolution =
   | { kind: 'context'; context: BranchNameWorkContext }

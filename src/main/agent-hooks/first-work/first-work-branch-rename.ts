@@ -47,6 +47,7 @@ import {
 import {
   failedGenerationVerdict,
   resolveFirstWorkContext,
+  skippedInheritedAgent,
   skipsInheritedAgentFailure,
   verdictBuilders,
   type FirstWorkContextSource,
@@ -213,9 +214,7 @@ async function runAutoRename(
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     if (skipsInheritedAgentFailure(origin, attempt, resolvedParams)) {
-      // Clear an earlier badge only while this attempt is current, so a newer failure stays.
-      const log = `inherited agent unavailable: ${resolvedParams.error}`
-      return stop('unavailable', log, attempt.isCurrent())
+      return skippedInheritedAgent(resolvedParams.error, failed)
     }
     deps.setRenameError(worktreeId, resolvedParams.error)
     return failed(`no generation agent: ${resolvedParams.error}`, true)

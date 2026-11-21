@@ -82,13 +82,16 @@ beforeEach(() => {
 })
 
 describe('automatic naming with an inherited agent that cannot name', () => {
-  it('keeps the branch name, launches nothing and clears the earlier badge', async () => {
+  it('keeps the branch name, launches nothing and leaves the badge alone', async () => {
+    const finished = recordFinished()
     const { deps, setRenameError } = setup(inheritedDefault('gemini'))
 
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
 
     expect(launches()).toBe(0)
-    expect(setRenameError.mock.calls).toEqual([[WORKTREE_ID, null]])
+    expect(setRenameError).not.toHaveBeenCalled()
+    // A failure dialog already following this attempt keeps its Try again.
+    expect(finished).toMatchObject([{ outcome: { kind: 'failed' } }])
     // Settled: a later message does not try again.
     const gitCalls = gitExecFileAsyncMock.mock.calls.length
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -101,7 +104,7 @@ describe('automatic naming with an inherited agent that cannot name', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
 
     expect(launches()).toBe(0)
-    expect(setRenameError.mock.calls).toEqual([[WORKTREE_ID, null]])
+    expect(setRenameError).not.toHaveBeenCalled()
   })
 
   it('keeps a folder workspace title and launches nothing', async () => {
@@ -114,7 +117,17 @@ describe('automatic naming with an inherited agent that cannot name', () => {
 
     expect(launches()).toBe(0)
     expect(setDisplayName).not.toHaveBeenCalled()
-    expect(setRenameError.mock.calls).toEqual([[FOLDER_WORKTREE_ID, null]])
+    expect(setRenameError).not.toHaveBeenCalled()
+  })
+
+  it('still reports the reason when the user presses Try again on a folder workspace', async () => {
+    const { deps, setRenameError } = retrySetup({}, FOLDER_WORKTREE_ID)
+
+    const result = await retryFirstWorkRename(FOLDER_WORKTREE_ID, deps)
+
+    expect(launches()).toBe(0)
+    expect(result.outcome).toEqual({ kind: 'failed' })
+    expect(setRenameError).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, SETTINGS_HINT)
   })
 
   it('still launches Claude for a blank default launch agent', async () => {
@@ -151,12 +164,7 @@ describe('automatic naming with an inherited agent that cannot name', () => {
 
   it('reports the reason when Try again joins a running automatic attempt', async () => {
     const releaseGit = holdGit()
-    const finished: BranchAutoRenameAttemptEvent[] = []
-    installFirstWorkAttemptNotifier((event) => {
-      if (event.phase === 'finished') {
-        finished.push(event)
-      }
-    })
+    const finished = recordFinished()
     const { deps, setRenameError } = retrySetup()
 
     const automatic = maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -200,6 +208,16 @@ describe('automatic naming with an inherited agent that cannot name', () => {
   })
 })
 
+function recordFinished(): BranchAutoRenameAttemptEvent[] {
+  const finished: BranchAutoRenameAttemptEvent[] = []
+  installFirstWorkAttemptNotifier((event) => {
+    if (event.phase === 'finished') {
+      finished.push(event)
+    }
+  })
+  return finished
+}
+
 /** Holds every git call until released, so a click can join the automatic attempt. */
 function holdGit(): () => void {
   let release!: () => void
@@ -214,8 +232,8 @@ function holdGit(): () => void {
 
 const SETTINGS_HINT = expect.stringContaining('Settings -> Git -> Source Control AI')
 
-function retrySetup(overrides: Partial<FirstWorkRetryDeps> = {}) {
-  const { deps: base, setRenameError } = setup(inheritedDefault('gemini'))
+function retrySetup(overrides: Partial<FirstWorkRetryDeps> = {}, worktreeId = WORKTREE_ID) {
+  const { deps: base, setRenameError } = setup(inheritedDefault('gemini'), worktreeId)
   const deps: FirstWorkRetryDeps = {
     ...base,
     ...overrides,

@@ -48,6 +48,12 @@ describe('resolveSourceControlAiForOperation inherited agent', () => {
     expect(agentOf(resolve('conversationName', inherited('claude-agent-teams')))).toBe('claude')
   })
 
+  it('does not run Claude for an inherited Claude Agent Teams default while Claude is disabled', () => {
+    const branch = resolve('branchName', inherited('claude-agent-teams', ['claude']))
+    expect(branch).toMatchObject({ ok: false, errorCode: 'sourceControlAgentUnsupported' })
+    expect(skips(branch)).toBe(true)
+  })
+
   it.each<TuiAgent>(['gemini', 'droid'])(
     'marks an enabled inherited %s that cannot generate text, without rerouting to Claude',
     (agent) => {

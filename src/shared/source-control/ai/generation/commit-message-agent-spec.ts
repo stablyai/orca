@@ -193,9 +193,17 @@ function enabledDefaultLaunchAgent(
     : null
 }
 
-// Launch variants that run another agent's CLI generate text through that agent.
+// Launch variants that run another agent's CLI generate text through that agent, while it is enabled.
 const TEXT_AGENT_FOR_LAUNCH_AGENT: Partial<Record<TuiAgent, TuiAgent>> = {
   'claude-agent-teams': 'claude'
+}
+
+function textAgentForLaunchAgent(
+  launchAgent: TuiAgent,
+  disabledTuiAgents?: Iterable<unknown> | null
+): TuiAgent {
+  const textAgent = TEXT_AGENT_FOR_LAUNCH_AGENT[launchAgent]
+  return textAgent && isTuiAgentEnabled(textAgent, disabledTuiAgents) ? textAgent : launchAgent
 }
 
 export function resolveCommitMessageAgentChoice(
@@ -209,7 +217,7 @@ export function resolveCommitMessageAgentChoice(
     return configuredAgentId
   }
   const launchAgent = enabledDefaultLaunchAgent(defaultTuiAgent, disabledTuiAgents)
-  const inherited = launchAgent && (TEXT_AGENT_FOR_LAUNCH_AGENT[launchAgent] ?? launchAgent)
+  const inherited = launchAgent && textAgentForLaunchAgent(launchAgent, disabledTuiAgents)
   if (inherited) {
     const usable =
       getCommitMessageAgentSpec(inherited) &&

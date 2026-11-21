@@ -592,7 +592,7 @@ describe('AutoRenameFailedDialog when an attempt stops reporting back', () => {
     expectControlsBack()
   })
 
-  it('does not present the old error as the reason for an automatic skip', async () => {
+  it('keeps Try again when a watched automatic attempt skips an inherited agent', async () => {
     await renderFailure()
     const attempt = {
       executionHostId: 'local' as const,
@@ -600,20 +600,14 @@ describe('AutoRenameFailedDialog when an attempt stops reporting back', () => {
       attemptId: 8
     }
     await act(async () => emitAttempt({ ...attempt, phase: 'started' }))
-    // The inherited-agent skip clears the stored error, then finishes as unavailable.
-    setStoredError(null)
+    // The inherited-agent skip leaves the stored error alone and finishes as a plain failure.
     await act(async () =>
-      emitAttempt({
-        ...attempt,
-        phase: 'finished',
-        outcome: { kind: 'ineligible', reason: 'unavailable' },
-        finishedAt: 1
-      })
+      emitAttempt({ ...attempt, phase: 'finished', outcome: { kind: 'failed' }, finishedAt: 1 })
     )
-    const dialog = document.querySelector('[role="dialog"]')?.textContent ?? ''
-    expect(dialog).toContain("Orca can't name this branch anymore.")
-    expect(dialog).not.toContain(EXCERPT_ERROR)
-    expect(dialog).not.toContain('Error details')
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Branch auto-name failed')
+    expect(dialog?.textContent).not.toContain("Orca can't name this branch anymore.")
+    expect(footerButtons()).toEqual(['Dismiss', 'Try again'])
   })
 
   it('shows a joined click as failed when the attempt events arrive before the reply', async () => {
