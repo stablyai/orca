@@ -11,15 +11,21 @@ import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import type { BotChatOrigin, BotChatTreeChat } from '../../shared/bots/bot-chat-tree'
 import { HOME_CHAT_TITLE } from '../../shared/bots/bot-chat-tree-model'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../shared/agent-session/identity/orca-session-address'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
-  lineageLiveSession,
   resolveLineageRunningSession,
-  type AgentSessionRecordReader
+  type AgentSessionRecordReader,
+  type LineageRunningSession
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
+import {
+  addressableSessionParty,
+  structuredSessionMailReachWith
+} from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   readSessionParties,
@@ -138,7 +144,16 @@ export function botChatBaseChat(
   build: BotChatBasePartial
 ): BotChatBaseChat | null {
   const row = botChatBaseRow(ctx, bot, record, build)
-  return row ? botChatBaseChatOfRow(ctx.db, store, record, row, build) : null
+  return row
+    ? botChatBaseChatOfRow(
+        ctx.db,
+        store,
+        record,
+        row,
+        resolveLineageRunningSession(store, row.id),
+        build
+      )
+    : null
 }
 
 function botChatBaseChatOfRow(
@@ -146,12 +161,18 @@ function botChatBaseChatOfRow(
   store: AgentSessionRecordReader,
   record: AgentSessionConversationView,
   row: BotChatRecordRow,
+  /** The chat's lineage walked once, for its live session and its end. */
+  running: LineageRunningSession,
   build: BotChatBasePartial
 ): BotChatBaseChat {
-  const live = lineageLiveSession(store, row.id)
+  const live = running.kind === 'unverifiable' ? null : running.record
   // Only a chat that truly ended is closed: one on another host or behind an unverifiable /clear is not.
   const root = store.getRecord(row.id)
-  const closed = root ? structuredSessionMailReach(store, root, parties).kind === 'ended' : false
+  const reach = {
+    running: () => running,
+    addressable: (id: OrcaSessionId) => Boolean(addressableSessionParty(id, parties))
+  }
+  const closed = root ? structuredSessionMailReachWith(reach, store, root).kind === 'ended' : false
   const origin = row.home ? { origin: 'home' as const } : build.originBySessionId.get(row.id)
   const preview = row.lastSaid ?? row.lastAsked
   return {
@@ -219,19 +240,18 @@ export function buildBotChatBase(
   if (store) {
     const rows = homeRecords.flatMap((record) => {
       const row = botChatBaseRow(ctx, inputs.bot, record, partial)
-      return row ? [{ record, row }] : []
+      return row ? [{ record, row, running: resolveLineageRunningSession(store, row.id) }] : []
     })
     // One party read for the chats whose end the base checks; another host's chat, or a lineage that
     // can't be verified, is judged without this host's rows.
     const parties = readSessionParties(
       ctx.db,
-      rows.flatMap(({ row }) => {
-        const running = resolveLineageRunningSession(store, row.id)
-        return running.kind === 'here' && isOrcaSessionId(running.sessionId) ? [row.id] : []
-      })
+      rows.flatMap(({ row, running }) =>
+        running.kind === 'here' && isOrcaSessionId(running.sessionId) ? [row.id] : []
+      )
     )
-    for (const { record, row } of rows) {
-      const chat = botChatBaseChatOfRow(parties, store, record, row, partial)
+    for (const { record, row, running } of rows) {
+      const chat = botChatBaseChatOfRow(parties, store, record, row, running, partial)
       chats.set(chat.chatId, chat)
       sessionOfChat.set(chat.chatId, record.sessionId)
     }

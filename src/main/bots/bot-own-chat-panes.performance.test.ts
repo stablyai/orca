@@ -35,22 +35,31 @@ it('reads the parties of every bot’s side chats in one query per bot, however 
   expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(10)
 })
 
-it('asks nothing of the database for chats running on another host', async () => {
-  const records = Array.from({ length: 20 }, (_, i) => {
-    const record = homeRecord(`chat-remote-${i}`, `Remote ${i}`)
-    return { ...record, location: { ...record.location, executionHostId: 'ssh:devbox' as const } }
-  })
-  const host = ownChatHost(records)
-  const store = await host.sessionRecords()
-  const prepare = vi.spyOn(host.db().db, 'prepare')
-  const build = buildBotChatBase(
-    { db: host.db(), backgroundRuns: host.backgroundRuns },
-    store,
-    readBotChatInputs(host, bot),
-    store?.listRecords() ?? []
-  )
-  expect(build.chats.size).toBe(20)
-  expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(0)
+it('builds chats running on another host with one lineage walk each and no database read', async () => {
+  for (const count of [20, 200]) {
+    const records = Array.from({ length: count }, (_, i) => {
+      const record = homeRecord(`chat-remote-${i}`, `Remote ${i}`)
+      return { ...record, location: { ...record.location, executionHostId: 'ssh:devbox' as const } }
+    })
+    const host = ownChatHost(records)
+    const store = await host.sessionRecords()
+    if (!store) {
+      throw new Error('fixture store missing')
+    }
+    const getRecord = vi.spyOn(store, 'getRecord')
+    const prepare = vi.spyOn(host.db().db, 'prepare')
+    const build = buildBotChatBase(
+      { db: host.db(), backgroundRuns: host.backgroundRuns },
+      store,
+      readBotChatInputs(host, bot),
+      store.listRecords()
+    )
+    expect(build.chats.size).toBe(count)
+    expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(0)
+    // Per chat: its lineage walked once, and its root read once for the closed check.
+    expect(getRecord).toHaveBeenCalledTimes(count * 2)
+    closeOwnChatHost()
+  }
 })
 
 it('reads a chat a /clear continued into another session from the batch', async () => {
