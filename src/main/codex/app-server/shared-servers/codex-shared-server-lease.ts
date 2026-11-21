@@ -16,7 +16,8 @@ export const CODEX_SHARED_LEASE_MAX_QUEUED_BYTES = 64 * 1024 * 1024
  *  a retry), and whether its commands are proven gone. */
 export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean }
 
-const RELEASE_RETRY_MS = 10_000
+/** Retries of an unproven stop back off, then hold the slowest pace until proven. */
+export const CODEX_SHARED_STOP_RETRY_DELAYS_MS = [2_000, 10_000, 60_000, 300_000]
 
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
@@ -272,21 +273,25 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     }
     // The chat hears its exit only after its turns are stopped, so a recovery can't race them; a
     // close meanwhile waits on this same cleanup.
-    const attempt = (): Promise<boolean> => {
+    const attempt = (tries: number): Promise<boolean> => {
       const closing = this.releaseOnHost(error, false).then((ended) => {
         if (!ended && this.closing === closing) {
           this.closing = null
-          setTimeout(() => {
-            if (this.state === 'closing' && !this.closing) {
-              this.closing = attempt()
-            }
-          }, RELEASE_RETRY_MS).unref?.()
+          const delays = CODEX_SHARED_STOP_RETRY_DELAYS_MS
+          setTimeout(
+            () => {
+              if (this.state === 'closing' && !this.closing) {
+                this.closing = attempt(tries + 1)
+              }
+            },
+            delays[Math.min(tries, delays.length - 1)]
+          ).unref?.()
         }
         return ended
       })
       return closing
     }
-    this.closing = attempt()
+    this.closing = attempt(0)
   }
 
   private finish(

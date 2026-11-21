@@ -7,7 +7,6 @@ import { spawnTokenFromEnvironBlock } from '../../../runtime/agent-session/owner
 
 const PS_TIMEOUT_MS = 5_000
 const PS_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
-const UNREADABLE_TAG = Symbol('unreadable')
 
 /** This user's processes by their lease tag. `unreadable`: own processes whose environment
  *  couldn't be read, so a scan with any is no proof that a lease's commands are gone. */
@@ -60,8 +59,8 @@ async function scanLinux(
   const launcher = await readFile(`/proc/${serverPid}/comm`, 'utf-8').catch(() => '')
   const scoped = launcher.startsWith('orca-provider-ex')
   const uid = process.getuid?.()
+  const own: number[] = []
   const parents = new Map<number, number | null>()
-  const tags = new Map<number, string | null | typeof UNREADABLE_TAG>()
   await Promise.all(
     names.map(async (name) => {
       const pid = Number(name)
@@ -78,35 +77,31 @@ async function scanLinux(
       if (uid !== undefined && owner !== uid) {
         return
       }
+      own.push(pid)
       if (scoped) {
         const procStat = await readFile(`/proc/${pid}/stat`, 'utf-8').catch(() => null)
         parents.set(pid, procStat === null ? null : parentFromStat(procStat))
       }
+    })
+  )
+  // Only the processes being judged have their environment read.
+  const inScope = scoped ? linuxSubtree(parents, serverPid) : () => true
+  const entries: (readonly [number, string | null])[] = []
+  const unreadable: number[] = []
+  await Promise.all(
+    own.filter(inScope).map(async (pid) => {
       try {
-        tags.set(
+        entries.push([
           pid,
           spawnTokenFromEnvironBlock(await readFile(`/proc/${pid}/environ`, 'utf-8'), envName)
-        )
+        ])
       } catch (error) {
         if (errnoCodeOrUnknown(error) !== 'ENOENT') {
-          tags.set(pid, UNREADABLE_TAG)
+          unreadable.push(pid)
         }
       }
     })
   )
-  const inScope = scoped ? linuxSubtree(parents, serverPid) : null
-  const entries: (readonly [number, string | null])[] = []
-  const unreadable: number[] = []
-  for (const [pid, tag] of tags) {
-    if (inScope && !inScope(pid)) {
-      continue
-    }
-    if (tag === UNREADABLE_TAG) {
-      unreadable.push(pid)
-    } else {
-      entries.push([pid, tag])
-    }
-  }
   return { tagged: byTag(entries), unreadable }
 }
 

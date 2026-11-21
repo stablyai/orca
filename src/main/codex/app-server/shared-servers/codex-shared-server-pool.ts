@@ -7,7 +7,10 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
 import { codexSharedServerSpec } from './codex-shared-server-key'
-import { CodexSharedServerLease } from './codex-shared-server-lease'
+import {
+  CODEX_SHARED_STOP_RETRY_DELAYS_MS,
+  CodexSharedServerLease
+} from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import {
@@ -20,7 +23,6 @@ export const CODEX_SHARED_SERVER_MAX_CHATS = 20
 /** A server with no chats waits this long for the next one before it stops. */
 const IDLE_SERVER_STOP_MS = 60_000
 /** Waits between attempts to stop a server whose exit could not be proven. */
-const STOP_RETRY_DELAYS_MS = [2_000, 10_000, 60_000, 300_000]
 
 export type CodexSharedServerOpenOptions = {
   sessionId: string
@@ -160,8 +162,11 @@ export class CodexSharedServerPool {
         return
       }
       // Retried until proven, at the slowest pace once the backoff runs out.
-      const delay = STOP_RETRY_DELAYS_MS[Math.min(attempt, STOP_RETRY_DELAYS_MS.length - 1)]!
-      if (attempt === STOP_RETRY_DELAYS_MS.length - 1) {
+      const delay =
+        CODEX_SHARED_STOP_RETRY_DELAYS_MS[
+          Math.min(attempt, CODEX_SHARED_STOP_RETRY_DELAYS_MS.length - 1)
+        ]!
+      if (attempt === CODEX_SHARED_STOP_RETRY_DELAYS_MS.length - 1) {
         console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} has not proven its exit`)
       }
       const timer = setTimeout(() => this.stop(server, attempt + 1), delay)
