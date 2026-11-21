@@ -4077,7 +4077,10 @@
     "workerApproval": {
       "title": "{{worker}} · {{title}}",
       "allow": "Allow",
-      "deny": "Deny"
+      "deny": "Deny",
+      "waiting": "{{count}} workers waiting · oldest first",
+      "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
+      "openWorker": "Open worker"
     }
   },
   "sourceControl": {
