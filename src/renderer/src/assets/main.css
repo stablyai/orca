@@ -195,7 +195,6 @@
   --color-search-match: var(--markdown-search-match);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --shadow-notice: var(--notice-shadow);
-  --shadow-bot-home-banner: var(--bot-home-banner-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -601,6 +600,7 @@
   --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
   --bot-home-banner-shadow:
     0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
 }

@@ -29,7 +29,7 @@ export function BotHomeBanner({
         openBotActivityPanel()
       }}
     >
-      <BotAvatar bot={bot} className="size-[24px] rounded-full text-3xs" />
+      <BotAvatar bot={bot} className="rounded-full text-3xs" />
       <span data-bot-home-banner-name="">{bot.name}</span>
     </button>
   )

@@ -14,7 +14,7 @@
   border-radius: 9999px;
   background: var(--notice-surface);
   color: var(--popover-foreground);
-  box-shadow: var(--shadow-bot-home-banner);
+  box-shadow: var(--bot-home-banner-shadow);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
@@ -48,5 +48,10 @@
 
   .native-chat-transcript-inset {
     padding-top: max(48px, calc(10 * var(--spacing)));
+  }
+
+  /* Open Find below the pill (8px + 32px) instead of over its lower edge. */
+  [data-native-chat-find-bar] {
+    --native-chat-find-top-inset: 40px;
   }
 }
