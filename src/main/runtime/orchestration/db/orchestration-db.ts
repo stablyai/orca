@@ -25,6 +25,7 @@ import { revokeAgentSessionPublicationFences } from '../../agent-session/agent-s
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
 import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-release'
+import { readPendingPointerPtyIds } from './messages/mailbox-pointer-enter-state'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -53,6 +54,7 @@ class OrchestrationDbCore {
   private changedDispatchIds: Set<string> | null = null
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  readonly pendingPointerPtyIds: Set<string>
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
@@ -71,6 +73,7 @@ class OrchestrationDbCore {
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     refreshOutstandingDeliveryTrigger(this.db)
+    this.pendingPointerPtyIds = readPendingPointerPtyIds(this.db)
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
