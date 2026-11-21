@@ -254,13 +254,13 @@ export function NativeChatQueuedMessageCard({
       {/* Reserve the same gutter in both states so the chevron stays aligned when expanded text scrolls. */}
       <div
         className={cn(
-          'col-start-2 -mr-1 -mb-1 min-h-9 min-w-0 py-1 pr-1 [scrollbar-gutter:stable]',
+          'col-start-2 -mr-1 -mb-1 min-h-9 min-w-0 py-1 pr-1 [scrollbar-gutter:stable] [--queue-text-padding-top:max(var(--spacing),calc(var(--spacing)_*_6.5_-_1lh))]',
           !hasExpandedMetadata && '-mt-1',
           expanded ? 'scrollbar-sleek max-h-64 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
         )}
       >
-        {/* Floated with a margin box one text line tall (text and controls scale apart), so only the first line makes room; hidden actions keep their space so text never shifts. */}
-        <div className="float-right mb-[calc(1lh_-_var(--spacing)_*_6)] ml-1 flex h-7 items-center text-sm">
+        {/* The 6-unit buttons end 6.5 units down. Keep line two below them even at small text sizes. */}
+        <div className="float-right mb-[calc(var(--queue-text-padding-top)_+_1lh_-_var(--spacing)_*_7)] ml-1 flex h-7 items-center text-sm">
           {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
           {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
           {card.hold === 'sending' ? null : (
@@ -376,13 +376,17 @@ export function NativeChatQueuedMessageCard({
         {expanded ? (
           <p
             id={textId}
-            className="py-1 text-sm whitespace-pre-wrap wrap-anywhere"
+            className="pt-(--queue-text-padding-top) pb-1 text-sm whitespace-pre-wrap wrap-anywhere"
             style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
           >
             {line}
           </p>
         ) : (
-          <p ref={measureLine} className="truncate py-1 text-sm" title={line}>
+          <p
+            ref={measureLine}
+            className="truncate pt-(--queue-text-padding-top) pb-1 text-sm"
+            title={line}
+          >
             {line}
           </p>
         )}
