@@ -16,6 +16,7 @@ import {
   lookAroundStoreFile
 } from '../bots/bot-look-around-store'
 import { botHomeFolder, botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
@@ -226,7 +227,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     workRuntime: this.botWorkRuntime,
     bots: () => this.bots.list(),
     store: () => this.store,
-    notify: (scope) => this.botChangeNotices.changed(scope),
+    // Closed items also go to each bot's memory/journal/.
+    notify: journaledItemsNotice(this, (scope) => this.botChangeNotices.changed(scope)),
     sendMail: (mail) => this.botSessions.sendItemMail(mail)
   })
 
