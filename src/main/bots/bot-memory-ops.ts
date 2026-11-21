@@ -8,15 +8,12 @@ import {
   botMemoryLineKey,
   parseBotMemoryFacts
 } from '../../shared/bot-memory-lines'
-import { botMemoryLineKind, isProtectedBotMemoryLine } from '../../shared/bot-memory-line-kinds'
-import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
-import { hasMeaningWords, isShortening } from './bot-memory-line-words'
+import { isProtectedBotMemoryLine } from '../../shared/bot-memory-line-kinds'
 import { TIDY_UP_ARCHIVE } from './bot-memory-tidy-up'
 import { TIDY_UP_TOPIC_NAME, type TidyUpPlan } from './bot-memory-tidy-up-draft'
 
 /** Share of the snapshot's lines that may leave MEMORY.md by retire, replace or merge in one run. */
 export const TIDY_UP_OPS_MAX_LOSS = 0.25
-const MAX_LINE_CHARS = 240
 
 export type MemorySnapshotLine = {
   /** `L<n>#<hash>`: its number among the facts and a hash of its text, as the run names it. */
@@ -49,20 +46,17 @@ export function memorySnapshotText(snapshot: readonly MemorySnapshotLine[]): str
   return snapshot.map(({ ref, raw }) => `${ref} ${raw.trim()}`).join('\n')
 }
 
-const Evidence = z.string().optional()
 const OpSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('replace'), line: z.string(), text: z.string(), evidence: Evidence }),
   z.object({
     op: z.literal('merge'),
     lines: z.array(z.string()).min(2).max(8),
-    text: z.string(),
-    evidence: Evidence
+    /** The named line that stays, word for word; the others go to the archive. */
+    keep: z.string()
   }),
   z.object({
     op: z.literal('retire'),
     line: z.string(),
-    reason: z.enum(['stale', 'done', 'wrong', 'not-a-lesson']),
-    evidence: Evidence
+    reason: z.enum(['stale', 'done', 'wrong', 'not-a-lesson'])
   }),
   z.object({
     op: z.literal('demote'),
@@ -73,10 +67,7 @@ const OpSchema = z.discriminatedUnion('op', [
 ])
 type Op = z.infer<typeof OpSchema>
 
-const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
 const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) ?? line.trim()
-
-export type TidyUpOpsInput = { today: string }
 
 /**
  * What the ops do to MEMORY.md as the run read it, as a Tidy-up plan, and why each skipped op was
@@ -86,8 +77,7 @@ export type TidyUpOpsInput = { today: string }
  */
 export function checkTidyUpOps(
   memory: string,
-  ops: readonly unknown[],
-  input: TidyUpOpsInput
+  ops: readonly unknown[]
 ): { plan: TidyUpPlan; skipped: string[] } {
   const snapshot = memorySnapshot(memory)
   const byRef = new Map(snapshot.map((line) => [line.ref, line]))
@@ -107,7 +97,6 @@ export function checkTidyUpOps(
   const fixed = (line: MemorySnapshotLine): boolean => groupOf(line).some(guarded)
   const used = new Set<string>()
   const removed: MemorySnapshotLine[] = []
-  const added: { line: string; at: MemorySnapshotLine }[] = []
   const plan: TidyUpPlan = {
     change: { added: [], removed: [] },
     kept: new Map(),
@@ -129,7 +118,6 @@ export function checkTidyUpOps(
       removed.push(line)
     }
   }
-  const existing = (line: string): boolean => groups.has(keyOf(line))
   const apply = (op: Op): string | null => {
     const named = (refs: readonly string[]): MemorySnapshotLine[] | string => {
       const unique = [...new Set(refs.map((ref) => ref.trim()))]
@@ -184,57 +172,31 @@ export function checkTidyUpOps(
     if (typeof found === 'string') {
       return found
     }
-    const distinct = new Set(found.map(({ raw }) => keyOf(raw))).size
-    if (op.op === 'merge' && distinct < 2) {
-      return 'merges fewer than two different lines'
-    }
-    // Every copy taken counts; a merge keeps one line for its lines.
-    const loss = op.op === 'merge' ? found.length - 1 : found.length
-    if (lost + loss > lossCap) {
-      return 'takes out more lines than one tidy-up may'
-    }
     if (op.op === 'retire') {
+      if (lost + found.length > lossCap) {
+        return 'takes out more lines than one tidy-up may'
+      }
       take(found)
       found.forEach(({ raw }) => plan.retired!.set(keyOf(raw), op.reason))
-      lost += loss
+      lost += found.length
       return null
     }
-    const text = squash(op.text)
-    const sources = found.map(({ fact }) => fact.text)
-    if ([text, ...sources].some(hasMeaningWords)) {
-      return 'rewrites a line with a negation or modal; move it or leave it'
+    // A merge writes nothing new: the line it keeps stays word for word, the rest are archived.
+    const kept = byRef.get(op.keep.trim())
+    if (!kept || !op.lines.some((ref) => ref.trim() === kept.ref)) {
+      return 'keeps a line it doesn’t name'
     }
-    // A rewrite only shortens: its words, in order, are words of one of its lines, so it can't
-    // reorder ("before" swapped) or add a claim.
-    if (
-      text === '' ||
-      text.length > MAX_LINE_CHARS ||
-      !sources.some((s) => isShortening(text, s))
-    ) {
-      return 'says more than the lines it rewrites, or reorders them'
+    const going = found.filter(({ raw }) => keyOf(raw) !== keyOf(kept.raw))
+    if (going.length === 0) {
+      return 'merges fewer than two different lines'
     }
-    if (isProtectedBotMemoryLine(text)) {
-      return 'would read as your owner’s rule'
+    if (lost + going.length > lossCap) {
+      return 'takes out more lines than one tidy-up may'
     }
-    const kind = botMemoryLineKind(text).kind
-    if (kind !== null && !sources.some((source) => botMemoryLineKind(source).kind === kind)) {
-      return 'gives the line a kind its lines don’t have'
-    }
-    const dates = found.flatMap(({ fact }) => fact.date ?? []).toSorted()
-    const line = `- ${(op.op === 'merge' ? dates[0] : input.today) ?? input.today} ${text}`
-    if (redactSecretLike(line) !== line) {
-      return 'looks like a secret'
-    }
-    // A rewrite into a line MEMORY.md already has would take out more than it counts.
-    if (existing(line) && !found.some(({ raw }) => keyOf(raw) === keyOf(line))) {
-      return 'says what another line already says; merge that line in too'
-    }
-    take(found)
-    lost += loss
-    added.push({ line, at: found[0] })
-    const into = op.op === 'merge' ? plan.merged! : plan.replaced
-    found.forEach(({ raw }) => into.add(keyOf(raw)))
-    plan.merges! += op.op === 'merge' ? 1 : 0
+    take(going)
+    lost += going.length
+    going.forEach(({ raw }) => plan.merged!.add(keyOf(raw)))
+    plan.merges! += 1
     return null
   }
   ops.forEach((raw, index) => {
@@ -245,7 +207,7 @@ export function checkTidyUpOps(
       skipped.push(`${name} ${index + 1}: ${why}`)
     }
   })
-  plan.change = { added: placed(memory, added, removed), removed: removed.map(changeLine) }
+  plan.change = { added: [], removed: removed.map(changeLine) }
   // Lines leave by their words: the apply checks the live file still has exactly these copies.
   plan.groups = lineGroups(removed.map(({ raw }) => raw))
   return { plan, skipped }
@@ -268,16 +230,3 @@ export function lineGroups(lines: readonly string[]): Map<string, string[]> {
 }
 
 const changeLine = ({ raw, after }: MemorySnapshotLine): BotMemoryLine => ({ line: raw, after })
-
-/** Each rewritten line after the nearest line before the first line it took that stays. */
-function placed(
-  memory: string,
-  added: readonly { line: string; at: MemorySnapshotLine }[],
-  removed: readonly MemorySnapshotLine[]
-): BotMemoryLine[] {
-  const lines = memory.split(/\r?\n/)
-  const gone = new Set(removed.map(({ fact }) => fact.line))
-  const anchor = (at: number): string | null =>
-    lines.slice(0, at).findLast((line, index) => line.trim() !== '' && !gone.has(index)) ?? null
-  return added.map(({ line, at }) => ({ line, after: anchor(at.fact.line) }))
-}
