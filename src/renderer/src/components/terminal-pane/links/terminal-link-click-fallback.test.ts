@@ -1,6 +1,10 @@
 import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { installFilePathLinkClickFallback } from './files/terminal-link-handlers'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { buildFileLinkActions } from './files/terminal-file-link-actions'
+import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
@@ -42,6 +46,34 @@ vi.mock('@/lib/workspace/ownership/connection-context', () => ({
 }))
 
 installTerminalLinkTestEnvironment(doubles)
+
+describe('creative project file links', () => {
+  it('opens a local Blender scene with its associated application on direct activation', async () => {
+    usePluginPanelsStore.getState().setPlugins([])
+    openDetectedFilePath('/tmp/City.BLEND', null, null, doubles.deps)
+    await flushAsyncWork()
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/City.BLEND', 'local', undefined)
+  })
+
+  it('opens the saved client copy when the primary menu action targets an SSH scene', async () => {
+    setPlatform('Linux')
+    usePluginPanelsStore.getState().setPlugins([])
+    vi.mocked(getConnectionId).mockReturnValue('render-host')
+    window.api.fs.downloadFile = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/city.blend'
+    })
+
+    const actions = buildFileLinkActions('/tmp/city.blend', null, null, doubles.deps, undefined)
+    await actions.primary.run()
+    await flushAsyncWork()
+    expect(window.api.fs.downloadFile).toHaveBeenCalledWith({
+      filePath: '/tmp/city.blend',
+      connectionId: 'render-host'
+    })
+    expect(openFilePathMock).toHaveBeenCalledWith('/downloads/city.blend', 'local')
+  })
+})
 
 describe('Windows OSC file links', () => {
   // A Mac client reaches Windows drive paths through an SSH or paired Windows host.
