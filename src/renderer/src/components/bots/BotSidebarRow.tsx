@@ -198,8 +198,13 @@ export function BotSidebarRow({
 function BotRowWorkingMark(): React.JSX.Element {
   const label = getWorktreeStatusLabel('working')
   return (
-    // A chevron-wide slot follows it, so it lines up with the marks on fold rows' strips.
-    <span role="img" aria-label={label} className="flex shrink-0 items-center gap-0.5">
+    // A chevron-wide slot follows it, so it lines up with the marks on fold rows' strips; a narrow
+    // row's slimmer strip ends 2px nearer the edge, so the mark does too.
+    <span
+      role="img"
+      aria-label={label}
+      className="flex shrink-0 items-center gap-0.5 can-hover:pointer-fine:@max-[15rem]/bot-row:-mr-0.5"
+    >
       <StatusIndicator status="working" showTooltip={false} aria-hidden />
       <span className="size-4" />
     </span>
