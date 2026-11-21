@@ -8,6 +8,7 @@ import {
   pollAntigravityTranscriptStatus,
   readAntigravityTranscriptPoll
 } from './antigravity-transcript-poll'
+import { ANTIGRAVITY_PARENT_WAKE_GRACE_MS } from './antigravity-event-rules'
 import type { AgentHookEventPayload } from '../../listener-event'
 
 let dir: string
@@ -79,9 +80,9 @@ async function poll(): Promise<AgentHookEventPayload | undefined> {
 function launch(stepIdx = 5): Record<string, unknown> {
   return { stepIdx, toolCall: { id: `invoke-${stepIdx}`, name: 'invoke_subagent', args: {} } }
 }
-function launchResult(step: number, content: string, status = 'DONE'): void {
+function launchResult(step: number, content: string, status = 'DONE', conversation = 'root'): void {
   appendFileSync(
-    join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
+    join(dir, conversation, '.system_generated', 'logs', 'transcript.jsonl'),
     `${JSON.stringify({ step_index: step, type: 'GENERIC', source: 'MODEL', status, content })}\n`
   )
 }
@@ -527,38 +528,65 @@ it.each([
   }
 )
 
-it('holds an old first-delivered phase without replacing a newer question and settles its matching result', async () => {
-  const failure =
-    'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
-  for (let step = 10; step <= 266; step++) {
-    spawn(undefined, step)
-    launchResult(step, failure, 'ERROR')
-  }
-  expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+it('holds an old first-delivered phase through a newer question until its matching root result', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    const failure =
+      'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+    for (let step = 10; step <= 266; step++) {
+      spawn(undefined, step)
+      launchResult(step, failure, 'ERROR')
+    }
+    expect(row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
+    await poll()
+    expect(row.payload.state).toBe('working')
+    expect(row.payload).not.toHaveProperty('antigravitySpawnPending')
 
-  hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
-  hook('root', 'PreToolUse', {
-    stepIdx: 270,
-    toolCall: { id: 'question-270', name: 'ask_question', args: { question: 'Continue?' } }
-  })
-  const waiting = {
-    state: 'waiting',
-    toolName: 'ask_question',
-    toolInput: 'Continue?',
-    prompt: 'Current task',
-    model: 'model-b'
+    hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
+    const question = {
+      stepIdx: 270,
+      toolCall: { id: 'question-270', name: 'ask_question', args: { question: 'Continue?' } }
+    }
+    const waiting = {
+      state: 'waiting',
+      toolName: 'ask_question',
+      toolInput: 'Continue?',
+      prompt: 'Current task',
+      model: 'model-b',
+      mainAgent: { state: 'waiting' }
+    }
+    expect(hook('root', 'PreToolUse', question)?.payload).toMatchObject(waiting)
+    expect(hook('root', 'PostToolUse', launch(11))).toBeNull()
+    const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
+    expect(hook('root', 'PreToolUse', oldLaunch)?.payload).toMatchObject({
+      ...waiting,
+      antigravitySpawnPending: true
+    })
+    expect(hook('root', 'PostToolUse', oldLaunch)).toBeNull()
+    expect(row.payload).toMatchObject(waiting)
+
+    expect(hook('root', 'PostToolUse', question)?.payload.state).toBe('working')
+    const held = {
+      state: 'working',
+      mainAgent: { state: 'done' },
+      antigravitySpawnPending: true
+    }
+    expect(hook('root', 'Stop', { fullyIdle: true })?.payload).toMatchObject(held)
+
+    transcript('foreign')
+    launchResult(5, failure, 'ERROR', 'foreign')
+    expect(hook('foreign', 'PreInvocation')).toBeNull()
+    launchResult(6, failure, 'ERROR')
+    expect((await poll())?.payload).toMatchObject(held)
+
+    launchResult(5, failure, 'ERROR')
+    expect((await poll())?.antigravityHelpersDrained).toBe(true)
+    expect(row.payload).not.toHaveProperty('antigravitySpawnPending')
+    vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+    expect((await poll())?.payload.state).toBe('done')
+  } finally {
+    vi.useRealTimers()
   }
-  const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
-  expect(hook('root', 'PreToolUse', oldLaunch)?.payload).toMatchObject({
-    ...waiting,
-    antigravitySpawnPending: true
-  })
-  expect(hook('root', 'PostToolUse', oldLaunch)).toBeNull()
-  launchResult(6, failure, 'ERROR')
-  expect((await poll())?.payload.antigravitySpawnPending).toBe(true)
-  launchResult(5, failure, 'ERROR')
-  expect((await poll())?.payload).toMatchObject(waiting)
-  expect(row.payload.antigravitySpawnPending).toBeUndefined()
 })
 
 it('counts only a swarm add as a spawn that holds the parent', async () => {

@@ -467,13 +467,28 @@ it.each([
 
 it('holds an unreadable root launch past the discovery lease and clears it on process exit', async () => {
   const transcriptPath = join(dir, 'parent', '.system_generated', 'logs', 'transcript.jsonl')
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
+  fakeTranscriptClock()
   await agyHook('PreInvocation', { transcriptPath, modelName: 'auto' })
   await agyHook('PreToolUse', {
     stepIdx: 1,
     toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600' } }
   })
   await agyHook('PostToolUse', subagentCall)
+  const question = {
+    stepIdx: 3,
+    toolCall: { id: 'question-3', name: 'ask_question', args: { question: 'Continue?' } }
+  }
+  await agyHook('PreToolUse', question)
+  expect(state()).toBe('waiting')
+  programDone()
+  await vi.advanceTimersByTimeAsync(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+  expect(server.getStatusSnapshot()[0]).toMatchObject({
+    state: 'waiting',
+    toolName: 'ask_question',
+    toolInput: 'Continue?'
+  })
+
+  await agyHook('PostToolUse', question)
   await agyHook('Stop', { fullyIdle: false })
   programDone()
   await vi.advanceTimersByTimeAsync(AGENT_STATUS_STALE_AFTER_MS + 60000)

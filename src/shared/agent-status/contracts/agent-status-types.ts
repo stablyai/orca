@@ -327,7 +327,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
       ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
       : {}),
     ...(obj.agentType === 'antigravity' &&
-    state === 'working' &&
+    (state === 'working' || state === 'waiting') &&
     obj.antigravitySpawnPending === true
       ? { antigravitySpawnPending: true as const }
       : {})
