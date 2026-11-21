@@ -239,12 +239,12 @@ export function NativeChatApprovalCard({
                   data-native-chat-approval-content="true"
                   tabIndex={0}
                   className={cn(
-                    'min-h-0 max-h-72 overflow-auto text-sm scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    // Quiet: under the title, as a folded row's lines sit under its own. Its clamped
-                    // command never shrinks away in a short pane; the card scrolls to the answers instead.
+                    // Never shrinks away in a short pane, so what is being approved stays in view; the card scrolls to the answers instead.
+                    'max-h-72 shrink-0 overflow-auto text-sm scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    // Quiet: under the title, as a folded row's lines sit under its own.
                     quiet
-                      ? 'shrink-0 space-y-1.5 pl-5 text-chat-foreground-faint'
-                      : 'shrink space-y-2 text-muted-foreground'
+                      ? 'space-y-1.5 pl-5 text-chat-foreground-faint'
+                      : 'space-y-2 text-muted-foreground'
                   )}
                 >
                   {countdown ? <p className="tabular-nums">{countdown}</p> : null}
