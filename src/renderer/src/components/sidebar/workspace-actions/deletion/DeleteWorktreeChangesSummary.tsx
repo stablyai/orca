@@ -100,7 +100,7 @@ export function DeleteWorktreeChangesSummary({
 }): JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const [fit, setFit] = useState({ need: 0, room: 0, chevronRoom: 0 })
+  const [fit, setFit] = useState({ need: 0, room: 0, chevronRoom: 0, noteTooNarrow: false })
   const [focused, setFocused] = useState(false)
   const [opened, setOpened] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -141,10 +141,17 @@ export function DeleteWorktreeChangesSummary({
     // The note cancels its own gap with a negative margin.
     const gaps = (items - 1 - (note ? 1 : 0)) * gap
     const room = rowWidth - fixed - gaps
+    // Squeezed below "· …", the note reads as noise; hide it (the panel still has it).
+    const noteTooNarrow = note?.parentElement
+      ? layoutWidth(note.parentElement) < 2 * rootFont
+      : false
     setFit((current) =>
-      current.need === need && current.room === room && current.chevronRoom === chevronRoom
+      current.need === need &&
+      current.room === room &&
+      current.chevronRoom === chevronRoom &&
+      current.noteTooNarrow === noteTooNarrow
         ? current
-        : { need, room, chevronRoom }
+        : { need, room, chevronRoom, noteTooNarrow }
     )
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
@@ -256,11 +263,10 @@ export function DeleteWorktreeChangesSummary({
       {note ? (
         // A zero flex basis gives the note only leftover room, so the main sentence stays whole.
         // Its gap is inner padding the outer box can clip, so a zero-width note leaves no gap.
-        // Too narrow for "· …" to read as anything, the note hides; the panel still has it.
-        <span className="@container -ml-1.5 min-w-0 flex-1 overflow-hidden">
+        <span className="-ml-1.5 min-w-0 flex-1 overflow-hidden">
           <span
             ref={noteRef}
-            className="block truncate pl-1.5 text-muted-foreground @max-[2rem]:invisible"
+            className={`block truncate pl-1.5 text-muted-foreground ${fit.noteTooNarrow ? 'invisible' : ''}`}
           >
             · {note}
           </span>
