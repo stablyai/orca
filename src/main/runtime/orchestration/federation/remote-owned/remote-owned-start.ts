@@ -124,6 +124,7 @@ export async function startRemoteOwnedWorker(
       : {
           spec: params.spec!,
           taskTitle: params.taskTitle,
+          displayName: params.taskDisplayName,
           deps: taskDeps,
           parentId: params.parent,
           createdByTerminalHandle: coordinator?.terminalHandle ?? undefined,
@@ -152,7 +153,11 @@ export async function startRemoteOwnedWorker(
         // A retry names the server's existing Task, whose ordinary retry checks refuse a spec.
         ...(params.retryOf
           ? { task: task.id }
-          : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
+          : {
+              spec: task.spec,
+              ...(task.task_title ? { taskTitle: task.task_title } : {}),
+              ...(task.display_name ? { taskDisplayName: task.display_name } : {})
+            }),
         adoptTaskId: task.id,
         ...(crossStoreParent ? { crossStoreParent } : {})
       },

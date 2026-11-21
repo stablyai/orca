@@ -14,6 +14,7 @@ export const WorkerStartParams = z
     task: OptionalString,
     spec: OptionalString,
     taskTitle: OptionalString,
+    taskDisplayName: OptionalString,
     deps: OptionalString,
     parent: OptionalString,
     on: OptionalString,

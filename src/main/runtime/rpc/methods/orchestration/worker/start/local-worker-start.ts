@@ -166,6 +166,7 @@ export async function startLocalWorker(args: {
       db,
       dispatchId: started.dispatch.id,
       taskId: task.id,
+      terminalTitle: task.display_name || `worker-${task.id}`,
       params,
       requestedWorktree,
       creationTarget,
