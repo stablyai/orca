@@ -46,7 +46,7 @@ function isMatchQueryWhitespace(code: number): boolean {
 
 export function tokenizeMatchValue(value: string): string[] {
   return normalizeMatchQuery(value)
-    .split(/[^a-z0-9]+/)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
 }
 

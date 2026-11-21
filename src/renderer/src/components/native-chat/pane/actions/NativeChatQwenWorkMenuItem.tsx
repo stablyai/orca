@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQwenWorkAvailable } from '@/hooks/useQwenWorkAvailable'
 import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -6,21 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function NativeChatQwenWorkMenuItem({ text }: { text: string }): React.JSX.Element | null {
   const t = useTranslate()
-  const [available, setAvailable] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    void window.api.shell?.isQwenWorkAvailable?.().then(
-      (installed) => {
-        if (!cancelled) {
-          setAvailable(installed)
-        }
-      },
-      () => {}
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const available = useQwenWorkAvailable()
 
   if (!available) {
     return null

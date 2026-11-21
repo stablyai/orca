@@ -18809,6 +18809,11 @@
     }
   },
   "components": {
+    "qwenWork": {
+      "openDesktop": "開啟千問辦公",
+      "openFailed": "無法開啟千問辦公。",
+      "searchNames": "千問辦公 QwenWork 千问办公"
+    },
     "onboarding": {
       "flow": {
         "stepTooltip": {

@@ -12,6 +12,7 @@ export type TabCreateMenuOptionKind =
   | 'new-terminal'
   | 'new-terminal-shell'
   | 'open-markdown'
+  | 'open-qwenwork'
   | 'new-plugin-file'
 
 /** A plugin's new-file type, as the + menu offers it. */
@@ -38,6 +39,7 @@ export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
+  hasQwenWork?: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
   terminalOnly: boolean
@@ -157,6 +159,15 @@ export function buildTabCreateMenuOptions(
         t('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
         t('auto.components.tab.bar.tab.create.menu.options.164c394bab', 'open file')
       ]
+    })
+  }
+
+  if (context.hasQwenWork) {
+    options.push({
+      id: 'open-qwenwork',
+      kind: 'open-qwenwork',
+      label: t('components.qwenWork.openDesktop', 'Open QwenWork'),
+      keywords: [t('components.qwenWork.searchNames', 'QwenWork 千问办公 千問辦公')]
     })
   }
 

@@ -1,23 +1,23 @@
-import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
+import type {
+  TabBarCreateMenuController,
+  TabBarCreateMenuControllerOptions
+} from './tab-bar-create-menu-contract'
 
 import { useAgentLaunchPickerInventorySource } from '../../agent/use-agent-launch-picker-inventory'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
+import { useQwenWorkAvailable } from '@/hooks/useQwenWorkAvailable'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useAppStore } from '../../../store/index'
 import { useTabAgentMenuLaunch } from '../../agent/launch-menu/AgentMenuItems'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { useNewTabAgentMenuRows } from '../../agent/launch-menu/use-new-tab-agent-menu-rows'
-import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { TabAgentLaunchOption } from '../create-entry/tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
-import type {
-  getProjectRuntimeShellMenuMode,
-  resolveWindowsPowerShellImplementationSetting
-} from '../model/use-tab-bar-runtime-model'
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 export function useTabBarCreateMenuController({
@@ -41,32 +41,11 @@ export function useTabBarCreateMenuController({
   onNewSimulatorTab,
   onNewFileTab,
   onOpenFileTab
-}: {
-  worktreeId: string
-  resolvedGroupId: string
-  terminalOnly: boolean
-  showAgentLaunchItems?: boolean
-  mobileEmulatorEnabled: boolean
-  managedBrowserCreationEnabled: boolean
-  mobileEmulatorCreationEnabled: boolean
-  workspaceHasSimulatorTab: boolean
-  showWindowsShellMenu: boolean
-  projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
-  defaultWindowsShell: string
-  defaultWindowsPowerShellImplementation: ReturnType<
-    typeof resolveWindowsPowerShellImplementationSetting
-  >
-  agentDetectionTarget: AgentDetectionTarget | undefined
-  windowsTerminalCapabilities: WindowsTerminalCapabilities
-  onNewTerminalTab: () => void
-  onNewTerminalWithShell?: (shell: string) => void
-  onNewBrowserTab: () => void
-  onNewSimulatorTab?: () => void
-  onNewFileTab?: () => void
-  onOpenFileTab?: () => void
-}): TabBarCreateMenuController {
+}: TabBarCreateMenuControllerOptions): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const t = useTranslate()
+  const hasQwenWork = useQwenWorkAvailable(newTabMenuOpen && !terminalOnly)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
   const agentMenu = useNewTabAgentMenuRows(
     worktreeId,
@@ -156,20 +135,26 @@ export function useTabBarCreateMenuController({
   ])
   const createMenuOptions = useMemo(
     () =>
-      buildTabCreateMenuOptions({
-        terminalOnly,
-        windowsShellEntries,
-        hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
-        hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
-        hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
-        hasSimulator:
-          !terminalOnly &&
-          mobileEmulatorEnabled &&
-          mobileEmulatorCreationEnabled &&
-          Boolean(onNewSimulatorTab),
-        simulatorIsGoTo: workspaceHasSimulatorTab
-      }),
+      buildTabCreateMenuOptions(
+        {
+          terminalOnly,
+          windowsShellEntries,
+          hasQwenWork,
+          hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
+          hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
+          hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
+          hasSimulator:
+            !terminalOnly &&
+            mobileEmulatorEnabled &&
+            mobileEmulatorCreationEnabled &&
+            Boolean(onNewSimulatorTab),
+          simulatorIsGoTo: workspaceHasSimulatorTab
+        },
+        t
+      ),
     [
+      t,
+      hasQwenWork,
       mobileEmulatorEnabled,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
@@ -199,6 +184,11 @@ export function useTabBarCreateMenuController({
             windowsTerminalCapabilities.pwshAvailable
           )
         )
+        break
+      case 'open-qwenwork':
+        void window.api.shell.openQwenWork().catch(() => {
+          toast.error(t('components.qwenWork.openFailed', 'Could not open QwenWork.'))
+        })
         break
       case 'new-browser':
         onNewBrowserTab()

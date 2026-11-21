@@ -1,10 +1,11 @@
 import React from 'react'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
+  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -102,6 +103,9 @@ export function renderTabBarSurface(
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
+  const qwenWorkOption = showStaticCreateMenuItems
+    ? createMenuOptions.find((option) => option.kind === 'open-qwenwork')
+    : undefined
   const { orderedItems, dropIndicatorByVisibleId, sortableIds, activeVisibleTabId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const {
@@ -311,6 +315,15 @@ export function renderTabBarSurface(
                 queueNewActiveTerminalFocusAfterNewTabMenuClose
               }
             />
+          ) : null}
+          {qwenWorkOption ? (
+            <DropdownMenuItem
+              variant="create"
+              onSelect={() => handleSelectCreateMenuOption(qwenWorkOption)}
+            >
+              <ExternalLink className="size-4 text-muted-foreground" />
+              {qwenWorkOption.label}
+            </DropdownMenuItem>
           ) : null}
           {showStaticCreateMenuItems && showAgentLaunchItems && !botGroup ? (
             <>

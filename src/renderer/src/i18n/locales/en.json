@@ -20714,6 +20714,11 @@
     }
   },
   "components": {
+    "qwenWork": {
+      "openDesktop": "Open QwenWork",
+      "openFailed": "Could not open QwenWork.",
+      "searchNames": "QwenWork 千问办公 千問辦公"
+    },
     "onboarding": {
       "flow": {
         "stepTooltip": {
