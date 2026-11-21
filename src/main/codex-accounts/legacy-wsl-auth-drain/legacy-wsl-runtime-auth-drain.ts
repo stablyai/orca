@@ -4,9 +4,10 @@ import { wslCodexRuntimeHomeForGuestHome } from '../../pty/shell-startup/codex-h
 import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../../codex/history/bridges/wsl-codex-session-bridge-script'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import {
-  readWslExeFailureBeforeGuest,
-  WSL_DIAGNOSTIC_LIMIT
-} from '../../wsl/execution/wsl-process-failure'
+  describeDrainStepFailure,
+  inspectNeverStarted,
+  inspectPayload
+} from './legacy-wsl-runtime-auth-inspect-outcome'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from '../credentials/codex-auth-identity'
 import {
   APPLY_LEGACY_AUTH_SCRIPT,
@@ -145,12 +146,15 @@ export async function drainLegacyWslRuntimeAuth(
   if (inspection.code === SOURCE_AUTH_ABSENT_EXIT) {
     return 'pending'
   }
-  if (readWslExeFailureBeforeGuest(inspection) !== null) {
-    throw new LegacyWslAuthInspectUnavailableError(describeDrainStepFailure('inspect', inspection))
+  if (inspectNeverStarted(inspection)) {
+    throw new LegacyWslAuthInspectUnavailableError(
+      describeDrainStepFailure('inspect', inspection, true)
+    )
   }
   assertSuccessfulDrainStep('inspect', inspection)
 
-  const inspected = parseLegacyRuntimeInspection(inspection.stdout)
+  const payload = inspectPayload(inspection.stdout)
+  const inspected = payload === null ? null : parseLegacyRuntimeInspection(payload)
   if (!inspected) {
     return 'pending'
   }
@@ -295,16 +299,6 @@ function assertSuccessfulDrainStep(
     return
   }
   throw new Error(describeDrainStepFailure(step, result))
-}
-
-function describeDrainStepFailure(
-  step: string,
-  result: { code: number | null; stdout: string; stderr: string; timedOut: boolean }
-): string {
-  // Never stdout text: inspect and recover print the auth files there; only a wsl.exe error code.
-  const detail =
-    result.stderr.trim().slice(0, WSL_DIAGNOSTIC_LIMIT) || readWslExeFailureBeforeGuest(result)
-  return `Legacy WSL auth drain ${step} failed (${result.timedOut ? 'timeout' : `exit ${result.code}`})${detail ? `: ${detail}` : ''}`
 }
 
 function sha256(contents: string): string {

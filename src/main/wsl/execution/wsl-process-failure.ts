@@ -31,30 +31,3 @@ export function describeWslProcessFailure(result: {
   }
   return `exited with code ${result.code ?? 'unknown'}`
 }
-
-export const WSL_DIAGNOSTIC_LIMIT = 300
-const WSL_ERROR_CODE = /\bWsl\/[A-Za-z0-9_/]+/
-// Any long base64 run is guest output (auth files are printed encoded), wherever it sits.
-const GUEST_BASE64_RUN = /[A-Za-z0-9+/=]{40,}/
-// wsl.exe's text opens with a word; a longer base64-alphabet token is guest bytes glued in front.
-const WSL_TEXT_OPENING = /^(?:[^\sA-Za-z0-9+/=]|[A-Za-z0-9+/=]{1,16}(?:\s|$|[^A-Za-z0-9+/=]))/
-
-/**
- * wsl.exe's own error code, only for exit -1 whose stdout is wsl.exe's text alone: evidence the
- * guest never ran. Returns just the code, so no stdout text can reach a message or log.
- */
-export function readWslExeFailureBeforeGuest(result: {
-  code: number | null
-  stdout: string
-  stderr: string
-  timedOut: boolean
-}): string | null {
-  if (result.timedOut || !isWslHostFailureExitCode(result.code) || result.stderr.trim()) {
-    return null
-  }
-  const diagnostic = readWslHostDiagnostic(result.stdout)
-  if (GUEST_BASE64_RUN.test(diagnostic) || !WSL_TEXT_OPENING.test(diagnostic)) {
-    return null
-  }
-  return WSL_ERROR_CODE.exec(diagnostic)?.[0] ?? null
-}
