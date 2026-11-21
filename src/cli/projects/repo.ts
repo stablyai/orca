@@ -4,8 +4,11 @@ import type {
 } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow } from './repo-format'
+import { formatProjectGroupList } from './project-format'
+import { listProjectGroups, resolveProjectGroupSelector } from './project-group-selector'
 import { printResult } from '../output/command-result-output'
 import type { BrowserProfileListResult } from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,
@@ -48,16 +51,40 @@ async function setRepoHidden(
   printResult(result, json, formatRepoShow)
 }
 
+type RepoResult = { repo: Record<string, unknown> }
+
+function moveRepoToProjectGroup(
+  client: HandlerContext['client'],
+  repo: string,
+  groupId: string | null,
+  connectionId?: string | null
+): Promise<RuntimeRpcSuccess<RepoResult>> {
+  return client.call<RepoResult>('projectGroup.moveProject', {
+    repo,
+    groupId,
+    ...(connectionId === undefined ? {} : { connectionId })
+  })
+}
+
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo list': async ({ client, json }) => {
     const result = await client.call<RuntimeRepoList>('repo.list')
     printResult(result, json, formatRepoList)
   },
+  'repo group list': async ({ client, json }) => {
+    printResult(await listProjectGroups(client), json, formatProjectGroupList)
+  },
   'repo add': async ({ flags, client, cwd, json }) => {
     const repoPath = getRequiredStringFlag(flags, 'path')
     const kind = getOptionalRepoKind(flags)
-    const result = await client
-      .call<{ repo: Record<string, unknown> }>('repo.add', {
+    const groupSelector = getOptionalStringFlag(flags, 'project-group')
+    // Resolve first so a bad group name refuses before the repo is registered.
+    const groupId =
+      groupSelector === undefined
+        ? undefined
+        : await resolveProjectGroupSelector(client, groupSelector)
+    const added = await client
+      .call<RepoResult>('repo.add', {
         path: resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add'),
         ...(kind === undefined ? {} : { kind })
       })
@@ -76,7 +103,27 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
         }
         throw error
       })
-    printResult(result, json, formatRepoShow)
+    if (groupId === undefined) {
+      printResult(added, json, formatRepoShow)
+      return
+    }
+    const repoId = String(added.result.repo.id)
+    // repo.add never registers an SSH row; null keeps an SSH twin with the same id out of the move.
+    const moved = await moveRepoToProjectGroup(client, `id:${repoId}`, groupId, null).catch(
+      (error: unknown) => {
+        if (error instanceof RuntimeClientError) {
+          throw attachCliErrorData(error, {
+            ...(error.data && typeof error.data === 'object' ? error.data : {}),
+            addedRepoId: repoId,
+            nextSteps: [
+              `The repo was added but not moved into the project group. Retry with: orca repo set --repo id:${repoId} --project-group ${groupId ?? 'none'}`
+            ]
+          })
+        }
+        throw error
+      }
+    )
+    printResult(moved, json, formatRepoShow)
   },
   'repo show': async ({ flags, client, json }) => {
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.show', {
@@ -88,10 +135,11 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     const repo = getRequiredStringFlag(flags, 'repo')
     const visibility = getOptionalStringFlag(flags, 'external-worktree-visibility')
     const browserProfile = getOptionalStringFlag(flags, 'browser-profile')
-    if (visibility === undefined && browserProfile === undefined) {
+    const groupSelector = getOptionalStringFlag(flags, 'project-group')
+    if (visibility === undefined && browserProfile === undefined && groupSelector === undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Pass --external-worktree-visibility or --browser-profile.'
+        'Pass --external-worktree-visibility, --browser-profile or --project-group.'
       )
     }
     if (
@@ -109,28 +157,40 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       browserProfile === undefined
         ? undefined
         : await resolveBrowserProfileFlag(client, browserProfile)
-    const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
-      repo,
-      updates: {
-        ...(visibility === undefined
-          ? {}
-          : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
-        ...(browserProfileId === undefined ? {} : { browserProfileId })
+    const groupId =
+      groupSelector === undefined
+        ? undefined
+        : await resolveProjectGroupSelector(client, groupSelector)
+    let result: RuntimeRpcSuccess<RepoResult> | null = null
+    if (visibility !== undefined || browserProfileId !== undefined) {
+      result = await client.call<RepoResult>('repo.update', {
+        repo,
+        updates: {
+          ...(visibility === undefined
+            ? {}
+            : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
+          ...(browserProfileId === undefined ? {} : { browserProfileId })
+        }
+      })
+      // A host from before per-repo browser profiles drops the field and still answers with its row.
+      if (
+        browserProfileId !== undefined &&
+        (result.result.repo.browserProfileId ?? null) !== browserProfileId
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          visibility === undefined
+            ? 'This Orca host does not support per-repo browser profiles. Update Orca on that host.'
+            : 'This Orca host does not support per-repo browser profiles, so only the worktree visibility was saved. Update Orca on that host.'
+        )
       }
-    })
-    // A host from before per-repo browser profiles drops the field and still answers with its row.
-    if (
-      browserProfileId !== undefined &&
-      (result.result.repo.browserProfileId ?? null) !== browserProfileId
-    ) {
-      throw new RuntimeClientError(
-        'incompatible_runtime',
-        visibility === undefined
-          ? 'This Orca host does not support per-repo browser profiles. Update Orca on that host.'
-          : 'This Orca host does not support per-repo browser profiles, so only the worktree visibility was saved. Update Orca on that host.'
-      )
     }
-    printResult(result, json, formatRepoShow)
+    if (groupId !== undefined) {
+      result = await moveRepoToProjectGroup(client, repo, groupId)
+    }
+    if (result) {
+      printResult(result, json, formatRepoShow)
+    }
   },
   'repo hide': (context) => setRepoHidden(context, true),
   'repo unhide': (context) => setRepoHidden(context, false),

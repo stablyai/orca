@@ -11,13 +11,17 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['repo', 'add'],
     summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--kind git|folder] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind'],
+    usage: 'orca repo add --path <path> [--kind git|folder] [--project-group <id|name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind', 'project-group'],
     notes: [
       'Defaults to git. Use --kind folder for an ordinary directory, including a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each.',
-      'With --environment, --path must be an absolute path on that Orca server.'
+      'With --environment, --path must be an absolute path on that Orca server.',
+      '--project-group puts the repo into that sidebar project group; see `orca repo group list`.'
     ],
-    examples: ['orca repo add --path /abs/path/to/folder --kind folder --json']
+    examples: [
+      'orca repo add --path /abs/path/to/folder --kind folder --json',
+      'orca repo add --path /abs/path/to/repo --project-group Work --json'
+    ]
   },
   {
     path: ['repo', 'show'],
@@ -27,18 +31,28 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'set'],
-    summary: "Set a repo's non-Orca worktree visibility or browser profile",
+    summary: "Set a repo's non-Orca worktree visibility, browser profile or project group",
     usage:
-      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility', 'browser-profile'],
+      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--project-group <id|name|none>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'repo',
+      'external-worktree-visibility',
+      'browser-profile',
+      'project-group'
+    ],
     notes: [
+      'Pass at least one of --external-worktree-visibility, --browser-profile and --project-group.',
       'show and hide override the global non-Orca worktree visibility default for this repo; inherit clears the override.',
       'Per-worktree visibility rules still apply.',
+      '--project-group takes a group id or name from `orca repo group list`; none takes the repo out of its group.',
       "--browser-profile picks the profile new browser tabs in this repo use, overriding the Browser setting's profile for new tabs; inherit clears it. Ids come from `orca tab profile list`; `default` is the Default profile."
     ],
     examples: [
       'orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json',
-      'orca repo set --repo name:acme-web --browser-profile <profileId> --json'
+      'orca repo set --repo name:acme-web --browser-profile <profileId> --json',
+      'orca repo set --repo name:orca --project-group Work --json',
+      'orca repo set --repo id:<repoId> --project-group none --json'
     ]
   },
   {
@@ -59,6 +73,14 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca repo unhide --repo <selector> [--host <host>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'repo', 'host'],
     notes: ["Shows one host's copy again; on a paired Orca server, for everyone connected to it."]
+  },
+  {
+    path: ['repo', 'group', 'list'],
+    summary: 'List sidebar project groups',
+    usage: 'orca repo group list [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: ['Pass a group id or name to `--project-group` on `orca repo set` or `orca repo add`.'],
+    examples: ['orca repo group list --json']
   },
   {
     path: ['repo', 'set-base-ref'],

@@ -143,6 +143,8 @@ ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
 ORCA repo hide --repo id:<repoId> --json
 ORCA repo unhide --repo id:<repoId> --json
+ORCA repo group list --json
+ORCA repo set --repo id:<repoId> --project-group <groupIdOrName> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
@@ -172,6 +174,8 @@ Use `repo set --external-worktree-visibility show` to show a repo's non-Orca wor
 `hide` hides them; `inherit` clears the repo override and follows the global default.
 Per-worktree visibility rules still apply.
 Use `repo set --browser-profile <id>` (ids from `tab profile list`, `default` for Default) so new browser tabs in that repo open on that profile; `inherit` clears it.
+
+Use `repo set --project-group <id|name>` to move a repo into a sidebar project group (`none` takes it out); `repo add --project-group` does the same for a new repo. Groups hold repos, so every worktree of the repo moves with it. `repo group list` shows the group ids and names.
 
 Selectors:
 

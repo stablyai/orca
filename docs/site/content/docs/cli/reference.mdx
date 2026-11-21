@@ -99,11 +99,15 @@ orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 orca repo hide --repo id:<repoId> --json
 orca repo unhide --repo id:<repoId> --json
+orca repo group list --json
+orca repo set --repo id:<repoId> --project-group <groupIdOrName> --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
 
 `repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
+
+`repo set --project-group` moves a repo, with all of its worktrees, into a sidebar project group; pass a group id or name from `repo group list`, or `none` to take it out of its group. `repo add --project-group` adds a repo straight into a group.
 
 `repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
