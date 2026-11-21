@@ -28,7 +28,8 @@ export function inspectSpawnFileChildProcessesFromRows(
   rows: readonly ProcessTableRow[],
   rootPid: number,
   shellName: string | null,
-  includeTerminalGroups = false
+  includeTerminalGroups = false,
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
 ): PtyChildProcessVerdict {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
@@ -74,6 +75,7 @@ export function inspectSpawnFileChildProcessesFromRows(
       return 'children'
     }
   }
+  onIdleShellChain?.(launchChain)
   return 'no-children'
 }
 

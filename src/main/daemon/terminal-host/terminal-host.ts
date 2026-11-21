@@ -7,7 +7,6 @@ import {
 } from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
@@ -36,7 +35,8 @@ import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
 import {
   inspectTerminalHostSession,
-  type TerminalHostProcessInspection
+  type TerminalHostProcessInspection,
+  type TerminalHostProcessInspectionOptions
 } from './terminal-host-process-inspection'
 
 import {
@@ -237,7 +237,7 @@ export class TerminalHost {
 
   inspectProcess(
     sessionId: string,
-    options?: PtyProcessInspectionOptions
+    options?: TerminalHostProcessInspectionOptions
   ): Promise<TerminalHostProcessInspection> {
     return inspectTerminalHostSession(
       this.sessions,

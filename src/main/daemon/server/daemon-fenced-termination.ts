@@ -57,7 +57,10 @@ export async function handleDaemonFencedTermination(
         : idleGuardStartedAt
       const inspection = await deps.host.inspectProcess(payload.sessionId, {
         expectedIncarnationId: payload.expectedIncarnationId,
-        runningWorkSinceMs: boundary
+        runningWorkSinceMs: boundary,
+        onIdleShellChain: (pids) => {
+          idleShellPids = pids
+        }
       })
       const runningWork = inspection.runningWork
       if (runningWork !== 'idle') {
@@ -71,10 +74,9 @@ export async function handleDaemonFencedTermination(
         return { outcome: 'already_exited' }
       }
       if (process.platform !== 'win32') {
-        if (evidence?.verdict !== 'live' || evidence.fence.platform !== 'posix') {
+        if (evidence?.verdict !== 'live' || evidence.fence.platform !== 'posix' || !idleShellPids) {
           return { outcome: 'refused', reason: 'unverifiable' }
         }
-        idleShellPids = new Set([evidence.fence.shellPid, evidence.fence.foregroundPgid])
       }
     } catch {
       return { outcome: 'refused', reason: 'unverifiable' }

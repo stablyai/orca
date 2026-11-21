@@ -28,6 +28,10 @@ import {
 } from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = HostProcessInspection
+export type TerminalHostProcessInspectionOptions = PtyProcessInspectionOptions & {
+  /** Retain the inspected launch chain for an automatic teardown's final fence. */
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
+}
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
@@ -42,6 +46,7 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   runningWorkSinceMs?: number
   signal?: AbortSignal
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
@@ -175,7 +180,8 @@ export async function inspectTerminalHostProcess(args: {
           snapshot.rows,
           session.pid,
           session.getForegroundProcess({ rawFallback: true }),
-          decidingRunningWork
+          decidingRunningWork,
+          args.onIdleShellChain
         )
         if (observed.available && observed.processName && !isShellProcess(observed.processName)) {
           childProcessEvidence = 'children'
@@ -268,7 +274,7 @@ export function inspectTerminalHostSession(
   sessions: ReadonlyMap<string, Session>,
   retired: Map<string, RetiredIncarnation>,
   sessionId: string,
-  options: PtyProcessInspectionOptions | undefined,
+  options: TerminalHostProcessInspectionOptions | undefined,
   authorityGeneration: string,
   nextObservationEpoch: () => number,
   owners?: ClaimedAgentPtyOwnerRegistry
