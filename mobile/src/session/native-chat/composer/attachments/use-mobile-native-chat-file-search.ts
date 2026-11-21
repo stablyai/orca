@@ -12,15 +12,19 @@ import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles
 } from '../../../../../../src/shared/quick-open/quick-open-path-search'
+import { withFolderPaths } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
 
-function rankInventory(paths: readonly string[], query: string): string[] {
-  return rankQuickOpenFiles(query, getPreparedQuickOpenFiles(paths), FILE_SEARCH_RESULT_LIMIT).map(
-    (result) => result.path
-  )
+/** Ranks the paths with the folders holding them, as desktop's `@` does. */
+function rankWithFolders(paths: readonly string[], query: string): string[] {
+  return rankQuickOpenFiles(
+    query,
+    getPreparedQuickOpenFiles(withFolderPaths(paths)),
+    FILE_SEARCH_RESULT_LIMIT
+  ).map((result) => result.path)
 }
 
 /** The legacy inventory is the whole workspace, so its request carries no further parameters. */
@@ -123,7 +127,7 @@ export function useMobileNativeChatFileSearch(args: {
           const inventoryScope: RequestScope = [client, worktreeId, generation]
           const held = inventory.read(inventoryScope, WHOLE_WORKSPACE)
           if (held) {
-            applyPaths(rankInventory(held, normalizedQuery))
+            applyPaths(rankWithFolders(held, normalizedQuery))
             return
           }
           // Share overlapping legacy full-inventory reads, especially across slow SSH.
@@ -141,7 +145,7 @@ export function useMobileNativeChatFileSearch(args: {
           ) {
             return
           }
-          applyPaths(rankInventory(loaded.value, normalizedQuery))
+          applyPaths(rankWithFolders(loaded.value, normalizedQuery))
         }
         void (async () => {
           if (!isCurrentRequest()) {
@@ -162,7 +166,7 @@ export function useMobileNativeChatFileSearch(args: {
           }
           if (accepted.accepted) {
             searchSupportedRef.current = true
-            applyPaths(accepted.value)
+            applyPaths(rankWithFolders(accepted.value, normalizedQuery))
             return
           }
           // Inspect method_not_found before policy interpretation to choose legacy inventory fallback.

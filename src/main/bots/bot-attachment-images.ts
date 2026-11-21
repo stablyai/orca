@@ -69,6 +69,46 @@ export async function copyLocalAttachmentToStore(
   return store.storeWith(basename(path), (part) => copyFile(path, part))
 }
 
+/** Refuses, before any image is copied in, a count or total over the chat limits: each outside image
+ *  is copied (a repeated one too), a store image counts once as admitStoredAttachmentImages does. */
+export async function assertLocalImagesFit(
+  store: BotAttachmentStore,
+  paths: readonly string[],
+  labels: BotAttachmentImageLabels,
+  refused: BotAttachmentErrorFactory
+): Promise<void> {
+  if (paths.length > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+    throw refused(`${labels.plural} take up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
+  }
+  const counted = new Set<string>()
+  const sizes = await Promise.all(
+    paths.map(async (path) => {
+      if (!isAbsolute(path)) {
+        return 0
+      }
+      if (parseAgentSessionAttachmentStorePath(store.rootDir, path)) {
+        if (counted.has(path)) {
+          return 0
+        }
+        counted.add(path)
+      }
+      return (await stat(path).catch(() => null))?.size ?? 0
+    })
+  )
+  const over = sizes.findIndex((size) => size > AGENT_SESSION_ATTACHMENT_MAX_BYTES)
+  if (over !== -1) {
+    throw refused(
+      `${basename(paths[over]!)} is over ${AGENT_SESSION_ATTACHMENT_MAX_BYTES / MB} MB.`
+    )
+  }
+  const total = sizes.reduce((sum, size) => sum + size, 0)
+  if (total > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
+    throw refused(
+      `These images add up to ${Math.ceil(total / MB)} MB. ${labels.singular} takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
+    )
+  }
+}
+
 /** Validates committed store image paths under chat count, per-file, total-byte, and symlink rules. */
 export async function admitStoredAttachmentImages(
   store: BotAttachmentStore,

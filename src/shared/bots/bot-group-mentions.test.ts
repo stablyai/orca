@@ -4,8 +4,10 @@ import {
   botGroupAudience,
   botGroupDraftAudience,
   botGroupMentionSegments,
+  botGroupReplyMentions,
   botGroupSingleRecipient,
-  botGroupReplyDraft
+  botGroupReplyDraft,
+  formatBotGroupAudience
 } from './bot-group-mentions'
 
 const bots = [
@@ -156,5 +158,110 @@ describe('reply to a turn', () => {
       botGroupAudience(botGroupReplyDraft('scout', 'go', group, renamed), group, renamed)
     ).toEqual(['scout'])
     expect(botGroupReplyDraft('gone', 'please continue', group, renamed)).toBe('please continue')
+  })
+})
+
+describe("a member's reply hand-offs", () => {
+  const members = [...bots, { id: 'ops', name: 'Ops' }, { id: 'ops-lead', name: 'Ops Lead' }]
+  const group = { members: members.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+  const wakes = (reply: string, speaker = 'speaker') =>
+    botGroupReplyMentions(reply, group, members, speaker).map(({ id }) => id)
+
+  it('wakes whole member names anywhere in the reply, case-insensitively, in order', () => {
+    expect(wakes('Done. @sage can you check, then @SCOUT ship it?')).toEqual(['sage', 'scout'])
+    expect(wakes("I agree with @Sage's plan (@Scout).")).toEqual(['sage', 'scout'])
+  })
+
+  it('never matches inside a longer word or an address', () => {
+    expect(wakes('Page @Opsgenie, mail jo@sage.com or j.@Sage, see @Scouting')).toEqual([])
+  })
+
+  it('takes the longest name at an @', () => {
+    expect(wakes('@Ops Lead please, not @Ops.')).toEqual(['ops-lead', 'ops'])
+    expect(wakes('@Code Scout review')).toEqual(['code-scout'])
+  })
+
+  it('never wakes the speaker itself', () => {
+    expect(wakes('@Sage and @Scout', 'sage')).toEqual(['scout'])
+  })
+
+  it('ignores quoted strings and quoted room history', () => {
+    expect(
+      wakes(
+        'He said "@Sage go" and \u201c@Scout\u201d.\n<quoted_room_history>@Ops Lead</quoted_room_history>'
+      )
+    ).toEqual([])
+  })
+
+  it('says where each member is first named', () => {
+    expect(botGroupReplyMentions('ok @Sage, @Sage again', group, members, 'x')).toEqual([
+      { id: 'sage', start: 3 }
+    ])
+  })
+
+  it('reaches no one for an ambiguous name or @everyone', () => {
+    const twins = [...members, { id: 'sage-2', name: 'sage' }]
+    const room = { members: twins.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+    expect(botGroupReplyMentions('@Sage and @everyone, @Scout', room, twins, 'x')).toEqual([
+      { id: 'scout', start: 21 }
+    ])
+  })
+
+  it('never lets an unknown name swallow the mention right after it', () => {
+    expect(wakes('cc @Former,@Sage please review')).toEqual(['sage'])
+  })
+
+  it('reads @everyone with the same end as a name, so a member named Everyone stays ambiguous', () => {
+    const everyone = [...members, { id: 'everyone', name: 'Everyone' }]
+    const room = { members: everyone.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+    expect(botGroupReplyMentions('[@everyone] and @everyone', room, everyone, 'x')).toEqual([])
+  })
+})
+
+describe('a member on another computer', () => {
+  // Same bot id as a local member: only the host-qualified key tells them apart.
+  const mixed = {
+    ...room({ kind: 'bot', botId: 'scout' }),
+    remoteMembers: [{ environmentId: 'ws', botId: 'scout', name: 'Willow' }]
+  }
+  const label = (draft: string, group = mixed) =>
+    formatBotGroupAudience(
+      botGroupDraftAudience(draft, group, bots),
+      group,
+      bots,
+      (_k, fallback, values) => fallback.replace('{{count}}', String(values?.count ?? ''))
+    )
+
+  it('is reached by its mention or by everyone, never by the local default', () => {
+    expect(botGroupAudience('hi', mixed, bots)).toEqual(['scout'])
+    expect(botGroupAudience('@Willow hi', mixed, bots)).toEqual(['remote:ws:scout'])
+    expect(botGroupAudience('@everyone hi', mixed, bots)).toEqual([
+      'scout',
+      'sage',
+      'code-scout',
+      'remote:ws:scout'
+    ])
+  })
+
+  it('is named in the Replies label, and counted among all bots', () => {
+    expect(label('@Willow hi')).toBe('Willow')
+    expect(label('@everyone hi')).toBe('All bots · 4')
+  })
+
+  it("is never woken by another member's @Name reply", () => {
+    expect(botGroupReplyMentions('@Willow and @Sage', mixed, bots, 'scout')).toEqual([
+      { id: 'sage', start: 12 }
+    ])
+  })
+
+  it('keeps its longer name from waking a local member whose name starts it', () => {
+    const sageBot = {
+      ...mixed,
+      remoteMembers: [{ environmentId: 'ws', botId: 'sb', name: 'Sage Bot' }]
+    }
+    expect(botGroupReplyMentions('@Sage Bot can you check', sageBot, bots, 'scout')).toEqual([])
+    expect(botGroupReplyMentions('@Sage can you check', sageBot, bots, 'scout')).toEqual([
+      { id: 'sage', start: 0 }
+    ])
   })
 })

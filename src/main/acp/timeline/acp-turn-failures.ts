@@ -28,6 +28,7 @@ export class AcpTurnFailures {
   })
   private retryRun?: { item: string; turn: string | undefined; attempt: number }
   private retryRuns = 0
+  private lost?: Error
 
   constructor(
     private readonly sessionId: string,
@@ -39,10 +40,21 @@ export class AcpTurnFailures {
     return this.rows.has(turn)
   }
 
+  /** The agent's notice, once, that it dropped the session although its prompt then ended. */
+  takeSessionLoss(): Error | undefined {
+    const lost = this.lost
+    this.lost = undefined
+    return lost
+  }
+
   notification(
     turn: string | undefined,
     extension: AcpDialectNotification | undefined
   ): ProviderTimelineEvent[] {
+    const notice = extension?.disposition === 'map' ? extension.failure?.failureDetail : undefined
+    if (notice && this.dialect.sessionLostNotice?.(notice)) {
+      this.lost = new Error(notice)
+    }
     return turn &&
       extension?.disposition === 'map' &&
       (extension.failureDetail || extension.failure)
