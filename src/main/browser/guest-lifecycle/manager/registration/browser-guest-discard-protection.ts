@@ -277,7 +277,8 @@ export function installBrowserGuestDiscardProtection(
       publish()
     }
   }
-  // A 204, a download or an error ends the navigation without a commit.
+  // An error ends the navigation without a commit; a 204 or a download aborts silently and is
+  // released at did-stop-loading.
   const failed = (
     _event: Electron.Event,
     _code: number,
