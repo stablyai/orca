@@ -86,7 +86,7 @@ export function SlackReconnectStep({
             { host: hostName }
           )
         : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
-  const form = (compactProps: { onCancel?: () => void; secondary?: boolean }) => (
+  const form = (compactProps: { onCancel?: () => void }) => (
     <SlackConfigTokenForm
       compact
       submitLabel={t('bots.slack.reconnect.submit', 'Reconnect')}
@@ -141,17 +141,20 @@ export function SlackReconnectStep({
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="pt-3">{form({ secondary: true })}</div>
+            {/* Open, the form's Cancel · Reconnect is the one footer, and Use it steps aside. */}
+            <div className="pt-3">{form({ onCancel })}</div>
           </CollapsibleContent>
         </Collapsible>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            {t('bots.slack.setup.cancel', 'Cancel')}
-          </Button>
-          <Button type="button" autoFocus onClick={() => onUse(offer.teamId)}>
-            {t('bots.slack.reconnect.use', 'Use it')}
-          </Button>
-        </DialogFooter>
+        {pasting ? null : (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              {t('bots.slack.setup.cancel', 'Cancel')}
+            </Button>
+            <Button type="button" autoFocus onClick={() => onUse(offer.teamId)}>
+              {t('bots.slack.reconnect.use', 'Use it')}
+            </Button>
+          </DialogFooter>
+        )}
       </div>
     )
   }

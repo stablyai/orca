@@ -34,8 +34,7 @@ export function SlackConfigTokenForm({
   onSubmit,
   aside,
   compact = false,
-  onCancel,
-  secondary = false
+  onCancel
 }: {
   submitLabel: string
   busy: boolean
@@ -47,8 +46,6 @@ export function SlackConfigTokenForm({
   compact?: boolean
   /** A Cancel beside the submit button. */
   onCancel?: () => void
-  /** Another of the dialog's buttons is its main action. */
-  secondary?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
@@ -204,11 +201,7 @@ export function SlackConfigTokenForm({
             {t('bots.slack.setup.cancel', 'Cancel')}
           </Button>
         ) : null}
-        <Button
-          type="submit"
-          variant={secondary ? 'outline' : 'default'}
-          disabled={busy || !trimmed}
-        >
+        <Button type="submit" disabled={busy || !trimmed}>
           {submitLabel}
         </Button>
       </DialogFooter>

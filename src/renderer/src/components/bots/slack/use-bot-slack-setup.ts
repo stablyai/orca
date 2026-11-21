@@ -9,7 +9,7 @@ import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
-import { openSlackApprovalHere } from './slack-page-here'
+import { isSlackAuthorizeUrl, NOT_SLACK_LINK, openSlackApprovalHere } from './slack-page-here'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { hostBots, knownSlackTeam, otherSlackTeams } from './slack-setup-teams'
 import {
@@ -119,6 +119,11 @@ export function useBotSlackSetup(
       const fresh = refreshBotSlack(bot)
       const current = (): boolean => mount !== null && mounted.current === mount
       if (!current()) {
+        return
+      }
+      // Not Slack's own page: refused here, so neither Approve nor Copy link can pass it on.
+      if (!isSlackAuthorizeUrl(link.authorizeUrl)) {
+        setStep({ kind: 'failed', code: NOT_SLACK_LINK })
         return
       }
       if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {

@@ -3,12 +3,15 @@
 // bot's computer, so neither needs the host's network. One Slack login then makes the token and
 // approves the app. No bot is passed: a server's page would open in one of its bots' workspaces.
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-routing'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { botSlackErrorMessage } from './bot-slack-copy'
 
 const SLACK_APPS_URL = 'https://api.slack.com/apps'
+
+/** The setup flow's code for a refused approval link; botSlackErrorMessage says it. */
+export const NOT_SLACK_LINK = 'not_slack_link'
 
 /** Slack's own approval page: the only link a host's answer may open in this computer's browser. */
 export function isSlackAuthorizeUrl(url: string): boolean {
@@ -33,15 +36,10 @@ export function openSlackAppsHere(): HttpLinkDestination | 'unrouted' {
   return openBotHostPageOrSay(LOCAL_EXECUTION_HOST_ID, SLACK_APPS_URL, { local: 'system' })
 }
 
-/** Slack's approval page; anything else is refused, and nothing opens. */
+/** Slack's approval page; anything else is refused with a toast (the setup flow refuses it first). */
 export function openSlackApprovalHere(url: string): HttpLinkDestination | 'unrouted' {
   if (!isSlackAuthorizeUrl(url)) {
-    toast.error(
-      translate(
-        'bots.slack.setup.notSlackLink',
-        'This approval link isn’t Slack’s, so Orca didn’t open it.'
-      )
-    )
+    toast.error(botSlackErrorMessage(NOT_SLACK_LINK, null))
     return 'unrouted'
   }
   return openBotHostPageOrSay(LOCAL_EXECUTION_HOST_ID, url, { local: 'system' })

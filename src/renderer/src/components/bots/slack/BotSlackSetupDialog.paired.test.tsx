@@ -278,6 +278,28 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(await screen.findByText('Scout is in Slack')).toBeTruthy()
   })
 
+  it('refuses an approval link that is not Slack’s, for Approve and Copy link alike', async () => {
+    mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
+    serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].setUpApp.mockResolvedValue(
+      ok({
+        appId: 'A1',
+        authorizeUrl: 'https://evil.test/oauth/v2/authorize',
+        expiresAt: NOW + 60_000
+      })
+    )
+    openDialog()
+
+    expect(
+      await screen.findByText('This approval link isn’t Slack’s, so Orca didn’t open it.')
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Approve in Slack' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    expect(mocks.open).not.toHaveBeenCalled()
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
   it("reconnects a server's workspace from Settings with Slack's page in this computer's browser", async () => {
     mocks.bots = [bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } })]
     serverState({ state: 'not_created' })
@@ -312,12 +334,17 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     redeem.mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE }))
     openDialog()
 
-    const use = await screen.findByRole('button', { name: 'Use it' })
+    await screen.findByRole('button', { name: 'Use it' })
     expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
+    // Open, the paste form's Cancel · Reconnect is the only footer: Use it steps aside.
     fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
     expect(screen.getByLabelText('Configuration refresh token')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
 
-    fireEvent.click(use)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use it' }))
     await screen.findByRole('button', { name: 'Approve in Slack' })
     expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(redeem).toHaveBeenCalledWith({ code: 'one-time' })

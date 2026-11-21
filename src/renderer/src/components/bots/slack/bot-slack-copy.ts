@@ -44,6 +44,11 @@ export function botSlackErrorMessage(code: string, hostName: string | null): str
         'bots.slack.errors.handOffExpired',
         'That hand-off expired or was already used. Try again.'
       )
+    case 'not_slack_link':
+      return translate(
+        'bots.slack.errors.notSlackLink',
+        'This approval link isn’t Slack’s, so Orca didn’t open it.'
+      )
     case 'not_installed':
       return translate('bots.slack.errors.notInstalled', 'Add this bot to Slack first.')
     case 'signed_out':

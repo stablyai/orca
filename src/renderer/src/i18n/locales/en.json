@@ -27186,8 +27186,7 @@
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
-        "cancel": "Cancel",
-        "notSlackLink": "This approval link isn’t Slack’s, so Orca didn’t open it."
+        "cancel": "Cancel"
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -27238,6 +27237,7 @@
         "unknownBot": "Orca Cloud has not seen this bot yet. Try again in a minute.",
         "wrongWorkspace": "This bot’s Slack app is in another workspace. Remove it from Slack first.",
         "notInstalled": "Add this bot to Slack first.",
+        "notSlackLink": "This approval link isn’t Slack’s, so Orca didn’t open it.",
         "signedOut": "Sign in to Orca Cloud to connect Slack.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
         "handOffExpired": "That hand-off expired or was already used. Try again."
