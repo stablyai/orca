@@ -107,7 +107,10 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   aug: {
     latest: () => npm('@augmentcode/auggie'),
     plan: () => ({ runnable: false, command: 'npm install -g @augmentcode/auggie@latest' })
-  }
+  },
+  // Both upgrade the way they were installed, as OpenCode 1.x does.
+  kilo: { latest: () => npm('@kilocode/cli'), plan: selfUpdate('upgrade') },
+  'mimo-code': { latest: () => npm('@mimo-ai/cli'), plan: selfUpdate('upgrade') }
 }
 
 export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUpdateDefinition {

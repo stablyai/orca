@@ -104,6 +104,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   kiro: null,
   // Goose reports its skills as commands, at rest too.
   goose: null,
+  // Orca knows no skill folders of theirs; their sessions report what they load as commands.
+  kilo: null,
+  'mimo-code': null,
   omp: null
 }
 
