@@ -101,6 +101,7 @@ describe('fenced daemon kill protocol', () => {
 
   it('drops an abandoned process inspection before it can start a new capture', async () => {
     harness = await startDaemonAdapterHarness(() => createMockSubprocess())
+    const terminal = await harness.adapter.spawn({ sessionId: 'pty', cols: 80, rows: 24 })
     const prior = Promise.withResolvers<string>()
     const capture = vi.fn().mockReturnValueOnce(prior.promise).mockResolvedValue('new')
     const reader = createProcessTableSnapshotReader({ runPs: capture, now: () => 100 })
@@ -118,11 +119,11 @@ describe('fenced daemon kill protocol', () => {
     })
     const abort = new AbortController()
     const inspection = harness.adapter.inspectProcess('pty', {
-      expectedIncarnationId: 'incarnation',
+      expectedIncarnationId: terminal.incarnationId,
       runningWorkSinceMs: 101,
       signal: abort.signal
     })
-    await admitted.promise
+    await Promise.race([admitted.promise, inspection])
     abort.abort()
     await expect(inspection).rejects.toThrow('client_disconnected')
     await harness.adapter.listProcesses()
