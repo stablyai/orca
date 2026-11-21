@@ -16,14 +16,24 @@ const scrcpyKeyboard = {
 }
 
 function AndroidPane(): React.JSX.Element {
-  const { handleKeyDown } = useEmulatorScreenKeyboard({
-    cancelKeyboardFrames: () => {},
-    canInteract: true,
-    scrcpyKeyboard,
-    sendKeyboardFrames: () => true,
-    worktreeId: 'wt-1'
-  })
-  return <div aria-label="screen" tabIndex={0} onKeyDown={handleKeyDown} />
+  const { handleKeyDown, keyboardProxyRef, onKeyboardProxyCompositionEnd, onKeyboardProxyInput } =
+    useEmulatorScreenKeyboard({
+      cancelKeyboardFrames: () => {},
+      canInteract: true,
+      scrcpyKeyboard,
+      sendKeyboardFrames: () => true,
+      worktreeId: 'wt-1'
+    })
+  return (
+    <div aria-label="screen" tabIndex={0} onKeyDown={handleKeyDown}>
+      <textarea
+        aria-label="proxy"
+        ref={keyboardProxyRef}
+        onCompositionEnd={onKeyboardProxyCompositionEnd}
+        onInput={onKeyboardProxyInput}
+      />
+    </div>
+  )
 }
 
 let container: HTMLDivElement
@@ -75,6 +85,29 @@ describe('Android emulator pane keys', () => {
 
     expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['ş'], ['中'], ['€']])
     expect(scrcpyKeyboard.sendKey).toHaveBeenCalledWith('backspace', false)
+  })
+
+  it('sends text a host input method committed, once, as text', () => {
+    press({ key: 'Enter' })
+    const proxy = container.querySelector<HTMLTextAreaElement>('[aria-label="proxy"]')!
+    // The key that starts a composition isn't composing yet; Chromium marks it keyCode 229.
+    const composingKey = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'k' })
+    Object.defineProperty(composingKey, 'keyCode', { value: 229 })
+    act(() => {
+      proxy.dispatchEvent(composingKey)
+      // Kotoeri shows its reading while composing; only the commit is typed.
+      proxy.value = 'か'
+      proxy.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }))
+      proxy.value = '漢字'
+      proxy.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '漢字' }))
+      // The emoji picker inserts without composing.
+      proxy.value = '😀'
+      proxy.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: false }))
+    })
+
+    expect(composingKey.defaultPrevented).toBe(false)
+    expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['漢字'], ['😀']])
+    expect(proxy.value).toBe('')
   })
 
   it('sends Mac Option characters as text', () => {
