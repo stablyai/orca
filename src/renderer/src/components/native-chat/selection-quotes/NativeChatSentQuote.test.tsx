@@ -3,13 +3,16 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
-const opened = vi.hoisted(() => ({ open: vi.fn(), toast: vi.fn() }))
+const opened = vi.hoisted(() => ({ open: vi.fn(), toast: vi.fn(), editor: vi.fn() }))
 vi.mock('@/store/index', () => ({
   useAppStore: (selector: (state: { settings: { theme: string } }) => unknown) =>
     selector({ settings: { theme: 'light' } })
 }))
 vi.mock('@/components/terminal-pane/links/files/terminal-file-open-routing', () => ({
   openDetectedFilePath: opened.open
+}))
+vi.mock('@/components/terminal-pane/links/files/terminal-file-link-editor-open', () => ({
+  openLinkedFileInEditor: opened.editor
 }))
 vi.mock('sonner', () => ({ toast: opened.toast }))
 
@@ -25,6 +28,7 @@ afterEach(() => {
   localStorage.clear()
   opened.open.mockReset()
   opened.toast.mockReset()
+  opened.editor.mockReset()
 })
 
 const OWNER = {
@@ -73,6 +77,20 @@ it('opens the quoted file at its first line and highlights that line', () => {
     1,
     expect.objectContaining({ worktreeId: 'w1', revealLength: Number.MAX_SAFE_INTEGER })
   )
+  expect(opened.toast).not.toHaveBeenCalled()
+})
+
+// The page of an HTML file has no lines: a quote of its source opens the code at the quoted line.
+it('opens a quoted HTML file in the editor at its first line', () => {
+  sent('> site/index.html:7-9\n> ```html\n> <p>hi</p>\n> ```\n\nreply')
+  fireEvent.click(screen.getByRole('button', { name: /^Quote: site\/index\.html:7-9/ }))
+  expect(opened.editor).toHaveBeenCalledWith(
+    expect.objectContaining({ filePath: '/repo/site/index.html', relativePath: 'site/index.html' }),
+    null,
+    { line: 7, column: 1, length: Number.MAX_SAFE_INTEGER },
+    expect.any(Function)
+  )
+  expect(opened.open).not.toHaveBeenCalled()
   expect(opened.toast).not.toHaveBeenCalled()
 })
 
