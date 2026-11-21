@@ -176,7 +176,12 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       payload: botAnswerPayload(db, original)
     })
     db.markAsRead([original.id])
-    showGroupAnswer(runtime, original, sessionCallerOf(orchestrationCaller)?.sessionId, params.body)
+    await showGroupAnswer(
+      runtime,
+      original,
+      sessionCallerOf(orchestrationCaller)?.sessionId,
+      params.body
+    )
 
     const receipt = {
       message: exposeMessage(reply),

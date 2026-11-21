@@ -15,6 +15,7 @@ import {
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
@@ -70,20 +71,25 @@ export function botAnswerOf(
   return { botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted) } }
 }
 
-/** A group member's answer shows in the room on the turn that sent it; elsewhere it is only mail. */
-export function showGroupAnswer(
+const GROUP_ANSWER_NOTE_TIMEOUT_MS = 5_000
+
+/** A group member's answer shows in the room on the turn that sent it; elsewhere it is only mail.
+ *  Saved before the reply returns, while the turn that sent it is still running; a stalled read
+ *  holds the reply back no longer than the bound, and never fails it. */
+export async function showGroupAnswer(
   runtime: OrcaRuntimeService,
   original: MessageRow,
   callerSessionId: string | undefined,
   body: string
-): void {
+): Promise<void> {
   const group = botRequestRecord(runtime.getOrchestrationDb(), original.id)?.group
   if (group && callerSessionId === group.targetSessionId) {
-    void runtimeBotGroups(runtime)
+    const noted = runtimeBotGroups(runtime)
       .noteAnswer(callerSessionId, body)
       .catch((error: unknown) =>
         console.warn('[bot-groups] could not show an answer in the room', error)
       )
+    await withTimeout(noted, GROUP_ANSWER_NOTE_TIMEOUT_MS, undefined)
   }
 }
 

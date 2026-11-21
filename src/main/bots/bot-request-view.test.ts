@@ -119,7 +119,7 @@ describe('what the sender reads', () => {
     expect(botAnswerView(mixed, false).next).toMatch(/^Pass this answer on/)
   })
 
-  it('never points a group room member at a card the room does not have', () => {
+  it('never has a group room member repeat an answer the room shows, or redo a handoff', () => {
     const grouped = record({
       askers: [{ kind: 'owner' }],
       conversation: null,
@@ -131,12 +131,19 @@ describe('what the sender reads', () => {
         targetSessionId: 'bot-group-member-b'
       }
     })
-    expect(botRequestSentNext(grouped)).not.toMatch(/card/)
-    expect(botAnswerView(grouped, false).next).toBe(
-      'Pass this answer on to your owner as your final message.'
+    const question = { ...grouped, purpose: 'question' as const }
+    for (const next of [botRequestSentNext(grouped), botRequestSentNext(question)]) {
+      expect(next).toMatch(/the room shows its answer on Docs's turn/)
+      expect(next).not.toMatch(/card|pass it on/)
+    }
+    expect(botAnswerView(grouped, false).next).toMatch(
+      /^The room already shows this answer on Docs's turn, so don't repeat, quote or summarize it\. Write only what the room doesn't say/
     )
-    expect(botAnswerView({ ...grouped, purpose: 'question' }, false).next).toBe(
-      'Finish the job with this answer.'
+    expect(botAnswerView(question, false).next).toMatch(
+      /^The room already shows this answer on Docs's turn, so don't repeat, quote or summarize it\. Finish the job with it\./
+    )
+    expect(botRequestUnansweredText(grouped, 'ended')).toBe(
+      "Docs read your handoff and ended its turn without a reply; the job is still Docs's, so don't redo it or call it dropped. The room shows Docs's turn."
     )
   })
 })
