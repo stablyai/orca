@@ -100,6 +100,38 @@ export const failed = row({
   }
 })
 
+export const externalInstallFailed = row({
+  ...base,
+  source: 'external',
+  operation: {
+    id: 'op-1',
+    kind: 'install',
+    phase: 'failed',
+    downloadedBytes: 0,
+    totalBytes: null,
+    error: "Couldn't reach the download server. Check your connection and try again."
+  }
+})
+export const downloadingUnknownSize = row({
+  ...base,
+  operation: {
+    id: 'op-1',
+    kind: 'install',
+    phase: 'downloading',
+    downloadedBytes: 41_200_000,
+    totalBytes: null
+  }
+})
+export const unavailable = row({ ...base, available: false })
+export const updateAvailable = row({
+  ...base,
+  source: 'managed',
+  version: '1.6.0',
+  installedVersion: '1.5.0',
+  installedCurrent: false,
+  canRemove: true
+})
+
 // Fixture pages share one i18n instance; run these shots last, then restart the server.
 function localized(state: ManagedRuntimeInstallState, language: string) {
   return defineFixture({

@@ -21,7 +21,9 @@ export type ManagedRuntimeInstallView = {
   /** Settings may offer to delete the copy Orca installed: one is there and nothing runs. */
   removable: boolean
   removing: boolean
-  /** A step with no percent runs (unpacking, verifying, removing), so Settings shows a spinner. */
+  /** The status explains a problem (unavailable, damaged, outdated), so it wraps whole instead of truncating. */
+  reason: boolean
+  /** A step with no percent runs (unpacking, verifying, removing, a download of unknown size), so Settings shows a spinner. */
   busy: boolean
   note: string | null
 }
@@ -38,6 +40,7 @@ const EMPTY: ManagedRuntimeInstallView = {
   prominent: false,
   removable: false,
   removing: false,
+  reason: false,
   busy: false,
   note: null
 }
@@ -57,20 +60,22 @@ function runningView(
     return null
   }
   const verifying = !cancelling && phase === 'verifying'
+  // Only a known, positive size gives a percent; without one the download spins like the other steps.
+  const sized = phase === 'downloading' && total !== null && total > 0 ? total : null
   const status = cancelling
     ? t('components.managed-runtime.cancelling', 'Cancelling…')
     : phase === 'extracting'
       ? t('components.managed-runtime.extracting', 'Unpacking…')
       : verifying
         ? t('components.managed-runtime.verifying', 'Verifying…')
-        : total === null
+        : sized === null
           ? t('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
               done: megabytes(done)
             })
           : t(
               'components.managed-runtime.downloadingOf',
               'Downloading {{done}} MB of {{total}} MB.',
-              { done: megabytes(done), total: megabytes(total) }
+              { done: megabytes(done), total: megabytes(sized) }
             )
   const label = t('components.managed-runtime.cancelShort', 'Cancel')
   return {
@@ -79,8 +84,8 @@ function runningView(
     spokenStatus: verifying
       ? t('components.managed-runtime.verifyingAgent', 'Verifying {{agent}}…', { agent })
       : null,
-    progress: phase === 'downloading' && total ? Math.min(100, (done / total) * 100) : null,
-    busy: phase !== 'downloading',
+    progress: sized === null ? null : Math.min(100, (done / sized) * 100),
+    busy: sized === null,
     action: { kind: 'cancel', label, operationId: operation.id }
   }
 }
@@ -116,10 +121,13 @@ function settledView(
   })
   const install = t('components.managed-runtime.installShort', 'Install')
   // The host's own copy always runs while it exists, so installing Orca's would change nothing.
-  // If that copy goes away, the row falls through to Not installed · Install.
+  // If that copy goes away, the row falls through to Not installed · Install. For the same reason
+  // a failed install of Orca's copy isn't shown here (the chat card keeps its own Retry); a failed
+  // Remove is, since the user asked for it from this row.
   if (state.source === 'external') {
     return {
       ...view(t('components.managed-runtime.external', 'Uses your own copy'), null),
+      error: operation?.kind === 'install' ? null : error,
       spokenStatus: t('components.managed-runtime.externalAgent', 'Uses your own {{agent}}', {
         agent
       })
@@ -162,22 +170,25 @@ function settledView(
     )
     return state.installedCurrent
       ? view(status, null, null, label)
-      : { ...view(status, label), prominent: true }
+      : { ...view(status, label), prominent: true, reason: true }
   }
   if (!state.available) {
-    return view(
-      t('components.managed-runtime.unavailable', '{{agent}} is not available on this host.', {
-        agent
-      }),
-      null
-    )
+    return {
+      ...view(
+        t('components.managed-runtime.unavailable', '{{agent}} is not available on this host.', {
+          agent
+        }),
+        null
+      ),
+      reason: true
+    }
   }
   if (state.damaged) {
     const status = t('components.managed-runtime.damaged', 'This copy of {{agent}} is damaged.', {
       agent
     })
     const label = t('components.managed-runtime.reinstallShort', 'Reinstall')
-    return { ...view(status, label), prominent: true }
+    return { ...view(status, label), prominent: true, reason: true }
   }
   const retry = t('components.managed-runtime.tryAgain', 'Try again')
   if (operation?.kind === 'install' && operation.phase === 'cancelled') {

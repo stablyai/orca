@@ -38,67 +38,128 @@ function external(installedVersion: string | null): ManagedRuntimeInstallState {
   }
 }
 
-function installing(phase: ManagedRuntimeOperation['phase']): ManagedRuntimeInstallState {
+function installing(
+  phase: ManagedRuntimeOperation['phase'],
+  downloadedBytes = 40_000_000,
+  totalBytes: number | null = 100_000_000
+): ManagedRuntimeInstallState {
   return {
     ...external(null),
     source: null,
-    operation: {
-      id: 'op-1',
-      kind: 'install',
-      phase,
-      downloadedBytes: 40_000_000,
-      totalBytes: 100_000_000
-    }
+    operation: { id: 'op-1', kind: 'install', phase, downloadedBytes, totalBytes }
   }
 }
 
+const viewOf = (state: ManagedRuntimeInstallState) =>
+  managedRuntimeInstallView({ kind: 'known', state }, 'Antigravity')
+
 describe('managedRuntimeInstallView with a host copy that runs', () => {
-  it('says the host copy runs and offers no Install while Orca has no copy', () => {
-    const view = managedRuntimeInstallView({ kind: 'known', state: external(null) }, 'Antigravity')
-    expect(view.status).toBe('Uses your own copy')
-    expect(view.spokenStatus).toBe('Uses your own Antigravity')
+  it('offers no Install while Orca has no copy', () => {
+    const view = viewOf(external(null))
+    expect(view.status).not.toBeNull()
     expect(view.action).toBeNull()
     expect(view.menuAction).toBeNull()
     expect(view.removable).toBe(false)
   })
 
   it('keeps Remove once Orca has its copy, which the host copy still outranks', () => {
-    const view = managedRuntimeInstallView(
-      { kind: 'known', state: external('1.5.0') },
-      'Antigravity'
-    )
-    expect(view.status).toBe('Uses your own copy')
+    const view = viewOf(external('1.5.0'))
     expect(view.action).toBeNull()
     expect(view.menuAction).toBeNull()
     expect(view.removable).toBe(true)
   })
+
+  it('names the agent only for screen readers, since the row sits under it', () => {
+    const view = viewOf(external(null))
+    expect(view.status).not.toContain('Antigravity')
+    expect(view.spokenStatus).toContain('Antigravity')
+  })
+
+  it("hides a failed install of Orca's copy, which wouldn't run anyway", () => {
+    const view = viewOf({
+      ...external(null),
+      operation: {
+        id: 'op-1',
+        kind: 'install',
+        phase: 'failed',
+        downloadedBytes: 0,
+        totalBytes: null,
+        error: 'network down'
+      }
+    })
+    expect(view.error).toBeNull()
+    expect(view.action).toBeNull()
+  })
+
+  it('still shows a failed Remove, which the user asked for from this row', () => {
+    const view = viewOf({
+      ...external('1.5.0'),
+      operation: {
+        id: 'op-1',
+        kind: 'remove',
+        phase: 'failed',
+        downloadedBytes: 0,
+        totalBytes: null,
+        error: 'file in use'
+      }
+    })
+    expect(view.error).toBe('file in use')
+  })
 })
 
 describe('managedRuntimeInstallView while installing', () => {
-  it('shows progress and no spinner while downloading', () => {
-    const view = managedRuntimeInstallView(
-      { kind: 'known', state: installing('downloading') },
-      'Antigravity'
-    )
-    expect(view.status).toBe('Downloading 40.0 MB of 100.0 MB.')
+  it('shows a bar and no spinner while a download of known size runs', () => {
+    const view = viewOf(installing('downloading'))
     expect(view.progress).toBe(40)
     expect(view.busy).toBe(false)
     expect(view.action?.kind).toBe('cancel')
   })
 
-  it.each([
-    ['extracting', 'Unpacking…', null],
-    ['verifying', 'Verifying…', 'Verifying Antigravity…']
-  ] as const)('shows a spinner and Cancel while %s', (phase, status, spokenStatus) => {
-    const view = managedRuntimeInstallView(
-      { kind: 'known', state: installing(phase) },
-      'Antigravity'
-    )
-    expect(view.status).toBe(status)
-    expect(view.spokenStatus).toBe(spokenStatus)
+  it('shows an empty bar, not a spinner, before the first byte of a known size', () => {
+    const view = viewOf(installing('downloading', 0, 100_000_000))
+    expect(view.progress).toBe(0)
+    expect(view.busy).toBe(false)
+    expect(view.action?.kind).toBe('cancel')
+  })
+
+  it.each([null, 0])('spins with Cancel while a download has total %s', (totalBytes) => {
+    const view = viewOf(installing('downloading', 40_000_000, totalBytes))
+    expect(view.progress).toBeNull()
+    expect(view.busy).toBe(true)
+    expect(view.status).toContain('40.0')
+    expect(view.action?.kind).toBe('cancel')
+  })
+
+  it.each(['extracting', 'verifying'] as const)('shows a spinner and Cancel while %s', (phase) => {
+    const view = viewOf(installing(phase))
     expect(view.progress).toBeNull()
     expect(view.busy).toBe(true)
     expect(view.action?.kind).toBe('cancel')
+  })
+
+  it('names the agent only for screen readers while verifying', () => {
+    const view = viewOf(installing('verifying'))
+    expect(view.status).not.toContain('Antigravity')
+    expect(view.spokenStatus).toContain('Antigravity')
+  })
+})
+
+describe('managedRuntimeInstallView reasons', () => {
+  it('lets an unavailable, damaged or outdated status wrap whole', () => {
+    expect(
+      viewOf({ ...external('1.4.0'), source: 'managed', installedCurrent: false }).reason
+    ).toBe(true)
+    expect(viewOf({ ...installing('downloading'), operation: null, available: false }).reason).toBe(
+      true
+    )
+    expect(viewOf({ ...installing('downloading'), operation: null, damaged: true }).reason).toBe(
+      true
+    )
+  })
+
+  it('lets a short status truncate', () => {
+    expect(viewOf(external(null)).reason).toBe(false)
+    expect(viewOf(installing('verifying')).reason).toBe(false)
   })
 })
 

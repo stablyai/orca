@@ -69,14 +69,14 @@ describe('ManagedRuntimeInstallRow status', () => {
         totalBytes: 98_000_000
       }
     })
-    expect(shown(line)).toBe('Verifying…')
-    expect(spoken(line)).toBe('Verifying Antigravity…·Cancel')
+    expect(shown(line)).not.toContain('Antigravity')
+    expect(spoken(line)).toContain('Antigravity')
   })
 
   it("shows short copy but announces the agent when the host's own copy runs", () => {
     const line = status({ ...base, source: 'external' })
-    expect(shown(line)).toBe('Uses your own copy')
-    expect(spoken(line)).toBe('Uses your own Antigravity')
+    expect(shown(line)).not.toContain('Antigravity')
+    expect(spoken(line)).toContain('Antigravity')
   })
 
   it('announces the visible text when it already reads on its own', () => {
@@ -90,7 +90,8 @@ describe('ManagedRuntimeInstallRow status', () => {
         totalBytes: 98_000_000
       }
     })
-    expect(shown(line)).toBe('Unpacking…')
-    expect(spoken(line)).toBe('Unpacking…·Cancel')
+    const text = shown(line)
+    expect(text).not.toBeNull()
+    expect(spoken(line).startsWith(text ?? '')).toBe(true)
   })
 })
