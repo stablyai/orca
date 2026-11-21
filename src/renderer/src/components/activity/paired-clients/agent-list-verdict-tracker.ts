@@ -23,7 +23,11 @@ export type AgentListVerdictChanges = {
   removed: string[]
 }
 
-type Lineage = { terminalHandle: string | undefined; orchestration: string | null }
+type Lineage = {
+  terminalHandle: string | undefined
+  orchestration: string | null
+  thread: AgentPaneThread
+}
 
 // Threads keep their identity across unrelated writes, so only a changed thread rebuilds its verdict.
 const threadVerdicts = new WeakMap<AgentPaneThread, ListedVerdict>()
@@ -71,7 +75,6 @@ export function createAgentListVerdictTracker() {
   const verdicts = new Map<string, AgentListVerdict>()
   const lineageByPaneKey = new Map<string, Lineage>()
   const handleCounts = new Map<string, number>()
-  let duplicateHandles = 0
   let orchestratedThreads = 0
   let parentByChild = new Map<string, string>()
   let pending = new Set<string>()
@@ -81,9 +84,7 @@ export function createAgentListVerdictTracker() {
     if (!handle) {
       return
     }
-    const before = handleCounts.get(handle) ?? 0
-    const after = before + delta
-    duplicateHandles += Number(after > 1) - Number(before > 1)
+    const after = (handleCounts.get(handle) ?? 0) + delta
     if (after === 0) {
       handleCounts.delete(handle)
     } else {
@@ -112,15 +113,21 @@ export function createAgentListVerdictTracker() {
     let lineageMoved = full
     for (const paneKey of dirty) {
       const thread = sources.thread(paneKey)
-      const next = thread ? childAgentLineageInputs(thread) : undefined
       const previous = lineageByPaneKey.get(paneKey)
+      if (previous?.thread === thread) {
+        continue
+      }
+      const next = thread ? { ...childAgentLineageInputs(thread), thread } : undefined
       if (
-        previous?.terminalHandle === next?.terminalHandle &&
-        previous?.orchestration === next?.orchestration &&
-        (previous === undefined) === (next === undefined)
+        previous !== undefined &&
+        next !== undefined &&
+        previous.terminalHandle === next.terminalHandle &&
+        previous.orchestration === next.orchestration
       ) {
-        // With a handle reported twice, the newest pane wins it, so reordering alone can move a parent.
-        lineageMoved ||= thread !== undefined && duplicateHandles > 0
+        // The newest pane wins a handle reported twice, so a rebuilt thread's new rank can move a parent.
+        lineageMoved ||=
+          next.terminalHandle !== undefined && (handleCounts.get(next.terminalHandle) ?? 0) > 1
+        previous.thread = next.thread
         continue
       }
       setLineage(paneKey, next)

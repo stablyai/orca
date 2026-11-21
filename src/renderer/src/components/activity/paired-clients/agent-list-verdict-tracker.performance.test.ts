@@ -29,7 +29,8 @@ function entry(paneKey: string, state: 'working' | 'done', at: number): AgentSta
     state,
     stateStartedAt: at,
     updatedAt: at,
-    terminalHandle: `term-${paneKey}`,
+    // Two coordinators report one handle, as a pane whose terminal moved keeps its old history.
+    terminalHandle: paneKey === 'pane-1' || paneKey === 'pane-2' ? 'term-moved' : `term-${paneKey}`,
     ...(coordinator ? { orchestration: { parentPaneKey: coordinator } } : {})
   } as unknown as AgentStatusEntry
 }
@@ -50,7 +51,7 @@ function thread(paneKey: string, state: 'working' | 'done', at: number): AgentPa
   } as unknown as AgentPaneThread)
 }
 
-/** Field reads to publish one pane's step on a fleet of `agents` coordinators, each with a worker. */
+/** Field reads to publish one worker's step on `agents` coordinators, each with a worker, two sharing a handle. */
 function readsForOneStep(agents: number): number {
   const threads = new Map<string, AgentPaneThread>()
   const statuses = new Map<string, AgentStatusEntry>()

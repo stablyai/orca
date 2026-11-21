@@ -18,7 +18,6 @@ import { createAgentListVerdictTracker } from './agent-list-verdict-tracker'
 const PUBLISH_INTERVAL_MS = 250
 
 type Publisher = {
-  threads: readonly AgentPaneThread[] | null
   publishNow: () => AgentListPublication
   stop: () => void
 }
@@ -32,7 +31,6 @@ function startPublisher(): Publisher {
   let statuses: AcceptedAgentStatuses | null = null
   let stopStatuses = (): void => {}
   let acknowledgedAt: Readonly<Record<string, number>> | null = null
-  let threads: readonly AgentPaneThread[] | null = null
   let sentReset = false
   let lastSentAt = 0
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -75,7 +73,6 @@ function startPublisher(): Publisher {
       statuses: state.agentStatusByPaneKey,
       acknowledgedAt: acknowledged
     })
-    threads = snapshot.allThreads
     if (!sentReset) {
       sentReset = true
       const publication = { publishedAt: lastSentAt, verdicts: tracker.snapshot() }
@@ -107,9 +104,6 @@ function startPublisher(): Publisher {
   ]
   schedule()
   return {
-    get threads() {
-      return threads
-    },
     publishNow: () => flush() ?? { publishedAt: lastSentAt, verdicts: tracker.snapshot() },
     stop: () => {
       stops.forEach((stop) => stop())
@@ -122,9 +116,12 @@ function startPublisher(): Publisher {
   }
 }
 
-/** The threads behind the last published verdicts; null until the publisher has run. */
+/** The window's threads as the store holds them now; null until the publisher runs. */
 export function readPublishedAgentPaneThreads(): readonly AgentPaneThread[] | null {
-  return publisher?.threads ?? null
+  // Read fresh: a phone's clear must judge eligibility on the turn running now, not the last flush.
+  return publisher
+    ? readActivityThreadSnapshot('all', getActivityThreadInputs('all')).allThreads
+    : null
 }
 
 /** Resolves with the verdicts for the store as it is now, after sending them to main. */

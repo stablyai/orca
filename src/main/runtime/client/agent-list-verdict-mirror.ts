@@ -3,6 +3,7 @@ import type {
   AgentListPublication,
   AgentListVerdictUpdate
 } from '../../../shared/agent-status/presentation/agent-list-status'
+import { notifyRuntimeListeners } from '../events/runtime-listener-delivery'
 
 /** Changed pane keys; null when any pane may have changed. */
 export type AgentListChangeListener = (paneKeys: ReadonlySet<string> | null) => void
@@ -80,9 +81,7 @@ export class AgentListVerdictMirror {
   }
 
   private emit(paneKeys: ReadonlySet<string> | null): void {
-    this.onChanged()
-    for (const listener of this.listeners) {
-      listener(paneKeys)
-    }
+    notifyRuntimeListeners([this.onChanged], (notify) => notify(), 'agent list client event')
+    notifyRuntimeListeners(this.listeners, (listener) => listener(paneKeys), 'agent list')
   }
 }
