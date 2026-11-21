@@ -19,3 +19,25 @@ it('accepts a new endpoint after 32 approvals by letting the oldest go', () => {
   expect(decisions.trusts(session, identity(3000))).toBe(false)
   expect(decisions.trusts(session, identity(3001))).toBe(true)
 })
+
+it('trusts only the exact endpoint, certificate and error, in its own session, until the session ends', () => {
+  const decisions = new BrowserSessionCertificateDecisions()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: decisions key on session identity only.
+  const profile = {} as Electron.Session
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: another profile or route partition is another session.
+  const otherPartition = {} as Electron.Session
+  const approved = identity(3443)
+  expect(decisions.accept(profile, approved)).toBe(true)
+  expect(decisions.trusts(profile, approved)).toBe(true)
+  expect(decisions.trusts(profile, { ...approved, error: 'net::ERR_CERT_DATE_INVALID' })).toBe(false)
+  expect(decisions.trusts(profile, { ...approved, leafCertificateSha256: 'sha-other' })).toBe(false)
+  expect(decisions.trusts(profile, { ...approved, secureEndpoint: 'https://localhost:3444' })).toBe(
+    false
+  )
+  expect(decisions.trusts(profile, { ...approved, secureEndpoint: 'https://127.0.0.1:3443' })).toBe(
+    false
+  )
+  expect(decisions.trusts(otherPartition, approved)).toBe(false)
+  decisions.forget(profile)
+  expect(decisions.trusts(profile, approved)).toBe(false)
+})
