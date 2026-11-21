@@ -4,6 +4,7 @@ import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claud
 import type { ClaudeStructuredSessionAdapterDeps } from '../../../claude/structured/claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from '../../../claude/structured/lifecycle/claude-structured-session-event'
 import { claudeProviderHandleLink } from '../../../claude/structured/lifecycle/claude-structured-owner-identity'
+import { readClaudeSubagentEffort } from '../../../claude/child-work/claude-subagent-effort'
 import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
@@ -139,6 +140,7 @@ export function createStructuredClaudeRuntimeAdapter(
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
     ...(deps.onUserRenamed ? { onUserRenamed: deps.onUserRenamed } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
+    readChildEffort: readClaudeSubagentEffort,
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})

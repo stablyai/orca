@@ -1,0 +1,2 @@
+{"parentUuid":null,"isSidechain":true,"agentId":"c3","type":"user","message":{"role":"user","content":"Summarize the folder"},"uuid":"e1","timestamp":"2026-11-20T10:00:02.000Z","sessionId":"s1","version":"2.1.322"}
+{"parentUuid":"e1","isSidechain":true,"agentId":"c3","type":"assistant","message":{"model":"claude-haiku-5","role":"assistant","content":[{"type":"text","text":"It has three files."}]},"uuid":"e2","timestamp":"2026-11-20T10:00:03.000Z","sessionId":"s1","version":"2.1.322"}
