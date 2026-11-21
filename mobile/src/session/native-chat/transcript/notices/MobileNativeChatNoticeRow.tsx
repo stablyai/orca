@@ -206,12 +206,11 @@ export function MobileNativeChatNoticeRow({
   )
   switch (look.kind) {
     case 'auto-review-denied':
-    case 'settled-permission': {
-      const summary = nativeChatReviewNoticeSummary(look, names.agentName ?? look.agent, t)
+    case 'settled-permission':
       return (
         <View>
           <MobileNativeChatNoticeDisclosure
-            summary={summary}
+            summary={nativeChatReviewNoticeSummary(look, names.agentName ?? look.agent, t)}
             expanded={expanded}
             fontScale={fontScale}
             onPress={() => setExpanded((open) => !open)}
@@ -220,7 +219,6 @@ export function MobileNativeChatNoticeRow({
           {expanded ? diagnosticBody : null}
         </View>
       )
-    }
     case 'divider':
       return <MobileNativeChatDivider label={copy[look.label]} />
     case 'forked-from': {

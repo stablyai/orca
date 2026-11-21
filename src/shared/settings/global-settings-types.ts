@@ -12,7 +12,6 @@ import type { TaskProvider } from '../work-items/task-providers'
 import type { AppIconId } from '../app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from '../agent-launch/startup/claude-agent-teams-tmux-compat'
-import type { ClaudeFlaggedRequestAction } from '../agent-launch/startup/claude-flagged-request-launch'
 import type { TerminalCustomTheme } from '../terminal-themes/terminal-custom-themes'
 import type { GlobalWindowsRuntimeDefault } from '../execution-host/project-runtime-preference'
 import type { PersistedNativeChatSessionOptions } from '../native-chat/input/native-chat-session-options'
@@ -184,7 +183,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Experimental Claude Agent Teams; native panes use a tmux-compatible shim so teammate output stays on the normal PTY path. */
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   /** What Claude does when its safety classifier flags a request; absent is its switch to a fallback model. */
-  claudeFlaggedRequestAction?: ClaudeFlaggedRequestAction
+  claudeFlaggedRequestAction?: 'switch-model' | 'stop'
   terminalScrollbackRows: number
   /** Optional app-level proxy for Electron networking and local PTYs; empty preserves system/inherited proxy env. */
   httpProxyUrl?: string
