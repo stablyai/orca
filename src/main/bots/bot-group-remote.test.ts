@@ -23,12 +23,17 @@ const ATLAS = {
 
 /** A group runtime on G whose paired computer S takes bot questions unless told otherwise. */
 function remoteFixture(
-  options: { capabilities?: string[]; deliver?: () => Promise<unknown> } = {}
+  options: {
+    capabilities?: string[]
+    deliver?: () => Promise<unknown>
+    status?: () => Promise<void>
+  } = {}
 ) {
   const base = fixture()
   const delivered: Record<string, unknown>[] = []
   const call = vi.fn(async (_environmentId: string, method: string, params: unknown) => {
     if (method === 'status.get') {
+      await options.status?.()
       return {
         capabilities: options.capabilities ?? [
           ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
@@ -280,6 +285,54 @@ describe('a group with a bot on another computer', () => {
     await expect(
       base.groups.update({ groupId: group.id, revision: group.revision, botIds: [] })
     ).rejects.toThrow('This group needs at least one bot on this computer.')
+  })
+
+  it('lets members who came to share a name keep editing, but refuses a joining namesake', async () => {
+    const base = remoteFixture()
+    const group = await mixedRoom(base)
+    // Scout, here, is renamed to the remote member's name after it joined.
+    base.bots[0].name = 'Atlas'
+    const edited = await base.groups.update({
+      groupId: group.id,
+      revision: group.revision,
+      name: 'Crew two'
+    })
+    expect(edited.name).toBe('Crew two')
+    base.bots[1].name = 'atlas'
+    await expect(
+      base.groups.update({
+        groupId: group.id,
+        revision: edited.revision,
+        botIds: ['bot-0', 'bot-1']
+      })
+    ).rejects.toThrow('atlas is already in this group.')
+  })
+
+  it("checks a joining member's computer without holding the room's posts", async () => {
+    let release: () => void = () => {}
+    let checking = false
+    const base = remoteFixture({
+      status: () =>
+        checking ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve()
+    })
+    const group = await base.groups.create({ name: 'Crew', botIds: ['bot-0'] })
+    checking = true
+    const editing = base.groups.update({
+      groupId: group.id,
+      revision: group.revision,
+      botIds: ['bot-0'],
+      remoteBots: [ATLAS]
+    })
+    await vi.waitFor(() => expect(base.call).toHaveBeenCalled())
+    checking = false
+    await expect(
+      base.groups.send(
+        { groupId: group.id, revision: group.revision, messageId: randomUUID(), text: 'hi' },
+        { local: true }
+      )
+    ).resolves.toMatchObject({ turns: [{ botId: 'bot-0' }] })
+    release()
+    await expect(editing).resolves.toMatchObject({ remoteMembers: [{ botId: 'bot-0' }] })
   })
 
   it('keeps the remote roster through a local-only edit, and drops it when asked', async () => {

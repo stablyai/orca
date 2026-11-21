@@ -252,12 +252,14 @@ export function formatBotGroupAudience(
     return t('bots.groups.onlyWhenMentioned', 'Only when mentioned')
   }
   if (ids.length === 1) {
+    // A remote member is named by its key, so it is found among the room's members, not this
+    // computer's bots.
     return (
-      bots.find((bot) => bot.id === ids[0])?.name ??
+      roomNamed(group, bots).find((bot) => bot.id === ids[0])?.name ??
       t('bots.groups.unavailableBot', 'Unavailable bot')
     )
   }
-  return ids.length === group.members.length
+  return ids.length === roomMemberIds(group).length
     ? t('bots.groups.allBotsCount', 'All bots · {{count}}', { count: ids.length })
     : t('bots.groups.mentionedCount', '{{count}} mentioned', { count: ids.length })
 }

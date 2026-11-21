@@ -6,6 +6,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { stampBotHost } from '@/lib/bot-catalog-snapshot'
+import { stampBotGroupHost } from '@/lib/bot-group-catalog-snapshot'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 
 const mocks = vi.hoisted(() => ({
@@ -211,12 +212,44 @@ describe('BotGroupMembersDialog', () => {
     cleanup()
     render(
       <BotGroupMembersDialog
-        group={{ ...group, hostId: 'runtime:ws', members: [] }}
+        group={stampBotGroupHost('runtime:ws', { ...group, members: [] })}
         onClose={() => {}}
       />
     )
     expect(row('Fern').hasAttribute('disabled')).toBe(true)
     expect(row('Fern').getAttribute('aria-describedby')).toBe('bot-group-same-computer')
+  })
+
+  it('lists a remote member whose computer is offline, so it can be removed, and keeps a bot here', () => {
+    const remote = {
+      environmentId: 'ws',
+      botId: 'w',
+      chatSessionId: 'chat-w',
+      computer: 'Workstation',
+      joinedAfter: 0,
+      name: 'Willow',
+      avatar: null,
+      agent: 'claude' as const
+    }
+    // The workstation is offline: the catalog lists only this computer's bots.
+    render(
+      <BotGroupMembersDialog group={{ ...group, remoteMembers: [remote] }} onClose={() => {}} />
+    )
+    expect(row('Willow').getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(row('Fern'))
+    fireEvent.click(row('Moss'))
+    expect(screen.getByText('This group needs at least one bot on this computer.')).toBeTruthy()
+    expect(button('Save').disabled).toBe(true)
+    fireEvent.click(row('Fern'))
+    fireEvent.click(row('Willow'))
+    fireEvent.click(button('Save'))
+    expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.groups.update', {
+      groupId: 'group-1',
+      revision: 1,
+      name: 'Crew',
+      botIds: ['a'],
+      remoteBots: []
+    })
   })
 
   it("creates a paired server's group on that server and opens it there", async () => {

@@ -13,7 +13,7 @@ import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-seri
 import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { requireStructuredHost, startBotSession } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import { resolveRemoteMembers } from './bot-group-remote'
+import * as remote from './bot-group-remote'
 
 /** The bots behind these ids, refusing duplicates and bots this host cannot run in a room. */
 export function requireGroupBots(groups: BotGroupRuntime, ids: readonly string[]): Bot[] {
@@ -38,7 +38,7 @@ export async function createBotGroup(
   input: z.infer<typeof BotGroupCreate>
 ): Promise<BotGroup> {
   const bots = requireGroupBots(groups, input.botIds)
-  const remoteMembers = await resolveRemoteMembers(groups, bots, input.remoteBots)
+  const remoteMembers = await remote.resolveNewGroupRemoteMembers(groups, bots, input)
   const id = randomUUID()
   const members = await startMembers(groups, bots)
   let home: Awaited<ReturnType<typeof groups.runtime.bots.createGroupHome>> | null = null
@@ -67,10 +67,11 @@ export async function createBotGroup(
   }
 }
 
-export function updateBotGroup(
+export async function updateBotGroup(
   groups: BotGroupRuntime,
   input: z.infer<typeof BotGroupUpdate>
 ): Promise<BotGroup> {
+  const computers = await remote.checkRemoteComputers(groups, input)
   return runKeyedSerializedOperation(groups.queues, input.groupId, async () => {
     const previous = groups.store.get(input.groupId)
     if (previous.revision !== input.revision) {
@@ -80,7 +81,7 @@ export function updateBotGroup(
       groups,
       input.botIds ?? previous.members.map((member) => member.botId)
     )
-    const remoteMembers = await resolveRemoteMembers(groups, bots, input.remoteBots, previous)
+    const remoteMembers = remote.resolveRemoteMembers(groups, bots, input, previous, computers)
     const joiningBots = bots.filter(
       (bot) => !previous.members.some((member) => member.botId === bot.id)
     )

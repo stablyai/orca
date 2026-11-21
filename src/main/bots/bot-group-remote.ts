@@ -39,19 +39,41 @@ const REFUSED_BEFORE_ADMISSION = new Set([
   'request_mismatch'
 ])
 
+/** The computers a requested roster newly reaches, checked before the room's queue so a slow or
+ *  offline computer never holds the room's posts and Stop: each one's name, by environment. */
+export async function checkRemoteComputers(
+  groups: BotGroupRuntime,
+  { remoteBots: requested, groupId }: { remoteBots?: RemoteBots; groupId?: string }
+): Promise<Map<string, string>> {
+  const group = groupId === undefined ? undefined : groups.store.get(groupId)
+  const kept = new Set((group?.remoteMembers ?? []).map(botGroupRemoteKey))
+  const computers = new Map<string, string>()
+  for (const environmentId of new Set(
+    (requested ?? [])
+      .filter((bot) => !kept.has(botGroupRemoteKey(bot)))
+      .map((bot) => bot.environmentId)
+  )) {
+    computers.set(environmentId, (await requireRemoteComputer(groups, environmentId)).name)
+  }
+  return computers
+}
+
 /**
- * The remote roster a create or edit asks for, checked before anything is saved: a room on this
- * computer, at least one of its own bots, names that keep mentions unambiguous, and computers whose
- * Orca takes questions for their bots. A member who joins now sees the room's history to this point.
+ * The remote roster a create or edit saves: a room on this computer, at least one of its own bots,
+ * and a joining member whose name no other member has, so mentions stay unambiguous (members who
+ * already share a name, say after a rename, never block an edit). A member who joins now has seen
+ * the room up to its newest post.
  */
-export async function resolveRemoteMembers(
+export function resolveRemoteMembers(
   groups: BotGroupRuntime,
   localBots: readonly Bot[],
   /** The whole remote roster asked for; absent keeps the group's. */
-  requested: RemoteBots | undefined,
-  /** The group being edited: its members' computers were checked when they joined. */
-  group?: BotGroup
-): Promise<BotGroupRemoteMember[]> {
+  { remoteBots: requested }: { remoteBots?: RemoteBots },
+  /** The group being edited, as its queue holds it now. */
+  group: BotGroup | undefined,
+  /** From `checkRemoteComputers`, for the members this edit adds. */
+  computers: ReadonlyMap<string, string>
+): BotGroupRemoteMember[] {
   const remoteBots: RemoteBots | readonly BotGroupRemoteMember[] =
     requested ?? group?.remoteMembers ?? []
   if (remoteBots.length === 0) {
@@ -64,41 +86,63 @@ export async function resolveRemoteMembers(
   if (keys.size !== remoteBots.length) {
     throw new Error('Choose each bot once.')
   }
-  const names = new Set<string>()
-  for (const { name } of [...localBots, ...remoteBots]) {
-    const folded = name.toLocaleLowerCase()
-    if (names.has(folded)) {
-      throw new Error(
-        `${name} is already in this group. Members need different names so mentions stay unambiguous.`
-      )
-    }
-    names.add(folded)
-  }
   const kept = new Map(
     (group?.remoteMembers ?? []).map((member) => [botGroupRemoteKey(member), member])
   )
-  // A member joining now has seen the room up to its newest post.
-  const joinedAfter = group ? newestGroupSequence(groups, group) : 0
-  const computers = new Map<string, string>()
-  for (const environmentId of new Set(
-    remoteBots.filter((bot) => !kept.has(botGroupRemoteKey(bot))).map((bot) => bot.environmentId)
-  )) {
-    computers.set(environmentId, (await requireRemoteComputer(groups, environmentId)).name)
+  const wasLocal = new Set(group?.members.map((member) => member.botId))
+  const named = [
+    ...localBots.map((bot) => ({ name: bot.name, joining: !wasLocal.has(bot.id) })),
+    ...remoteBots.map((bot) => ({ name: bot.name, joining: !kept.has(botGroupRemoteKey(bot)) }))
+  ]
+  for (const [index, member] of named.entries()) {
+    const folded = member.name.toLocaleLowerCase()
+    if (
+      member.joining &&
+      named.some(
+        // The later of two joining namesakes is the one refused.
+        (other, at) =>
+          at !== index &&
+          (at < index || !other.joining) &&
+          other.name.toLocaleLowerCase() === folded
+      )
+    ) {
+      throw new Error(
+        `${member.name} is already in this group. Members need different names so mentions stay unambiguous.`
+      )
+    }
   }
-  return remoteBots.map(
-    (bot) =>
-      kept.get(botGroupRemoteKey(bot)) ?? {
-        environmentId: bot.environmentId,
-        botId: bot.botId,
-        chatSessionId: bot.chatSessionId,
-        computer: computers.get(bot.environmentId) ?? bot.environmentId,
-        joinedAfter,
-        name: bot.name,
-        avatar: bot.avatar,
-        ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
-        agent: bot.agent
-      }
-  )
+  const joinedAfter = group ? newestGroupSequence(groups, group) : 0
+  return remoteBots.map((bot) => {
+    const member = kept.get(botGroupRemoteKey(bot))
+    if (member) {
+      return member
+    }
+    const computer = computers.get(bot.environmentId)
+    if (!computer) {
+      throw new Error('The group changed. Reopen this dialog and try again.')
+    }
+    return {
+      environmentId: bot.environmentId,
+      botId: bot.botId,
+      chatSessionId: bot.chatSessionId,
+      computer,
+      joinedAfter,
+      name: bot.name,
+      avatar: bot.avatar,
+      ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
+      agent: bot.agent
+    }
+  })
+}
+
+/** A new group's remote roster, its computers checked first. */
+export async function resolveNewGroupRemoteMembers(
+  groups: BotGroupRuntime,
+  localBots: readonly Bot[],
+  input: { remoteBots?: RemoteBots }
+): Promise<BotGroupRemoteMember[]> {
+  const computers = await checkRemoteComputers(groups, input)
+  return resolveRemoteMembers(groups, localBots, input, undefined, computers)
 }
 
 /** Asking bots on other computers is the owner's own act at this computer's window. */

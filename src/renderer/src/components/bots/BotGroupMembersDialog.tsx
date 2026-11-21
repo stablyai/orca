@@ -21,7 +21,6 @@ import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseRoutableExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
@@ -30,6 +29,12 @@ import { useBotPurposes } from './use-bot-purposes'
 import { BotNameSuggestion, takeSuggestionOnTab } from './BotNameSuggestion'
 import { BotPickFilter, BotPickRow, BotPickRows, FILTER_FROM, filterByName } from './BotPickList'
 import { BotGroupFaceCluster } from './BotGroupFaceCluster'
+import {
+  groupMemberKeys,
+  mixable,
+  remoteRoster,
+  withUnlistedMembers
+} from './bot-group-members-dialog-roster'
 import {
   BOT_GROUP_NAME_MAX_LENGTH,
   botGroupMissing,
@@ -50,7 +55,9 @@ export function BotGroupMembersDialog({
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const allBots = useBots()
+  const listedBots = useBots()
+  // A remote member whose computer isn't listed now still shows, so it can be removed.
+  const allBots = useMemo(() => withUnlistedMembers(listedBots, group), [listedBots, group])
   // A room on this computer can also hold bots on paired computers; a paired server's room holds
   // only that server's bots. A paired web window's bots all live on its one server.
   const canMix = !isPairedWebClientWindow() && (!group || group.hostId === LOCAL_EXECUTION_HOST_ID)
@@ -78,7 +85,9 @@ export function BotGroupMembersDialog({
   const picked = order.flatMap((key) => allBots.find((bot) => botRefKey(bot) === key) ?? [])
   const pickHosts = new Set(picked.map((bot) => bot.hostId))
   // Bots on several computers make a room here, which needs one of this computer's own.
-  const needsLocal = pickHosts.size > 1 && !pickHosts.has(LOCAL_EXECUTION_HOST_ID)
+  const hostedHere = group ? group.hostId === LOCAL_EXECUTION_HOST_ID : pickHosts.size > 1
+  const needsLocal =
+    canMix && hostedHere && order.length > 0 && !pickHosts.has(LOCAL_EXECUTION_HOST_ID)
   const suggestion = name ? null : suggestGroupName(picked.map((bot) => bot.name))
   const missing = needsLocal
     ? t('bots.groups.needsLocalBot', 'This group needs at least one bot on this computer.')
@@ -269,67 +278,6 @@ export function BotGroupMembersDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-/** A room here can hold this computer's bots and paired computers' bots, never an SSH host's. */
-function mixable(hostId: ExecutionHostId): boolean {
-  const parsed = parseRoutableExecutionHostId(hostId)
-  return parsed?.kind === 'local' || parsed?.kind === 'runtime'
-}
-
-/** The group's members by host-qualified key, local ones first as saved, then remote ones. */
-function groupMemberKeys(group: BotGroup): string[] {
-  return [
-    ...group.members.map((member) => botRefKey({ hostId: group.hostId, id: member.botId })),
-    ...(group.remoteMembers ?? []).map((member) =>
-      botRefKey({ hostId: `runtime:${member.environmentId}`, id: member.botId })
-    )
-  ]
-}
-
-/** The picked bots on paired computers, as the room here saves them. A member whose computer is
- *  offline isn't listed; it stays unless unpicked, so an edit never drops it silently. */
-function remoteRoster(
-  order: readonly string[],
-  allBots: readonly Bot[],
-  group: BotGroup | undefined
-) {
-  return order.flatMap((key) => {
-    const bot = allBots.find((entry) => botRefKey(entry) === key)
-    const parsed = parseRoutableExecutionHostId(bot?.hostId)
-    if (bot && parsed?.kind === 'runtime') {
-      // Questions go to the bot's own Home Chat, so one that never chatted has nowhere to take them.
-      if (!bot.chatSessionId) {
-        throw new Error(
-          translate(
-            'bots.groups.remoteNeedsChat',
-            'Open a chat with {{name}} once, then add it to the group.',
-            { name: bot.name }
-          )
-        )
-      }
-      return [
-        {
-          environmentId: parsed.environmentId,
-          botId: bot.id,
-          chatSessionId: bot.chatSessionId,
-          name: bot.name,
-          avatar: bot.avatar,
-          ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
-          agent: bot.agent
-        }
-      ]
-    }
-    const kept = bot
-      ? undefined
-      : group?.remoteMembers?.find(
-          (member) =>
-            botRefKey({ hostId: `runtime:${member.environmentId}`, id: member.botId }) === key
-        )
-    return kept
-      ? [(({ computer: _computer, joinedAfter: _joinedAfter, ...rest }) => rest)(kept)]
-      : []
-  })
 }
 
 /** Opens a group just made. It exists now, so a failed open is a toast with Retry: pressing
