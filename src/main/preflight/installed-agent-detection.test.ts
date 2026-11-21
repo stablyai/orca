@@ -1,9 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-const host = vi.hoisted(() => ({ wsl: false, onPath: new Set<string>() }))
+const host = vi.hoisted(() => ({
+  wsl: false,
+  onPath: new Set<string>(),
+  outsidePath: new Map<string, string>()
+}))
 // Nothing on PATH unless a case puts it there: only Orca's own copies can make an agent installed.
 vi.mock('./agent-command-detection', () => ({
-  detectAgentCommandsOnHost: async () => new Set(host.onPath)
+  detectAgentCommandLocationsOnHost: async () => ({
+    found: new Set([...host.onPath, ...host.outsidePath.keys()]),
+    outsidePath: new Map(host.outsidePath)
+  })
 }))
 vi.mock('../ipc/preflight/preflight-runtime-target', () => ({
   getPreflightWslTarget: () => (host.wsl ? { distro: 'Ubuntu' } : null)
@@ -16,6 +23,7 @@ const { provideInstalledManagedAgents } = await import('./managed-agent-detectio
 afterEach(() => {
   host.wsl = false
   host.onPath = new Set()
+  host.outsidePath = new Map()
   provideInstalledManagedAgents(async () => [])
 })
 
@@ -48,4 +56,17 @@ it("reports the full path to Orca's copy only where the user has no CLI of their
   })
   host.wsl = true
   expect((await detectInstalledAgentInventory()).managedAgentCommands).toBeUndefined()
+})
+
+it("runs the user's own CLI by full path when it was found only outside PATH", async () => {
+  host.outsidePath = new Map([['claude', '/Users/a/.local/bin/claude']])
+
+  expect(await detectInstalledAgentInventory()).toEqual({
+    agents: ['claude'],
+    managedAgentCommands: { claude: '/Users/a/.local/bin/claude' }
+  })
+  expect(
+    (await detectInstalledAgentInventory(undefined, { agentCmdOverrides: { claude: 'my-claude' } }))
+      .managedAgentCommands
+  ).toEqual({})
 })
