@@ -10,5 +10,7 @@ export const FORK_FEATURES = {
   /** A bot's row counts its unread chats. */
   sidebarUnreadChatCount: true,
   /** "Change photo…" in a bot's row menu. */
-  sidebarChangePhoto: true
+  sidebarChangePhoto: true,
+  /** Phase 4: a bot the owner lets build a team creates bots from its own offers. */
+  agentTeams: true
 } as const

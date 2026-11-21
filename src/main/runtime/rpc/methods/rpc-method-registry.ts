@@ -104,6 +104,8 @@ import { GOOGLE_SETUP_METHODS } from './bots-google-setup'
 import { BOT_REQUEST_OUTCOME_METHOD } from './bots-request-outcome'
 import { WORKTREE_RELEASE_BOT_HOME_METHOD } from './bots-home-release'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
+// orca-fork: agent teams
+import { AGENT_TEAM_METHODS } from '../../../orca-fork/agent-teams/agent-team-methods'
 import { BOT_TEMPLATE_METHODS } from './bots-templates'
 import { BOT_IMPORT_METHODS } from './bots-import'
 import { BOT_SHARE_METHODS } from './bots-share'
@@ -171,6 +173,7 @@ const BOT_RPC_METHODS = [
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,
+  ...AGENT_TEAM_METHODS, // orca-fork: agent teams
   ...BOT_TEMPLATE_METHODS,
   ...BOT_IMPORT_METHODS,
   ...BOT_SHARE_METHODS,

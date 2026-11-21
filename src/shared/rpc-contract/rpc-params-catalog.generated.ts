@@ -619,6 +619,7 @@ import {
   OrcaAccountSignInWaitParams,
   OrcaAccountUnsubscribeParams
 } from './orca-account-params'
+import { AgentTeamsGet, AgentTeamsSet } from './orca-fork-agent-teams-params'
 import { ApprovalAnswerParams } from './orchestration/orchestration-approval-answer-params'
 import {
   FederationDispatchParams,
@@ -1807,6 +1808,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'orcaAccount.status': null,
   'orcaAccount.subscribe': null,
   'orcaAccount.unsubscribe': OrcaAccountUnsubscribeParams,
+  'orcaFork.teams.get': AgentTeamsGet,
+  'orcaFork.teams.set': AgentTeamsSet,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.abortCatalogByReference': OrcadMigrationCatalogReferenceParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,

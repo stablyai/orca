@@ -29545,6 +29545,10 @@
       "unreadChats_other": "{{count}} unread chats",
       "photoChanged": "Photo changed",
       "changePhoto": "Change photo…"
+    },
+    "teams": {
+      "builder": "Can build a team",
+      "builderDetail": "Creates the bots it proposes without asking you (up to {{cap}} a day) and shares a group with them. They hand work to each other without your approval."
     }
   }
 }

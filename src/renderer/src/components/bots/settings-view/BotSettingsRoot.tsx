@@ -60,6 +60,8 @@ import { useBotComputerName } from './BotComputerPage'
 import type { BotSettingsPage } from './bot-settings-place'
 import { SettingsControlsOffContext, SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 import { BotItemsSettingsGroup } from './BotItemsSettingsGroup'
+// orca-fork: agent teams
+import { BotTeamBuilderRow } from '../../orca-fork/agent-teams/BotTeamBuilderRow'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
@@ -364,6 +366,8 @@ export function BotSettingsRoot({
             />
           }
         />
+        {/* orca-fork: agent teams */}
+        <BotTeamBuilderRow bot={bot} />
       </SettingsInsetGroup>
       {lookAroundSupported(bot.agent) ? (
         <ScheduleGroup bot={bot} update={update} open={open} />
