@@ -48,12 +48,15 @@ export function mergeNamedBotItems(
     same &&= kept === item
     return kept ? [kept] : []
   })
-  // A Closed item new to the read joins it only above where its first page ends: one below belongs to
-  // a later page (its copy reaches loaded pages through this step).
+  // A Closed item stays in or joins the read only above where its first page ends: one below (new to
+  // it, or moved down by a host clock set back) belongs to a later page, and its copy reaches loaded
+  // pages through this step. So the page's new end never passes its old one.
   const firstPageEnd = botItemCursorPlace(previous.nextClosedCursor)
-  const added = [...fresh.values()].filter(
-    (item) => !isClosedItem(item) || !firstPageEnd || botItemReaches(item, firstPageEnd)
-  )
+  const onFirstPage = (item: BotItem) =>
+    !isClosedItem(item) || !firstPageEnd || botItemReaches(item, firstPageEnd)
+  const added = [...fresh.values()].filter(onFirstPage)
+  const movedDown = items.some((item) => asked.has(item.uid) && !onFirstPage(item))
+  same &&= !movedDown
   const counts = reuseEqualJson(previous.counts, named.counts)
   // A named item this read didn't hold may sit in a loaded Closed page: its step still tells them.
   const elsewhere = uids.some((uid) => !previous.items.some((item) => item.uid === uid))
@@ -63,7 +66,7 @@ export function mergeNamedBotItems(
       : stepFrom(previous, copies, { ...previous, seenEventId: named.seenEventId })
   }
   // In the host's order (open, then Closed; each newest activity first), as a whole read has them.
-  const ordered = [...items, ...added].sort(
+  const ordered = [...items.filter(onFirstPage), ...added].sort(
     (a, b) =>
       Number(isClosedItem(a)) - Number(isClosedItem(b)) ||
       b.lastActivityAt - a.lastActivityAt ||
