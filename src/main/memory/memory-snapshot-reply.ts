@@ -26,6 +26,10 @@ function jsonStringBytes(value: string | null | undefined): number {
   return value ? 2 + jsonStringContentBytes(value) : 4
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 /** Exact `JSON.stringify` size of plain data, built from no string; past `limit` it stops and returns Infinity. */
 function jsonBytes(value: unknown, limit: number): number {
   let bytes = 0
@@ -46,10 +50,11 @@ function jsonBytes(value: unknown, limit: number): number {
           return false
         }
       }
-    } else if (node !== null && typeof node === 'object') {
+    } else if (isJsonRecord(node)) {
       let fields = 0
       bytes += 2
-      for (const [key, item] of Object.entries(node)) {
+      for (const key in node) {
+        const item = Object.hasOwn(node, key) ? node[key] : undefined
         if (item === undefined || typeof item === 'function' || typeof item === 'symbol') {
           continue
         }

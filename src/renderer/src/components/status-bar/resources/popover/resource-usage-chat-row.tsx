@@ -9,8 +9,35 @@ import type { ChatAgentMemory } from '../../../../../../shared/diagnostics/proce
 import { MetricPair, ROW_TRAILING_GUTTER_CLS } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
 
+/** A workspace's chat rows; samples share each workspace's chat array, so unrelated updates skip them. */
+export const ChatRows = React.memo(function ChatRows({
+  chats,
+  worktreeId,
+  runtimeHostId,
+  unplaced,
+  onOpenChat
+}: {
+  chats: readonly ChatAgentMemory[]
+  worktreeId: string
+  runtimeHostId?: string
+  /** This window can't reach the workspace, so its chats are read-only. */
+  unplaced?: true
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
+}): React.JSX.Element {
+  const open = unplaced
+    ? undefined
+    : (agentSessionId: string): void => onOpenChat(worktreeId, agentSessionId, runtimeHostId)
+  return (
+    <>
+      {chats.map((chat) => (
+        <ChatRow key={chat.agentSessionId} chat={chat} onOpen={open} />
+      ))}
+    </>
+  )
+})
+
 /** A chat agent and the processes running under it; it stops from the chat, so the row has no kill action. */
-export function ChatRow({
+function ChatRow({
   chat,
   onOpen
 }: {

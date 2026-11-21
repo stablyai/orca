@@ -13,7 +13,7 @@ import type {
 } from '../workspace-attribution/resource-usage-merge-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
-import { ChatRow } from './resource-usage-chat-row'
+import { ChatRows } from './resource-usage-chat-row'
 import { firstRuntimePaneTitle } from '../workspace-attribution/resource-session-labels'
 import { useAppStore } from '@/store/index'
 
@@ -283,19 +283,15 @@ export function WorktreeRow({
         </div>
       </div>
 
-      {!isCollapsed &&
-        worktree.chats?.map((chat) => (
-          <ChatRow
-            key={chat.agentSessionId}
-            chat={chat}
-            onOpen={
-              worktree.unplaced
-                ? undefined
-                : (agentSessionId) =>
-                    onOpenChat(worktree.worktreeId, agentSessionId, worktree.runtimeHostId)
-            }
-          />
-        ))}
+      {!isCollapsed && worktree.chats && (
+        <ChatRows
+          chats={worktree.chats}
+          worktreeId={worktree.worktreeId}
+          runtimeHostId={worktree.runtimeHostId}
+          unplaced={worktree.unplaced}
+          onOpenChat={onOpenChat}
+        />
+      )}
       {!isCollapsed &&
         worktree.sessions.map((session) => (
           <SessionRow

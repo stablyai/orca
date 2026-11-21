@@ -195,11 +195,11 @@ export function spawnManagedProviderProcess(
   // Hosted launches publish their pid only once the agent host starts them.
   void awaitProviderChildSpawn(child).then(() => {
     if (child.pid !== undefined && !agentMemoryRetired && !child.numericIdentityRetired) {
-      // Once the leader exits its pid can be reused while cleanup still runs, so it stops counting.
+      // Once the leader exits, or its outcome is lost, its pid can be reused while cleanup still runs.
       releaseAgentMemory = registerAgentProcess(
         child.ownerPid ?? child.pid,
         child.pid,
-        () => child.leaderExited !== true
+        () => child.leaderExited !== true && child.numericIdentityRetired !== true
       )
     }
   })
