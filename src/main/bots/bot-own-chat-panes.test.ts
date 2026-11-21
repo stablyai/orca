@@ -59,7 +59,7 @@ describe('readBotOwnChatPanes', () => {
     expect(tabReads).toHaveLength(botCount)
   })
 
-  it('leaves out a worker known only by its Dispatch row, and one only by its terminal row', async () => {
+  it('leaves out a worker that lost its identity (listed as ended), and one held only by its durable terminal row', async () => {
     const sides = Array.from({ length: 3 }, (_, i) => homeRecord(`chat-side-${i}`, `Side ${i}`))
     const lost = homeRecord('chat-lost-worker', 'Lost worker')
     const restarted = homeRecord('chat-restarted-worker', 'Restarted worker')

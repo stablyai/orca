@@ -16,6 +16,7 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
   lineageLiveSession,
+  resolveLineageRunningSession,
   type AgentSessionRecordReader
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
@@ -220,12 +221,14 @@ export function buildBotChatBase(
       const row = botChatBaseRow(ctx, inputs.bot, record, partial)
       return row ? [{ record, row }] : []
     })
-    // One party read for the chats whose end the base checks, not two lookups for each.
+    // One party read for the chats whose end the base checks; another host's chat, or a lineage that
+    // can't be verified, is judged without this host's rows.
     const parties = readSessionParties(
       ctx.db,
-      rows.flatMap(({ row }) =>
-        isOrcaSessionId(row.id) && store.getRecord(row.id) ? [row.id] : []
-      )
+      rows.flatMap(({ row }) => {
+        const running = resolveLineageRunningSession(store, row.id)
+        return running.kind === 'here' && isOrcaSessionId(running.sessionId) ? [row.id] : []
+      })
     )
     for (const { record, row } of rows) {
       const chat = botChatBaseChatOfRow(parties, store, record, row, partial)
