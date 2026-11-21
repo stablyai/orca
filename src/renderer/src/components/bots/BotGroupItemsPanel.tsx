@@ -22,7 +22,7 @@ import { BotItemsList } from './items/BotItemsList'
 import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
-import { botItemWalkReturnRow } from './items/bot-item-walk'
+import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotGroupItems } from './use-bot-group-items'
 

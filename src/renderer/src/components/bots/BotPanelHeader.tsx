@@ -27,6 +27,7 @@ import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-sett
 import { botErrorMessage } from './bot-presentation'
 import { setBotSettingsPlace } from './settings-view/bot-settings-place'
 import { BotPictureButton } from './BotPictureButton'
+import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { BotShareFlow } from './sharing/BotShareFlow'
 import { formatWaitTime } from './bot-wait-copy'
@@ -88,12 +89,14 @@ function BotNowLine({
   bot,
   home,
   quiet,
-  needsYou
+  needsYou,
+  offline
 }: {
   bot: Bot
   home: FolderWorkspace
   quiet: BotQuietFacts
   needsYou: number
+  offline: boolean
 }): React.JSX.Element {
   // Paused and an asking chat's words still come first; its count is the Items tab's.
   const rowLine = useBotRowLine(bot, home, needsYou)
@@ -101,16 +104,27 @@ function BotNowLine({
   // A running automation is live work: its line beats another session's stop, as its mark does.
   const limit = quiet.running === null ? rowLine.limit : null
   if (line || limit) {
-    return <BotRowLineText line={line} limit={limit} now={now} />
+    return (
+      <BotPanelHostLine hostId={bot.hostId} offline={offline}>
+        {() => <BotRowLineText line={line} limit={limit} now={now} />}
+      </BotPanelHostLine>
+    )
   }
   const { text, short } = botQuietLine(quiet, now)
-  return short === null ? (
-    <>{text}</>
-  ) : (
-    <>
-      <span className="@max-[284px]:hidden">{text}</span>
-      <span className="hidden @max-[284px]:inline">{short}</span>
-    </>
+  // A server's name leaves room for only the short form; hovering shows the whole line.
+  return (
+    <BotPanelHostLine hostId={bot.hostId} offline={offline} title={text}>
+      {(compact) =>
+        short === null || compact ? (
+          (short ?? text)
+        ) : (
+          <>
+            <span className="@max-[284px]:hidden">{text}</span>
+            <span className="hidden @max-[284px]:inline">{short}</span>
+          </>
+        )
+      }
+    </BotPanelHostLine>
   )
 }
 
@@ -173,7 +187,8 @@ export function BotPanelHeader({
           avatarClassName="size-9 rounded-[9px] text-base"
           className="rounded-[9px]"
         >
-          {bot.paused ? null : (
+          {/* A down server's bot shows no live state, as its sidebar row doesn't. */}
+          {bot.paused || offline ? null : (
             <span className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
               {now.needsYou > 0 || now.working > 0 || quiet.running !== null || !home ? (
                 <AgentStateDot
@@ -195,9 +210,19 @@ export function BotPanelHeader({
       </fieldset>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold leading-5">{bot.name}</div>
-        <div className="truncate text-xs leading-4 text-muted-foreground">
-          {home ? <BotNowLine bot={bot} home={home} quiet={quiet} needsYou={now.needsYou} /> : null}
-        </div>
+        {home ? (
+          <BotNowLine
+            bot={bot}
+            home={home}
+            quiet={quiet}
+            needsYou={now.needsYou}
+            offline={offline}
+          />
+        ) : (
+          <BotPanelHostLine hostId={bot.hostId} offline={offline}>
+            {() => null}
+          </BotPanelHostLine>
+        )}
       </div>
       {filter}
       <Tooltip>

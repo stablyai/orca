@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
+import { getLocalWorktreePathAccess, removeLocalWorktreePath } from './local-worktree-filesystem'
 import '../../filesystem/host-tree-removal'
 import { isWorktreePathMissing } from './worktree-removal-safety'
 
@@ -86,6 +86,42 @@ describe('local worktree filesystem runtime access', () => {
       await expect(isWorktreePathMissing('/mnt/c/repo/missing', access.statPath)).resolves.toBe(
         true
       )
+    })
+  })
+
+  it('does not report a WSL checkout removed when only its marker vanished mid-delete', async () => {
+    await withPlatform('win32', async () => {
+      const results = [
+        {
+          code: 1,
+          stdout: '',
+          stderr: "find: '/mnt/c/repo/checkout/.git': No such file or directory\n"
+        },
+        { code: 0, stdout: 'directory\n', stderr: '' }
+      ]
+      runProcessMock.mockImplementation(async () => ({
+        signal: null,
+        timedOut: false,
+        ...results.shift()
+      }))
+
+      await expect(
+        removeLocalWorktreePath('/mnt/c/repo/checkout', { wslDistro: 'Ubuntu' }, undefined, {
+          markerLast: true
+        })
+      ).rejects.toThrow('No such file or directory')
+    })
+  })
+
+  it('reports a WSL checkout removed when its root is gone', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(1, "rmdir: failed to remove '/mnt/c/repo/checkout': No such file or directory\n")
+
+      await expect(
+        removeLocalWorktreePath('/mnt/c/repo/checkout', { wslDistro: 'Ubuntu' }, undefined, {
+          markerLast: true
+        })
+      ).resolves.toBeUndefined()
     })
   })
 

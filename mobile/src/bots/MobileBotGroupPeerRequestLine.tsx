@@ -19,6 +19,12 @@ function peerLineText(t: Translate, line: BotGroupPeerLine): string {
       return t('bots.groups.peerReplyRead', "{{reader}} read {{peer}}'s reply", line)
     case 'followed':
       return t('bots.groups.peerFollowedUp', '{{bot}} followed up', line)
+    case 'paused':
+      return t(
+        'bots.groups.handoffsPaused',
+        'Paused after {{count}} hand-offs. Reply to continue.',
+        line
+      )
   }
 }
 

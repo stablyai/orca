@@ -5,6 +5,7 @@ import {
   waitForPendingWorktreeRemoval,
   type RemovalSettlement
 } from './worktree-removal-settlement'
+export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal-gitdir-identity'
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
@@ -104,7 +105,7 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force'
+      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'gitdir'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {

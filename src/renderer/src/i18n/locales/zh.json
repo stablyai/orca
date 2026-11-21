@@ -965,7 +965,6 @@
       "permissions": "权限",
       "permissionsDescription": "新会话的初始权限。超出此权限的操作会在会话中请求批准。",
       "active": "已启用",
-      "activeDescription": "回复消息并运行自动化。",
       "memoryFact": "记忆",
       "cancel": "取消",
       "save": "保存",
@@ -26963,7 +26962,6 @@
       "publishing": "正在发布…",
       "previewChanged": "预览已更改。请在发布前检查。",
       "manageSharing": "管理分享…",
-      "sharedUpdated": "已分享 · 更新于 {{date}}",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
       "view": "查看",
@@ -27195,11 +27193,8 @@
       "yesterday": "昨天",
       "lastLooked": "上次查看于 {{when}}",
       "lastTidied": "上次整理于 {{when}}",
-      "memoryFiles_one": "MEMORY.md 和 {{count}} 个主题文件",
-      "memoryFiles_other": "MEMORY.md 和 {{count}} 个主题文件",
       "toolsFrom": "来自 {{agent}} 的 {{count}} 个工具",
       "toolsMore": "另有 {{count}} 个工具来自 {{agent}}",
-      "withAccess": "{{service}} 中有 {{people}} 人拥有访问权限",
       "onlyYou": "仅你"
     },
     "newHomeChat": {
@@ -27319,14 +27314,11 @@
       "copyPath": "复制路径",
       "topicFiles": "主题文件",
       "schedule": "计划",
-      "automationsFoot": "自动化位于 Home › 自动化。",
       "soulAndMemory": "灵魂与记忆",
       "access": "访问权限",
       "whoCanAsk": "谁可以提问",
-      "chatDefault": "你的聊天默认设置",
       "name": "机器人名称",
       "rename": "重命名 {{name}}",
-      "share": "分享…",
       "agent": "智能体和模型",
       "computer": "电脑",
       "deleteBot": "删除机器人…",
@@ -27345,10 +27337,24 @@
       "items": "条目",
       "itemsStale": {
         "days": "{{days}} 天",
-        "detail": "无活动达到此时长后标记为“长期无活动”。计划中的条目使用 3 倍时长。",
         "never": "永不",
-        "title": "多久后将条目标记为“长期无活动”"
-      }
+        "title": "多久后将条目标记为“长期无活动”",
+        "shortTitle": "多久算过期"
+      },
+      "memoryFiles_other": "{{count}} 个文件",
+      "lookAroundShort": {
+        "every4h": "4 小时",
+        "every2h": "2 小时",
+        "twiceDaily": "每天两次",
+        "mornings": "每天早上"
+      },
+      "tidyUpShort": {
+        "night": "每晚",
+        "week": "每周"
+      },
+      "youAndOthers_other": "你和另外 {{count}} 人",
+      "shareAction": "分享",
+      "sharingOn": "开"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "仅按计划运行：退出 Orca 登录期间，其事件已暂停",
