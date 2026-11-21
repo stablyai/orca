@@ -19,6 +19,8 @@ import {
   type BotItemFilterScope
 } from './items/BotItemsFilter'
 import { BotItemsList } from './items/BotItemsList'
+import { BotItemFaceSrcs } from './items/BotItemRowFace'
+import { useBotAvatarSrcs } from './bot-avatar-image'
 import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
@@ -97,6 +99,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   }
   const clock = useNow(60_000)
   const merged = useBotGroupItems(members, filter, clock)
+  const faceSrcs = useBotAvatarSrcs(members)
   const walk = useBotItemWalk(merged.list, `group:${group.id}`)
   const openItem = (uid: string): void => {
     setReturnTo(null)
@@ -202,7 +205,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   }
   // The readers stay mounted in one place across list and item: the item's walk and bot come from them.
   return (
-    <>
+    <BotItemFaceSrcs.Provider value={faceSrcs}>
       {merged.readers}
       {walk.uid && openBot ? (
         <BotItemPane
@@ -284,6 +287,6 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
           </fieldset>
         </div>
       )}
-    </>
+    </BotItemFaceSrcs.Provider>
   )
 }

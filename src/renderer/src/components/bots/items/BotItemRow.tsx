@@ -51,8 +51,6 @@ type BotItemRowProps = {
   tabbable?: boolean
   /** Announced as a list item itself; false when its window's slot is the item. */
   listItem?: boolean
-  /** Mounted as its window scrolls. */
-  windowed?: boolean
 }
 
 // Whether an item has a live worker, worked out once per item object: the comparison and the render
@@ -142,8 +140,7 @@ function BotItemRowView({
   face = null,
   place = null,
   tabbable = true,
-  listItem = true,
-  windowed = false
+  listItem = true
 }: BotItemRowProps): React.JSX.Element {
   const t = useTranslate()
   const closed = item.status === 'done' || item.status === 'canceled'
@@ -182,7 +179,7 @@ function BotItemRowView({
           }}
         />
       </span>
-      {face ? <BotItemRowFace bot={face} windowed={windowed} /> : null}
+      {face ? <BotItemRowFace bot={face} /> : null}
       <BotRowHoverCard
         card={question ? <BotItemQuestionCard title={item.title} question={question} /> : null}
       >

@@ -284,7 +284,7 @@ function BotItemGroup({
   if (count === 0 && outside === 0) {
     return null
   }
-  const row = (item: BotItem, tabbable?: boolean, windowed = false): React.JSX.Element => (
+  const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
     <BotItemRow
       key={item.uid}
       item={item}
@@ -302,7 +302,6 @@ function BotItemGroup({
       // In a window, the window's slot is the list item and the Tab stop is chosen there.
       tabbable={tabbable}
       listItem={tabbable === undefined}
-      windowed={windowed}
     />
   )
   const fresh =
@@ -395,8 +394,7 @@ function BotItemGroup({
             placed={owner.placed ?? null}
             viewport={viewport}
             label={botItemGroupName(id, t)}
-            renderRow={(item, tabbable, windowed) => row(item, tabbable, windowed)}
-            faces={owner.faces}
+            renderRow={row}
             backUid={backItem?.uid ?? null}
             onBackFocused={backFocused}
             disabled={offline}

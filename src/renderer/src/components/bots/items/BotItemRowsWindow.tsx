@@ -17,7 +17,6 @@ import {
   uniformGeometry
 } from './bot-item-rows-geometry'
 import { focusFellToNothing } from '../use-needs-you-focus'
-import { BotItemFaceFailuresContext, useBotItemFaceFailures } from './bot-item-face-reads'
 
 /** Drawn past each edge of the panel, so a scroll shows rows already there. */
 const OVERSCAN_PX = 300
@@ -91,7 +90,6 @@ export function BotItemRowsWindow({
   viewport,
   label,
   renderRow,
-  faces = false,
   backUid,
   onBackFocused,
   disabled = false
@@ -103,10 +101,8 @@ export function BotItemRowsWindow({
   viewport: BotItemsViewport
   /** The group's name, which the list is announced by. */
   label: string
-  /** `tabbable`: the row is in the Tab order; `windowed`: it mounts and unmounts as the panel scrolls. */
-  renderRow: (item: BotItem, tabbable: boolean, windowed: boolean) => React.ReactNode
-  /** Rows show their bot's face, whose pictures read as the rows mount. */
-  faces?: boolean
+  /** `tabbable`: the row is in the Tab order. */
+  renderRow: (item: BotItem, tabbable: boolean) => React.ReactNode
   /** Back's row: drawn until it has focus, then `onBackFocused`. */
   backUid: string | null
   onBackFocused: () => void
@@ -123,7 +119,6 @@ export function BotItemRowsWindow({
     setWindowed(!windowed)
   }
   const all = windowed ? count <= ALL_ROWS / 2 : count <= ALL_ROWS
-  const faceFailures = useBotItemFaceFailures(faces)
   // Heights follow from which rows have a chat line: in one bot's list none do, so positions are a count.
   // Keyed by those heights alone, so content changes leave the positions as they were.
   const tallKey = useMemo(
@@ -389,69 +384,67 @@ export function BotItemRowsWindow({
   // A long group is a grid, the role assistive tech knows may be partly drawn: it says how many rows
   // there are and which one this is, and moves between rows with the arrows.
   return (
-    <BotItemFaceFailuresContext.Provider value={faceFailures}>
-      <div
-        ref={container}
-        role={all ? 'list' : 'grid'}
-        aria-label={label}
-        aria-rowcount={all ? undefined : count}
-        className="-mb-0.5"
-        onKeyDown={onKeyDown}
-      >
-        {drawn.map((index, at) => {
-          const item = items[index]!
-          const gap = geometry.offset(index) - (at === 0 ? 0 : geometry.offset(drawn[at - 1]! + 1))
-          return (
-            <Fragment key={item.uid}>
-              <BotItemRowsGap key="gap" height={gap} />
-              <div
-                key="row"
-                role={all ? 'listitem' : 'row'}
-                aria-rowindex={all ? undefined : index + 1}
-                data-bot-item-index={index}
-                data-bot-item-row={item.uid}
-                data-bot-item-tall={tallKey[index] === '1' ? '' : undefined}
-                tabIndex={rowsTakeFocus ? (index === tabStop ? 0 : -1) : undefined}
-                className="pb-0.5"
-                ref={
-                  index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined
+    <div
+      ref={container}
+      role={all ? 'list' : 'grid'}
+      aria-label={label}
+      aria-rowcount={all ? undefined : count}
+      className="-mb-0.5"
+      onKeyDown={onKeyDown}
+    >
+      {drawn.map((index, at) => {
+        const item = items[index]!
+        const gap = geometry.offset(index) - (at === 0 ? 0 : geometry.offset(drawn[at - 1]! + 1))
+        return (
+          <Fragment key={item.uid}>
+            <BotItemRowsGap key="gap" height={gap} />
+            <div
+              key="row"
+              role={all ? 'listitem' : 'row'}
+              aria-rowindex={all ? undefined : index + 1}
+              data-bot-item-index={index}
+              data-bot-item-row={item.uid}
+              data-bot-item-tall={tallKey[index] === '1' ? '' : undefined}
+              tabIndex={rowsTakeFocus ? (index === tabStop ? 0 : -1) : undefined}
+              className="pb-0.5"
+              ref={
+                index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined
+              }
+              // A short group draws and tabs every row, so focus moving through it needs no state.
+              onFocus={() => {
+                if (all) {
+                  return
                 }
-                // A short group draws and tabs every row, so focus moving through it needs no state.
-                onFocus={() => {
-                  if (all) {
-                    return
-                  }
-                  const pick = { uid: item.uid, at: index }
-                  // Focus moving between a row's own controls changes nothing here.
-                  setFocused((prev) => (samePick(prev, pick) ? prev : pick))
-                  setStop((prev) => (samePick(prev, pick) ? prev : pick))
-                }}
-                onBlur={(event) => {
-                  // Focus going nowhere (the row removed, or a click on no control) keeps the row as the
-                  // one holding focus, so a row leaving hands focus to the next.
-                  if (
-                    !all &&
-                    document.hasFocus() &&
-                    event.relatedTarget !== null &&
-                    !event.currentTarget.contains(event.relatedTarget)
-                  ) {
-                    setFocused(null)
-                  }
-                }}
-              >
-                {/* The cell wraps the row at every size, so crossing into a grid remounts nothing. */}
-                <div role={all ? undefined : 'gridcell'}>
-                  {renderRow(item, all || index === tabStop, !all)}
-                </div>
+                const pick = { uid: item.uid, at: index }
+                // Focus moving between a row's own controls changes nothing here.
+                setFocused((prev) => (samePick(prev, pick) ? prev : pick))
+                setStop((prev) => (samePick(prev, pick) ? prev : pick))
+              }}
+              onBlur={(event) => {
+                // Focus going nowhere (the row removed, or a click on no control) keeps the row as the
+                // one holding focus, so a row leaving hands focus to the next.
+                if (
+                  !all &&
+                  document.hasFocus() &&
+                  event.relatedTarget !== null &&
+                  !event.currentTarget.contains(event.relatedTarget)
+                ) {
+                  setFocused(null)
+                }
+              }}
+            >
+              {/* The cell wraps the row at every size, so crossing into a grid remounts nothing. */}
+              <div role={all ? undefined : 'gridcell'}>
+                {renderRow(item, all || index === tabStop)}
               </div>
-            </Fragment>
-          )
-        })}
-        <BotItemRowsGap
-          height={geometry.total - (drawn.length ? geometry.offset(drawn.at(-1)! + 1) : 0)}
-        />
-      </div>
-    </BotItemFaceFailuresContext.Provider>
+            </div>
+          </Fragment>
+        )
+      })}
+      <BotItemRowsGap
+        height={geometry.total - (drawn.length ? geometry.offset(drawn.at(-1)! + 1) : 0)}
+      />
+    </div>
   )
 }
 
