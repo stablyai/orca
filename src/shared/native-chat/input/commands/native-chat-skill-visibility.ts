@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from '../../../agent-session/agent-session-wire'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../skills/discovery/skills'
+import type { DiscoveredSlashCommand } from '../../../skills/discovery/custom-slash-commands'
 import { getNativeChatAgentProfile, readsSkillSource } from './native-chat-agent-profiles'
 import { classifyPickerCommands } from '../composer/native-chat-picker-items'
 import {
@@ -33,6 +34,20 @@ export function isNativeChatSkillForAgent(
       (entry) => entry.path === rootPath && readsSkillSource(profile, entry, skill)
     )
   )
+}
+
+const NO_COMMANDS: readonly DiscoveredSlashCommand[] = []
+
+/** `.claude/commands` is Claude Code grammar; other TUIs would reject the inserted token.
+ *  Empty until a scan is ready, and for a host that did not report commands. */
+export function nativeChatCommandsForAgent(
+  agent: AgentType,
+  status: 'idle' | 'loading' | 'ready' | 'error',
+  commands: readonly DiscoveredSlashCommand[] | undefined
+): readonly DiscoveredSlashCommand[] {
+  return getNativeChatAgentProfile(agent)?.skillSourceOwner === 'claude' && status === 'ready'
+    ? (commands ?? NO_COMMANDS)
+    : NO_COMMANDS
 }
 
 /** Skills the session reported; undefined keeps the host disk scan (also for chats that keep scanned skills). */

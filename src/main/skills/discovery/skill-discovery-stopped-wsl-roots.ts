@@ -100,6 +100,19 @@ export async function isOnStoppedWslDistro(path: string): Promise<boolean> {
   return wslDistroForPath(path) !== null && (await blockedWslDistroForPath(path)) !== null
 }
 
+/** Whether `cwd` is on a stopped WSL distro outside the read scope, so reading it would boot the distro. */
+export async function isUnreadableStoppedWslCwd(
+  cwd: string | undefined,
+  readFor: StoppedWslRootsReadScope | undefined
+): Promise<boolean> {
+  return (
+    readFor !== 'all' &&
+    cwd !== undefined &&
+    !stoppedRootReader(readFor)(cwd) &&
+    (await isOnStoppedWslDistro(cwd))
+  )
+}
+
 /**
  * Discovery for a WSL target whose distro is stopped (or unverifiable) answers "unknown": no skills,
  * and an unavailable source per requested kind, so no surface reads the skills as not installed.

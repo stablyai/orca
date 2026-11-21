@@ -8,8 +8,11 @@ import type { AgentType } from '../../../shared/agent-status/contracts/agent-sta
 import '../../../shared/agent-launch/catalog/tui-agent-config'
 
 import type * as SkillRootFileWalk from './skill-root-file-walk'
+import { COMMAND_SCAN_DEADLINE_MS } from './custom-slash-command-discovery'
 
 let unavailableRootPath: string | null = null
+// Only command roots reach the mocked findRootFiles; skill roots walk through findSkillFiles.
+let commandRootWalk: (() => Promise<string[]>) | null = null
 
 vi.mock('./skill-root-file-walk', async (importOriginal) => {
   const actual = await importOriginal<typeof SkillRootFileWalk>()
@@ -24,7 +27,9 @@ vi.mock('./skill-root-file-walk', async (importOriginal) => {
         )
       }
       return actual.findSkillFiles(rootPath, maxDepth, signal)
-    }
+    },
+    findRootFiles: (...args: Parameters<typeof actual.findRootFiles>) =>
+      commandRootWalk ? commandRootWalk() : actual.findRootFiles(...args)
   }
 })
 
@@ -41,6 +46,8 @@ beforeEach(() => {
 
 afterEach(() => {
   unavailableRootPath = null
+  commandRootWalk = null
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
@@ -319,5 +326,67 @@ describe('skill discovery', () => {
     expect(reviews[0].rootPaths?.slice().sort()).toEqual(
       [codexSkills, join(home, '.agents', 'skills')].sort()
     )
+  })
+  it('returns Claude Code custom slash commands for a targeted workspace scan', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const cwd = join(root, 'repo')
+    const projectCommands = join(cwd, '.claude', 'commands', 'opsx')
+    await mkdir(projectCommands, { recursive: true })
+    await writeFile(
+      join(projectCommands, 'apply.md'),
+      '---\ndescription: Apply an OpenSpec change\n---\n'
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd })
+
+    expect(result.commands?.map((command) => command.name)).toEqual(['opsx:apply'])
+  })
+
+  it('returns skill results when the command scan never settles', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const cwd = join(root, 'repo')
+    const skillDir = join(home, '.agents', 'skills', 'healthy')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(join(skillDir, 'SKILL.md'), '# Healthy\n\nScanned fine.')
+    await mkdir(join(cwd, '.claude', 'commands'), { recursive: true })
+    let commandWalkStarted: () => void = () => undefined
+    const started = new Promise<void>((resolve) => {
+      commandWalkStarted = resolve
+    })
+    commandRootWalk = () => {
+      commandWalkStarted()
+      return new Promise<never>(() => undefined)
+    }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    const pending = discoverSkills({ homeDir: home, cwd })
+    await started
+    await vi.advanceTimersByTimeAsync(COMMAND_SCAN_DEADLINE_MS)
+    const result = await pending
+
+    expect(result.skills.map((skill) => skill.name)).toContain('Healthy')
+    expect(result.commands).toEqual([])
+  })
+
+  it('still rejects when the command scan rejects', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const cwd = join(root, 'repo')
+    await mkdir(join(cwd, '.claude', 'commands'), { recursive: true })
+    commandRootWalk = () => Promise.reject(new Error('command scan failed'))
+
+    await expect(discoverSkills({ homeDir: join(root, 'home'), cwd })).rejects.toThrow(
+      'command scan failed'
+    )
+  })
+
+  it('leaves commands empty for an untargeted inventory scan', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+
+    const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
+
+    expect(result.commands).toEqual([])
   })
 })

@@ -33,9 +33,8 @@ import {
   type SlashCommandSuggestion
 } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
-import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
-import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
+import { useNativeChatPickerCommands } from './use-native-chat-discovered-commands'
 import {
   emitNativeChatPickerItemAccepted,
   emitNativeChatPickerOpened,
@@ -112,16 +111,14 @@ export function useNativeChatPickerState(args: {
     disabledRef.current = disabled
   }, [disabled])
   const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
-  const discovery = useNativeChatSkills(
+  const { discovery, pickerCommands, sendCommands } = useNativeChatPickerCommands({
     agent,
+    agentCommands,
+    sessionSkills,
     terminalTabId,
-    skillPickerTriggered,
-    launchWorktreeId
-  )
-  const pickerCommands = useMemo(
-    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
-    [agent, agentCommands, discovery.skills]
-  )
+    launchWorktreeId,
+    skillPickerTriggered
+  })
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
   const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
@@ -287,14 +284,14 @@ export function useNativeChatPickerState(args: {
     (value: string) => {
       const outcome = classifyNativeChatSend(
         value,
-        agentCommands,
+        sendCommands(),
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )
       emitNativeChatSendClassified({ agent, outcome })
       return outcome
     },
-    [agent, agentCommands, profile]
+    [agent, profile, sendCommands]
   )
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null

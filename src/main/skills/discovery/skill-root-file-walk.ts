@@ -72,6 +72,18 @@ export async function findSkillFiles(
   signal?: AbortSignal,
   options: SkillFileWalkOptions = {}
 ): Promise<string[]> {
+  return findRootFiles(rootPath, maxDepth, (name) => name === SKILL_FILE_NAME, signal, options)
+}
+
+/** The same bounded, symlink-guarded walk with a caller-chosen file predicate,
+ *  so slash-command roots do not need a second walker. */
+export async function findRootFiles(
+  rootPath: string,
+  maxDepth: number,
+  isMatch: (fileName: string) => boolean,
+  signal?: AbortSignal,
+  options: SkillFileWalkOptions = {}
+): Promise<string[]> {
   const out: string[] = []
   const visitedDirectoryPaths = new Set<string>()
   const readAhead = createDirectoryReadAhead({
@@ -100,21 +112,25 @@ export async function findSkillFiles(
         continue
       }
       const entryPath = join(dirPath, entry.name)
-      if (entry.name === SKILL_FILE_NAME) {
+      // Why: the predicate selects files only; a directory named like a match
+      // (e.g. `team.md/`) is still walked below.
+      if (isMatch(entry.name)) {
         if (entry.isFile()) {
           out.push(entryPath)
           continue
         }
         if (entry.isSymbolicLink()) {
+          let linksToFile = false
           try {
-            if ((await stat(entryPath)).isFile()) {
-              out.push(entryPath)
-            }
+            linksToFile = (await stat(entryPath)).isFile()
           } catch {
             // Broken links are not valid skill files.
           }
+          if (linksToFile) {
+            out.push(entryPath)
+            continue
+          }
         }
-        continue
       }
       if (entry.isDirectory()) {
         if (childIndexes.has(index)) {

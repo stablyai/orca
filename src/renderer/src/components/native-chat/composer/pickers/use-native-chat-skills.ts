@@ -6,8 +6,12 @@ import type {
   DiscoveredSkill,
   SkillDiscoveryResult
 } from '../../../../../../shared/skills/discovery/skills'
+import type { DiscoveredSlashCommand } from '../../../../../../shared/skills/discovery/custom-slash-commands'
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
-import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
+import {
+  isNativeChatSkillForAgent,
+  nativeChatCommandsForAgent
+} from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { emitNativeChatSkillDiscovery } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import {
@@ -25,13 +29,16 @@ const DISCOVERY_BACKSTOP_TIMEOUT_MS = 18_000
 export type NativeChatSkillDiscovery = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   skills: DiscoveredSkill[]
+  /** `.claude/commands` entries from the same scan; empty for non-Claude agents. */
+  commands: readonly DiscoveredSlashCommand[]
   error: Error | null
   errorKind?: 'unavailable' | 'timeout' | 'host' | 'unknown'
   retry: () => void
 }
 
-type StoredDiscoveryState = Omit<NativeChatSkillDiscovery, 'retry'> & {
+type StoredDiscoveryState = Omit<NativeChatSkillDiscovery, 'retry' | 'commands'> & {
   contextKey: string | null
+  commands?: readonly DiscoveredSlashCommand[] | undefined
 }
 
 const IDLE_STATE: StoredDiscoveryState = {
@@ -121,7 +128,13 @@ export function useNativeChatSkills(
     const cached = paneDiscoveryCache.current.get(paneCacheKey)
     setState(
       cached
-        ? { status: 'ready', skills: cached.skills, error: null, contextKey: context.key }
+        ? {
+            status: 'ready',
+            skills: cached.skills,
+            commands: cached.commands,
+            error: null,
+            contextKey: context.key
+          }
         : { status: 'loading', skills: [], error: null, contextKey: context.key }
     )
     if (cached && checkedThisOpen.current.has(paneCacheKey)) {
@@ -149,7 +162,13 @@ export function useNativeChatSkills(
           outcome: 'ready',
           executionHostKind: context.executionHostKind
         })
-        setState({ status: 'ready', skills: result.skills, error: null, contextKey: paneCacheKey })
+        setState({
+          status: 'ready',
+          skills: result.skills,
+          commands: result.commands,
+          error: null,
+          contextKey: paneCacheKey
+        })
       },
       (reason) => {
         if (cancelled) {
@@ -208,6 +227,12 @@ export function useNativeChatSkills(
       : []
   }, [agent, context, effectiveState, profile])
 
+  const visibleCommands = nativeChatCommandsForAgent(
+    agent,
+    effectiveState.status,
+    effectiveState.commands
+  )
+
   const retry = useCallback(() => {
     forceNextDiscovery.current = true
     if (context) {
@@ -220,11 +245,12 @@ export function useNativeChatSkills(
     () => ({
       status: effectiveState.status,
       skills: visibleSkills,
+      commands: visibleCommands,
       error: effectiveState.error,
       ...(effectiveState.errorKind ? { errorKind: effectiveState.errorKind } : {}),
       retry
     }),
-    [effectiveState, retry, visibleSkills]
+    [effectiveState, retry, visibleCommands, visibleSkills]
   )
 }
 
