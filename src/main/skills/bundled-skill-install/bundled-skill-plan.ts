@@ -212,9 +212,11 @@ async function planTarget(
             : {})
         }
       : decided
-  // Preserve main's filtering only for folders holding just Orca's SKILL.md.
+  // Beside a current copy, a former-name folder Orca doesn't own is the user's own skill, not a blocker.
+  // A folder current only by its SKILL.md keeps them visible: an agent's files sit beside it.
+  const currentBySkillOnly = observed.kind === 'folder' && classified.folderClass !== 'current'
   const leaves =
-    op.kind === 'keep' && classified.folderClass === 'current'
+    op.kind === 'keep' && !currentBySkillOnly
       ? former.leaves.filter((stale) => stale.reason !== 'edited' && stale.reason !== 'other')
       : former.leaves
   const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
