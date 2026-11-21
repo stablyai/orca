@@ -218,6 +218,13 @@ describe('the Linked row of a worker the chat started', () => {
     ).toEqual(['t1', 's1 for P0', 's2 for P0'])
   })
 
+  it('keeps the same joined Started row across passes that change nothing about its links', () => {
+    const rows = [prompt('t1'), started('s', 'd1', 5), link('l', 'bot', 'dispatch:d1')]
+    const turnKeys = ['t1', 't1', 't1']
+    const first = foldBotItemNotes(rows, turnKeys)[1]
+    expect(foldBotItemNotes([...rows, said('more')], [...turnKeys, 't1'])[1]).toBe(first)
+  })
+
   it('gives each worker only the items linked to it', () => {
     const both = link('l', 'bot', 'dispatch:d1')
     both.botItemNote!.entries.push({

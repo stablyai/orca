@@ -90,15 +90,17 @@ function joinWorkerLinksToStarts(
   out: NativeChatMessage[],
   turnKeys: readonly (string | undefined)[]
 ): void {
-  const starts: number[] = []
+  const startsById = new Map<string, number[]>()
   out.forEach((message, index) => {
-    if (message.agentStart && message.agentStartDispatchId) {
-      starts.push(index)
+    const id = message.agentStart ? message.agentStartDispatchId : undefined
+    if (id) {
+      startsById.set(id, [...(startsById.get(id) ?? []), index])
     }
   })
-  if (starts.length === 0) {
+  if (startsById.size === 0) {
     return
   }
+  const joins = new Map<number, BotItemNoteItem[]>()
   out.forEach((message, index) => {
     const ids = linkedDispatches(message)
     if (!ids) {
@@ -117,23 +119,37 @@ function joinWorkerLinksToStarts(
       }
       return true
     }
-    const joined = ids.map((id) => ({
-      id,
-      start: starts.find((start) => out[start]!.agentStartDispatchId === id && nearby(start))
-    }))
+    const joined = ids.map((id) => ({ id, start: startsById.get(id)?.find(nearby) }))
     if (joined.some(({ start }) => start === undefined)) {
       return
     }
     for (const { id, start } of joined) {
-      const row = out[start!]!
       const items = linkedItems(message.botItemNote!, `${DISPATCH_REF}${id}`)
-      const kept = (row.agentStartItems ?? []).filter(
+      const kept = (joins.get(start!) ?? []).filter(
         (item) => !items.some((linked) => linked.uid === item.uid)
       )
-      out[start!] = { ...row, agentStartItems: [...kept, ...items] }
+      joins.set(start!, [...kept, ...items])
     }
     out[index] = hidden(message)
   })
+  for (const [start, items] of joins) {
+    out[start] = joinedStart(out[start]!, items)
+  }
+}
+
+/** Each Started row as last joined, so a streaming turn that changes nothing about its links keeps
+ *  the same row and its card doesn't draw again. */
+const joinedStarts = new WeakMap<NativeChatMessage, { key: string; row: NativeChatMessage }>()
+
+function joinedStart(row: NativeChatMessage, items: BotItemNoteItem[]): NativeChatMessage {
+  const key = JSON.stringify(items)
+  const last = joinedStarts.get(row)
+  if (last?.key === key) {
+    return last.row
+  }
+  const joined = { ...row, agentStartItems: items }
+  joinedStarts.set(row, { key, row: joined })
+  return joined
 }
 
 /** Each item a note links to `ref` once, as of its last entry. */

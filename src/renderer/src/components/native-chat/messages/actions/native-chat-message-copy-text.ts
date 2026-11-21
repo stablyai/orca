@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatMessageCopyText } from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-copy-text'
@@ -15,7 +16,13 @@ export function nativeChatSlotCopyText(
 
 /** What "Copy message" copies for a row drawing `message`. */
 export function nativeChatRowCopyText(message: NativeChatMessage): string {
-  return message.from && (message.role === 'user' || message.agentStart)
-    ? agentMessageTranscriptText(message.blocks, message.from, message.shortened)
-    : nativeChatMessageCopyText(message, nativeChatStoppedBeforeStartLabel())
+  if (!message.from || !(message.role === 'user' || message.agentStart)) {
+    return nativeChatMessageCopyText(message, nativeChatStoppedBeforeStartLabel())
+  }
+  const text = agentMessageTranscriptText(message.blocks, message.from, message.shortened)
+  const items = message.agentStartItems ?? []
+  // A start joined to its item link copies what the row says it was for.
+  return items.length > 0
+    ? `${translate('components.native-chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}\n\n${text}`
+    : text
 }
