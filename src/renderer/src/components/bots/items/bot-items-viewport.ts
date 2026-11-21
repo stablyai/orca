@@ -11,12 +11,15 @@ import {
 /** Marks the scroller an Items list windows against, so the list finds it as it mounts. */
 export const BOT_ITEMS_SCROLLER_ATTR = 'data-bot-items-scroller'
 
-export type BotItemsViewportBox = { top: number; bottom: number }
+/** The scroller's visible box in client coordinates, and how far it is scrolled. */
+export type BotItemsViewportBox = { top: number; bottom: number; scrolled: number }
 
 export type BotItemsViewport = {
   /** The scroller's visible box in client coordinates; null before a scroller is
    *  attached. Read once per frame for every group a notice reaches. */
   read: () => BotItemsViewportBox | null
+  /** This notice is only a scroll: groups' places in the scrolled content are as last measured. */
+  scrollOnly: () => boolean
   /** The first listener starts listening to the scroller; the last one leaving stops. */
   subscribe: (listener: () => void) => () => void
   /** Notifies every listener now, once per commit: the list's groups changed shape, which can move a
@@ -35,28 +38,32 @@ export function botItemsDocumentHidden(): boolean {
 
 function readBox(scroller: HTMLElement): BotItemsViewportBox {
   const box = scroller.getBoundingClientRect()
-  return { top: box.top, bottom: box.bottom }
+  return { top: box.top, bottom: box.bottom, scrolled: scroller.scrollTop }
 }
 
 /** Listens to `scroller` (and `list`'s size) while anyone listens here; returns the stop. */
 function listenTo(
   scroller: HTMLElement,
   list: HTMLElement | null,
-  onFrame: () => void
+  onFrame: (scrollOnly: boolean) => void
 ): () => void {
   let frame: number | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   // `byUser`: a scroll, which a hidden window never gets, so one wrongly left `hidden` (after display
   // wake, before any click or key proves it) measures too.
   let byUser = false
+  // Anything but a scroll (a resize, the window showing) may have moved the groups in the content.
+  let shaped = false
   const run = (): void => {
     frame = null
     timer = null
     if (byUser || !botItemsDocumentHidden()) {
       // The rows a scroll brings into view commit before this frame paints, so it shows no gap.
-      flushSync(onFrame)
+      const scrollOnly = !shaped
+      flushSync(() => onFrame(scrollOnly))
     }
     byUser = false
+    shaped = false
   }
   const schedule = (): void => {
     // A hidden window measures as it shows again. One wrongly left `hidden` gets no frames, and one
@@ -77,7 +84,10 @@ function listenTo(
       frame = requestAnimationFrame(run)
     }
   }
-  const notify = (): void => schedule()
+  const notify = (): void => {
+    shaped = true
+    schedule()
+  }
   const scrolled = (): void => {
     byUser = true
     schedule()
@@ -119,11 +129,14 @@ function createViewport(): BotItemsViewport {
   let frameBox: BotItemsViewportBox | null = null
   let stop: (() => void) | null = null
   let flushed = false
-  const onFrame = (): void => {
+  let frameScrollOnly = false
+  const onFrame = (scrollOnly = false): void => {
     if (scroller) {
       frameBox = readBox(scroller)
+      frameScrollOnly = scrollOnly
       listeners.forEach((listener) => listener())
       frameBox = null
+      frameScrollOnly = false
     }
   }
   const listen = (): void => {
@@ -132,6 +145,7 @@ function createViewport(): BotItemsViewport {
   }
   return {
     read: () => (scroller ? (frameBox ?? readBox(scroller)) : null),
+    scrollOnly: () => frameScrollOnly,
     subscribe: (listener) => {
       listeners.add(listener)
       if (!stop) {

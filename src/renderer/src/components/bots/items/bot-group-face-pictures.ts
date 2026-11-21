@@ -53,18 +53,48 @@ export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | 
 const hostOffline = (picture: Picture): boolean =>
   readBotHostState(picture.bot.hostId) === 'offline'
 
+// Reads in flight at once; the rest wait their turn, so a jump through a long group doesn't start one per
+// member together.
+const MAX_READS = 4
+
 function createFacePictures(): BotGroupFacePictures {
   // One per member asked for, its latest version, and each face's handle on it.
   const pictures = new Map<string, Picture>()
   const handles = new Map<string, { version: string; handle: BotGroupFacePicture }>()
-  // Pictures with a face drawn that wait on the window showing, their host, or (failed) their host's return.
-  const waiting = new Set<Picture>()
+  // Pictures with a face drawn that wait on the window showing, their host, (failed) their host's
+  // return, or a read slot; by host, with whether that host was offline when last looked at.
+  const waiting = new Map<string, { offline: boolean; pictures: Set<Picture> }>()
+  let waitingCount = 0
+  let reads = 0
   let stopWatching: (() => void) | null = null
   let liveHosts = readLiveBotHostIds()
   let closed = false
 
+  const wait = (picture: Picture, offline: boolean): void => {
+    const host = waiting.get(picture.bot.hostId) ?? { offline, pictures: new Set<Picture>() }
+    waiting.set(picture.bot.hostId, host)
+    if (!host.pictures.has(picture)) {
+      host.pictures.add(picture)
+      waitingCount += 1
+    }
+  }
+  const unwait = (picture: Picture): void => {
+    const host = waiting.get(picture.bot.hostId)
+    if (host?.pictures.delete(picture)) {
+      waitingCount -= 1
+      if (host.pictures.size === 0) {
+        waiting.delete(picture.bot.hostId)
+      }
+    }
+  }
+  const eachWaiting = (visit: (picture: Picture) => void): void => {
+    for (const host of waiting.values()) {
+      host.pictures.forEach(visit)
+    }
+  }
+
   const syncWatching = (): void => {
-    if (waiting.size > 0 && !stopWatching && !closed) {
+    if (waitingCount > 0 && !stopWatching && !closed) {
       liveHosts = readLiveBotHostIds()
       const stopHosts = subscribeToBotChanges(onHosts)
       const stopVisibility = subscribeWindowParkVisibility(onVisibility)
@@ -72,7 +102,7 @@ function createFacePictures(): BotGroupFacePictures {
         stopHosts()
         stopVisibility()
       }
-    } else if ((waiting.size === 0 || closed) && stopWatching) {
+    } else if ((waitingCount === 0 || closed) && stopWatching) {
       stopWatching()
       stopWatching = null
     }
@@ -81,13 +111,13 @@ function createFacePictures(): BotGroupFacePictures {
   // Only pictures with a face drawn wait; one without is looked at again as a face returns.
   const admit = (picture: Picture): void => {
     if (picture.src !== undefined || picture.reading || picture.faces.size === 0) {
-      waiting.delete(picture)
+      unwait(picture)
       return
     }
     // A picture the shared cache already holds shows even while the host can't be asked.
     const cached = readCachedBotUploadSrc(picture.bot, picture.version)
     if (cached !== undefined) {
-      waiting.delete(picture)
+      unwait(picture)
       picture.src = cached
       picture.failed = false
       picture.faces.forEach((notify) => notify())
@@ -95,43 +125,59 @@ function createFacePictures(): BotGroupFacePictures {
     }
     const offline = hostOffline(picture)
     picture.hostLeft ||= picture.failed && offline
-    if ((picture.failed && !picture.hostLeft) || offline || !getWindowParkVisible()) {
-      waiting.add(picture)
+    if (
+      (picture.failed && !picture.hostLeft) ||
+      offline ||
+      !getWindowParkVisible() ||
+      reads >= MAX_READS
+    ) {
+      wait(picture, offline)
       return
     }
-    waiting.delete(picture)
+    unwait(picture)
     picture.reading = true
     picture.failed = false
     picture.hostLeft = false
+    reads += 1
     void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, src))
   }
 
   const settle = (picture: Picture, src: string | null | undefined): void => {
     picture.reading = false
+    reads -= 1
     // A reply for a version since replaced is dropped.
-    if (pictures.get(botRefKey(picture.bot)) !== picture) {
-      return
+    if (pictures.get(botRefKey(picture.bot)) === picture) {
+      if (src === undefined) {
+        picture.failed = true
+        picture.hostLeft = false
+        admit(picture)
+      } else {
+        picture.src = src
+      }
+      picture.faces.forEach((notify) => notify())
     }
-    if (src === undefined) {
-      picture.failed = true
-      picture.hostLeft = false
-      admit(picture)
-    } else {
-      picture.src = src
-    }
+    // The freed read slot goes to a picture waiting for one.
+    eachWaiting((next) => {
+      if (reads < MAX_READS && !next.failed) {
+        admit(next)
+      }
+    })
     syncWatching()
-    picture.faces.forEach((notify) => notify())
   }
 
-  // Only a host coming or going matters; other catalog changes keep the same live list.
+  // Only a host coming or going matters, and only to the pictures waiting on that host.
   function onHosts(): void {
     const now = readLiveBotHostIds()
     if (now === liveHosts) {
       return
     }
     liveHosts = now
-    for (const picture of waiting) {
-      admit(picture)
+    for (const [hostId, host] of waiting) {
+      const offline = readBotHostState(hostId) === 'offline'
+      if (offline !== host.offline) {
+        host.offline = offline
+        host.pictures.forEach(admit)
+      }
     }
     syncWatching()
   }
@@ -140,9 +186,7 @@ function createFacePictures(): BotGroupFacePictures {
     if (!getWindowParkVisible()) {
       return
     }
-    for (const picture of waiting) {
-      admit(picture)
-    }
+    eachWaiting(admit)
     syncWatching()
   }
 
@@ -153,7 +197,7 @@ function createFacePictures(): BotGroupFacePictures {
       return found
     }
     if (found) {
-      waiting.delete(found)
+      unwait(found)
     }
     const picture: Picture = {
       bot: { hostId: bot.hostId, id: bot.id },
@@ -186,7 +230,7 @@ function createFacePictures(): BotGroupFacePictures {
         if (members.get(key) !== picture.version && picture.faces.size === 0) {
           pictures.delete(key)
           handles.delete(key)
-          waiting.delete(picture)
+          unwait(picture)
         }
       }
       syncWatching()

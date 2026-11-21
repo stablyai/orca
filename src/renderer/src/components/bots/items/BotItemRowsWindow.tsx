@@ -133,11 +133,21 @@ export function BotItemRowsWindow({
       drifted: now.some((index, offset) => index !== band[offset]!.at)
     }
   }, [all, windowRange, indexOf])
+  const contentTop = useRef<number | null>(null)
   const measure = useLatestHandler((): void => {
     const box = viewport.read()
     const element = container.current
-    const rect = box && element ? element.getBoundingClientRect() : null
-    const top = rect ? rect.top : null
+    // A scroll moves every group alike: the group's place in the content, measured when the layout last
+    // changed, gives where it is with no layout read, however far from the view it is.
+    const rect =
+      box && element && (!viewport.scrollOnly() || contentTop.current === null)
+        ? element.getBoundingClientRect()
+        : null
+    if (box && rect) {
+      contentTop.current = rect.top + box.scrolled
+    }
+    const top =
+      box && element && contentTop.current !== null ? contentTop.current - box.scrolled : null
     let next: Range = { start: 0, end: Math.min(count, FIRST_ROWS) }
     if (box && top !== null) {
       const from = box.top - top - OVERSCAN_PX
