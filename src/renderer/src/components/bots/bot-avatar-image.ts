@@ -6,34 +6,68 @@ import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botMascotSrc } from './bot-mascot-color'
 
-// Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
-// `read` keeps a finished read, so a face drawn again (a row scrolled back into view) shows it at once.
-const uploads = new Map<
-  string,
-  { version: string; src: Promise<string | null>; read?: string | null }
->()
+type Upload = {
+  version: string
+  /** The finished read: a data URL, or null for none. */
+  read?: string | null
+  failedAt?: number
+  /** Faces waiting on the read in flight; each leaves as it unmounts, so scrolling adds none. */
+  waiting: Set<(src: string | null) => void>
+}
 
-function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
-  const key = botRefKey(bot)
-  const cached = uploads.get(key)
-  if (cached?.version === version) {
-    return cached.src
-  }
-  const entry: { version: string; src: Promise<string | null>; read?: string | null } = {
-    version,
-    src: readBotAvatarPng(bot).then(
+// Each bot's current upload only (by botRefKey), so a replaced picture is let go. A finished read is
+// kept, so a face drawn again (a row scrolled back into view) shows it at once; a failed read is retried
+// once RETRY_MS has passed, not by every face that scrolls into view.
+const uploads = new Map<string, Upload>()
+const RETRY_MS = 30_000
+
+function startUpload(bot: BotRef, version: string): Upload {
+  const entry: Upload = { version, waiting: new Set() }
+  uploads.set(botRefKey(bot), entry)
+  void readBotAvatarPng(bot)
+    .then(
       (png) => {
         entry.read = png ? `data:image/png;base64,${png}` : null
-        return entry.read
       },
       () => {
-        uploads.delete(key)
-        return null
+        entry.failedAt = Date.now()
       }
     )
+    .then(() => {
+      const waiting = [...entry.waiting]
+      entry.waiting.clear()
+      waiting.forEach((onRead) => onRead(entry.read ?? null))
+    })
+  return entry
+}
+
+/** Calls `onRead` with the picture once read (reading it if no current read is kept); returns the leave. */
+function watchUpload(
+  bot: BotRef,
+  version: string,
+  onRead: (src: string | null) => void
+): () => void {
+  const cached = uploads.get(botRefKey(bot))
+  const entry =
+    cached?.version === version &&
+    (cached.failedAt === undefined || Date.now() - cached.failedAt < RETRY_MS)
+      ? cached
+      : startUpload(bot, version)
+  if (entry.read === undefined && entry.failedAt === undefined) {
+    entry.waiting.add(onRead)
+    return () => {
+      entry.waiting.delete(onRead)
+    }
   }
-  uploads.set(key, entry)
-  return entry.src
+  let live = true
+  queueMicrotask(() => {
+    if (live) {
+      onRead(entry.read ?? null)
+    }
+  })
+  return () => {
+    live = false
+  }
 }
 
 function readUpload(
@@ -59,17 +93,11 @@ export function useBotAvatarSrc(
     if (!uploadKey) {
       return
     }
-    let live = true
-    void uploadSrc({ hostId, id }, uploadKey).then((src) => {
-      if (live) {
-        setUpload((shown) =>
-          shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
-        )
-      }
-    })
-    return () => {
-      live = false
-    }
+    return watchUpload({ hostId, id }, uploadKey, (src) =>
+      setUpload((shown) =>
+        shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
+      )
+    )
   }, [hostId, id, uploadKey])
   if (mascotSrc) {
     return mascotSrc

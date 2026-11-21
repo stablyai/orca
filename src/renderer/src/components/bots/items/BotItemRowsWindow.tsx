@@ -1,5 +1,5 @@
-// A group's shown rows, drawn only where the panel shows them. Rows have two known heights (one line, or
-// two with a chat line), so positions come from counts and nothing is measured. Drawn rows are in flow,
+// A group's shown rows, drawn only where the panel shows them. Rows have two heights (one line, or two
+// with a chat line), read from drawn rows, so positions come from counts. Drawn rows are in flow,
 // with the rows not drawn standing as gaps of their height, so the browser keeps the reading position as
 // for any list. Rows keep their keys at every size, so a group never remounts its rows as it grows or
 // shrinks. One row is in the Tab
@@ -12,9 +12,10 @@ import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
 import { focusFellToNothing } from '../use-needs-you-focus'
 
-/** A one-line row and its 2 px gap; a row that names its chat adds a 16 px line. */
-export const BOT_ITEM_ROW_PX = 30
-export const BOT_ITEM_PLACED_ROW_PX = 46
+/** A one-line row and its gap, and one that names its chat on a second line. Until a drawn row is
+ *  read, their heights at the default font size; a larger font (Orca Web) makes them taller. */
+type RowSizes = { row: number; placed: number }
+const DEFAULT_ROW_SIZES: RowSizes = { row: 30, placed: 46 }
 /** Drawn past each edge of the panel, so a scroll shows rows already there. */
 const OVERSCAN_PX = 300
 /** Rows drawn while the panel's scroller isn't known yet. */
@@ -30,19 +31,19 @@ type Geometry = {
   indexAt: (y: number) => number
 }
 
-function uniformGeometry(count: number): Geometry {
+function uniformGeometry(count: number, { row }: RowSizes): Geometry {
   return {
-    total: count * BOT_ITEM_ROW_PX,
-    offset: (index) => index * BOT_ITEM_ROW_PX,
-    height: () => BOT_ITEM_ROW_PX,
-    indexAt: (y) => Math.min(Math.max(0, count - 1), Math.max(0, Math.floor(y / BOT_ITEM_ROW_PX)))
+    total: count * row,
+    offset: (index) => index * row,
+    height: () => row,
+    indexAt: (y) => Math.min(Math.max(0, count - 1), Math.max(0, Math.floor(y / row)))
   }
 }
 
-function mixedGeometry(tall: readonly boolean[]): Geometry {
+function mixedGeometry(tall: readonly boolean[], sizes: RowSizes): Geometry {
   const offsets = [0]
   for (const placed of tall) {
-    offsets.push(offsets.at(-1)! + (placed ? BOT_ITEM_PLACED_ROW_PX : BOT_ITEM_ROW_PX))
+    offsets.push(offsets.at(-1)! + (placed ? sizes.placed : sizes.row))
   }
   return {
     total: offsets.at(-1)!,
@@ -62,6 +63,15 @@ function mixedGeometry(tall: readonly boolean[]): Geometry {
       return Math.max(0, low)
     }
   }
+}
+
+/** The drawn rows' heights as laid out, or `was` where no row of a kind is drawn. */
+function readRowSizes(container: HTMLElement, was: RowSizes): RowSizes {
+  const heightOf = (selector: string, fallback: number): number =>
+    container.querySelector(selector)?.getBoundingClientRect().height || fallback
+  const row = heightOf(':scope > [data-bot-item-row]:not([data-bot-item-tall])', was.row)
+  const placed = heightOf(':scope > [data-bot-item-row][data-bot-item-tall]', was.placed)
+  return row === was.row && placed === was.placed ? was : { row, placed }
 }
 
 type Range = { start: number; end: number }
@@ -158,12 +168,16 @@ export function BotItemRowsWindow({
     () => (placed ? items.map((item) => (placed(item) ? '1' : '0')).join('') : ''),
     [items, placed]
   )
+  const [sizes, setSizes] = useState(DEFAULT_ROW_SIZES)
   const geometry = useMemo(
     () =>
       tallKey.includes('1')
-        ? mixedGeometry([...tallKey].map((flag) => flag === '1'))
-        : uniformGeometry(count),
-    [count, tallKey]
+        ? mixedGeometry(
+            [...tallKey].map((flag) => flag === '1'),
+            sizes
+          )
+        : uniformGeometry(count, sizes),
+    [count, tallKey, sizes]
   )
   const indexOf = useMemo(() => indexOfPicks(items), [items])
   const [windowRange, setRange] = useState<WindowRange>(() => ({
@@ -194,6 +208,11 @@ export function BotItemRowsWindow({
     const box = viewport.read()
     const element = container.current
     const top = box && element ? element.getBoundingClientRect().top : null
+    const read = element ? readRowSizes(element, sizes) : sizes
+    if (read !== sizes) {
+      // New heights re-position the rows, which measures again.
+      setSizes(read)
+    }
     let next: Range = { start: 0, end: Math.min(count, FIRST_ROWS) }
     if (box && top !== null) {
       const from = box.top - top - OVERSCAN_PX
@@ -396,8 +415,9 @@ export function BotItemRowsWindow({
               aria-rowindex={all ? undefined : index + 1}
               data-bot-item-index={index}
               data-bot-item-row={item.uid}
+              data-bot-item-tall={tallKey[index] === '1' ? '' : undefined}
               tabIndex={rowsTakeFocus ? (index === tabStop ? 0 : -1) : undefined}
-              style={{ height: geometry.height(index) }}
+              className="pb-0.5"
               ref={
                 index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined
               }
