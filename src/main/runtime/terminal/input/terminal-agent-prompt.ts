@@ -162,6 +162,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             deliverySignal
           )
         } else {
+          // With no render gate (a flagged `claude --model opus`), a pending launch watch holds Enter until the composer mounts.
+          const launchWatch = this.launchComposerReadyByPtyId.get(ptyId) ?? Promise.resolve(true)
+          await waitForAgentPromptPromise(launchWatch, deliverySignal)
           const agent = this.getPtyAgent(ptyId)
           const submitDelayMs = options.promptForSchedule
             ? resolveAgentPromptSubmitDelayForAgent(

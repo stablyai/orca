@@ -50,6 +50,8 @@ export type HostBotsRead =
       needsYouChangeInMs?: number
       /** The host's Orca Cloud link; absent from an older host, which keeps today's card line. */
       connectorStatus?: ConnectorCloudStatus
+      /** Its Orca Cloud answers an event in that event's thread, for an automation's results. */
+      threadReplies?: boolean
     }
   | { kind: 'no-capability' }
   | { kind: 'unreadable' }

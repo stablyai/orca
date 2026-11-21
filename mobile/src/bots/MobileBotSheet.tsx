@@ -28,6 +28,9 @@ export function MobileBotSheet(props: {
   showToast: (message: string, durationMs?: number) => void
   /** Drafts into the Home Chat, where automations are made; absent while no chat shows. */
   onNewAutomation: (() => void) | null
+  /** Drafts a message in the Home Chat (Edit in chat); null while no chat shows. */
+  onAskInChat: ((draft: string) => void) | null
+  onViewRuns: ((automationId: string) => void) | null
   /** Access requests, listed above who can ask. */
   accessRequests: BotAccessRequests | null
   /** Puts an Up next request in the Home Chat's message box; null while no chat shows. */
@@ -125,6 +128,12 @@ export function MobileBotSheet(props: {
           waits={props.routeBot.activity?.waits}
           showToast={props.showToast}
           onNewAutomation={props.onNewAutomation}
+          actions={{
+            onEdit: null,
+            onAskInChat: props.onAskInChat,
+            onViewRuns: props.onViewRuns,
+            present: null
+          }}
           online={props.online}
         />
       ) : (

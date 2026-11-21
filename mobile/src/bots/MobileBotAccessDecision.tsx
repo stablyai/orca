@@ -1,5 +1,5 @@
-// The desktop's "Give access" confirm on the phone: who asked and where, the warning in its tone, and
-// what they would reach. As a sheet, Decline answers here too; closing any other way leaves the request
+// The desktop's "Give access" confirm on the phone: who would get access and where, the warning in its
+// tone, and what they would reach. As a sheet, Decline answers here too; closing any other way leaves the request
 // waiting.
 import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
@@ -16,9 +16,11 @@ import type { BotPanelOpen } from './MobileBotPanel'
 import {
   ACCESS_REQUEST_EXPIRED_LINE,
   accessDecisionCopy,
+  accessRequestGrant,
   phoneAccessHost,
   type AccessDecisionRow,
-  type PhoneAccessBot
+  type PhoneAccessBot,
+  type PhoneAccessGrant
 } from './bot-access-request-copy'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -44,13 +46,13 @@ function RowIcon({ row }: { row: AccessDecisionRow }) {
 }
 
 export function MobileBotAccessDecisionContent({
-  request,
+  grant,
   bot,
   onGrant,
   onDecline,
   onClose
 }: {
-  request: ConnectorAccessRequest
+  grant: PhoneAccessGrant
   bot: PhoneAccessBot
   onGrant: () => void
   /** Decline in place of Cancel, where nothing else beside the confirm declines. */
@@ -58,7 +60,7 @@ export function MobileBotAccessDecisionContent({
   onClose: () => void
 }) {
   useMobileColorScheme()
-  const copy = accessDecisionCopy(request, bot)
+  const copy = accessDecisionCopy(grant, bot)
   const tone = copy.tone === 'high' ? colors.statusRed : colors.statusAmber
   return (
     <ConfirmContent
@@ -146,7 +148,7 @@ export function useBotAccessDecisionSheet(
     <BottomDrawer visible={reviewing !== null} onClose={close}>
       {shown ? (
         <MobileBotAccessDecisionContent
-          request={shown}
+          grant={accessRequestGrant(shown)}
           bot={{
             ...bot,
             accessHost: phoneAccessHost(client ? readConnectionStatusProbe(client) : undefined)

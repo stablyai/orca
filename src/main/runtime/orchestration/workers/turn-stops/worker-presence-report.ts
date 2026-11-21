@@ -272,8 +272,7 @@ function reconcileWorkerReport(
   if (
     rest.reason !== 'exited' &&
     rest.reason !== 'lost' &&
-    (db.isWorkerStopRequested(dispatchId) ||
-      (!('requestError' in rest && rest.requestError) && isDeliberateRest(db, target, rest, deps)))
+    (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
   ) {
     return keep()
   }
