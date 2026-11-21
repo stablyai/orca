@@ -6,7 +6,8 @@ import { agentTurnEndedOnPurpose } from './agent-main-agent-verdict'
 export type AgentCompletionSource = Pick<
   AgentStatusEntry,
   'state' | 'stateStartedAt' | 'stateHistory' | 'interrupted' | 'mainAgent' | 'sessionBoundary'
->
+> &
+  Pick<AgentStatusEntry, 'lastCompletionAt'>
 
 function mostRecentCompletedTurnInHistory(
   history: readonly AgentStateHistoryEntry[] | undefined
@@ -31,6 +32,9 @@ export function agentEntryCompletionAt(entry: AgentCompletionSource): number | n
     return null
   }
   if (entry.sessionBoundary === true) {
+    if (entry.lastCompletionAt !== undefined) {
+      return entry.lastCompletionAt || null
+    }
     return mostRecentCompletedTurnInHistory(entry.stateHistory)
   }
   return Number.isFinite(entry.stateStartedAt) ? entry.stateStartedAt : null

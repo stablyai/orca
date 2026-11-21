@@ -1,4 +1,5 @@
 import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
+import { readLastCompletionAt } from '../../../shared/agent-status/lifecycle/agent-last-completion'
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -178,6 +179,7 @@ export function sanitizeHydratedEntry(
     payload,
     receivedAt,
     stateStartedAt,
+    lastCompletionAt: readLastCompletionAt(record.lastCompletionAt),
     ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
       ? { turnStartedAt }
       : {}),

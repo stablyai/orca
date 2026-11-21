@@ -3,7 +3,7 @@ import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store/index'
-import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
+import { isAgentSubjectUnread } from '@/attention/agent-attention-acknowledgement'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/lib/window-activity/use-now'
@@ -265,7 +265,16 @@ const AgentBranch = React.memo(function AgentBranch({
       [context.focusedPaneKey, paneKey]
     )
   )
-  const acknowledgedAt = useAppStore((s) => s.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
+  const isUnvisited = useAppStore((s) =>
+    isAgentSubjectUnread(
+      {
+        liveTurns: s.agentStatusByPaneKey,
+        acknowledgedTurnStartedAt: s.acknowledgedAgentsByPaneKey,
+        manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
+      },
+      paneKey
+    )
+  )
   const t = useTranslate()
   if (!row) {
     return null
@@ -287,7 +296,7 @@ const AgentBranch = React.memo(function AgentBranch({
     agent: row,
     showModel: context.showAgentModels,
     now: context.now,
-    isUnvisited: row.rowSource === 'live' && acknowledgedAt < agentAttentionTurnAt(row.entry),
+    isUnvisited: row.rowSource === 'live' && isUnvisited,
     onActivate: context.onActivate,
     childAgentCount: hasChildren ? children.keys.length : undefined,
     childAgentsExpanded: expanded,

@@ -2,7 +2,7 @@ import type { useAppStore } from '@/store'
 import type { AgentAttentionSurface } from '@/attention/agent-attention-contract'
 import {
   computeAgentAcknowledgementTargets,
-  readAgentAttentionTurnStartedAt,
+  isAgentSubjectManuallyUnread,
   resolveViewedUnreadSubjectKey,
   type AgentAttentionTurnRecords
 } from '@/attention/agent-attention-acknowledgement'
@@ -26,10 +26,16 @@ export function surfaceForAutoAckTarget(
     : createTerminalAttentionSurface(state)
 }
 
-export function readAgentAttentionTurnRecords(state: StoreSnapshot): AgentAttentionTurnRecords {
+export function readAgentAttentionTurnRecords(
+  state: Pick<
+    StoreSnapshot,
+    'agentStatusByPaneKey' | 'acknowledgedAgentsByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
+  >
+): AgentAttentionTurnRecords {
   return {
     liveTurns: state.agentStatusByPaneKey,
-    acknowledgedTurnStartedAt: state.acknowledgedAgentsByPaneKey
+    acknowledgedTurnStartedAt: state.acknowledgedAgentsByPaneKey,
+    manuallyUnreadTurnStartedAt: state.manuallyUnreadTurnsByPaneKey
   }
 }
 
@@ -37,25 +43,25 @@ export function readAgentAttentionTurnRecords(state: StoreSnapshot): AgentAttent
 export function acknowledgeViewedAutoAckTarget(
   state: StoreSnapshot,
   target: AutoAckTabTarget,
-  options?: { reads?: readonly AgentSubjectRead[]; readViewed?: boolean }
+  options?: {
+    reads?: readonly AgentSubjectRead[]
+    readViewed?: boolean
+    protectedManualSubjects?: ReadonlyMap<string, number>
+  }
 ): void {
   const records = readAgentAttentionTurnRecords(state)
   const groupId = target.tabId
+  const protectedManual = (key: string): boolean =>
+    options?.protectedManualSubjects?.has(key) ?? isAgentSubjectManuallyUnread(records, key)
   const subjectKey = surfaceForAutoAckTarget(state, target).resolveViewedSubjectKey(groupId)
   const toAck = computeAgentAcknowledgementTargets(records, subjectKey).filter(
-    (key) =>
-      state.manuallyUnreadTurnsByPaneKey[key] !== readAgentAttentionTurnStartedAt(records, key)
+    (key) => !protectedManual(key)
   )
   const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(
     state.unreadAgentCompletionPanes,
     subjectKey
   )
-  const readViewed =
-    options?.readViewed &&
-    subjectKey !== null &&
-    (state.manuallyUnreadTurnsByPaneKey[subjectKey] === undefined ||
-      state.manuallyUnreadTurnsByPaneKey[subjectKey] !==
-        readAgentAttentionTurnStartedAt(records, subjectKey))
+  const readViewed = options?.readViewed && subjectKey !== null && !protectedManual(subjectKey)
   if (toAck.length === 0 && !viewedUnreadSubjectKey && !readViewed) {
     return
   }

@@ -25,11 +25,15 @@ export function createRootsUnreadSelector(worktreeId: string) {
   let projection: AgentStatusProjection | undefined
   let revision = 0
   let acknowledgements: AppState['acknowledgedAgentsByPaneKey'] | undefined
+  let manual: AppState['manuallyUnreadTurnsByPaneKey'] | undefined
   let rootKeys: ReadonlySet<string> = new Set()
   let result: boolean[] = []
   const readsKey = (key: string): boolean => rootKeys.has(key)
   return (
-    state: Pick<AppState, 'agentStatusByPaneKey' | 'acknowledgedAgentsByPaneKey'>,
+    state: Pick<
+      AppState,
+      'agentStatusByPaneKey' | 'acknowledgedAgentsByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
+    >,
     nextRoots: readonly string[]
   ): boolean[] => {
     const nextProjection = state.agentStatusByPaneKey.projection
@@ -38,8 +42,10 @@ export function createRootsUnreadSelector(worktreeId: string) {
       nextRoots === roots &&
       nextProjection === projection &&
       nextRevision === revision &&
-      !recordChangeReaches(state.acknowledgedAgentsByPaneKey, acknowledgements, readsKey)
+      !recordChangeReaches(state.acknowledgedAgentsByPaneKey, acknowledgements, readsKey) &&
+      !recordChangeReaches(state.manuallyUnreadTurnsByPaneKey, manual, readsKey)
     acknowledgements = state.acknowledgedAgentsByPaneKey
+    manual = state.manuallyUnreadTurnsByPaneKey
     if (unchanged) {
       return result
     }

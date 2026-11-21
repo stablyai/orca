@@ -129,6 +129,9 @@ export type DashboardCard = {
   statusUpdatedAt?: number
   /** Derive from the app-wide acknowledgment map so sidebar/tab visits and dashboard dialogs mute unseen state together. */
   unseen: boolean
+  sessionBoundary?: boolean
+  acknowledgedAt?: number
+  manuallyUnreadAt?: number
   /** Short summary of the pending question when bucket === 'attention'. */
   askSummary?: string
   /** Resolve conversation names like sidebar rows; omit unusable status-only titles. */

@@ -107,6 +107,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       opensTurn,
       hostTurnEnd,
+      lastCompletionAt,
       compactTrigger,
       worktreeId,
       promptInteractionKey,
@@ -280,6 +281,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       ...hostTurnEnd,
+      lastCompletionAt,
       claudeRunningNonAgentTask:
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask

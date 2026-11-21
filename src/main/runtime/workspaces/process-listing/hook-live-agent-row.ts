@@ -11,6 +11,7 @@ export type HookLiveAgentRow = Pick<
   | 'updatedAt'
   | 'evidenceObservedAt'
   | 'stateStartedAt'
+  | 'lastCompletionAt'
   | 'turnEndedAt'
   | 'turnEndDisposition'
   | 'worktreeId'
@@ -25,6 +26,7 @@ export function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
     ...pickHostTurnEnd(row),
+    lastCompletionAt: row.lastCompletionAt,
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
     ...(row.programStatus ? { programStatus: row.programStatus } : {}),
     ...(row.paneSleep ? { paneSleep: row.paneSleep } : {})

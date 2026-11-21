@@ -57,13 +57,20 @@ export function resolveAgentStatusLiveEntryTiming(
   commandCodeNewTurn: boolean
 ) {
   const previousTurn = previousLiveTurnContext(existing, agentType, routing, metadata)
-  const stateStartedAt =
-    timing?.stateStartedAt ??
-    (commandCodeNewTurn
-      ? updatedAt
-      : previousTurn && previousTurn.state === payload.state
-        ? previousTurn.stateStartedAt
-        : updatedAt)
+  const resolvesBoundary =
+    previousTurn?.sessionBoundary === true &&
+    payload.state === 'done' &&
+    (payload.sessionBoundary === false ||
+      payload.lastAssistantMessage !== undefined ||
+      payload.prompt !== previousTurn.prompt)
+  const stateStartedAt = resolvesBoundary
+    ? Math.max(timing?.stateStartedAt ?? updatedAt, previousTurn.stateStartedAt + 1, updatedAt)
+    : (timing?.stateStartedAt ??
+      (commandCodeNewTurn
+        ? updatedAt
+        : previousTurn && previousTurn.state === payload.state
+          ? previousTurn.stateStartedAt
+          : updatedAt))
   const turnStartedAt =
     timing?.turnStartedAt ??
     (previousTurn && previousTurn.state === payload.state ? previousTurn.turnStartedAt : undefined)

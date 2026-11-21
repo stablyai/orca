@@ -54,6 +54,7 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  lastCompletionAt?: number
   /** The host proved this exact process stopped for sleep; the placed pane owns its Done. */
   paneSleep?: { ptyId: string; incarnationId?: string }
   /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */

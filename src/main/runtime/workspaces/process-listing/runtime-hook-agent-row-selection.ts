@@ -23,6 +23,7 @@ export type RuntimeAgentRowSnapshot = {
   connectionId: string | null
   payload: ParsedAgentStatusPayload
   stateStartedAt: number
+  lastCompletionAt?: number
   turnEndedAt?: number
   turnEndDisposition?: TurnEndDisposition
   updatedAt: number
@@ -193,6 +194,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     payload: pickParsedAgentStatusPayload(match),
     stateStartedAt: match.stateStartedAt ?? match.receivedAt,
     ...pickHostTurnEnd(match),
+    lastCompletionAt: match.lastCompletionAt,
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
     ...(match.orcaSessionId !== undefined ? { orcaSessionId: match.orcaSessionId } : {}),

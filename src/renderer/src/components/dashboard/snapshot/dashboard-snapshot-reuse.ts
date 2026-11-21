@@ -69,6 +69,7 @@ export function dashboardSnapshotReuseInputs(state: DashboardSnapshotInput): unk
     state.ptyIdsByTabId,
     state.runtimePaneTitlesByTabId,
     state.acknowledgedAgentsByPaneKey,
+    state.manuallyUnreadTurnsByPaneKey,
     state.settings,
     state.hostedReviewCache,
     state.prCache,

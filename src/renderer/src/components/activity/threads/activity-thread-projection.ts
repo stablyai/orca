@@ -1,4 +1,5 @@
 import { shallow } from 'zustand/shallow'
+import { readAgentAttentionTurnRecords } from '@/attention/agent-auto-ack-surfaces'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
@@ -280,6 +281,7 @@ function projectThreads(inputs: ActivityThreadInputs, mode: ActivityThreadMode):
           : build.events,
       liveAgentByPaneKey: build.liveAgentByPaneKey,
       paneEntryByPaneKey: build.paneEntryByPaneKey,
+      turnRecords: readAgentAttentionTurnRecords(inputs.storeData),
       generatedTitlesEnabled
     },
     projection.cache

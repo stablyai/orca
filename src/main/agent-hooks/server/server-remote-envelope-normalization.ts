@@ -1,4 +1,5 @@
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { readLastCompletionAt } from '../../../shared/agent-status/lifecycle/agent-last-completion'
 import {
   isTurnEndDisposition,
   type HostTurnEndFacts
@@ -18,6 +19,7 @@ import {
 } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
+  lastCompletionAt?: unknown
   paneKey: string
   tabId?: string
   worktreeId?: string
@@ -55,6 +57,7 @@ export type RemoteAgentStatusEnvelope = {
 }
 
 export type RemoteEnvelopeFields = {
+  lastCompletionAt?: number
   hookEventName?: string
   source?: AgentHookSource
   providerPromptId?: string
@@ -74,6 +77,7 @@ export type RemoteEnvelopeFields = {
 }
 
 export function normalizeRemoteEnvelopeFields(envelope: {
+  lastCompletionAt?: unknown
   hookEventName?: string
   source?: unknown
   providerPromptId?: unknown
@@ -94,6 +98,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
 }): RemoteEnvelopeFields {
   const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
   return {
+    lastCompletionAt: readLastCompletionAt(envelope.lastCompletionAt),
     hookEventName:
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()

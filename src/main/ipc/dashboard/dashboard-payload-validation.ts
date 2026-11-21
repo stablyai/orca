@@ -272,6 +272,9 @@ function isDashboardCard(value: unknown): boolean {
     isFiniteNumber(card.stateChangedAt) &&
     (card.statusUpdatedAt === undefined || isFiniteNumber(card.statusUpdatedAt)) &&
     typeof card.unseen === 'boolean' &&
+    (card.sessionBoundary === undefined || typeof card.sessionBoundary === 'boolean') &&
+    (card.acknowledgedAt === undefined || isFiniteNumber(card.acknowledgedAt)) &&
+    (card.manuallyUnreadAt === undefined || isFiniteNumber(card.manuallyUnreadAt)) &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
     isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&
     isDashboardTerminalInput(card.terminalInput)

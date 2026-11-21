@@ -57,6 +57,7 @@ export type DashboardSnapshotState = Pick<
         | 'unifiedTabsByWorktree'
         | 'activeWorktreeId'
         | 'activeWorkspaceExecutionHostId'
+        | 'manuallyUnreadTurnsByPaneKey'
       >
   >
 
