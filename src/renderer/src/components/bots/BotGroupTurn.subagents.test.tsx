@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupTurn as Turn } from '../../../../shared/bots/bot-group'
@@ -47,12 +47,12 @@ afterEach(() => {
   cleanup()
 })
 
-it("opens a member's subagent in the room turn and Esc returns to the turn", () => {
-  const view = render(
+function renderTurn(shown: Turn) {
+  return render(
     <TooltipProvider>
       <BotGroupTurn
         hostId="local"
-        turn={turn}
+        turn={shown}
         files={null}
         roomLinks={{ onLinkClick: undefined, request: () => {}, rootRef: createRef() }}
         roomRows={new BotGroupTranscriptRows()}
@@ -64,6 +64,17 @@ it("opens a member's subagent in the room turn and Esc returns to the turn", () 
       />
     </TooltipProvider>
   )
+}
+
+it("draws the member's outfit as it was when the turn ran", async () => {
+  const view = renderTurn({ ...turn, avatar: 'mascot:A1', avatarOutfit: 'tie' })
+  await vi.waitFor(() =>
+    expect(view.container.querySelector('img[src^="data:image/webp"]')).not.toBeNull()
+  )
+})
+
+it("opens a member's subagent in the room turn and Esc returns to the turn", () => {
+  const view = renderTurn(turn)
   expect(view.queryByText('Subagent step text')).toBeNull()
 
   const open = view.getByRole('button', { name: 'Open Subagent' })

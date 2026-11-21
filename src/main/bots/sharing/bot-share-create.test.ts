@@ -131,6 +131,33 @@ function expectNothingLeft(): void {
 }
 
 describe('creating a bot from a shared link', () => {
+  it("gives a client from before shared looks the shared mascot's color and outfit", async () => {
+    const reviewed = await reviewedContent(await sharedPackage(root, {}))
+    const dressed: BotRecipientContent = {
+      ...reviewed,
+      bot: { ...reviewed.bot, avatar: { mascot: 'H1', color: '#f4c4cf', outfit: 'tie' } },
+      avatarBase64: null
+    }
+    const create = (name: string, lookSent?: true) =>
+      createBotFromShare(
+        deps(async () => dressed),
+        {
+          ...input(),
+          name,
+          avatar: 'mascot:H1',
+          fromShare: { ...input().fromShare, lookSent }
+        }
+      )
+    expect(await create('Older client')).toMatchObject({
+      avatarColor: '#f4c4cf',
+      avatarOutfit: 'tie'
+    })
+    // A newer client sent the look it shows, here none.
+    const plain = await create('Newer client', true)
+    expect(plain.avatarColor ?? null).toBeNull()
+    expect(plain.avatarOutfit ?? null).toBeNull()
+  })
+
   it('writes the reviewed files byte for byte, and nothing the review left out', async () => {
     const reviewed = await reviewedContent(
       await sharedPackage(root, {

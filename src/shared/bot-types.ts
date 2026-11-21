@@ -11,6 +11,7 @@ import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
+import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -171,6 +172,9 @@ export const BotSchema = z.object({
   avatar: z.string().nullable(),
   /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
+   *  as none (wornBotOutfit) but survives a save, for the version that added it. */
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),

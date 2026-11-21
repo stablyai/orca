@@ -1,8 +1,9 @@
 // Create from a shared link: the reviewed content, kept in main under the review's id, or nothing. The
 // link must still serve the reviewed version. The bot is made the normal way first, so its record is the
 // handle any failure after it deletes it by; then its home gets the reviewed files and paused schedules.
+import { mascotAvatar } from '../../../shared/bot-avatar'
 import type { Bot } from '../../../shared/bot-types'
-import type { BotPackagePlan } from '../../../shared/bots/bot-package'
+import type { BotPackagePlan, BotPackageV1 } from '../../../shared/bots/bot-package'
 import type { BotCreateParams } from '../../../shared/rpc-contract/bots-params'
 import type { BotController } from '../bot-controller'
 import {
@@ -39,6 +40,23 @@ function sharedSetup(sharedBy: string | null, plan: BotPackagePlan): BotPackageS
   }
 }
 
+/** The shared mascot's tile color and outfit, for a client from before shared looks, which sends the mascot
+ *  alone; a newer one sends the look it shows (`lookSent`). */
+function lookForOlderClient(
+  params: BotCreateParams,
+  fromShare: BotShareCreateParams['fromShare'],
+  shared: BotPackageV1
+): Pick<BotCreateParams, 'avatarColor' | 'avatarOutfit'> {
+  const avatar = shared.avatar && 'mascot' in shared.avatar ? shared.avatar : null
+  if (fromShare.lookSent || !avatar || params.avatar !== mascotAvatar(avatar.mascot)) {
+    return {}
+  }
+  return {
+    ...(avatar.color ? { avatarColor: avatar.color } : {}),
+    ...(avatar.outfit ? { avatarOutfit: avatar.outfit } : {})
+  }
+}
+
 export async function createBotFromShare(
   deps: BotShareCreateDeps,
   input: BotShareCreateParams
@@ -49,7 +67,7 @@ export async function createBotFromShare(
   const plan = recipientPlan(recipient, { agent, toolIds: fromShare.toolIds })
   const { source } = recipient
   const bot = await deps.bots.create(
-    { ...params, agent },
+    { ...lookForOlderClient(params, fromShare, recipient.bot), ...params, agent },
     {
       sharedFrom: {
         shareId: source.shareId,

@@ -1,5 +1,6 @@
 import { parseBotAvatar, type BotMascotId } from '../../../src/shared/bot-avatar'
 import type { Bot } from '../../../src/shared/bot-types'
+import { wornBotOutfit, type BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import { botFallback } from '../../../src/shared/bots/bot-avatar-fallback'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
@@ -16,7 +17,7 @@ import type { botFoldLiveStatus } from '../../../src/shared/bots/bot-sidebar-wor
 
 export type MobileBotAvatarSource =
   /** `color` is its tile's, drawn behind the transparent picture; absent, the mascots' own sky blue. */
-  | { kind: 'mascot'; id: BotMascotId; color?: string }
+  | { kind: 'mascot'; id: BotMascotId; color?: string; outfit?: BotAvatarOutfit }
   | { kind: 'image'; uri: string }
   | { kind: 'text'; text: string }
 
@@ -81,14 +82,18 @@ export type MobileBotChatLineFacts = {
 
 /** An upload shows once its bytes are read; until then, like a missing picture, the emoji or initial. */
 export function mobileBotAvatarSource(
-  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor'>,
+  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'>,
   uploadUri: string | undefined
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
+  const outfit = wornBotOutfit(bot.avatarOutfit)
   if (parsed?.kind === 'mascot') {
-    return bot.avatarColor
-      ? { kind: 'mascot', id: parsed.id, color: bot.avatarColor }
-      : { kind: 'mascot', id: parsed.id }
+    return {
+      kind: 'mascot',
+      id: parsed.id,
+      ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
+      ...(outfit ? { outfit } : {})
+    }
   }
   if (parsed?.kind === 'upload' && uploadUri) {
     return { kind: 'image', uri: uploadUri }

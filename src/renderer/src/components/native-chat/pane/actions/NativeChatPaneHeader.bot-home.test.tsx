@@ -50,7 +50,9 @@ vi.mock('../../../bots/bot-workspace', () => ({
         }
       : null
 }))
-vi.mock('../../../bots/bot-avatar-image', () => ({ useBotAvatarSrc: () => null }))
+vi.mock('../../../bots/bot-avatar-image', () => ({
+  useBotAvatarLook: () => ({ src: null, outfit: null })
+}))
 vi.mock('./use-structured-chat-pane-actions', () => ({
   useStructuredChatPaneActions: () => ({ onSplitRight: vi.fn() })
 }))

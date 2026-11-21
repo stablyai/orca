@@ -159,12 +159,17 @@ export function MobileBotGroupTurn({
     () => ({
       name: turn.botName,
       avatar: mobileBotAvatarSource(
-        { name: turn.botName, avatar: turn.avatar, avatarColor: turn.avatarColor },
+        {
+          name: turn.botName,
+          avatar: turn.avatar,
+          avatarColor: turn.avatarColor,
+          avatarOutfit: turn.avatarOutfit
+        },
         undefined
       ),
       showName: true
     }),
-    [turn.botName, turn.avatar, turn.avatarColor]
+    [turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
   return (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.
