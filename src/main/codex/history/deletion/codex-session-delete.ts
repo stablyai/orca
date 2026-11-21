@@ -7,14 +7,14 @@ import type {
 import {
   normalizeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   materializeCodexSessionDeletionSymlinks,
   discardCodexSessionDeletionStagingFiles
 } from './codex-session-delete-symlinks'
-import { resolveCodexCommand } from '../../../codex-cli/command'
+import { resolveCodexSessionDeletionEnvironment } from '../../trust/project-trust/codex-project-trust-worker-client'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 import { readCodexRolloutSessionMetaId } from '../rollouts/codex-rollout-session-meta'
 import {
@@ -59,7 +59,11 @@ export async function deleteCodexSession(
   const sessionId = args.sessionId.toLowerCase()
   return withCodexSessionHistoryMutation<AiVaultDeleteSessionResult>(sessionId, async () => {
     try {
-      const homes = options.homes ?? codexSessionDeletionHomes()
+      const environment =
+        options.homes && options.command
+          ? { accountHomes: [], command: options.command }
+          : await resolveCodexSessionDeletionEnvironment()
+      const homes = options.homes ?? codexSessionDeletionHomes(environment.accountHomes)
       const path = resolve(args.filePath)
       const remaining = await pendingCodexSessionDeletionHomes(sessionId)
       const home = [...homes, ...remaining].find((candidate) =>
@@ -95,7 +99,7 @@ export async function deleteCodexSession(
         (alias) => symlinks.push(alias),
         (file) => stagingFiles.push(file)
       )
-      const command = options.command ?? resolveCodexCommand()
+      const command = options.command ?? environment.command
       const run = options.run ?? runProcess
       if (!(await probeSupport(targets, command, run))) {
         return failed('unsupported')

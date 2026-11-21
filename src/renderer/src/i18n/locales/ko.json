@@ -14117,7 +14117,6 @@
             "resumeInNewCliTooltipChat": "이 채팅은 그대로 유지됩니다."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "이 세션을 삭제할까요?",
             "codexDescription": "\"{{value0}}\" 세션이 이 기기의 Codex 기록에서 영구적으로 삭제됩니다. 작업 공간 파일은 유지됩니다. 삭제하기 전에 Orca 밖에서 이 세션을 사용하는 Codex를 닫으세요. Orca는 이러한 세션을 감지할 수 없습니다.",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",

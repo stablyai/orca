@@ -5,9 +5,8 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { configuredAdditionalCodexHomePaths } from '../../../ai-vault/listing/cached-session-list'
+import { configuredAdditionalCodexHomePaths } from '../../../ai-vault/discovery/ai-vault-scan-roots'
 import { codexHomeSessionsDir } from '../../../ai-vault/discovery/session-scanner-roots'
-import { getCodexAccountHomeSessionDirectories } from '../rollouts/codex-account-home-discovery'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath
@@ -17,14 +16,14 @@ import { readCodexRolloutSessionMetaId } from '../rollouts/codex-rollout-session
 import { isCodexSessionDeletionRecorded } from './codex-session-deletion-record'
 import { listCodexSessionRolloutFilesIncrementally } from '../rollouts/codex-session-file-listing'
 
-export function codexSessionDeletionHomes(): string[] {
+export function codexSessionDeletionHomes(accountHomes: readonly string[]): string[] {
   return [
     ...new Set(
       [
         getSystemCodexHomePath(),
         dirname(codexHomeSessionsDir()),
         resolveOrcaManagedCodexHomePath(),
-        ...getCodexAccountHomeSessionDirectories().map((root) => dirname(root)),
+        ...accountHomes,
         ...configuredAdditionalCodexHomePaths()
       ]
         .filter((home) => !isWslUncPath(home))

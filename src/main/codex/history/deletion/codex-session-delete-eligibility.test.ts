@@ -9,7 +9,7 @@ const { snapshot, presence, ownership } = vi.hoisted(() => ({
 vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: {
     getStatusSnapshot: snapshot,
-    checkAgentPresence: presence
+    checkAgentPresenceSince: presence
   }
 }))
 vi.mock('../../../ai-vault/structured-sessions/structured-session-ownership', () => ({
@@ -33,10 +33,9 @@ describe('Codex deletion ownership', () => {
     presence.mockResolvedValue(verdict)
     expect(await canDeleteCodexSession(SESSION, '/history/rollout.jsonl')).toBe(false)
   })
-  it('accepts a certified exit, including an ended retained session', async () => {
+  it('accepts a certified exit', async () => {
     presence.mockResolvedValue('exited')
     expect(await canDeleteCodexSession(SESSION, '/history/rollout.jsonl')).toBe(true)
-    expect(presence).toHaveBeenCalledWith('pane', { includeEnded: true })
   })
   it('refuses native chat ownership before probing terminal presence', async () => {
     ownership.mockImplementation(() => {

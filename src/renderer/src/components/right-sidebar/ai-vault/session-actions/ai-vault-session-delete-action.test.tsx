@@ -11,7 +11,7 @@ const { confirm, deleteSession } = vi.hoisted(() => ({
   confirm: vi.fn(),
   deleteSession: vi.fn<() => Promise<AiVaultDeleteSessionResult>>()
 }))
-vi.mock('@/components/confirmation-dialog-context', () => ({
+vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
 

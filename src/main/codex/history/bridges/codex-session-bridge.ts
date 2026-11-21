@@ -1,4 +1,7 @@
-import { createCodexRolloutVisibilityPredicate, withCodexRolloutPublication } from '../deletion/codex-session-deletion-record'
+import {
+  createCodexRolloutVisibilityPredicate,
+  withCodexRolloutPublication
+} from '../deletion/codex-session-deletion-record'
 import {
   existsSync,
   lstatSync,
@@ -127,13 +130,13 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
           // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
           await withCodexRolloutPublication(systemSessionFilePath, undefined, async () => {
             await (readBudget.exhausted
-            ? protectLegacySessionCopy({ managedHome, relativePath })
-            : swapLegacySessionCopy({
-                managedHome,
-                relativePath,
-                expectedSourcePath: systemSessionFilePath,
-                readBudget
-              }))
+              ? protectLegacySessionCopy({ managedHome, relativePath })
+              : swapLegacySessionCopy({
+                  managedHome,
+                  relativePath,
+                  expectedSourcePath: systemSessionFilePath,
+                  readBudget
+                }))
           })
         }
       } else if (bridged) {
@@ -154,15 +157,12 @@ async function bridgeSystemCodexSessionFile(
   mayBeMovedAside = false
 ): Promise<boolean | 'existing' | 'missing'> {
   if (existsSync(managedSessionFilePath)) {
-    if (!lstatSync(managedSessionFilePath).isSymbolicLink()) {
-      return 'existing'
-    }
-    return withCodexRolloutPublication(systemSessionFilePath, 'existing' as const, async () =>
-      replaceSymlinkSessionBridgeWithHardlink(
+    return (
+      (await replaceSymlinkSessionBridgeWithHardlink(
         systemSessionFilePath,
         managedSessionFilePath,
         relativePath
-      ) || 'existing'
+      )) || 'existing'
     )
   }
   // A swap may have stopped with the copy moved aside: linking the source here would hide its bytes.
@@ -187,11 +187,11 @@ function linkSystemCodexSessionFile(
   return linked
 }
 
-function replaceSymlinkSessionBridgeWithHardlink(
+async function replaceSymlinkSessionBridgeWithHardlink(
   sourcePath: string,
   targetPath: string,
   relativePath: string
-): boolean {
+): Promise<boolean> {
   let replacementPath: string | null = null
   try {
     const targetStat = lstatSync(targetPath)
@@ -206,14 +206,16 @@ function replaceSymlinkSessionBridgeWithHardlink(
       return false
     }
 
-    replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
-    if (!tryHardlinkCodexSessionFile(sourcePath, replacementPath)) {
-      return false
-    }
-    rmSync(targetPath, { force: true })
-    renameSync(replacementPath, targetPath)
-    clearLegacyCopiedSessionMarker(relativePath)
-    return true
+    return await withCodexRolloutPublication(sourcePath, false, async () => {
+      replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
+      if (!tryHardlinkCodexSessionFile(sourcePath, replacementPath)) {
+        return false
+      }
+      rmSync(targetPath, { force: true })
+      renameSync(replacementPath, targetPath)
+      clearLegacyCopiedSessionMarker(relativePath)
+      return true
+    })
   } catch (error) {
     console.warn(
       '[codex-session-bridge] Failed to replace symlinked Codex session bridge:',

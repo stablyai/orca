@@ -93,7 +93,10 @@ async function* listCodexSessionFilesIncrementally(
         const childPath = join(currentDirectory, entry.name)
         if (entry.isDirectory()) {
           pendingDirectories.push(childPath)
-        } else if ((entry.isFile() || (options.includeSymlinkFiles && entry.isSymbolicLink())) && isSessionFile(entry.name)) {
+        } else if (
+          (entry.isFile() || (options.includeSymlinkFiles && entry.isSymbolicLink())) &&
+          isSessionFile(entry.name)
+        ) {
           yield childPath
         }
         entriesSinceYield += 1

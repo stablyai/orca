@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     }
   }
 })
-vi.mock('../../../ai-vault/listing/cached-session-list', () => ({
+vi.mock('../../../ai-vault/discovery/ai-vault-scan-roots', () => ({
   configuredAdditionalCodexHomePaths: () => []
 }))
 

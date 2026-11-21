@@ -1,3 +1,6 @@
+import { dirname } from 'node:path'
+import { resolveCodexCommand } from '../../../codex-cli/command'
+import { getCodexAccountHomeSessionDirectories } from '../../history/rollouts/codex-account-home-discovery'
 import { parentPort, workerData } from 'node:worker_threads'
 import {
   runCodexHookPassRequest,
@@ -20,6 +23,15 @@ export function handleCodexProjectTrustRequest(
 ): CodexProjectTrustWorkerResponse | Promise<CodexProjectTrustWorkerResponse> {
   try {
     switch (request.kind) {
+      case 'sessionDeletionEnvironment':
+        return {
+          id: request.id,
+          ok: true,
+          deletionEnvironment: {
+            accountHomes: getCodexAccountHomeSessionDirectories().map((root) => dirname(root)),
+            command: resolveCodexCommand()
+          }
+        }
       case 'hookPass':
         return runCodexHookPassRequest(request).then(
           (hookPass) => ({ id: request.id, ok: true, hookPass }),

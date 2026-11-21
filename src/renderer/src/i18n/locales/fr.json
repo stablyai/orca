@@ -14749,7 +14749,6 @@
             "resumeInNewCliTooltipChat": "Ce chat reste inchangé."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "Supprimer cette session ?",
             "codexDescription": "« {{value0}} » sera définitivement supprimée de l’historique Codex sur cet appareil. Les fichiers de votre espace de travail seront conservés. Avant la suppression, fermez toute session Codex qui l’utilise en dehors d’Orca ; Orca ne peut pas détecter ces sessions.",
             "description": "« {{value0}} » sera supprimée. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "remoteDescription": "« {{value0}} » sera supprimée de {{value2}}. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",

@@ -11,6 +11,7 @@ import type {
 import type { CodexHookPassEffects } from '../../hooks/installation/codex-hook-install-effects'
 import type { ObservedFileContent } from '../../../filesystem/file-content-observation'
 import type {
+  CodexSessionDeletionEnvironment,
   CodexProjectTrustWorkerFailure,
   CodexProjectTrustWorkerRequest,
   CodexProjectTrustWorkerResponse
@@ -166,4 +167,12 @@ export function removeOrcaCreatedAntigravityTrustOffMain(workspacePath: string):
       console.warn('[antigravity-trust] Failed to remove an Orca-created trust entry:', error)
     }
   })
+}
+
+export async function resolveCodexSessionDeletionEnvironment(): Promise<CodexSessionDeletionEnvironment> {
+  const response = await request((id) => ({ id, kind: 'sessionDeletionEnvironment' }))
+  if (!response.deletionEnvironment) {
+    throw new Error('Codex session deletion environment is unavailable')
+  }
+  return response.deletionEnvironment
 }

@@ -23,7 +23,10 @@ import {
   pendingCodexSessionDeletionHomes
 } from './codex-session-deletion-record'
 
-vi.mock('../../../ai-vault/listing/cached-session-list', () => ({
+vi.mock('../../trust/project-trust/codex-project-trust-worker-client', () => ({
+  resolveCodexSessionDeletionEnvironment: async () => ({ accountHomes: [], command: 'codex' })
+}))
+vi.mock('../../../ai-vault/discovery/ai-vault-scan-roots', () => ({
   configuredAdditionalCodexHomePaths: () => []
 }))
 vi.mock('./codex-session-delete-eligibility', () => ({

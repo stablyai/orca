@@ -173,7 +173,7 @@ export abstract class AgentHookServerStateContract {
 
   protected abstract hasLiveClaimsForPaneKey(paneKey: string): boolean
 
-  abstract checkAgentPresence(paneKey: string, options?: { includeEnded?: boolean }): Promise<AgentProcessVerdict | null>
+  abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
 
   abstract checkAgentPresenceAfterHook(
     event: AgentHookEventPayload,

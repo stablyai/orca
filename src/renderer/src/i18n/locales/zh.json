@@ -15220,7 +15220,6 @@
             "resumeInNewCliTooltipChat": "此聊天保持不变"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "要删除此会话吗？",
             "codexDescription": "“{{value0}}”将从此设备的 Codex 历史记录中永久删除。工作区文件将保留。删除前，请关闭在 Orca 外使用此会话的 Codex；Orca 无法检测这些会话。",
             "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复。",

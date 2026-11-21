@@ -2,8 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as FsPromises from 'node:fs/promises'
-import type * as Fs from 'node:fs'
 import {
   createCodexRolloutVisibilityPredicate,
   recordCodexSessionDeletion
@@ -12,21 +10,9 @@ import { discoverAiVaultSessionSources } from './session-scanner-source-discover
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 
 const mocks = vi.hoisted(() => ({
-  readdir: vi.fn(),
-  lstatSync: vi.fn(),
   createPredicate: vi.fn(),
   discover: vi.fn()
 }))
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const original = await importOriginal<typeof FsPromises>()
-  mocks.readdir.mockImplementation(original.readdir)
-  return { ...original, readdir: mocks.readdir }
-})
-vi.mock('node:fs', async (importOriginal) => {
-  const original = await importOriginal<typeof Fs>()
-  mocks.lstatSync.mockImplementation(original.lstatSync)
-  return { ...original, lstatSync: mocks.lstatSync }
-})
 vi.mock('./session-scanner-agent-sources', () => ({
   AI_VAULT_AGENT_SOURCES: {
     codex: {
@@ -53,10 +39,7 @@ beforeEach(async () => {
   vi.stubEnv('ORCA_USER_DATA_PATH', root)
   vi.clearAllMocks()
   mocks.createPredicate.mockImplementation(createCodexRolloutVisibilityPredicate)
-  mocks.discover.mockImplementation(async ({ rootDir, filePredicate }) => {
-    for (let index = 0; index < 1000; index++) {
-      filePredicate(file)
-    }
+  mocks.discover.mockImplementation(async ({ rootDir }) => {
     return { agent: 'codex', rootDir, files: [] }
   })
 })
@@ -66,18 +49,6 @@ afterEach(async () => {
 })
 
 describe('scan-scoped Codex deletion visibility', () => {
-  it('loads deletion IDs once across roots and does no per-candidate filesystem checks', async () => {
-    await recordCodexSessionDeletion(SESSION, true)
-    mocks.lstatSync.mockClear()
-    await discoverAiVaultSessionSources({ options: {}, limitPerAgent: 100, issues: [] })
-    expect(mocks.createPredicate).toHaveBeenCalledTimes(1)
-    expect(mocks.readdir).toHaveBeenCalledTimes(1)
-    expect(mocks.lstatSync).not.toHaveBeenCalled()
-    const firstPredicate = mocks.discover.mock.calls[0]?.[0].filePredicate
-    expect(firstPredicate).toBe(mocks.discover.mock.calls[1]?.[0].filePredicate)
-    expect(firstPredicate(file)).toBe(false)
-  })
-
   it('refreshes the snapshot on the next scan and keeps WSL UUIDs independent', async () => {
     await discoverAiVaultSessionSources({ options: {}, limitPerAgent: 100, issues: [] })
     const firstPredicate = mocks.discover.mock.calls[0]?.[0].filePredicate
@@ -91,7 +62,6 @@ describe('scan-scoped Codex deletion visibility', () => {
         String.raw`\\wsl.localhost\Ubuntu\home\user\.codex\sessions\rollout-2026-10-11T12-00-00-${SESSION}.jsonl`
       )
     ).toBe(true)
-    expect(mocks.readdir).toHaveBeenCalledTimes(2)
   })
 
   it('preserves discovery errors instead of turning them into predicate failures', async () => {

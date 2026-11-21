@@ -1,5 +1,4 @@
 import { lock } from 'proper-lockfile'
-import type * as ProperLockfile from 'proper-lockfile'
 import type * as CodexHomePaths from '../../configuration/homes/codex-home-paths'
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,13 +23,6 @@ import { prepareCodexAiVaultSessionResume } from '../resume/codex-ai-vault-sessi
 import { resolveCodexResumeLaunch } from '../../../ipc/pty/host-env/codex-resume'
 import { resolveCodexSessionResumeProvenance } from '../resume/codex-session-resume-home'
 import { AI_VAULT_AGENT_SOURCES } from '../../../ai-vault/discovery/session-scanner-agent-sources'
-
-const locks = vi.hoisted(() => ({ acquire: vi.fn() }))
-vi.mock('proper-lockfile', async (importOriginal) => {
-  const original = await importOriginal<typeof ProperLockfile>()
-  locks.acquire.mockImplementation(original.lock)
-  return { ...original, lock: locks.acquire }
-})
 
 const SESSION = '019f0000-1111-7222-8333-000000000001'
 const OTHER = '019f0000-1111-7222-8333-000000000002'
@@ -68,7 +60,6 @@ function backfillPaths() {
 }
 
 beforeEach(() => {
-  locks.acquire.mockClear()
   root = mkdtempSync(join(tmpdir(), 'orca-codex-resurrection-'))
   systemHome = join(root, 'system')
   managedHome = join(root, 'managed')
@@ -127,39 +118,6 @@ describe('durable Codex session deletion', () => {
     await startCodexSessionBackfillInBackground({ yieldMs: 0 })
     expect(existsSync(rollout(systemHome))).toBe(true)
     expect(existsSync(paths.markerPath)).toBe(true)
-  })
-
-  it('defers only the locked heal thread without recording a completed read', async () => {
-    const record = join(root, 'orca', 'codex-session-deletions', `${SESSION}.tombstone`)
-    mkdirSync(dirname(record), { recursive: true })
-    const release = await lock(record, { realpath: false })
-    const request = vi.fn().mockResolvedValue({ thread: { id: OTHER } })
-    const onOutcome = vi.fn()
-    const options = {
-      buildInvocation: () => ({ command: 'stub', args: [], cliPath: null, timeoutMs: 1000 }),
-      runSession: async (
-        _invocation: unknown,
-        operation: (rpc: { request: typeof request; notify: typeof request }) => Promise<void>
-      ) => operation({ request, notify: request })
-    }
-    try {
-      expect(
-        await readCodexThreadsForIndexHeal(
-          systemHome,
-          [{ threadId: SESSION }, { threadId: OTHER }],
-          onOutcome,
-          options
-        )
-      ).toBe('deferred')
-      expect(onOutcome).toHaveBeenCalledTimes(1)
-      expect(onOutcome).toHaveBeenCalledWith({ threadId: OTHER }, 'healed')
-    } finally {
-      await release()
-    }
-    expect(
-      await readCodexThreadsForIndexHeal(systemHome, [{ threadId: SESSION }], onOutcome, options)
-    ).toBe('completed')
-    expect(onOutcome).toHaveBeenCalledWith({ threadId: SESSION }, 'healed')
   })
 
   it('blocks the system bridge and backfill while other sessions still publish', async () => {

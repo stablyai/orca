@@ -14915,7 +14915,6 @@
             "resumeInNewCliTooltipChat": "このチャットは変更されません。"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "このセッションを削除しますか?",
             "codexDescription": "「{{value0}}」は、このデバイスの Codex 履歴から完全に削除されます。ワークスペースのファイルは保持されます。削除する前に、Orca の外でこのセッションを使用している Codex を閉じてください。Orca はそれらのセッションを検出できません。",
             "description": "「{{value0}}」を削除します。削除すると、{{value1}} 自体のコマンドラインからも再開できなくなります。",
             "remoteDescription": "「{{value0}}」は {{value2}} から削除されます。削除後は {{value1}} 自身のコマンドラインからも再開できなくなります。",

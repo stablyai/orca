@@ -18,10 +18,7 @@ export async function canDeleteCodexSession(sessionId: string, filePath: string)
       ) {
         continue
       }
-      if (
-        (await agentHookServer.checkAgentPresence(entry.paneKey, { includeEnded: true })) !==
-        'exited'
-      ) {
+      if ((await agentHookServer.checkAgentPresenceSince(entry.paneKey, 0)) !== 'exited') {
         return false
       }
     }
