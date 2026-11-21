@@ -75,7 +75,7 @@ it('declares a missing worker ended only after a complete empty controller censu
   expect(await terminalsProvenAbsent(runtime, [{ worker, durable }])).toEqual([true])
 })
 
-function emptyCensusRuntime(runtimeStore = store) {
+function emptyCensusRuntime(runtimeStore?: Parameters<typeof identityFixture>[1]) {
   const { runtime } = identityFixture(undefined, runtimeStore)
   runtime.setPtyController({
     write: () => true,
