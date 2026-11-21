@@ -8,13 +8,6 @@ import { peerMailLocalRecipient, peerMailPairing } from './peer-mail-delivery'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import type { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
-import { noteQuestionEdge } from '../../db/messages/question-edges'
-
-/** A paired computer answered a pull: a question notice it couldn't take before goes again. */
-export function noteServerReachable(environmentId: string): void {
-  noteQuestionEdge({ kind: 'reachable', environmentId })
-}
-
 export function recordPeerQuestionOut(
   db: OrchestrationDb,
   question: {
@@ -40,6 +33,11 @@ export function recordPeerQuestionOut(
       question.asker,
       question.threadId ?? null
     )
+}
+
+/** Its delivery failed: nothing there will answer it, and the sender saw the failure. */
+export function forgetPeerQuestionOut(db: OrchestrationDb, messageId: string): void {
+  db.db.prepare('DELETE FROM peer_questions_out WHERE message_id = ?').run(messageId)
 }
 
 /** A reply came back on this conversation: the question it answers, or is a notice for, is settled.

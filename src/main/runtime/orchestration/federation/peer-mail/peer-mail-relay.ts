@@ -20,7 +20,8 @@ import {
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
-import { noteServerReachable, settlePeerQuestionsOut } from './peer-questions-out'
+import { settlePeerQuestionsOut } from './peer-questions-out'
+import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
@@ -111,7 +112,7 @@ export class PeerMailRelay {
     while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
       try {
         await this.pullOnce(environmentId, loop)
-        noteServerReachable(environmentId)
+        retryRemoteAskNotices(environmentId)
         if (failures > 0) {
           // The server answers again: what this Orca owes it goes out now, not after its backoff.
           dueRemoteResendsNow(loop.db, environmentId)

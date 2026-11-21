@@ -6,10 +6,9 @@ import {
   getRemoteOwnedQuestion,
   recordRemoteAskAnswered
 } from '../../../../orchestration/db/remote-owned/remote-dispatch-records'
-import { noteQuestionEdge } from '../../../../orchestration/db/messages/question-edges'
 import { startRestingQuestionReconciler } from '../../../../orchestration/mailbox/questions/question-reconciler.test-fixture'
 import { testOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
-import { remoteAskNotices } from './remote-ask-notices'
+import { remoteAskNotices, retryRemoteAskNotices } from './remote-ask-notices'
 
 const call = vi.hoisted(() => ({ send: vi.fn() }))
 vi.mock('../../../../orchestration/federation/remote-owned/remote-owned-calls', () => ({
@@ -101,7 +100,7 @@ describe("a paired worker's question its coordinator here stopped on", () => {
     await decided(reconciler)
     expect(getRemoteOwnedQuestion(db, id)).toMatchObject({ ended: null, awaiting: 1 })
 
-    noteQuestionEdge({ kind: 'reachable', environmentId: 'env_box' })
+    retryRemoteAskNotices('env_box')
     await decided(reconciler)
 
     expect(call.send).toHaveBeenCalledTimes(2)
