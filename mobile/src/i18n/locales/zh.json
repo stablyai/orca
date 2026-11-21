@@ -3727,7 +3727,7 @@
     },
     "terminalMoreKeys": {
       "sendKey": "发送 {{label}}",
-      "paste": "粘贴",
+      "paste": "Paste",
       "sending": "发送中…",
       "photo": "照片",
       "file": "文件",
