@@ -239,7 +239,6 @@ async function releaseSessionProxyPin(
   if (state.appliedKey === null) {
     return
   }
-  await closeInFlightRequests(proxySession)
   await proxySession.setProxy({ mode: 'system' })
   // Retain the pin marker until stale pooled connections close so retries cannot skip cleanup.
   state.settledKey = null
@@ -248,12 +247,6 @@ async function releaseSessionProxyPin(
   await proxySession.closeAllConnections?.()
   state.appliedKey = null
   state.appliedResult = null
-}
-
-// A request that started before this change can't be held by the browser request gate; failing
-// it now keeps its redirects from leaving on the old route while the new one applies.
-async function closeInFlightRequests(proxySession: ProxySession): Promise<void> {
-  await proxySession.closeAllConnections?.()
 }
 
 async function applySessionProxyResult(
@@ -269,7 +262,6 @@ async function applySessionProxyResult(
   ) {
     return result
   }
-  await closeInFlightRequests(proxySession)
   await proxySession.setProxy({
     mode: 'fixed_servers',
     proxyRules: result.proxyRules,
