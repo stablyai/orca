@@ -165,6 +165,24 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       )
     ]
   },
+  wrapCodeBlocks: {
+    targetSectionId: 'chat-wrap-code-blocks',
+    title: translate(
+      'components.settings.nativeChat.wrapCodeBlocksTitle',
+      'Wrap long lines in code blocks'
+    ),
+    description: translate(
+      'components.settings.nativeChat.wrapCodeBlocksCopy',
+      'Code blocks in chats start with their lines wrapped instead of a horizontal scrollbar. Each block’s wrap button still overrides this for that block.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('components.settings.nativeChat.wrapCodeBlocksSearchWrap', 'wrap'),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.wrapCodeBlocksSearchScroll',
+        'horizontal scroll'
+      )
+    ]
+  },
   shellEnvironment: {
     targetSectionId: 'chat-shell-environment',
     title: translate(
