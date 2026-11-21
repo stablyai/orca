@@ -140,6 +140,15 @@ describe('loadBotItemsList', () => {
     }
     expect(await loadBotItemsList(counted, read, WHOLE)).toBe(read)
     expect(calls).toBe(1)
+    // With more asked too, the next page is all it reads.
+    calls = 0
+    const deeper = await loadBotItemsList(counted, read, { whole: true, parts: [], more: true })
+    expect(calls).toBe(2)
+    expect(deeper.items.filter(closed)).toHaveLength(150)
+    // The chat-filtered list reads its loaded pages again, as it always did.
+    calls = 0
+    await loadBotItemsList(counted, read, WHOLE, { pageUnmoved: true })
+    expect(calls).toBe(2)
   })
 
   it('stops paging down the depth once nothing shows the list', async () => {
@@ -152,7 +161,7 @@ describe('loadBotItemsList', () => {
       calls += 1
       return older(params)
     }
-    await loadBotItemsList(counted, read, WHOLE, undefined, () => calls === 0)
+    await loadBotItemsList(counted, read, WHOLE, { live: () => calls === 0 })
     expect(calls).toBe(1)
   })
 
