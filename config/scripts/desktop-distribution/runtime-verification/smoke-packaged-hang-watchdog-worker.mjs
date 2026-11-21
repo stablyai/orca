@@ -102,15 +102,6 @@ async function runInternal() {
     worker.once('error', (error) => {
       workerError.current = error
     })
-    worker.on('message', (message) => {
-      if (
-        message?.type === 'capture-drain' &&
-        typeof message.token === 'string' &&
-        message.token.length <= 80
-      ) {
-        setImmediate(() => worker.postMessage({ type: 'capture-drain-ack', token: message.token }))
-      }
-    })
     await waitForMarker(markerPath, (marker) => marker?.selfRecovered === false, workerError)
     worker.postMessage({ type: 'heartbeat' })
     await waitForMarker(markerPath, (marker) => marker?.selfRecovered === true, workerError)

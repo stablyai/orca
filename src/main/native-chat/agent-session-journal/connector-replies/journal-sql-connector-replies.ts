@@ -1,9 +1,13 @@
+import type { ConnectorFailure } from '../../../../shared/connectors/connector-cloud-contract'
 import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyRow
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
 import type { JournalSqlDatabase } from '../database/journal-sql-database'
+import type { JournalSqlMaintenance } from '../journal-sql-maintenance'
 
 // Writes share one lane of their own on the writer worker; reads use the reader pool.
 const LANE = 'journal.connector-replies'
@@ -35,6 +39,32 @@ export class JournalSqlConnectorReplies {
       writer.maintain({ kind: 'connector-replies-fill', fills, now: Date.now() })
     )
     return result === true
+  }
+
+  /** Open rows a cut now owes a continuation; whether any changed. */
+  async cut(rows: JournalConnectorReplyCutRows): Promise<boolean> {
+    return await this.maintain({ kind: 'connector-replies-cut', rows }, rows.keys.length)
+  }
+
+  /** The continuation's own turn was cut and is owed again: its claimed rows become that cut's. */
+  async recut(
+    claimMessageId: string,
+    cut: JournalConnectorReplyCut,
+    failure?: ConnectorFailure
+  ): Promise<boolean> {
+    return await this.maintain({ kind: 'connector-replies-recut', claimMessageId, cut, failure })
+  }
+
+  /** The claiming message never became the continuation: its rows are their cut's again. */
+  async releaseClaim(claimMessageId: string): Promise<boolean> {
+    return await this.maintain({ kind: 'connector-replies-release', claimMessageId })
+  }
+
+  private async maintain(operation: JournalSqlMaintenance, size = 1): Promise<boolean> {
+    if (this.db.readOnly || size === 0) {
+      return false
+    }
+    return (await this.db.serialize(LANE, (writer) => writer.maintain(operation))) === true
   }
 
   /** The cloud accepted these rows. */

@@ -25009,7 +25009,13 @@
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
       "terminalDescriptionChats": "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats.",
       "terminalDescriptionNoChats": "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats.",
-      "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here."
+      "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here.",
+      "googleSignIn": "Google account sign-in",
+      "googleSignInAgy": "agy's own sign-in",
+      "googleSignInAgyOption": "Sign in by running agy",
+      "googleSignInOrca": "Orca's built-in sign-in",
+      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed",
+      "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -25986,6 +25992,9 @@
     "linkedMessageMissing": "Couldn't find that message.",
     "math": {
       "scrollDisplayEquation": "Scroll display equation"
+    },
+    "messageTime": {
+      "yesterday": "Yesterday {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -28005,9 +28014,6 @@
       "reading": "Getting to know your setup…",
       "read": "Getting to know your setup"
     },
-    "header": {
-      "open": "Open {{name}} settings"
-    },
     "lookSteps": {
       "slackThread": "a Slack thread",
       "slackChannel": "a Slack channel",
@@ -29352,7 +29358,7 @@
         "links": "Links",
         "showLess": "Show less",
         "showMore": "Show more",
-        "sub": "Item {{number}} · {{chat}} · {{when}}",
+        "subWhere": "Item {{number}} · {{chat}}",
         "showEarlier": "Show earlier",
         "next": "Next item",
         "previous": "Previous item",
@@ -29730,6 +29736,7 @@
     "auggieProduct": "Auggie",
     "kiloProduct": "Kilo CLI",
     "mimoCodeProduct": "MiMo Code",
+    "qwenCodeProduct": "Qwen Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

@@ -161,9 +161,9 @@ describe('orca automations create --bot', () => {
     [
       [
         ['bot', 'Reviewer'],
-        ['agent', 'gemini']
+        ['agent', 'aider']
       ],
-      "Bots can't run on gemini"
+      "Bots can't run on aider"
     ],
     [
       [

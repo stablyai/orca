@@ -86,7 +86,10 @@ export function structuredChatNamingDeps(
           'goose',
           'aug',
           'kilo',
-          'mimo-code'
+          'mimo-code',
+          'gemini',
+          'droid',
+          'qwen-code'
         ].includes(record.provider)
       ) {
         return null

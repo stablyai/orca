@@ -8,7 +8,6 @@ import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-nam
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -19,15 +18,9 @@ import {
 } from './MobileBotItemCommentAttachments'
 import { MobileBotItemQuestionLines } from './MobileBotItemQuestionLines'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
+import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
 const ICON = 13
-
-/** An Activity line's time: "9:41 AM". */
-export function botItemEventTime(at: number): string {
-  return new Intl.DateTimeFormat(getUiIntlLocale(), { hour: 'numeric', minute: '2-digit' }).format(
-    at
-  )
-}
 
 export function MobileBotItemCommentCard({
   item,
@@ -46,15 +39,20 @@ export function MobileBotItemCommentCard({
 }) {
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
+  const time = useMobileMessageTime()
   const mine = event.actor.kind === 'owner'
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
   return (
     <View style={[styles.card, mine && styles.cardMine, failed && styles.cardFailed]}>
       <View style={styles.cardHead}>
-        <Text style={styles.author}>{botItemActorName(event, item, t)}</Text>
+        <Text style={[styles.author, styles.shrink]} numberOfLines={1}>
+          {botItemActorName(event, item, t)}
+        </Text>
         <View style={styles.spacer} />
-        <Text style={styles.meta}>{botItemEventTime(event.at)}</Text>
+        <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
+          {time.label(event.at)}
+        </Text>
       </View>
       {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
       <MobileBotItemCommentAttachments data={event.data} {...attachments}>
@@ -115,6 +113,7 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.xs
   },
   author: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  shrink: { flexShrink: 1 },
   line: { fontSize: 13, lineHeight: 18, color: colors.textMuted },
   meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   spacer: { flex: 1 }

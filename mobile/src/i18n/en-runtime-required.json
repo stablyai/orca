@@ -218,6 +218,10 @@
         "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
         "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled."
       }
+    },
+    "import": {
+      "folderItems_one": "{{count}} item",
+      "folderItems_other": "{{count}} items"
     }
   },
   "chat": {
