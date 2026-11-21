@@ -218,3 +218,25 @@ describe('agent scratch worktrees', () => {
     })
   })
 })
+
+describe('host Workspace Directory layouts', () => {
+  it('recognizes worktrees under a remote host directory', () => {
+    const hostId = 'ssh:mini' as const
+    const repo = makeRepo({
+      path: '/home/me/milvus',
+      connectionId: 'mini',
+      executionHostId: hostId,
+      worktreeBasePath: undefined
+    })
+    const settings = makeSettings({
+      workspaceDir: '/Users/me/.orca/workspaces',
+      nestWorkspaces: false,
+      hostSettingOverrides: {
+        [hostId]: { defaultWorktreeLocation: '/home/me/.orca/workspaces' }
+      }
+    })
+    const paths = buildKnownOrcaWorkspaceLayouts(settings, repo).map((layout) => layout.path)
+
+    expect(paths).toContain('/home/me/.orca/workspaces')
+  })
+})
