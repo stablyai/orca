@@ -41,10 +41,13 @@ export function claudeProjectsRootDirs(args: {
   wslHomeDirs?: readonly string[]
   /** Passed in by a scan worker, which has no account router of its own. */
   claudeProfileProjectsDirs?: readonly string[]
+  /** Canonical projects dirs when ~/.claude is a symlink Windows cannot follow. */
+  extraClaudeProjectsDirs?: readonly string[]
 }): string[] {
   return uniqueDirs([
     ...(args.claudeProjectsDir ? [args.claudeProjectsDir] : claudeProjectsHostDirs()),
     ...wslHomeSessionDirs('claude', args.wslHomeDirs ?? []),
+    ...(args.extraClaudeProjectsDirs ?? []),
     ...(args.claudeProfileProjectsDirs ?? claudeProfileHistoryDirs('projects'))
   ])
 }
