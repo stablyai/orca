@@ -6,13 +6,10 @@ import { SUPPORTED, test } from '../session-fixtures/structured-claude-stub'
 import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
 import { waitForTerminalOutput } from '../../terminal/layout/terminal-pane-operations'
 
-const SHOTS = process.env.AGENT_COPY_SHOTS_DIR
-
 test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
 test('an agent copy has its own submenu in the + menu and launches as the copy', async ({
   orcaPage: page,
-  electronApp,
   claudeStub
 }) => {
   // Two agent launches after a cold Orca start; the default 60s is too tight on CI.
@@ -31,15 +28,6 @@ test('an agent copy has its own submenu in the + menu and launches as the copy',
   chmodSync(wrapper, 0o755)
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
-  if (SHOTS) {
-    // Screenshots need a drawn window; keep it unfocused.
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await electronApp.evaluate(({ BrowserWindow }) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.showInactive()
-      }
-    })
-  }
   await page.evaluate(async (command) => {
     await window.__store?.getState().updateSettings({
       agentDefaultSurface: 'terminal',
@@ -68,9 +56,6 @@ test('an agent copy has its own submenu in the + menu and launches as the copy',
   await expect(
     page.getByRole('combobox', { name: 'Search models' }).or(page.getByLabel('Search models'))
   ).toBeVisible({ timeout: 20_000 })
-  if (SHOTS) {
-    await page.screenshot({ path: path.join(SHOTS, 'copy-submenu.png') })
-  }
   // The panel launches the copy with the model picked there.
   await page.getByText('Haiku', { exact: true }).click({ force: true })
   await page.getByRole('button', { name: /Launch terminal/ }).click({ force: true })
