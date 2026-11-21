@@ -9,6 +9,7 @@ import {
   parseBotMemoryFacts
 } from '../../shared/bot-memory-lines'
 import { isProtectedBotMemoryLine } from '../../shared/bot-memory-line-kinds'
+import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import { TIDY_UP_ARCHIVE } from './bot-memory-tidy-up'
 import { TIDY_UP_TOPIC_NAME, type TidyUpPlan } from './bot-memory-tidy-up-draft'
 
@@ -112,6 +113,10 @@ export function checkTidyUpOps(
   const skipped: string[] = []
   const lossCap = Math.max(1, Math.floor(snapshot.length * TIDY_UP_OPS_MAX_LOSS))
   let lost = 0
+  const keeps: MemorySnapshotLine[] = []
+  // History can't keep a secret-looking line, or the line it sits under, for Undo.
+  const secretish = ({ raw, after }: MemorySnapshotLine): boolean =>
+    redactSecretLike(raw) !== raw || (after !== null && redactSecretLike(after) !== after)
   const take = (lines: MemorySnapshotLine[]): void => {
     for (const line of lines) {
       used.add(line.ref)
@@ -132,8 +137,14 @@ export function checkTidyUpOps(
       if (found.some((line) => used.has(line.ref))) {
         return 'names a line an earlier op took'
       }
-      return found.some(fixed)
-        ? "names your owner's rule or an undated line, which only your owner changes"
+      if (found.some(fixed)) {
+        return "names your owner's rule or an undated line, which only your owner changes"
+      }
+      if (found.length > picked.length) {
+        return 'names a line MEMORY.md states more than once; only your owner tidies those'
+      }
+      return found.some(secretish)
+        ? 'names a line that looks like a secret, or sits under one; only your owner moves it'
         : found
     }
     if (op.op === 'demote') {
@@ -148,7 +159,9 @@ export function checkTidyUpOps(
           return 'names a range MEMORY.md no longer has'
         }
         // Lines an earlier op took and the owner's own lines stay where they are.
-        const inRange = snapshot.slice(from, to + 1).filter((line) => !fixed(line))
+        const inRange = snapshot
+          .slice(from, to + 1)
+          .filter((line) => !fixed(line) && groupOf(line).length === 1 && !secretish(line))
         lines = [...new Set(inRange.flatMap(groupOf))].filter((line) => !used.has(line.ref))
       } else {
         const found = named(op.lines ?? [])
@@ -193,6 +206,9 @@ export function checkTidyUpOps(
     if (lost + going.length > lossCap) {
       return 'takes out more lines than one tidy-up may'
     }
+    // The kept line must still be there as it was, and no later op may take it.
+    keeps.push(...groupOf(kept))
+    groupOf(kept).forEach(({ ref }) => used.add(ref))
     take(going)
     lost += going.length
     going.forEach(({ raw }) => plan.merged!.add(keyOf(raw)))
@@ -209,7 +225,7 @@ export function checkTidyUpOps(
   })
   plan.change = { added: [], removed: removed.map(changeLine) }
   // Lines leave by their words: the apply checks the live file still has exactly these copies.
-  plan.groups = lineGroups(removed.map(({ raw }) => raw))
+  plan.groups = lineGroups([...removed, ...keeps].map(({ raw }) => raw))
   return { plan, skipped }
 }
 

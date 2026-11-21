@@ -812,28 +812,19 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     )
   })
 
-  it('takes nothing out when the owner undated a line it moves during the run', async () => {
-    const undated = OLD.replace('- 2026-10-02 times in Eastern', '- times in Eastern')
+  it.each([
+    ['the line a merge keeps changed', OLD.replace('are in Eastern', 'are in Pacific')],
+    ['a line it moves was undated', OLD.replace('- 2026-10-02 times in', '- times in')],
+    ['a copy of a line it moves was written', `${OLD}- 2026-11-06 times in Eastern\n`]
+  ])('takes nothing out when %s during the run', async (_what, changed) => {
     const run = harness({
       memory: OLD,
       reply: merge(),
-      duringRun: (files) => files.set(MEMORY, undated)
+      duringRun: (files) => files.set(MEMORY, changed)
     })
     run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
     await run.tick()
-    expect(run.files.get(MEMORY)).toBe(undated)
-    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.changed)
-  })
-
-  it('takes nothing out when a copy of a line it moves was written during the run', async () => {
-    const run = harness({
-      memory: OLD,
-      reply: merge(),
-      duringRun: (files) => files.set(MEMORY, `${OLD}- 2026-11-06 times in Eastern\n`)
-    })
-    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
-    await run.tick()
-    expect(run.files.get(MEMORY)).toBe(`${OLD}- 2026-11-06 times in Eastern\n`)
+    expect(run.files.get(MEMORY)).toBe(changed)
     expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.changed)
   })
 

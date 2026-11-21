@@ -2,6 +2,7 @@
 // of MEMORY.md into the month's journal file, word for word and without a model. It rides in a
 // Tidy-up's one History row, so Undo puts every line back.
 import { botMemoryLineKey } from '../../shared/bot-memory-lines'
+import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import { botMemoryLineKind, isOwnerRuleLine } from '../../shared/bot-memory-line-kinds'
 import type { TidyUpPlan } from './bot-memory-tidy-up-draft'
 import { lineGroups, memorySnapshot } from './bot-memory-ops'
@@ -50,7 +51,16 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
   // share moves alone in its own run, so it drains instead of waiting forever.
   const groups = new Map<string | null, typeof snapshot>()
   for (const line of snapshot) {
-    if (line.fact.date !== null && isStatusLine(line.fact.text) && !kept.has(key(line.raw))) {
+    // History can't keep a secret-looking line, or the one above it, for Undo: those stay.
+    const secret =
+      redactSecretLike(line.raw) !== line.raw ||
+      (line.after !== null && redactSecretLike(line.after) !== line.after)
+    if (
+      line.fact.date !== null &&
+      isStatusLine(line.fact.text) &&
+      !kept.has(key(line.raw)) &&
+      !secret
+    ) {
       const group = groups.get(key(line.raw))
       if (group) {
         group.push(line)
@@ -69,7 +79,9 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
     (oldest.get(a) ?? '').localeCompare(oldest.get(b) ?? '')
   )
   const status: typeof snapshot = []
-  for (const group of byAge) {
+  // A fact stated more than once stays: History restores one line per fact, so Undo can't bring
+  // back every copy.
+  for (const group of byAge.filter((candidate) => candidate.length === 1)) {
     if (status.length > 0 && status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
       continue
     }

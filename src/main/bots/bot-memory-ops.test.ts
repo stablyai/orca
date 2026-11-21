@@ -74,34 +74,43 @@ describe("Orca's checks on a tidy-up's ops", () => {
     ])
   })
 
-  it('moves every copy of a line it names, from a range too, and counts each toward the limit', () => {
+  it('leaves a line stated more than once, and a line that is or sits under a secret', () => {
     const copies = [
       '# M',
       '- 2026-10-05 Staging notes',
       '- 2026-10-06 keep me',
       '- 2026-10-07 Staging notes',
-      '- 2026-10-08 one more'
+      '- 2026-10-08 token=sk-live-1234567890abcdef',
+      '- 2026-10-09 under the secret'
     ].join('\n')
+    const ops = [
+      { op: 'retire', line: ref(1, copies), reason: 'stale' },
+      { op: 'retire', line: ref(5, copies), reason: 'stale' }
+    ]
+    expect(check(ops, copies).skipped).toEqual([
+      'retire 1: names a line MEMORY.md states more than once; only your owner tidies those',
+      'retire 2: names a line that looks like a secret, or sits under one; only your owner moves it'
+    ])
     const ranged = check(
-      [{ op: 'demote', range: [ref(1, copies), ref(2, copies)], topic: 'x' }],
+      [{ op: 'demote', range: [ref(1, copies), ref(5, copies)], topic: 'x' }],
       copies
     )
-    expect(ranged.plan.topics.get('x')).toEqual([
-      '- 2026-10-05 Staging notes',
-      '- 2026-10-07 Staging notes',
-      '- 2026-10-06 keep me'
-    ])
-    expect(ranged.plan.groups).toEqual(
-      new Map([
-        ['Staging notes', ['- 2026-10-05 Staging notes', '- 2026-10-07 Staging notes']],
-        ['keep me', ['- 2026-10-06 keep me']]
-      ])
-    )
-    expect(
-      check([{ op: 'retire', line: ref(1, copies), reason: 'stale' }], copies).skipped
-    ).toEqual(['retire 1: takes out more lines than one tidy-up may'])
+    expect(ranged.plan.topics.get('x')).toEqual(['- 2026-10-06 keep me'])
   })
 
+  it('checks the line a merge keeps, and lets no later op take it', () => {
+    const { plan, skipped } = check([
+      { op: 'merge', lines: [ref(2), ref(3)], keep: ref(3) },
+      { op: 'retire', line: ref(3), reason: 'stale' }
+    ])
+    expect(skipped).toEqual(['retire 2: names a line an earlier op took'])
+    expect(plan.groups).toEqual(
+      new Map([
+        ['Times are in Eastern', ['- 2026-10-02 Times are in Eastern']],
+        ['All times are in Eastern', ['- 2026-10-03 All times are in Eastern']]
+      ])
+    )
+  })
   it('skips a stale ref, a line an earlier op took, and a line named twice', () => {
     const { skipped } = check([
       { op: 'retire', line: 'L2#0000', reason: 'stale' },
@@ -203,15 +212,17 @@ describe('the status move', () => {
         ]
       ])
     )
-    // A group of copies too big for one run moves alone, so it drains; the next run takes the rest.
+    // A fact stated more than once stays: Undo restores one line per fact.
     const crowded = [
       '# M',
-      ...Array.from({ length: 1_001 }, () => '- 2026-11-01 #4417 merged at a1b2c3d4'),
+      '- 2026-11-01 #4417 merged at a1b2c3d4',
+      '- 2026-11-03 #4417 merged at a1b2c3d4',
       '- 2026-11-02 #4500 merged at b2c3d4e5'
     ].join('\n')
-    const moved = statusMigrationPlan(crowded, '2026-11-21')?.topics.get('journal/2026-11') ?? []
-    expect(moved).toHaveLength(1_002)
-    expect(moved).not.toContain('- 2026-11-02 #4500 merged at b2c3d4e5')
+    expect(statusMigrationPlan(crowded, '2026-11-21')?.topics.get('journal/2026-11')).toEqual([
+      '# Status moved out of MEMORY.md, 2026-11',
+      '- 2026-11-02 #4500 merged at b2c3d4e5'
+    ])
     // Lines leave by their words: a status line whose undated copy stays, stays too.
     const copied = '# M\n- 2026-11-12 #4417 merged at a1b2c3d4\n- #4417 merged at a1b2c3d4\n'
     expect(statusMigrationPlan(copied, '2026-11-21')).toBeNull()
