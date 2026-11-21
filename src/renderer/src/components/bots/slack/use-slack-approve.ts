@@ -1,12 +1,24 @@
 // Approve in Slack: Slack's approval page in this computer's browser, then the wait for it.
-import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction
+} from 'react'
 import type { SlackInstallLink } from './slack-install-link'
 import { openSlackApprovalHere } from './slack-page-here'
 import type { BotSlackSetupStep, OpenedSlackPage, SetupMount } from './use-bot-slack-setup'
 
+type ApproveStep = Extract<BotSlackSetupStep, { kind: 'ready' | 'waiting' }>
+/** A page still opening, and the step its success moves on from: the newest Approve for it. */
+type Launch = { at: ApproveStep; link: SlackInstallLink }
+
 /**
- * One launch per step, and it moves on only from the step it began on, in the dialog it began in:
- * a later Install again, Copy link or close wins over a launch that answers late.
+ * At most one launch per page in this dialog. Approve again for a page still opening joins that
+ * launch instead of opening it twice. A launch moves on only from the step it was last asked from,
+ * in the dialog it began in: a later Install again, Copy link or close wins over a late answer.
  */
 export function useSlackApprove(
   step: BotSlackSetupStep,
@@ -14,34 +26,40 @@ export function useSlackApprove(
   mounted: RefObject<SetupMount | null>,
   remember: (teamId: string, link: SlackInstallLink) => OpenedSlackPage
 ): () => void {
-  // The launch in flight: its page and dialog. A step change, such as Copy link, doesn't start
-  // another launch of the same page while that one is pending.
-  const launching = useRef<{ url: string; mount: SetupMount | null } | null>(null)
+  const pending = useRef(new Map<string, Launch>())
+  useEffect(() => {
+    const launches = pending.current
+    return () => launches.clear()
+  }, [])
   return useCallback(() => {
     const at = step
     if ((at.kind !== 'ready' && at.kind !== 'waiting') || !at.link) {
       return
     }
-    const [mount, link, teamId] = [mounted.current, at.link, at.teamId]
-    const pending = launching.current
-    if (pending && pending.url === link.authorizeUrl && pending.mount === mount) {
+    const url = at.link.authorizeUrl
+    const joined = pending.current.get(url)
+    if (joined) {
+      Object.assign(joined, { at, link: at.link })
       return
     }
-    const launch = { url: link.authorizeUrl, mount }
-    launching.current = launch
-    // Waits only once this computer's browser took Slack's page; a failed launch stays here.
-    void openSlackApprovalHere(link.authorizeUrl).then((opened) => {
-      if (launching.current === launch) {
-        launching.current = null
+    const launch: Launch = { at, link: at.link }
+    const mount = mounted.current
+    pending.current.set(url, launch)
+    // Waits only once this computer's browser took Slack's page; a failed launch stays here, and
+    // its page can be asked for again.
+    void openSlackApprovalHere(url).then((opened) => {
+      if (pending.current.get(url) === launch) {
+        pending.current.delete(url)
       }
       if (!opened || mounted.current !== mount) {
         return
       }
+      const { at: from, link } = launch
       // Checked against the step as it is when applied, so a Copy link in the same batch wins.
       // Recording the page is idempotent, so a repeated updater call changes nothing more.
       setStep((current) =>
-        current === at
-          ? { kind: 'waiting', teamId, ...remember(teamId, link), copied: false }
+        current === from
+          ? { kind: 'waiting', teamId: from.teamId, ...remember(from.teamId, link), copied: false }
           : current
       )
     })

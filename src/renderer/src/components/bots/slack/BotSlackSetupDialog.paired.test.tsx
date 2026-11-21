@@ -323,6 +323,11 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(screen.queryByText('Waiting for Slack…')).toBeNull()
     expect(screen.getByRole('button', { name: 'Approve in Slack' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
+    // The failed launch let go of its page: asking again opens it again.
+    openUrl.mockResolvedValue(undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+    expect(await screen.findByText('Waiting for Slack…')).toBeTruthy()
+    expect(openUrl).toHaveBeenCalledTimes(2)
   })
 
   it('launches Approve once, and a late launch never undoes a later Copy link', async () => {
@@ -406,7 +411,13 @@ describe('BotSlackSetupDialog on a paired computer', () => {
       expect(writeClipboardText).toHaveBeenLastCalledWith(SECOND)
     })
 
-    it('launches the same page once while pending, even when Install again brings it back', async () => {
+    const installAgain = async (): Promise<void> => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Install again' }))
+      await screen.findByRole('button', { name: 'Approve in Slack' })
+    }
+
+    it('joins a page still opening when Install again brings it back, and waits once it opens', async () => {
       // Install again can answer with the same approval link.
       mocks.hosts[SERVER].setUpApp
         .mockReset()
@@ -415,9 +426,40 @@ describe('BotSlackSetupDialog on a paired computer', () => {
       await approveFirstThenInstallAgain()
       fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
       expect(openUrl).toHaveBeenCalledTimes(1)
-      // Once it answered, the page can be opened again.
+      // The one launch answers for the Approve asked last: the dialog waits, Copy has its link.
       await act(async () => launches[0]())
+      expect(await screen.findByText('Waiting for Slack…')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+      await screen.findByText('Link copied')
+      expect(writeClipboardText).toHaveBeenLastCalledWith(AUTHORIZE)
+      expect(openUrl).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps one launch per page across A, B and A again, and A answering keeps B’s', async () => {
+      mocks.hosts[SERVER].setUpApp
+        .mockResolvedValueOnce(
+          ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+        )
+        .mockResolvedValueOnce(ok({ appId: 'A1', authorizeUrl: SECOND, expiresAt: NOW + 60_000 }))
+      openDialog()
+      await approveFirstThenInstallAgain()
       fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+      await installAgain()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+      expect(openUrl.mock.calls).toEqual([[AUTHORIZE], [SECOND]])
+      await act(async () => launches[0]())
+      await screen.findByText('Waiting for Slack…')
+      fireEvent.click(await screen.findByRole('button', { name: 'Install again' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+      expect(openUrl.mock.calls).toEqual([[AUTHORIZE], [SECOND]])
+    })
+
+    it('opens a page again in a dialog opened again while the old one was still opening', async () => {
+      openDialog()
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+      cleanup()
+      openDialog()
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
       expect(openUrl).toHaveBeenCalledTimes(2)
     })
 
