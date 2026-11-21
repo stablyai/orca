@@ -94,4 +94,26 @@ describe('folder Resource Manager rows', () => {
       unplaced: true
     })
   })
+
+  it("keeps a paired repo's chats read-only until this window lists the worktree", () => {
+    const chat = { agentSessionId: 'chat-2', agent: 'codex', name: null, cpu: 1, memory: 256 }
+    const repos = mergeSnapshotAndSessions(
+      null,
+      [],
+      context({
+        repoRuntimeHostIdById: new Map([['repo-1', 'runtime:paired']]),
+        runtimeHostResources: [
+          {
+            hostId: 'runtime:paired',
+            hostLabel: 'Studio',
+            worktrees: [{ ...oldRow, worktreeId: 'repo-1::/new', repoId: 'repo-1', chats: [chat] }]
+          }
+        ]
+      })
+    )
+
+    expect(
+      repos.flatMap((repo) => repo.worktrees).find((row) => row.worktreeId === 'repo-1::/new')
+    ).toMatchObject({ chats: [chat], unplaced: true })
+  })
 })
