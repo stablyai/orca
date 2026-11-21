@@ -383,6 +383,49 @@ it('reads imported attention, live execution ownership and aliased legacy opener
   expect(cleared.indicators.firstInputSubmissionKey).toBeNull()
 })
 
+it('names the tool and the input a pending approval asks to run, so a list can say it', () => {
+  const item = (
+    itemId: string,
+    body: Extract<JournalRow, { kind: 'item' }>['body']
+  ): JournalRow => ({ ...base, kind: 'item', itemId, revision: 1, body })
+  // Claude's approval detail is its tool input, pretty-printed.
+  const approval = (title: string, input: Record<string, string>, toolName?: string): JournalRow =>
+    item(`ask-${title}`, {
+      kind: 'approval',
+      title,
+      ...(toolName ? { toolName } : {}),
+      detail: JSON.stringify(input, null, 2),
+      options: [{ id: 'allow', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+  const bash = approval('Allow Bash?', { command: 'pnpm vitest run upload.test.ts' }, 'Bash')
+  const edit = approval(
+    'Allow Edit?',
+    { file_path: 'src/upload/retry.ts', old_string: 'a' },
+    'Edit'
+  )
+  const running = [
+    item('ask', message('Run the tests')),
+    item('turn', { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'ask' })
+  ]
+  const awaited = (rows: JournalRow[]) =>
+    readJournalSqlStatusState(fixture([...running, ...rows]).context()).summary.awaitsApproval
+
+  expect(
+    readJournalSqlStatusState(fixture([...running, bash, edit]).context()).summary
+  ).toMatchObject({
+    status: 'attention',
+    awaitsApproval: { tool: 'Bash', input: 'pnpm vitest run upload.test.ts' }
+  })
+  expect(awaited([edit])).toEqual({ tool: 'Edit', input: 'src/upload/retry.ts' })
+  // A provider that names no tool reads as its prompt's title.
+  expect(awaited([approval('Run the tests?', { command: 'pnpm test' })])).toEqual({
+    tool: 'Run the tests?',
+    input: 'pnpm test'
+  })
+  expect(awaited([])).toBeUndefined()
+})
+
 it('waits on the user for a Codex async question after its turn ends, until their next message', () => {
   const item = (
     itemId: string,

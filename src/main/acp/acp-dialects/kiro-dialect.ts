@@ -28,5 +28,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const KIRO_ACP_DIALECT: AcpDialect = {
-  normalizeToolUpdate
+  normalizeToolUpdate,
+  // Kiro runs user hooks only for ACP clients that opt in at initialize, as its own TUI does.
+  clientCapabilities: { _meta: { kiro: { hooks: { enabled: true, v2: true } } } }
 }

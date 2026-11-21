@@ -1,5 +1,6 @@
 // The owner's item calls from the phone: the host the route reaches (a paired server's too) reads and
-// changes the bot's items. Writes carry no request id in v1, so a dropped reply is never retried.
+// changes the bot's items. Only a comment carries a request id (where the host takes one), so only a
+// comment's Retry is safe after a dropped reply.
 import * as z from 'zod'
 import {
   BotItemShowReadSchema,
@@ -129,7 +130,7 @@ export function markBotItemsOpened(client: RpcClient, botId: string): void {
 
 /** How an owner write went: `unknown` when the connection dropped after sending, so it may have landed. */
 export type BotItemWriteOutcome =
-  | { kind: 'done' }
+  | { kind: 'done'; result?: unknown }
   | { kind: 'refused'; message: string }
   | { kind: 'unknown' }
   | { kind: 'not-sent' }
@@ -141,23 +142,32 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
   } catch (error) {
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
-  return reply instanceof Error ? { kind: 'refused', message: reply.message } : { kind: 'done' }
+  return reply instanceof Error
+    ? { kind: 'refused', message: reply.message }
+    : { kind: 'done', result: reply }
 }
 
+/** `images`: committed attachment store paths on the bot's host; `requestId` only to a host that
+ *  takes one. Done carries the host's answer, `{ eventId }`. */
 export function commentOnBotItem(
   client: RpcClient,
   uid: string,
-  text: string
+  text: string,
+  extra: { images?: readonly string[]; requestId?: string } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemComment.request(
       client,
-      { item: uid, text },
+      {
+        item: uid,
+        text,
+        ...(extra.images?.length ? { images: [...extra.images] } : {}),
+        ...(extra.requestId ? { requestId: extra.requestId } : {})
+      },
       { failWhenDisconnected: true }
     )
     try {
-      itemComment.interpret(reply)
-      return null
+      return itemComment.interpret(reply)
     } catch (error) {
       return error instanceof Error ? error : new Error(String(error))
     }

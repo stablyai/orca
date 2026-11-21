@@ -162,6 +162,7 @@ export async function removeRegisteredLocalWorktree(
         repoId,
         repoPath: repo.path,
         worktree: refreshedRegisteredWorktree,
+        gitdir: await backgroundRemoval.markerIdentity(refreshedRegisteredWorktree.path),
         deleteBranch,
         force: args.force ?? false
       },

@@ -15,7 +15,11 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Icon',
   ChevronRight: 'Icon',
   ChevronDown: 'Icon',
-  ChevronLeft: 'Icon'
+  ChevronLeft: 'Icon',
+  Laptop: 'Icon',
+  Mail: 'Icon',
+  ShieldAlert: 'Icon',
+  ShieldOff: 'Icon'
 }))
 vi.mock('../components/list/DisclosureChevron', () => ({
   DisclosureChevron: ({ children }: { children: ReactNode }) => children
@@ -228,7 +232,8 @@ function machineStatus(machineName: string): RpcResponse {
 function expectNamedWarningAndConsent(root: ReactTestInstance, name: string): void {
   expect(texts(root).some((text) => text.includes(name))).toBe(true)
   press(root, 'Review Dana Kim')
-  expect(root.findByProps({ confirmLabel: 'Give access' }).props.message).toContain(name)
+  root.findByProps({ confirmLabel: 'Give access' })
+  expect(texts(root)).toContain(`They’ll act as you on ${name}.`)
   press(root, 'Cancel')
 }
 

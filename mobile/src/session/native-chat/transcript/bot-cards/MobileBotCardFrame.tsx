@@ -15,6 +15,7 @@ export function MobileBotCardFrame({
   heading,
   trailing,
   title,
+  titleLines = 1,
   meta,
   fontScale,
   onToggle,
@@ -26,6 +27,7 @@ export function MobileBotCardFrame({
   heading?: string
   trailing?: ReactNode
   title?: string
+  titleLines?: number
   meta?: ReactNode
   fontScale: number
   onToggle?: () => void
@@ -53,7 +55,7 @@ export function MobileBotCardFrame({
         ) : null}
         {title ? (
           <Text
-            numberOfLines={1}
+            numberOfLines={titleLines}
             style={[styles.title, scaledType(typography.bodySize, fontScale, 4)]}
           >
             {title}

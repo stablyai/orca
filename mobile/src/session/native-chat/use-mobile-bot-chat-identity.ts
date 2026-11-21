@@ -100,9 +100,9 @@ export function useMobileBotChatIdentity(
   )
   return useMemo(
     () =>
-      owns && bot && avatar
-        ? { botId: bot.id, name: bot.name, avatar, cancelledWaits: bot.cancelledWaits }
+      owns && bot && avatar && sessionId
+        ? { botId: bot.id, sessionId, name: bot.name, avatar, cancelledWaits: bot.cancelledWaits }
         : null,
-    [owns, bot, avatar]
+    [owns, bot, avatar, sessionId]
   )
 }
