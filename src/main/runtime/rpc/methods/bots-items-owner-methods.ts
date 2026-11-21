@@ -161,7 +161,8 @@ const COMMENT = defineMethod({
       images,
       undefined,
       params.requestId,
-      params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1)
+      params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1),
+      params.plain === true
     )
     botItems.changed([item.ownerBotId])
     // The comment is stored and its mail owed: the reply never waits on the chat taking it.

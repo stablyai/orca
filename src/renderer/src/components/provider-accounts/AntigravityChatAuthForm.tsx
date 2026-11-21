@@ -53,21 +53,15 @@ type AuthFormProps = {
   fieldsRow?: (fields: ReactNode) => ReactNode
   /** The Google sign-in choice's state from the host's answer; shown only where it is known. */
   googleSignIn?: AntigravityGoogleSignInState
+  /** After a saved sign-in method, e.g. so the Google sign-in choice reads the new route. */
+  onSaved?: () => void
   children: (action: AntigravityChatAuthAction) => ReactNode
 }
 
 const unwrapped = (fields: ReactNode): ReactNode => fields
 
-export function AntigravityChatAuthForm({
-  owner,
-  disabled,
-  onSignIn,
-  heading,
-  signInError,
-  fieldsRow,
-  googleSignIn,
-  children
-}: AuthFormProps): React.JSX.Element | null {
+export function AntigravityChatAuthForm(props: AuthFormProps): React.JSX.Element | null {
+  const { owner, heading, onSignIn, signInError, children } = props
   const capability = useStructuredAgentSessionHostCapabilityState(
     owner,
     ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY
@@ -89,21 +83,7 @@ export function AntigravityChatAuthForm({
     )
   }
   const key = owner.kind === 'local' ? 'local' : owner.environmentId
-  return (
-    <AuthForm
-      key={key}
-      owner={owner}
-      disabled={disabled}
-      supported={capability === 'supported'}
-      onSignIn={onSignIn}
-      heading={heading}
-      signInError={signInError}
-      fieldsRow={fieldsRow}
-      googleSignIn={googleSignIn}
-    >
-      {children}
-    </AuthForm>
-  )
+  return <AuthForm key={key} {...props} supported={capability === 'supported'} />
 }
 
 function AuthForm({
@@ -115,6 +95,7 @@ function AuthForm({
   signInError,
   fieldsRow = unwrapped,
   googleSignIn,
+  onSaved,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const t = useTranslate()
@@ -264,6 +245,7 @@ function AuthForm({
         setMethod(next.method)
         setProject(next.gcpProject ?? '')
         setLocation(next.gcpLocation ?? '')
+        onSaved?.()
         return true
       })
       .catch(() => {
@@ -362,7 +344,7 @@ function AuthForm({
               </Select>
             </AntigravityChatAuthSettingRow>
             {method === 'oauth-personal' && googleSignIn && (
-              <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} />
+              <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} disabled={blocked} />
             )}
             {usesGcp && (
               <AntigravityChatGcpFields

@@ -182,6 +182,17 @@ export function getStructuredAgentSessionTabs(
   return list
 }
 
+// Chat tabs keep their objects across non-chat writes, so a full pass never re-hashes a session id.
+const paneKeysByTab = new WeakMap<StructuredTab, string>()
+export function structuredTabPaneKey(tab: StructuredTab): string {
+  let paneKey = paneKeysByTab.get(tab)
+  if (paneKey === undefined) {
+    paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    paneKeysByTab.set(tab, paneKey)
+  }
+  return paneKey
+}
+
 const emptyPaneTabs: ReadonlyMap<string, StructuredTab> = new Map()
 const paneTabs = new WeakMap<readonly StructuredTab[], ReadonlyMap<string, StructuredTab>>()
 export function getStructuredAgentSessionTabsByPaneKey(
@@ -190,16 +201,20 @@ export function getStructuredAgentSessionTabsByPaneKey(
   if (!tabs) {
     return emptyPaneTabs
   }
-  const structuredTabs = Array.isArray(tabs)
-    ? structuredTabsOf(tabs, undefined)
-    : getStructuredAgentSessionTabs(tabs)
+  return structuredTabsByPaneKey(
+    Array.isArray(tabs) ? structuredTabsOf(tabs, undefined) : getStructuredAgentSessionTabs(tabs)
+  )
+}
+
+/** A chat list's tabs by pane key, built once per list identity. */
+export function structuredTabsByPaneKey(
+  structuredTabs: readonly StructuredTab[]
+): ReadonlyMap<string, StructuredTab> {
   const cached = paneTabs.get(structuredTabs)
   if (cached) {
     return cached
   }
-  const result = new Map(
-    structuredTabs.map((tab) => [structuredAgentSessionPaneKey(tab.id, tab.entityId), tab])
-  )
+  const result = new Map(structuredTabs.map((tab) => [structuredTabPaneKey(tab), tab]))
   paneTabs.set(structuredTabs, result)
   return result
 }

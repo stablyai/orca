@@ -58,4 +58,8 @@ it('reads Windows environment names case-insensitively', async () => {
   saveGoogleLogin()
   expect(envValue({ Gemini_Api_Key: 'k' }, 'GEMINI_API_KEY', 'win32')).toBe('k')
   expect(envValue({ Gemini_Api_Key: 'k' }, 'GEMINI_API_KEY', 'linux')).toBeUndefined()
+  // Names differing only in case: the set one wins over an empty one.
+  expect(envValue({ Gemini_Api_Key: '', GEMINI_API_KEY: 'saved' }, 'GEMINI_API_KEY', 'win32')).toBe(
+    'saved'
+  )
 })
