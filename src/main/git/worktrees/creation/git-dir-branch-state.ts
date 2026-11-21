@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { lstat, open, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
+import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { dirname, isAbsolute, join } from 'node:path'
 
@@ -87,24 +87,31 @@ export async function readRefLink(path: string): Promise<string | undefined> {
 // Refs are a short line; anything larger, or not a regular file, is left to Git's listing.
 const MAX_REF_BYTES = 4096
 
-/** A ref's content without blocking on a FIFO or buffering a large file; '' for a directory. */
+/** A ref's content; '' for a directory (`refs/heads/feature/` beside an unborn `feature` holds no ref). */
 async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
+  const text = await readBoundedFile(path, MAX_REF_BYTES, extraFlags)
+  return text === null ? '' : text === undefined ? UNRESOLVED_HEAD : normalizeHead(text)
+}
+
+/** A regular file's content, opened without blocking on a FIFO; null for a directory, undefined when not regular or over `maxBytes`. */
+async function readBoundedFile(
+  path: string,
+  maxBytes: number,
+  extraFlags = 0
+): Promise<string | null | undefined> {
   const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | extraFlags)
   try {
     const info = await handle.stat()
-    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
     if (info.isDirectory()) {
-      return ''
+      return null
     }
-    if (!info.isFile() || info.size > MAX_REF_BYTES) {
-      return UNRESOLVED_HEAD
+    if (!info.isFile() || info.size > maxBytes) {
+      return undefined
     }
     // One spare byte shows a file that grew past its stat.
     const buffer = Buffer.allocUnsafe(info.size + 1)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-    return bytesRead > info.size
-      ? UNRESOLVED_HEAD
-      : normalizeHead(buffer.toString('utf8', 0, bytesRead))
+    return bytesRead > info.size ? undefined : buffer.toString('utf8', 0, bytesRead)
   } finally {
     await handle.close()
   }
@@ -163,13 +170,22 @@ export function normalizeHead(text: string): string {
 
 export const COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
+// Git caps a gitfile at 1 MiB; other metadata here is smaller still.
+const MAX_METADATA_BYTES = 1 << 20
+
+/** A metadata file's content, '' when missing; throws for anything but a small regular file. */
 export async function readOptional(path: string): Promise<string> {
+  let text: string | null | undefined
   try {
-    return await readFile(path, 'utf8')
+    text = await readBoundedFile(path, MAX_METADATA_BYTES)
   } catch (error) {
     rethrowUnlessMissing(error)
     return ''
   }
+  if (typeof text !== 'string') {
+    throw new Error(`Not a small regular file: ${path}`)
+  }
+  return text
 }
 
 export function errorCode(error: unknown): unknown {
