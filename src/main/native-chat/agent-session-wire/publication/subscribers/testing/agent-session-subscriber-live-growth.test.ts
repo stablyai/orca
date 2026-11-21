@@ -7,6 +7,7 @@ import type { Subscriber } from '../agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from '../agent-session-subscriber-catch-up'
 import {
   publishSubscriberLiveText,
+  sessionLiveTextReaders,
   withSubscriberLiveText
 } from '../agent-session-subscriber-live-text'
 import type * as WireForm from '../../history/agent-session-item-wire-form'
@@ -62,7 +63,7 @@ function stream(boundedFrames: boolean, holdsTextBase?: () => boolean) {
       hostNow: 0
     })
   const publish = (text: string): Promise<void> => publishItems([reply(text)])
-  return { events, publish, publishItems }
+  return { events, publish, publishItems, subscriber }
 }
 
 describe('a live reply that only grows', () => {
@@ -116,6 +117,34 @@ describe('a live reply that only grows', () => {
     await publishItems(read?.('e') ?? [])
     expect(read?.('e')).toHaveLength(1)
     expect(events).toEqual([])
+  })
+
+  it('is no longer read for a phone that was sent it shortened, since its save carries it', async () => {
+    let read:
+      | ((epoch: string, readers?: { appends: boolean }) => readonly AgentJournalRenderItem[])
+      | undefined
+    let reads = 0
+    const rows = new StructuredAgentSessionLiveTextRows(
+      {
+        bindLiveText: (source) => {
+          read = source.read
+          return () => {}
+        }
+      },
+      () => {
+        reads += 1
+        return 'a'.repeat(128 * 1024)
+      },
+      (_key, text) => reply(text).body
+    )
+    rows.committed('reply')(reply(''), 'e')
+    const { events, publishItems, subscriber } = stream(true, () => false)
+    const readers = () => sessionLiveTextReaders(new Map([['reader', subscriber]])) ?? undefined
+    await publishItems(read?.('e', readers()) ?? [])
+    reads = 0
+    await publishItems(read?.('e', readers()) ?? [])
+    expect(events).toHaveLength(1)
+    expect(reads).toBe(0)
   })
 
   it('reaches an append reader as only its new text', async () => {

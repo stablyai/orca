@@ -206,6 +206,7 @@ export function pageWithSubscriberLiveText(
 ): AgentJournalRenderItem[] {
   const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
   subscriber.liveSent = new Map()
+  subscriber.liveShortened = undefined
   return subscriber.boundedFrames
     ? page.items
     : withSubscriberLiveText(page.items, live, reader.form, noteSubscriberLiveRow(subscriber), [
@@ -261,12 +262,13 @@ export function sessionLiveTextReaders(
 }
 
 function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {
-  for (const subscriber of subscribers) {
-    if (subscriber.holdsTextBase !== undefined) {
-      return { appends: true }
-    }
-  }
-  return { appends: false }
+  const appenders = [...subscribers].filter((subscriber) => subscriber.holdsTextBase !== undefined)
+  return appenders.length === 0
+    ? { appends: false }
+    : {
+        appends: true,
+        takes: (itemId) => appenders.some((reader) => !reader.liveShortened?.has(itemId))
+      }
 }
 
 /** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
@@ -310,6 +312,10 @@ export async function publishSubscriberLiveText(
       if (!subscriber.holdsTextBase && isAppendOnlyLiveRow(source)) {
         continue
       }
+      // A shortened row never grows on screen, so its save carries it.
+      if (subscriber.liveShortened?.has(source.itemId)) {
+        continue
+      }
       const prior = sent?.get(source.itemId)
       // Sent whole once, the row becomes the reader's base; one the reader still can't append to
       // would go whole every window, so its save carries it.
@@ -320,6 +326,9 @@ export async function publishSubscriberLiveText(
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
       const row = prior?.source === source ? prior : liveRow(prior, source, form, maxBytes)
       rows.push(row)
+      if (row.sent.shortened === true && isAppendOnlyLiveRow(source)) {
+        ;(subscriber.liveShortened ??= new Set()).add(source.itemId)
+      }
       if (row !== prior && !sameSentForm(prior, row.sent)) {
         fresh.push(row.sent)
         freshBytes += row.bytes

@@ -28,23 +28,31 @@ function textLength(node: ElementContent): number {
     : 0
 }
 
+/** Source offsets of selected fading words; their groups keep their word elements as the window moves. */
+export type MarkdownFadeHold = { from: number; to: number }
+
+type WordFade = { from: number; base: number; hold?: MarkdownFadeHold }
+
 /** Every text node becomes a word group, so the groups keep their places while the window moves;
  *  each records where in its text the window starts. Text that plugins added has no position, so
  *  it is placed after what came before it. */
-function splitWords(node: Root | Element, from: number, cursor: { at: number }): void {
+function splitWords(node: Root | Element, fade: WordFade, cursor: { at: number }): void {
+  const { from, base, hold } = fade
   node.children.forEach((child, index) => {
     const start = child.position?.start.offset
     const end = child.position?.end.offset
     if (child.type === 'text') {
       const at = start ?? cursor.at
       cursor.at = end ?? at + child.value.length
+      const held = hold && at < hold.to && at + child.value.length > hold.from
+      const groupFrom = held ? Math.min(from, hold.from) : from
       node.children[index] = {
         type: 'element',
         tagName: 'span',
         properties: {
           dataWordGroup: '',
-          dataFadeFrom: Math.min(child.value.length, Math.max(0, from - at)),
-          dataFadeOffset: at
+          dataFadeFrom: Math.min(child.value.length, Math.max(0, groupFrom - at)),
+          dataFadeOffset: base + at
         },
         children: [{ type: 'text', value: child.value }]
       }
@@ -58,7 +66,7 @@ function splitWords(node: Root | Element, from: number, cursor: { at: number }):
       !UNSPLIT_TAGS.has(child.tagName) &&
       !(Array.isArray(child.properties.className) && child.properties.className.includes('katex'))
     ) {
-      splitWords(child, from, cursor)
+      splitWords(child, fade, cursor)
     } else if (end === undefined) {
       cursor.at += textLength(child)
     }
@@ -66,7 +74,8 @@ function splitWords(node: Root | Element, from: number, cursor: { at: number }):
   })
 }
 
-/** Words from source offset `from` on fade in; text before it renders plain. */
-export function rehypeWordFade({ from }: { from: number }): (tree: Root) => void {
-  return (tree) => splitWords(tree, from, { at: 0 })
+/** Words from block offset `from` on fade in; text before it renders plain, except in groups that
+ *  `hold` reaches. Groups record their offsets in the whole content, which starts `base` earlier. */
+export function rehypeWordFade(fade: WordFade): (tree: Root) => void {
+  return (tree) => splitWords(tree, fade, { at: 0 })
 }

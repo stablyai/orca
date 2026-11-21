@@ -1,9 +1,10 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
-  isDocumentRangeInFadingWords,
+  selectedFadingWords,
   watchDocumentRange
 } from '@/components/comment-markdown/CommentMarkdownWords'
+import type { MarkdownFadeHold } from '@/components/comment-markdown/comment-markdown-word-fade'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
 import { documentHeldDrawnCount } from '../session/structured/read/document-viewer-visibility'
@@ -29,16 +30,18 @@ export type NativeChatPacedText = {
   fading: boolean
   /** Where the words shown in the last fade window start; text before it renders plain. */
   fadeFrom: number | undefined
+  /** Selected fading words, which keep their elements so the selection keeps its nodes. */
+  fadeHold: MarkdownFadeHold | undefined
 }
 
 type ShownSample = { at: number; length: number }
-type Shown = { length: number; fadeFrom: number }
+type Shown = { length: number; fadeFrom: number; hold?: MarkdownFadeHold }
 
 export function useNativeChatPacedText(
   rowKey: string,
   text: string,
   streaming: boolean,
-  /** The reply's element; only a selection of its fading words holds them still. */
+  /** The reply's element; only a selection of its fading words keeps them as elements. */
   root: React.RefObject<HTMLElement | null>
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
@@ -55,12 +58,12 @@ export function useNativeChatPacedText(
   const pace = useRef(initial)
   // Text already there when the reply mounts never fades.
   const samples = useRef<ShownSample[]>([{ at: -Infinity, length: initial.shown }])
-  const [{ length: shown, fadeFrom }, setShownState] = useState<Shown>({
+  const [{ length: shown, fadeFrom, hold }, setShownState] = useState<Shown>({
     length: initial.shown,
     fadeFrom: initial.shown
   })
-  // Recorded as text is shown, so only words shown in the last fade window are elements. Holds
-  // still while its fading words are selected, so the selection keeps its nodes.
+  // Recorded as text is shown, so only words shown in the last fade window are elements, plus any
+  // selected ones, so the selection keeps its nodes.
   const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
   const setShown = useCallback(
     (length: number, plain = false): void => {
@@ -73,16 +76,17 @@ export function useNativeChatPacedText(
       while (history.length > 1 && history[1]!.at <= now - WORD_FADE_MS) {
         history.shift()
       }
-      setShownState((previous) =>
-        previous.length === length
-          ? previous
-          : {
-              length,
-              fadeFrom: isDocumentRangeInFadingWords(root.current)
-                ? previous.fadeFrom
-                : Math.min(history[0]!.length, length)
-            }
-      )
+      setShownState((previous) => {
+        if (previous.length === length) {
+          return previous
+        }
+        const selected = selectedFadingWords(root.current)
+        const hold =
+          selected?.from === previous.hold?.from && selected?.to === previous.hold?.to
+            ? previous.hold
+            : selected
+        return { length, fadeFrom: Math.min(history[0]!.length, length), ...(hold ? { hold } : {}) }
+      })
     },
     [root]
   )
@@ -142,7 +146,7 @@ export function useNativeChatPacedText(
     let due = false
     // Dropping the word spans while text is selected would take the selection's nodes with them.
     const settle = (): void => {
-      if (due && !isDocumentRangeInFadingWords(root.current)) {
+      if (due && selectedFadingWords(root.current) === undefined) {
         document.removeEventListener('selectionchange', settle)
         setLingering(false)
       }
@@ -164,6 +168,7 @@ export function useNativeChatPacedText(
     text: reducedMotion ? text : text.slice(0, Math.min(shown, text.length)),
     revealing,
     fading,
-    fadeFrom: fading ? fadeFrom : undefined
+    fadeFrom: fading ? fadeFrom : undefined,
+    fadeHold: fading ? hold : undefined
   }
 }

@@ -11,7 +11,8 @@ export async function unpacedTextModule(
       text,
       revealing: false,
       fading: false,
-      fadeFrom: undefined
+      fadeFrom: undefined,
+      fadeHold: undefined
     })
   }
 }

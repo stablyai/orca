@@ -1,4 +1,5 @@
 import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
+import type { MarkdownFadeHold } from './comment-markdown-word-fade'
 import React from 'react'
 import {
   CommentMarkdownMermaidContext,
@@ -116,6 +117,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   /** Content offset where arriving words start; words from it on get their own `data-word`
    *  element, for a stylesheet to fade in. */
   fadeFrom?: number
+  /** Selected fading words, whose groups keep their word elements while the window moves past. */
+  fadeHold?: MarkdownFadeHold
   extension?: CommentMarkdownExtension
   /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
   unknownHtmlAsText?: boolean
@@ -144,6 +147,7 @@ const CommentMarkdown = React.memo(
       keepMermaidSourceWhilePending = false,
       growing = false,
       fadeFrom,
+      fadeHold,
       extension,
       onCopy,
       unknownHtmlAsText = false,
@@ -216,9 +220,13 @@ const CommentMarkdown = React.memo(
               {...rest}
             >
               {blocks.map((block, index) => {
-                // Only blocks reaching into the fade window fade; earlier ones stay memoized and plain.
+                // Only blocks reaching into the fade window or a held selection fade; earlier ones
+                // stay memoized and plain.
+                const blockEnd = block.start + block.text.length
+                const held =
+                  fadeHold !== undefined && fadeHold.from < blockEnd && fadeHold.to > block.start
                 const blockFadeFrom =
-                  fadeFrom !== undefined && fadeFrom < block.start + block.text.length
+                  fadeFrom !== undefined && (fadeFrom < blockEnd || held)
                     ? Math.max(0, fadeFrom - block.start)
                     : undefined
                 return (
@@ -229,6 +237,13 @@ const CommentMarkdown = React.memo(
                       rehypePlugins={activeRehypePlugins}
                       math={math}
                       fadeFrom={blockFadeFrom}
+                      fadeBase={block.start}
+                      {...(held
+                        ? {
+                            fadeHoldFrom: fadeHold.from - block.start,
+                            fadeHoldTo: fadeHold.to - block.start
+                          }
+                        : {})}
                       components={blockFadeFrom === undefined ? components : fadingComponents}
                       urlTransform={
                         allowFileUriLinks

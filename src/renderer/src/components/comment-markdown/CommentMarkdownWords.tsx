@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import type { ExtraProps } from 'react-markdown'
-import { markdownWordTokens } from './comment-markdown-word-fade'
+import { markdownWordTokens, type MarkdownFadeHold } from './comment-markdown-word-fade'
 
 /** Reading the selection flushes layout, so one listener keeps the selected range. A Range is
  *  live, so testing it against a node later touches only the DOM tree. */
@@ -12,19 +12,25 @@ function readDocumentRange(): void {
     selection && !selection.isCollapsed && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
 }
 
-/** Whether a selected range reaches the fading words in `root`, whose nodes it would lose if they
- *  merged into plain text; current while watched. */
-export function isDocumentRangeInFadingWords(root: Element | null): boolean {
+/** The content offsets of the fading words a selected range reaches in `root`, whose nodes the
+ *  selection would lose if they merged into plain text; current while watched. */
+export function selectedFadingWords(root: Element | null): MarkdownFadeHold | undefined {
   const range = selectedRange
   if (root === null || range?.intersectsNode(root) !== true) {
-    return false
+    return undefined
   }
-  for (const group of root.querySelectorAll('[data-word-group]')) {
-    if (range.intersectsNode(group)) {
-      return true
+  let hold: MarkdownFadeHold | undefined
+  for (const word of root.querySelectorAll<HTMLElement>('[data-word]')) {
+    if (range.intersectsNode(word)) {
+      const words = word.parentElement
+      const from = Number(words?.dataset.fadeStart)
+      const to = Number(words?.dataset.fadeEnd)
+      if (Number.isFinite(from) && Number.isFinite(to)) {
+        hold = { from: Math.min(hold?.from ?? from, from), to: Math.max(hold?.to ?? to, to) }
+      }
     }
   }
-  return false
+  return hold
 }
 
 export function watchDocumentRange(): () => void {
@@ -53,7 +59,7 @@ export function CommentMarkdownWords({
   const text = String(children ?? '')
   const start = Number(node?.properties.dataFadeOffset ?? 0) + from
   return (
-    <span data-word-group="">
+    <span data-word-group="" data-fade-start={start} data-fade-end={start - from + text.length}>
       {text.slice(0, from)}
       {markdownWordTokens(text.slice(from)).map(({ value, offset }) =>
         value.trim() === '' ? (

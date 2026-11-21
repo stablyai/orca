@@ -65,7 +65,11 @@ export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppe
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
 /** Who a live read is for; a source whose rows only an append reader takes skips the read without one. */
-export type LiveTextReaders = { appends: boolean }
+export type LiveTextReaders = {
+  appends: boolean
+  /** Whether any reader still takes this row's live text; absent, every one does. */
+  takes?: (itemId: string) => boolean
+}
 export type LiveTextRead = (readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
 
 /** The row as written, so live text can reuse its placement without saving. */

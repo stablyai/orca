@@ -4,7 +4,8 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionItemCommitted
+  StructuredAgentSessionItemCommitted,
+  LiveTextReaders
 } from './structured-agent-session-event-sink'
 import { CHAT_LIVE_TEXT_SUBSCRIBER_BYTES } from '../../retention/subscriber-live-text-cap'
 import { noteReplyTextGrowth } from '../../../../shared/agent-session/view/live-read/agent-session-text-append'
@@ -46,7 +47,7 @@ export class StructuredAgentSessionLiveTextRows {
   ) {
     // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
     this.release = sink.bindLiveText?.({
-      read: (epoch, readers) => (readers?.appends === false ? [] : this.read(epoch)),
+      read: (epoch, readers) => (readers?.appends === false ? [] : this.read(epoch, readers)),
       flush: () => {}
     })
   }
@@ -79,11 +80,12 @@ export class StructuredAgentSessionLiveTextRows {
     this.release?.()
   }
 
-  private read(epoch: string): AgentJournalRenderItem[] {
+  private read(epoch: string, readers?: LiveTextReaders): AgentJournalRenderItem[] {
     const items: AgentJournalRenderItem[] = []
     let budget = LIVE_TEXT_STREAM_MAX_CHARS
     for (const [key, placement] of this.placements) {
-      const text = placement?.epoch === epoch ? this.text(key, budget) : undefined
+      const wanted = placement && readers?.takes?.(placement.row.itemId) !== false
+      const text = wanted && placement.epoch === epoch ? this.text(key, budget) : undefined
       if (!placement || text === undefined) {
         continue
       }

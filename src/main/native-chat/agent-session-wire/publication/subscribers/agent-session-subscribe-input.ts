@@ -58,6 +58,8 @@ export type Subscriber = {
   holdsTextBase?: (itemId: string) => boolean
   /** Live rows last sent, by row; a page that replaces the view clears it. */
   liveSent?: Map<string, SubscriberLiveRow>
+  /** Streaming replies this subscriber was sent shortened; their saves carry them, not live text. */
+  liveShortened?: Set<string>
   /** Host facts the client holds, which a live row-carrying frame must restate. */
   hostWork?: SubscriberHostWork
   /** Aborts when the subscriber is dropped, withdrawing its reads still waiting for a reader. */

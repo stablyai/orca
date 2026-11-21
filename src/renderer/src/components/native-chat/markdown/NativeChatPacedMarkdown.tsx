@@ -8,7 +8,7 @@ export function NativeChatPacedMarkdown({
   content,
   streaming,
   ...props
-}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeFrom'> & {
+}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeFrom' | 'fadeHold'> & {
   rowKey: string
   streaming: boolean
 }): React.JSX.Element {
@@ -22,6 +22,7 @@ export function NativeChatPacedMarkdown({
       content={paced.text}
       streaming={streaming || paced.revealing}
       fadeFrom={paced.fadeFrom}
+      fadeHold={paced.fadeHold}
     />
   )
 }
