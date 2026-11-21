@@ -4,8 +4,9 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { sameBucketRecords } from './unread-bucket-record-equality'
-import { getUnreadBadgeCount } from './unread-badge-count'
+import { countUnreadFolderRows, countUnreadWorktrees } from './unread-badge-count'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -42,20 +43,51 @@ function sameBadgeWorktree(previous: Worktree, next: Worktree): boolean {
   )
 }
 
-function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
+/** Inputs both counts read: which hosts the sidebar shows. */
+function sameHostScope(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
   return (
-    selectFolderWorkspaces(previous) === selectFolderWorkspaces(next) &&
-    previous.projectGroups === next.projectGroups &&
-    previous.repos === next.repos &&
     previous.workspaceHostScope === next.workspaceHostScope &&
     previous.visibleWorkspaceHostIds === next.visibleWorkspaceHostIds &&
     previous.settings?.activeRuntimeEnvironmentId === next.settings?.activeRuntimeEnvironmentId &&
-    previous.hideWorkspacesFromOtherDevices === next.hideWorkspacesFromOtherDevices &&
+    previous.hideWorkspacesFromOtherDevices === next.hideWorkspacesFromOtherDevices
+  )
+}
+
+function sameWorktreeInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
+  return (
+    previous.repos === next.repos &&
     sameBucketRecords(
       selectWorktreesByRepo(previous),
       selectWorktreesByRepo(next),
       sameBadgeWorktree
     )
+  )
+}
+
+/** The folder fields the count reads; activity timestamps and names are not among them. */
+function sameBadgeFolder(previous: FolderWorkspace, next: FolderWorkspace): boolean {
+  return (
+    previous === next ||
+    (previous.id === next.id &&
+      previous.isUnread === next.isUnread &&
+      previous.projectGroupId === next.projectGroupId &&
+      previous.executionHostId === next.executionHostId &&
+      previous.connectionId === next.connectionId &&
+      previous.creatorProvenance?.kind === next.creatorProvenance?.kind &&
+      (previous.creatorProvenance?.kind !== 'paired-device' ||
+        (next.creatorProvenance?.kind === 'paired-device' &&
+          previous.creatorProvenance.deviceId === next.creatorProvenance.deviceId)))
+  )
+}
+
+function sameFolderInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
+  const previousFolders = selectFolderWorkspaces(previous)
+  const nextFolders = selectFolderWorkspaces(next)
+  return (
+    previous.projectGroups === next.projectGroups &&
+    (previousFolders === nextFolders ||
+      (previousFolders.length === nextFolders.length &&
+        nextFolders.every((folder, index) => sameBadgeFolder(previousFolders[index]!, folder))))
   )
 }
 
@@ -81,7 +113,8 @@ function samePairings(
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState) => number {
   let previousState: UnreadBadgeCountState | undefined
   let pairings: ReadonlyMap<string, string> | null = null
-  let unreadCount = 0
+  let worktreeCount = 0
+  let folderCount = 0
 
   // Why by content: runtime status reallocates on every remote status write, but only device ids filter rows.
   const nextPairings = (state: UnreadBadgeCountState): ReadonlyMap<string, string> | null => {
@@ -103,24 +136,39 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
   }
 
   return (state) => {
+    const previous = previousState
     const statePairings = nextPairings(state)
-    if (
-      !previousState ||
+    const scopeStale =
+      previous === undefined ||
       !samePairings(pairings, statePairings) ||
-      !sameCountInputs(previousState, state)
-    ) {
-      unreadCount = getUnreadBadgeCount({
-        worktreeBuckets: selectWorktreesByRepo(state),
-        folders: selectFolderWorkspaces(state),
-        projectGroups: state.projectGroups,
-        repoMap: getIndexedRepoMap(state.repos),
-        visibleHostIds: getVisibleWorkspaceHostIdSet(state),
-        defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-        hiddenOtherDevicePairings: statePairings
-      })
+      !sameHostScope(previous, state)
+    // Why two caches: folder activity writes replace the folder list without touching worktree rows.
+    const worktreesStale = scopeStale || !sameWorktreeInputs(previous, state)
+    const foldersStale = scopeStale || !sameFolderInputs(previous, state)
+    if (worktreesStale || foldersStale) {
+      const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
+      const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+      if (worktreesStale) {
+        worktreeCount = countUnreadWorktrees({
+          worktreeBuckets: selectWorktreesByRepo(state),
+          repoMap: getIndexedRepoMap(state.repos),
+          visibleHostIds,
+          defaultHostId,
+          hiddenOtherDevicePairings: statePairings
+        })
+      }
+      if (foldersStale) {
+        folderCount = countUnreadFolderRows({
+          folders: selectFolderWorkspaces(state),
+          projectGroups: state.projectGroups,
+          visibleHostIds,
+          defaultHostId,
+          hiddenOtherDevicePairings: statePairings
+        })
+      }
       pairings = statePairings
     }
     previousState = state
-    return unreadCount
+    return worktreeCount + folderCount
   }
 }

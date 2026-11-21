@@ -13,6 +13,8 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type UnreadBadgeCountSources = {
   worktreeBuckets: Readonly<Record<string, readonly Worktree[]>>
@@ -26,10 +28,12 @@ export type UnreadBadgeCountSources = {
   hiddenOtherDevicePairings: ReadonlyMap<string, string> | null
 }
 
-/** Each row counts its unread flag, as the sidebar dot does. */
-export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
+/** Unread worktrees; each row counts its flag, as the sidebar dot does. */
+export function countUnreadWorktrees(
+  sources: Omit<UnreadBadgeCountSources, 'folders' | 'projectGroups'>
+): number {
   const { visibleHostIds, defaultHostId } = sources
-  // Preserve the existing id-only count while narrowing it to visible hosts.
+  // Why host-keyed: the sidebar shows same-id copies on two hosts as two rows.
   const unreadWorktrees = new Set<string>()
   for (const worktrees of Object.values(sources.worktreeBuckets)) {
     for (const worktree of worktrees) {
@@ -41,15 +45,17 @@ export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
           !isWorkspaceOwnedBySomeoneElse(worktree, sources.hiddenOtherDevicePairings)) &&
         worktreeMatchesVisibleHost(worktree, visibleHostIds, sources.repoMap, defaultHostId)
       ) {
-        unreadWorktrees.add(worktree.id)
+        unreadWorktrees.add(getWorktreeHostIdentity(worktree))
       }
     }
   }
-  return unreadWorktrees.size + countUnreadFolderRows(sources)
+  return unreadWorktrees.size
 }
 
-/** Folder workspaces through the same membership steps the sidebar runs before building rows. */
-function countUnreadFolderRows(sources: UnreadBadgeCountSources): number {
+/** Unread folder workspaces through the same membership steps the sidebar runs before building rows. */
+export function countUnreadFolderRows(
+  sources: Omit<UnreadBadgeCountSources, 'worktreeBuckets' | 'repoMap'>
+): number {
   const { projectGroups, visibleHostIds, defaultHostId, hiddenOtherDevicePairings } = sources
   const unread = sources.folders.filter((folder) => folder.isUnread)
   if (unread.length === 0) {
@@ -67,5 +73,6 @@ function countUnreadFolderRows(sources: UnreadBadgeCountSources): number {
       : onVisibleHosts,
     filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIds, defaultHostId)
   )
-  return new Set(rows.map(({ folderWorkspace }) => folderWorkspace.id)).size
+  return new Set(rows.map(({ folderWorkspace }) => getFolderWorkspaceHostIdentity(folderWorkspace)))
+    .size
 }

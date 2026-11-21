@@ -107,7 +107,10 @@ export function persistedNotificationSettingsRepaired(
   }
   const raw = value as Record<string, unknown>
   return Object.entries(normalized).some(
-    ([key, normalizedValue]) => !sameNotificationSettingValue(raw[key], normalizedValue)
+    ([key, normalizedValue]) =>
+      // Why: a missing Dock flag reads as on; writing it alone is not worth an upgrade-time profile save.
+      !(key === 'dockUnreadBadge' && raw[key] === undefined) &&
+      !sameNotificationSettingValue(raw[key], normalizedValue)
   )
 }
 

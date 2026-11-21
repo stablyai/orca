@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { createUnreadBadgeCountSelector } from '@/attention/unread/unread-badge-count-selector'
 import { useAppStore } from '@/store/index'
 import { selectFloatingWorkspaceHasUnread } from '@/store/workspaces/floating/floating-workspace-unread-selector'
@@ -19,9 +19,13 @@ export function UnreadDockBadgeSync({
 }: {
   floatingTerminalOpen: boolean
 }): null {
-  const [selectUnreadBadgeCount] = useState(createUnreadBadgeCountSelector)
   const enabled = useAppStore((s) => s.settings?.notifications?.dockUnreadBadge !== false)
-  const unreadWorkspaceCount = useAppStore((s) => (enabled ? selectUnreadBadgeCount(s) : 0))
+  // Why recreated: the selector caches the last store state, which must not outlive turning the badge off.
+  const selectUnreadBadgeCount = useMemo(
+    () => (enabled ? createUnreadBadgeCountSelector() : null),
+    [enabled]
+  )
+  const unreadWorkspaceCount = useAppStore((s) => selectUnreadBadgeCount?.(s) ?? 0)
   // Why: the floating terminal has no workspace flag, so it counts exactly while its launcher shows the dot.
   const floatingTerminalHasUnread = useAppStore(
     (s) =>
