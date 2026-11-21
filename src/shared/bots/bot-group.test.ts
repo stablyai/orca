@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { botGroupAudience } from './bot-group-mentions'
 import {
   botGroupCompletedText,
+  botGroupOffPageRunningTurn,
   botGroupOperationAdmitted,
+  botGroupTurnNeedsOlderPage,
   botGroupContext,
   botGroupTurnItems,
   botGroupRoom,
   botGroupTurnReplyText,
+  createBotGroupJournalIndexer,
   findBotGroupRoom,
+  indexBotGroupJournal,
   type BotGroup,
   type BotGroupMessage
 } from './bot-group'
@@ -354,6 +358,120 @@ describe('operation resolution', () => {
     }
     expect(botGroupOperationAdmitted(snapshot, 'queued-op')).toBe(true)
     expect(botGroupCompletedText(botGroupTurnItems(snapshot, 'queued-op'))).toBe('done')
+  })
+})
+
+describe('off-page running group turn', () => {
+  const submission = (
+    dispatchState: AgentJournalSnapshot['submissions'][number]['dispatchState'],
+    extra: Partial<AgentJournalSnapshot['submissions'][number]> = {}
+  ): AgentJournalSnapshot['submissions'][number] => ({
+    clientMessageId: 'operation',
+    fence: 1,
+    payloadFingerprint: 'f',
+    dispatchState,
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: dispatchState === 'pending' ? null : 2,
+    ...extra
+  })
+  const running = (userItemId: string | undefined, itemId = 'turn-off') => ({
+    itemId,
+    observedAt: 5,
+    turn: {
+      turnId: 'provider-turn',
+      state: 'running' as const,
+      ...(userItemId !== undefined ? { userItemId } : {}),
+      startedAt: 10
+    }
+  })
+  const page = (
+    items: AgentJournalRenderItem[],
+    submissions: AgentJournalSnapshot['submissions'] = []
+  ): AgentJournalSnapshot => ({
+    sessionId: 'session',
+    cursor: { epoch: 'e', sequence: 1 },
+    items,
+    submissions
+  })
+  const tail = row(
+    'tail',
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'still going' }] },
+    'turn-off'
+  )
+
+  it('keeps a loaded tail on the running turn whose opener is above the page', () => {
+    const snapshot = page([tail])
+    const latest = running(agentJournalSubmissionKey('operation'))
+    expect(botGroupTurnItems(snapshot, 'operation')).toEqual([])
+    expect(botGroupOperationAdmitted(snapshot, 'operation')).toBe(false)
+    expect(indexBotGroupJournal(snapshot, latest)('operation').map((item) => item.itemId)).toEqual([
+      'tail'
+    ])
+    expect(botGroupOffPageRunningTurn(snapshot, 'operation', latest)?.state).toBe('running')
+    expect(botGroupTurnNeedsOlderPage(snapshot, 'operation', latest)).toBe(true)
+    const read = createBotGroupJournalIndexer()(snapshot, ['operation'], latest)
+    expect(read('operation').map((item) => item.itemId)).toEqual(['tail'])
+    expect(indexBotGroupJournal(snapshot, latest)('someone-else')).toEqual([])
+    expect(botGroupTurnNeedsOlderPage(snapshot, 'someone-else', latest)).toBe(false)
+    const finished = { ...latest, turn: { ...latest.turn, state: 'completed' as const } }
+    expect(indexBotGroupJournal(snapshot, finished)('operation')).toEqual([])
+    expect(botGroupOffPageRunningTurn(snapshot, 'operation', finished)).toBeNull()
+    expect(botGroupTurnNeedsOlderPage(snapshot, 'operation', finished)).toBe(false)
+  })
+
+  it('matches a raw operation id, an accepted provider identity, and an empty page', () => {
+    const snapshot = page([tail])
+    expect(
+      indexBotGroupJournal(snapshot, running('operation'))('operation').map((item) => item.itemId)
+    ).toEqual(['tail'])
+    const accepted = page([tail], [submission('accepted', { providerItemId: 'prov-user' })])
+    const byProvider = running('prov-user')
+    expect(botGroupOffPageRunningTurn(accepted, 'operation', byProvider)?.startedAt).toBe(10)
+    expect(botGroupTurnNeedsOlderPage(accepted, 'operation', byProvider)).toBe(true)
+    const empty = page([])
+    const latest = running(agentJournalSubmissionKey('operation'))
+    expect(indexBotGroupJournal(empty, latest)('operation')).toEqual([])
+    expect(botGroupTurnNeedsOlderPage(empty, 'operation', latest)).toBe(true)
+  })
+
+  it('does not page a queued or rejected send, or a turn whose header is already loaded', () => {
+    const latest = running(agentJournalSubmissionKey('operation'))
+    const queued = page(
+      [tail],
+      [submission('pending', { handoverRecorded: true, resolvedAt: null })]
+    )
+    expect(indexBotGroupJournal(queued, latest)('operation')).toEqual([])
+    expect(botGroupTurnNeedsOlderPage(queued, 'operation', latest)).toBe(false)
+    const rejected = page([tail], [submission('rejected', { reason: 'no' })])
+    expect(botGroupTurnNeedsOlderPage(rejected, 'operation', latest)).toBe(false)
+    const header = row('turn-off', {
+      kind: 'turn',
+      turnId: 'provider-turn',
+      state: 'running',
+      userItemId: agentJournalSubmissionKey('operation'),
+      startedAt: 10
+    })
+    const loaded = page([header, tail])
+    expect(indexBotGroupJournal(loaded, latest)('operation').map((item) => item.itemId)).toEqual([
+      'turn-off',
+      'tail'
+    ])
+    expect(botGroupOffPageRunningTurn(loaded, 'operation', latest)).toBeNull()
+    expect(botGroupTurnNeedsOlderPage(loaded, 'operation', latest)).toBe(false)
+  })
+
+  it('pages for an accepted send answered into the off-page running turn', () => {
+    const snapshot = page(
+      [tail],
+      [submission('accepted', { answeredInTurn: { turnItemId: 'turn-off', via: 'start' } })]
+    )
+    const latest = running(undefined)
+    expect(indexBotGroupJournal(snapshot, latest)('operation').map((item) => item.itemId)).toEqual([
+      'tail'
+    ])
+    expect(botGroupTurnNeedsOlderPage(snapshot, 'operation', latest)).toBe(true)
   })
 })
 

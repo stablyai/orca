@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useStructuredAgentSession } from '../native-chat/session/structured/use-structured-agent-session'
 import {
-  botGroupOperationAdmitted,
+  botGroupTurnNeedsOlderPage,
   createBotGroupJournalIndexer,
   type indexBotGroupJournal,
   type BotGroupTurn
@@ -34,25 +34,26 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     () =>
       indexJournal(
         { items: controller.journalItems, submissions: controller.submissions },
-        turn.operationIds
+        turn.operationIds,
+        controller.latestTurn
       ),
-    [indexJournal, controller.journalItems, controller.submissions, turn.operationIds]
+    [
+      indexJournal,
+      controller.journalItems,
+      controller.submissions,
+      turn.operationIds,
+      controller.latestTurn
+    ]
   )
   const { readCurrent, hasOlder, loadingOlder, loadOlder } = controller
   useEffect(() => {
+    const journal = { items: controller.journalItems, submissions: controller.submissions }
     if (
       readCurrent &&
       hasOlder &&
       !loadingOlder &&
-      // Page only for a turn the session admitted; queued or refused ones have no older rows to find.
-      turn.operationIds.some(
-        (id) =>
-          groupTurnItems(id).length === 0 &&
-          botGroupOperationAdmitted(
-            { items: controller.journalItems, submissions: controller.submissions },
-            id
-          )
-      )
+      // Page while a running turn still starts above the window, or an admitted turn has no rows.
+      turn.operationIds.some((id) => botGroupTurnNeedsOlderPage(journal, id, controller.latestTurn))
     ) {
       void loadOlder()
     }
@@ -62,9 +63,9 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     loadingOlder,
     loadOlder,
     turn.operationIds,
-    groupTurnItems,
     controller.journalItems,
-    controller.submissions
+    controller.submissions,
+    controller.latestTurn
   ])
   const session = useMemo(() => ({ ...controller, groupTurnItems }), [controller, groupTurnItems])
   useEffect(() => {
