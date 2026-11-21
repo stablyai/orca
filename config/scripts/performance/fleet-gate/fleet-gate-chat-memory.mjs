@@ -49,7 +49,17 @@ async function idleLiveChatCount(page, sessionIds) {
               done += 1
             }
           }
-          resolve({ done, seen })
+          resolve({
+            done,
+            seen,
+            debug: {
+              rows: rows.length,
+              wanted: ids.slice(0, 2),
+              sample: rows
+                .slice(0, 3)
+                .map((row) => [row.sessionId, row.status, row.hostExecutionPhase])
+            }
+          })
         }
         window.api.runtime
           .subscribe({ method: 'agentSession.subscribeStatus', params: {} }, (response) => {
@@ -173,7 +183,7 @@ export async function chatMemoryOnce({
       const idle = await idleLiveChatCount(copy.page, sessionIds)
       if (live < offset + count || idle.done < offset + count) {
         result.incomplete.push(
-          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle.done)} done with their turn at the reading (${JSON.stringify(idle.seen)})`
+          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle.done)} done with their turn at the reading (${JSON.stringify(idle.seen)} ${JSON.stringify(idle.debug)})`
         )
         return null
       }
