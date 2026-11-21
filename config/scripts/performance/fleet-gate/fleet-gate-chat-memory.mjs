@@ -22,60 +22,78 @@ const SAMPLE_EVERY_MS = 5_000
 // Memory falling this much as 190 chats start means a reading was wrong, not that chats are free.
 const MIN_MAIN_MB_PER_CHAT = -0.25
 
-/** Of these chats, how many the host reports done with their turn (idle, or unread attention) with their provider running. */
+const STATUS_SETTLE_MS = 2_000
+
+/** Of these chats, how many the host reports idle after a successful turn with their provider running. */
 async function idleLiveChatCount(page, sessionIds) {
   return page.evaluate(
-    (ids) =>
+    ({ ids, settleMs }) =>
       new Promise((resolve, reject) => {
         const wanted = new Set(ids)
-        const timer = setTimeout(() => reject(new Error('no status snapshot in 30 s')), 30_000)
+        // The host sends a naming-only snapshot (no sessions) before the status one, so merge frames briefly.
+        const rows = new Map()
         let subscription = null
         let settled = false
-        const finish = (rows) => {
+        let quiet = null
+        const timer = setTimeout(() => stop(new Error('no status snapshot in 30 s')), 30_000)
+        const stop = (error) => {
           settled = true
           clearTimeout(timer)
+          clearTimeout(quiet)
           subscription?.unsubscribe()
+          if (error) {
+            reject(error)
+            return
+          }
           const seen = {}
           let done = 0
-          for (const row of rows.filter((entry) => wanted.has(entry.sessionId))) {
-            const key = `${String(row.status)}/${row.hostExecutionPhase ?? 'no-child'}`
+          for (const row of rows.values()) {
+            const key = `${String(row.status)}/${String(row.turnOutcome)}/${row.hostExecutionPhase ?? 'no-child'}`
             seen[key] = (seen[key] ?? 0) + 1
-            // A finished turn nobody has looked at yet reads as attention, not idle.
             if (
-              (row.status === 'idle' || row.status === 'attention') &&
+              row.status === 'idle' &&
+              row.turnOutcome === 'success' &&
               row.hostExecutionOwned === true &&
               row.hostExecutionPhase !== 'starting'
             ) {
               done += 1
             }
           }
-          resolve({
-            done,
-            seen,
-            debug: {
-              rows: rows.length,
-              wanted: ids.slice(0, 2),
-              sample: rows
-                .slice(0, 3)
-                .map((row) => [row.sessionId, row.status, row.hostExecutionPhase])
-            }
-          })
+          resolve({ done, seen })
         }
         window.api.runtime
           .subscribe({ method: 'agentSession.subscribeStatus', params: {} }, (response) => {
-            if (settled || !response.ok || response.result?.type !== 'snapshot') {
+            if (settled) {
               return
             }
-            finish(response.result.sessions)
+            if (!response.ok) {
+              stop(new Error(`status stream: ${JSON.stringify(response.error).slice(0, 200)}`))
+              return
+            }
+            const event = response.result
+            const incoming =
+              event?.type === 'snapshot'
+                ? event.sessions
+                : event?.type === 'status'
+                  ? [event.session]
+                  : []
+            for (const row of incoming) {
+              if (wanted.has(row.sessionId)) {
+                rows.set(row.sessionId, row)
+              }
+            }
+            if (event?.type === 'snapshot' && quiet === null) {
+              quiet = setTimeout(() => stop(null), settleMs)
+            }
           })
           .then((handle) => {
             subscription = handle
             if (settled) {
               handle.unsubscribe()
             }
-          }, reject)
+          }, stop)
       }),
-    sessionIds
+    { ids: sessionIds, settleMs: STATUS_SETTLE_MS }
   )
 }
 
@@ -183,7 +201,7 @@ export async function chatMemoryOnce({
       const idle = await idleLiveChatCount(copy.page, sessionIds)
       if (live < offset + count || idle.done < offset + count) {
         result.incomplete.push(
-          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle.done)} done with their turn at the reading (${JSON.stringify(idle.seen)} ${JSON.stringify(idle.debug)})`
+          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle.done)} idle after a successful turn at the reading (${JSON.stringify(idle.seen)})`
         )
         return null
       }
