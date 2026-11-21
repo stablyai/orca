@@ -4,22 +4,13 @@
 import type { BotProposal } from './bot-proposal'
 import { botTemplate, type BotTemplateSkill } from './bot-templates'
 import { botTemplateEventParts, freeBotName } from './bot-template-view'
+import { englishTextHash } from '../text/english-text-hash'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
-/** FNV-1a over the English, so desktop and phone derive the same key without a crypto API. */
-function englishHash(english: string): string {
-  let hash = 0x811c9dc5
-  for (let index = 0; index < english.length; index += 1) {
-    hash ^= english.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
 export function botTemplateText(english: string, t: Translate): string {
   // Why the inline template: catalog checks keep keys whose `t(` call names this prefix.
-  return english ? t(`bots.templateText.t${englishHash(english)}`, english) : english
+  return english ? t(`bots.templateText.t${englishTextHash(english)}`, english) : english
 }
 
 /** A template's proposed name as New bot shows it: in the UI language and free among `taken`; any

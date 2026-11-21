@@ -1,3 +1,4 @@
+import { pluginDisplayText } from '../../../../../shared/plugins/plugin-display-text'
 import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -150,7 +151,7 @@ export function PluginMoreFromAuthor({
             <span className="block truncate text-sm font-medium">{plugin.name}</span>
             {plugin.description ? (
               <span className="block truncate text-xs text-muted-foreground">
-                {plugin.description}
+                {pluginDisplayText(plugin.description, t)}
               </span>
             ) : null}
           </span>

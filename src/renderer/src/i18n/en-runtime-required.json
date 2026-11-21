@@ -3136,6 +3136,16 @@
       "unsupportedFile": "Unsupported file. Pick a PNG, APNG, JPG, GIF, WebP, or SVG."
     }
   },
+  "plugins": {
+    "displayText": {
+      "t0b4f7e19": "Unofficial ports of VS Code's default color themes: Dark Modern, Light Modern, Dark+ and Light+.",
+      "t0f9f5503": "GitHub's own VS Code themes: Light Default, Dark Default, Dark Dimmed and the high-contrast variants.",
+      "tb0b38488": "GitHub Themes for Orca",
+      "tb8aa98fc": "VS Code Default Themes for Orca",
+      "tc86eed7d": "A reviewed starter lifecycle for disposable Multipass workspaces.",
+      "tfc425a57": "Multipass VM Recipes"
+    }
+  },
   "projectViews": {
     "error": {
       "tooLargeCount_one": "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub.",

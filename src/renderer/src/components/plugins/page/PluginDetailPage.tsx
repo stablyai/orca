@@ -1,3 +1,4 @@
+import { pluginDisplayText } from '../../../../../shared/plugins/plugin-display-text'
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { BadgeCheck, ChevronLeft } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -97,7 +98,7 @@ export function PluginDetailPage({
   // Why: a fetched manifest names the plugin exactly; older catalogs only give its key.
   const name = entry.nameShowsPublisher
     ? entry.name
-    : (plugin?.name ?? preview?.manifest.name ?? entry.name)
+    : pluginDisplayText(plugin?.name ?? preview?.manifest.name ?? entry.name, t)
   const action = usePluginPageAction({
     entry,
     name,
@@ -130,7 +131,10 @@ export function PluginDetailPage({
       )
     : null
   const version = plugin?.version ?? preview?.manifest.version ?? entry.version
-  const description = plugin?.description ?? preview?.manifest.description ?? entry.description
+  const description = pluginDisplayText(
+    plugin?.description ?? preview?.manifest.description ?? entry.description ?? '',
+    t
+  )
 
   const publisherNotice = pluginPublisherNotice({
     official: entry.official,

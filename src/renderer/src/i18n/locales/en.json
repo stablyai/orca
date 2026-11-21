@@ -29741,6 +29741,14 @@
       "unknownProject": "an unknown project",
       "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
       "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
+    },
+    "displayText": {
+      "tb0b38488": "GitHub Themes for Orca",
+      "tb8aa98fc": "VS Code Default Themes for Orca",
+      "tfc425a57": "Multipass VM Recipes",
+      "t0f9f5503": "GitHub's own VS Code themes: Light Default, Dark Default, Dark Dimmed and the high-contrast variants.",
+      "t0b4f7e19": "Unofficial ports of VS Code's default color themes: Dark Modern, Light Modern, Dark+ and Light+.",
+      "tc86eed7d": "A reviewed starter lifecycle for disposable Multipass workspaces."
     }
   },
   "checks": {

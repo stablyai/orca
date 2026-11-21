@@ -29499,6 +29499,14 @@
       "unknownProject": "未知项目",
       "automationNewWorkspaces": "自动化 {{id}}：按 {{schedule}} 运行，每次都在 {{project}} 中新建工作区",
       "automationInWorkspace": "自动化 {{id}}：在 {{project}} / {{workspace}} 中按 {{schedule}} 运行"
+    },
+    "displayText": {
+      "tb0b38488": "适用于 Orca 的 GitHub 主题",
+      "tb8aa98fc": "适用于 Orca 的 VS Code 默认主题",
+      "tfc425a57": "Multipass 虚拟机配方",
+      "t0f9f5503": "GitHub 官方的 VS Code 主题：Light Default、Dark Default、Dark Dimmed 以及高对比度版本",
+      "t0b4f7e19": "VS Code 默认配色主题的非官方移植版：Dark Modern、Light Modern、Dark+ 和 Light+",
+      "tc86eed7d": "一套经过审核的入门生命周期，适用于一次性的 Multipass 工作区"
     }
   },
   "checks": {
