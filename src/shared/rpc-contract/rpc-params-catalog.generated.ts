@@ -44,6 +44,14 @@ import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/l
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
+  WorkerDockAcknowledge,
+  WorkerDockRead,
+  WorkerDockResultRead,
+  WorkerDockResultsRead,
+  WorkerDockStop,
+  WorkerDockSubscribe
+} from '../orchestration/dock/worker-dock'
+import {
   CrewSubscribeParams,
   WorkerApprovalsSubscribeParams,
   WorkerApprovalsUnsubscribeParams
@@ -1907,6 +1915,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerApprovalsUnsubscribe': WorkerApprovalsUnsubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
+  'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
+  'orchestration.workerDockRead': WorkerDockRead,
+  'orchestration.workerDockResult': WorkerDockResultRead,
+  'orchestration.workerDockResultsRead': WorkerDockResultsRead,
+  'orchestration.workerDockStop': WorkerDockStop,
+  'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,

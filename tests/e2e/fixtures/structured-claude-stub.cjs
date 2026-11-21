@@ -73,6 +73,22 @@ function startTurn(frame) {
   write({ ...frame, isReplay: true })
   runPromptCommands(promptText(frame.message))
   const prompt = JSON.stringify(frame.message ?? '')
+  const stickyCount = /sticky-(?:roster|mixed):(\d+)/.exec(prompt)
+  if (stickyCount) {
+    for (let index = 0; index < Math.min(75, Number(stickyCount[1])); index++) {
+      write({
+        type: 'system',
+        subtype: 'task_started',
+        session_id: sessionId,
+        uuid: randomUUID(),
+        task_id: `sticky-${index}`,
+        task_type: prompt.includes('sticky-mixed:') && index === 1 ? 'local_bash' : 'local_agent',
+        is_backgrounded: true,
+        description: `Review journal writes ${index + 1}`,
+        subagent_type: 'general-purpose'
+      })
+    }
+  }
   const slow = prompt.includes('slow')
   const pluginUi = prompt.includes('plugin-ui')
   if (prompt.includes('plugin-focus')) {

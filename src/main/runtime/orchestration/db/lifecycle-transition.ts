@@ -1,5 +1,6 @@
 import { noteQuestionEdge } from './messages/question-edges'
 import type Database from '../../../sqlite/sync-database'
+import { workerDockSourcesFor } from './worker-dock-source-presence'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
 import { notifyPeerMailQueued } from '../federation/peer-mail/peer-mail-waiters'
@@ -11,17 +12,20 @@ type LifecycleWriteTransaction = {
   savepoint: string | null
 }
 
-export function beginLifecycleWriteTransaction(
+export function beginLifecycleTransaction(
   db: Database.Database,
-  savepoint: string
+  savepoint: string,
+  mode: 'read' | 'write' = 'write'
 ): LifecycleWriteTransaction {
   if (!/^[a-z][a-z0-9_]*$/.test(savepoint)) {
     throw new Error(`Invalid lifecycle savepoint: ${savepoint}`)
   }
   const nested = db.isTransaction
-  db.exec(nested ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE')
+  db.exec(nested ? `SAVEPOINT ${savepoint}` : mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE')
   return { savepoint: nested ? savepoint : null }
 }
+
+export const beginLifecycleWriteTransaction = beginLifecycleTransaction
 
 export function commitLifecycleWriteTransaction(
   db: Database.Database,
@@ -190,6 +194,9 @@ export function transitionLifecycleWithDb(
       'lifecycle_conflict',
       `${params.entity} ${params.id} changed while transitioning.`
     )
+  }
+  if (params.entity === 'worker' && current.state !== params.to) {
+    workerDockSourcesFor(db)?.changedDispatch(params.id)
   }
   // A peer Run's change is queued home by trigger in this statement.
   notifyPeerMailQueued(db)
