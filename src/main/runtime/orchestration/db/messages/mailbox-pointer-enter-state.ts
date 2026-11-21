@@ -201,7 +201,10 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
        WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
-  this.releasedPointerPtyIds.add(ptyId)
+  // An enclosing transaction can still roll the release back, so only a committed one is remembered.
+  if (!this.db.isTransaction) {
+    this.releasedPointerPtyIds.add(ptyId)
+  }
 }
 
 /** An exited PTY leaves the released set; a reused id then runs one release on its first working edge. */

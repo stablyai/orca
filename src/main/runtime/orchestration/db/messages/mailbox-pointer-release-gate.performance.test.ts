@@ -108,4 +108,14 @@ describe('mailbox pointer release gate', () => {
     expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
     expect(db.getMessageById(id)?.delivered_at).not.toBeNull()
   })
+
+  it('retries a release that an enclosing transaction rolled back', () => {
+    const db = open()
+    const id = stagePointer(db, 'pty_rolled', 'term_d')
+    db.db.exec('BEGIN')
+    db.releasePendingMailboxPointerForPty('pty_rolled')
+    db.db.exec('ROLLBACK')
+    db.releasePendingMailboxPointerForPty('pty_rolled')
+    expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
+  })
 })
