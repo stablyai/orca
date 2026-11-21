@@ -70,6 +70,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     this.terminalPaneLifecycle = lifecycle
   }
 
+  /** An idle agent's row outlives the TTL while its pane is placed; until placement is readable,
+   *  the prune after binding decides. */
+  protected placementKeepsRow(row: EnrichedAgentHookEventPayload): boolean {
+    return !this.terminalPaneLifecycle || this.terminalPaneLifecycle.isPlaced(row) === true
+  }
+
   /** Which agent conversation this pane holds; see paneAgentIdentity. A null `savedRecord` was
    *  already read and found absent, so it isn't read again. */
   paneAgentIdentity(

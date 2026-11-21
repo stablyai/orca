@@ -2,7 +2,11 @@ import { lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { HERMES_CONTEXT_FILE, writeHermesContextFile } from './hermes-context-file'
+import { writeFolderContextFile } from './acp-folder-context-file'
+
+const HERMES_CONTEXT_FILE = '.hermes.md'
+const writeHermesContextFile = (cwd: string, text: string) =>
+  writeFolderContextFile(cwd, HERMES_CONTEXT_FILE, 'Hermes', text)
 
 let dir = ''
 beforeEach(async () => {

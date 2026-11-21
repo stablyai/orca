@@ -21,7 +21,7 @@ import {
   botItemWaitingAsk,
   botItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
-import type { BotItemPendingComment } from './use-bot-item-pending-comments'
+import type { BotItemPendingComment } from '../../../../../shared/bots/bot-item-pending-comments'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
 
 const NOT_COMPOSING = (): boolean => false
