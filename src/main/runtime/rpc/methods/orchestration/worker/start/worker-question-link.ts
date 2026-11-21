@@ -8,11 +8,12 @@ import {
   callerMailTaker,
   getQuestionTaker,
   mailTakerKey,
+  sessionMailTaker,
   stampQuestionTakes
 } from '../../../../../orchestration/db/messages/mail-taker'
 
 export type WorkerQuestionLink =
-  | { question: string; linked: true }
+  | { question: string; linked: true; take?: () => void }
   | { question: string; linked: false; why: string }
 
 export function linkWorkerToQuestion(
@@ -39,9 +40,14 @@ export function linkWorkerToQuestion(
   const taker = callerMailTaker(caller)
   const takenBy = getQuestionTaker(db, question)
   if (takenBy !== null) {
-    return takenBy === mailTakerKey(taker)
+    // A structured worker reads chat cards as its session and checks mail as its terminal.
+    const own = [taker, ...(caller.orcaSessionId ? [sessionMailTaker(caller.orcaSessionId)] : [])]
+    return own.some((mine) => mailTakerKey(mine) === takenBy)
       ? { question, linked: true }
       : unlinked(`${question} was taken by someone else`)
+  }
+  if (message.read === 1) {
+    return unlinked(`${question} was read before Orca recorded who took it`)
   }
   const mailboxes = new Set([
     caller.address,
@@ -52,7 +58,6 @@ export function linkWorkerToQuestion(
   if (!mailboxes.has(message.to_handle)) {
     return unlinked(`${question} was not sent to you`)
   }
-  // The start can come before the delivery that hands it over has recorded the take.
-  stampQuestionTakes(db, [question], taker)
-  return { question, linked: true }
+  // The start can come before the delivery that hands it over; the take is recorded once it starts.
+  return { question, linked: true, take: () => stampQuestionTakes(db, [question], taker) }
 }
