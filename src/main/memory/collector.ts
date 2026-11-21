@@ -42,38 +42,22 @@ import {
 export type { MemorySnapshotStore } from './memory-snapshot-buckets'
 export { collectSubtree, parsePsOutput } from './process-index'
 
-let inflight: { chats: boolean; promise: Promise<MemorySnapshot> } | null = null
+let inflight: Promise<MemorySnapshot> | null = null
 
-/** `chats: false` skips chat attribution for callers that receive terminals only. */
-export async function collectMemorySnapshot(
-  store: MemorySnapshotStore,
-  { chats = true }: { chats?: boolean } = {}
-): Promise<MemorySnapshot> {
+export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   // Runtime callers share one process-wide store, so coalesced sweeps use the same data source.
-  if (inflight && (inflight.chats || !chats)) {
-    return inflight.promise
+  if (inflight) {
+    return inflight
   }
-  // A terminal-only sweep is running: the full one starts after it, so the host is never swept twice at once.
-  const previous = inflight?.promise.then(
-    () => undefined,
-    () => undefined
-  )
-  const sweep = {
-    chats,
-    promise: (previous ?? Promise.resolve())
-      .then(() => runSnapshot(store, chats))
-      .catch((err) => {
-        console.warn('[memory] snapshot failed; returning empty', err)
-        return emptyMemorySnapshot()
-      })
-      .finally(() => {
-        if (inflight === sweep) {
-          inflight = null
-        }
-      })
-  }
-  inflight = sweep
-  return sweep.promise
+  inflight = runSnapshot(store)
+    .catch((err) => {
+      console.warn('[memory] snapshot failed; returning empty', err)
+      return emptyMemorySnapshot()
+    })
+    .finally(() => {
+      inflight = null
+    })
+  return inflight
 }
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
@@ -169,10 +153,7 @@ function addUsage(target: RowTotals, usage: UsageValues): void {
   target.privateMemory += clampMemoryMetric(usage.privateMemory)
 }
 
-async function runSnapshot(
-  store: MemorySnapshotStore,
-  withChats: boolean
-): Promise<MemorySnapshot> {
+async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
   const repoName = createRepoNameLookup(store)
   const agentMark = agentRegistrationMark()
@@ -181,7 +162,7 @@ async function runSnapshot(
   const appBuckets = bucketElectronMetrics(processIndex)
   const claimed = new Set<number>()
   const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
-  const agentTrees = (withChats ? listAgentProcessRoots(agentMark) : []).map((root) => ({
+  const agentTrees = listAgentProcessRoots(agentMark).map((root) => ({
     ...root,
     rows: claimProcessTree(processIndex, root.pid, claimed)
   }))
@@ -213,7 +194,7 @@ async function runSnapshot(
   const restoredSessionIds = new Set<string>()
   for (const { pty, rows } of ptyTrees) {
     // This machine's panel names a restored terminal by its pane before the pane mounts; paired replies don't carry it.
-    const restoredPaneKey = withChats && !pty.paneKey ? (pty.restoredPaneKey ?? null) : null
+    const restoredPaneKey = pty.paneKey ? null : (pty.restoredPaneKey ?? null)
     const session: SessionMemory = {
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey ?? restoredPaneKey,
@@ -262,34 +243,13 @@ async function runSnapshot(
   // Write before reading history to include this sample and refresh active-worktree retention.
   const now = Date.now()
   pushAppMemoryHistory(appBuckets.memory, now)
-  const { terminalSeries, historyKeyFor } = recordWorkspaceMemorySeries(
-    bucketList,
-    terminalUsage,
-    withChats,
-    now
-  )
+  const terminalSeries = recordWorkspaceMemorySeries(bucketList, terminalUsage, now)
 
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
     ...optionalCommitField(hasPrivateMemory, privateMemory),
-    history: readMemoryHistory(historyKeyFor(b.worktreeId))
+    history: readMemoryHistory(b.worktreeId)
   }))
-  if (!withChats) {
-    // Exactly the terminal-only shape paired machines have always received.
-    return {
-      app: { ...appBuckets, history: readAppMemoryHistory() },
-      worktrees,
-      host,
-      processMemoryMetric: processIndex.memoryMetric,
-      ...snapshotCommitFields(
-        hasPrivateMemory,
-        clampMemoryMetric(appBuckets.privateMemory) + terminals.privateMemory
-      ),
-      totalCpu: appBuckets.cpu + terminals.cpu,
-      totalMemory: appBuckets.memory + terminals.memory,
-      collectedAt: now
-    }
-  }
   const agentProcesses = usageOf(agents, hasPrivateMemory)
 
   const snapshot: MemorySnapshot = {
@@ -307,15 +267,9 @@ async function runSnapshot(
     collectedAt: now
   }
   recordPairedReplyParts(snapshot, {
-    terminalRows: new Map(
-      terminalSeries.map(({ worktreeId, usage }) => [
-        worktreeId,
-        {
-          usage: usageOf(usage, hasPrivateMemory),
-          readHistory: () => readMemoryHistory(terminalOnlyHistoryKey(worktreeId))
-        }
-      ])
-    ),
+    terminalSeries,
+    hasPrivateMemory,
+    readTerminalHistory: (worktreeId) => readMemoryHistory(terminalOnlyHistoryKey(worktreeId)),
     restoredSessionIds,
     totals: {
       ...snapshotCommitFields(

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeMemory } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  MemorySnapshot,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { MergeContext, RuntimeHostResourceSample } from './resource-usage-merge-types'
 import { mergeSnapshotAndSessions } from './merge-snapshot-and-sessions'
 import { createResourceMergeCache } from './resource-chat-row-groups'
@@ -57,19 +60,23 @@ function context(
   }
 }
 
+function localSnapshot(worktrees: WorktreeMemory[]): MemorySnapshot {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+  return { worktrees } as MemorySnapshot
+}
+
+function peer(memory: number): RuntimeHostResourceSample {
+  return { hostId: 'runtime:b', hostLabel: 'B', worktrees: [sample('/peer', memory, true)] }
+}
+
 describe('Resource Manager chat row reuse', () => {
-  it("leaves one machine's chat rows unvisited when another machine replies", () => {
+  it("leaves this machine's chat rows unvisited when a paired machine replies", () => {
     const cache = createResourceMergeCache()
     const chats = [sample('/a', 10), sample('/b', 20)]
-    const quiet = { hostId: 'runtime:a', hostLabel: 'A', worktrees: chats } as const
-    const busy = (memory: number): RuntimeHostResourceSample => ({
-      hostId: 'runtime:b',
-      hostLabel: 'B',
-      worktrees: [sample('/c', memory)]
-    })
-    const first = mergeSnapshotAndSessions(null, [], context([quiet, busy(1)]), undefined, cache)
+    const snapshot = localSnapshot(chats)
+    const first = mergeSnapshotAndSessions(snapshot, [], context([peer(1)]), undefined, cache)
     const counter = countReads(chats)
-    const second = mergeSnapshotAndSessions(null, [], context([quiet, busy(2)]), undefined, cache)
+    const second = mergeSnapshotAndSessions(snapshot, [], context([peer(2)]), undefined, cache)
     expect(second[0]).toBe(first[0])
     expect(second[1]).not.toBe(first[1])
     expect(counter.reads).toBe(0)
@@ -78,34 +85,29 @@ describe('Resource Manager chat row reuse', () => {
   it('rebuilds only terminal rows of a mixed project when a tab title is stored', () => {
     const cache = createResourceMergeCache()
     const chats = [sample('/a', 10), sample('/b', 20)]
-    const host = {
-      hostId: 'runtime:a',
-      hostLabel: 'A',
-      worktrees: [...chats, sample('/t', 5, true)]
-    } as const
-    const [first] = mergeSnapshotAndSessions(null, [], context([host]), undefined, cache)
+    const snapshot = localSnapshot([...chats, sample('/t', 5, true)])
+    const [first] = mergeSnapshotAndSessions(snapshot, [], context([]), undefined, cache)
     const counter = countReads(chats)
-    const [second] = mergeSnapshotAndSessions(null, [], context([host], {}), undefined, cache)
+    const [second] = mergeSnapshotAndSessions(snapshot, [], context([], {}), undefined, cache)
     expect(counter.reads).toBe(0)
-    expect(second.worktrees.slice(0, 2)).toEqual(first.worktrees.slice(0, 2))
     expect(second.worktrees[0]).toBe(first.worktrees[0])
     expect(second.memory).toBe(35)
   })
 
   it('adds a terminal to a copy, so the kept row never gains it twice or keeps it after exit', () => {
     const cache = createResourceMergeCache()
-    const host = { hostId: 'runtime:a', hostLabel: 'A', worktrees: [sample('/a', 10)] } as const
+    const snapshot = localSnapshot([sample('/a', 10)])
     const shell = {
       id: 'pty-1',
-      worktreeId: 'runtime:a|repo::/a',
+      worktreeId: 'repo::/a',
       cwd: '/a',
       title: 'Shell',
       agentOwnership: 'absent'
     } as const
-    const [plain] = mergeSnapshotAndSessions(null, [], context([host]), undefined, cache)
-    mergeSnapshotAndSessions(null, [shell], context([host]), undefined, cache)
-    const [again] = mergeSnapshotAndSessions(null, [shell], context([host]), undefined, cache)
-    const [exited] = mergeSnapshotAndSessions(null, [], context([host]), undefined, cache)
+    const [plain] = mergeSnapshotAndSessions(snapshot, [], context([]), undefined, cache)
+    mergeSnapshotAndSessions(snapshot, [shell], context([]), undefined, cache)
+    const [again] = mergeSnapshotAndSessions(snapshot, [shell], context([]), undefined, cache)
+    const [exited] = mergeSnapshotAndSessions(snapshot, [], context([]), undefined, cache)
     expect(again.worktrees[0].sessions.map((s) => s.sessionId)).toEqual(['pty-1'])
     expect(exited).toBe(plain)
     expect(plain.worktrees[0].sessions).toEqual([])

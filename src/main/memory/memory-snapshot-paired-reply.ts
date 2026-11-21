@@ -1,12 +1,12 @@
 import type { MemorySnapshot, WorktreeMemory } from '../../shared/diagnostics/process-stats-types'
+import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values'
 
 /** What a sample recorded to rebuild the terminal-only snapshot paired clients have always received. */
 export type PairedReplyParts = {
-  /** Terminal-only usage, and a reader for their history, for workspaces that have had chats. */
-  terminalRows: ReadonlyMap<
-    string,
-    { usage: Pick<WorktreeMemory, 'cpu' | 'memory' | 'privateMemory'>; readHistory: () => number[] }
-  >
+  /** Terminal-only usage of workspaces that have had chats; their history is read only when asked. */
+  terminalSeries: readonly { worktreeId: string; usage: RowUsage }[]
+  hasPrivateMemory: boolean
+  readTerminalHistory: (worktreeId: string) => number[]
   /** Sessions whose pane key came from startup restore; paired replies send them without one. */
   restoredSessionIds: ReadonlySet<string>
   totals: Pick<
@@ -22,8 +22,14 @@ export function recordPairedReplyParts(snapshot: MemorySnapshot, parts: PairedRe
   partsBySnapshot.set(snapshot, parts)
 }
 
-function pairedRow(wt: WorktreeMemory, parts: PairedReplyParts): WorktreeMemory {
-  const terminal = parts.terminalRows.get(wt.worktreeId)
+type RowUsage = { cpu: number; memory: number; privateMemory: number }
+
+function pairedRow(
+  wt: WorktreeMemory,
+  parts: PairedReplyParts,
+  terminalUsage: ReadonlyMap<string, RowUsage>
+): WorktreeMemory {
+  const terminal = terminalUsage.get(wt.worktreeId)
   const restored =
     parts.restoredSessionIds.size > 0 &&
     wt.sessions.some((session) => parts.restoredSessionIds.has(session.sessionId))
@@ -33,7 +39,14 @@ function pairedRow(wt: WorktreeMemory, parts: PairedReplyParts): WorktreeMemory 
   const { chats: _chats, ...row } = wt
   return {
     ...row,
-    ...(terminal ? { ...terminal.usage, history: terminal.readHistory() } : {}),
+    ...(terminal
+      ? {
+          cpu: clampMemoryMetric(terminal.cpu),
+          memory: clampMemoryMetric(terminal.memory),
+          ...optionalCommitField(parts.hasPrivateMemory, terminal.privateMemory),
+          history: parts.readTerminalHistory(wt.worktreeId)
+        }
+      : {}),
     sessions: restored
       ? wt.sessions.map((session) =>
           parts.restoredSessionIds.has(session.sessionId) ? { ...session, paneKey: null } : session
@@ -61,11 +74,14 @@ export function toPairedMemoryReply(snapshot: MemorySnapshot): MemorySnapshot {
     totalPrivateMemory: _private,
     ...base
   } = snapshot
+  const terminalUsage = new Map(
+    parts.terminalSeries.map(({ worktreeId, usage }) => [worktreeId, usage])
+  )
   const reply: MemorySnapshot = {
     ...base,
     worktrees: snapshot.worktrees
       .filter((wt) => wt.sessions.length > 0)
-      .map((wt) => pairedRow(wt, parts)),
+      .map((wt) => pairedRow(wt, parts, terminalUsage)),
     ...parts.totals
   }
   replyBySnapshot.set(snapshot, reply)

@@ -15,8 +15,7 @@ import type { PtyListedSession as DaemonSession } from '../../../../../../shared
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost,
-  stampedRuntimeHostId
+  resolveResourceWorkspaceHost
 } from './resource-workspace-host'
 import {
   daemonSessionLiveTitleTabId,
@@ -102,27 +101,11 @@ export function mergeSnapshotAndSessions(
         localSamplePlacement(ctx, wt)
       )
     : null
-  const paired = (ctx.runtimeHostResources ?? []).map((host) => ({
-    host,
-    rows: sampleRowsFor(
-      cache,
-      nextSamples,
-      host.hostId,
-      host.worktrees,
-      [...inputs, host.hostLabel],
-      (wt) => pairedSamplePlacement(ctx, host, wt)
-    )
-  }))
   if (cache) {
     cache.bySample = nextSamples
   }
   for (const part of local?.groups ?? []) {
     groups.addChatRowGroup(part)
-  }
-  for (const { rows } of paired) {
-    for (const part of rows.groups) {
-      groups.addChatRowGroup(part)
-    }
   }
   const shownLocally = new Set<string>()
   // Local chat rows were added first, so a same-id row in the project is this machine's.
@@ -135,12 +118,7 @@ export function mergeSnapshotAndSessions(
       ingestSampledWorktree(wt, placement)
     }
   }
-  for (const { host, rows } of paired) {
-    for (const wt of rows.terminalSamples) {
-      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt, isShownLocally))
-    }
-  }
-
+  // This machine's live terminals come before paired samples, so a same-id paired sample is host-qualified.
   for (const session of daemonSessions) {
     if (seenSessionIds.has(session.id)) {
       continue
@@ -174,13 +152,10 @@ export function mergeSnapshotAndSessions(
       finalWorktreeId,
       finalRepoId
     )
-    // A paired-stamped record keeps local terminals only where this machine's sample shows them.
-    if (
-      runtimeHostId ||
-      (!shownLocally.has(finalWorktreeId) && stampedRuntimeHostId(ctx, finalWorktreeId))
-    ) {
+    if (runtimeHostId) {
       continue
     }
+    shownLocally.add(finalWorktreeId)
 
     const row =
       groups.rowToUpdate(finalRepoId, finalWorktreeId) ??
@@ -212,6 +187,13 @@ export function mergeSnapshotAndSessions(
       memory: null,
       hasLocalSamples: false
     })
+  }
+
+  // Paired machines send terminals only, so their samples go straight to placement.
+  for (const host of ctx.runtimeHostResources ?? []) {
+    for (const wt of host.worktrees) {
+      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt, isShownLocally))
+    }
   }
 
   for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {

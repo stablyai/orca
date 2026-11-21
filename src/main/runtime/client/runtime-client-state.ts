@@ -170,11 +170,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     return this.stats?.getSummary() ?? null
   }
 
-  getMemorySnapshot(options?: { chats?: boolean }): Promise<MemorySnapshot> {
+  getMemorySnapshot(): Promise<MemorySnapshot> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    return collectMemorySnapshot(this.store, options)
+    return collectMemorySnapshot(this.store)
   }
 
   getUIState(): PersistedUIState {

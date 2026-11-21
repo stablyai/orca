@@ -8,9 +8,10 @@ export const DIAGNOSTICS_METHODS = [
     params: null,
     handler: async (_params, { runtime, caller }) => {
       // Paired machines get terminals only, as before; chat detail stays on this machine for now.
-      const local = caller?.kind === 'local-cli' || caller?.kind === 'desktop'
-      const snapshot = await runtime.getMemorySnapshot({ chats: local })
-      return local ? snapshot : toPairedMemoryReply(snapshot)
+      const snapshot = await runtime.getMemorySnapshot()
+      return caller?.kind === 'local-cli' || caller?.kind === 'desktop'
+        ? snapshot
+        : toPairedMemoryReply(snapshot)
     }
   })
 ]
