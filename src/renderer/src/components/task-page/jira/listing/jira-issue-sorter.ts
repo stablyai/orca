@@ -77,6 +77,8 @@ export function sortJiraIssues(
       comparison = compareNumericLocaleText(a.key, b.key)
     } else if (orderBy === 'title') {
       comparison = a.title.localeCompare(b.title)
+    } else if (orderBy === 'type') {
+      comparison = a.issueType.name.localeCompare(b.issueType.name)
     } else if (orderBy === 'status') {
       comparison = 0
     } else if (orderBy === 'priority') {
