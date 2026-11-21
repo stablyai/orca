@@ -139,26 +139,28 @@ describe('loadBotItemsList', () => {
       // A page per call: no answer larger than one page read alone.
       expect(limits.every((limit) => limit === undefined || (limit as number) <= 50)).toBe(true)
     }
-    // Unchanged, an older host's first page is all a whole read asks of it.
-    const older = host(items, true)
-    let read = await loadBotItemsList(older, null, WHOLE)
-    read = await loadBotItemsList(older, read, MORE)
-    let calls = 0
-    const counted: BotItemsListCall = (params) => {
-      calls += 1
-      return older(params)
+    // Unchanged, its first page is all a whole read asks of a host, older or not.
+    for (const older of [false, true]) {
+      const inner = host(items, older)
+      let read = await loadBotItemsList(inner, null, WHOLE)
+      read = await loadBotItemsList(inner, read, MORE)
+      let calls = 0
+      const counted: BotItemsListCall = (params) => {
+        calls += 1
+        return inner(params)
+      }
+      expect(await loadBotItemsList(counted, read, WHOLE)).toBe(read)
+      expect(calls).toBe(1)
+      // With more asked too, the next page is all it reads.
+      calls = 0
+      const deeper = await loadBotItemsList(counted, read, { whole: true, parts: [], more: true })
+      expect(calls).toBe(2)
+      expect(deeper.items.filter(closed)).toHaveLength(150)
+      // The chat-filtered list reads its loaded pages again, as it always did.
+      calls = 0
+      await loadBotItemsList(counted, read, WHOLE, { pageUnmoved: true })
+      expect(calls).toBe(2)
     }
-    expect(await loadBotItemsList(counted, read, WHOLE)).toBe(read)
-    expect(calls).toBe(1)
-    // With more asked too, the next page is all it reads.
-    calls = 0
-    const deeper = await loadBotItemsList(counted, read, { whole: true, parts: [], more: true })
-    expect(calls).toBe(2)
-    expect(deeper.items.filter(closed)).toHaveLength(150)
-    // The chat-filtered list reads its loaded pages again, as it always did.
-    calls = 0
-    await loadBotItemsList(counted, read, WHOLE, { pageUnmoved: true })
-    expect(calls).toBe(2)
   })
 
   it('stops paging down the depth once nothing shows the list', async () => {
@@ -175,7 +177,7 @@ describe('loadBotItemsList', () => {
     expect(calls).toBe(1)
   })
 
-  it('reads the loaded items that link a worker for a worker change, all of them past a page', async () => {
+  it('reads the loaded items that link a worker for a worker change, a hundred a read', async () => {
     const items = seeded()
     const link = {
       kind: 'dispatch' as const,
@@ -205,14 +207,15 @@ describe('loadBotItemsList', () => {
     read = await loadBotItemsList(call, read, worker)
     expect(asked).toEqual([['i3', 'i2', 'i1']])
     expect(read.items.find((item) => item.uid === 'i2')?.links[0]?.state).toBe('done')
-    // More than one read takes: the list reads whole.
-    for (const item of [...items.slice(0, 100), items[299]!]) {
+    // More than one read holds: a read per hundred, however deep Closed is loaded.
+    for (const item of [...items.slice(0, 100), ...items.slice(200)]) {
       item.links = [link]
     }
     read = await loadBotItemsList(call, null, WHOLE)
+    read = await loadBotItemsList(call, read, MORE)
     asked.length = 0
     await loadBotItemsList(call, read, worker)
-    expect(asked[0]).toBe('whole')
+    expect(asked.map((uids) => (uids as string[]).length)).toEqual([100, 100])
   })
 
   it('keeps loaded Closed items when an older host answers a named read whole', async () => {
