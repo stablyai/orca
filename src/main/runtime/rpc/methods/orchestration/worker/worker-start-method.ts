@@ -29,7 +29,7 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-sess
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
-import { linkWorkerToQuestion, type WorkerQuestionLink } from './start/worker-question-link'
+import { linkWorkerToQuestion, withQuestionLink } from './start/worker-question-link'
 
 type WorkerStartContext = Pick<
   RpcContext,
@@ -92,17 +92,7 @@ export async function startWorker(
       : undefined
   const linkedParams =
     questionLink && !questionLink.linked ? { ...params, forQuestion: undefined } : params
-  const withLink = <T>(started: T): T => {
-    if (!questionLink || !started || typeof started !== 'object') {
-      return started
-    }
-    let link: WorkerQuestionLink = questionLink
-    if (questionLink.linked) {
-      questionLink.take?.()
-      link = { question: questionLink.question, linked: true }
-    }
-    return { ...started, forQuestion: link }
-  }
+  const withLink = <T>(started: T): T => withQuestionLink(questionLink, started)
   const mode = decideWorkerStartMode({
     params,
     settings: readWorkerStartModeSettings(runtime)
