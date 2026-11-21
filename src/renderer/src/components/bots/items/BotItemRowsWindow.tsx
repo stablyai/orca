@@ -78,6 +78,9 @@ function useIndexOf(items: readonly BotItem[], pick: RowPick | null): number {
   return useMemo(() => indexOfPick(items, pick), [items, pick])
 }
 
+const relocated = (pick: RowPick | null, at: number): RowPick | null =>
+  pick === null || pick.at === at ? pick : at < 0 ? null : { uid: pick.uid, at }
+
 const samePick = (a: RowPick | null, b: RowPick | null): boolean =>
   a === b || (a !== null && b !== null && a.uid === b.uid && a.at === b.at)
 
@@ -195,10 +198,18 @@ export function BotItemRowsWindow({
   // The row an arrow moved to: drawn, then focused as it mounts.
   const [target, setTarget] = useState<RowPick | null>(null)
   const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])
-  const tabStop = Math.max(0, useIndexOf(items, stop))
+  const stopIndex = useIndexOf(items, stop)
   const focusedIndex = useIndexOf(items, focused)
   const targetIndex = useIndexOf(items, target)
   const backIndex = useIndexOf(items, backPick)
+  // A row that moved is found at its new place from now on, and one that left is let go, so later
+  // updates find each pick at once rather than searching the group again.
+  useLayoutEffect(() => {
+    setStop((prev) => relocated(prev, stopIndex))
+    setFocused((prev) => relocated(prev, focusedIndex))
+    setTarget((prev) => relocated(prev, targetIndex))
+  }, [stopIndex, focusedIndex, targetIndex])
+  const tabStop = Math.max(0, stopIndex)
   const pinned = useMemo(
     () =>
       [tabStop, focusedIndex, targetIndex, backIndex].filter(

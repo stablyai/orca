@@ -30,28 +30,14 @@ import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
-import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 import { BotItemRowsWindow, focusBotItemBackRow } from './BotItemRowsWindow'
 import { useBotItemsViewport, type BotItemsViewport } from './bot-items-viewport'
+import { listOwner, type BotItemsListMembers, type ListOwner } from './bot-items-list-owner'
+
+export type { BotItemsListMembers }
 
 const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
-
-/** A group's members' items in one list: each row acts on its own bot and shows its face. */
-export type BotItemsListMembers = {
-  /** Where the list keeps its folds. */
-  foldKey: string
-  botOf: (item: BotItem) => Bot
-  /** Each bot's seen mark, for its rows' dots. */
-  seenOf: (item: BotItem) => string
-  /** Each ask's bot. */
-  needBot: (need: BotNeedView) => Bot
-  /** The chat a row names on its second line, for a row outside the chats the list is about. */
-  placeOf: (item: BotItem) => string | null
-  /** Needs you's rows the shown bots have outside the list's chats, "N more outside this group", and
-   *  what those chats are. */
-  outside: { count: number; of: 'group' | 'room' | 'thread' }
-}
 
 export type BotItemsListProps = {
   /** The bot whose items these are, or a group's members. */
@@ -78,27 +64,6 @@ export type BotItemsListProps = {
 }
 
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
-
-type ListOwner = Omit<BotItemsListMembers, 'needBot'> & {
-  needBot: Bot | BotItemsListMembers['needBot']
-  /** Rows show their bot's face: the list is a group's. */
-  faces: boolean
-}
-
-function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): ListOwner {
-  if ('botOf' in bot) {
-    return { ...bot, faces: true }
-  }
-  return {
-    foldKey: bot.id,
-    botOf: () => bot,
-    seenOf: () => seenEventId,
-    needBot: bot,
-    placeOf: () => null,
-    outside: { count: 0, of: 'group' },
-    faces: false
-  }
-}
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const { groups, onOpen } = props
@@ -254,9 +219,11 @@ function BotItemGroup({
     focusUid ? items.findIndex((item) => item.uid === focusUid) : -1
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
-  const shownItems = useMemo(() => items.slice(0, shown), [items, shown])
-  const { placeOf } = owner
-  const placedOf = useCallback((item: BotItem) => placeOf(item) !== null, [placeOf])
+  // Only an open window draws rows: a folded group, or Needs you, copies none.
+  const shownItems = useMemo(
+    () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
+    [open, id, items, shown]
+  )
   const section = useRef<HTMLElement | null>(null)
   // Back's row until it has focus; one that left the group has nothing to return to.
   const [backDone, setBackDone] = useState(false)
@@ -396,7 +363,7 @@ function BotItemGroup({
         <>
           <BotItemRowsWindow
             items={shownItems}
-            placed={owner.faces ? placedOf : null}
+            placed={owner.placed ?? null}
             viewport={viewport}
             label={botItemGroupName(id, t)}
             renderRow={(item, tabbable) => row(item, tabbable)}

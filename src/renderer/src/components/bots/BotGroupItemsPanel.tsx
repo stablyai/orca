@@ -136,10 +136,16 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   const rows = merged.shown.length > 0 || asking
   // Stable while the scope is, so the list's row heights aren't recomputed on every render.
   const filterChatIds = filter.chatIds
-  const placeOf = useMemo(() => {
+  const { placeOf, placed } = useMemo(() => {
     const groupIds = new Set(scopes[0]!.chatIds)
-    return (item: BotItem): string | null =>
-      filterChatIds === null && !groupIds.has(item.chat.id) ? botItemChatName(item.chat, t) : null
+    // A chat filter shows only the group's own chats, so then no row names another.
+    const outsideGroup =
+      filterChatIds === null ? (item: BotItem): boolean => !groupIds.has(item.chat.id) : null
+    return {
+      placeOf: (item: BotItem): string | null =>
+        outsideGroup?.(item) ? botItemChatName(item.chat, t) : null,
+      placed: outsideGroup
+    }
   }, [scopes, filterChatIds, t])
   const note = (): React.ReactNode => {
     if (members.length === 0) {
@@ -255,6 +261,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
                 seenOf: merged.seenOf,
                 needBot: merged.needBot,
                 placeOf,
+                placed,
                 outside: {
                   count: merged.outside,
                   of:
