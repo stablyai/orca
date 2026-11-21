@@ -55,6 +55,48 @@ it("calls a federated worker of the Run its worker, and an unrelated chat's Run 
   }
 })
 
+it("sends Orca's notice for a local worker the thread's turn started back to the thread", () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    const run = db.createRun({
+      objective: 'thread',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: null
+    })
+    const assign = (creatorHandle: string) =>
+      db.createDispatchContext({
+        taskId: db.createTask({ runId: run.id, spec: creatorHandle }).id,
+        assigneeHandle: `term_worker_${creatorHandle}`,
+        creator: { kind: 'terminal', handle: creatorHandle, turnSource: 'connector' },
+        maxDepth: 8
+      })
+    const started = assign('term_coord')
+    const foreign = assign('term_other')
+    // A failed start's or lost worker's notice is mailed from the dispatch itself.
+    const notice = (dispatchId: string) =>
+      structuredMailSource({
+        db,
+        mailboxHandle: `run:${run.id}`,
+        dispatchId: null,
+        senderSnapshot: () => ({ name: 'Worker', agent: null }),
+        batch: [
+          {
+            id: `m-${dispatchId}`,
+            from_handle: `dispatch:${dispatchId}`,
+            run_id: run.id,
+            type: 'status',
+            payload: null,
+            created_at: '2026-01-01T00:00:00.000Z'
+          }
+        ]
+      }).senders[0]
+    expect(notice(started.id)).toMatchObject({ relation: 'worker', toConversation: true })
+    expect(notice(foreign.id)).not.toHaveProperty('toConversation')
+  } finally {
+    db.close()
+  }
+})
+
 it("tells a thread chat its answer lands there only on its thread's workers' reports", () => {
   const db = new OrchestrationDb(':memory:')
   try {

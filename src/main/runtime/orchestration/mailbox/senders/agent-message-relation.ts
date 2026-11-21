@@ -28,18 +28,18 @@ export type Lineage = {
 
 const UNKNOWN: Lineage = { relation: undefined }
 
-/** A federated worker mails as its dispatch: 'worker' only when this host started that dispatch in
- *  the Run for the recipient; anything else is unknown. */
-function federatedWorkerLineage(
+/** A federated worker mails as its dispatch, and so does Orca for a local one (its failed start or
+ *  lost worker): 'worker' only when that dispatch, in the Run, was created by the recipient;
+ *  anything else is unknown. */
+function dispatchWorkerLineage(
   db: OrchestrationDb,
   dispatchId: string,
   runId: string,
   recipient: Party
 ): Lineage {
-  const dispatch = db.getFederatedDispatch(dispatchId)
-    ? db.getDispatchContextById(dispatchId)
-    : null
-  const creator = dispatch?.run_id === runId ? dispatch : null
+  const dispatch = db.getDispatchContextById(dispatchId)
+  const known = dispatch && (db.getFederatedDispatch(dispatchId) || localDispatch(dispatch))
+  const creator = known && dispatch.run_id === runId ? dispatch : null
   return creator &&
     sameParty(
       { terminalHandle: creator.creator_handle, orcaSessionId: creator.creator_orca_session_id },
@@ -86,7 +86,7 @@ export function agentMessageLineage(args: RelationArgs): Lineage {
         ? runCoordinatorKey(run)
         : resolveOrchestrationParty(args.recipient, db)
     if (sender.address.startsWith('dispatch:')) {
-      return federatedWorkerLineage(db, sender.address.slice('dispatch:'.length), runId, recipient)
+      return dispatchWorkerLineage(db, sender.address.slice('dispatch:'.length), runId, recipient)
     }
     const coordinator = runCoordinatorKey(run)
     const dispatchFor = (party: Party, id?: string | null) => {
