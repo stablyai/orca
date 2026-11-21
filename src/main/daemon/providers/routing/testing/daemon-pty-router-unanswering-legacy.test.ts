@@ -96,6 +96,7 @@ describe('DaemonPtyRouter reattach beside an unanswering older daemon', () => {
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
   }, 30_000)
 
+  // Runs real daemon sockets and waits out the unanswering daemon's request timeout.
   it('lets the early newer-daemon gate pass a session the current daemon still runs', async () => {
     const current = await startDaemonAdapterHarness(() => createMockSubprocess())
     cleanups.push(async () => {

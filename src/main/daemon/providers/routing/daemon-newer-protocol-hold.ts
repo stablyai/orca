@@ -13,7 +13,7 @@ import {
   getDaemonSocketPath,
   getDaemonTokenPath
 } from '../../launch/daemon-spawner'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { parseDaemonPidFile } from '../../endpoint/identity/daemon-pid-file-parse'
 import { inspectProcessLiveness } from '../../endpoint/identity/daemon-process-inspection'
 import { killStaleDaemon } from '../../launch/daemon-stale-kill'
@@ -32,19 +32,21 @@ export async function discoverNewerProtocolHolds(runtimeDir: string): Promise<vo
   const verdicts = await Promise.all(
     versions.map((version) => classifyDaemonGeneration(runtimeDir, version))
   )
-  heldProtocols = versions.filter((_, index) => verdicts[index] !== 'exited')
+  const held = versions.filter((_, index) => verdicts[index] !== 'exited')
+  const pids = await Promise.all(held.map((version) => readHeldDaemonPid(runtimeDir, version)))
+  heldProtocols = held
   heldDaemonPids = new Map(
-    heldProtocols.flatMap((version) => {
-      const pid = readHeldDaemonPid(runtimeDir, version)
+    held.flatMap((version, index) => {
+      const pid = pids[index]
       return pid === null ? [] : [[version, pid] as const]
     })
   )
 }
 
 // Only a pid read while the daemon was held can later prove its exit; a missing file proves nothing then.
-function readHeldDaemonPid(runtimeDir: string, version: number): number | null {
+async function readHeldDaemonPid(runtimeDir: string, version: number): Promise<number | null> {
   try {
-    const parsed = parseDaemonPidFile(readFileSync(getDaemonPidPath(runtimeDir, version), 'utf8'))
+    const parsed = parseDaemonPidFile(await readFile(getDaemonPidPath(runtimeDir, version), 'utf8'))
     return parsed && Number.isInteger(parsed.pid) && parsed.pid > 0 ? parsed.pid : null
   } catch {
     return null

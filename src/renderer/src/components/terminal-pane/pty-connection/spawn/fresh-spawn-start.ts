@@ -263,7 +263,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        if (!refusal && freshSpawnRefusal(session, message)) {
+        if (!refusal && freshSpawnRefusal(message)) {
           outputCallbacks.callbacks.onError(message)
         }
         releaseDeferredCwdFence(session)

@@ -7,10 +7,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 export type FreshSpawnRefusal = 'pane-owner' | 'newer-daemon'
 
 /** Which refusal left a fresh spawn unbound, if any. */
-export function freshSpawnRefusal(
-  session: ConnectPanePtySession,
-  message: string
-): FreshSpawnRefusal | null {
+export function freshSpawnRefusal(message: string): FreshSpawnRefusal | null {
   if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
     return 'newer-daemon'
   }
@@ -22,7 +19,7 @@ export function noteFreshSpawnError(
   session: ConnectPanePtySession,
   message: string
 ): FreshSpawnRefusal | null {
-  const refusal = freshSpawnRefusal(session, message)
+  const refusal = freshSpawnRefusal(message)
   if (refusal !== 'newer-daemon') {
     session.reportError(message)
   }
