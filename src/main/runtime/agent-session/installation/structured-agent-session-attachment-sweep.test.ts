@@ -205,46 +205,58 @@ it('cleans orphans after a complete custody snapshot whose source identity canno
   }
 })
 
-it('continues orphan cleanup when permanent history failures have settled their upload custody', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-  const { db: source } = openJournalDatabase(journalDatabasePath(root))
-  cleanup.push(() => source.close())
-  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('saved-chat', '{}')
-  await initializeJournalDomainDatabase(root)
-  source
-    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
-    .run('claimed', 'saved-chat', 100)
-  source.exec('DROP TABLE journal_sessions')
-  const now = 2_000_000_000_000
-  const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
-  const attachments = agentSessionAttachmentStoreRoot(root)
-  for (const upload of ['claimed', 'orphan']) {
-    const directory = join(attachments, upload)
-    mkdirSync(directory, { recursive: true })
-    writeFileSync(join(directory, 'saved.txt'), 'stored upload')
-    utimesSync(directory, old, old)
+it.each([true, false])(
+  'continues orphan cleanup when a damaged original keeps its upload custody (chat converted=%s)',
+  async (converted) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: source } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => source.close())
+    const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    if (converted) {
+      record.run('saved-chat', '{}')
+    }
+    await initializeJournalDomainDatabase(root)
+    if (!converted) {
+      record.run('saved-chat', '{}')
+    }
+    source
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run('claimed', 'saved-chat', 100)
+    source.exec('DROP TABLE journal_sessions')
+    const now = 2_000_000_000_000
+    const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
+    const attachments = agentSessionAttachmentStoreRoot(root)
+    for (const upload of ['claimed', 'orphan']) {
+      const directory = join(attachments, upload)
+      mkdirSync(directory, { recursive: true })
+      writeFileSync(join(directory, 'saved.txt'), 'stored upload')
+      utimesSync(directory, old, old)
+    }
+    const database = await JournalSqlDatabase.open(root, {
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceError: () => {}
+    })
+    try {
+      const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
+      // Claims are pruned after removal, so a dropped claim shows on the next sweep.
+      for (let sweep = 0; sweep < 2; sweep++) {
+        await sweepAgentSessionAttachments(
+          store,
+          structuredAgentSessionAttachmentSweepFacts(database),
+          now
+        )
+      }
+      expect(['claimed', 'orphan'].map((id) => existsSync(join(attachments, id)))).toEqual([
+        true,
+        false
+      ])
+    } finally {
+      await database.close()
+    }
   }
-  const database = await JournalSqlDatabase.open(root, {
-    writerPath: journalSqlWorkerPath(),
-    readerPath: journalSqlReaderPath(),
-    onMaintenanceError: () => {}
-  })
-  try {
-    const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
-    await sweepAgentSessionAttachments(
-      store,
-      structuredAgentSessionAttachmentSweepFacts(database),
-      now
-    )
-    expect(['claimed', 'orphan'].map((id) => existsSync(join(attachments, id)))).toEqual([
-      true,
-      false
-    ])
-  } finally {
-    await database.close()
-  }
-})
+)
 
 it.each(['claim inventory', 'chat catalog'])(
   'keeps baseline cleanup when the original %s cannot be read',

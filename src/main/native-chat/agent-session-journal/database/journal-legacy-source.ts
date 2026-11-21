@@ -2,29 +2,26 @@ import Database from '../../../sqlite/sync-database'
 import { ensureJournalAdditiveTables, journalPragmaNumber } from './journal-database'
 import { createAgentSessionRecordTablesSql } from './journal-database-schema'
 
-/** An original whose version created tables it no longer has; no chat in it can be read. */
-export class JournalLegacySourceDamagedError extends Error {}
-
 /**
  * Opens the original journal read-only, shaped as this build's writable open would have left it.
  * A table an older build never added reads as empty through a private TEMP table, so the file
- * itself is never written. Columns added later are optional in their row readers. With `complete`,
- * an original missing a table its version created is refused as a whole.
+ * itself is never written. Columns added later are optional in their row readers.
  */
 export function openJournalLegacySource(
   filename: string,
-  options: { timeout?: number; complete?: boolean } = {}
+  options: { timeout?: number } = {}
 ): Database.Database {
-  const { complete, ...open } = options
-  const source = new Database(filename, { readonly: true, fileMustExist: true, ...open })
+  return openJournalLegacySourceChecked(filename, options).source
+}
+
+/** Also names the tables the original's version created that it no longer has. */
+export function openJournalLegacySourceChecked(
+  filename: string,
+  options: { timeout?: number } = {}
+): { source: Database.Database; missing: string[] } {
+  const source = new Database(filename, { readonly: true, fileMustExist: true, ...options })
   try {
-    const missing = presentCurrentSchema(source)
-    if (complete && missing.length > 0) {
-      throw new JournalLegacySourceDamagedError(
-        `the original journal is missing ${missing.join(', ')}`
-      )
-    }
-    return source
+    return { source, missing: presentCurrentSchema(source) }
   } catch (error) {
     source.close()
     throw error

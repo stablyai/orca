@@ -272,7 +272,9 @@ it.each([
 ])('records a version-four original missing %s once, at flat cost', async (_, damage) => {
   const small = await damagedOriginalLaunches(20, damage)
   const large = await damagedOriginalLaunches(200, damage)
-  expect(large.perLaunch).toEqual(small.perLaunch)
+  // The first launch keeps the original's upload claims; later ones skip the unchanged file.
+  expect(large.perLaunch.slice(1)).toEqual(small.perLaunch.slice(1))
+  expect(large.perLaunch[0]).toBeLessThanOrEqual(small.perLaunch[0] * 10)
   for (const { keys } of [small, large]) {
     expect(keys.filter((key) => key.startsWith('journal.legacy-failed:'))).toEqual([])
     expect(keys).toContain(JOURNAL_LEGACY_SOURCE_DAMAGED)
