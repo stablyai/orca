@@ -54,7 +54,7 @@ export async function readAntigravityTranscriptPoll(
     state.antigravityChildWorkByPaneKey.get(paneKey)?.rootModel === root &&
     root.fence === fence &&
     Date.now() < antigravityModelReadEndsAt(root)
-  const batch = new RolloutReadBatch(wanted, signal)
+  const batch = new RolloutReadBatch(wanted, signal, () => antigravityModelReadEndsAt(root))
   try {
     const read = await readJsonlCursorBytes(root.cursor, batch, 'forward', {
       previous: root.fingerprint

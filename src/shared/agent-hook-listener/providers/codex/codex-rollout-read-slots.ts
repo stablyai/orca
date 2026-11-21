@@ -1,17 +1,49 @@
+import { monotonicNow, type Settled } from '../../../concurrency/deadline-settle-notifier'
+
 // Why: an open stalled by an on-access scan holds a libuv thread (4 by default); leave one free for other file work.
 const MAX_CONCURRENT_ROLLOUT_READS = 3
-let rolloutReadsInFlight = 0
 const MAX_QUEUED_ROLLOUT_READS = 4096
+const ROLLOUT_READ_TIMEOUT_MS = 20_000
+
+const nativeReads = new Set<{ stalledAt: number }>()
+let reportedStall = false
+
+function allReadSlotsStalled(now: number): boolean {
+  if (nativeReads.size < MAX_CONCURRENT_ROLLOUT_READS) {
+    return false
+  }
+  for (const read of nativeReads) {
+    if (read.stalledAt > now) {
+      return false
+    }
+  }
+  if (!reportedStall) {
+    reportedStall = true
+    console.warn('[agent-hooks] Transcript reads stalled')
+  }
+  return true
+}
 
 type RolloutReadWaiter = {
   previous?: RolloutReadWaiter
   next?: RolloutReadWaiter
-  settle: (granted: boolean) => void
+  start: () => void
 }
 
 let firstWaiter: RolloutReadWaiter | undefined
 let lastWaiter: RolloutReadWaiter | undefined
 let queuedReads = 0
+
+function enqueueWaiter(waiter: RolloutReadWaiter): void {
+  waiter.previous = lastWaiter
+  if (lastWaiter) {
+    lastWaiter.next = waiter
+  } else {
+    firstWaiter = waiter
+  }
+  lastWaiter = waiter
+  queuedReads++
+}
 
 function unlinkWaiter(waiter: RolloutReadWaiter): void {
   if (waiter.previous) {
@@ -37,12 +69,13 @@ let heldRolloutBytes = 0
 /** One poll's or hook's reads: whether they are still wanted, and the buffer bytes they hold until released. */
 export class RolloutReadBatch {
   private held = 0
+  private retained = 0
   private released = false
-  private activeReads = 0
 
   constructor(
     private readonly isWanted: () => boolean = () => true,
-    readonly signal?: AbortSignal
+    readonly signal?: AbortSignal,
+    readonly expiresAt?: () => number
   ) {}
 
   wanted(): boolean {
@@ -62,85 +95,117 @@ export class RolloutReadBatch {
     return true
   }
 
-  /** Returns bytes a read already dropped, such as a parsed first-line buffer. */
   unreserve(bytes: number): void {
-    const returned = Math.min(bytes, this.held)
-    heldRolloutBytes -= returned
-    this.held -= returned
+    heldRolloutBytes -= bytes
+    this.held -= bytes
   }
 
-  startRead(): void {
-    this.activeReads++
-  }
-
-  finishRead(): void {
-    this.activeReads--
-    if (this.released) {
-      this.release()
-    }
+  retain(bytes: number): void {
+    this.retained += bytes
   }
 
   /** Call once the batch is applied or dropped. */
   release(): void {
     this.released = true
-    if (this.activeReads === 0) {
-      this.unreserve(this.held)
-    }
+    this.unreserve(this.retained)
+    this.retained = 0
   }
 }
 
-/** `wanted` is rechecked once a slot is granted, so work its caller abandoned while queued never touches the disk. */
-export async function withRolloutReadSlot<T>(
-  run: () => Promise<T>,
+export type RolloutRead = {
+  wanted: () => boolean
+  reserve: (bytes: number, lifetime: 'read' | 'batch') => boolean
+}
+
+export function withRolloutReadSlot<T>(
+  run: (read: RolloutRead) => Promise<T>,
   batch: RolloutReadBatch,
   unwanted: T
 ): Promise<T> {
-  if (!batch.wanted()) {
-    return unwanted
+  const now = monotonicNow()
+  const delay = Math.min(ROLLOUT_READ_TIMEOUT_MS, (batch.expiresAt?.() ?? Infinity) - Date.now())
+  if (
+    delay <= 0 ||
+    !batch.wanted() ||
+    allReadSlotsStalled(now) ||
+    queuedReads >= MAX_QUEUED_ROLLOUT_READS
+  ) {
+    return Promise.resolve(unwanted)
   }
-  if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
-    rolloutReadsInFlight += 1
-  } else {
-    if (queuedReads >= MAX_QUEUED_ROLLOUT_READS) {
-      return unwanted
+  const deadline = now + delay
+  return new Promise((resolve, reject) => {
+    let waiter: RolloutReadWaiter | undefined
+    let complete: ((outcome: Settled<T>) => void) | undefined = (outcome) => {
+      complete = undefined
+      clearTimeout(timer)
+      batch.signal?.removeEventListener('abort', abandon)
+      if (waiter) {
+        unlinkWaiter(waiter)
+        waiter = undefined
+      }
+      if (outcome.ok) {
+        resolve(outcome.value)
+      } else {
+        reject(outcome.error)
+      }
     }
-    const granted = await new Promise<boolean>((resolve) => {
-      const waiter: RolloutReadWaiter = {
-        previous: lastWaiter,
-        settle: (granted) => {
-          unlinkWaiter(waiter)
-          batch.signal?.removeEventListener('abort', cancel)
-          resolve(granted)
+    const abandon = (): void => {
+      complete?.({ ok: true, value: unwanted })
+      allReadSlotsStalled(monotonicNow())
+    }
+    const wanted = (): boolean =>
+      complete !== undefined && monotonicNow() < deadline && batch.wanted()
+    const start = (): void => {
+      if (!wanted()) {
+        abandon()
+        return
+      }
+      if (waiter) {
+        unlinkWaiter(waiter)
+        waiter = undefined
+      }
+      // A short lease or a long queue wait can end a caller before its native operation stalls.
+      const native = { stalledAt: monotonicNow() + ROLLOUT_READ_TIMEOUT_MS }
+      nativeReads.add(native)
+      let held = 0
+      let retained = 0
+      const reserve: RolloutRead['reserve'] = (bytes, lifetime) => {
+        if (!batch.reserve(bytes)) {
+          return false
+        }
+        held += bytes
+        if (lifetime === 'batch') {
+          retained += bytes
+        }
+        return true
+      }
+      const finish = (outcome: Settled<T>): void => {
+        allReadSlotsStalled(monotonicNow())
+        const accepted = wanted()
+        const keep = accepted && outcome.ok ? retained : 0
+        batch.unreserve(held - keep)
+        batch.retain(keep)
+        complete?.(accepted ? outcome : { ok: true, value: unwanted })
+        // A caller may leave early. Only native settlement (including close) frees capacity.
+        nativeReads.delete(native)
+        reportedStall = false
+        while (firstWaiter && nativeReads.size < MAX_CONCURRENT_ROLLOUT_READS) {
+          firstWaiter.start()
         }
       }
-      const cancel = () => waiter.settle(false)
-      if (lastWaiter) {
-        lastWaiter.next = waiter
-      } else {
-        firstWaiter = waiter
-      }
-      lastWaiter = waiter
-      queuedReads++
-      batch.signal?.addEventListener('abort', cancel, { once: true })
-    })
-    if (!granted) {
-      return unwanted
+      void run({ wanted, reserve }).then(
+        (value) => finish({ ok: true, value }),
+        (error: unknown) => finish({ ok: false, error })
+      )
     }
-  }
-  batch.startRead()
-  try {
-    if (!batch.wanted()) {
-      return unwanted
-    }
-    const result = await run()
-    return batch.wanted() ? result : unwanted
-  } finally {
-    batch.finishRead()
-    // Only the physical read's settlement hands its slot to the oldest waiter.
-    if (firstWaiter) {
-      firstWaiter.settle(true)
+    const timer = setTimeout(abandon, Math.ceil(delay))
+    timer.unref?.()
+    batch.signal?.addEventListener('abort', abandon, { once: true })
+    if (nativeReads.size < MAX_CONCURRENT_ROLLOUT_READS) {
+      start()
     } else {
-      rolloutReadsInFlight -= 1
+      waiter = { start }
+      enqueueWaiter(waiter)
     }
-  }
+  })
 }

@@ -15,7 +15,11 @@ import {
   type JsonlFirstRecord
 } from './codex-rollout-jsonl-format'
 
-import { type RolloutReadBatch, withRolloutReadSlot } from './codex-rollout-read-slots'
+import {
+  type RolloutRead,
+  type RolloutReadBatch,
+  withRolloutReadSlot
+} from './codex-rollout-read-slots'
 
 export { RolloutReadBatch } from './codex-rollout-read-slots'
 
@@ -40,7 +44,7 @@ export function readJsonlFirstRecordAsync(
   batch: RolloutReadBatch
 ): Promise<JsonlFirstRecord> {
   return withRolloutReadSlot(
-    () => readJsonlFirstRecordAsyncUnslotted(filePath, batch),
+    (read) => readJsonlFirstRecordAsyncUnslotted(filePath, read),
     batch,
     'unreadable'
   )
@@ -48,32 +52,30 @@ export function readJsonlFirstRecordAsync(
 
 async function readJsonlFirstRecordAsyncUnslotted(
   filePath: string,
-  batch: RolloutReadBatch
+  read: RolloutRead
 ): Promise<JsonlFirstRecord> {
   // Over the held-bytes budget reads as a transient failure; the identity retry comes back later.
-  if (!batch.reserve(TRANSCRIPT_LINE_MAX_BYTES)) {
+  if (!read.reserve(TRANSCRIPT_LINE_MAX_BYTES, 'read')) {
     return 'unreadable'
   }
   let handle: FileHandle | undefined
   try {
     handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
-    if (!batch.wanted()) {
+    if (!read.wanted()) {
       return 'unreadable'
     }
     if (!(await handle.stat()).isFile()) {
       return undefined
     }
-    if (!batch.wanted()) {
+    if (!read.wanted()) {
       return 'unreadable'
     }
     const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-    return batch.wanted() ? parseJsonlFirstRecord(buffer, bytesRead) : 'unreadable'
+    return read.wanted() ? parseJsonlFirstRecord(buffer, bytesRead) : 'unreadable'
   } catch (error) {
     return firstRecordError(error)
   } finally {
-    // The buffer is parsed and dropped here, so it holds none of the budget afterwards.
-    batch.unreserve(TRANSCRIPT_LINE_MAX_BYTES)
     await handle?.close().catch(() => {})
   }
 }
@@ -86,7 +88,7 @@ export function readJsonlCursorBytes(
   trackFile?: { previous?: JsonlFileFingerprint }
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   return withRolloutReadSlot(
-    () => readJsonlCursorBytesUnslotted(cursor, batch, mode, trackFile),
+    (read) => readJsonlCursorBytesUnslotted(cursor, read, mode, trackFile),
     batch,
     'deferred'
   )
@@ -112,7 +114,7 @@ function jsonlFingerprint(stats: Stats): JsonlFileFingerprint {
 
 async function readJsonlCursorBytesUnslotted(
   cursor: JsonlCursor,
-  batch: RolloutReadBatch,
+  read: RolloutRead,
   mode: 'tail' | 'forward',
   trackFile?: { previous?: JsonlFileFingerprint }
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
@@ -126,24 +128,27 @@ async function readJsonlCursorBytesUnslotted(
     const previous = trackFile?.previous
     if (previous && snapshot.offset === previous.size) {
       const pathStats = await stat(snapshot.filePath)
+      if (!read.wanted()) {
+        return 'deferred'
+      }
       if (!pathStats.isFile()) {
         return undefined
       }
       if (sameJsonlFingerprint(previous, jsonlFingerprint(pathStats))) {
         return { ...planJsonlRead(snapshot, previous.size, mode), fingerprint: previous }
       }
-      if (!batch.wanted()) {
-        return 'deferred'
-      }
     }
     if (trackFile) {
       // Bind the fingerprint and byte range to the same opened file.
       handle = await open(snapshot.filePath, FIRST_RECORD_OPEN_FLAGS)
-      if (!batch.wanted()) {
+      if (!read.wanted()) {
         return 'deferred'
       }
     }
     const stats = handle ? await handle.stat() : await stat(snapshot.filePath)
+    if (!read.wanted()) {
+      return 'deferred'
+    }
     if (!stats.isFile()) {
       return undefined
     }
@@ -163,15 +168,18 @@ async function readJsonlCursorBytesUnslotted(
     if (plan.length === 0) {
       return plan
     }
-    if (!batch.wanted() || !batch.reserve(plan.length)) {
+    if (!read.reserve(plan.length, 'batch')) {
       return 'deferred'
     }
     handle ??= await open(plan.filePath, 'r')
-    if (!batch.wanted()) {
+    if (!read.wanted()) {
       return 'deferred'
     }
     const buffer = Buffer.allocUnsafe(plan.length)
     const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
+    if (!read.wanted()) {
+      return 'deferred'
+    }
     const bytes = buffer.subarray(0, bytesRead)
     if (mode === 'forward') {
       return {
@@ -192,12 +200,20 @@ export function readTranscriptDirectoryAsync(
   directory: string,
   batch: RolloutReadBatch
 ): Promise<string[]> {
-  return withRolloutReadSlot(() => readTranscriptDirectoryAsyncUnslotted(directory), batch, [])
+  return withRolloutReadSlot(
+    (read) => readTranscriptDirectoryAsyncUnslotted(directory, read),
+    batch,
+    []
+  )
 }
 
-async function readTranscriptDirectoryAsyncUnslotted(directory: string): Promise<string[]> {
+async function readTranscriptDirectoryAsyncUnslotted(
+  directory: string,
+  read: RolloutRead
+): Promise<string[]> {
   try {
-    return boundTranscriptDirectory(await readdir(directory))
+    const entries = await readdir(directory)
+    return read.wanted() ? boundTranscriptDirectory(entries) : []
   } catch {
     return []
   }

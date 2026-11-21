@@ -23,6 +23,7 @@ const reads = vi.hoisted(() => ({
   started: 0,
   settled: 0,
   pending: new Set<Promise<void>>(),
+  openTranscripts: new Set<Promise<void>>(),
   transcripts: 0,
   ranges: [] as { at: number; bytes: number }[],
   stallTranscripts: false,
@@ -40,19 +41,31 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         return actual.open(...args)
       }
       reads.transcripts++
-      if (reads.stallTranscripts) {
-        await reads.released
+      let closed!: () => void
+      const transcript = new Promise<void>((resolve) => (closed = resolve))
+      reads.openTranscripts.add(transcript)
+      const retire = (): void => {
+        reads.openTranscripts.delete(transcript)
+        closed()
       }
-      const handle = await actual.open(...args)
-      const read = handle.read.bind(handle)
-      return {
-        stat: handle.stat.bind(handle),
-        close: handle.close.bind(handle),
-        read: async (buffer: Buffer, offset: number, length: number, position: number) => {
-          const result = await read(buffer, offset, length, position)
-          reads.ranges.push({ at: position, bytes: result.bytesRead })
-          return result
+      try {
+        if (reads.stallTranscripts) {
+          await reads.released
         }
+        const handle = await actual.open(...args)
+        const read = handle.read.bind(handle)
+        return {
+          stat: handle.stat.bind(handle),
+          close: () => handle.close().finally(retire),
+          read: async (buffer: Buffer, offset: number, length: number, position: number) => {
+            const result = await read(buffer, offset, length, position)
+            reads.ranges.push({ at: position, bytes: result.bytesRead })
+            return result
+          }
+        }
+      } catch (error) {
+        retire()
+        throw error
       }
     }
   }
@@ -102,6 +115,7 @@ afterEach(async () => {
   server.stop()
   reads.release()
   await Promise.allSettled(reads.pending)
+  await Promise.all(reads.openTranscripts)
   vi.useRealTimers()
   rmSync(dir, { recursive: true, force: true })
 })
@@ -174,19 +188,27 @@ it.each([100, 1000])(
   }
 )
 
-it('expires a queued poll at the hook-silence deadline without a new read or a free slot', async () => {
+it('retries after the read deadline without losing the last model or blocking a terminal hook', async () => {
   reads.stallTranscripts = true
   const entries = [pane(0), pane(1), pane(2), pane(3)]
+  const queued = entries[3]!
+  await queued.send('PreInvocation', { modelName: 'previous-model', lastUserInput: 'Earlier task' })
   for (const entry of entries) {
     await entry.send('PreInvocation', { initialNumSteps: 1 })
   }
   await vi.advanceTimersByTimeAsync(1000)
   expect(reads).toMatchObject({ started: 4, transcripts: 3, settled: 0 })
-  await vi.advanceTimersByTimeAsync(1_798_999)
+  await vi.advanceTimersByTimeAsync(19_999)
   expect(reads.settled).toBe(0)
   await vi.advanceTimersByTimeAsync(1)
-  expect(reads).toMatchObject({ started: 4, transcripts: 3, settled: 1 })
-  expect(entries[3]!.row()).toMatchObject({ state: 'working' })
+  expect(reads).toMatchObject({ started: 4, transcripts: 3, settled: 4 })
+  expect(queued.row()).toMatchObject({ state: 'working', model: 'previous-model' })
+  await vi.advanceTimersByTimeAsync(1999)
+  expect(reads.started).toBe(4)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(reads).toMatchObject({ started: 8, transcripts: 3, settled: 8 })
+  await queued.send('Stop', { fullyIdle: true })
+  expect(queued.row()).toMatchObject({ state: 'done', model: 'previous-model' })
 })
 
 it.each([10, 100])(
@@ -353,10 +375,11 @@ it('lets a replacement root poll while the old transcript read is stalled', asyn
   await vi.advanceTimersByTimeAsync(1000)
   await Promise.all([...reads.pending].filter((poll) => poll !== oldPoll))
   expect(entry.row()?.model).toBe('new-root-model')
-  expect(reads.settled).toBe(1)
+  expect(reads.settled).toBe(2)
 
   reads.release()
   await oldPoll
+  await Promise.all(reads.openTranscripts)
   expect(entry.row()?.providerSession?.id).toBe('replacement')
   expect(entry.row()?.model).toBe('new-root-model')
 })
@@ -383,17 +406,21 @@ it('recovers the root model after an oversized unfinished record and file trunca
 it('stops model reads at hook silence while a busy Stop leaves the row working', async () => {
   const entry = pane(0)
   reads.stallTranscripts = true
+  await pane(1).send('PreInvocation', { initialNumSteps: 1 })
+  await pane(2).send('PreInvocation', { initialNumSteps: 1 })
   await entry.send('PreInvocation', { initialNumSteps: 1 })
   await entry.send('Stop', { fullyIdle: false })
   await vi.advanceTimersByTimeAsync(1000)
-  expect(reads.transcripts).toBe(1)
+  expect(reads.transcripts).toBe(3)
   await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
+  const attempts = reads.started
   reads.release()
-  await Promise.all(reads.pending)
+  await Promise.all(reads.openTranscripts)
   expect(entry.row()?.model).toBeUndefined()
   expect(entry.row()?.state).toBe('working')
   await vi.advanceTimersByTimeAsync(5000)
-  expect(reads.transcripts).toBe(1)
+  expect(reads.started).toBe(attempts)
+  expect(reads.transcripts).toBe(3)
 })
 
 it.each([
