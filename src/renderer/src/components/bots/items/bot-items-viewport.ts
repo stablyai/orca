@@ -49,38 +49,43 @@ function listenTo(
   }
 }
 
+function createViewport(
+  scroller: HTMLElement | null,
+  list: React.RefObject<HTMLElement | null>
+): BotItemsViewport {
+  const listeners = new Set<() => void>()
+  // This frame's box, shared by every group a notice reaches.
+  let frameBox: BotItemsViewportBox | null = null
+  let stop: (() => void) | null = null
+  const onFrame = (): void => {
+    if (scroller) {
+      frameBox = readBox(scroller)
+      listeners.forEach((listener) => listener())
+      frameBox = null
+    }
+  }
+  return {
+    read: () => (scroller ? (frameBox ?? readBox(scroller)) : null),
+    subscribe: (listener) => {
+      listeners.add(listener)
+      if (scroller && !stop) {
+        stop = listenTo(scroller, list.current, onFrame)
+      }
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0 && stop) {
+          stop()
+          stop = null
+        }
+      }
+    },
+    scrollTo: (scrollTop) => scroller?.scrollTo({ top: scrollTop })
+  }
+}
+
 export function useBotItemsViewport(
   scroller: HTMLElement | null,
   list: React.RefObject<HTMLElement | null>
 ): BotItemsViewport {
-  return useMemo<BotItemsViewport>(() => {
-    const listeners = new Set<() => void>()
-    // This frame's box, shared by every group a notice reaches.
-    let frameBox: BotItemsViewportBox | null = null
-    let stop: (() => void) | null = null
-    const onFrame = (): void => {
-      if (scroller) {
-        frameBox = readBox(scroller)
-        listeners.forEach((listener) => listener())
-        frameBox = null
-      }
-    }
-    return {
-      read: () => (scroller ? (frameBox ?? readBox(scroller)) : null),
-      subscribe: (listener) => {
-        listeners.add(listener)
-        if (scroller && !stop) {
-          stop = listenTo(scroller, list.current, onFrame)
-        }
-        return () => {
-          listeners.delete(listener)
-          if (listeners.size === 0 && stop) {
-            stop()
-            stop = null
-          }
-        }
-      },
-      scrollTo: (scrollTop) => scroller?.scrollTo({ top: scrollTop })
-    }
-  }, [scroller, list])
+  return useMemo(() => createViewport(scroller, list), [scroller, list])
 }
