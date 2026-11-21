@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Worktree } from '../../shared/worktree/types'
 import type { Bot } from '../../shared/bot-types'
@@ -81,7 +82,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     },
     createFolderWorkspace: async (input) =>
       (await this.projectGroups.createFolderWorkspace(input)).folderWorkspace,
-    deleteFolderWorkspace: (id) => this.projectGroups.deleteFolderWorkspace(id),
+    deleteFolderWorkspace: (id) =>
+      this.projectGroups.deleteFolderWorkspace(id, { discardUnsavedDrafts: true }),
     deleteBotAutomations: (botId) =>
       deleteAutomationsOfBot(this.store?.listAutomations?.() ?? [], botId, (id) =>
         this.deleteAutomation(id)
@@ -302,7 +304,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return {
       isMuted: (scope: Muted[1], news: Muted[2]) =>
         isStructuredAttentionMuted(muteDeps, scope, news),
-      readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId)
+      readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId),
+      repliesInSlack: (id: string) => !!this.store && sessionRepliesInSlack(this.store, id)
     }
   }
 
@@ -340,10 +343,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   // A tool's sign-in state shows in every window's and phone's rows: they re-read the tools on this,
   // and when a credential ends (a tool removed, a sign-in replaced).
-  protected readonly stopToolSignInNotices = [
-    onBotToolSignInChanged(() => this.botChangeNotices.changed({ kinds: ['settings'] })),
-    onBotToolCredentialEnded(() => this.botChangeNotices.changed({ kinds: ['settings'] }))
-  ]
+  protected readonly stopToolSignInNotices = [onBotToolSignInChanged, onBotToolCredentialEnded].map(
+    (subscribe) => subscribe(() => this.botChangeNotices.changed({ kinds: ['settings'] }))
+  )
 
   /** Something a bot's settings or cards show changed on this host; windows and phones re-read.
    *  Unscoped, every reader re-reads. */

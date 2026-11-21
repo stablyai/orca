@@ -2,8 +2,6 @@
 // host and re-read when its items or workers change; and the owner's writes to them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
-import type { BotItemAnswer } from '../../../../../shared/bots/bot-item-ask'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
@@ -185,14 +183,16 @@ export function commentOnBotItem(
   uid: string,
   text: string,
   images: readonly string[] = [],
-  requestId?: string
+  requestId?: string,
+  questionId?: string
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
     item: uid,
     text,
     // An older host refuses these fields, so a comment without them leaves them off.
     ...(images.length > 0 ? { images } : {}),
-    ...(requestId ? { requestId } : {})
+    ...(requestId ? { requestId } : {}),
+    ...(questionId ? { questionId } : {})
   })
 }
 
@@ -211,46 +211,6 @@ export function botItemsByBot<I extends Pick<BotItem, 'uid'>>(
     groups.set(key, group)
   }
   return [...groups.values()]
-}
-
-/** How an answer went: recorded (also when a retry found its first write), refused because the question
- *  closed first, or refused by a host that predates answers (it never keeps one as a plain comment). */
-export type BotItemAnswerOutcome = 'answered' | 'closed' | 'unsupported'
-
-/** The owner's answer to the item's open question. `answerId` stays the same across retries of one
- *  answer, so the host records it once. Other failures throw. */
-export async function answerBotItem(
-  bot: BotRef,
-  uid: string,
-  question: string,
-  answers: readonly BotItemAnswer[],
-  answerId: string
-): Promise<BotItemAnswerOutcome> {
-  try {
-    const result = await callBotRpc(bot, 'bots.items.owner.comment', {
-      item: uid,
-      // Empty: the host spells the answer out. An older host refuses an empty comment instead.
-      text: '',
-      answering: question,
-      answers: [...answers],
-      answerId
-    })
-    return isRecord(result) && result.answered === true ? 'answered' : 'unsupported'
-  } catch (error) {
-    if (hasRuntimeRpcErrorCode(error, 'question_closed')) {
-      return 'closed'
-    }
-    // An older host: its params refuse the answer's fields or its empty text. A current host's own
-    // refusal of the answer ("Your answers come to …") is no such sign, so it surfaces as an error.
-    if (error instanceof Error && /Missing text|answering|answerId/.test(error.message)) {
-      return 'unsupported'
-    }
-    throw error
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
 }
 
 /** One status for any number of items: one mail per chat, so one turn for the bot. */

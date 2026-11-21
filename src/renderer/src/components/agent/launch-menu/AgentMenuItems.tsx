@@ -1,6 +1,7 @@
 import { readAgentMenuTerminalPending } from './agent-menu-launch-facts'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
@@ -41,7 +42,13 @@ import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/pick
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
-import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './agent-menu-row-presentation'
+import {
+  chatUnavailableLabel,
+  rowStatusLabel,
+  rowTitle,
+  rowLabel,
+  rowId
+} from './agent-menu-row-presentation'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -91,7 +98,9 @@ export function useTabAgentMenuLaunch({
         disabled ||
         row.kind === 'chat-unavailable' ||
         (row.kind !== 'chat' &&
-          readAgentMenuTerminalPending(useAppStore.getState(), { worktreeId }))
+          readAgentMenuTerminalPending(useAppStore.getState(), readRuntimeStatuses(), {
+            worktreeId
+          }))
       ) {
         return false
       }
@@ -292,6 +301,8 @@ export function ProjectedAgentMenuItems({
                 <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
                   {pendingReason}
                 </span>
+              ) : rowStatusLabel(row, t) ? (
+                <span className="text-xs text-muted-foreground">{rowStatusLabel(row, t)}</span>
               ) : null}
               {showsDefaultAgentShortcut ? (
                 <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>

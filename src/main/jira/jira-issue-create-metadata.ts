@@ -49,7 +49,7 @@ export async function listIssueTypes(
     return issueTypes.map(mapIssueType)
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listIssueTypes failed:', error)
@@ -104,7 +104,7 @@ export async function listCreateFields(
     return fields
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listCreateFields failed:', error)
@@ -133,7 +133,7 @@ export async function listPriorities(
     return response.map(mapPriority).filter((priority): priority is JiraPriority => !!priority)
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listPriorities failed:', error)
@@ -165,7 +165,7 @@ export async function searchUsers(query?: string, siteId?: string | null): Promi
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     // Browse-users permission is optional; the dialog allows explicit known user IDs.
@@ -204,7 +204,7 @@ async function searchAssignableUsers(
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn(`[jira] ${label} failed:`, error)

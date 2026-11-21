@@ -1,7 +1,7 @@
 // The plan a bot shows with `orca bot import plan`: what comes over from the old bot, what changes, and what
 // stays behind, one checkbox per item that comes. The owner's answer goes back as an ordinary message.
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import { Check, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -60,6 +60,12 @@ export function NativeChatImportPlanCard({
     }
     setUnticked(next)
   }
+  const asked =
+    chosen.length === 1
+      ? t('components.native-chat.importPlan.askedOne', 'Asked to import 1 item')
+      : t('components.native-chat.importPlan.askedMany', 'Asked to import {{count}} items', {
+          count: chosen.length
+        })
   return (
     <NativeChatCardFrame
       avatar={
@@ -67,20 +73,38 @@ export function NativeChatImportPlanCard({
           <Download className="size-4 text-muted-foreground" aria-hidden />
         </NativeChatCardAvatar>
       }
-      heading={t('components.native-chat.importPlan.heading', 'Import plan')}
-      trailing={
-        <span>
-          {plan.again
-            ? t('components.native-chat.importPlan.fromAgain', 'From {{app}}, again', {
-                app: plan.app
-              })
-            : t('components.native-chat.importPlan.from', 'From {{app}}', {
-                app: plan.app
-              })}
-        </span>
+      heading={
+        plan.again
+          ? t('components.native-chat.importPlan.fromAgain', 'From {{app}}, again', {
+              app: plan.app
+            })
+          : t('components.native-chat.importPlan.from', 'From {{app}}', { app: plan.app })
+      }
+      title={plan.name}
+      footer={
+        sent === null ? (
+          <NativeChatOfferActions offer={answering}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={chosen.length === 0}
+              onClick={() =>
+                answering.send(
+                  botImportAnswer(plan, leftOut),
+                  chosen.map((item) => String(item.index))
+                )
+              }
+            >
+              {chosen.length === 1
+                ? t('components.native-chat.importPlan.importOne', 'Import 1 item')
+                : t('components.native-chat.importPlan.importMany', 'Import {{count}} items', {
+                    count: chosen.length
+                  })}
+            </Button>
+          </NativeChatOfferActions>
+        ) : undefined
       }
     >
-      <p className="mt-0.5 text-sm font-medium text-foreground">{plan.name}</p>
       {GROUP_ORDER.map((group) => {
         const entries = items.filter((item) => item.group === group)
         if (entries.length === 0) {
@@ -123,47 +147,20 @@ export function NativeChatImportPlanCard({
           </div>
         )
       })}
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2.5">
-        <p className="min-w-0 text-xs text-muted-foreground">
-          {t(
+      <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+        {sent === null ? (
+          t(
             'components.native-chat.importPlan.selected',
             '{{chosen}} of {{total}} selected · keys and logins are never copied',
             { chosen: chosen.length, total: bringable.length }
-          )}
-        </p>
-        <NativeChatOfferActions
-          offer={answering}
-          done={sent !== null}
-          doneLabel={
-            chosen.length === 1
-              ? t('components.native-chat.importPlan.askedOne', 'Asked to import 1 item')
-              : t(
-                  'components.native-chat.importPlan.askedMany',
-                  'Asked to import {{count}} items',
-                  { count: chosen.length }
-                )
-          }
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={chosen.length === 0}
-            onClick={() =>
-              answering.send(
-                botImportAnswer(plan, leftOut),
-                chosen.map((item) => String(item.index))
-              )
-            }
-          >
-            {chosen.length === 1
-              ? t('components.native-chat.importPlan.importOne', 'Import 1 item')
-              : t('components.native-chat.importPlan.importMany', 'Import {{count}} items', {
-                  count: chosen.length
-                })}
-          </Button>
-        </NativeChatOfferActions>
-      </div>
+          )
+        ) : (
+          <>
+            <Check className="size-3" aria-hidden />
+            {asked}
+          </>
+        )}
+      </p>
     </NativeChatCardFrame>
   )
 }

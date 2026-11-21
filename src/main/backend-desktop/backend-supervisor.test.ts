@@ -82,7 +82,12 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
   const event = { sender, senderFrame: frame }
   const token = '11111111-1111-1111-1111-111111111111'
   const joined = request(event, token, 'recovery')
-  children[0].emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
+  children[0].emit('message', {
+    type: 'ready',
+    protocol: 1,
+    capabilities: ['usage'],
+    incarnation: 'backend-1'
+  })
   await joined
   for (let i = 0; i < 3; i++) {
     children[i].emit('exit', 1)
@@ -95,7 +100,12 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
       await vi.advanceTimersByTimeAsync(1)
       expect(children).toHaveLength(i + 2)
       const recovery = request(event, token, 'recovery')
-      children[i + 1].emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
+      children[i + 1].emit('message', {
+        type: 'ready',
+        protocol: 1,
+        capabilities: ['usage'],
+        incarnation: 'backend-1'
+      })
       await recovery
     }
   }
@@ -110,7 +120,12 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
   )
   const demand = request(event, token)
   expect(children).toHaveLength(4)
-  children[3].emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
+  children[3].emit('message', {
+    type: 'ready',
+    protocol: 1,
+    capabilities: ['usage'],
+    incarnation: 'backend-1'
+  })
   await demand
   children[3].emit('exit', 1)
   rig.call.mockResolvedValueOnce({ inputTokens: 42 })
@@ -121,7 +136,12 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
     completedAt: null
   })
   expect(children).toHaveLength(5)
-  children[4].emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
+  children[4].emit('message', {
+    type: 'ready',
+    protocol: 1,
+    capabilities: ['usage'],
+    incarnation: 'backend-1'
+  })
   await expect(automation).resolves.toEqual({ inputTokens: 42 })
   await vi.advanceTimersByTimeAsync(1000)
   expect(children).toHaveLength(5)
@@ -130,54 +150,14 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
   expect(children).toHaveLength(5)
   await vi.advanceTimersByTimeAsync(1)
   expect(children).toHaveLength(6)
-  children[5].emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
+  children[5].emit('message', {
+    type: 'ready',
+    protocol: 1,
+    capabilities: ['usage'],
+    incarnation: 'backend-1'
+  })
   const stopped = supervisor.stop()
   children[5].emit('exit', 0)
-  await stopped
-})
-
-it('retires only the exited renderer document and rejects its pending port delivery', async () => {
-  const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
-  rig.fork.mockReturnValue(child)
-  const supervisor = new BackendSupervisor({
-    getRepos: () => [],
-    getAllWorktreeMeta: () => ({}),
-    getRememberedWorktreeDisplayNames: () => new Map(),
-    whenLoaded: async () => {}
-  })
-  const frame = { postMessage: vi.fn() }
-  const sender = Object.assign(new EventEmitter(), {
-    id: 3,
-    mainFrame: frame,
-    isDestroyed: () => false,
-    getType: () => 'window',
-    getURL: () => 'file:///index.html'
-  })
-  const request = rig.handle.mock.calls.find(([channel]) => channel === BACKEND_PORT_REQUEST)?.[1]
-  const gone = rig.appOn.mock.calls.find(([event]) => event === 'render-process-gone')?.[1]
-  const token = '33333333-3333-3333-3333-333333333333'
-  const initial = request({ sender, senderFrame: frame }, token)
-  const rejected = expect(initial).rejects.toThrow('The document was replaced')
-  gone({}, { id: 99 })
-  expect(child.postMessage).not.toHaveBeenCalledWith({ type: 'retire', token })
-  gone({}, sender)
-  expect(child.postMessage).toHaveBeenCalledWith({ type: 'retire', token })
-  child.emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
-  await rejected
-  expect(frame.postMessage.mock.calls.some(([channel]) => channel === BACKEND_PORT_DELIVERY)).toBe(
-    false
-  )
-  await request({ sender, senderFrame: frame }, token)
-  expect(
-    child.postMessage.mock.calls.filter(([message]) => message.type === 'client')
-  ).toHaveLength(1)
-  gone({}, sender)
-  expect(
-    child.postMessage.mock.calls.filter(([message]) => message.type === 'retire')
-  ).toHaveLength(2)
-  const stopped = supervisor.stop()
-  expect(rig.appOff).toHaveBeenCalledWith('render-process-gone', gone)
-  child.emit('exit', 0)
   await stopped
 })
 
@@ -221,6 +201,7 @@ function startupFixture() {
     children,
     supervisor,
     frame,
+    sender,
     read,
     request: (purpose = 'demand', contents = sender, requestToken = token) =>
       request({ sender: contents, senderFrame: contents.mainFrame }, requestToken, purpose)
@@ -230,7 +211,7 @@ function startupFixture() {
 it('retries a rejected signal-free launch on new demand without replay or false retirement', async () => {
   vi.useFakeTimers()
   const { children, supervisor, frame, read, request } = startupFixture()
-  const ready = { type: 'ready', protocol: 1, capabilities: ['usage'] }
+  const ready = { type: 'ready', protocol: 1, capabilities: ['usage'], incarnation: 'backend-1' }
   for (let attempt = 0; attempt < 4; attempt++) {
     const demand = expect(read()).rejects.toThrow('Usage is still unavailable')
     const joined = expect(request('recovery')).rejects.toThrow('Usage is still unavailable')
@@ -290,7 +271,7 @@ it('retries a rejected signal-free launch on new demand without replay or false 
 
 it('rejects old requests when ownership changes across readiness instead of rerouting them', async () => {
   const { children, supervisor, frame, read, request } = startupFixture()
-  const ready = { type: 'ready', protocol: 1, capabilities: ['usage'] }
+  const ready = { type: 'ready', protocol: 1, capabilities: ['usage'], incarnation: 'backend-1' }
   children[0].emit('message', ready)
   const oldRead = expect(read()).rejects.toThrow('Usage disconnected')
   const oldPort = expect(request()).rejects.toThrow('The document was replaced')
@@ -318,10 +299,70 @@ it('rejects old requests when ownership changes across readiness instead of rero
   ).toHaveLength(1)
   expect(
     children[1].postMessage.mock.calls.filter(([message]) => message.type === 'client')
-  ).toEqual([[{ type: 'client', token }, [{}]]])
+  ).toEqual([
+    [
+      {
+        type: 'client',
+        incarnation: 'backend-1',
+        document: { id: expect.any(String), role: 'main' }
+      },
+      [{}]
+    ]
+  ])
   const stopped = supervisor.stop()
   children[1].emit('spawn')
   expect(children[1].kill).toHaveBeenCalled()
   children[1].emit('exit', 0)
+  await stopped
+})
+
+it('retires pending documents on navigation and renderer exit and binds a successor', async () => {
+  const { children, supervisor, frame, sender, request } = startupFixture()
+  const gone = rig.appOn.mock.calls.find(([event]) => event === 'render-process-gone')?.[1]
+  const child = children[0]
+  const retiredDocuments = () =>
+    child.postMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'retire')
+      .map((message) => message.document)
+
+  const navigated = expect(request()).rejects.toThrow('The document was replaced')
+  gone({}, { id: 99 })
+  expect(retiredDocuments()).toEqual([])
+  sender.emit('did-frame-navigate', {}, 'file:///index.html', 200, 'OK', true)
+  expect(retiredDocuments()).toHaveLength(1)
+
+  const exited = expect(request()).rejects.toThrow('The document was replaced')
+  gone({}, sender)
+  expect(retiredDocuments()).toHaveLength(2)
+
+  child.emit('message', {
+    type: 'ready',
+    protocol: 1,
+    capabilities: ['usage'],
+    incarnation: 'backend-1'
+  })
+  await Promise.all([navigated, exited])
+  expect(frame.postMessage.mock.calls.some(([channel]) => channel === BACKEND_PORT_DELIVERY)).toBe(
+    false
+  )
+
+  await request()
+  const admitted = child.postMessage.mock.calls.filter(([message]) => message.type === 'client')
+  expect(admitted).toHaveLength(1)
+  const successor = admitted[0][0].document.id
+  expect(retiredDocuments()).not.toContain(successor)
+  expect(frame.postMessage).toHaveBeenCalledWith(
+    BACKEND_PORT_DELIVERY,
+    { token: '44444444-4444-4444-4444-444444444444', incarnation: 'backend-1' },
+    [{}]
+  )
+
+  gone({}, sender)
+  expect(retiredDocuments()).toHaveLength(3)
+  expect(retiredDocuments().at(-1)).toBe(successor)
+  const stopped = supervisor.stop()
+  expect(rig.appOff).toHaveBeenCalledWith('render-process-gone', gone)
+  child.emit('exit', 0)
   await stopped
 })

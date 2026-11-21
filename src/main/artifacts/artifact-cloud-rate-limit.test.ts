@@ -150,6 +150,11 @@ describe('artifact share under a rate limit', () => {
     expect(message).toContain(`Try again after`)
     expect(message).toContain(localTime(resetAt))
     expect(message).not.toContain(resetAt)
+    expect(mapRuntimeError('request-1', { runtimeId: 'runtime-1' }, error).error).toMatchObject({
+      code: 'artifact_rate_limited',
+      message,
+      data: { resetAt, retryAfterSeconds: 2700 }
+    })
   })
 
   it('waits out a short Retry-After and replays once with the same Idempotency-Key', async () => {
@@ -235,19 +240,5 @@ describe('artifact share under a rate limit', () => {
     await expect(artifacts.share(writeRequest)).rejects.toThrow(
       'Slow down [2J please. Try again in 15 minutes.'
     )
-  })
-
-  it('reaches RPC callers with its own code, message and reset details', async () => {
-    const artifacts = await service()
-    stubFetch(rateLimited('2700', limitBody(2700)))
-    const error = await shareFailure(artifacts)
-
-    const response = mapRuntimeError('request-1', { runtimeId: 'runtime-1' }, error)
-
-    expect(response.error).toMatchObject({
-      code: 'artifact_rate_limited',
-      message: error.message,
-      data: { resetAt, retryAfterSeconds: 2700 }
-    })
   })
 })

@@ -11,7 +11,7 @@ import {
   type OrchestrationSessionWorkerState,
   type OrchestrationSessionWorkersResult
 } from '../../../../../../shared/orchestration-session-workers'
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
+import { workerTaskTitle } from '../../../../orchestration/workers/identity/worker-identity'
 import { SessionWorkersParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { chatAssigneeSessionId } from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -228,13 +228,6 @@ function sessionWorker(
 ): OrchestrationSessionWorker {
   const dispatch = db.getDispatchContextById(worker.dispatchId)
   const task = db.getTask(worker.taskId, worker.runId)
-  const display = task
-    ? buildOrchestrationTaskDisplayMetadata({
-        spec: task.spec,
-        taskTitle: task.task_title,
-        displayName: task.display_name
-      })
-    : null
   const structured = resolveStructuredWorkerForDispatch(db, worker.dispatchId)
   const running = structured ? structuredWorkerSession(structured) : null
   const provider = running?.kind === 'here' ? running.record.provider : structured?.agent
@@ -248,7 +241,7 @@ function sessionWorker(
     dispatchId: worker.dispatchId,
     taskId: worker.taskId,
     runId: worker.runId,
-    title: display?.taskTitle || display?.displayName || worker.taskId,
+    title: workerTaskTitle(task) ?? worker.taskId,
     agent: worker.provider?.id ?? provider ?? requestedAgent(db, worker.dispatchId),
     state,
     activity: sessionWorkerActivity(worker, chatSessionId, chatStatusRows),

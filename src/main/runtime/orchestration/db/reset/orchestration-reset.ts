@@ -58,6 +58,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
+    DELETE FROM worker_presence;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
     DELETE FROM messages;
@@ -96,6 +97,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
+    DELETE FROM worker_presence;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
   `,

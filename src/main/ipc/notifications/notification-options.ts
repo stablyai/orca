@@ -146,7 +146,10 @@ function buildAgentTaskCompleteRichBody(
   }
   // A reply written for Slack names people as Slack does; the notification shows names.
   const assistantMessage = normalizeNotificationText(
-    args.agentLastAssistantMessage && slackMentionsPlainText(args.agentLastAssistantMessage),
+    args.agentLastAssistantMessage &&
+      (args.agentRepliesInSlack
+        ? slackMentionsPlainText(args.agentLastAssistantMessage)
+        : args.agentLastAssistantMessage),
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
   if (assistantMessage) {

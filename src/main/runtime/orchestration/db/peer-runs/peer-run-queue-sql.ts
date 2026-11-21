@@ -32,9 +32,10 @@ CREATE TABLE IF NOT EXISTS peer_run_corrections (
 );
 
 CREATE TABLE IF NOT EXISTS message_dispatch_provenance (
-  message_id  TEXT PRIMARY KEY,
-  dispatch_id TEXT NOT NULL,
-  task_id     TEXT NOT NULL
+  message_id      TEXT PRIMARY KEY,
+  dispatch_id     TEXT NOT NULL,
+  task_id         TEXT NOT NULL,
+  sender_snapshot TEXT
 );
 `
 
@@ -93,7 +94,7 @@ export function peerRunDispatchStateStatements(
   )
 }
 
-/** A message filed in a peer Run's mailbox, once, with the Dispatch its sender worked for. */
+/** A message filed in a peer Run's mailbox, once, with its sender's Dispatch only when that Dispatch is this Run's. */
 function peerRunMailStatements(row: string): [string, string] {
   return queueItemStatements(
     `SELECT pr.conversation_id, ${row}.id AS message_id,
@@ -109,6 +110,7 @@ function peerRunMailStatements(row: string): [string, string] {
        ) AS payload
      FROM peer_runs pr
      LEFT JOIN message_dispatch_provenance p ON p.message_id = ${row}.id
+       AND p.dispatch_id IN (SELECT id FROM dispatch_contexts WHERE run_id = pr.run_id)
      WHERE ${row}.to_handle = 'run:' || pr.run_id
        AND NOT EXISTS (
          SELECT 1 FROM federation_relay_items

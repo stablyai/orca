@@ -1,5 +1,5 @@
-import { stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { secretServiceProcessEnvironment } from '../linux-secret-service/session-bus-environment'
 import {
   decodeAntigravityKeychainValue,
   parseAntigravityNativeCredential,
@@ -20,21 +20,15 @@ function requireLinux(): void {
   }
 }
 
-/** godbus finds /run/user/<uid>/bus without XDG_RUNTIME_DIR, so agy reaches the bus where GLib would autolaunch. */
-async function agyBusEnvironment(): Promise<NodeJS.ProcessEnv> {
-  // English stderr keeps the timeout check below locale-independent.
-  const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: 'C', LANG: 'C' }
-  const bus = `/run/user/${process.getuid?.()}/bus`
-  if (
-    [undefined, '', 'autolaunch:'].includes(env.DBUS_SESSION_BUS_ADDRESS) &&
-    (await stat(bus).then(
-      () => true,
-      () => false
-    ))
+/** gdbus or secret-tool, which Orca reads the keyring with, isn't installed; agy talks to the
+ *  Secret Service itself, so this says nothing about agy's own store. */
+export class AntigravityKeyringToolMissingError extends Error {
+  constructor(
+    readonly program: 'gdbus' | 'secret-tool',
+    message: string
   ) {
-    env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${bus}`
+    super(message)
   }
-  return env
 }
 
 async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: string) {
@@ -43,13 +37,14 @@ async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: str
       program,
       args,
       input,
-      env: await agyBusEnvironment(),
+      env: await secretServiceProcessEnvironment(),
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024
     })
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(
+      throw new AntigravityKeyringToolMissingError(
+        program,
         program === 'gdbus'
           ? 'Antigravity account switching on Linux needs gdbus (GLib) to reach the keyring. Install it and try again.'
           : 'Antigravity account switching on Linux needs secret-tool. Install libsecret-tools (or your distribution’s equivalent) and try again.'

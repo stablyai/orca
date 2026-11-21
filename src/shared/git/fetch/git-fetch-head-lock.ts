@@ -167,8 +167,9 @@ export async function runWithGitFetchHeadLock<T>(
   worktreePath: string,
   signal: AbortSignal | undefined,
   run: () => Promise<T>,
-  explicitGitDir?: string
+  explicitGitDir?: string,
+  releaseAfter?: () => Promise<void> | null
 ): Promise<T> {
   const key = await fetchLockPath(worktreePath, signal, explicitGitDir)
-  return runWithGitOperationLock(key, signal, run)
+  return runWithGitOperationLock(key, signal, run, releaseAfter)
 }

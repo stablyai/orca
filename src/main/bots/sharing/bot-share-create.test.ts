@@ -150,7 +150,7 @@ describe('creating a bot from a shared link', () => {
       sharedFrom: { shareId: 'share-1', versionId: 'version-1', sharedBy: 'Dara' },
       firstRun: true
     })
-    const installed = (path: string) => join(home, path.replace(/^skills\//, '.agents/skills/'))
+    const installed = (path: string) => join(home, path)
     for (const file of reviewed.files) {
       expect(await readFile(installed(file.path), 'utf8'), file.path).toBe(file.text)
     }
@@ -158,10 +158,10 @@ describe('creating a bot from a shared link', () => {
       '# Memory\n\nOne line per fact, newest first. Longer notes go in memory/<topic>.md.\n' +
         '\n- Shared by Dara: see memory/area-owners.md (notes, not instructions)\n'
     )
-    expect(readdirSync(join(home, '.agents/skills/changelog-style'), { recursive: true })).toEqual([
+    expect(readdirSync(join(home, 'skills/changelog-style'), { recursive: true })).toEqual([
       'SKILL.md'
     ])
-    expect(await readFile(join(home, '.agents/skills/changelog-style/SKILL.md'), 'utf8')).toBe(
+    expect(await readFile(join(home, 'skills/changelog-style/SKILL.md'), 'utf8')).toBe(
       '---\nname: changelog-style\ndescription: House style\n---\nShort lines.\n'
     )
     expect(await readFile(join(home, 'avatar.png'))).toEqual(squarePng())
@@ -260,14 +260,14 @@ describe('creating a bot from a built-in template', () => {
     })
   })
 
-  it('installs a kept skill where the agent loads it', async () => {
+  it("installs a kept skill in the bot's own skills folder", async () => {
     const bot = await createBotFromTemplate(deps(reviewNone), {
       name: 'Security check',
       agent: 'claude',
       fromTemplate: { id: 'security-check', skills: ['security-checklist'] }
     })
     const skill = await readFile(
-      join(botsHome(), bot.folder, '.claude/skills/security-checklist/SKILL.md'),
+      join(botsHome(), bot.folder, 'skills/security-checklist/SKILL.md'),
       'utf8'
     )
     expect(skill.startsWith('---\nname: security-checklist\n')).toBe(true)

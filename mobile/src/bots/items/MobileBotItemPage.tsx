@@ -1,8 +1,8 @@
 // One item's page inside the bot panel, in the desktop's order: title, "Item · chat · when", description
 // (three lines, Show more), the close note, Status (and Snoozed while it is) and Chat, Done means, Links, Activity, and the comment
 // box docked at the bottom. Back returns to the list.
-import { useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Keyboard, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
 import {
   formatBotItemNumber,
@@ -28,7 +28,10 @@ import {
   type MobileScrollTailMetrics
 } from '../../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import { botItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
+import { MobileNativeChatPromptStrip } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
+import { useMobileBotItemAskSlot } from './MobileBotItemAskCard'
 import { MobileBotItemCommentBox, type BotItemCommentBoxHandle } from './MobileBotItemCommentBox'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
 import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
@@ -72,6 +75,36 @@ export function MobileBotItemPage({
   const view = usePhoneBotItemView({ client, uid, reads })
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
+  // An answer on its way or landed: the ask card waits for the item's next event, or comes back if it
+  // surely failed, so a second tap never posts it twice.
+  const [replyAfter, setReplyAfter] = useState<string | null>(null)
+  const lastEventId = view.events.at(-1)?.id ?? ''
+  const replyBusy = replyAfter !== null && replyAfter === lastEventId
+  const waitingLine = view.item ? botItemWaitingLine(view.item, view.events) : null
+  const waitingOn = waitingLine
+    ? { replies: waitingLine.replies, asker: view.item?.owner.name ?? bot.name }
+    : null
+  const ask = useMobileBotItemAskSlot({
+    item: view.item,
+    events: view.events,
+    online: online && !view.failed,
+    pending: replyBusy,
+    send: async (text) => {
+      setReplyAfter(lastEventId)
+      const outcome = (await comment.current?.send(text)) ?? 'failed'
+      if (outcome === 'failed') {
+        setReplyAfter(null)
+      }
+      return outcome
+    }
+  })
+  const askShown = ask.card !== null && ask.strip === null
+  useEffect(() => {
+    // The card takes the comment box's place: a keyboard up for the box would type into it unseen.
+    if (askShown) {
+      Keyboard.dismiss()
+    }
+  }, [askShown])
   const jump = useJumpToEnd()
   // Titled like the drawer's other pages; the item's number leads its own heading below.
   const back = (
@@ -244,21 +277,30 @@ export function MobileBotItemPage({
           <MobileBotItemActivity
             item={item}
             events={view.events}
-            onReply={() => comment.current?.focus()}
+            attachments={{ client, onOpenFile }}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
         <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
         <MobileNativeChatFloatingControls showJumpToTail={jump.shown} onJumpToTail={jump.toEnd} />
       </View>
-      <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>
-        <MobileBotItemCommentBox
-          ref={comment}
-          client={client}
-          item={item}
-          online={online && !view.failed}
-          hostName={hostName}
-        />
+      <View
+        style={askShown ? styles.askDock : undefined}
+        onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}
+      >
+        <View style={ask.strip ? styles.hidden : styles.askSlot}>{ask.card}</View>
+        <MobileNativeChatPromptStrip prompt={ask.strip} />
+        {/* Kept mounted under the card: it sends the card's answer. */}
+        <View style={askShown ? styles.hidden : undefined}>
+          <MobileBotItemCommentBox
+            ref={comment}
+            client={client}
+            item={item}
+            online={online && !view.failed}
+            hostName={hostName}
+            waitingOn={waitingOn}
+          />
+        </View>
       </View>
     </View>
   )
@@ -312,6 +354,10 @@ function ClampedDescription({ text }: { text: string }) {
 
 const styles = themedStyleSheet(() => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
+  hidden: { display: 'none' },
+  // As chat caps its card: the activity stays in view and a tall card scrolls inside.
+  askDock: { flexShrink: 1, minHeight: 0, maxHeight: '60%' },
+  askSlot: { flexShrink: 1, minHeight: 0 },
   scroll: { flex: 1 },
   content: { gap: spacing.sm, paddingBottom: spacing.lg },
   head: { paddingHorizontal: spacing.xs, gap: spacing.xs },

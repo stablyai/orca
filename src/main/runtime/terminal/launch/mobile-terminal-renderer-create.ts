@@ -4,15 +4,12 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
-import type { IpcMainEvent } from 'electron'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
   MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
 } from '../view/terminal-surface-deadlines'
 import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
-import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import {
   assertMobileTerminalShellSupported,
@@ -137,8 +134,8 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const win = this.getAvailableAuthoritativeWindow()
-    if (!win) {
+    const windowId = this.getAvailableAuthoritativeWindowId()
+    if (windowId === null) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
@@ -166,48 +163,28 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const rendererWebContents = win.webContents
-    if (rendererWebContents.isDestroyed?.()) {
+    const desktop = getRuntimeDesktopSurface()
+    if (!desktop.hasLiveRenderer(windowId)) {
       throw new Error('runtime_unavailable')
     }
     const releasePublicationThrottle = pairedCreate
-      ? rendererPublicationThrottle.acquire(rendererWebContents)
+      ? (desktop.holdRendererPublication?.(windowId) ?? (() => {}))
       : () => {}
     try {
-      const requestId = randomUUID()
-      const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
-          reject(new Error('Terminal creation timed out'))
-        }, 10_000)
-        // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          reject(new Error('client_disconnected'))
-        }
-
-        const handler = (
-          event: IpcMainEvent,
-          r: { requestId: string; tabId?: string; title?: string; error?: string }
-        ): void => {
-          if (event.sender !== rendererWebContents || r.requestId !== requestId) {
-            return
-          }
-          clearTimeout(timer)
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
-          if (r.error) {
-            reject(new Error(r.error))
-          } else {
-            resolve({ tabId: r.tabId!, title: r.title ?? '' })
-          }
-        }
-        opts.signal?.addEventListener('abort', onAbort, { once: true })
-        getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
-        rendererWebContents.send('terminal:requestTabCreate', {
-          requestId,
+      // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
+      const response = await desktop.requestRenderer<{
+        requestId: string
+        tabId?: string
+        title?: string
+        error?: string
+      }>(windowId, {
+        channel: 'terminal:requestTabCreate',
+        replyChannel: 'terminal:tabCreateReply',
+        timeoutMs: 10_000,
+        timeoutMessage: 'Terminal creation timed out',
+        signal: opts.signal,
+        abortMessage: 'client_disconnected',
+        payload: {
           worktreeId,
           afterTabId: afterDesktopTabId,
           targetGroupId: opts.targetGroupId,
@@ -223,8 +200,12 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
           activate: opts.activate
-        })
+        }
       })
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      const reply = { tabId: response.tabId!, title: response.title ?? '' }
 
       if (opts.activate !== false) {
         this.notifier?.focusTerminal(reply.tabId, worktreeId, null)

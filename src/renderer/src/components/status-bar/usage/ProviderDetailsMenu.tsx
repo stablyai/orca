@@ -19,8 +19,7 @@ import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../composition/status-bar-
 
 export function ProviderDetailsMenu({
   provider,
-  compact,
-  iconOnly,
+  iconOnly = false,
   ariaLabel,
   topContent,
   open,
@@ -34,8 +33,7 @@ export function ProviderDetailsMenu({
   variant = 'default'
 }: {
   provider: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   ariaLabel: string
   topContent?: React.ReactNode
   open?: boolean
@@ -125,7 +123,7 @@ export function ProviderDetailsMenu({
             {!provider ? null : iconOnly ? (
               <ProviderLetterBadge p={provider} />
             ) : (
-              <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
+              <ProviderSegment p={provider} display={usagePercentageDisplay} />
             )}
           </button>
         )}

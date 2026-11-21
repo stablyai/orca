@@ -184,6 +184,19 @@ export function* allLinks(store: ExternalConversationLinkStore): Generator<Linke
   }
 }
 
+/** Whether the chat answers a Slack thread, so its replies are written in Slack's markup. */
+export function sessionRepliesInSlack(
+  store: ExternalConversationLinkStore,
+  sessionId: string
+): boolean {
+  for (const { link } of allLinks(store)) {
+    if (link.sessionId === sessionId && link.source === 'slack') {
+      return true
+    }
+  }
+  return false
+}
+
 /** The conversation a chat is bound to, as its bot reads it, and whether its answer to this mail
  *  lands there (only mail finishing its ask does); null for an unlinked chat or a bot's own Chat. */
 export function chatMailPlace(

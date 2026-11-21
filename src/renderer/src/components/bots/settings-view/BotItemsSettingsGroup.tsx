@@ -62,7 +62,7 @@ function BotItemsStaleRow({
             }
           }}
         >
-          <SelectTrigger size="sm" aria-label={title} className="w-[104px]">
+          <SelectTrigger size="xs" aria-label={title}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

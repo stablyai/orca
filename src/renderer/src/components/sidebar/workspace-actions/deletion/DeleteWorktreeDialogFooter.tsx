@@ -1,5 +1,5 @@
 // @protected-copy: delete-workspace confirmation buttons.
-import { useId, useState, type JSX, type Ref } from 'react'
+import { useId, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -32,7 +32,6 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren = false,
   deleteDisabled = false,
   canForceDelete,
-  deleteButtonRef,
   onForceDelete,
   onSavingChange,
   onDelete,
@@ -43,7 +42,6 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren?: boolean
   deleteDisabled?: boolean
   canForceDelete: boolean
-  deleteButtonRef: Ref<HTMLButtonElement>
   onForceDelete: () => void
   onSavingChange: (saving: boolean) => void
   onDelete: () => void
@@ -122,7 +120,6 @@ export function DeleteWorktreeDialogFooter({
       </DialogCancel>
       {isMainWorktree ? null : (
         <Button
-          ref={deleteButtonRef}
           size="sm"
           variant="destructive"
           onClick={() => void confirm()}

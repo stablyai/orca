@@ -6,13 +6,18 @@ import { toast } from 'sonner'
 import { botRefKey, botTarget, type BotRef } from '@/lib/bot-hosts'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import { BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY
+} from '../../../../../shared/bot-runtime-capabilities'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   botItemCommentImages,
   parseBotItemEventId,
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { translate } from '@/i18n/i18n'
 import { botErrorMessage } from '../bot-presentation'
 import { commentOnBotItem } from './use-bot-items'
 
@@ -27,14 +32,17 @@ export type BotItemPendingComment = {
   /** The comment's id on a host that dedupes by it: a Retry returns the comment already made, and
    *  the read names it. Null on an older host, where a refused one matches by its text. */
   requestId: string | null
+  /** The question a quick reply answers: the host refuses it once the agent has asked another. */
+  questionId: string | null
   failed: boolean
 }
 
 export type BotItemPendingComments = {
   /** Sent comments the item's read doesn't show yet, oldest first. */
   shown: readonly BotItemPendingComment[]
-  /** `after`: the id of the item's newest event as the view shows it. */
-  send: (text: string, paths: readonly string[], after: string | null) => void
+  /** `after`: the id of the item's newest event as the view shows it; `questionId`: the ask a quick
+   *  reply answers. */
+  send: (text: string, paths: readonly string[], after: string | null, questionId?: string) => void
   retry: (id: string) => void
   discard: (id: string) => void
 }
@@ -80,11 +88,22 @@ function update(key: string, id: string, change: Partial<BotItemPendingComment> 
   )
 }
 
+function hostCode(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+}
+
 function deliver(bot: BotRef, uid: string, key: string, entry: BotItemPendingComment): void {
   const { id } = entry.event
   const queued = (queues.get(key) ?? Promise.resolve())
     .then(() =>
-      commentOnBotItem(bot, uid, commentText(entry), entry.paths, entry.requestId ?? undefined)
+      commentOnBotItem(
+        bot,
+        uid,
+        commentText(entry),
+        entry.paths,
+        entry.requestId ?? undefined,
+        entry.questionId ?? undefined
+      )
     )
     .then(
       (result) => {
@@ -93,8 +112,17 @@ function deliver(bot: BotRef, uid: string, key: string, entry: BotItemPendingCom
         update(key, id, eventId ? { eventId, failed: false } : null)
       },
       (error: unknown) => {
-        toast.error(botErrorMessage(error))
-        update(key, id, { failed: true })
+        // A reply to a replaced question would fail the same way again: it goes, and the new question shows.
+        const replaced = entry.questionId !== null && hostCode(error) === 'item_changed'
+        toast.error(
+          replaced
+            ? translate(
+                'bots.items.ask.replaced',
+                'The agent asked a new question. Read it, then reply.'
+              )
+            : botErrorMessage(error)
+        )
+        update(key, id, replaced ? null : { failed: true })
       }
     )
   queues.set(key, queued)
@@ -189,7 +217,7 @@ export function useBotItemPendingComments(
 
   return {
     shown: done.size > 0 ? entries.filter((entry) => !done.has(entry.event.id)) : entries,
-    send: (text, paths, after) => {
+    send: (text, paths, after, questionId) => {
       const entry: BotItemPendingComment = {
         event: {
           id: nextPendingId(),
@@ -208,7 +236,8 @@ export function useBotItemPendingComments(
         paths,
         after: after ? (parseBotItemEventId(after) ?? 0) : 0,
         eventId: null,
-        requestId: takesRequestId(bot) ? createNonSecureContextUuid() : null,
+        requestId: takesCapability(bot, REQUEST_ID) ? createNonSecureContextUuid() : null,
+        questionId: questionId && takesCapability(bot, QUESTION_ID) ? questionId : null,
         failed: false
       }
       write(key, (prev) => [...prev, entry])
@@ -225,15 +254,15 @@ export function useBotItemPendingComments(
   }
 }
 
+const REQUEST_ID = BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY
+const QUESTION_ID = BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY
+
 /** An unknown answer is no: an older host refuses the field. This app's own host always takes it. */
-function takesRequestId(bot: BotRef): boolean {
+function takesCapability(bot: BotRef, capability: RuntimeCapability): boolean {
   const environmentId = runtimeTargetEnvironmentId(botTarget(bot))
   return (
     environmentId === null ||
-    readCachedRuntimeEnvironmentCapability(
-      environmentId,
-      BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY
-    ) === true
+    readCachedRuntimeEnvironmentCapability(environmentId, capability) === true
   )
 }
 
