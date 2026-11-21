@@ -406,6 +406,21 @@ describe('BotSlackSetupDialog on a paired computer', () => {
       expect(writeClipboardText).toHaveBeenLastCalledWith(SECOND)
     })
 
+    it('launches the same page once while pending, even when Install again brings it back', async () => {
+      // Install again can answer with the same approval link.
+      mocks.hosts[SERVER].setUpApp
+        .mockReset()
+        .mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 }))
+      openDialog()
+      await approveFirstThenInstallAgain()
+      fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+      expect(openUrl).toHaveBeenCalledTimes(1)
+      // Once it answered, the page can be opened again.
+      await act(async () => launches[0]())
+      fireEvent.click(screen.getByRole('button', { name: 'Approve in Slack' }))
+      expect(openUrl).toHaveBeenCalledTimes(2)
+    })
+
     it('keeps Link copied when Copy link and the launch land together', async () => {
       openDialog()
       fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))

@@ -100,15 +100,17 @@ export function BotSlackPostAs({
   const requestApproval = async (choice: SlackPostAs): Promise<void> => {
     setBusy(true)
     const result = await calls.setPostAs({ botId: bot.id, teamId, postAs: choice })
-    setBusy(false)
     if (!result.ok) {
+      setBusy(false)
       failed(result.error)
       return
     }
+    // Busy until the browser answers, so a second click can't launch Slack's page again. A failed
+    // launch says so, and Approve in Slack comes back to try again.
     if (result.value && 'authorizeUrl' in result.value) {
-      // A failed launch says so; Approve in Slack stays, to try again.
       await openSlackApprovalHere(result.value.authorizeUrl)
     }
+    setBusy(false)
     await refreshBotSlack(bot)
   }
 

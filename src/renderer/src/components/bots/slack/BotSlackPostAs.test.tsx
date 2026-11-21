@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
@@ -93,6 +93,23 @@ describe('BotSlackPostAs', () => {
     expect(mocks.serverOpen).not.toHaveBeenCalled()
     // The change itself is still asked of the bot's own computer.
     expect(mocks.calledFor).toContain(SERVER)
+  })
+
+  it('keeps Approve in Slack busy until the browser answers', async () => {
+    mocks.setPostAs.mockResolvedValue({ ok: true, value: { authorizeUrl: AUTHORIZE } })
+    let launched: () => void = () => {}
+    mocks.open.mockReturnValue(new Promise<void>((resolve) => (launched = resolve)))
+    Object.assign(window, { api: { shell: { openUrl: mocks.open } } })
+    render(<BotSlackPostAs bot={pairedBot} slack={slack} />)
+
+    const approve = screen.getByRole('button', { name: 'Approve in Slack' })
+    fireEvent.click(approve)
+    await waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(1))
+    expect(approve).toHaveProperty('disabled', true)
+    fireEvent.click(approve)
+    expect(mocks.setPostAs).toHaveBeenCalledTimes(1)
+    await act(async () => launched())
+    expect(approve).toHaveProperty('disabled', false)
   })
 
   it('keeps Approve in Slack to try again when the browser could not be opened', async () => {

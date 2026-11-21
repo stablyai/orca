@@ -14,17 +14,24 @@ export function useSlackApprove(
   mounted: RefObject<SetupMount | null>,
   remember: (teamId: string, link: SlackInstallLink) => OpenedSlackPage
 ): () => void {
-  const launching = useRef<BotSlackSetupStep | null>(null)
+  // The launch in flight: its page and dialog. A step change, such as Copy link, doesn't start
+  // another launch of the same page while that one is pending.
+  const launching = useRef<{ url: string; mount: SetupMount | null } | null>(null)
   return useCallback(() => {
     const at = step
-    if ((at.kind !== 'ready' && at.kind !== 'waiting') || !at.link || launching.current === at) {
+    if ((at.kind !== 'ready' && at.kind !== 'waiting') || !at.link) {
       return
     }
     const [mount, link, teamId] = [mounted.current, at.link, at.teamId]
-    launching.current = at
+    const pending = launching.current
+    if (pending && pending.url === link.authorizeUrl && pending.mount === mount) {
+      return
+    }
+    const launch = { url: link.authorizeUrl, mount }
+    launching.current = launch
     // Waits only once this computer's browser took Slack's page; a failed launch stays here.
     void openSlackApprovalHere(link.authorizeUrl).then((opened) => {
-      if (launching.current === at) {
+      if (launching.current === launch) {
         launching.current = null
       }
       if (!opened || mounted.current !== mount) {
