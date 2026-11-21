@@ -304,7 +304,7 @@
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
-22 src/main/codex/history/bridges/codex-session-bridge.ts
+13 src/main/codex/history/bridges/codex-session-bridge.ts
 2 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
@@ -1444,7 +1444,8 @@
 1 src/main/warp-themes/index.ts
 2 src/main/webhooks/webhook-call-file.ts
 1 src/main/webhooks/webhook-call-runs.ts
-3 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-ledger.ts
+2 src/main/webhooks/webhook-host-newer-agent-hooks.ts # the ledger's two secure writes, moved out of webhook-host-ledger.ts (its count dropped by 2)
 8 src/main/window/attach-main-window-services.ts
 2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts

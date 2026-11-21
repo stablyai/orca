@@ -1517,8 +1517,8 @@
       "confirmWarning": "They’ll act as you on {{computer}}.",
       "controlBrief": "They can act as you here.",
       "controlBriefIfAdded": "Anyone you add can act as you here.",
-      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
       "controlBriefOnHost": "They can act as you on {{computer}}.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
@@ -2291,10 +2291,6 @@
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
-      "goal": {
-        "checks_one": "{{count}} check",
-        "checks_other": "{{count}} checks"
-      },
       "goalControl": {
         "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
@@ -2622,6 +2618,10 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       }
     },
     "onboarding": {

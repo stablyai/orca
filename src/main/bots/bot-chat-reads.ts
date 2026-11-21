@@ -1,6 +1,7 @@
 // What bot background work reads from a bot's chats: bounded journal windows, never a whole chat.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { indexBotGroupJournal } from '../../shared/bots/bot-group'
+import { botGroupSteeredOperations } from '../../shared/bots/bot-group-visible-turns'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 import type { JournalOperationWindowAnchors } from '../native-chat/agent-session-journal/journal-domain-operation-window'
@@ -46,11 +47,21 @@ export function botChatReads(runtime: OrcaRuntimeService): BotChatReads {
     messagesSince: async (sessionId, since) =>
       (await window(sessionId, { observedSince: since })).items,
     turnItems: async (sessionId, turns) => {
-      const read = indexBotGroupJournal(
-        await window(sessionId, { operationIds: turns.map((turn) => turn.operationId) })
-      )
+      const operationIds = turns.map((turn) => turn.operationId)
+      const snapshot = await window(sessionId, { operationIds })
+      const steered = botGroupSteeredOperations(snapshot, operationIds)
+      const read = indexBotGroupJournal(snapshot)
       return new Map(
-        turns.map((turn) => [turn.operationId, read(turn.operationId, turn.workerDispatchIds)])
+        turns.map((turn) => {
+          const items = read(turn.operationId, turn.workerDispatchIds)
+          // Steered mail joined an earlier turn; keep only its lifecycle so it settles without duplicating text.
+          return [
+            turn.operationId,
+            steered.has(turn.operationId)
+              ? items.filter((item) => item.body.kind === 'turn')
+              : items
+          ]
+        })
       )
     }
   }

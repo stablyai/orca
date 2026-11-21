@@ -16,6 +16,8 @@ import {
   type BotGroupTurn,
   withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
+import { botGroupSteeredOperations } from '../../../src/shared/bots/bot-group-visible-turns'
+import { nativeChatQuietTurns } from '../../../src/shared/native-chat/transcript/turns/native-chat-quiet-turns'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import { groupStyles as styles } from './mobile-bot-group-styles'
@@ -32,6 +34,7 @@ import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat
 
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
+  steeredOperations: ReadonlySet<string>
 }
 const transcript = createStructuredQuestionProjection(projectStructuredAgentStartItem)
 export const MobileBotGroupReader = memo(function Reader({
@@ -66,6 +69,10 @@ export const MobileBotGroupReader = memo(function Reader({
     () => indexJournal(session.journal, turn.operationIds),
     [indexJournal, session.journal.items, session.journal.submissions, turn.operationIds]
   )
+  const steeredOperations = useMemo(
+    () => botGroupSteeredOperations(session.journal, turn.operationIds),
+    [session.journal.items, session.journal.submissions, turn.operationIds]
+  )
   const { hasMore, loadingEarlier, loadEarlier, status } = session.session
   useEffect(() => {
     if (
@@ -92,7 +99,10 @@ export const MobileBotGroupReader = memo(function Reader({
     groupTurnItems,
     session.journal
   ])
-  const view = useMemo(() => ({ ...session, groupTurnItems }), [session, groupTurnItems])
+  const view = useMemo(
+    () => ({ ...session, groupTurnItems, steeredOperations }),
+    [session, groupTurnItems, steeredOperations]
+  )
   useEffect(() => {
     report(turn.sessionId, view)
   }, [turn.sessionId, view, report])
@@ -142,6 +152,31 @@ export function MobileBotGroupTurn({
     () => foldMobileNativeChatMessages(fullContent.messages, turn.agent),
     [fullContent.messages, turn.agent]
   )
+  const workedSeconds = clock && !working ? (clock.durationMs ?? 0) / 1000 : null
+  const quiet = useMemo(
+    () =>
+      nativeChatQuietTurns(
+        messages,
+        messages.map(() => turn.operationId),
+        workedSeconds === null
+          ? {}
+          : {
+              [turn.operationId]: {
+                thinking: false,
+                startedAt: clock?.startedAt ?? null,
+                workedSeconds,
+                verdict: clock?.outcome
+              }
+            },
+        () => false
+      ),
+    [messages, turn.operationId, workedSeconds, clock?.startedAt, clock?.outcome]
+  )
+  const visibleMessages = useMemo(
+    () => (quiet.rows.size > 0 ? messages.filter((_, index) => !quiet.rows.has(index)) : messages),
+    [messages, quiet.rows]
+  )
+  const quietTurn = quiet.turns.has(turn.operationId)
   const visuals = useMobileNativeChatVisualRenderer(source)
   const itemSource = useMemo(
     () => ({ ...source, messageDetail: fullContent.detail }),
@@ -195,7 +230,9 @@ export function MobileBotGroupTurn({
                     workedSeconds={clock && working ? null : (clock?.durationMs ?? 0) / 1000}
                     verdict={clock?.outcome}
                     expanded={expanded}
-                    onToggleExpanded={clock ? () => setExpanded(!expanded) : undefined}
+                    onToggleExpanded={
+                      clock && !quietTurn ? () => setExpanded(!expanded) : undefined
+                    }
                   />
                 </View>
                 {!turn.revoked && !turn.error && (working || !clock) ? (
@@ -226,7 +263,7 @@ export function MobileBotGroupTurn({
                   {t('bots.groups.waitingForTheNativeSession', 'Waiting for the native session…')}
                 </Text>
               ) : null}
-              {messages.map((message) => (
+              {visibleMessages.map((message) => (
                 <MobileNativeChatMessage
                   key={message.id}
                   message={message}

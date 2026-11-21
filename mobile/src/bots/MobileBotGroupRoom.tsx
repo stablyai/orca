@@ -1,6 +1,10 @@
 import { MobileBotGroupTranscript } from './MobileBotGroupTranscript'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileBotGroupReader, MobileBotGroupTurn } from './MobileBotGroupTurns'
+import {
+  MobileBotGroupReader,
+  MobileBotGroupTurn,
+  type MobileBotGroupSession
+} from './MobileBotGroupTurns'
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, Ellipsis, ListChecks } from 'lucide-react-native'
@@ -22,6 +26,7 @@ import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
 import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
 import { botGroupMenuActions } from './bot-group-menu-actions'
 import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
+import { visibleBotGroupMessages } from '../../../src/shared/bots/bot-group-visible-turns'
 import { MobileBotGroupPeerRequestLine } from './MobileBotGroupPeerRequestLine'
 import { groupNewThread, groupSend, groupStop } from './bot-group-operations'
 import { MobileBotGroupRoomBar } from './MobileBotGroupRoomBar'
@@ -35,7 +40,6 @@ import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ModelPill } from '../session/native-chat/input/session-options/MobileNativeChatSessionOptionRows'
 import { MobileNativeChatComposer } from '../session/native-chat/composer/MobileNativeChatComposer'
 import { structuredAgentSessionHostSupport } from '../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
-import type { MobileBotGroupSession } from './MobileBotGroupTurns'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { MobileNativeChatSendErrorBanner } from '../session/native-chat/status/MobileNativeChatSendErrorBanner'
@@ -82,19 +86,17 @@ export function MobileBotGroupRoom({
   const [itemsOpen, setItemsOpen] = useState(false)
   const itemsOnPhone = hostCapabilities?.includes(BOTS_ITEMS_RUNTIME_CAPABILITY) === true
   const [sessions, setSessions] = useState<ReadonlyMap<string, MobileBotGroupSession>>(new Map())
-  const report = useCallback(
-    (id: string, session: MobileBotGroupSession | null) =>
-      setSessions((previous) => {
-        const next = new Map(previous)
-        if (session) {
-          next.set(id, session)
-        } else {
-          next.delete(id)
-        }
-        return next
-      }),
-    []
-  )
+  const report = useCallback((id: string, session: MobileBotGroupSession | null) => {
+    setSessions((previous) => {
+      const next = new Map(previous)
+      if (session) {
+        next.set(id, session)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
+  }, [])
   const onError = useCallback((message: string) => setError(message), [])
   const {
     data,
@@ -103,6 +105,7 @@ export function MobileBotGroupRoom({
     bots,
     needsYou,
     itemReads,
+    itemMemberIds,
     loadEarlier
   } = useMobileBotGroupTranscript(client, groupId, threadId, hostId, visible && connected, setError)
   const group = data?.group
@@ -110,20 +113,16 @@ export function MobileBotGroupRoom({
     () =>
       group?.members.flatMap((member) => {
         const bot = bots.find((bot) => bot.id === member.botId)
-        return bot && isBotAgent(bot.agent)
-          ? [
-              {
-                sessionId: member.sessionId,
-                agent: bot.agent,
-                operationIds:
-                  data?.messages.flatMap((message) =>
-                    message.turns
-                      .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
-                      .map((turn) => turn.operationId)
-                  ) ?? []
-              }
-            ]
-          : []
+        if (!bot || !isBotAgent(bot.agent)) {
+          return []
+        }
+        const operationIds =
+          data?.messages.flatMap((message) =>
+            message.turns
+              .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
+              .map((turn) => turn.operationId)
+          ) ?? []
+        return [{ sessionId: member.sessionId, agent: bot.agent, operationIds }]
       }) ?? [],
     [group?.members, bots, data?.messages]
   )
@@ -163,6 +162,7 @@ export function MobileBotGroupRoom({
     const bot = bots.find((bot) => bot.id === member.botId)
     return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot, undefined) }] : []
   })
+  const visibleMessages = visibleBotGroupMessages(botGroupRoomOrder(data?.messages ?? []), sessions)
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {readers.map((turn) => (
@@ -221,7 +221,7 @@ export function MobileBotGroupRoom({
             </Text>
           </Pressable>
         ) : null}
-        {botGroupRoomOrder(data?.messages ?? []).map((message) => (
+        {visibleMessages.map((message) => (
           <View key={message.id}>
             {message.author.kind === 'owner' ? (
               <MobileNativeChatMessage
@@ -379,6 +379,7 @@ export function MobileBotGroupRoom({
           bots={bots}
           needsYou={needsYou}
           reads={itemReads}
+          memberIds={itemMemberIds}
           online={connected}
           hostName={hostName}
           onOpenRoom={setThreadId}

@@ -25,6 +25,7 @@ import { useBotGroupComposerTransport } from './use-bot-group-composer-transport
 import { useBotTranscriptFollow } from './use-bot-transcript-follow'
 import { NativeChatMentionNamesContext } from '../native-chat/native-chat-markdown-mentions'
 import { botGroupRoomOrder } from '../../../../shared/bots/bot-group-room-order'
+import { visibleBotGroupMessages } from '../../../../shared/bots/bot-group-visible-turns'
 import { BotGroupPeerRequestLine } from './BotGroupPeerRequestLine'
 import { NativeChatTranscriptColumn } from '../native-chat/NativeChatTranscriptColumn'
 import { NativeChatTranscriptViewport } from '../native-chat/NativeChatTranscriptViewport'
@@ -34,6 +35,7 @@ import { useBotGroupLinkContextFor, type BotGroupRoomLinks } from './use-bot-gro
 import { MessageRow } from '../native-chat/messages/rows/NativeChatMessageRow'
 import { BotGroupSessionReader, type BotGroupSession } from './BotGroupSessionReader'
 import { BotGroupTurn } from './BotGroupTurn'
+import { BotGroupRemoteAsk } from './BotGroupRemoteAsk'
 import { BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { BotGroupApprovalDock } from './BotGroupApprovalDock'
@@ -98,6 +100,10 @@ export function BotGroupChat({
   useBotGroupRoomRead(group?.folderWorkspaceId, isVisible)
   const loaded = data?.messages ?? EMPTY_MESSAGES
   const messages = useMemo(() => botGroupRoomOrder(loaded), [loaded])
+  const visibleMessages = useMemo(
+    () => visibleBotGroupMessages(messages, sessions),
+    [messages, sessions]
+  )
   const readers = useMemo(() => {
     if (!group) {
       return []
@@ -167,7 +173,14 @@ export function BotGroupChat({
   useBotGroupTranscriptRows(rows, 'room', ownerRowList)
   const follow = useBotTranscriptFollow({
     messageCopyText: rows.messageCopyText,
-    itemCount: messages.reduce((count, message) => count + 1 + message.turns.length, 0),
+    itemCount: visibleMessages.reduce(
+      (count, message) =>
+        count +
+        1 +
+        message.turns.length +
+        (message.remoteAsks?.filter((ask) => ask.reply).length ?? 0),
+      0
+    ),
     isWorking: working,
     isVisible
   })
@@ -299,7 +312,7 @@ export function BotGroupChat({
                     </p>
                   </div>
                 ) : (
-                  messages.map((message) => (
+                  visibleMessages.map((message) => (
                     <div key={message.id} className="space-y-5">
                       {ownerRows.has(message.id) ? (
                         <MessageRow
@@ -327,6 +340,9 @@ export function BotGroupChat({
                           onReply={reply}
                           scrollMessageToTop={follow.scrollMessageToTop}
                         />
+                      ))}
+                      {message.remoteAsks?.map((ask) => (
+                        <BotGroupRemoteAsk key={ask.requestId} ask={ask} />
                       ))}
                     </div>
                   ))

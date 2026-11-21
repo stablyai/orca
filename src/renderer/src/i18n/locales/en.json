@@ -1204,6 +1204,7 @@
       "permissionWithoutAuto": "Agents without Approve for me",
       "permissionMixed": "Mixed",
       "permissionSurfaceDifference": "Terminals use the agent’s own settings; new chats use {{mode}}.",
+      "permissionModeSurfaceDifference": "Terminals use {{terminal}}; new chats use {{mode}}.",
       "permissionSameAsAll": "Same as all agents",
       "choiceChipRemove": "Remove {{flag}}",
       "choiceChipTooltip": "Added by {{choice}}. Remove it to use the default.",
@@ -22202,7 +22203,6 @@
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
         "detachedCommit": "Commit {{head}} (not a branch)",
-        "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
         "worktree": "Worktree"
@@ -22927,12 +22927,12 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
           "unavailableDetails": "Details unavailable",
-          "none": "No uncommitted changes"
+          "none": "No uncommitted changes",
+          "noUnsaved": "No unsaved files"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
@@ -22960,8 +22960,7 @@
           "morePaths_other": "and {{count}} more ignored paths",
           "listLabel": "Ignored local files that will be lost",
           "incompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted."
-        },
-        "ignoredFilesLost": "Ignored files will be lost: {{names}}"
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -25260,7 +25259,6 @@
         "withIgnored": "{{what}} and ignored files will be lost",
         "ignoredOnly": "Ignored files will be lost"
       },
-      "showChanges": "Show changes",
       "unsavedSuffix": "(unsaved)",
       "onHost": "On {{host}}",
       "forceDeletingEllipsis": "Force deleting…",
@@ -27212,15 +27210,14 @@
     "errors": {
       "nameTaken": "Another bot already has that name.",
       "generic": "Something went wrong. Try again.",
-      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image."
+      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image.",
+      "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },
     "slack": {
       "setup": {
         "checking": "Checking Slack…",
         "retry": "Try again",
         "settingUp": "Setting up your Slack app…",
-        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
-        "reconnectSubmit": "Reconnect Slack workspace",
         "create": "Create Slack app",
         "waiting": "Waiting for Slack…",
         "waitingDetail": "Finish in Slack. If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
@@ -27248,7 +27245,8 @@
         "tryIt": "Try it in any channel or direct message",
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
-        "openInSlack": "Message it in Slack"
+        "openInSlack": "Message it in Slack",
+        "cancel": "Cancel"
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -27272,7 +27270,10 @@
         "step3": "Copy the Refresh Token and paste it below.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
         "label": "Configuration refresh token",
-        "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it."
+        "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
+        "openSettings": "Open Slack app settings",
+        "generate": "Generate a token for this workspace",
+        "copyRefresh": "Copy the Refresh Token"
       },
       "workspaces": {
         "otherTeam": "That token is for another workspace. Orca keeps it for that workspace.",
@@ -27304,7 +27305,6 @@
       "handOff": {
         "confirmMac": "Orca on this Mac creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
         "confirm": "Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
-        "reconnect": "Slack no longer accepts the token {{email}} has for this workspace. Paste a new one to reconnect.",
         "offerMac": "This Mac is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
         "offer": "This computer is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
         "use": "Use it →"
@@ -27322,7 +27322,26 @@
         "waitingOn": "Switching to {{name}} needs {{installer}} to approve in Slack.",
         "waiting": "Switching to {{name}} needs approval in Slack."
       },
-      "mentionLine": "Mention <code>@{{name}}</code> in a channel or DM."
+      "mentionLine": "Mention <code>@{{name}}</code> in a channel or DM.",
+      "reconnect": {
+        "expiredTitle": "Slack token expired",
+        "useTitleMac": "Use your Mac’s token?",
+        "useTitle": "Use this computer’s token?",
+        "whyMine": "Each computer keeps its own Slack token. Slack stopped accepting the one {{email}} uses.",
+        "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
+        "why": "Slack stopped accepting this workspace’s saved token.",
+        "submit": "Reconnect",
+        "about": "About Slack tokens",
+        "useDetail": "Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.",
+        "hostExpiredMac": "<host>{{host}}</host>’s token expired. This Mac’s works.",
+        "hostExpired": "<host>{{host}}</host>’s token expired. This computer’s works.",
+        "pasteInstead": "Paste a token instead",
+        "use": "Use it",
+        "kept": "Orca Cloud keeps the new token encrypted, so your next bots here need one click.",
+        "mineMac": "This Mac’s token expired. Paste a new one.",
+        "mine": "This computer’s token expired. Paste a new one.",
+        "paste": "Paste a new token to reconnect."
+      }
     },
     "whoCanAsk": {
       "searching": "Searching…",
@@ -27597,7 +27616,8 @@
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
         "finishSetup": "Finish setup",
-        "orgDescription": "{{repos}} · signed in as @{{login}}"
+        "orgDescription": "{{repos}} · signed in as @{{login}}",
+        "addAccount": "Add another GitHub account"
       },
       "setup": {
         "install": "Install the Orca app",
@@ -27633,6 +27653,8 @@
         "unlink": "Unlink",
         "unlinked": "Add GitHub from a bot’s Connectors to link your account.",
         "descriptionOnHost": "The GitHub user {{host}}’s bots work as and are owned by.",
+        "descriptionPlural": "Your GitHub accounts, so your bots know which comments are yours.",
+        "descriptionOnHostPlural": "The GitHub users {{host}}’s bots work as and are owned by.",
         "linkedAs": "Linked as {{login}}",
         "reconnect": "Reconnect",
         "linkFromApp": "Link GitHub from Orca on a computer paired to {{host}}.",
@@ -28139,6 +28161,19 @@
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
       "sameComputer": "Bots in a group must be on the same computer.",
+      "pairedComputersOnly": "Groups can add bots only from paired computers.",
+      "needsLocalBot": "This group needs at least one bot on this computer.",
+      "thisComputer": "This computer",
+      "remoteNeedsChat": "Open a chat with {{name}} once, then add it to the group.",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteUnknown": "Delivery unknown",
+      "remoteStopped": "Stopped here",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "homeUnavailable": "The home workspace for “{{name}}” on {{host}} is unavailable.",
       "createdNotOpened": "Created “{{name}}”, but couldn’t open it.",
       "retryOpen": "Retry",
@@ -28721,6 +28756,12 @@
       "stopped": "Stopped sharing {{name}}",
       "webhookNotShared": "Webhook · not shared",
       "commandNotShared": "Command · not shared",
+      "fileLinkNotShared": "Has a symlink or hard link · not shared",
+      "outsideSkill": "From outside {{project}}",
+      "outsideSkillWith": "From outside {{project}} · {{description}}",
+      "tooLargeNotShared": "Too large · not shared",
+      "unreadableNotShared": "Can't be read · not shared",
+      "overLimitNotShared": "Over the skill limit · not shared",
       "notShared": "Not shared",
       "setupNote": "Setup note",
       "skills": "Skills",
