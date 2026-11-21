@@ -303,6 +303,7 @@ export function NativeChatMessageList({
     request: navigationRequest,
     rail,
     slots,
+    waitingSlots,
     conversation,
     subagentRows,
     roster: subagentRoster,

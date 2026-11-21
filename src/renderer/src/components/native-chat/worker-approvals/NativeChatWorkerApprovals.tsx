@@ -149,6 +149,7 @@ export function NativeChatWorkerApprovalStack({
           <div key={approval.approvalId} data-native-chat-worker-approval={approval.approvalId}>
             <NativeChatApprovalCard
               approval={workerApprovalCard(approval, t)}
+              memoryKey={`worker:${approval.approvalId}`}
               onChoose={(decision) => {
                 if (isWorkerApprovalDecision(decision)) {
                   answer(entry, decision)

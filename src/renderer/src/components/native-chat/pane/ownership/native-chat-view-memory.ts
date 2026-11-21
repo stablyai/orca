@@ -16,6 +16,8 @@ export const NativeChatViewTabContext = createContext<NativeChatViewTab | null>(
 // memento, and ends exactly when the tab closes. Layers report which tabs are open, so writes check in O(1).
 /** Per-transcript state keeps this many transcripts per tab: a rewind or /clear leaves the old one's behind. */
 export const KEPT_TRANSCRIPTS_PER_TAB = 16
+/** Per-prompt view choices (a folded question, an opened detail) are kept for this many prompts per tab. */
+export const KEPT_PROMPT_VIEWS = 8
 
 const openTabs = new Set<string>()
 const records = new Map<string, Map<string, unknown>>()
@@ -108,23 +110,25 @@ const NO_SUBSCRIPTION = (): (() => void) => () => {}
  * the view is gone still updates the view that replaced it. `initial` must be stable, like a default.
  */
 export function useNativeChatViewState<T>(
-  key: string,
+  /** Without a key the value stays local to the view. */
+  key: string | undefined,
   initial: T,
   keepNewest?: number
 ): [T, (action: SetStateAction<T>) => void] {
-  const tab = useContext(NativeChatViewTabContext)
+  const viewTab = useContext(NativeChatViewTabContext)
+  const tab = key === undefined ? null : viewTab
   const [local, setLocal] = useState(initial)
   const subscribe = useCallback(
     (listener: () => void) => (tab ? subscribeToTab(tab.tabId, listener) : NO_SUBSCRIPTION()),
     [tab]
   )
   const kept = useSyncExternalStore(subscribe, () =>
-    tab ? (readNativeChatViewMemory<T>(tab, key) ?? initial) : initial
+    tab && key !== undefined ? (readNativeChatViewMemory<T>(tab, key) ?? initial) : initial
   )
   const setValue = useCallback(
     (action: SetStateAction<T>) => {
       const apply = (value: T): T => (isUpdater(action) ? action(value) : action)
-      if (!tab) {
+      if (!tab || key === undefined) {
         setLocal(apply)
         return
       }

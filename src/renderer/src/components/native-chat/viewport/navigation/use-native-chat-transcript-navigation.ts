@@ -43,6 +43,20 @@ export type NativeChatNavigationRequest = {
 }
 
 /** Read before the window mounts rows, so the request's slot stays drawn. */
+/** A waiting message's drawn row: those rows sit after the window, unindexed. */
+function waitingRowOf(
+  container: HTMLElement | null,
+  waitingSlots: readonly NativeChatTranscriptSlot[],
+  messageId: string
+): HTMLElement | null {
+  const index = waitingSlots.findIndex(
+    (_, at) => nativeChatSlotMessageIdFrom(waitingSlots, at) === messageId
+  )
+  return index < 0
+    ? null
+    : (container?.querySelector<HTMLElement>(`[data-native-chat-waiting-index="${index}"]`) ?? null)
+}
+
 export function useNativeChatNavigationRequest(
   slots: readonly NativeChatTranscriptSlot[]
 ): NativeChatNavigationRequest {
@@ -68,6 +82,7 @@ export function useNativeChatNavigation({
   request,
   rail,
   slots,
+  waitingSlots,
   conversation,
   subagentRows,
   roster,
@@ -90,6 +105,8 @@ export function useNativeChatNavigation({
   request: NativeChatNavigationRequest
   rail: { items: readonly NativeChatRailItem[]; onActivate: (id: string) => void }
   slots: readonly NativeChatTranscriptSlot[]
+  /** Rows held behind the running turn, drawn after the window. */
+  waitingSlots: readonly NativeChatTranscriptSlot[]
   conversation: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   roster: StructuredAgentSubagentRoster | undefined
@@ -130,6 +147,15 @@ export function useNativeChatNavigation({
           return 'landed'
         }
         const index = nativeChatSlotIndexOf(slots, target.id)
+        const waiting =
+          index < 0 && target.offset !== undefined
+            ? waitingRowOf(scrollRef.current, waitingSlots, target.id)
+            : null
+        if (waiting) {
+          readerLeavesEnd()
+          scrollMessageToTop(waiting, 'start', target.offset)
+          return 'landed'
+        }
         // A returning reader's row inside a collapsed turn is loaded but drawn by nothing; don't page for it.
         if (
           index < 0 &&
@@ -200,6 +226,7 @@ export function useNativeChatNavigation({
     scrollRef,
     readerAtEnd,
     messageIdAt: (index) => nativeChatSlotMessageIdFrom(slots, index),
+    waitingMessageIdAt: (index) => nativeChatSlotMessageIdFrom(waitingSlots, index),
     jumpTo: ({ messageId, offset }, settled) =>
       startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
         if (result === 'missing' || result === 'failed') {

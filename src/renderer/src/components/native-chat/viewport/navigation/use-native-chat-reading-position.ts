@@ -14,16 +14,19 @@ const MAX_RESTORE_ATTEMPTS = 5
 export type NativeChatReadingPosition = { messageId: string; offset: number }
 
 /**
- * The first row reaching below the viewport's top, by its message, and how far the reader is into it. A reader
- * past every indexed row (in the waiting messages drawn after them) is held by the last one, further in.
+ * The first row reaching below the viewport's top, by its message, and how far the reader is into it: a transcript
+ * row, or a waiting message drawn after them. A reader past every row is held by the last one, further in.
  */
 function readingPositionOf(
   container: HTMLElement,
-  messageIdAt: (index: number) => string | null
+  messageIdAt: (index: number) => string | null,
+  waitingMessageIdAt: (index: number) => string | null
 ): NativeChatReadingPosition | null {
   const top = container.getBoundingClientRect().top
   let anchor: HTMLElement | null = null
-  for (const row of container.querySelectorAll<HTMLElement>('[data-index]')) {
+  for (const row of container.querySelectorAll<HTMLElement>(
+    '[data-index], [data-native-chat-waiting-index]'
+  )) {
     anchor = row
     if (row.getBoundingClientRect().bottom > top) {
       break
@@ -32,7 +35,11 @@ function readingPositionOf(
   if (!anchor) {
     return null
   }
-  const messageId = messageIdAt(Number.parseInt(anchor.dataset.index ?? '', 10))
+  const { index, nativeChatWaitingIndex } = anchor.dataset
+  const messageId =
+    index === undefined
+      ? waitingMessageIdAt(Number.parseInt(nativeChatWaitingIndex ?? '', 10))
+      : messageIdAt(Number.parseInt(index, 10))
   return messageId
     ? { messageId, offset: Math.max(0, top - anchor.getBoundingClientRect().top) }
     : null
@@ -46,6 +53,7 @@ export function useNativeChatReadingPosition({
   scrollRef,
   readerAtEnd,
   messageIdAt,
+  waitingMessageIdAt,
   jumpTo
 }: {
   /** One per transcript: a session's main list and each subagent's list read separately. */
@@ -56,6 +64,8 @@ export function useNativeChatReadingPosition({
   readerAtEnd: () => boolean
   /** The message a transcript row shows, for rows of any kind. */
   messageIdAt: (index: number) => string | null
+  /** The message a waiting row shows. */
+  waitingMessageIdAt: (index: number) => string | null
   jumpTo: (position: NativeChatReadingPosition, settled: (result: HistoryJumpResult) => void) => void
 }): () => boolean {
   const tab = useContext(NativeChatViewTabContext)
@@ -65,9 +75,9 @@ export function useNativeChatReadingPosition({
   const freshMountRef = useRef(true)
   // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
   const restoringRef = useRef<NativeChatReadingPosition | null>(null)
-  const latest = useRef({ readerAtEnd, jumpTo, messageIdAt })
+  const latest = useRef({ readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt })
   useLayoutEffect(() => {
-    latest.current = { readerAtEnd, jumpTo, messageIdAt }
+    latest.current = { readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt }
   })
   useLayoutEffect(() => {
     if (!isVisible || !ready || !tab) {
@@ -116,7 +126,7 @@ export function useNativeChatReadingPosition({
       const container = scrollRef.current
       const next =
         container && !latest.current.readerAtEnd()
-          ? readingPositionOf(container, latest.current.messageIdAt)
+          ? readingPositionOf(container, latest.current.messageIdAt, latest.current.waitingMessageIdAt)
           : null
       if (next === null && freshMountRef.current) {
         return
