@@ -29,7 +29,12 @@ export function pushMemoryHistorySample(key: string, memoryBytes: number, now: n
     ring = { samples: [], touchedAt: now }
     historyByKey.set(key, ring)
   }
-  ring.samples.push(memoryBytes)
+  // Whole bytes within the safe-integer range keep each point at most 16 digits in a paired reply.
+  ring.samples.push(
+    Number.isFinite(memoryBytes)
+      ? Math.min(Number.MAX_SAFE_INTEGER, Math.round(Math.max(0, memoryBytes)))
+      : memoryBytes
+  )
   if (ring.samples.length > HISTORY_CAPACITY) {
     ring.samples.shift()
   }

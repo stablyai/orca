@@ -18,17 +18,19 @@ const ESTIMATE_RESERVE_BYTES = 256 * 1024
 const ROW_OVERHEAD_BYTES = 200
 const SESSION_OVERHEAD_BYTES = 160
 const CHAT_OVERHEAD_BYTES = 160
-// The longest JSON number (`-1.2345678901234567e-308`) and its comma.
-const HISTORY_POINT_BYTES = 25
+// History holds whole bytes up to 2^53 (16 digits), or null, plus a comma.
+const HISTORY_POINT_BYTES = 17
 
 /** A JSON string's serialized size. */
 function jsonStringBytes(value: string | null | undefined): number {
   return value === null || value === undefined ? 4 : 2 + jsonStringContentBytes(value)
 }
 
-// A UTF-16 unit serializes to at most 6 bytes (a `\uXXXX` escape); reading only the length skips a scan.
+// Reading only the length skips a scan. A UTF-16 unit is at most 3 UTF-8 bytes, and quote, backslash
+// and common controls escape to 2; only rare controls and lone surrogates (6) exceed it, which the
+// reserve absorbs. A reply estimated within budget minus the reserve is sent as is.
 function jsonStringUpperBytes(value: string | null | undefined): number {
-  return value === null || value === undefined ? 4 : 2 + 6 * value.length
+  return value === null || value === undefined ? 4 : 2 + 3 * value.length
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {

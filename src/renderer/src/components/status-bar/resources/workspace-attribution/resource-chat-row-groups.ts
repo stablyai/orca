@@ -14,13 +14,18 @@ export type SampleChatRows = {
   source: readonly WorktreeMemory[]
   inputs: readonly unknown[]
   groups: ChatRowGroup[]
+  /** The sample's workspaces with terminals, whose rows are rebuilt every merge. */
+  terminalSamples: readonly WorktreeMemory[]
 }
 
-/** Lives while the panel is open; keyed by sample owner (this machine or a paired host). */
-export type ResourceMergeCache = { bySample: Map<string, SampleChatRows> }
+/** Lives while the panel is open; samples are keyed by owner (this machine or a paired host). */
+export type ResourceMergeCache = {
+  bySample: Map<string, SampleChatRows>
+  combinedByRepo: Map<string, { parts: ChatRowGroup[]; group: UnifiedProjectGroup }>
+}
 
 export function createResourceMergeCache(): ResourceMergeCache {
-  return { bySample: new Map() }
+  return { bySample: new Map(), combinedByRepo: new Map() }
 }
 
 export function isChatOnlySample(wt: WorktreeMemory): boolean {
@@ -85,20 +90,25 @@ function buildChatRowGroups(
   return [...byRepo.values()]
 }
 
-/** The sample's chat-only groups, rebuilt only when the sample or the catalog it is placed by changes. */
-export function chatRowGroupsFor(
+/** The sample's chat-only groups and terminal samples, rebuilt only when the sample or the catalog it is placed by changes. */
+export function sampleRowsFor(
   cache: ResourceMergeCache | undefined,
   next: Map<string, SampleChatRows>,
   owner: string,
   source: readonly WorktreeMemory[],
   inputs: readonly unknown[],
   place: (wt: WorktreeMemory) => SamplePlacement | null
-): ChatRowGroup[] {
+): SampleChatRows {
   const prior = cache?.bySample.get(owner)
   const entry =
     prior && prior.source === source && sameInputs(prior.inputs, inputs)
       ? prior
-      : { source, inputs, groups: buildChatRowGroups(source, place) }
+      : {
+          source,
+          inputs,
+          groups: buildChatRowGroups(source, place),
+          terminalSamples: source.filter((wt) => !isChatOnlySample(wt))
+        }
   next.set(owner, entry)
-  return entry.groups
+  return entry
 }

@@ -34,7 +34,11 @@ function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWor
   } else if (sort === 'cpu') {
     copy.sort((a, b) => compareMetricDesc(a.cpu, b.cpu))
   } else {
-    copy.sort((a, b) => a.worktreeName.localeCompare(b.worktreeName))
+    // Ties keep a fixed order, whichever source a workspace's row came from.
+    copy.sort(
+      (a, b) =>
+        a.worktreeName.localeCompare(b.worktreeName) || a.worktreeId.localeCompare(b.worktreeId)
+    )
   }
   return copy
 }
@@ -46,7 +50,7 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
   } else if (sort === 'cpu') {
     copy.sort((a, b) => compareMetricDesc(a.cpu, b.cpu))
   } else {
-    copy.sort((a, b) => a.repoName.localeCompare(b.repoName))
+    copy.sort((a, b) => a.repoName.localeCompare(b.repoName) || a.repoId.localeCompare(b.repoId))
   }
   return copy
 }
