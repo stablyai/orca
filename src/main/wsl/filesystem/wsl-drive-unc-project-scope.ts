@@ -146,7 +146,7 @@ function refuseOverlaps(
     kind === 'repo' ? scope.repoIds : scope.folderWorkspaceIds
   for (let added = true; added;) {
     added = false
-    // A same-folder duplicate is the project it duplicates; nested ones: wslDriveUncDuplicatesSplitBy.
+    // A same-folder duplicate is the project it duplicates; nested ones: wslDriveUncRefusedSplitBy.
     const refusedRoots = scope.refused
       .filter((entry) => entry.reason !== 'duplicate-windows-project')
       // An accepted id is another host's row refused under the same folder workspace id.
@@ -217,18 +217,18 @@ export function withNestedWslDriveUncProjects(
 }
 
 /**
- * Refused duplicates a conversion rewriting these folders would split: their paths inside them
- * would move while their ids stay. A second spelling of a converting project is that project.
+ * Refused projects a conversion rewriting these folders would split: their paths inside them would
+ * move while their ids stay. The folders include saved worktrees outside a repo's own paths, which
+ * the scope check cannot see. A second spelling of a converting project is that project.
  */
-export function wslDriveUncDuplicatesSplitBy(
+export function wslDriveUncRefusedSplitBy(
   state: WslDriveUncScopeState,
   scope: WslDriveUncScope,
   distro: string,
   converting: { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] },
   rewriteRoots: () => readonly string[]
 ): string[] {
-  const duplicates = scope.refused.filter((entry) => entry.reason === 'duplicate-windows-project')
-  if (duplicates.length === 0) {
+  if (scope.refused.length === 0) {
     return []
   }
   const convertingFolders = new Set(
@@ -243,17 +243,21 @@ export function wslDriveUncDuplicatesSplitBy(
     )
   )
   const roots = driveRoots(rewriteRoots(), distro)
+  // The rewrite maps a path at a root as well as under it.
   const splits = (folder: string, paths: readonly string[]): boolean =>
     !driveRoots([folder], distro).some((path) => convertingFolders.has(path)) &&
-    driveRoots(paths, distro).some((path) => roots.some((root) => isInside(path, root)))
-  return duplicates.flatMap(({ kind, id }) => {
-    if (kind === 'repo') {
-      const repo = state.repos.find((entry) => entry.id === id)
-      return repo && splits(repo.path, wslMoveRepoPaths(repo)) ? [id] : []
-    }
-    const folder = state.folderWorkspaces.find((entry) => entry.id === id)
-    return folder && splits(folder.folderPath, [folder.folderPath]) ? [id] : []
-  })
+    driveRoots(paths, distro).some((path) =>
+      roots.some((root) => path === root || isInside(path, root))
+    )
+  const split = scope.refused.filter(({ kind, id }) =>
+    kind === 'repo'
+      ? state.repos.some((repo) => repo.id === id && splits(repo.path, wslMoveRepoPaths(repo)))
+      : // Every row: another host may hold a folder workspace with the same id.
+        state.folderWorkspaces.some(
+          (folder) => folder.id === id && splits(folder.folderPath, [folder.folderPath])
+        )
+  )
+  return [...new Set(split.map(({ id }) => id))]
 }
 
 function driveRoots(paths: readonly string[], distro: string): string[] {

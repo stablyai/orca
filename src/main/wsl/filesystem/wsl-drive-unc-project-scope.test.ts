@@ -7,8 +7,8 @@ const MOUNTS = [{ mountPoint: '/mnt/c', windowsRoot: 'C:\\' }]
 const SRC = String.raw`\\wsl.localhost\Ubuntu\mnt\c\src`
 const APP = String.raw`\\wsl.localhost\Ubuntu\mnt\c\src\app`
 
-function repo(path: string, connectionId: string | null = null): Repo {
-  return { id: 'repo-a', path, displayName: 'app', badgeColor: '', addedAt: 0, connectionId }
+function repo(path: string, connectionId: string | null = null, id = 'repo-a'): Repo {
+  return { id, path, displayName: 'app', badgeColor: '', addedAt: 0, connectionId }
 }
 
 function folder(folderPath: string, connectionId: string | null = null): FolderWorkspace {
@@ -60,6 +60,24 @@ describe('collectWslDriveUncScope', () => {
       refused: [
         { kind: 'folder-workspace', id: 'folder-a', reason: 'not-local' },
         { kind: 'repo', id: 'repo-a', reason: 'overlaps-refused-project' }
+      ]
+    })
+  })
+
+  it('refuses each project nesting with one refused for an overlap, through a chain', () => {
+    // The refused repo is in the folder, which holds the other repo; the two repos do not nest.
+    const state = {
+      repos: [repo(String.raw`${SRC}\lib`, null, 'repo-b'), repo(APP, 'ssh-1')],
+      folderWorkspaces: [folder(SRC)],
+      projectGroups: []
+    }
+    expect(collectWslDriveUncScope(state, 'Ubuntu', MOUNTS)).toEqual({
+      repoIds: [],
+      folderWorkspaceIds: [],
+      refused: [
+        { kind: 'repo', id: 'repo-a', reason: 'not-local' },
+        { kind: 'folder-workspace', id: 'folder-a', reason: 'overlaps-refused-project' },
+        { kind: 'repo', id: 'repo-b', reason: 'overlaps-refused-project' }
       ]
     })
   })
