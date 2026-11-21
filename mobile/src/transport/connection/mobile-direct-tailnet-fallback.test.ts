@@ -84,22 +84,32 @@ describe('mobile authenticated tailnet fallback', () => {
   })
 
   it('migrates an unreachable LAN session only after the backup authenticates', async () => {
-    const host = logical('connecting')
-    const backup = physical('connecting')
-    const fallback = new MobileDirectTailnetFallback(host.client, () => backup.client)
-    fallback.start()
-    host.setState('reconnecting')
-    expect(host.migrateTo).not.toHaveBeenCalled()
+    vi.useFakeTimers()
+    try {
+      const host = logical('connecting')
+      const backup = physical('connecting')
+      const open = vi.fn(() => backup.client)
+      const fallback = new MobileDirectTailnetFallback(host.client, open)
+      fallback.start()
+      host.setState('reconnecting')
 
-    backup.setState('connected')
-    await vi.waitFor(() => expect(host.migrateTo).toHaveBeenCalledTimes(1), { timeout: 4000 })
-    expect(host.migrateTo).toHaveBeenCalledWith(
-      backup.client,
-      'tailscale',
-      12_000,
-      expect.any(Function)
-    )
-    fallback.stop()
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(open).toHaveBeenCalledWith('tailscale')
+      expect(host.migrateTo).not.toHaveBeenCalled()
+
+      backup.setState('connected')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(host.migrateTo).toHaveBeenCalledTimes(1)
+      expect(host.migrateTo).toHaveBeenCalledWith(
+        backup.client,
+        'tailscale',
+        12_000,
+        expect.any(Function)
+      )
+      fallback.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('falls back to LAN when an already migrated tailnet path goes offline', async () => {
