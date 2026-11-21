@@ -1,4 +1,5 @@
 import type { AppState } from '../../types'
+import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
 
 type LocalAgentContextState = Pick<
   AppState,
@@ -41,56 +42,49 @@ export function removeLocalAgentContextEntry<T>(entries: Record<string, T>, cont
   return removeLocalAgentContextEntries(entries, new Set([contextKey]))
 }
 
-export function getLocalAgentContextEviction(args: {
-  projectIds: readonly string[]
-  state: LocalAgentContextState
-  internalContextKeys: Iterable<string>
-  detectedContextKey: string | null
-  legacyDetectContextKey: string | null
-  legacyRefreshContextKey: string | null
-}): LocalAgentContextEviction | null {
-  const prefixes = args.projectIds
-    .map((projectId) => projectId.trim())
-    .filter(Boolean)
-    .map((projectId) => `${projectId}:`)
-  if (prefixes.length === 0) {
-    return null
-  }
-  const contextKeys = new Set([
-    ...Object.keys(args.state.localDetectedAgentIdsByContext),
-    ...Object.keys(args.state.isDetectingLocalAgentsByContext),
-    ...Object.keys(args.state.isRefreshingLocalAgentsByContext),
-    ...args.internalContextKeys
+/** Every context the store or the lifecycle tracks, cached or in flight. */
+export function getTrackedLocalAgentContextKeys(
+  state: LocalAgentContextState,
+  lifecycle: LocalAgentInventoryLifecycle
+): Set<string> {
+  return new Set([
+    ...Object.keys(state.localDetectedAgentIdsByContext),
+    ...Object.keys(state.isDetectingLocalAgentsByContext),
+    ...Object.keys(state.isRefreshingLocalAgentsByContext),
+    ...lifecycle.detectPromises.keys(),
+    ...lifecycle.refreshPromises.keys(),
+    ...lifecycle.failedDetectContextKeys,
+    ...lifecycle.refusedContextKeys
   ])
+}
+
+export function getLocalAgentContextEviction(
+  state: LocalAgentContextState,
+  lifecycle: LocalAgentInventoryLifecycle,
+  shouldRemove: (contextKey: string) => boolean
+): LocalAgentContextEviction | null {
   const removedContextKeys = new Set(
-    [...contextKeys].filter((contextKey) =>
-      prefixes.some((prefix) => contextKey.startsWith(prefix))
-    )
+    [...getTrackedLocalAgentContextKeys(state, lifecycle)].filter(shouldRemove)
   )
   if (removedContextKeys.size === 0) {
     return null
   }
-  const clearDetected = Boolean(
-    (args.detectedContextKey && removedContextKeys.has(args.detectedContextKey)) ||
-    (args.legacyDetectContextKey && removedContextKeys.has(args.legacyDetectContextKey))
-  )
-  const clearRefreshing = Boolean(
-    args.legacyRefreshContextKey && removedContextKeys.has(args.legacyRefreshContextKey)
-  )
+  const isRemoved = (contextKey: string | null): boolean =>
+    contextKey !== null && removedContextKeys.has(contextKey)
+  const clearDetected =
+    isRemoved(lifecycle.detectedContextKey) || isRemoved(lifecycle.legacyDetectContextKey)
+  const clearRefreshing = isRemoved(lifecycle.legacyRefreshContextKey)
   return {
     removedContextKeys,
-    detectedContextKey:
-      args.detectedContextKey && removedContextKeys.has(args.detectedContextKey)
-        ? null
-        : args.detectedContextKey,
-    legacyDetectContextKey:
-      args.legacyDetectContextKey && removedContextKeys.has(args.legacyDetectContextKey)
-        ? null
-        : args.legacyDetectContextKey,
-    legacyRefreshContextKey:
-      args.legacyRefreshContextKey && removedContextKeys.has(args.legacyRefreshContextKey)
-        ? null
-        : args.legacyRefreshContextKey,
+    detectedContextKey: isRemoved(lifecycle.detectedContextKey)
+      ? null
+      : lifecycle.detectedContextKey,
+    legacyDetectContextKey: isRemoved(lifecycle.legacyDetectContextKey)
+      ? null
+      : lifecycle.legacyDetectContextKey,
+    legacyRefreshContextKey: isRemoved(lifecycle.legacyRefreshContextKey)
+      ? null
+      : lifecycle.legacyRefreshContextKey,
     statePatch: {
       ...(clearDetected
         ? {
@@ -102,17 +96,33 @@ export function getLocalAgentContextEviction(args: {
         : {}),
       ...(clearRefreshing ? { isRefreshingAgents: false } : {}),
       localDetectedAgentIdsByContext: removeLocalAgentContextEntries(
-        args.state.localDetectedAgentIdsByContext,
+        state.localDetectedAgentIdsByContext,
         removedContextKeys
       ),
       isDetectingLocalAgentsByContext: removeLocalAgentContextEntries(
-        args.state.isDetectingLocalAgentsByContext,
+        state.isDetectingLocalAgentsByContext,
         removedContextKeys
       ),
       isRefreshingLocalAgentsByContext: removeLocalAgentContextEntries(
-        args.state.isRefreshingLocalAgentsByContext,
+        state.isRefreshingLocalAgentsByContext,
         removedContextKeys
       )
     }
   }
+}
+
+/** Forgets the evicted contexts' probes, so a late result cannot restore them. */
+export function applyLocalAgentContextEviction(
+  lifecycle: LocalAgentInventoryLifecycle,
+  eviction: LocalAgentContextEviction
+): void {
+  for (const contextKey of eviction.removedContextKeys) {
+    lifecycle.detectPromises.delete(contextKey)
+    lifecycle.refreshPromises.delete(contextKey)
+    lifecycle.failedDetectContextKeys.delete(contextKey)
+    lifecycle.refusedContextKeys.delete(contextKey)
+  }
+  lifecycle.detectedContextKey = eviction.detectedContextKey
+  lifecycle.legacyDetectContextKey = eviction.legacyDetectContextKey
+  lifecycle.legacyRefreshContextKey = eviction.legacyRefreshContextKey
 }

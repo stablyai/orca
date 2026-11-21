@@ -5,6 +5,7 @@ import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-p
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
+import { mergeEnabledProbeIntoCompleteInventory } from './local-agent-availability-change'
 import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
@@ -111,9 +112,8 @@ export function refreshLocalAgentInventory(
     .refreshAgents({ ...refreshArgs, ...options })
     .then((result) => {
       const typed = result.agents.filter(isTuiAgent)
-      const published = includeDisabled
-        ? filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
-        : typed
+      // Also drops agents disabled while an enabled-only refresh ran.
+      const published = filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
       if (
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
@@ -121,6 +121,7 @@ export function refreshLocalAgentInventory(
         lifecycle.failedDetectContextKeys.delete(contextKey)
         lifecycle.refusedContextKeys.delete(contextKey)
         lifecycle.failedDetectContextKeys.delete(publishedContextKey)
+        lifecycle.refusedContextKeys.delete(publishedContextKey)
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
           refreshContextKeys.has(lifecycle.legacyRefreshContextKey)
@@ -139,6 +140,9 @@ export function refreshLocalAgentInventory(
             : {}),
           localDetectedAgentIdsByContext: {
             ...state.localDetectedAgentIdsByContext,
+            ...(includeDisabled
+              ? {}
+              : mergeEnabledProbeIntoCompleteInventory(state, lifecycle, contextKey, typed)),
             [contextKey]: typed,
             [publishedContextKey]: published
           },
@@ -148,7 +152,7 @@ export function refreshLocalAgentInventory(
           )
         }))
       }
-      return typed
+      return includeDisabled ? typed : published
     })
     .catch((error: unknown) => {
       const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? []
@@ -160,7 +164,11 @@ export function refreshLocalAgentInventory(
         lifecycle.keptThroughFailure.add(fallback)
         const publishedFallback = get().localDetectedAgentIdsByContext[publishedContextKey] ?? []
         lifecycle.keptThroughFailure.add(publishedFallback)
-        if (!publishedHadUsableCache) {
+        // A toggle may have dropped the published list mid-refresh, leaving nothing usable to keep.
+        if (
+          !publishedHadUsableCache ||
+          get().localDetectedAgentIdsByContext[publishedContextKey] == null
+        ) {
           lifecycle.failedDetectContextKeys.add(publishedContextKey)
         }
         if (!hadUsableCache) {
