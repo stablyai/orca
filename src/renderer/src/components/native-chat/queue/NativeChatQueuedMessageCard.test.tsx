@@ -2,6 +2,7 @@
 
 import React, { type ComponentProps } from 'react'
 import { cleanup, render } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { NativeChatQueuedMessageCard } from './NativeChatQueuedMessageCard'
 import { projectQueuedMessageCards } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
@@ -19,7 +20,10 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 function queued(
   messageId: string,
@@ -33,9 +37,9 @@ function queued(
   }
 }
 
-function moreActions(message: AgentSessionQueuedMessage): HTMLElement | null {
+function renderQueuedMessage(message: AgentSessionQueuedMessage): ReturnType<typeof render> {
   const [card] = projectQueuedMessageCards([message], [], { agentWorking: true })
-  const view = render(
+  return render(
     <NativeChatQueuedMessageCard
       card={card!}
       chatWorktreeId={null}
@@ -46,11 +50,33 @@ function moreActions(message: AgentSessionQueuedMessage): HTMLElement | null {
       onEdit={() => {}}
     />
   )
-  return view.queryByRole('button', { name: 'More actions' })
 }
 
 it("offers Edit on the owner's queued message but never on an automation's queued run", () => {
-  expect(moreActions(queued('mine', {}))).not.toBeNull()
+  expect(
+    renderQueuedMessage(queued('mine', {})).queryByRole('button', { name: 'More actions' })
+  ).not.toBeNull()
   cleanup()
-  expect(moreActions(queued('run', { origin: 'automation-run' }))).toBeNull()
+  expect(
+    renderQueuedMessage(queued('run', { origin: 'automation-run' })).queryByRole('button', {
+      name: 'More actions'
+    })
+  ).toBeNull()
+})
+
+it('tabs through queued message actions before expanding the message with the keyboard', async () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(480)
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(960)
+  const user = userEvent.setup()
+  const view = renderQueuedMessage(queued('clipped', {}))
+
+  for (const name of ['Steer', 'Delete', 'More actions', 'Show full message']) {
+    await user.tab()
+    expect(document.activeElement).toBe(view.getByRole('button', { name }))
+  }
+
+  await user.keyboard('{Enter}')
+  expect(document.activeElement).toBe(
+    view.getByRole('button', { name: 'Show less', expanded: true })
+  )
 })
