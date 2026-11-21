@@ -17,7 +17,15 @@ import {
   type BotChangeScope
 } from '../../../src/shared/bots/bot-change-scope'
 const ROOM_KINDS: readonly BotChangeKind[] = ['groups', 'bot']
-const ITEM_KINDS: readonly BotChangeKind[] = ['groups', 'items', 'workers']
+const ITEM_KINDS: readonly BotChangeKind[] = ['items', 'workers']
+
+/** Bumps for the group's Items list to read again: `rooms` its rooms, `all` every member's items,
+ *  `bots` one member's. */
+export type BotGroupItemReads = {
+  rooms: number
+  all: number
+  bots: Readonly<Record<string, number>>
+}
 
 function sameCounts(
   left: Readonly<Record<string, number>>,
@@ -25,6 +33,17 @@ function sameCounts(
 ): boolean {
   const keys = Object.keys(left)
   return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key])
+}
+
+function bumpEach(
+  counts: Readonly<Record<string, number>>,
+  ids: readonly string[]
+): Readonly<Record<string, number>> {
+  const next = { ...counts }
+  ids.forEach((id) => {
+    next[id] = (next[id] ?? 0) + 1
+  })
+  return next
 }
 
 type RoomTranscript = { threadId: string | undefined; data: BotGroupTranscript | null }
@@ -62,12 +81,10 @@ export function useMobileBotGroupTranscript(
   )
   const [bots, setBots] = useState<PhoneBot[]>([])
   const [needsYou, setNeedsYou] = useState<Readonly<Record<string, number>>>({})
-  // Bumps on each change the members' items may show, for the group's Items list to read again.
-  const [itemReads, setItemReads] = useState(0)
-  const memberIds = useRef<readonly string[]>([])
-  useEffect(() => {
-    memberIds.current = room.data?.group.members.map((member) => member.botId) ?? []
-  })
+  const [itemReads, setItemReads] = useState<BotGroupItemReads>({ rooms: 0, all: 0, bots: {} })
+  // The members the Items drawer reads, which it sets from the group list: a thread room's own read
+  // lists only the thread's members.
+  const itemMemberIds = useRef<readonly string[]>([])
   useEffect(() => {
     if (!visible) {
       return
@@ -75,13 +92,21 @@ export function useMobileBotGroupTranscript(
     let closed = false
     let request = 0
     const refresh = (changed?: BotChangeScope) => {
+      const rooms = botChangeConcerns(changed, { kinds: ['groups'] })
+      const named = botChangeConcerns(changed, { kinds: ITEM_KINDS })
+        ? botChangeBotIds(changed, ITEM_KINDS)
+        : []
+      // An items or workers change naming no bot can change every member's list. A group change
+      // reaches the lists only by moving their rooms, which re-reads them through the group list.
+      const everyMember = named === null
       // Another bot's items or workers change nothing a member's list shows.
-      const changedBots = botChangeBotIds(changed, ITEM_KINDS)
-      if (
-        botChangeConcerns(changed, { kinds: ITEM_KINDS }) &&
-        (changedBots === null || changedBots.some((id) => memberIds.current.includes(id)))
-      ) {
-        setItemReads((reads) => reads + 1)
+      const members = everyMember ? [] : named.filter((id) => itemMemberIds.current.includes(id))
+      if (rooms || everyMember || members.length > 0) {
+        setItemReads((last) => ({
+          rooms: last.rooms + (rooms ? 1 : 0),
+          all: last.all + (everyMember ? 1 : 0),
+          bots: members.length > 0 ? bumpEach(last.bots, members) : last.bots
+        }))
       }
       // An items notice carries the host's new Needs you counts, which the bot list read would bring.
       const counts = changed?.needsYou?.counts
@@ -141,5 +166,14 @@ export function useMobileBotGroupTranscript(
       setError(String(error))
     }
   }, [apply, client, groupId, threadId, data, setError])
-  return { data, group: room.data?.group, apply, bots, needsYou, itemReads, loadEarlier }
+  return {
+    data,
+    group: room.data?.group,
+    apply,
+    bots,
+    needsYou,
+    itemReads,
+    itemMemberIds,
+    loadEarlier
+  }
 }
