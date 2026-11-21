@@ -41,42 +41,27 @@ export function sessionLiveTextReaders(
   return shown.length > 0 ? liveTextReadersOf(shown) : null
 }
 
-const viewerShown = (subscriber: Subscriber): boolean => subscriber.viewer?.hidden() !== true
+/** Whether a subscriber's window shows; a host that can't see it treats it as shown. */
+export const viewerShown = (subscriber: Subscriber): boolean => subscriber.viewer?.hidden() !== true
 
-/** Live text goes only to viewers whose window shows; a hidden one gets the newest text once it
- *  shows, read again from the session's last publication. */
-export class LiveTextForShownViewers {
-  private readonly republish = new Map<string, (targets: readonly Subscriber[]) => void>()
+/** Watches each subscriber's window, to send it what it skipped while hidden once it shows. */
+export class ShownViewerWatches {
   private readonly watches = new WeakMap<Subscriber, () => void>()
 
-  shown(
-    sessionId: string,
-    targets: readonly Subscriber[],
-    republish: (targets: readonly Subscriber[]) => void
-  ): readonly Subscriber[] {
-    this.republish.set(sessionId, republish)
-    return targets.filter(viewerShown)
-  }
-
   /** Watches a new subscriber's window, and stops watching the one it replaced. */
-  watch(subscriber: Subscriber, replaced?: Subscriber): void {
+  watch(subscriber: Subscriber, replaced: Subscriber | undefined, shown: () => void): void {
     if (replaced) {
-      this.unwatch(replaced, false)
+      this.unwatch(replaced)
     }
-    const stop = subscriber.viewer?.subscribeShown(() =>
-      this.republish.get(subscriber.sessionId)?.([subscriber])
-    )
+    const stop = subscriber.viewer?.subscribeShown(shown)
     if (stop) {
       this.watches.set(subscriber, stop)
     }
   }
 
-  unwatch(subscriber: Subscriber, sessionEnded: boolean): void {
+  unwatch(subscriber: Subscriber): void {
     this.watches.get(subscriber)?.()
     this.watches.delete(subscriber)
-    if (sessionEnded) {
-      this.republish.delete(subscriber.sessionId)
-    }
   }
 }
 

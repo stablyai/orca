@@ -75,6 +75,8 @@ export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
   readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
   readForkMarker?: (sessionId: string) => ForkMarker | undefined
   readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  /** The session's current journal, for a send outside a publication. */
+  readSessionJournal?: (sessionId: string) => AgentSessionJournal | undefined
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   readCurrentWork?: (
     sessionId: string,

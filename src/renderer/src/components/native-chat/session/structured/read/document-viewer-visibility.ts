@@ -17,6 +17,9 @@ function subscribeDocumentShown(shown: () => void): () => void {
 }
 
 const heldDrawnBySession = new Map<string, number>()
+/** Chats whose catch-up counts are kept; a chat past this is long closed, and at worst one reply of
+ *  it draws its next words at once. */
+const HELD_DRAWN_CHATS_KEPT = 64
 
 /** How many times a chat's text held while the window was hidden has been drawn; its text landing
  *  across a change was held. */
@@ -31,7 +34,12 @@ export function documentViewerVisibility(
   return {
     hidden: documentHidden,
     heldDrawn: () => {
-      heldDrawnBySession.set(sessionId, documentHeldDrawnCount(sessionId) + 1)
+      const count = documentHeldDrawnCount(sessionId) + 1
+      heldDrawnBySession.delete(sessionId)
+      heldDrawnBySession.set(sessionId, count)
+      if (heldDrawnBySession.size > HELD_DRAWN_CHATS_KEPT) {
+        heldDrawnBySession.delete(heldDrawnBySession.keys().next().value!)
+      }
     },
     subscribeShown: subscribeDocumentShown
   }

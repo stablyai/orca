@@ -28,7 +28,20 @@ it('sends a minimized window no live text, then its newest text once the window 
     },
     stateDirectory: join(fixture.root, SESSION)
   })
-  const subscribers = new AgentSessionSubscribers()
+  let text = 'The reply so far'
+  const read = (): readonly AgentJournalRenderItem[] => [
+    {
+      itemId: 'reply',
+      revision: 1,
+      sequence: journal.cursor().sequence,
+      observedAt: 1,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+    }
+  ]
+  const subscribers = new AgentSessionSubscribers({
+    readLiveText: () => read(),
+    readSessionJournal: () => journal
+  })
   const events: AgentSessionSubscribeEvent[] = []
   let hidden = true
   let shown = (): void => {}
@@ -48,21 +61,12 @@ it('sends a minimized window no live text, then its newest text once the window 
   })
   await vi.waitFor(() => expect(events.length).toBeGreaterThan(0))
   const opened = events.length
-  let text = 'The reply so far'
-  const read = (): readonly AgentJournalRenderItem[] => [
-    {
-      itemId: 'reply',
-      revision: 1,
-      sequence: journal.cursor().sequence,
-      observedAt: 1,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
-    }
-  ]
-  subscribers.publishLiveText(SESSION, journal, 1, read)
-  text = 'The reply so far, and more that arrived while minimized'
+  text = 'The reply so far, and more'
   subscribers.publishLiveText(SESSION, journal, 1, read)
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(events).toHaveLength(opened)
+  // The newest text arrives with no publication at all while hidden, as when the host skips one.
+  text = 'The reply so far, and more that arrived while minimized'
 
   hidden = false
   shown()

@@ -51,7 +51,7 @@ export class AgentSessionSubscribers {
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
-  private readonly shownViewers = new liveText.LiveTextForShownViewers()
+  private readonly shownViewers = new liveText.ShownViewerWatches()
   readonly promptSuggestions = new AgentSessionPromptSuggestionDelivery({
     subscribers: (sessionId) => this.subscribers(sessionId),
     send: (subscriber, event) => this.enqueue(subscriber, () => this.emit(subscriber, event())),
@@ -93,7 +93,13 @@ export class AgentSessionSubscribers {
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
-    this.shownViewers.watch(subscriber, replaced)
+    // A window that shows again gets the newest live text it skipped while hidden.
+    this.shownViewers.watch(subscriber, replaced, () =>
+      this.enqueue(subscriber, async () => {
+        const current = this.hooks.readSessionJournal?.(subscriber.sessionId)
+        await (current && this.sendLiveTail(subscriber, current, subscriber.fence, this.now()))
+      })
+    )
 
     this.forkMarkers.add(subscriber)
     this.enqueue(subscriber, async () => {
@@ -107,14 +113,7 @@ export class AgentSessionSubscribers {
         await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
-      await liveText.publishSubscriberLiveText(this.deliveryPort(), {
-        sessionId: input.sessionId,
-        journal,
-        fence: input.fence,
-        items: this.sentLiveText(subscriber, input.sessionId, journal),
-        subscribers: [subscriber],
-        hostNow
-      })
+      await this.sendLiveTail(subscriber, journal, input.fence, hostNow)
     })
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
@@ -154,9 +153,7 @@ export class AgentSessionSubscribers {
     read: liveText.SubscriberLiveTextSource,
     all: readonly Subscriber[] = this.subscribers(sessionId)
   ): void => {
-    const republish = (only: readonly Subscriber[]) =>
-      this.publishLiveText(sessionId, journal, fence, read, only)
-    const targets = this.shownViewers.shown(sessionId, all, republish).filter(this.isActive)
+    const targets = all.filter((target) => this.isActive(target) && liveText.viewerShown(target))
     const items = targets.length > 0 ? liveText.liveTextFor(read, targets) : []
     const live = { journal, fence, items, hostNow: this.now() }
     // Checked per subscriber, in case ending one ends another mid fan-out.
@@ -201,14 +198,7 @@ export class AgentSessionSubscribers {
     for (const subscriber of this.subscribers(sessionId)) {
       this.enqueue(subscriber, async () => {
         await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
-        await liveText.publishSubscriberLiveText(this.deliveryPort(), {
-          sessionId,
-          journal,
-          fence,
-          items: this.sentLiveText(subscriber, sessionId, journal),
-          subscribers: [subscriber],
-          hostNow
-        })
+        await this.sendLiveTail(subscriber, journal, fence, hostNow)
       })
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
@@ -250,6 +240,19 @@ export class AgentSessionSubscribers {
 
   liveTextReaders = (sessionId: string) =>
     liveText.sessionLiveTextReaders(this.bySession.get(sessionId))
+  /** A subscriber's newest live text, sent as it opens, takes a snapshot, or its window shows. */
+  private sendLiveTail(
+    subscriber: Subscriber,
+    journal: AgentSessionJournal,
+    fence: number,
+    hostNow: number
+  ) {
+    const { sessionId } = subscriber
+    const items = this.sentLiveText(subscriber, sessionId, journal)
+    const tail = { sessionId, journal, fence, items, subscribers: [subscriber], hostNow }
+    return liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
+  }
+
   /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
   private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []
@@ -332,7 +335,7 @@ export class AgentSessionSubscribers {
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
-    this.shownViewers.unwatch(subscriber, session?.size === 0)
+    this.shownViewers.unwatch(subscriber)
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
