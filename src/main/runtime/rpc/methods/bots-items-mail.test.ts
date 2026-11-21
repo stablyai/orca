@@ -174,6 +174,19 @@ describe('item mail for a group room session', () => {
     expect(db.getMessageById('msg_item_e11')).toBeUndefined()
   })
 
+  it('mails nothing when the Home chat itself changed the room item', async () => {
+    rooms.live.add(ROOM)
+    const db = mailDb()
+    expect(
+      await sendBotItemMail(
+        runtimeOf(db, { 'home-chat': null }),
+        inRoom({ kind: 'bot', botId: 'ranger', chatId: 'home-chat' })
+      )
+    ).toBe(true)
+    expect(db.getMessageById('msg_item_e11')).toBeUndefined()
+    expect(rooms.posted).toEqual([])
+  })
+
   it('mails Home when no room has the session, or another of the bot’s chats made the change', async () => {
     const gone = mailDb()
     await sendBotItemMail(runtimeOf(gone, {}), inRoom())

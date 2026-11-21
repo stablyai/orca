@@ -33,6 +33,8 @@ export type SendBotGroupMessageOptions = {
   local?: boolean
   /** Orca posts for the owner to this member alone, whatever the text or reply mode says. */
   to?: string
+  /** Resolves once each turn was admitted or refused, not as soon as the post is stored. */
+  awaitDelivery?: boolean
 }
 
 export async function sendBotGroupMessage(
@@ -131,8 +133,9 @@ export async function sendBotGroupMessage(
   // Marks its asks in flight before any reader can see the post.
   void deliverRemoteAsks(groups, message, remoteBodies)
   groups.changed()
-  for (const turn of message.turns) {
-    void deliverTurn(groups, message, turn)
+  const deliveries = message.turns.map((turn) => deliverTurn(groups, message, turn))
+  if (options.awaitDelivery) {
+    await Promise.all(deliveries)
   }
   return message
 }

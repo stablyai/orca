@@ -6,8 +6,6 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
-import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
-import { postStoredGroupItemMail } from './bot-group-item-posts'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
@@ -147,11 +145,6 @@ export function narrowGroupMailBatch<
   const live: { mail: T; root: BotGroupPeerScope }[] = []
   const ended: string[] = []
   for (const mail of messages) {
-    // Item mail an older Orca stored here runs as the owner's post in the room instead.
-    if (mail.from_handle === BOT_ITEM_MAIL_SENDER) {
-      postStoredGroupItemMail(groups, sessionId, mail.id)
-      continue
-    }
     const root = mailRoot(groups, found.member, mail)
     if (root && rootActive(found.group, found.member, root)) {
       live.push({ mail, root })

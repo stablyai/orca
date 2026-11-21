@@ -66,14 +66,21 @@ export async function sendBotItemMail(
   let sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
   const images = botItemMailImages(owed.changes)
   if (isBotGroupMemberSession(sessionId)) {
-    // The owner's change reaches a room bot as their post in its room; anything else, or a session
-    // no room has any more, goes to the Home chat.
-    const owners = owed.changes[0]?.event.actor?.kind === 'owner'
+    // The owner's change reaches a room bot as their post in its room; one the room can't take, or
+    // another chat's change, goes to the Home chat, unless Home made that change itself.
+    const actor = owed.changes[0]?.event.actor
     const room = { id, ...mail, images }
-    if (owners && (await postGroupItemMail(runtimeBotGroups(runtime), sessionId, room))) {
+    if (
+      actor?.kind === 'owner' &&
+      (await postGroupItemMail(runtimeBotGroups(runtime), sessionId, room))
+    ) {
       return true
     }
     sessionId = await runtimeBotChats(runtime).ensure(bot.id)
+    const items = runtime.botItems
+    if (actor?.kind === 'bot' && items.chatRootOf(actor.chatId) === items.chatRootOf(sessionId)) {
+      return true
+    }
   }
   const to = `orca_session_id:${sessionId}`
   const payload = JSON.stringify({
