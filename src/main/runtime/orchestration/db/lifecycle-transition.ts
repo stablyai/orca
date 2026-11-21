@@ -12,7 +12,7 @@ type LifecycleWriteTransaction = {
   savepoint: string | null
 }
 
-export function beginLifecycleTransaction(
+export function beginLifecycleWriteTransaction(
   db: Database.Database,
   savepoint: string,
   mode: 'read' | 'write' = 'write'
@@ -24,8 +24,6 @@ export function beginLifecycleTransaction(
   db.exec(nested ? `SAVEPOINT ${savepoint}` : mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE')
   return { savepoint: nested ? savepoint : null }
 }
-
-export const beginLifecycleWriteTransaction = beginLifecycleTransaction
 
 export function commitLifecycleWriteTransaction(
   db: Database.Database,
