@@ -1,9 +1,20 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { KiroHookService } from './hook-service'
-import { getKiroManagedCommandMatcher } from './hook-settings'
+import { getKiroManagedCommandMatcher, getKiroStandaloneManagedCommand } from './hook-settings'
 import { KIRO_STANDALONE_HOOK_TRIGGERS } from './standalone-hook-settings'
 import { installKiroStandaloneHooks, removeKiroStandaloneHooks } from './standalone-hooks'
 
@@ -126,5 +137,58 @@ describe('Kiro V3 standalone hooks file', () => {
     expect(JSON.parse(readFileSync(agentPath(defaultKiroHome(), 'plain'), 'utf-8'))).toEqual({
       name: 'plain'
     })
+  })
+})
+
+describe('Kiro V3 standalone hook command', () => {
+  const payload = '{"hook_event_name":"PreToolUse","tool_name":"shell"}'
+
+  // A file as stdin shares its offset with the child, so the bytes left over are what nothing read.
+  function runHook(
+    command: string,
+    env: NodeJS.ProcessEnv
+  ): { status: number | null; unread: string } {
+    const payloadPath = join(home, 'payload.json')
+    writeFileSync(payloadPath, payload)
+    const fd = openSync(payloadPath, 'r')
+    try {
+      const { status } = spawnSync('/bin/sh', ['-c', command], { stdio: [fd, 'pipe', 'pipe'], env })
+      const rest = Buffer.alloc(payload.length)
+      return {
+        status,
+        unread: rest.subarray(0, readSync(fd, rest, 0, rest.length, null)).toString()
+      }
+    } finally {
+      closeSync(fd)
+    }
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'exits in the host shell outside an Orca pane, and runs the script inside one',
+    () => {
+      new KiroHookService().install()
+      const command = readHooksFile().hooks?.[0]?.action.command ?? ''
+      const env = { PATH: process.env.PATH, HOME: home }
+
+      expect(runHook(command, env)).toEqual({ status: 0, unread: payload })
+      expect(runHook(command, { ...env, ORCA_PANE_KEY: 'tab-1:pane-1' })).toEqual({
+        status: 0,
+        unread: ''
+      })
+    }
+  )
+
+  it('starts no PowerShell outside an Orca pane for a path cmd.exe cannot run directly', () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      expect(
+        getKiroStandaloneManagedCommand('C:\\Users\\Dev Name\\.orca\\agent-hooks\\kiro-hook.cmd')
+      ).toMatch(/^if defined ORCA_PANE_KEY \S+\/powershell\.exe -NoProfile -EncodedCommand /)
+    } finally {
+      if (original) {
+        Object.defineProperty(process, 'platform', original)
+      }
+    }
   })
 })

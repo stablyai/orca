@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { handOverWorkspace } from './hand-to-bot-workspace'
+import { handOverWorkspace } from './hand-over-workspace'
 
 describe('handOverWorkspace', () => {
   it('puts the workspace back when the bot refuses it', async () => {

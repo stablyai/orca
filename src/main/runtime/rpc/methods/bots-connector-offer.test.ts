@@ -6,12 +6,13 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotConnectorOffer } from '../../../../shared/rpc-contract/bots-look-around-params'
+import { BOT_GROUP_ROOM_CARD_REFUSAL } from '../../../bots/bot-group-session-access'
 import { BOT_CONNECTOR_OFFER_METHOD } from './bots-connector-offer'
 
 const cards = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
-    sessionId === 'bot-chat' || sessionId === 'look' ? bots.list()[0] : null
+    ['bot-chat', 'look', 'bot-group-member-m1'].includes(sessionId) ? bots.list()[0] : null
 }))
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
@@ -75,14 +76,14 @@ describe('orca connector offer', () => {
     ])
   })
 
-  it('shows no card for a Linear workspace the bot is already in', async () => {
+  it('shows no card for a Linear workspace the bot is already in, from its chat or a group room', async () => {
     const linear = { workspaceId: 'w1', workspaceName: 'Acme', urlKey: 'acme' }
     const dispatcher = offerRuntime(makeTestBot({ id: 'b1', linear, linearWorkspaces: [linear] }))
-    expect(
-      await dispatcher.dispatch(
-        request({ callerSessionId: 'bot-chat', source: 'linear', workspace: 'acme' })
-      )
-    ).toMatchObject({ ok: true, result: { offered: false } })
+    for (const callerSessionId of ['bot-chat', 'bot-group-member-m1']) {
+      expect(
+        await dispatcher.dispatch(request({ callerSessionId, source: 'linear', workspace: 'acme' }))
+      ).toMatchObject({ ok: true, result: { offered: false } })
+    }
     expect(cards).toEqual([])
   })
 
@@ -124,6 +125,16 @@ describe('orca connector offer', () => {
         await dispatcher.dispatch(request({ callerSessionId, source: 'github' }))
       ).toMatchObject({ ok: false })
     }
+    expect(cards).toEqual([])
+  })
+
+  it('refuses a card from a group room, whose transcript shows no card', async () => {
+    const dispatcher = offerRuntime(makeTestBot({ id: 'b1' }))
+    expect(
+      await dispatcher.dispatch(
+        request({ callerSessionId: 'bot-group-member-m1', source: 'github' })
+      )
+    ).toMatchObject({ ok: false, error: { message: BOT_GROUP_ROOM_CARD_REFUSAL } })
     expect(cards).toEqual([])
   })
 

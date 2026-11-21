@@ -87,6 +87,9 @@ export type AcpLaunchSpec = {
   /** The agent's own MCP servers, for an agent whose ACP mode connects only the client's; absent,
    *  the agent loads its own. */
   ownMcpServers?: AcpOwnMcpServersLoader
+  /** Why a bot's own tools never reach this agent (its ACP server ignores a session's MCP servers):
+   *  its chats start without them and are told so, and its Tools rows show them off. */
+  botToolsOff?: string
   /** How a session's standing instructions reach the agent's system prompt; absent, a session
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
@@ -162,7 +165,8 @@ export type AcpHostBackend = {
 /** The settings a host backend weighs; a change to any of them can change its answers. */
 export const ACP_HOST_BACKEND_SETTING_KEYS = [
   'antigravityChatAuth',
-  'antigravityManagedAgyEnabled'
+  'antigravityManagedAgyEnabled',
+  'antigravityGoogleSignIn'
 ] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>

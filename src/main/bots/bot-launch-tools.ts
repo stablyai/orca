@@ -113,3 +113,8 @@ export function withRelayProblems(
   }
   return out
 }
+
+/** A bot session's note that its own tools are off and `why`, so it doesn't claim or try them. */
+export function botToolsOffInstruction(why: string): string {
+  return `Your own tools (MCP servers) are off in this session: ${why}. Don't say you have them or try to use them.`
+}

@@ -149,7 +149,10 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     const consume = (): RuntimeMobileSessionTabsResult => {
       const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
       if (!snapshot) {
-        const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+        // A windowless desktop has no publisher coming, so its hydrated absence is the answer.
+        const publishedEpoch =
+          this.getAuthoritativeSessionTabsInventoryEpoch() ??
+          (this.authoritativeWindowId === null ? this.rendererGraphEpoch : null)
         if (publishedEpoch === null) {
           this.notifyEmptyWorktreeOnPublication(worktreeId)
         }

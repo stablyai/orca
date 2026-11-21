@@ -36,8 +36,9 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { botItemEventTime, MobileBotItemCommentCard } from './MobileBotItemCommentCard'
+import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
+import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
 const ICON = 13
 
@@ -253,6 +254,7 @@ export function MobileBotItemActivity({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const time = useMobileMessageTime()
   const entries = botItemActivity(item, events)
   // A reply already sent answers the question, before the host's read says so.
   const answered = pending.shown.some(({ failed }) => !failed)
@@ -278,7 +280,9 @@ export function MobileBotItemActivity({
                 <EventLine event={entry.event} item={item} />
               )}
             </View>
-            <Text style={styles.meta}>{botItemEventTime(entry.at)}</Text>
+            <Text style={styles.meta} accessibilityLabel={time.full(entry.at)}>
+              {time.label(entry.at)}
+            </Text>
           </View>
         )
       )}

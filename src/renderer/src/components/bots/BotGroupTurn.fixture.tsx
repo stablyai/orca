@@ -197,3 +197,75 @@ function PausedRoom() {
 
 /** Members handing off by @Name until the post's limit holds the next one on a quiet line. */
 export const handoffsPaused = defineFixture({ width: 640, render: () => <PausedRoom /> })
+
+const answerScope = { kind: 'turn', turnItemId: 'turn-answer' } as const
+/** A member that answered a peer's request by mail and ended quiet (its NO_REPLY draws nothing):
+ *  its chat holds only the call. */
+export const peerAnswerTurn: Turn = {
+  operationId: 'operation-answer',
+  botId: 'bot-2',
+  botName: 'Bug investigation',
+  avatar: null,
+  agent: 'claude',
+  sessionId: 'bot-group-member-2',
+  answer:
+    'Script: `python3 -c "print(20160088 - 34/3)"`\n\nResult: 20160076.666666668 (exactly 60480230/3).',
+  frozenItems: [
+    {
+      itemId: 'turn-answer',
+      revision: 2,
+      sequence: 1,
+      observedAt: at,
+      turnScope: answerScope,
+      body: {
+        kind: 'turn',
+        turnId: 'turn-answer',
+        state: 'completed',
+        startedAt: at,
+        completedAt: at + 27_000
+      }
+    },
+    {
+      itemId: 'call-answer',
+      revision: 2,
+      sequence: 2,
+      observedAt: at + 20_000,
+      turnScope: answerScope,
+      body: {
+        kind: 'tool-call',
+        name: 'Bash',
+        input: { command: 'orca orchestration reply --id msg_1 --body "..."' },
+        state: 'completed'
+      }
+    }
+  ]
+}
+
+function PeerAnswerRoom() {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const line = handoff('大管家', peerAnswerTurn)
+  return (
+    <div ref={rootRef} data-native-chat-root className="p-4">
+      <NativeChatTranscriptColumn className="space-y-6 py-6">
+        <div className="space-y-5">
+          <BotGroupPeerRequestLine message={{ ...line, mentioned: undefined }} />
+          <BotGroupTurn
+            hostId="local"
+            turn={peerAnswerTurn}
+            files={null}
+            roomLinks={{ onLinkClick: undefined, request: () => {}, rootRef }}
+            roomRows={new BotGroupTranscriptRows()}
+            tabId="room-tab"
+            isVisible
+            onStop={() => {}}
+            onReply={() => {}}
+            scrollMessageToTop={() => {}}
+          />
+        </div>
+      </NativeChatTranscriptColumn>
+    </div>
+  )
+}
+
+/** A member's answer to a peer's request, sent by mail, drawn on its room turn. */
+export const peerAnswer = defineFixture({ width: 640, render: () => <PeerAnswerRoom /> })

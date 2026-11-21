@@ -19972,6 +19972,7 @@
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
           "none": "无",
+          "off": "关闭",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -24675,6 +24676,9 @@
     "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -26416,7 +26420,7 @@
         "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "sub": "条目 {{number}} · {{chat}} · {{when}}",
+        "subWhere": "条目 {{number}} · {{chat}}",
         "showEarlier": "显示更早的内容",
         "place": "{{index}} / {{total}}",
         "deleted": "此条目已删除。",
@@ -27696,6 +27700,7 @@
       "titleOne": "允许 {{person}} 访问 {{name}}？",
       "titleMany": "允许 {{count}} 人访问 {{name}}？",
       "confirm": "授予访问权限",
+      "reject": "拒绝",
       "confirmWarning": "他们将以你的身份在 {{computer}} 上操作。",
       "confirmComputer": "运行命令和修改文件",
       "confirmNoApprovals": "无需事先询问即可操作",

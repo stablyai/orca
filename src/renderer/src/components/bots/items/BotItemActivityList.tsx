@@ -13,7 +13,6 @@ import {
   Plus
 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
@@ -28,12 +27,12 @@ import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name
 import { botItemStatusName } from './bot-item-status-name'
 import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { NativeChatMessageTimestamp } from '../../native-chat/messages/rows/NativeChatMessageTimestamp'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
 
-const TIME = { hour: 'numeric', minute: '2-digit' } as const
 const ACTOR = 'font-medium text-foreground/80'
 // Where a linked event's refs go in its translated sentence.
 const LINKS_SLOT = '\u0000'
@@ -306,7 +305,7 @@ export function BotItemActivityList({
           return (
             <div
               key={entry.key}
-              className="relative flex min-w-0 items-start gap-2 py-[3px] text-xs leading-[18px] text-muted-foreground"
+              className="relative flex min-w-0 flex-wrap items-start gap-x-2 py-[3px] text-xs leading-[18px] text-muted-foreground"
             >
               <span className="flex h-[18px] w-5 shrink-0 items-center justify-center bg-sidebar">
                 <EntryIcon entry={entry} />
@@ -319,9 +318,11 @@ export function BotItemActivityList({
                   <EventBody event={entry.event} item={item} />
                 )}
               </div>
-              <span className="shrink-0 text-2xs tabular-nums @max-[284px]:hidden">
-                {uiDateTimeFormat(TIME).format(entry.at)}
-              </span>
+              <NativeChatMessageTimestamp
+                timestamp={entry.at}
+                // A narrow pane puts the time under the line, so dates don't squeeze it.
+                className="shrink-0 text-2xs text-muted-foreground @max-[340px]:basis-full @max-[340px]:pl-7"
+              />
             </div>
           )
         })}

@@ -42,10 +42,15 @@ import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
 import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
 import {
+  cutJournalConnectorReplies,
   fillJournalConnectorReplies,
+  recutJournalConnectorReplies,
+  releaseJournalConnectorClaim,
   sentJournalConnectorReplies
 } from './connector-replies/journal-connector-replies'
 import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey
 } from '../../../shared/agent-session/journal/journal-connector-reply'
@@ -91,6 +96,9 @@ export type JournalSqlMaintenance =
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
+  | { kind: 'connector-replies-cut'; rows: JournalConnectorReplyCutRows }
+  | { kind: 'connector-replies-recut'; claimMessageId: string; cut: JournalConnectorReplyCut }
+  | { kind: 'connector-replies-release'; claimMessageId: string }
 
 export type JournalSqlProjectionState = JournalDomainImportState
 
@@ -186,6 +194,12 @@ export function applyJournalSqlMaintenance(
     case 'connector-replies-sent':
       sentJournalConnectorReplies(db, operation.keys, operation.now)
       return true
+    case 'connector-replies-cut':
+      return cutJournalConnectorReplies(db, operation.rows) > 0
+    case 'connector-replies-recut':
+      return recutJournalConnectorReplies(db, operation.claimMessageId, operation.cut) > 0
+    case 'connector-replies-release':
+      return releaseJournalConnectorClaim(db, operation.claimMessageId) > 0
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

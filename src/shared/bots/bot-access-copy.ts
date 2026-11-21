@@ -30,6 +30,8 @@ export const BOT_ACCESS_COPY = {
   executionComputer: 'the computer this agent runs on',
   there: 'there',
   confirm: 'Give access',
+  // The confirm's dismiss button when it answers a request: it declines, unlike Escape.
+  reject: 'Reject',
   heading: 'Asking for access',
   decline: 'Decline',
   review: 'Review…',

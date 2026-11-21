@@ -3,7 +3,8 @@ import { BOT_AGENTS, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
-import type { NativeChatBlock } from '../native-chat/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
+import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
 
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
@@ -75,6 +76,8 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
+  answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
   handedOff: z.array(z.string()).optional(),
   frozenItems: z
@@ -146,6 +149,62 @@ export type BotGroupMessage = z.infer<typeof BotGroupMessageSchema>
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
+
+const WORD_CHARACTER = /[\p{L}\p{N}]/u
+
+/** Whether a turn's own words already say its answer to a member's request, as whole words: an
+ *  answer of `42` is not said by `142 files`. */
+function holdsAnswer(words: string, answer: string): boolean {
+  const said = answer.trim()
+  for (let at = words.indexOf(said); at !== -1; at = words.indexOf(said, at + 1)) {
+    const before = words[at - 1] ?? ''
+    const after = words[at + said.length] ?? ''
+    if (!WORD_CHARACTER.test(before) && !WORD_CHARACTER.test(after)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** A turn's reply as room history: its answer to a member's request added unless the reply
+ *  already says it, and a quiet reply's marker dropped. Null when neither has words. */
+export function botGroupTurnReplyText(
+  reply: string | null | undefined,
+  answer: string | undefined
+): string | null {
+  const said = reply && isQuietBotResult(reply) ? quietBotResultText(reply) : (reply ?? '')
+  if (!answer?.trim() || holdsAnswer(said, answer)) {
+    return said || null
+  }
+  return said ? `${said}\n\n${answer}` : answer
+}
+
+/** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request
+ *  closes them, unless its own words already said it. */
+export function withBotGroupTurnAnswer(
+  messages: NativeChatMessage[],
+  turn: Pick<BotGroupTurn, 'operationId' | 'answer'>
+): NativeChatMessage[] {
+  const words = messages
+    .flatMap((message) =>
+      message.role === 'assistant'
+        ? message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    .join('\n')
+  return turn.answer?.trim() && !holdsAnswer(words, turn.answer)
+    ? [
+        ...messages,
+        {
+          id: `${turn.operationId}:answer`,
+          role: 'assistant',
+          blocks: [{ type: 'text', text: turn.answer }],
+          timestamp: null,
+          source: 'transcript'
+        }
+      ]
+    : messages
+}
 
 /** An owner post's transcript blocks for desktop and mobile message rows. */
 export function botGroupOwnerMessageBlocks(

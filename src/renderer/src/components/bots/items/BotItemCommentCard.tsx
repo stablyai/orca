@@ -5,7 +5,6 @@
 // question ruled off from the body. Answered, it reads as any other comment.
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
@@ -14,6 +13,10 @@ import {
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
 import { botItemCommentFiles } from '../../../../../shared/bots/bot-item-comment-files'
+import {
+  NativeChatMessageTimestamp,
+  useNativeChatMessageTimeLabel
+} from '../../native-chat/messages/rows/NativeChatMessageTimestamp'
 import { BotItemCommentImages } from './BotItemCommentImages'
 import { BotItemCommentFiles } from './BotItemCommentFiles'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -30,11 +33,12 @@ import {
   type BotItemQuickReplyActions
 } from './use-bot-item-question-steps'
 
-const TIME = { hour: 'numeric', minute: '2-digit' } as const
-
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
- *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. */
-const QUESTION_RULE = '-ml-9 -mr-2 mt-2.5 border-t border-border pl-9 pr-2 pt-2.5'
+ *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of
+ *  each side, at the card's hairline, so the two translucent strokes never overlap into a brighter dot;
+ *  the spacing part scales with the card's padding at any root font size. */
+const QUESTION_RULE =
+  '-ml-[calc(var(--spacing)*9-1px)] -mr-[calc(var(--spacing)*2-1px)] mt-2.5 border-t border-border pl-[calc(var(--spacing)*9-1px)] pr-[calc(var(--spacing)*2-1px)] pt-2.5'
 
 function NeedsYouTag(): React.JSX.Element {
   const t = useTranslate()
@@ -107,7 +111,7 @@ export function BotItemCommentCard({
   const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
   const { files } = botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '')
   const name = botItemActorName(event, item, t)
-  const format = uiDateTimeFormat(TIME)
+  const fullTime = useNativeChatMessageTimeLabel(event.at)
   const jump =
     'rounded-sm outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50'
   return (
@@ -120,21 +124,26 @@ export function BotItemCommentCard({
         role="article"
         aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {
           name,
-          time: format.format(event.at)
+          time: fullTime ?? ''
         })}
         className={cn(
-          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
+          // A hairline (an inset ring, so its size and padding hold) and, in dark, the muted surface: a
+          // tint alone lost the card's edge on the page.
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 dark:bg-muted',
           // A question's chips end the card: more room under them.
           shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}
       >
-        <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <Avatar bot={bot} event={event} name={name} />
-          <b className="min-w-0 truncate text-[13px] font-medium text-foreground">{name}</b>
-          {waiting ? <NeedsYouTag /> : null}
-          <span className={cn('shrink-0 text-2xs tabular-nums', !waiting && 'ml-auto')}>
-            {format.format(event.at)}
-          </span>
+        <div className="mb-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+          <div className="flex min-w-0 max-w-full flex-auto items-center gap-2">
+            <Avatar bot={bot} event={event} name={name} />
+            <b className="min-w-0 truncate text-[13px] font-medium text-foreground">{name}</b>
+            {waiting ? <NeedsYouTag /> : null}
+          </div>
+          <NativeChatMessageTimestamp
+            timestamp={event.at}
+            className="ml-auto shrink-0 text-2xs text-muted-foreground"
+          />
         </div>
         {replyTo ? (
           <button
