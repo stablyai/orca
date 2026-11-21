@@ -90,6 +90,9 @@ async function loadJinjaGrammars(root: 'jinja' | 'jinja-html'): Promise<Language
 // The upstream grammar has no numeric literal rule, leaving range(10) or default(8080) uncolored.
 function withJinjaNumbers(grammar: LanguageRegistration): LanguageRegistration {
   const expression = grammar.repository.expression
+  if (!expression) {
+    return grammar
+  }
   const numeric = {
     match: '\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b',
     name: 'constant.numeric.jinja'
