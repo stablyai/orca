@@ -629,13 +629,10 @@
       "connectionChanged": "Bağlantı değişti. Eki yeniden açmayı deneyin.",
       "hostChanged": "Ekin ana makinesi değişti. Eki kapatıp yeniden açın.",
       "readFailed": "Ek okunamadı. Yeniden bağlanıp tekrar deneyin. Dosya kaldırılmış veya değiştirilmiş olabilir.",
-      "copyFrame": "Bu ekin tamamını kopyalamak için gelecek telefon güncellemesi gerekir.",
       "copyFailed": "Ek kopyalanamadı. Tekrar deneyin.",
       "pastedText": "Yapıştırılan metin",
       "textAttachment": "Metin eki",
-      "byteSize": "{{size}} bayt",
-      "saveUpdate": "Kaydetme özelliği bir telefon güncellemesiyle kullanılabilecek.",
-      "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
+      "byteSize": "{{size}} bayt"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} çevrimdışı · {{time}} itibarıyla",
@@ -2365,7 +2362,6 @@
       "commands": "Komutlar",
       "fileTypes": "PDF, metin, kod…",
       "files": "Dosyalar",
-      "photos": "Fotoğraflar",
       "skills": "Beceriler",
       "workspaceFile": "Çalışma alanı dosyası"
     },
@@ -2562,8 +2558,6 @@
       "switchToPhone": "Telefon Moduna Geç"
     },
     "terminalInputActions": {
-      "attachFileHint": "Fotoğraf yerine dosya eklemek için basılı tutun",
-      "attachPhoto": "Fotoğraf ekle",
       "sendingImage": "Görsel gönderiliyor"
     },
     "terminalLiveInputStatus": {

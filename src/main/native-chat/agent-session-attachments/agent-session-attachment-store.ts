@@ -67,11 +67,11 @@ export class AgentSessionAttachmentStore {
 
   async startUpload(args: {
     callerKey: string
-    sessionId: string
+    sessionId?: string
     name: string
     byteLength: number
   }): Promise<{ uploadId: string }> {
-    if (!this.options.hasSession(args.sessionId)) {
+    if (args.sessionId !== undefined && !this.options.hasSession(args.sessionId)) {
       throw new Error('This chat is not on this host')
     }
     const name = sanitizeAgentSessionAttachmentName(args.name)

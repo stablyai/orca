@@ -17,30 +17,55 @@ export function isChatAttachmentStorePath(path: string): boolean {
   )
 }
 
+const REFERENCE_TOKEN = /@"(?:\\"|[^"])*"|@'[^']*'|@[^\s]+/g
+
+const UPLOAD_ID = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+
+// A terminal chat writes the stored file's path as typed text: POSIX spaces escaped with a backslash, a Windows path as it is, in double quotes when it has a space.
+const REFERENCE_OR_PLAIN_UPLOAD_PATH = new RegExp(
+  [
+    REFERENCE_TOKEN.source,
+    `"[a-z]:\\\\[^"]*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}\\\\${UPLOAD_ID}\\\\[^"\\\\]+"`,
+    `[a-z]:\\\\[^\\s"]*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}\\\\${UPLOAD_ID}\\\\[^\\s"\\\\]+`,
+    `(?:[a-z]:)?/(?:\\\\.|[^\\s\\\\])*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}/${UPLOAD_ID}/(?:\\\\.|[^\\s\\\\/])+`
+  ].join('|'),
+  'gi'
+)
+
+function plainUploadPath(token: string): string {
+  if (token.startsWith('"')) {
+    return token.slice(1, -1)
+  }
+  return /^[a-z]:\\/i.test(token) ? token : token.replace(/\\(.)/g, '$1')
+}
+
+function referencedPath(token: string): string {
+  if (token[1] === '"') {
+    return token.slice(2, -1).replace(/\\"/g, '"')
+  }
+  return token[1] === "'" ? token.slice(2, -1) : token.slice(1)
+}
+
 export type ChatAttachmentPart = { text: string; path?: string }
 /** Discover exact source tokens independently of their presentation. */
 export function nativeChatTextAttachmentParts(
   text: string,
   structured: boolean,
-  acceptPath: (path: string) => boolean = isCommittedChatAttachmentCandidate
+  acceptPath: (path: string) => boolean = isCommittedChatAttachmentCandidate,
+  plainUploadPaths = false
 ): ChatAttachmentPart[] {
   if (!structured) {
     return [{ text }]
   }
   const parts: ChatAttachmentPart[] = []
-  const pattern = /@"(?:\\"|[^"])*"|@'[^']*'|@[^\s]+/g
+  const pattern = plainUploadPaths ? REFERENCE_OR_PLAIN_UPLOAD_PATH : REFERENCE_TOKEN
   let end = 0
   for (const match of text.matchAll(pattern)) {
     const token = match[0]
     if (token.length > 8192) {
       continue
     }
-    const quoted = token[1] === '"' || token[1] === "'"
-    const path = quoted
-      ? token[1] === '"'
-        ? token.slice(2, -1).replace(/\\"/g, '"')
-        : token.slice(2, -1)
-      : token.slice(1)
+    const path = token.startsWith('@') ? referencedPath(token) : plainUploadPath(token)
     if (!acceptPath(path)) {
       continue
     }
@@ -67,4 +92,24 @@ export function nativeChatTextAttachmentPaths(text: string): string[] {
       nativeChatTextAttachmentParts(text, true).flatMap((part) => (part.path ? [part.path] : []))
     )
   ]
+}
+
+/** Every uploaded file a message references, binary or text, in first-seen order. */
+export function nativeChatUploadedFilePaths(text: string): string[] {
+  return [
+    ...new Set(
+      nativeChatTextAttachmentParts(text, true, isChatAttachmentStorePath, true).flatMap((part) =>
+        part.path ? [part.path] : []
+      )
+    )
+  ]
+}
+
+/** The message text without its uploaded-file reference tokens, which the transcript draws as file chips. */
+export function nativeChatTextWithoutUploadedFiles(text: string): string {
+  return nativeChatTextAttachmentParts(text, true, isChatAttachmentStorePath, true)
+    .filter((part) => part.path === undefined)
+    .map((part) => part.text)
+    .join('')
+    .trim()
 }

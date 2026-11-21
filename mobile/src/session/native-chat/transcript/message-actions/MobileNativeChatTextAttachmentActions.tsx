@@ -1,27 +1,24 @@
 import { memo, useMemo } from 'react'
-import { Text } from 'react-native'
-import {
-  nativeChatTextAttachmentPaths,
-  chatTextAttachmentName
-} from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
-import { useMobileNativeChatOpenFile } from '../../links/mobile-native-chat-open-file-context'
+import { View } from 'react-native'
+import { nativeChatUploadedFilePaths } from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { styles } from '../messages/mobile-native-chat-message-styles'
+import { MobileNativeChatFileChip } from './MobileNativeChatFileChip'
 
+// A sent message draws each uploaded file as a chip, so videos, archives and documents show by name and type.
 export const TextAttachmentActions = memo(function TextAttachmentActions(props: {
   text: string
   pastedText: string
 }) {
   const { text, pastedText } = props
-  const onOpenFile = useMobileNativeChatOpenFile()
-  const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
-  return paths.map((path) => (
-    <Text
-      key={path}
-      accessibilityRole="button"
-      onPress={() => onOpenFile?.(path)}
-      style={styles.agentAttribution}
-    >
-      {chatTextAttachmentName(path, pastedText)}
-    </Text>
-  ))
+  const paths = useMemo(() => nativeChatUploadedFilePaths(text), [text])
+  if (paths.length === 0) {
+    return null
+  }
+  return (
+    <View style={styles.sentFiles}>
+      {paths.map((path) => (
+        <MobileNativeChatFileChip key={path} path={path} pastedText={pastedText} />
+      ))}
+    </View>
+  )
 })

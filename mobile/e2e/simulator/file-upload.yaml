@@ -1,0 +1,64 @@
+# Drives the terminal input strip attach menu: gallery (photo + video) then Files (2 docs).
+# Precondition: phone is on a live shell terminal tab with an empty prompt, attach button visible.
+appId: com.stably.orca.mobile
+---
+- extendedWaitUntil:
+    visible: 'Live input'
+    timeout: 20000
+- takeScreenshot: 01-attach-button
+- tapOn:
+    point: '81%,92%'
+- extendedWaitUntil:
+    visible: 'Select from Gallery'
+    timeout: 10000
+- takeScreenshot: 02-attach-menu
+- tapOn: 'Select from Gallery'
+- tapOn:
+    text: 'Allow Full Access'
+    optional: true
+- extendedWaitUntil:
+    visible: 'Select up to.*'
+    timeout: 15000
+# Newest library items first: video, photo are the first two tiles of a fresh library.
+- tapOn:
+    point: '50%,47%'
+- tapOn:
+    point: '16%,47%'
+- takeScreenshot: 03-gallery-selected
+- tapOn:
+    point: '90%,16%'
+- extendedWaitUntil:
+    notVisible: 'Select up to.*'
+    timeout: 60000
+- extendedWaitUntil:
+    visible: 'Live input'
+    timeout: 60000
+- waitForAnimationToEnd
+- takeScreenshot: 04-gallery-uploaded
+- tapOn:
+    point: '81%,92%'
+- extendedWaitUntil:
+    visible: 'Files'
+    timeout: 10000
+- tapOn: 'Files'
+- tapOn:
+    point: '71%,94%'
+    optional: true
+- extendedWaitUntil:
+    visible: 'notes.json'
+    timeout: 15000
+- tapOn: 'notes.json'
+- tapOn: 'readme'
+- extendedWaitUntil:
+    visible: 'Deselect All'
+    timeout: 5000
+- takeScreenshot: 05-files-selected
+- tapOn: 'Open'
+- extendedWaitUntil:
+    notVisible: 'Deselect All'
+    timeout: 60000
+- extendedWaitUntil:
+    visible: 'Live input'
+    timeout: 60000
+- waitForAnimationToEnd
+- takeScreenshot: 06-files-uploaded

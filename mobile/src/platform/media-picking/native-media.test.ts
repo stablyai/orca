@@ -82,6 +82,7 @@ function harness(
         canceled: false,
         assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf' }]
       }),
+    launchGallery: () => Promise.resolve({ canceled: true }),
     readClipboardImage: () => Promise.resolve(null),
     stageBase64: (base64) => {
       const uri = `${CACHE}/staged-${written.length}.png`
@@ -135,6 +136,28 @@ describe('picking', () => {
     }
     expect(launches).toEqual([])
     warn.mockRestore()
+  })
+
+  it('stages a gallery video far past the image cap but still refuses an oversized gallery photo', async () => {
+    const hundredMiB = 100 * 1024 * 1024
+    const gallery = (mimeType: string) => () =>
+      Promise.resolve({
+        canceled: false,
+        assets: [{ uri: `${CACHE}/pick.bin`, mimeType }]
+      })
+    const video = harness({
+      openFile: () => ({ size: hundredMiB, open: () => fakeFile(new Uint8Array()).open() }),
+      launchGallery: gallery('video/quicktime')
+    })
+    const picked = await video.serve('native.media.pick', { source: 'gallery', multiple: true })
+    expect(picked).toMatchObject({ items: [{ mime: 'video/quicktime', byteLength: hundredMiB }] })
+    const photo = harness({
+      openFile: () => ({ size: hundredMiB, open: () => fakeFile(new Uint8Array()).open() }),
+      launchGallery: gallery('image/jpeg')
+    })
+    await expect(
+      photo.serve('native.media.pick', { source: 'gallery', multiple: true })
+    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_too_large')
   })
 
   it('weighs a provider item before copying it, so an oversized one is never held in memory', async () => {

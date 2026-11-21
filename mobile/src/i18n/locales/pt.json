@@ -683,13 +683,10 @@
       "connectionChanged": "A conexão mudou. Tente abrir o anexo novamente.",
       "hostChanged": "O host do anexo mudou. Feche-o e abra-o novamente.",
       "readFailed": "Não foi possível ler este anexo. Reconecte-se e tente novamente. O arquivo pode ter sido removido ou alterado.",
-      "copyFrame": "Copiar tudo para este anexo requer a próxima atualização do celular.",
       "copyFailed": "Não foi possível copiar o anexo. Tente novamente.",
       "pastedText": "Texto colado",
       "textAttachment": "Anexo de texto",
-      "byteSize": "{{size}} bytes",
-      "saveUpdate": "Salvar estará disponível em uma atualização do celular.",
-      "fullCopySaveUpdate": "Copiar tudo e Salvar para este anexo estarão disponíveis em uma atualização do celular."
+      "byteSize": "{{size}} bytes"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} está off-line · em {{time}}",
@@ -2800,7 +2797,6 @@
       "commands": "Comandos",
       "fileTypes": "PDF, texto, código…",
       "files": "Arquivos",
-      "photos": "Fotos",
       "skills": "Skills",
       "workspaceFile": "Arquivo do espaço de trabalho"
     },
@@ -2998,8 +2994,6 @@
       "switchToPhone": "Alternar para o modo celular"
     },
     "terminalInputActions": {
-      "attachFileHint": "Mantenha pressionado para anexar um arquivo em vez de uma foto",
-      "attachPhoto": "Anexar uma foto",
       "sendingImage": "Enviando imagem"
     },
     "terminalLiveInputStatus": {

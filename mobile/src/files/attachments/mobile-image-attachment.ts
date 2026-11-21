@@ -3,10 +3,14 @@ import {
   buildMobileTerminalImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
-import type {
+import {
+  MobileUploadCancelledError,
+  type MobileGalleryPick,
   MobileImageSource,
+  PickedMobileFile,
   PickedMobileImage
 } from '../../platform/media-picking/media-picker-contract'
+import { uploadMobileTerminalFile } from './mobile-terminal-file-upload'
 import { nativeChatTerminalWrite } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 
@@ -22,40 +26,112 @@ export type AttachMobileImageDeps = {
   readonly onUploadStart?: () => void
   readonly fitImage?: (image: PickedMobileImage) => Promise<PickedMobileImage>
   readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
+  // True once the user stops the transfer; checked between chunks and before each paste.
+  readonly shouldCancel?: () => boolean
 }
 
 export async function attachMobileImageToTerminal(
   source: MobileImageSource,
-  {
-    client,
-    agent,
-    terminal,
-    deviceToken,
-    getConnectionId,
-    pickImage,
-    onUploadStart,
-    fitImage,
-    beforeTerminalSend
-  }: AttachMobileImageDeps
+  deps: AttachMobileImageDeps
 ): Promise<boolean> {
-  const pickedImage = await pickImage(source)
+  const pickedImage = await deps.pickImage(source)
   if (!pickedImage) {
     return false
   }
-  onUploadStart?.()
-  const picked = fitImage ? await fitImage(pickedImage) : pickedImage
-  const connectionId = await getConnectionId()
-  const imagePath = await saveMobileClipboardImageAsTempFile(client, picked.base64, {
+  return pasteMobileImageIntoTerminal(pickedImage, deps)
+}
+
+type TerminalPasteDeps = Omit<AttachMobileImageDeps, 'pickImage'>
+
+// Picks may hold many files; each is uploaded and pasted in order, stopping at the first failure.
+export async function attachMobileFilesToTerminal(
+  deps: TerminalPasteDeps & {
+    readonly pickFiles: () => AsyncIterable<PickedMobileFile>
+  }
+): Promise<boolean> {
+  let sentAny = false
+  for await (const file of deps.pickFiles()) {
+    if (!(await pasteMobileFileIntoTerminal(file, deps))) {
+      return sentAny
+    }
+    sentAny = true
+  }
+  return sentAny
+}
+
+// One gallery pick: photos paste as images, videos as streamed files; cache copies of unsent videos go when it ends.
+export async function attachMobileGalleryToTerminal(
+  deps: TerminalPasteDeps & { readonly pickGallery: () => Promise<MobileGalleryPick> }
+): Promise<boolean> {
+  const { images, videos } = await deps.pickGallery()
+  let sentAny = false
+  try {
+    for (const image of images) {
+      if (!(await pasteMobileImageIntoTerminal(image, deps))) {
+        return sentAny
+      }
+      sentAny = true
+    }
+    for (const video of videos) {
+      if (!(await pasteMobileFileIntoTerminal(video, deps))) {
+        return sentAny
+      }
+      sentAny = true
+    }
+    return sentAny
+  } finally {
+    videos.forEach((video) => video.dispose?.())
+  }
+}
+
+async function pasteMobileFileIntoTerminal(
+  file: PickedMobileFile,
+  deps: TerminalPasteDeps
+): Promise<boolean> {
+  deps.onUploadStart?.()
+  const connectionId = await deps.getConnectionId()
+  const path = await uploadMobileTerminalFile(deps.client, file, {
+    connectionId,
+    shouldCancel: deps.shouldCancel
+  }).finally(() => file.dispose?.())
+  return pastePathIntoTerminal(path, deps)
+}
+
+async function pasteMobileImageIntoTerminal(
+  pickedImage: PickedMobileImage,
+  deps: TerminalPasteDeps
+): Promise<boolean> {
+  deps.onUploadStart?.()
+  const picked = deps.fitImage ? await deps.fitImage(pickedImage) : pickedImage
+  if (deps.shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
+  const connectionId = await deps.getConnectionId()
+  const imagePath = await saveMobileClipboardImageAsTempFile(deps.client, picked.base64, {
     connectionId,
     fileName: picked.fileName
   })
-  // Always bracket injected image paths atomically and append a space so following typing cannot glue onto the filename.
+  return pastePathIntoTerminal(imagePath, deps)
+}
+
+async function pastePathIntoTerminal(
+  path: string,
+  { client, agent, terminal, deviceToken, beforeTerminalSend, shouldCancel }: TerminalPasteDeps
+): Promise<boolean> {
+  if (shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
+  // Always bracket injected paths atomically and append a space so following typing cannot glue onto the filename.
   const payload = separateImagePasteFromFollowingText(
-    buildMobileTerminalImagePastePayload(imagePath, agent),
+    buildMobileTerminalImagePastePayload(path, agent),
     true
   )
   if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {
     return false
+  }
+  // The lease wait can outlast a cancel tap.
+  if (shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
   }
   const response = await nativeChatTerminalWrite.request(client, {
     terminal,

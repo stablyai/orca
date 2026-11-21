@@ -3,19 +3,15 @@ import type { ActionSheetAction } from '../../../../components/sheets/ActionShee
 import { translate } from '../../../../i18n/mobile-i18n'
 
 // Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
-export function mobileNativeChatAttachActions(args: {
+export function mobileNativeChatMediaAttachActions(args: {
   onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined
-  onWorkspaceFile: () => void
-  onSkills: () => void
-  onCommands: () => void
-  skillCount: number
 }): ActionSheetAction[] {
   const actions: ActionSheetAction[] = []
   if (args.onPhotos) {
     actions.push({
       id: 'photos',
-      label: translate('session.nativeChatAttachActions.photos', 'Photos'),
+      label: translate('session.nativeChatAttachActions.gallery', 'Select from Gallery'),
       icon: Image,
       closeBeforePress: true,
       onPress: args.onPhotos
@@ -31,6 +27,18 @@ export function mobileNativeChatAttachActions(args: {
       onPress: args.onFiles
     })
   }
+  return actions
+}
+
+export function mobileNativeChatAttachActions(args: {
+  onPhotos: (() => void) | undefined
+  onFiles: (() => void) | undefined
+  onWorkspaceFile: () => void
+  onSkills: () => void
+  onCommands: () => void
+  skillCount: number
+}): ActionSheetAction[] {
+  const actions = mobileNativeChatMediaAttachActions(args)
   actions.push(
     {
       id: 'workspaceFile',

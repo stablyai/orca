@@ -3,6 +3,10 @@ import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
 } from '../images/native-chat-image-transcript-markers'
+import {
+  nativeChatTextWithoutUploadedFiles,
+  nativeChatUploadedFilePaths
+} from '../../attachments/native-chat-text-attachment-references'
 import { isImageRefBlock, type NativeChatMessage } from '../../native-chat-types'
 
 export type NativeChatPendingOccurrence = {
@@ -38,10 +42,24 @@ function nativeChatUserMessageContentKey(
     return null
   }
   let text = normalizedNativeChatUserMessageText(message) ?? ''
+  // Uploaded files draw as chips, so a send's echo carries only the words typed beside them.
+  if (nativeChatUploadedFilePaths(text).length > 0) {
+    text = normalizeNativeChatPendingText(nativeChatTextWithoutUploadedFiles(text)) || text
+  }
   // Some CLIs retain pasted attachment paths as prompt text instead of image markers.
   const paths = sentImagePaths?.filter(Boolean) ?? []
   const normalizedPaths = paths.map(normalizeNativeChatPendingText)
-  for (const prefix of [normalizedPaths.join(' '), normalizedPaths.join('')]) {
+  // A terminal chat types the stored path with its spaces backslash-escaped, or a Windows one in double quotes.
+  const escapedPaths = normalizedPaths.map((path) => path.replace(/ /g, '\\ '))
+  const quotedPaths = normalizedPaths.map((path) => (/\s/.test(path) ? `"${path}"` : path))
+  for (const prefix of [
+    normalizedPaths.join(' '),
+    normalizedPaths.join(''),
+    escapedPaths.join(' '),
+    escapedPaths.join(''),
+    quotedPaths.join(' '),
+    quotedPaths.join('')
+  ]) {
     if (prefix && (text === prefix || text.startsWith(`${prefix} `))) {
       text = text.slice(prefix.length).trimStart()
       if (!text) {

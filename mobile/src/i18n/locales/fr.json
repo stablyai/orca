@@ -664,13 +664,10 @@
       "connectionChanged": "La connexion a changé. Réessayez d’ouvrir la pièce jointe.",
       "hostChanged": "L’hôte de la pièce jointe a changé. Fermez-la et rouvrez-la.",
       "readFailed": "Impossible de lire cette pièce jointe. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié.",
-      "copyFrame": "La copie intégrale de cette pièce jointe nécessite la prochaine mise à jour du téléphone.",
       "copyFailed": "Impossible de copier la pièce jointe. Réessayez.",
       "pastedText": "Texte collé",
       "textAttachment": "Pièce jointe texte",
-      "byteSize": "{{size}} octets",
-      "saveUpdate": "L’enregistrement sera disponible dans une mise à jour du téléphone.",
-      "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
+      "byteSize": "{{size}} octets"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} est hors ligne · état à {{time}}",
@@ -2438,7 +2435,6 @@
       "commands": "Commandes",
       "fileTypes": "PDF, texte, code…",
       "files": "Fichiers",
-      "photos": "Photos",
       "skills": "Skills",
       "workspaceFile": "Fichier d'espace de travail"
     },
@@ -2636,8 +2632,6 @@
       "switchToPhone": "Passer en mode téléphone"
     },
     "terminalInputActions": {
-      "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
-      "attachPhoto": "Joindre une photo",
       "sendingImage": "Envoi de l'image"
     },
     "terminalLiveInputStatus": {

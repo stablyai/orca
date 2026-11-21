@@ -2242,6 +2242,7 @@
       "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
       "preparingMic": "Preparing microphone",
+      "cancelUpload": "Cancel upload",
       "uploadingImage": "Uploading image to host"
     },
     "markdownReader": {
@@ -2418,8 +2419,7 @@
     },
     "terminalInputActions": {
       "sendingImage": "Sending image",
-      "attachPhoto": "Attach a photo",
-      "attachFileHint": "Long press to attach a file instead"
+      "attach": "Attach photos or files"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",
@@ -2603,13 +2603,13 @@
       "viewedOfCount": "{{viewedCount}} of {{count}} viewed"
     },
     "nativeChatAttachActions": {
-      "photos": "Photos",
       "files": "Files",
       "fileTypes": "PDF, text, code…",
       "workspaceFile": "Workspace file",
       "skills": "Skills",
       "availableSkills": "{{count}} available",
-      "commands": "Commands"
+      "commands": "Commands",
+      "gallery": "Select from Gallery"
     },
     "nativeChatCliFork": {
       "resumeInNewCli": "Resume in New CLI"
@@ -3218,7 +3218,8 @@
       "removeImage": "Remove image",
       "uploadingFile": "Uploading {{name}}",
       "removeFile": "Remove {{name}}",
-      "uploadingImage": "Uploading image"
+      "uploadingImage": "Uploading image",
+      "uploadMeta": "{{type}} · {{percent}}% of {{size}}"
     },
     "useImageUpload": {
       "disconnected": "Attach failed (disconnected)",
@@ -3647,13 +3648,18 @@
       "connectionChanged": "Connection changed. Retry to reopen the attachment.",
       "hostChanged": "The attachment host changed. Close it and reopen it.",
       "readFailed": "Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.",
-      "copyFrame": "Full Copy for this attachment needs the upcoming phone update.",
       "copyFailed": "Unable to copy attachment. Try again.",
       "pastedText": "Pasted text",
       "textAttachment": "Text attachment",
       "byteSize": "{{size}} bytes",
-      "saveUpdate": "Save will be available in a phone update.",
-      "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update."
+      "fileAttachment": "File attachment",
+      "shareFailed": "Unable to open this file. Try again.",
+      "saveOrShare": "Save or share",
+      "downloading": "Downloading {{percent}}%",
+      "fullCopyUseSave": "This attachment is too large to copy in full. Use Save to get the whole file.",
+      "copyFrameUseSave": "This attachment is too large to copy. Use Save instead.",
+      "saveNativeOnly": "Saving files is not available in this view yet.",
+      "binaryInfoSave": "This file is on the host and the agent can read it. It cannot be previewed here, but you can save it or open it in another app."
     },
     "agentMessage": {
       "open": "Open {{name}}",

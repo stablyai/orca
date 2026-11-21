@@ -2,13 +2,22 @@ import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../sr
 import {
   useMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs,
+  readMobileNativeChatDraftInputs,
   mobileNativeChatDraftDestination,
   type MobileNativeChatDraftDestination
 } from '../drafts/mobile-native-chat-draft-inputs'
 import { useCallback } from 'react'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
+import {
+  blobBase64Chunks,
+  inMemoryBase64Chunks
+} from '../../../../platform/media-picking/picked-file-base64-chunks'
 import { useMediaPicker } from '../../../../platform/media-picking/media-picker'
-import type { PickedMobileFile } from '../../../../platform/media-picking/media-picker-contract'
+import {
+  MOBILE_STREAMED_FILE_MAX_BYTES,
+  MobileFileTooLargeError,
+  type PickedMobileFile
+} from '../../../../platform/media-picking/media-picker-contract'
 import { encodeBase64Bytes } from '../../../../transport/encryption/base64-byte-codec'
 import { agentSessionPastedTextName } from '../../../../../../src/shared/agent-session/agent-session-attachments'
 import { uploadMobileAgentSessionAttachment } from '../../../../files/attachments/mobile-agent-session-attachment-upload'
@@ -24,6 +33,10 @@ export type MobileNativeChatFileAttachments = {
   readonly attachFiles: () => Promise<void>
   /** Stores a long paste as a "Pasted text" file, as desktop does; null when no upload can start. */
   readonly attachPastedText: ((text: string) => Promise<void>) | null
+  /** Uploads files pasted into the field; null when no upload can start. */
+  readonly attachPastedFiles: ((files: readonly File[]) => Promise<void>) | null
+  /** Uploads files a picker already staged, such as gallery videos; null when no upload can start. */
+  readonly attachPickedFiles: ((files: readonly PickedMobileFile[]) => Promise<void>) | null
   // Drop only files removed or carried by this send; attachments added while sending must survive.
   readonly removeFiles: (
     ids: readonly string[],
@@ -70,12 +83,19 @@ export function useMobileNativeChatFileAttachments(args: {
         await uploadPickedNativeChatFiles({
           canContinue: () => destination.active,
           picked: picked(),
-          upload: (file) =>
+          upload: (file, onProgress, id) =>
             uploadMobileAgentSessionAttachment(client, {
               sessionId,
               name: file.name,
-              base64: file.base64
-            }),
+              byteLength: file.byteLength,
+              chunks: file.chunks(),
+              onProgress,
+              shouldCancel: () =>
+                !destination.active ||
+                !readMobileNativeChatDraftInputs(destination.scope).files.some(
+                  (chip) => chip.id === id
+                )
+            }).finally(() => file.dispose?.()),
           nextId: createUuidV4,
           onPicked: (file) => updateScope(destination, (current) => [...current, file]),
           onStored: (id, stored) =>
@@ -83,6 +103,10 @@ export function useMobileNativeChatFileAttachments(args: {
               current.map((file) =>
                 file.id === id ? { ...file, name: stored.name, path: stored.path } : file
               )
+            ),
+          onProgress: (id, sentBytes) =>
+            updateScope(destination, (current) =>
+              current.map((file) => (file.id === id ? { ...file, sentBytes } : file))
             ),
           onFailed: (id) =>
             updateScope(destination, (current) => current.filter((file) => file.id !== id)),
@@ -110,7 +134,40 @@ export function useMobileNativeChatFileAttachments(args: {
           name: agentSessionPastedTextName(Date.now(), createUuidV4()),
           mime: 'text/plain',
           byteLength: bytes.byteLength,
-          base64: encodeBase64Bytes(bytes)
+          chunks: () => inMemoryBase64Chunks(encodeBase64Bytes(bytes))
+        }
+      }),
+    [attach]
+  )
+
+  const attachPastedFiles = useCallback(
+    (pasted: readonly File[]) =>
+      attach(async function* () {
+        for (const file of pasted) {
+          const name = file.name.trim() || 'pasted-file'
+          if (file.size > MOBILE_STREAMED_FILE_MAX_BYTES) {
+            throw new MobileFileTooLargeError(name, MOBILE_STREAMED_FILE_MAX_BYTES)
+          }
+          yield {
+            name,
+            mime: file.type || 'application/octet-stream',
+            byteLength: file.size,
+            chunks: () => blobBase64Chunks(file)
+          }
+        }
+      }),
+    [attach]
+  )
+
+  const attachPickedFiles = useCallback(
+    (picked: readonly PickedMobileFile[]) =>
+      attach(async function* () {
+        try {
+          yield* picked
+        } finally {
+          for (const file of picked) {
+            file.dispose?.()
+          }
         }
       }),
     [attach]
@@ -132,6 +189,8 @@ export function useMobileNativeChatFileAttachments(args: {
     files,
     attachFiles,
     attachPastedText: canAttach ? attachPastedText : null,
+    attachPastedFiles: canAttach ? attachPastedFiles : null,
+    attachPickedFiles: canAttach ? attachPickedFiles : null,
     removeFiles
   }
 }
