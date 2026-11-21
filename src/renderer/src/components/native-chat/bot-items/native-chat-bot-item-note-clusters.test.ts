@@ -99,7 +99,7 @@ describe('item lines on the desktop', () => {
     const comment: BotItemNoteEntry = { ...entry, event: 'commented', text: 'Ship it' }
     const diff = {
       ...note('b', 'bot'),
-      turnDiff: { files: [], added: 0, removed: 0, truncated: false }
+      turnDiff: { turnKey: 'b', files: [], added: 0, removed: 0, truncated: false }
     }
     const clustered = nativeChatBotItemNoteClusters([
       note('a', 'bot'),

@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../../../right-sidebar/source-control/listing/diff-line-counts'
@@ -71,27 +72,35 @@ export function NativeChatTurnDiffRollup({
   diff: NativeChatTurnDiff
 }): React.JSX.Element {
   const t = useTranslate()
+  const { open, setOpen } = useNativeChatDisclosure(`turn-diff-summary:${diff.turnKey}`, false)
   const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
-    `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
+    `turn-diff-files:${diff.turnKey}`,
     false
   )
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
   const remaining = diff.files.length - files.length
   return (
-    <div
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
       className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint`}
     >
-      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
-        <span className="min-w-0 truncate">
-          {t('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
-            count: diff.files.length,
-            defaultValue_one: '{{count}} changed file'
-          })}
-        </span>
-        <DiffLineCounts added={diff.added} removed={diff.removed} />
-        {diff.truncated ? (
-          <span>{t('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
-        ) : null}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="xs" className="min-w-0 flex-1 justify-start">
+            <ChevronRight aria-hidden className={open ? 'size-3.5 rotate-90' : 'size-3.5'} />
+            <span className="min-w-0 truncate">
+              {t('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
+                count: diff.files.length,
+                defaultValue_one: '{{count}} changed file'
+              })}
+            </span>
+            <DiffLineCounts added={diff.added} removed={diff.removed} />
+            {diff.truncated ? (
+              <span>{t('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
+            ) : null}
+          </Button>
+        </CollapsibleTrigger>
         <NativeChatCardHideButton
           updates={{ nativeChatTurnDiffSummary: false }}
           settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
@@ -101,18 +110,20 @@ export function NativeChatTurnDiffRollup({
           )}
         />
       </div>
-      <div className="space-y-1">
-        {files.map((file) => (
-          <TurnDiffFileRow key={file.path} file={file} />
-        ))}
-        {remaining > 0 ? (
-          <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>
-            {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
-              count: remaining
-            })}
-          </Button>
-        ) : null}
-      </div>
-    </div>
+      <CollapsibleContent animation="height" data-native-chat-member-detail>
+        <div className="space-y-1 pt-1">
+          {files.map((file) => (
+            <TurnDiffFileRow key={file.path} file={file} />
+          ))}
+          {remaining > 0 ? (
+            <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>
+              {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
+                count: remaining
+              })}
+            </Button>
+          ) : null}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
