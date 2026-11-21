@@ -52,6 +52,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
     'By default this creates the worktree and its first terminal without switching the active Orca view.',
     'Pass --agent to start an agent with the worktree, as a chat or a terminal per your Chat | CLI choice for that agent, exactly as a new agent tab does; --prompt sends initial work to it. --model and --effort pick its model and reasoning effort, and --surface chat|terminal picks chat or terminal for this launch instead of your setting.',
+    'An agent started this way is independent: completion is not automatically reported to the caller. For work that should report back and wake its coordinator, first run `orca skills get orchestration` and use `orca orchestration worker-start`.',
     'After a lost agent launch reply, re-issue the same command from the same directory on the same host with --retry-launch <operationId> from the error. Never retry as a fresh launch; older hosts require inspecting the workspace first.',
     'With --agent --json, result.launch says what started: launch.outcome.kind (structured chat or terminal), launch.outcome.handle, and launch.receipt.detail for why. An Orca host older than this returns the terminal agent handle in result.agentTerminalHandle instead.',
     'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',

@@ -101,6 +101,12 @@ it('real CLI processes carry surface choices and refuse invalid or unsupported p
       for (const surface of ['chat', 'terminal']) {
         const response = await run(['--surface', surface])
         expect(response.code, response.stderr + response.stdout).toBe(0)
+        const receipt = JSON.parse(response.stdout)
+        const launch = command[0] === 'agent' ? receipt.result : receipt.result.launch
+        expect(launch.reporting).toEqual({
+          automatic: false,
+          guideCommand: 'orca skills get orchestration'
+        })
         expect(mutate().at(-1)).toMatchObject({
           method: 'agent.launchReplay',
           params: {
