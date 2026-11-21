@@ -1,6 +1,7 @@
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { toast } from 'sonner'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { BotGroupRoomUnavailableError } from '@/lib/bot-group-catalog'
 
 type TabLookup = Record<string, { id: string }[]>
 
@@ -47,5 +48,9 @@ export function openResourceChat(worktreeId: string, agentSessionId: string): vo
   // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
   void activateAiVaultStructuredSession({
     structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId }
-  }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : String(error)))
+  }).catch((error: unknown) => {
+    if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+  })
 }

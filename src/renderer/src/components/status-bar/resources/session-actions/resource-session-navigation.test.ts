@@ -4,6 +4,7 @@ const open = vi.hoisted(() => vi.fn(async () => true))
 vi.mock('@/lib/agent-session/open/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: open
 }))
+vi.mock('@/lib/bot-group-catalog', () => ({ BotGroupRoomUnavailableError: class extends Error {} }))
 
 import { openResourceChat } from './resource-session-navigation'
 

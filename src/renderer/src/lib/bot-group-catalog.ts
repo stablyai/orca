@@ -48,6 +48,16 @@ export async function startBotGroupThread(group: BotGroup): Promise<void> {
   await openBotGroupRoom(saved, threadId, botGroupRoomLabel(saved, threadId))
 }
 
+/** A room whose home can't open; a blocked path has already shown its own notice. */
+export class BotGroupRoomUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly userNotified: boolean
+  ) {
+    super(message)
+  }
+}
+
 /** Opens one room of the group, the original or a thread, focusing its tab or adding it. */
 export async function openBotGroupRoom(
   group: BotGroup,
@@ -63,11 +73,7 @@ export async function openBotGroupRoom(
     revealInSidebar: false
   })
   if ('refused' in outcome) {
-    // A blocked path already told the user why; say nothing twice.
-    if (outcome.refused.failureNotified) {
-      return
-    }
-    throw new Error(
+    throw new BotGroupRoomUnavailableError(
       translate(
         'bots.groups.homeUnavailable',
         'The home workspace for “{{name}}” on {{host}} is unavailable.',
@@ -75,7 +81,8 @@ export async function openBotGroupRoom(
           name: group.name,
           host: selectExecutionHostDisplayLabel(useAppStore.getState(), group.hostId)
         }
-      )
+      ),
+      outcome.refused.failureNotified
     )
   }
   const workspace = folderWorkspaceKey(group.folderWorkspaceId)
