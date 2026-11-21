@@ -32,8 +32,10 @@ vi.mock('@/lib/browser/navigation/app-http-link-open', async (actual) => ({
   openAppHttpLink
 }))
 
-import { botGitHubSetupStep } from './BotGitHubSetupDialog'
+import { botGitHubSetupStep } from './bot-github-setup-step'
 import { GitHubInstallMount } from './GitHubInstallMount'
+// The mount lazy-loads the surface; loading it up front keeps the first test inside findBy's timeout.
+import './GitHubInstallSurface'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -253,7 +255,7 @@ describe('BotGitHubSetupDialog', () => {
     api.botGitHub.state.mockResolvedValue({ ok: true, value: state() })
     renderDialog()
     fireEvent.click(await screen.findByRole('button', { name: /Connect GitHub/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Close' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Minimize' }))
     expect(await screen.findByRole('status', PILL)).toBeDefined()
     expect(screen.queryByRole('dialog')).toBeNull()
 
@@ -354,14 +356,14 @@ describe('BotGitHubSetupDialog', () => {
       await screen.findByRole('button', { name: /Add repositories or an organization/ })
     )
     expect(screen.getByRole('dialog')).toBeDefined()
-    expect(screen.getByText('Finish on GitHub in your browser…')).toBeDefined()
+    expect(screen.getByText('Finish in your browser…')).toBeDefined()
     expect(screen.queryByRole('status', PILL)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /Open again/ }))
     expect(openAppHttpLink).toHaveBeenCalledTimes(2)
     expect(openAppHttpLink).toHaveBeenLastCalledWith(installUrl)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
     expect(await screen.findByRole('status', PILL)).toBeDefined()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(overlay()).toBeNull()
@@ -376,7 +378,7 @@ describe('BotGitHubSetupDialog', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /Add repositories or an organization/ })
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
     await screen.findByRole('status', PILL)
     first.unmount()
 
@@ -384,7 +386,7 @@ describe('BotGitHubSetupDialog', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
     expect(await screen.findByRole('dialog')).toBeDefined()
     // Where the trip went, from the saved setup.
-    expect(screen.getByText('Finish on GitHub in your browser…')).toBeDefined()
+    expect(screen.getByText('Finish in your browser…')).toBeDefined()
     expect(screen.queryByRole('status', PILL)).toBeNull()
     expect(readGitHubAwait('local')).toBe('checking')
   })
@@ -475,7 +477,7 @@ describe('BotGitHubSetupDialog', () => {
 
       // Expanding and minimizing again keeps the same wait instead of starting another.
       fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
-      fireEvent.click(await screen.findByRole('button', { name: 'Close' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Minimize' }))
       before = reads()
       await act(async () => vi.advanceTimersByTimeAsync(3_000))
       expect(reads()).toBe(before + 1)
@@ -613,6 +615,14 @@ describe('BotGitHubSetupDialog', () => {
     expect(readGitHubAwait('local')).toBe(null)
   })
 
+  it('the corner × ends setup when nothing waits on GitHub, with no pill left', async () => {
+    api.botGitHub.state.mockResolvedValue(stateWith([acme]))
+    renderDialog()
+    fireEvent.click(await screen.findByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByRole('status', PILL)).toBeNull()
+  })
+
   it('Cancel ends the wait and its focus listener', async () => {
     openAppHttpLink.mockReturnValue('system-browser')
     api.botGitHub.state.mockResolvedValue(stateWith([acme]))
@@ -657,7 +667,7 @@ describe('BotGitHubSetupDialog', () => {
     act(() => {
       awaitGitHubChange('local')
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Stop adding Ranger to GitHub' }))
     expect(readGitHubAwait('local')).toBe('checking')
   })

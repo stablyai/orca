@@ -284,53 +284,23 @@ html[data-github-dialog-shot] [data-slot='dialog-content'] {
   width: var(--github-dialog-shot-width); max-width: var(--github-dialog-shot-width);
 }`
 
-const repos = (owner: string, names: string[]): { fullName: string }[] =>
-  names.map((name) => ({ fullName: `${owner}/${name}` }))
+const org = (id: string, login: string, names: string[]): ConnectorGitHubInstallation => ({
+  installationId: id,
+  accountLogin: login,
+  repositories: names.map((name) => ({ fullName: `${login}/${name}` }))
+})
+const LONG_ORG = 'very-long-organization-name-incorporated-worldwide'
+const LONG_REPO = 'marketing-website-v2-staging-preview-environment-for-the-launch'
+const THIRTY = Array.from({ length: 30 }, (_, index) => `service-${index + 1}`)
 
-const SHOT_REPOS: Record<'one' | 'seven' | 'twoOrgs' | 'long', ConnectorGitHubInstallation[]> = {
-  one: [{ installationId: '1', accountLogin: 'acme', repositories: repos('acme', ['widgets']) }],
+const SHOT_REPOS = {
+  one: [org('1', 'acme', ['widgets'])],
   seven: [
-    {
-      installationId: '1',
-      accountLogin: 'acme',
-      repositories: repos('acme', [
-        'widgets',
-        'marketing-website',
-        'internal',
-        'cloud',
-        'plugins',
-        'devex',
-        'private'
-      ])
-    }
+    org('1', 'acme', 'widgets marketing-website internal cloud plugins devex private'.split(' '))
   ],
-  twoOrgs: [
-    {
-      installationId: '1',
-      accountLogin: 'acme',
-      repositories: repos('acme', ['widgets', 'cloud', 'devex'])
-    },
-    {
-      installationId: '2',
-      accountLogin: 'carol-labs',
-      repositories: repos('carol-labs', ['press-kit'])
-    }
-  ],
-  long: [
-    {
-      installationId: '1',
-      accountLogin: 'acme',
-      repositories: repos('acme', [
-        'marketing-website-v2-staging-preview-environment-for-the-launch',
-        'widgets'
-      ])
-    },
-    {
-      installationId: '2',
-      accountLogin: 'very-long-organization-name-incorporated-worldwide',
-      repositories: repos('very-long-organization-name-incorporated-worldwide', ['handbook'])
-    }
-  ]
+  twoOrgs: [org('1', 'acme', ['widgets', 'cloud', 'devex']), org('2', 'carol-labs', ['press-kit'])],
+  thirty: [org('1', 'acme', THIRTY)],
+  long: [org('1', 'acme', [LONG_REPO, 'widgets']), org('2', LONG_ORG, ['handbook'])]
 }
 
 // Made-up people with no GitHub picture, so their initials show.
@@ -339,19 +309,35 @@ const TWO_PEOPLE = [
   { id: 'raj-patel', name: 'raj-patel', source: 'github' }
 ]
 
+const LONG_LOGIN = 'a-very-long-github-username-for-testing-ellipsis'
+// A worst case: a long bot name and login, a person with a long login, and a 30-repository org.
+const WORST: Partial<Bot> = {
+  name: 'Customer Support Escalations and Release Notes Writer',
+  members: [{ id: 'long', name: 'someone-with-a-really-long-github-login-name', source: 'github' }]
+}
+
 function dialogShot(options: {
   width: 440 | 340
   repos: keyof typeof SHOT_REPOS
   people?: boolean
+  bot?: Partial<Bot>
+  login?: string
+  signedIn?: boolean
   expand?: string
+  /** Then click "+ Add ↗": GitHub opens in the system browser and setup waits on it. */
+  addRepositories?: boolean
 }): ReturnType<typeof defineFixture> {
   return defineFixture({
     width: options.width + 32,
     setup: () => {
       stubGitHub({
-        bot: { ...marketing, members: options.people ? TWO_PEOPLE : [] },
-        with: SHOT_REPOS[options.repos]
+        bot: { ...marketing, members: options.people ? TWO_PEOPLE : [], ...options.bot },
+        with: SHOT_REPOS[options.repos],
+        signedIn: options.signedIn
       })
+      if (options.login && account) {
+        account = { ...account, login: options.login }
+      }
       if (!document.getElementById('github-dialog-shot')) {
         const style = document.createElement('style')
         style.id = 'github-dialog-shot'
@@ -363,27 +349,20 @@ function dialogShot(options: {
     },
     render: () => <Setup />,
     interact: async (frame) => {
-      await clickAddRepositoriesShown()
+      await settle(400)
       if (options.expand) {
         await clickWhenShown(options.expand)
       }
-      await settle(100)
+      if (options.addRepositories) {
+        await clickAddRepositories()
+      }
+      await settle(200)
       const dialog = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')
       if (dialog) {
         frame.style.height = `${dialog.offsetHeight + 32}px`
       }
     }
   })
-}
-
-/** Waits for the signed-in step without clicking anything. */
-async function clickAddRepositoriesShown(): Promise<void> {
-  for (let tries = 0; tries < 80; tries++) {
-    if (document.querySelector('button[aria-label="Add repositories or an organization"]')) {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
 }
 
 export const shotOneRepo = dialogShot({ width: 440, repos: 'one' })
@@ -394,15 +373,22 @@ export const shotSevenOpen = dialogShot({ width: 440, repos: 'seven', expand: 'a
 export const shotSevenOpenNarrow = dialogShot({ width: 340, repos: 'seven', expand: 'acme7 repos' })
 export const shotTwoOrgs = dialogShot({ width: 440, repos: 'twoOrgs' })
 export const shotTwoOrgsNarrow = dialogShot({ width: 340, repos: 'twoOrgs' })
-export const shotLongNames = dialogShot({
-  width: 440,
-  repos: 'long',
-  expand: 'acme2 repos'
-})
-export const shotLongNamesNarrow = dialogShot({
-  width: 340,
-  repos: 'long',
-  expand: 'acme2 repos'
-})
+const LONG_SHOT = { repos: 'long', expand: 'acme2 repos' } as const
+export const shotLongNames = dialogShot({ width: 440, ...LONG_SHOT })
+export const shotLongNamesNarrow = dialogShot({ width: 340, ...LONG_SHOT })
 export const shotPeople = dialogShot({ width: 440, repos: 'twoOrgs', people: true })
 export const shotPeopleNarrow = dialogShot({ width: 340, repos: 'twoOrgs', people: true })
+const WORST_SHOT = {
+  repos: 'thirty',
+  bot: WORST,
+  login: LONG_LOGIN,
+  expand: 'acme30 repos'
+} as const
+export const shotWorst = dialogShot({ width: 440, ...WORST_SHOT })
+export const shotWorstNarrow = dialogShot({ width: 340, ...WORST_SHOT })
+export const shotDone = dialogShot({ width: 440, repos: 'seven', bot: { github: {} } })
+export const shotDoneNarrow = dialogShot({ width: 340, repos: 'seven', bot: { github: {} } })
+// Waiting on GitHub in the system browser: the corner button minimizes (dash) instead of ending setup.
+export const shotWaiting = dialogShot({ width: 440, repos: 'twoOrgs', addRepositories: true })
+export const shotWaitingNarrow = dialogShot({ width: 340, repos: 'twoOrgs', addRepositories: true })
+export const shotConnect = dialogShot({ width: 340, repos: 'one', signedIn: false })

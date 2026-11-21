@@ -128,6 +128,39 @@ export function BotWhoCanAskList({
     decline
   } = useBotWhoCanAsk(bot, service)
   const others = listed.map((member) => member.name || member.id)
+  const addPeople = (
+    <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          size="xs"
+          variant={compact ? 'ghost' : 'outline'}
+          className={compact ? '-mr-1.5' : undefined}
+          aria-label={compact ? t('bots.whoCanAsk.addPeople', 'Add people') : undefined}
+          disabled={service.outsiders === null || capped || saving}
+          title={
+            capped
+              ? t('bots.whoCanAsk.cap', '{{count}} people is the most here.', {
+                  count: cap
+                })
+              : undefined
+          }
+        >
+          {saving ? <Loader2 className="animate-spin" /> : <Plus />}
+          {t('bots.whoCanAsk.add', 'Add')}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align={compact ? 'end' : 'start'} className="w-80">
+        {pickerOpen ? (
+          <BotWhoCanAskPicker
+            bot={bot}
+            service={service}
+            owner={owner}
+            onPicked={(picked) => void add(picked)}
+          />
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  )
   return (
     <>
       {requests.length > 0 ? (
@@ -162,6 +195,7 @@ export function BotWhoCanAskList({
               </TooltipContent>
             </Tooltip>
           ) : null}
+          <span className="ml-auto">{addPeople}</span>
         </div>
       ) : null}
       <BotConnectorSection
@@ -177,38 +211,7 @@ export function BotWhoCanAskList({
           members={listed}
           onRemove={remove}
           ownerTag={!compact}
-          add={
-            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  size="xs"
-                  variant={compact ? 'ghost' : 'outline'}
-                  aria-label={compact ? t('bots.whoCanAsk.addPeople', 'Add people') : undefined}
-                  disabled={service.outsiders === null || capped || saving}
-                  title={
-                    capped
-                      ? t('bots.whoCanAsk.cap', '{{count}} people is the most here.', {
-                          count: cap
-                        })
-                      : undefined
-                  }
-                >
-                  {saving ? <Loader2 className="animate-spin" /> : <Plus />}
-                  {t('bots.whoCanAsk.add', 'Add')}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-80">
-                {pickerOpen ? (
-                  <BotWhoCanAskPicker
-                    bot={bot}
-                    service={service}
-                    owner={owner}
-                    onPicked={(picked) => void add(picked)}
-                  />
-                ) : null}
-              </PopoverContent>
-            </Popover>
-          }
+          add={compact ? undefined : addPeople}
         />
         {keptOnlyMe && listed.length === 0 && !saving ? (
           <div role="status" className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">

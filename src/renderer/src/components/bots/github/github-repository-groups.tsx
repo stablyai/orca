@@ -16,7 +16,8 @@ export function GitHubRepositoryGroups({
   newInstalls: ReadonlySet<string>
 }): React.JSX.Element {
   return (
-    <ul className="rounded-lg border border-border p-1">
+    // Six and a half rows at most, the half row showing it scrolls; the footer stays on screen.
+    <ul className="max-h-[218px] overflow-y-auto rounded-lg border border-border p-1 scrollbar-sleek">
       {installations.map((installation) => (
         <GitHubRepositoryGroup
           key={installation.installationId}

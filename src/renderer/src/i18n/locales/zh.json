@@ -27628,7 +27628,6 @@
         "repositories": "仓库",
         "isOn": "{{name}} 已接入 GitHub",
         "new": "新增",
-        "finishInBrowser": "在浏览器中前往 GitHub 完成设置…",
         "openAgain": "重新打开",
         "added": "已从 GitHub 添加：{{names}}。",
         "pushesOnHost": "{{name}} 使用 {{host}} 上的 git 登录身份推送代码。",

@@ -5,12 +5,7 @@ import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  type BotGitHubView,
-  refreshBotGitHub,
-  useBotGitHub,
-  useGitHubAwait
-} from '@/lib/bot-github-state'
+import { refreshBotGitHub, useBotGitHub, useGitHubAwait } from '@/lib/bot-github-state'
 import {
   closeGitHubInstall,
   followGitHubInstall,
@@ -21,11 +16,7 @@ import {
 } from '@/lib/bot-github-install-record'
 import { readBots, updateBot } from '@/lib/bot-catalog'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
-import {
-  cancelConnectorConnect,
-  type ConnectorConnectView,
-  useResumeAfterConnect
-} from '@/lib/connector-connect-state'
+import { cancelConnectorConnect, useResumeAfterConnect } from '@/lib/connector-connect-state'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -44,7 +35,8 @@ import { useConfirmConnectorSignOut } from '../connector-sign-out-confirm'
 import { botGitHubErrorMessage, gitHubMention, gitHubPushesAs } from './bot-github-copy'
 import { ConnectorTryIt } from '../ConnectorTryIt'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
-import { GitHubSignedInLine } from './GitHubSignedInLine'
+import { GitHubSetupCorner, GitHubSignedInLine } from './github-setup-header'
+import { botGitHubSetupStep } from './bot-github-setup-step'
 import {
   GitHubFinishInBrowser,
   GitHubInstalledRepositories,
@@ -54,55 +46,6 @@ import {
 /** Once linked and installed, the owner picks who may ask the bot on GitHub. */
 function LinkedPeople({ bot }: { bot: Bot }): React.JSX.Element {
   return <BotWhoCanAskList bot={bot} service={useGitHubWhoCanAsk(bot.hostId, true)} compact />
-}
-
-/** Each step follows from the cloud's state and the connect trip. */
-export type BotGitHubSetupStep =
-  | { kind: 'checking' }
-  | { kind: 'failed'; code: string }
-  | { kind: 'connect'; error: string | null }
-  | { kind: 'waiting' }
-  /** Signed in, no installation yet: `requested` when an organization owner must approve it. */
-  | { kind: 'install'; login: string; installUrl: string; requested: boolean }
-  | {
-      kind: 'turn-on'
-      login: string
-      installations: ConnectorGitHubInstallation[]
-      installUrl: string
-    }
-  | {
-      kind: 'done'
-      login: string
-      installations: ConnectorGitHubInstallation[]
-      installUrl: string
-    }
-
-/** `on`: the bot is already turned on for GitHub, so setup ends once the account is linked and installed. */
-export function botGitHubSetupStep(
-  view: BotGitHubView,
-  connect: ConnectorConnectView,
-  on: boolean
-): BotGitHubSetupStep {
-  if (connect.status === 'waiting') {
-    return { kind: 'waiting' }
-  }
-  if (view.status === 'loading') {
-    return { kind: 'checking' }
-  }
-  if (view.status !== 'ready') {
-    return { kind: 'failed', code: view.status === 'off' ? 'github_off' : view.error }
-  }
-  const { account, installations, installUrl } = view.github
-  if (!account) {
-    return { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }
-  }
-  if (installations.length === 0) {
-    const requested = connect.status === 'linked' && connect.link.install === 'requested'
-    return { kind: 'install', login: account.login, installUrl, requested }
-  }
-  return on
-    ? { kind: 'done', login: account.login, installations, installUrl }
-    : { kind: 'turn-on', login: account.login, installations, installUrl }
 }
 
 const GITHUB = { id: 'github', Icon: GitHubIcon } as const
@@ -222,6 +165,18 @@ function BotGitHubSetupFlow({
       line={signedInStep ? signedIn(step.login) : undefined}
       done={step.kind === 'done'}
       bare
+      corner={
+        <GitHubSetupCorner
+          minimize={
+            step.kind === 'connect' ||
+            step.kind === 'waiting' ||
+            step.kind === 'install' ||
+            trip.inSystemBrowser ||
+            awaiting
+          }
+          onEnd={onClose}
+        />
+      }
     />
   )
   const body = ((): React.JSX.Element => {
@@ -281,7 +236,7 @@ function BotGitHubSetupFlow({
             ) : null}
             <DialogFooter>
               {cancelButton}
-              <Button autoFocus onClick={() => void signIn.start({ bot })}>
+              <Button onClick={() => void signIn.start({ bot })}>
                 {t('bots.github.connect.button', 'Connect GitHub')}
                 <ExternalLink />
               </Button>
@@ -341,7 +296,7 @@ function BotGitHubSetupFlow({
             </section>
             <DialogFooter>
               {cancelButton}
-              <Button autoFocus disabled={saving} onClick={() => void turnOn()}>
+              <Button disabled={saving} onClick={() => void turnOn()}>
                 {t('bots.github.setup.add', 'Add')}
               </Button>
             </DialogFooter>
@@ -364,9 +319,7 @@ function BotGitHubSetupFlow({
             />
             {installed(step)}
             <DialogFooter>
-              <Button autoFocus onClick={onClose}>
-                {t('bots.github.setup.finish', 'Done')}
-              </Button>
+              <Button onClick={onClose}>{t('bots.github.setup.finish', 'Done')}</Button>
             </DialogFooter>
           </div>
         )
@@ -395,10 +348,22 @@ export function BotGitHubSetupDialog({
     ? t('bots.github.setup.titleOn', '{{name}} in GitHub', { name: bot.name })
     : t('bots.github.setup.addTitle', 'Add {{name}}', { name: bot.name })
   return (
-    // The corner ×, Escape and a click outside minimize to the pill; Cancel, Done and the pill's ✕ end setup.
+    // Escape and a click outside minimize to the pill; Cancel, Done, the pill's ✕ and the corner × end setup.
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : minimizeGitHubInstall())}>
       {/* It ends on who signed in and who gets access: a trust decision. */}
-      <DialogContent surface="security" size="form" showCloseButton className="sm:max-w-[440px]">
+      <DialogContent
+        surface="security"
+        size="form"
+        showCloseButton={false}
+        className="sm:max-w-[440px]"
+        // Focus lands on the dialog, not a button, so a mouse-opened dialog shows no focus ring.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) {
+            event.currentTarget.focus()
+          }
+        }}
+      >
         {open ? (
           <div className="flex min-w-0 flex-col gap-4">
             <OrcaCloudSignInGate

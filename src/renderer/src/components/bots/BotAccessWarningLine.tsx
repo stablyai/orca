@@ -26,7 +26,11 @@ export function BotAccessWarningLine({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs text-status-warning-text">
+        {/* Focusable so the full sentence's tooltip opens from the keyboard too. */}
+        <p
+          tabIndex={0}
+          className="mt-2 flex min-w-0 items-center gap-1.5 rounded-sm text-xs text-status-warning-text outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
           <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
           <span aria-hidden className="min-w-0 truncate">
             {t('bots.access.actsAsYou', BOT_ACCESS_COPY.actsAsYou, place)}

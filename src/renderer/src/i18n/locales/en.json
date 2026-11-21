@@ -27554,7 +27554,6 @@
         "repositories": "Repositories",
         "isOn": "{{name}} is on GitHub",
         "new": "New",
-        "finishInBrowser": "Finish on GitHub in your browser…",
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
@@ -27568,7 +27567,8 @@
         "addShort": "Add",
         "allRepos": "All repos",
         "repoCount_one": "{{count}} repo",
-        "repoCount_other": "{{count}} repos"
+        "repoCount_other": "{{count}} repos",
+        "finishInYourBrowser": "Finish in your browser…"
       },
       "account": {
         "defaultBot": "Default bot for my requests",

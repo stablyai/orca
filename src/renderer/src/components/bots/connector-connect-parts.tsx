@@ -160,7 +160,8 @@ export function ConnectorSetupHeader({
   intro,
   line,
   done = false,
-  bare = false
+  bare = false,
+  corner
 }: {
   connector: Pick<BotConnector, 'id' | 'Icon'>
   title: string
@@ -171,12 +172,14 @@ export function ConnectorSetupHeader({
   done?: boolean
   /** The mark alone, with no tile, and a 12px line under the title. */
   bare?: boolean
+  /** In place of the dialog's own corner button, centered on the title's line. */
+  corner?: React.ReactNode
 }): React.JSX.Element {
   return (
     <DialogHeader>
       <div
         className={
-          bare ? 'flex items-center gap-2.5 text-left' : 'flex items-center gap-3 text-left'
+          bare ? 'flex items-center gap-1.5 text-left' : 'flex items-center gap-3 text-left'
         }
       >
         <span aria-hidden className="relative shrink-0">
@@ -189,12 +192,17 @@ export function ConnectorSetupHeader({
           )}
           {done ? <BotAppLogoBadge kind="done" size={bare ? 'sm' : 'md'} /> : null}
         </span>
-        <div className="min-w-0 flex-1 space-y-0.5 pr-6">
-          <DialogTitle>
-            <span className="block truncate" title={title}>
-              {title}
-            </span>
-          </DialogTitle>
+        <div className={corner ? 'min-w-0 flex-1 space-y-0.5' : 'min-w-0 flex-1 space-y-0.5 pr-6'}>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <DialogTitle>
+                <span className="block truncate" title={title}>
+                  {title}
+                </span>
+              </DialogTitle>
+            </div>
+            {corner}
+          </div>
           <DialogDescription asChild size={bare ? 'compact' : 'default'}>
             <div className={bare ? 'min-w-0' : 'break-words'}>
               {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}

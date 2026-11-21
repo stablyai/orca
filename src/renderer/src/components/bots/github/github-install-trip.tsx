@@ -101,11 +101,11 @@ export function GitHubFinishInBrowser({
   const t = useTranslate()
   return (
     <ConnectWaiting
-      label={t('bots.github.setup.finishInBrowser', 'Finish on GitHub in your browser…')}
+      label={t('bots.github.setup.finishInYourBrowser', 'Finish in your browser…')}
       action={
-        <Button size="sm" variant="ghost" onClick={() => trip.open(url, undefined)}>
+        <Button size="xs" variant="ghost" onClick={() => trip.open(url, undefined)}>
           {t('bots.github.setup.openAgain', 'Open again')}
-          <ExternalLink className="size-3.5" />
+          <ExternalLink />
         </Button>
       }
     />
