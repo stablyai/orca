@@ -140,33 +140,27 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   private async releaseLease(lease: CodexSharedServerLease): Promise<CodexLeaseRelease> {
-    this.leases.delete(lease)
-    const owned = this.router.release(lease)
     let done = (): void => {}
     const released = new Promise<void>((resolve) => {
       done = resolve
     })
-    for (const threadId of owned) {
+    const fenced = [...lease.threads]
+    for (const threadId of fenced) {
       this.releasingThreads.set(threadId, released)
     }
     let result: CodexLeaseRelease = { writerStopped: false, workloadGone: false }
     try {
-      result = await this.stopLeaseWork(lease, owned)
+      result = await this.stopLeaseWork(lease)
       return result
     } finally {
       if (!result.writerStopped && !this.hasExited) {
         // Still running here: the chat keeps its threads and its place until a retry proves it.
-        this.leases.add(lease)
-        for (const threadId of owned) {
-          if (!this.router.isClaimed(threadId)) {
-            this.router.claim(threadId, lease)
-          }
-        }
         this.releases.delete(lease)
       } else {
+        this.leases.delete(lease)
         this.onEnded(this)
       }
-      for (const threadId of owned) {
+      for (const threadId of fenced) {
         if (this.releasingThreads.get(threadId) === released) {
           this.releasingThreads.delete(threadId)
         }
@@ -175,10 +169,43 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
   }
 
-  private async stopLeaseWork(
-    lease: CodexSharedServerLease,
-    owned: string[]
-  ): Promise<CodexLeaseRelease> {
+  /** Interrupts every turn on the chat's threads, the helpers it announces meanwhile included;
+   *  the chat keeps routing them until each turn is proven over. */
+  private async stopLeaseWriter(lease: CodexSharedServerLease): Promise<boolean> {
+    const physical = this.physical
+    if (!physical) {
+      return true
+    }
+    const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
+    // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
+    await withDeadline(
+      Promise.allSettled([...lease.pendingOpens, ...this.turns.startsPending([...lease.threads])]),
+      RELEASE_REQUEST_TIMEOUT_MS
+    )
+    const interrupted = new Set<string>()
+    for (let pass = 0; pass < 2; pass += 1) {
+      const turns = [...lease.threads, ...lease.abandonedThreads].flatMap((threadId) => {
+        const turnId = this.turns.runningOn(threadId)
+        return turnId && !interrupted.has(turnId) ? [{ threadId, turnId }] : []
+      })
+      await Promise.all(
+        turns.map(async ({ threadId, turnId }) => {
+          interrupted.add(turnId)
+          const ended = this.turns.ended(turnId)
+          await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
+          await withDeadline(ended, TURN_STOP_PROOF_MS)
+        })
+      )
+    }
+    const threads = [...lease.threads, ...lease.abandonedThreads]
+    return (
+      lease.pendingOpens.size === 0 &&
+      !this.turns.anyStartPending(threads) &&
+      threads.every((threadId) => this.turns.runningOn(threadId) === undefined)
+    )
+  }
+
+  private async stopLeaseWork(lease: CodexSharedServerLease): Promise<CodexLeaseRelease> {
     const physical = this.physical
     if (!physical) {
       return { writerStopped: true, workloadGone: true }
@@ -190,30 +217,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     if (this.hasExited) {
       return this.reapedVerdict()
     }
-    const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
-    // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
-    await withDeadline(
-      Promise.allSettled([...lease.pendingOpens, ...this.turns.startsPending(owned)]),
-      RELEASE_REQUEST_TIMEOUT_MS
-    )
-    let writerStopped = lease.pendingOpens.size === 0 && !this.turns.anyStartPending(owned)
-    // Threads that opened after the chat left are let go here, and their commands stopped below.
-    let workloadGone = (await Promise.all(lease.abandoning)).every(Boolean)
-    const threads = [...owned, ...lease.abandonedThreads]
-    const turns = threads.flatMap((threadId) => {
-      const turnId = this.turns.runningOn(threadId)
-      return turnId ? [{ threadId, turnId }] : []
-    })
-    const stopped = await Promise.all(
-      turns.map(async ({ threadId, turnId }) => {
-        const ended = this.turns.ended(turnId)
-        await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
-        return withDeadline(ended, TURN_STOP_PROOF_MS)
-      })
-    )
-    writerStopped &&= stopped.every(Boolean)
+    const writerStopped = await this.stopLeaseWriter(lease)
     if (!writerStopped && !this.hasExited) {
-      await this.stopIfAlone()
+      await this.stopIfAlone(lease)
     }
     if (this.hasExited) {
       // An exit mid-wait ends every turn waiter without a turn/completed; only the reaped tree
@@ -223,10 +229,16 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     if (!writerStopped) {
       return { writerStopped: false, workloadGone: false }
     }
+    // Only now do the chat's threads stop routing to it; their late frames are refused.
+    this.leases.delete(lease)
+    const owned = this.router.release(lease)
+    // Threads that opened after the chat left are let go here, and their commands stopped below.
+    let workloadGone = (await Promise.all(lease.abandoning)).every(Boolean)
+    const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
     // Turns ending doesn't end the commands they started; the chat's own are stopped alone.
     workloadGone &&= await stopCodexSharedChatWorkload({
       rpc: physical,
-      threads,
+      threads: [...owned, ...lease.abandonedThreads],
       leaseId: lease.id,
       ...(this.sweep ? { sweep: this.sweep } : {}),
       serverPid: this.pid,
@@ -277,9 +289,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
 
   /** A turn that ignores Stop: with no other chat on the server, stop the server (its exit is the
    *  proof); with any other chat on it, whatever that chat is doing, only drain it. */
-  private async stopIfAlone(): Promise<void> {
+  private async stopIfAlone(lease: CodexSharedServerLease): Promise<void> {
     this.draining = true
-    if (this.leases.size > 0 || !this.physical) {
+    if ([...this.leases].some((other) => other !== lease) || !this.physical) {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: a stopped turn kept running`)
       return
     }

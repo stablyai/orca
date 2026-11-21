@@ -247,6 +247,34 @@ describe('shared Codex app-servers', () => {
     expect(connB.closed).toBe(false)
   })
 
+  it('keeps routing a closing chat until its turns are proven over, interrupting a helper it announces meanwhile', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('later')
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    const { handlers } = servers[0]!
+    handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    const closing = connA.close()
+    await vi.advanceTimersByTimeAsync(0)
+    handlers.onNotification?.('item/started', {
+      threadId: threadA,
+      item: { type: 'subAgentActivity', id: 'i1', kind: 'started', agentThreadId: 'helper-1' }
+    })
+    handlers.onNotification?.('turn/started', { threadId: 'helper-1', turn: { id: 'h' } })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await expect(closing).resolves.toBe(true)
+    expect(a.notifications).toContainEqual({
+      method: 'turn/started',
+      params: { threadId: 'helper-1', turn: { id: 'h' } }
+    })
+    expect(servers[0]!.requests).toContainEqual({
+      method: 'turn/interrupt',
+      params: { threadId: 'helper-1', turnId: 'h' }
+    })
+  })
+
   it('drops only a paused chat that falls past its queue bound', async () => {
     const { servers, pool } = fakeCodex()
     const a = chat()
