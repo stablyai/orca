@@ -3,7 +3,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
-import { DashboardBotAsks } from './DashboardBotAsks'
+import {
+  DashboardBotAsks,
+  DashboardBotAsksFeed,
+  PopoutDashboardBotAsks,
+  openRelayedDashboardBotAsk
+} from './DashboardBotAsks'
+import { readDashboardBotAsks } from './dashboard-bot-asks-feed'
 
 // Never stale, so the fixed activity times below stay in Needs you.
 const bot: Bot = {
@@ -36,7 +42,10 @@ vi.mock('@/lib/bot-catalog', () => ({
   useListedBotItemsNeedingOwner: () => 1
 }))
 vi.mock('@/components/bots/items/bot-item-open', () => ({ openBotItem: calls.openItem }))
-vi.mock('@/components/bots/BotAvatar', () => ({ BotAvatar: () => null }))
+vi.mock('@/components/bots/BotAvatar', () => ({
+  BotAvatar: () => null,
+  CarriedBotAvatar: () => null
+}))
 vi.mock('@/components/bots/items/use-bot-items', () => ({
   useBotItems: () => ({
     read: {
@@ -72,4 +81,51 @@ describe('DashboardBotAsks', () => {
     expect(calls.openItem).toHaveBeenCalledWith(bot, 'uid-7')
     expect(opened).toHaveBeenCalledOnce()
   })
+
+  it('feeds the pop-out the same asks while mounted, and drops them on unmount', () => {
+    const { unmount } = render(<DashboardBotAsksFeed />)
+
+    expect(readDashboardBotAsks()).toEqual([
+      {
+        botHostId: 'local',
+        botId: 'bot-a',
+        botName: 'Reviewer',
+        botAvatar: 'mascot:Q1',
+        itemUid: 'uid-7',
+        title: 'Pick a release date',
+        question: 'Ship on Friday or Monday?',
+        number: 7,
+        activityAt: 1_000
+      }
+    ])
+
+    unmount()
+    expect(readDashboardBotAsks()).toEqual([])
+  })
+
+  it('asks the main window to open a pop-out card, and opens a relayed ask by its bot', () => {
+    const openBotItem = vi.fn(async () => {})
+    vi.stubGlobal('api', { dashboard: { openBotItem } })
+    render(<PopoutDashboardBotAsks asks={[{ ...relayedAsk, question: '' }]} />)
+
+    fireEvent.click(screen.getByText('Pick a release date'))
+    expect(openBotItem).toHaveBeenCalledWith(openArgs)
+
+    calls.openItem.mockClear()
+    expect(openRelayedDashboardBotAsk(openArgs)).toBe(true)
+    expect(calls.openItem).toHaveBeenCalledWith(bot, 'uid-7')
+    expect(openRelayedDashboardBotAsk({ ...openArgs, botId: 'gone' })).toBe(false)
+    vi.unstubAllGlobals()
+  })
 })
+
+const openArgs = { botHostId: 'local', botId: 'bot-a', itemUid: 'uid-7' } as const
+const relayedAsk = {
+  ...openArgs,
+  botName: 'Reviewer',
+  botAvatar: null,
+  title: 'Pick a release date',
+  question: 'Ship on Friday or Monday?',
+  number: 7,
+  activityAt: 1_000
+}

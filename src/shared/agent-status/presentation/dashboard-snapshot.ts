@@ -180,6 +180,28 @@ export type DashboardSnapshot = {
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   /** Share repo icons by ID: repeated per-card 400KB data URLs would bloat several snapshots per second. Optional for older pop-outs. */
   repoIconsByRepoId?: Record<string, RepoIcon | null>
+  /** Bot items asking the owner, read by the main window; the pop-out has no bot catalog. Optional for older producers. */
+  botAsks?: DashboardBotAsk[]
+}
+
+/** A bot item in Needs you, as the pop-out paints it; `botAvatar` is the bot's stored avatar string. */
+export type DashboardBotAsk = {
+  botHostId: ExecutionHostId
+  botId: string
+  botName: string
+  botAvatar: string | null
+  itemUid: string
+  title: string
+  question: string
+  number: number
+  activityAt: number
+}
+
+/** Open a bot item in the main window's bot panel, as a click on its card in-window does. */
+export type DashboardOpenBotItemArgs = {
+  botHostId: ExecutionHostId
+  botId: string
+  itemUid: string
 }
 
 export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {

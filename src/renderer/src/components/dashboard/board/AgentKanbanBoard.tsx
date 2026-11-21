@@ -64,7 +64,7 @@ function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, Dashboar
   return grouped
 }
 
-/** Cards a host adds to Needs You below the agents' (bot items asking the owner); the pop-out has none. */
+/** Cards a host adds to Needs You below the agents' (bot items asking the owner). */
 export type DashboardNeedsYouExtra = { count: number; content: React.ReactNode }
 
 function KanbanColumn({
@@ -142,7 +142,7 @@ type AgentKanbanBoardProps = {
   onBrowserForeground?: () => void
   /** In-window settings controls; the pop-out renderer has no store to drive them. */
   headerActions?: React.ReactNode
-  /** In-window only, like `headerActions`: the pop-out renderer reads no bots. */
+  /** In-window reads the bots itself; the pop-out gets their items in its snapshot. */
   needsYouExtra?: DashboardNeedsYouExtra
 }
 

@@ -2,7 +2,8 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { EMPTY_DASHBOARD_SNAPSHOT } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
-import { DashboardBotAskCard } from '../bot-asks/DashboardBotAsks'
+import { BotAvatar } from '../../bots/BotAvatar'
+import { DashboardBotAskCard, toDashboardBotAsk } from '../bot-asks/DashboardBotAsks'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
 const now = Date.now()
@@ -26,7 +27,14 @@ export const withBotItem = defineFixture({
       containerClassName="h-80"
       needsYouExtra={{
         count: 1,
-        content: <DashboardBotAskCard bot={fixtureCos} item={item} now={now} onOpen={() => {}} />
+        content: (
+          <DashboardBotAskCard
+            ask={toDashboardBotAsk(fixtureCos, item, now)}
+            avatar={<BotAvatar bot={fixtureCos} className="size-3.5 rounded-full text-[8px]" />}
+            now={now}
+            onOpen={() => {}}
+          />
+        )
       }}
     />
   )
