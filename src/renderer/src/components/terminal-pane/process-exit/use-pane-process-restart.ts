@@ -5,6 +5,7 @@ import { connectPanePty } from '../pty-connection/connect-pane-pty'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { holdPaneResumeInPlace } from '../session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
+import { resetTerminalStartupPasteWindow } from '../input/paste/terminal-paste-startup-window'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import { clearRetainedInlineScrollback } from '../snapshots/terminal-scrollback-ref-hydration'
@@ -110,6 +111,7 @@ export function usePaneProcessRestart({
         setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
         setTerminalError(null)
         setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+        resetTerminalStartupPasteWindow(pane.terminal)
         const newPaneBinding = connectPanePty(pane, manager, {
           tabId,
           worktreeId,
