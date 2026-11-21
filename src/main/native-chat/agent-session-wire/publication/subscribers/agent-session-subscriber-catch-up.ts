@@ -1,3 +1,4 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionSlashCommand,
@@ -43,7 +44,10 @@ export type SubscriberDeliveryPort = {
       journal: AgentSessionJournal
     ) => Promise<StructuredAgentSessionObservedWork | null>
     readWorkFrame?: StructuredAgentSessionWorkFrameReader
-    readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
+    readLiveText?: (
+      sessionId: string,
+      readers?: LiveTextReaders
+    ) => readonly AgentJournalRenderItem[]
     /** In-lane queue for a captured frame; never admits the lane itself. */
     captureQueuePublication?: (
       sessionId: string,

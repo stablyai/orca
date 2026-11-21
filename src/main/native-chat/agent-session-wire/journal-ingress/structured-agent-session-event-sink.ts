@@ -67,6 +67,8 @@ export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAp
 /** Who a live read is for; a source whose rows only an append reader takes skips the read without one. */
 export type LiveTextReaders = {
   appends: boolean
+  /** False when no reader is a shown viewer, so a reply's newest text (Claude, Codex) is not read. */
+  shown?: boolean
   /** Whether any reader still takes this row's live text; absent, every one does. */
   takes?: (itemId: string) => boolean
 }
@@ -187,7 +189,7 @@ export type DeferredStructuredAgentSessionEventSink = {
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
-  liveText(): readonly AgentJournalRenderItem[]
+  liveText(readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
   seal(): void
   close(): void
   drained(): Promise<StructuredAgentSessionSinkBarrier>

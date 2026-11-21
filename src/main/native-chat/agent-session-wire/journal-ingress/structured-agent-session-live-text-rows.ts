@@ -47,7 +47,8 @@ export class StructuredAgentSessionLiveTextRows {
   ) {
     // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
     this.release = sink.bindLiveText?.({
-      read: (epoch, readers) => (readers?.appends === false ? [] : this.read(epoch, readers)),
+      read: (epoch, readers) =>
+        readers?.appends === false || readers?.shown === false ? [] : this.read(epoch, readers),
       flush: () => {}
     })
   }

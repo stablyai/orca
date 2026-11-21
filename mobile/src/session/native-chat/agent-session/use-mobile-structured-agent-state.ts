@@ -44,6 +44,8 @@ import {
   unconfirmedStructuredStateSavedAt
 } from '../transcript/persistence/mobile-native-chat-transcript-writer'
 import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
+import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
+import { AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 
 const MAX_RETAINED_SESSION_STATES = 32
 
@@ -97,6 +99,8 @@ export function useMobileStructuredAgentState(args: {
   })
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const stateRef = useRef(state)
+  // A paired desktop relaying to a server must forward the shown calls too.
+  const relaysViewer = useRouteRelaysCapability(AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY)
   useLayoutEffect(() => {
     stateRef.current = state
   }, [state])
@@ -175,7 +179,7 @@ export function useMobileStructuredAgentState(args: {
       textAppend: advertised.then(hostTextAppends),
       // Live text only while the app is in front; in the background, saves, then the newest on return.
       liveTextViewer: mobileAppLiveTextViewer(
-        advertised.then(hostLiveTextViewer),
+        advertised.then((list) => relaysViewer && hostLiveTextViewer(list)),
         (viewerId, shown) =>
           callAgentSession(client, 'agentSession.liveTextShown', { sessionId, viewerId, shown })
       ),
@@ -199,7 +203,17 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
+  }, [
+    apply,
+    client,
+    connected,
+    enabled,
+    readingStore,
+    relaysViewer,
+    sessionId,
+    sessionKey,
+    supersede
+  ])
 
   const loadEarlier = useCallback(() => {
     const start = oldestStructuredAgentSessionCursor(stateRef.current)

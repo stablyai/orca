@@ -152,11 +152,14 @@ export class AgentSessionSubscribers {
     read: liveText.SubscriberLiveTextSource,
     all: readonly Subscriber[] = this.subscribers(sessionId)
   ): void => {
-    const targets = all.filter(liveText.receivesLiveText)
-    const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets) : []
-    const live = { journal, fence, items, hostNow: this.now() }
-    // Checked per subscriber, in case ending one ends another mid fan-out.
-    targets.forEach((target) => this.isActive(target) && this.lanes.of(target).liveText(live))
+    // Shown viewers also take a reply's newest text; the rest get main's live text, read apart.
+    for (const shown of [true, false]) {
+      const targets = all.filter((subscriber) => liveText.shownViewer(subscriber) === shown)
+      const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets, shown) : []
+      const live = { journal, fence, items, hostNow: this.now() }
+      // Checked per subscriber, in case ending one ends another mid fan-out.
+      targets.forEach((target) => this.isActive(target) && this.lanes.of(target).liveText(live))
+    }
   }
 
   /** What a request's frame captures with, outside any subscriber. */
@@ -243,17 +246,12 @@ export class AgentSessionSubscribers {
    *  against its cap. One behind a save gets none, leaving it for after its catch-up. */
   private sendLiveTail(subscriber: Subscriber, journal: AgentSessionJournal, fence: number) {
     const { sessionId } = subscriber
-    const taken = liveText.receivesLiveText(subscriber) ? this.hooks.readLiveText?.(sessionId) : []
+    const readers = liveText.subscriberLiveTextReaders(subscriber)
+    const taken = this.hooks.readLiveText?.(sessionId, readers)
     const sends = !!taken?.length && liveText.subscriberAtHead(subscriber, journal)
     const items = sends && this.lanes.of(subscriber).sendsLiveText(taken) ? taken : []
-    const tail = {
-      sessionId,
-      journal,
-      fence,
-      items,
-      subscribers: [subscriber],
-      hostNow: this.now()
-    }
+    const [subscribers, hostNow] = [[subscriber], this.now()]
+    const tail = { sessionId, journal, fence, items, subscribers, hostNow }
     return liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
   }
 

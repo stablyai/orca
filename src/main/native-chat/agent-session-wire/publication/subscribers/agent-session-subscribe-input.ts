@@ -1,3 +1,4 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
@@ -76,7 +77,7 @@ export type Subscriber = {
   SubscriberFieldState
 
 export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
-  readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
+  readLiveText?: (sessionId: string, readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
   readForkMarker?: (sessionId: string) => ForkMarker | undefined
   readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
   /** The session's current journal, for a send outside a publication. */

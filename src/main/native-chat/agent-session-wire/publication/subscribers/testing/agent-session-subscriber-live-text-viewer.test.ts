@@ -4,6 +4,7 @@ import { claudeProviderHandle } from '../../../../../../shared/agent-session/lif
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
+import type { LiveTextReaders } from '../../../journal-ingress/structured-agent-session-event-sink'
 import {
   fixture,
   journals,
@@ -17,7 +18,9 @@ const replyText = (event: AgentSessionSubscribeEvent | undefined): string | unde
     : undefined
 }
 
-async function chat() {
+/** `reply` is a Claude or Codex reply's newest text, read only for shown viewers; `timeline` is a
+ *  provider timeline's, which every reader took before viewers said they were shown. */
+async function chat(source: 'reply' | 'timeline' = 'reply') {
   const journal = await journals.open({
     identity: {
       sessionId: SESSION,
@@ -29,17 +32,20 @@ async function chat() {
     stateDirectory: join(fixture.root, SESSION)
   })
   let text = 'The reply so far'
-  const read = (): readonly AgentJournalRenderItem[] => [
-    {
-      itemId: 'reply',
-      revision: 1,
-      sequence: journal.cursor().sequence,
-      observedAt: 1,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
-    }
-  ]
+  const read = (readers?: LiveTextReaders): readonly AgentJournalRenderItem[] =>
+    source === 'reply' && readers?.shown === false
+      ? []
+      : [
+          {
+            itemId: 'reply',
+            revision: 1,
+            sequence: journal.cursor().sequence,
+            observedAt: 1,
+            body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+          }
+        ]
   const subscribers = new AgentSessionSubscribers({
-    readLiveText: () => read(),
+    readLiveText: (_sessionId, readers) => read(readers),
     readSessionJournal: () => journal
   })
   let setShown = (_shown: boolean): void => {}
@@ -77,12 +83,21 @@ async function chat() {
   }
 }
 
-it('sends an older reader no live text, only the saves it got before', async () => {
+it("sends an older reader no reply's live text, only the saves it got before", async () => {
   const { open, publish } = await chat()
   const events = await open()
   const opened = events.length
   await publish('The reply so far, and more')
   expect(events).toHaveLength(opened)
+})
+
+it("still sends an older reader a provider timeline's live text", async () => {
+  const { open, publish } = await chat('timeline')
+  const events = await open()
+  const opened = events.length
+  await publish('The timeline so far, and more')
+  await vi.waitFor(() => expect(events.length).toBe(opened + 1))
+  expect(replyText(events.at(-1))).toBe('The timeline so far, and more')
 })
 
 it('sends a hidden viewer no live text, then its newest text once it says it is shown', async () => {

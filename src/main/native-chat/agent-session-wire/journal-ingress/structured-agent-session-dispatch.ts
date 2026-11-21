@@ -34,7 +34,8 @@ export function createLiveTextPublication(
 ): () => StructuredAgentSessionSinkAdmission {
   // Asked each window, so a viewer who arrives mid-stream gets the next one.
   const nobodyTakes = (readers: LiveTextReaders | null | undefined): boolean =>
-    readers === null || (readers?.appends === false && read(readers).length === 0)
+    readers === null ||
+    ((readers?.appends === false || readers?.shown === false) && read(readers).length === 0)
   return () =>
     nobodyTakes(target()?.liveTextReaders?.())
       ? { accepted: true }

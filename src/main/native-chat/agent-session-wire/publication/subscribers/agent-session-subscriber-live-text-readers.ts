@@ -29,30 +29,39 @@ export type SubscriberLiveTextSource = readonly AgentJournalRenderItem[] | LiveT
  *  built when none of them is one. */
 export function liveTextFor(
   read: SubscriberLiveTextSource,
-  subscribers: readonly Subscriber[]
+  subscribers: readonly Subscriber[],
+  shown: boolean
 ): readonly AgentJournalRenderItem[] {
-  return typeof read === 'function' ? read(liveTextReadersOf(subscribers)) : read
+  return typeof read === 'function' ? read(liveTextReadersOf(subscribers, shown)) : read
 }
 
-/** Live text goes only to a viewer that opted in and says it is shown; every other subscriber,
- *  older phones and desktops included, gets the saves alone. */
-export const receivesLiveText = (subscriber: Subscriber): boolean =>
-  subscriber.liveTextShown === true
+/** A viewer that opted in and says it is shown. Only it gets a Claude or Codex reply's newest
+ *  text; every other subscriber, older phones and desktops included, gets what main sent it. */
+export const shownViewer = (subscriber: Subscriber): boolean => subscriber.liveTextShown === true
 
-/** Who would read a session's live text; null while no subscriber takes it. */
+/** Who would read a session's live text; null while it has no subscriber. */
 export function sessionLiveTextReaders(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): LiveTextReaders | null {
-  const receivers = [...(subscribers?.values() ?? [])].filter(receivesLiveText)
-  return receivers.length > 0 ? liveTextReadersOf(receivers) : null
+  const all = [...(subscribers?.values() ?? [])]
+  const shown = all.filter(shownViewer)
+  if (shown.length > 0) {
+    return liveTextReadersOf(shown, true)
+  }
+  return all.length > 0 ? liveTextReadersOf(all, false) : null
 }
 
-function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {
+/** What one subscriber reads of the session's live text. */
+export const subscriberLiveTextReaders = (subscriber: Subscriber): LiveTextReaders =>
+  liveTextReadersOf([subscriber], shownViewer(subscriber))
+
+function liveTextReadersOf(subscribers: Iterable<Subscriber>, shown: boolean): LiveTextReaders {
   const appenders = [...subscribers].filter((subscriber) => subscriber.holdsTextBase !== undefined)
   return appenders.length === 0
-    ? { appends: false }
+    ? { appends: false, shown }
     : {
         appends: true,
+        shown,
         takes: (itemId) => appenders.some((reader) => !reader.liveShortened?.has(itemId))
       }
 }
@@ -98,7 +107,7 @@ export class LiveTextViewerShows {
   private sendTail(subscriber: Subscriber, attempts: number): void {
     this.deps.enqueue(subscriber, async () => {
       const journal = this.deps.journal(subscriber.sessionId)
-      if (!journal || !receivesLiveText(subscriber) || !this.deps.isActive(subscriber)) {
+      if (!journal || !shownViewer(subscriber) || !this.deps.isActive(subscriber)) {
         return
       }
       // Behind a save, the catch-up already queued for it runs first, then this tries again.

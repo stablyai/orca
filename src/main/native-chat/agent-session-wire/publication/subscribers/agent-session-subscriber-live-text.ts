@@ -8,14 +8,15 @@ import { textExtends } from '../../../../../shared/agent-session/view/live-read/
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
 import {
   noteShortenedRow,
-  receivesLiveText,
-  subscriberAtHead
+  subscriberAtHead,
+  subscriberLiveTextReaders
 } from './agent-session-subscriber-live-text-readers'
 export {
   liveTextFor,
   LiveTextViewerShows,
-  receivesLiveText,
+  shownViewer,
   subscriberAtHead,
+  subscriberLiveTextReaders,
   sessionLiveTextReaders,
   type SubscriberLiveTextSource
 } from './agent-session-subscriber-live-text-readers'
@@ -194,12 +195,14 @@ export function batchWithSubscriberLiveText(
   ])
 }
 
-/** The session's live text for a subscriber that takes it now; others get saves only, as before. */
+/** The session's live text this subscriber takes: a reply's newest text only while it is shown. */
 function liveTextOf(
   port: SubscriberDeliveryPort,
   subscriber: Subscriber
 ): readonly AgentJournalRenderItem[] {
-  return receivesLiveText(subscriber) ? (port.hooks.readLiveText?.(subscriber.sessionId) ?? []) : []
+  return (
+    port.hooks.readLiveText?.(subscriber.sessionId, subscriberLiveTextReaders(subscriber)) ?? []
+  )
 }
 
 /** A row whose stream ended is saved whole, so what was last sent of it is let go. */
@@ -281,7 +284,7 @@ export async function publishSubscriberLiveText(
   }
   const cursor = journal.cursor()
   for (const subscriber of subscribers) {
-    if (!receivesLiveText(subscriber) || !subscriberAtHead(subscriber, journal)) {
+    if (!subscriberAtHead(subscriber, journal)) {
       continue
     }
     const sent = subscriber.liveSent

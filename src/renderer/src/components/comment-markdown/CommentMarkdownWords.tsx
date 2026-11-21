@@ -12,19 +12,19 @@ function readDocumentRange(): void {
     selection && !selection.isCollapsed && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
 }
 
-/** The content offsets of the fading words a selected range reaches in `root`, whose nodes the
- *  selection would lose if they merged into plain text; current while watched. */
+/** The content offsets of the fading word groups a selected range reaches in `root`, in their
+ *  words or the plain text before them, whose nodes the selection would lose as the fade window
+ *  moves on; current while watched. */
 export function selectedFadingWords(root: Element | null): MarkdownFadeHold | undefined {
   const range = selectedRange
   if (root === null || range?.intersectsNode(root) !== true) {
     return undefined
   }
   let hold: MarkdownFadeHold | undefined
-  for (const word of root.querySelectorAll<HTMLElement>('[data-word]')) {
-    if (range.intersectsNode(word)) {
-      const words = word.parentElement
-      const from = Number(words?.dataset.fadeStart)
-      const to = Number(words?.dataset.fadeEnd)
+  for (const words of root.querySelectorAll<HTMLElement>('[data-word-group]')) {
+    if (range.intersectsNode(words)) {
+      const from = Number(words.dataset.fadeStart)
+      const to = Number(words.dataset.fadeEnd)
       if (Number.isFinite(from) && Number.isFinite(to)) {
         hold = { from: Math.min(hold?.from ?? from, from), to: Math.max(hold?.to ?? to, to) }
       }

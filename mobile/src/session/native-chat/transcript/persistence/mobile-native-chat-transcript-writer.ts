@@ -71,14 +71,15 @@ function sameRows(a: StoredChatTranscript, b: StoredChatTranscript): boolean {
       a.messages.every((row, at) => row === b.messages[at])
     )
   }
-  // A journal's cursor moves with every change to its rows.
+  // A reply's live text changes its row without moving the journal's cursor, so rows are compared too.
   return (
     a.kind === 'structured' &&
     b.kind === 'structured' &&
     a.journal.epoch === b.journal.epoch &&
     a.journal.cursor?.sequence === b.journal.cursor?.sequence &&
     a.journal.items.length === b.journal.items.length &&
-    a.journal.hasOlder === b.journal.hasOlder
+    a.journal.hasOlder === b.journal.hasOlder &&
+    a.journal.items.every((row, at) => row === b.journal.items[at])
   )
 }
 
