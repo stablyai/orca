@@ -53,7 +53,10 @@ const item: BotItemRecord = {
   closedAt: null
 }
 
-function owed(actor: BotItemActor = { kind: 'owner' }): BotItemMail {
+function owed(
+  actor: BotItemActor = { kind: 'owner' },
+  answer: Record<string, unknown> = {}
+): BotItemMail {
   const event = (id: number, kind: string, data: Record<string, unknown>) => ({
     id,
     itemUid: item.uid,
@@ -67,7 +70,7 @@ function owed(actor: BotItemActor = { kind: 'owner' }): BotItemMail {
     ownerBotId: 'ranger',
     chatId: CHAT,
     changes: [
-      { event: event(11, 'commented', { text: 'Use the short link' }), item },
+      { event: event(11, 'commented', { text: 'Use the short link', ...answer }), item },
       { event: event(12, 'status', { from: 'needs_you', to: 'working' }), item }
     ]
   }
@@ -156,5 +159,19 @@ describe('item mail', () => {
       ]
     })
     expect(notified).toEqual([`orca_session_id:${CHAT}`])
+  })
+})
+
+describe("the owner's answer to a question a conversation's turn asked", () => {
+  it('names the chat that asked in the payload', async () => {
+    const db = new OrchestrationDb(':memory:')
+    dbs.push(db)
+    await sendBotItemMail(
+      runtimeOf(db, {}),
+      owed(undefined, { answers: 'e9', askedInConversation: CHAT })
+    )
+    const sent = db.getMessageById('msg_item_e11')
+    expect(sent?.to_handle).toBe(`orca_session_id:${CHAT}`)
+    expect(JSON.parse(String(sent?.payload))).toMatchObject({ askedInConversation: CHAT })
   })
 })

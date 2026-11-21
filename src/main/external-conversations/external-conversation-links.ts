@@ -204,7 +204,7 @@ export function chatMailPlace(
   sessionId: string,
   from: AgentMessageSource
 ): ChatMailPlace | null {
-  const linked = [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)
+  const linked = findLinkForSession(store, sessionId)
   if (!linked || linked.link.bot?.kind === 'bot-chat') {
     return null
   }
@@ -215,6 +215,7 @@ export function chatMailPlace(
 type LinkIndex = {
   byPane: Map<string, LinkedConversation>
   byConversation: Map<string, LinkedConversation>
+  bySession: Map<string, LinkedConversation>
 }
 
 type LinkIndexSlot = { current: LinkIndex | null }
@@ -230,7 +231,8 @@ function conversationIndexKey(key: ConversationKey): string {
 function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
   const index: LinkIndex = {
     byPane: new Map(),
-    byConversation: new Map()
+    byConversation: new Map(),
+    bySession: new Map()
   }
   // First in scan order wins, as the scans this replaces returned.
   for (const linked of allLinks(store)) {
@@ -240,6 +242,9 @@ function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
     const conversation = conversationIndexKey(linked.link)
     if (!index.byConversation.has(conversation)) {
       index.byConversation.set(conversation, linked)
+    }
+    if (!index.bySession.has(linked.link.sessionId)) {
+      index.bySession.set(linked.link.sessionId, linked)
     }
   }
   return index
@@ -296,6 +301,14 @@ export function findLinkForPane(
   paneKey: string
 ): LinkedConversation | null {
   return linkIndex(store).byPane.get(paneKey) ?? null
+}
+
+/** The conversation a chat is bound to, if any. */
+export function findLinkForSession(
+  store: ExternalConversationLinkStore,
+  sessionId: string
+): LinkedConversation | null {
+  return linkIndex(store).bySession.get(sessionId) ?? null
 }
 
 export function findConversationChat(

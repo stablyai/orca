@@ -521,4 +521,19 @@ describe("an ask's quick replies and the owner's reply", () => {
     expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
     expect(store.get(uid)?.status).toBe('working')
   })
+  it("names the conversation's chat that asked on the owner's answer, and not on a question asked again from Orca", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    const ask = { questions: [{ prompt: 'Run it?', options: [{ label: 'Yes' }, { label: 'No' }] }] }
+    store.set(uid, { status: 'needs_you', ask, askedInConversation: 'thread-chat' }, owner)
+    store.ownerComment(uid, 'Yes', { kind: 'owner' })
+    expect(store.events(uid, 0, 50).at(-2)?.data).toMatchObject({
+      text: 'Yes',
+      askedInConversation: 'thread-chat'
+    })
+
+    store.set(uid, { status: 'needs_you', ask }, owner)
+    store.ownerComment(uid, 'No', { kind: 'owner' })
+    expect(store.events(uid, 0, 50).at(-2)?.data).not.toHaveProperty('askedInConversation')
+  })
 })

@@ -130,8 +130,12 @@ export class SlackMirror extends SlackMirrorLinks {
   /** Whether the thread saw the chat's running turn: one of its messages is posted or posting, not
    *  failed or dismissed. A restart ends the turn (its continuation is Orca's), so memory suffices. */
   turnPosted(sessionId: string): boolean {
+    const mine = this.turnPosts.get(sessionId)
+    if (!mine?.size) {
+      return false
+    }
     const posts = this.linkOfSession(sessionId)?.link.mirrorPosts ?? {}
-    return [...(this.turnPosts.get(sessionId) ?? [])].some((itemId) => {
+    return [...mine].some((itemId) => {
       const state = posts[itemId]?.state
       return state === 'posting' || state === 'posted'
     })
