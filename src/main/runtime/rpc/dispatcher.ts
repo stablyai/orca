@@ -32,9 +32,6 @@ import { runWithActiveRpcCaller } from './callers/active-call'
 import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
-import { runWithheldBrowserCommand } from '../browser/withholding/browser-command-withholding'
-import { resolveRpcCallerIdentity } from './callers/rpc-caller-identity'
-import { routeDispatchedBrowserRpc } from './dispatch/dispatcher-browser-routes'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -203,32 +200,35 @@ export class RpcDispatcher {
     )
   }
 
-  /** Every unary call, however it arrived; an agent's browser command may answer withheld. */
-  private invokeUnary(
-    call: AdmittedUnaryCall,
-    options: RpcDispatchStreamingOptions | undefined
-  ): Promise<unknown> {
-    return runWithheldBrowserCommand(
-      {
-        method: call.request.method,
-        caller: resolveRpcCallerIdentity(options),
-        // Runtime test fakes may omit browser routing.
-        workspaceOf: async () =>
-          (await this.runtime.browserCommandWorkspaceId?.(call.params)) ?? null
-      },
-      () => this.routeUnary(call, options)
-    )
-  }
-
-  private async routeUnary(
+  private async invokeUnary(
     { request, method, params, caller }: AdmittedUnaryCall,
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration, pinnedCallerScope: scope } = this
     const context = guardedRpcCallContext(runtime, request, options, scope, caller, params)
-    const browser = await routeDispatchedBrowserRpc(runtime, request, params, context)
-    if (browser.handled) {
-      return browser.result
+    // Runtime test fakes may omit client-hosted browser routing.
+    const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
+      request.method,
+      params,
+      context.caller
+    ) ?? { handled: false as const })
+    if (clientHostedBrowser.handled) {
+      recordRuntimeFeatureInteraction(
+        runtime,
+        request.method,
+        clientHostedBrowser.result,
+        undefined,
+        request.params
+      )
+      return clientHostedBrowser.result
+    }
+    const desktopBrowser = await (runtime.routeDesktopBrowserBridgeRpc?.(
+      request.method,
+      params,
+      context
+    ) ?? { handled: false as const })
+    if (desktopBrowser.handled) {
+      return desktopBrowser.result
     }
 
     // A paired Orca is never a legacy caller, so its calls reach only the declared access check.

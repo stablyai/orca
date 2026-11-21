@@ -1,7 +1,6 @@
 // Google setup for a managed agent on a headless paired server, its tab on the paired desktop: the
-// tab opens despite --split, from the client step on nothing of the page reaches the agent (even
-// after the owner moves the page), and the key the desktop downloads is imported on the server
-// without ever landing in the agent's workspace.
+// tab opens despite --split, and the key the desktop downloads (by the reference's typed action) is
+// imported on the server without ever landing in the agent's workspace.
 import { existsSync, readdirSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import path from 'node:path'
@@ -16,9 +15,8 @@ import {
 import { pairedOwnerApp } from './paired-owner-app'
 
 const PROJECT = 'example-project-123'
-const SECRET = 'GOCSPX-e2e-secret-never-read'
+const SECRET = 'GOCSPX-e2e-secret'
 const CLIENTS_URL = `https://console.cloud.google.com/auth/clients?project=${PROJECT}`
-const BRANDING_URL = `https://console.cloud.google.com/auth/branding?project=${PROJECT}`
 
 // The key file Google Cloud's Download JSON gives a Desktop app client.
 const KEY = JSON.stringify({
@@ -127,35 +125,13 @@ test('a server agent sets Google up through the paired desktop browser', async (
           .result
       )
 
-    // Control, before the client step: the same click's effects carry the page lines.
-    await agent('browser.goto', { url: BRANDING_URL })
-    const control = await agent('browser.click', { element: '#create' })
-    expect(control).toContain('"page"')
-    expect(control).toContain(SECRET)
-
-    // The client step begins; the owner (not the agent) takes the desktop pane to the client page,
-    // so this server never hears the address.
     await setUp({ action: 'step', step: 'client', status: 'active' })
-    await client.app.evaluate(
-      ({ webContents }, { from, to }) =>
-        webContents
-          .getAllWebContents()
-          .find((c) => c.getURL() === from)!
-          .loadURL(to),
-      { from: BRANDING_URL, to: CLIENTS_URL }
-    )
-    // The agent's Create opens the dialog without changing the address: still nothing comes back.
-    expect(JSON.parse(await agent('browser.click', { element: '#create' }))).toEqual({
-      withheld: true,
-      message: expect.any(String)
-    })
-    await expect(agent('browser.snapshot', {})).rejects.toThrow(/may show a secret/)
+    await agent('browser.goto', { url: CLIENTS_URL })
+    await agent('browser.click', { element: '#create' })
 
     // The reference's Download JSON action, exactly: the desktop says what started the download,
     // and the server imports the key from memory, never from the agent's workspace.
-    expect(
-      await agent('browser.find', { locator: 'text', value: 'Download JSON', action: 'click' })
-    ).not.toContain(SECRET)
+    await agent('browser.find', { locator: 'text', value: 'Download JSON', action: 'click' })
     await expect
       .poll(
         async () =>

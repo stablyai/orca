@@ -121,18 +121,6 @@ export function googleSetupAwaitsKey(run: Pick<GoogleSetupRun, 'state' | 'steps'
   return run.state === 'running' && client !== 'done' && client !== 'skipped'
 }
 
-/** From the client step on, Google's Create dialog may show the client secret, and it stays open
- *  after the key is saved; so while the run goes on, the agent's own browser shows it nothing. */
-export function googleSetupMayShowSecret(run: Pick<GoogleSetupRun, 'state' | 'steps'>): boolean {
-  if (run.state !== 'running') {
-    return false
-  }
-  const client = run.steps.client?.status ?? 'pending'
-  return client === 'skipped'
-    ? false
-    : client !== 'pending' || currentGoogleSetupStep(run) === 'client'
-}
-
 /** The Google Cloud page that creates OAuth clients and shows a new one's secret in its dialog. */
 export function isGoogleClientsPage(url: string): boolean {
   try {

@@ -3,7 +3,7 @@ import { requireSetupPageInAgentWorkspace } from './google-setup-page-binding'
 
 const runtime = {
   bots: { list: () => [{ id: 'ivy', folderWorkspaceId: 'fw-ivy' }] },
-  browserCommandWorkspaceId: async ({ page }: { page: string }) =>
+  browserPageWorkspaceId: (page: string) =>
     ({ 'ivy-tab': 'folder:fw-ivy', 'rex-tab': 'folder:fw-rex' })[page] ?? null
 } as never
 

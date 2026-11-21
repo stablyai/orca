@@ -5,7 +5,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { InvalidArgumentError } from '../runtime/rpc/core'
 
 export async function requireSetupPageInAgentWorkspace(
-  runtime: Pick<OrcaRuntimeService, 'bots' | 'browserCommandWorkspaceId'>,
+  runtime: Pick<OrcaRuntimeService, 'bots' | 'browserPageWorkspaceId'>,
   botId: string,
   change: object
 ): Promise<void> {
@@ -14,7 +14,7 @@ export async function requireSetupPageInAgentWorkspace(
     return
   }
   const bot = runtime.bots.list().find((entry) => entry.id === botId)
-  const workspace = await runtime.browserCommandWorkspaceId({ page })
+  const workspace = runtime.browserPageWorkspaceId(page)
   if (!bot || workspace !== folderWorkspaceKey(bot.folderWorkspaceId)) {
     throw new InvalidArgumentError(
       `Browser page ${page} isn't one of this agent's tabs. Open the setup's tab from your own folder with \`tab create\` and use its id.`
