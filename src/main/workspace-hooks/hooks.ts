@@ -22,6 +22,7 @@ import {
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const HOOK_TIMEOUT = 120_000
 
@@ -90,11 +91,12 @@ function hookSpawnFailure(
   return { success: false, output: message }
 }
 
-function getHookShell(): string | undefined {
+function getHookShell(): string {
   if (process.platform === 'win32') {
-    return process.env.ComSpec || 'cmd.exe'
+    return (
+      process.env.ComSpec?.trim() || process.env.COMSPEC?.trim() || windowsSystem32Binary('cmd.exe')
+    )
   }
-
   return '/bin/bash'
 }
 

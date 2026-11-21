@@ -1,3 +1,5 @@
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+
 export type WindowsCommandInvocation = {
   command: string
   args: string[]
@@ -19,7 +21,9 @@ function quoteCmdToken(value: string): string {
 export function buildWindowsCommandInvocation(
   command: string,
   args: string[],
-  commandInterpreter = process.env.ComSpec ?? 'cmd.exe'
+  commandInterpreter = process.env.ComSpec?.trim() ||
+    process.env.COMSPEC?.trim() ||
+    windowsSystem32Binary('cmd.exe')
 ): WindowsCommandInvocation {
   const commandLine = [command, ...args].map(quoteCmdToken).join(' ')
   return {

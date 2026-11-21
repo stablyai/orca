@@ -1,6 +1,7 @@
 import os from 'node:os'
 import type * as pty from 'node-pty'
 import { createRequire } from 'node:module'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 
 const WARMUP_KILL_TIMEOUT_MS = 10_000
@@ -22,7 +23,11 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = spawnWarmupPt
     try {
       // Warm-up children must die with the daemon, even before its first real terminal.
       assignHostProcessToKillOnCloseJob()
-      const proc = spawnPty(process.env.COMSPEC || 'cmd.exe', ['/c', 'exit'], {
+      const shell =
+        process.env.ComSpec?.trim() ||
+        process.env.COMSPEC?.trim() ||
+        windowsSystem32Binary('cmd.exe')
+      const proc = spawnPty(shell, ['/c', 'exit'], {
         name: 'xterm-256color',
         cols: 2,
         rows: 1,
