@@ -17,8 +17,8 @@ import {
   stagingRecordPath
 } from './codex-history-import-staging-record'
 import {
-  appendHandledNames,
-  hasUnsavedImportLedger,
+  appendImportProgress,
+  importLedgerNeedsWrite,
   readImportLedger,
   writeImportLedger,
   type ImportedFolder,
@@ -48,20 +48,16 @@ function rolloutKey(name: string): string {
     : name
 }
 
-/** Names never copied again; each one added is journaled by the next `flush`. */
+/** A source's names never copied again; each one added is journaled by the next `flush`. */
 class HandledNames {
   private readonly names: Set<string>
   private pending: string[] = []
 
   constructor(
-    names: readonly string[],
+    private readonly source: ImportedSource,
     private readonly record: (names: string[]) => Promise<void>
   ) {
-    this.names = new Set(names)
-  }
-
-  get size(): number {
-    return this.names.size
+    this.names = new Set(source.handled)
   }
 
   has(name: string): boolean {
@@ -71,18 +67,17 @@ class HandledNames {
   add(name: string): void {
     if (!this.names.has(name)) {
       this.names.add(name)
+      this.source.handled.push(name)
       this.pending.push(name)
     }
   }
 
-  list(): string[] {
-    return [...this.names]
-  }
-
   async flush(): Promise<void> {
-    const names = this.pending
-    this.pending = []
-    await this.record(names)
+    if (this.pending.length > 0) {
+      const names = this.pending
+      this.pending = []
+      await this.record(names)
+    }
   }
 }
 
@@ -171,7 +166,12 @@ async function importFolder(
       targetDir,
       name,
       otherFolder: otherFolder ? join(args.storeHome, otherFolder) : null,
-      isHandled: () => handled.has(key)
+      isHandled: () => handled.has(key),
+      // Recorded as soon as it joins the store, so a crash can't forget a copy the user then deletes.
+      recordPublished: () => {
+        handled.add(key)
+        return handled.flush()
+      }
     })
     if (published === 'failed') {
       return { copied, stopped: false, halt: 'failed' }
@@ -182,8 +182,6 @@ async function importFolder(
     }
     copied += published === 'copied' ? 1 : 0
     handled.add(key)
-    // Recorded at once, so a crash can't forget a copy the user then deletes.
-    await handled.flush()
     targetNames.add(name)
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
@@ -230,8 +228,8 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true
-  const handled = new HandledNames(source.handled, (names) =>
-    appendHandledNames(args.ledgerPath, { key: sourceKey, identity }, names)
+  const handled = new HandledNames(source, (names) =>
+    appendImportProgress(args.ledgerPath, { source: sourceKey, identity, handled: names })
   )
   const listing = await listDayFolders(args.importHome)
   // A pass that skipped an unreadable folder hasn't read everything yet.
@@ -239,13 +237,10 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
   const folders = [ARCHIVED, ...listing.days]
   const store = new StoreNames(args.storeHome, args.runId)
   let copied = 0
-  let changed = false
   let stopped = false
-  const save = async (): Promise<void> => {
-    source.handled = handled.list()
-    await writeImportLedger(args.ledgerPath, ledger)
-    changed = false
-  }
+  let finished = false
+  // Folders whose entry this pass changed, journaled once at its end.
+  const changedFolders: Record<string, ImportedFolder> = {}
   try {
     for (const folder of folders) {
       if (!args.isCurrent()) {
@@ -253,13 +248,10 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         break
       }
       let result: FolderResult | null
-      const handledBefore = handled.size
       try {
         result = await importFolder(args, folder, source, handled, store, seedOnly)
       } catch (error) {
         unread = true
-        // Names this folder copied before failing are kept: they must stay handled.
-        changed = true
         // One unreadable folder must not hold back the rest; the next pass reads it again.
         console.warn(
           `[codex-history-import] Could not read ${join(args.importHome, folder)}:`,
@@ -271,13 +263,8 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
       }
       if (result) {
         const entry: ImportedFolder = result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}
-        // A stop that changed nothing writes nothing, so the waiting launch isn't held by a save.
-        if (
-          result.copied > 0 ||
-          handled.size !== handledBefore ||
-          JSON.stringify(entry) !== JSON.stringify(source.folders[folder] ?? {})
-        ) {
-          changed = true
+        if (entry.mtimeNs !== source.folders[folder]?.mtimeNs) {
+          changedFolders[folder] = entry
         }
         source.folders[folder] = entry
         copied += result.copied
@@ -290,14 +277,23 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         }
       }
     }
+    finished = true
   } finally {
-    if (changed || !known || hasUnsavedImportLedger(args.ledgerPath)) {
-      await save()
+    // A stop that changed nothing writes nothing, so the waiting launch isn't held by a write.
+    if (Object.keys(changedFolders).length > 0) {
+      await appendImportProgress(args.ledgerPath, {
+        source: sourceKey,
+        identity,
+        folders: changedFolders
+      })
     }
-  }
-  if (seedOnly && !stopped && !unread) {
-    delete source.seeding
-    await save()
+    if (seedOnly && finished && !stopped && !unread) {
+      delete source.seeding
+    }
+    // Seeding ends only in the ledger itself, which the journal can't change.
+    if ((seedOnly && !source.seeding) || importLedgerNeedsWrite(args.ledgerPath)) {
+      await writeImportLedger(args.ledgerPath, ledger)
+    }
   }
   if (copied > 0) {
     console.info(`[codex-history-import] Imported ${copied} conversations from ${args.importHome}`)

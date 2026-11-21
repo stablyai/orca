@@ -21,7 +21,7 @@ import { importCodexHistory } from './codex-history-import'
 
 // The rollout whose copy finds the store's disk full.
 const diskFull = vi.hoisted(() => ({ forName: '' }))
-// Set while every ledger save fails, as a crash before the save would leave it.
+// Set while every whole-ledger write fails.
 const ledgerSave = vi.hoisted(() => ({ fails: false }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -141,11 +141,12 @@ describe('importCodexHistory', () => {
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
   })
 
-  it('remembers a copy the user deleted after the ledger failed to save', async () => {
+  it('records a pass without rewriting the ledger, and a restart remembers a copy the user deleted', async () => {
     const { importHome, storeHome, run } = setup()
     writeFileSync(join(importHome, DAY, NEW), 'new\n')
+    // Any whole-ledger write fails, as a crash before it would.
     ledgerSave.fails = true
-    await expect(run()).rejects.toThrow('EIO')
+    expect(await run()).toBe(1)
     ledgerSave.fails = false
 
     rmSync(join(storeHome, DAY, NEW))

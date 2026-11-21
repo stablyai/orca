@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import type { BigIntStats } from 'node:fs'
-import { chmod, link, rm, stat, writeFile } from 'node:fs/promises'
+import { constants, type BigIntStats } from 'node:fs'
+import { access, chmod, link, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { COMPRESSED_ROLLOUT_SUFFIX, plainWins } from '../rollouts/codex-rollout-compressed-twin'
 import { isHardLinkUnsupportedError } from '../rollouts/codex-rollout-copy'
 import {
+  clearDarwinFileFlags,
   readingSource,
   removeStagedCopy,
   stageRolloutCopy
@@ -73,6 +74,32 @@ export async function canHardLinkIn(folder: string, runId: string): Promise<bool
 
 const OWNER_READ_WRITE = 0o600n
 
+/**
+ * Codex appends to the conversation it resumes, but a copy keeps a read-only source's mode and, on
+ * macOS, its Finder lock: the copy gets owner read/write and loses the lock.
+ */
+async function makeStagedCopyWritable(staged: string, mode: bigint): Promise<void> {
+  const needsMode = (mode & OWNER_READ_WRITE) !== OWNER_READ_WRITE
+  const writableMode = Number((mode & 0o777n) | OWNER_READ_WRITE)
+  try {
+    if (needsMode) {
+      await chmod(staged, writableMode)
+    }
+    if (process.platform === 'darwin') {
+      // A locked file refuses writes (and chmod) whatever its mode.
+      await access(staged, constants.W_OK)
+    }
+    return
+  } catch (error) {
+    if (process.platform !== 'darwin' || !(await clearDarwinFileFlags(staged))) {
+      throw error
+    }
+  }
+  if (needsMode) {
+    await chmod(staged, writableMode)
+  }
+}
+
 function sameSource(before: BigIntStats, after: BigIntStats): boolean {
   return (
     before.dev === after.dev &&
@@ -109,10 +136,7 @@ export async function stageImportRollout(
   let kept = false
   try {
     await stageRolloutCopy(source, from, staged)
-    // A copy keeps its source's mode, and Codex appends to the conversation it resumes.
-    if ((source.mode & OWNER_READ_WRITE) !== OWNER_READ_WRITE) {
-      await chmod(staged, Number((source.mode & 0o777n) | OWNER_READ_WRITE))
-    }
+    await makeStagedCopyWritable(staged, source.mode)
     if (!sameSource(source, await readSource())) {
       return 'source-changed'
     }
