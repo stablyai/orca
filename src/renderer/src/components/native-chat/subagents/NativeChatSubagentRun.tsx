@@ -155,7 +155,10 @@ export function NativeChatSubagentRun({
   if (header.total === 1) {
     // One row either way, and its name says more than "1 subagent".
     return (
-      <NativeChatSubagentRows {...{ block, disclosureId, stateLabels, entryDetails }} onOpen={onOpenSubagent} />
+      <NativeChatSubagentRows
+        {...{ block, disclosureId, stateLabels, entryDetails }}
+        onOpen={onOpenSubagent}
+      />
     )
   }
   const { working, headline, verdict, alertState, alert, clockStartedAt } = header
@@ -173,7 +176,10 @@ export function NativeChatSubagentRun({
       }
       detailsAreRows
       details={
-        <NativeChatSubagentRows {...{ block, disclosureId, stateLabels, entryDetails }} onOpen={onOpenSubagent} />
+        <NativeChatSubagentRows
+          {...{ block, disclosureId, stateLabels, entryDetails }}
+          onOpen={onOpenSubagent}
+        />
       }
     >
       <span className="text-chat-foreground">{headline}</span>
