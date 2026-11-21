@@ -103,6 +103,37 @@ describe('loadBotItemsList', () => {
     expect(read.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
   })
 
+  it('stops paging for a newer ask and pages the rest on the next read', async () => {
+    const items = seeded()
+    const inner = host(items)
+    let read = await loadBotItemsList(inner, null, WHOLE)
+    read = await loadBotItemsList(inner, read, MORE)
+    read = await loadBotItemsList(inner, read, MORE)
+    Object.assign(items[0]!, { status: 'needs_you', version: 2 })
+    Object.assign(items[159]!, { title: 'Renamed deep', version: 2 })
+    let calls = 0
+    const call: BotItemsListCall = (params) => {
+      calls += 1
+      return inner(params)
+    }
+    // A newer ask waits: the fresh first page lands, the rows below it as they were.
+    read = await loadBotItemsList(call, read, WHOLE, { waiting: () => true })
+    expect(calls).toBe(1)
+    expect(read.items.find((item) => item.uid === 'i1')?.status).toBe('needs_you')
+    expect(read.items.filter(closed)).toHaveLength(150)
+    expect(read.items.find((item) => item.uid === 'i160')?.title).not.toBe('Renamed deep')
+    // The newer ask lands first, then the rows below where the last read stopped.
+    Object.assign(items[1]!, { status: 'needs_you', version: 2 })
+    read = await loadBotItemsList(call, read, { whole: false, parts: ['i2'], more: false })
+    expect(read.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
+    expect(read.items.find((item) => item.uid === 'i160')?.title).toBe('Renamed deep')
+    expect(read.items.filter(closed)).toHaveLength(150)
+    // Paged through, a whole read of an unchanged list reads its first page alone again.
+    calls = 0
+    expect(await loadBotItemsList(call, read, WHOLE)).toBe(read)
+    expect(calls).toBe(1)
+  })
+
   it('keeps loaded Closed items when an older host answers a named read whole', async () => {
     const items = seeded()
     const call = host(items, true)

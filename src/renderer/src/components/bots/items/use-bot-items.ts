@@ -48,8 +48,8 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   {
     partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
-    load: (bot, previous, ask, show, live) =>
-      loadBotItemsList(listCall(bot, null), previous, ask, { show, live })
+    load: (bot, previous, ask, show, live, waiting) =>
+      loadBotItemsList(listCall(bot, null), previous, ask, { show, live, waiting })
   }
 )
 

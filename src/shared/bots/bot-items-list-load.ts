@@ -28,7 +28,14 @@ export type BotItemsListLoadOptions = {
   /** A whole read pages down the loaded depth every time, not only once its first page moves (the
    *  chat-filtered list always read its loaded pages again). */
   pageUnmoved?: boolean
+  /** True once a newer ask waits: paging down the loaded depth stops after the page in hand, and the
+   *  next read takes it up from there. */
+  waiting?: () => boolean
 }
+
+/** A value whose loaded depth was read again only down to this Closed cursor; the rows below it are
+ *  the last read's, kept until the next read pages them. */
+const unread = new WeakMap<BotItemsListRead, string>()
 
 export async function loadBotItemsList(
   call: BotItemsListCall,
@@ -36,21 +43,46 @@ export async function loadBotItemsList(
   ask: BotItemsListAsk,
   options: BotItemsListLoadOptions = {}
 ): Promise<BotItemsListRead> {
-  const { show, live = () => true } = options
+  const value = await loadAsked(call, previous, ask, options)
+  const from = previous && !ask.whole ? unread.get(previous) : undefined
+  if (!from || !isLive(options)) {
+    return value
+  }
+  // A read that stopped for a newer ask goes on below where it stopped, once that ask is in.
+  options.show?.(value)
+  const place = botItemCursorPlace(from)
+  const top: BotItemsListRead = {
+    ...value,
+    items: value.items.filter(
+      (item) => !isClosedRow(item) || (place !== null && botItemReaches(item, place))
+    ),
+    nextClosedCursor: from
+  }
+  return readBelow(call, top, value, botItemsClosedDepth(value), options, false)
+}
+
+async function loadAsked(
+  call: BotItemsListCall,
+  previous: BotItemsListRead | null,
+  ask: BotItemsListAsk,
+  options: BotItemsListLoadOptions
+): Promise<BotItemsListRead> {
+  const { show } = options
+  const live = () => isLive(options)
   const page = BOT_ITEM_LIMITS.listPage
   const parts = previous ? namedParts(ask.parts, previous) : []
   if (!ask.whole && previous && parts.length > 0) {
     const named = await readNamed(call, parts, live)
     // A host before `uids` answers whole: what it left out isn't gone, so the list is read whole.
     if (!named) {
-      return live() ? loadBotItemsList(call, previous, { ...ask, whole: true }, options) : previous
+      return live() ? loadAsked(call, previous, { ...ask, whole: true }, options) : previous
     }
     const merged = mergeNamedBotItems(previous, named, parts)
     if (!ask.more || !live()) {
       return merged
     }
     // A failed page fails only Show more: the named items stand.
-    return loadBotItemsList(call, merged, { whole: false, parts: [], more: true }, options).catch(
+    return loadAsked(call, merged, { whole: false, parts: [], more: true }, options).catch(
       () => merged
     )
   }
@@ -61,37 +93,21 @@ export async function loadBotItemsList(
     const want = (previous ? botItemsClosedDepth(previous) : page) + more
     const first = await call({})
     // When the first page is as loaded, the pages below it are read again only once it moves (as
-    // before): the next page is all that more asks.
-    if (previous && !options.pageUnmoved && sameFirstPage(previous, first)) {
+    // before), or when the last read stopped above them: the next page is all that more asks.
+    if (
+      previous &&
+      !options.pageUnmoved &&
+      !unread.has(previous) &&
+      sameFirstPage(previous, first)
+    ) {
       return more && live()
-        ? loadBotItemsList(call, previous, { whole: false, parts: [], more: true }, options)
+        ? loadAsked(call, previous, { whole: false, parts: [], more: true }, options)
         : previous
     }
     if (show && previous && first.nextClosedCursor && botItemsClosedLoaded(first) < want) {
       show(reuseEqualJson(previous, withLoadedBelow(first, previous)))
     }
-    // The pages below, gathered and joined to the first page once.
-    const below: BotItem[] = []
-    let loaded = botItemsClosedLoaded(first)
-    let last: BotItemsListRead = first
-    while (live() && last.nextClosedCursor && loaded < want) {
-      try {
-        last = await call({
-          closedCursor: last.nextClosedCursor,
-          closedOnly: true,
-          closedLimit: Math.min(want - loaded, page)
-        })
-      } catch {
-        // The first page is fresh; the pages below it load again through Show more (as before).
-        return reuseEqualJson(previous, first)
-      }
-      const closedRows = last.items.filter(isClosedRow)
-      below.push(...closedRows)
-      loaded += closedRows.length
-    }
-    const value =
-      last === first ? first : appendBotItemsClosedPage(first, { ...last, items: below })
-    return reuseEqualJson(previous, value)
+    return readBelow(call, first, previous, want, options, true)
   }
   let value = previous
   if (ask.more && value.nextClosedCursor) {
@@ -101,6 +117,52 @@ export async function loadBotItemsList(
     )
   }
   return value
+}
+
+/** `top` (fresh down to its Closed cursor) with the pages below it read, a page per call, down to
+ *  `want` Closed rows. A newer ask waiting stops it after a page (or at once, when `top` was just
+ *  read): `kept`'s rows below stand until the next read pages them. Equal parts keep `kept`'s identity. A failed page leaves `top`; the
+ *  pages below it load again through Show more (as before). */
+async function readBelow(
+  call: BotItemsListCall,
+  top: BotItemsListRead,
+  kept: BotItemsListRead | null,
+  want: number,
+  options: BotItemsListLoadOptions,
+  topIsFresh: boolean
+): Promise<BotItemsListRead> {
+  const below: BotItem[] = []
+  let loaded = botItemsClosedLoaded(top)
+  let last: BotItemsListRead = top
+  let paged = topIsFresh
+  const joined = () =>
+    last === top ? top : appendBotItemsClosedPage(top, { ...last, items: below })
+  while (isLive(options) && last.nextClosedCursor && loaded < want) {
+    if (kept && paged && options.waiting?.()) {
+      const stopped = joined()
+      const value = reuseEqualJson(kept, withLoadedBelow(stopped, kept))
+      unread.set(value, stopped.nextClosedCursor!)
+      return value
+    }
+    try {
+      last = await call({
+        closedCursor: last.nextClosedCursor,
+        closedOnly: true,
+        closedLimit: Math.min(want - loaded, BOT_ITEM_LIMITS.listPage)
+      })
+    } catch {
+      return reuseEqualJson(kept, top)
+    }
+    paged = true
+    const closedRows = last.items.filter(isClosedRow)
+    below.push(...closedRows)
+    loaded += closedRows.length
+  }
+  return reuseEqualJson(kept, joined())
+}
+
+function isLive(options: BotItemsListLoadOptions): boolean {
+  return options.live?.() ?? true
 }
 
 /** The named items, a read per `listPageMax` of them; null when a host before `uids` answered whole
@@ -151,8 +213,9 @@ function withLoadedBelow(first: BotItemsListRead, previous: BotItemsListRead): B
   const below = previous.items.filter(
     (item) => isClosedRow(item) && !held.has(item.uid) && end !== null && !botItemReaches(item, end)
   )
+  const { nextClosedCursor: _end, ...rest } = first
   return {
-    ...first,
+    ...rest,
     items: [...first.items, ...below],
     ...(previous.nextClosedCursor ? { nextClosedCursor: previous.nextClosedCursor } : {})
   }
