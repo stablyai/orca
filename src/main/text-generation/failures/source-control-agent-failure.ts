@@ -40,12 +40,17 @@ export function agentHostFailure(label: string): TextGenerationFailureFields {
 const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = new Set([
   'branch-name',
   'conversation-name',
-  'dictation-cleanup'
+  'dictation-cleanup',
+  'agent-text'
 ])
 
-/** The agent's answer without CLI framing; dictated text keeps the lines and markers Git text drops. */
+/** The agent's answer without CLI framing; dictated and free text keep the lines and markers Git text drops. */
 export function cleanAgentAnswer(raw: string, operation: TextGenerationOperation): string {
-  return cleanGeneratedText(raw, operation === 'dictation-cleanup' ? 'prose' : 'git')
+  const prose = operation === 'dictation-cleanup' || operation === 'agent-text'
+  // A free-text answer is the user's words or the model's words: a JSON object with a `text` key is an answer, not an envelope.
+  return cleanGeneratedText(raw, prose ? 'prose' : 'git', {
+    unwrapJcodeEnvelope: operation !== 'agent-text'
+  })
 }
 
 type AgentCliFailureOptions = {
@@ -107,7 +112,8 @@ const UNCODED_EMPTY_RESULT_NAMES = {
   'branch-name': 'branch name',
   'conversation-name': 'chat name',
   'dictation-cleanup': 'cleanup',
-  'bot-suggestions': 'answer'
+  'bot-suggestions': 'answer',
+  'agent-text': 'answer'
 } as const
 
 export function emptyResultFailure(
@@ -119,7 +125,8 @@ export function emptyResultFailure(
     operation === 'branch-name' ||
     operation === 'conversation-name' ||
     operation === 'dictation-cleanup' ||
-    operation === 'bot-suggestions'
+    operation === 'bot-suggestions' ||
+    operation === 'agent-text'
   ) {
     // Background rename failures are stored as English rename errors, outside the coded result path.
     const name = UNCODED_EMPTY_RESULT_NAMES[operation]

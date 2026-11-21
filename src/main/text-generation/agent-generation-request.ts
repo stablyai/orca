@@ -43,11 +43,13 @@ export async function runGenerationRequest(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
+  /** Local agent deadline; the source-control default when absent. */
+  timeoutMs?: number
 }): Promise<InternalTextGenerationResult> {
   const params = {
     ...input.params,
     backslash: commandBackslashMode(input.target),
-    toolFree: input.operation === 'dictation-cleanup'
+    toolFree: input.operation === 'dictation-cleanup' || input.operation === 'agent-text'
   }
   const prompt =
     input.operation === 'conversation-name'
@@ -89,7 +91,8 @@ export async function runGenerationRequest(input: {
             target: input.target,
             operation: input.operation,
             spawnAgent: input.spawnAgent,
-            shouldExecute: input.shouldExecute
+            shouldExecute: input.shouldExecute,
+            timeoutMs: input.timeoutMs
           })
   let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,

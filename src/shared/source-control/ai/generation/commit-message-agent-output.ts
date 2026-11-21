@@ -11,12 +11,17 @@ export function cleanGeneratedCommitMessage(raw: string): string {
 }
 
 /** `prose` (dictated text) keeps a first line, a fence and list markers that Git text would drop. */
-export function cleanGeneratedText(raw: string, shape: 'git' | 'prose'): string {
+export function cleanGeneratedText(
+  raw: string,
+  shape: 'git' | 'prose',
+  options: { unwrapJcodeEnvelope?: boolean } = {}
+): string {
   // Scan boundaries instead of allocating newline arrays for large generated bodies.
   let text = normalizeGeneratedCommitMessageLineFeeds(raw).trim()
 
   // Extract jcode --json text; plain mode mixes thinking and token-usage lines into stdout.
-  if (text.startsWith('{')) {
+  // A free-text answer may itself be JSON with a `text` key, so callers can switch this off.
+  if (options.unwrapJcodeEnvelope !== false && text.startsWith('{')) {
     try {
       const parsed: unknown = JSON.parse(text)
       if (isJcodeJsonResult(parsed) && typeof parsed.text === 'string') {
