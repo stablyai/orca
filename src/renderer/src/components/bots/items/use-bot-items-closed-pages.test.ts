@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -39,38 +39,42 @@ function listRead() {
 
 const BOT = { hostId: 'local', id: 'bot-1' } as const
 
-async function loadAll(view: { result: { current: ReturnType<typeof useBotItemsClosedPages> } }) {
-  while (view.result.current.loadMore) {
-    await act(() => view.result.current.loadMore!())
-  }
-}
-
 it('keeps every closed item reachable when a refresh moves the first page’s end', async () => {
   host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
   const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
     initialProps: { read: listRead() }
   })
-  await loadAll(view)
+  await act(() => view.result.current.loadMore!())
+  expect(view.result.current.loadMore).toBeNull()
 
   // Another item closes: the first page is now new + c1..c49, so c50 moves past it.
   host.closed = ['new', ...host.closed]
-  view.rerender({ read: listRead() })
+  const read = listRead()
+  view.rerender({ read })
 
-  // Nothing is read again, and c50 stays.
-  expect(view.result.current.loadMore).toBeNull()
-  expect(new Set(view.result.current.items.map((item) => item.uid)).size).toBe(101)
+  // Show more reaches everything the count names.
+  await waitFor(() => expect(view.result.current.loadMore).not.toBeNull())
+  while (view.result.current.loadMore) {
+    await act(() => view.result.current.loadMore!())
+  }
+  const shown = new Set([...read.items, ...view.result.current.items].map((item) => item.uid))
+  expect(shown.size).toBe(101)
 })
 
-it('starts Closed from its first page when more closed unheard than one page holds', async () => {
+it('takes a named read’s copies into loaded pages, a deleted item dropped, without reading them again', async () => {
   host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
+  const first = listRead()
   const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
-    initialProps: { read: listRead() }
+    initialProps: { read: first }
   })
-  await loadAll(view)
+  await act(() => view.result.current.loadMore!())
 
-  host.closed = [...Array.from({ length: 60 }, (_, index) => `n${index + 1}`), ...host.closed]
-  view.rerender({ read: listRead() })
-  await loadAll(view)
+  // c70 was deleted; the host no longer pages it, and the named read leaves it out.
+  host.closed = host.closed.filter((uid) => uid !== 'c70')
+  view.rerender({ read: { ...first, counts: { done: 99 }, named: ['c70'] } })
 
-  expect(new Set(view.result.current.items.map((item) => item.uid)).size).toBe(160)
+  const uids = view.result.current.items.map((item) => item.uid)
+  expect(uids).toHaveLength(99)
+  expect(uids).not.toContain('c70')
+  expect(view.result.current.loadMore).toBeNull()
 })

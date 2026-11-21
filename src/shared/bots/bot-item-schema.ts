@@ -148,6 +148,9 @@ export type BotItemsListRead = {
   /** The newest event the owner had seen when the tab was last opened. */
   seenEventId: string
   nextClosedCursor?: string
+  /** Set on the client only: this value is the last one with these items read again, everything else
+   *  as it was. */
+  named?: readonly string[]
 }
 
 export const BotItemsListReadSchema: z.ZodType<BotItemsListRead, unknown> = z.looseObject({

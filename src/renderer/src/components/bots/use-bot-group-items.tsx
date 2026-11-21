@@ -87,7 +87,7 @@ const MemberReader = memo(function MemberReader({
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list
-  const { closedTotal, loadMoreClosed, closedEnded } = list
+  const { closedTotal, loadMoreClosed, closedEnded, closedEndAt } = list
   const { read: chatListRead, failed: chatFailed, retry: chatRetry } = list.chatRead
   useEffect(() => {
     report(bot.id, {
@@ -104,7 +104,8 @@ const MemberReader = memo(function MemberReader({
         staleDays,
         closedTotal,
         loadMoreClosed,
-        closedEnded
+        closedEnded,
+        closedEndAt
       },
       needs,
       stoppedForSignIn,
@@ -130,6 +131,7 @@ const MemberReader = memo(function MemberReader({
     closedTotal,
     loadMoreClosed,
     closedEnded,
+    closedEndAt,
     needs,
     stoppedForSignIn,
     needsYou,

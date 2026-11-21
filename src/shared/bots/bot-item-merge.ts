@@ -48,7 +48,7 @@ export function mergeNamedBotItems(
   if (same && added.length === 0 && counts === previous.counts) {
     return previous.seenEventId === named.seenEventId
       ? previous
-      : { ...previous, seenEventId: named.seenEventId }
+      : { ...previous, seenEventId: named.seenEventId, named: uids }
   }
   // In the host's order (open, then Closed; each newest activity first), as a whole read has them.
   const ordered = [...items, ...added].sort(
@@ -57,7 +57,7 @@ export function mergeNamedBotItems(
       b.lastActivityAt - a.lastActivityAt ||
       b.number - a.number
   )
-  return { ...previous, items: ordered, counts, seenEventId: named.seenEventId }
+  return { ...previous, items: ordered, counts, seenEventId: named.seenEventId, named: uids }
 }
 
 function isClosedItem(item: BotItem): boolean {
