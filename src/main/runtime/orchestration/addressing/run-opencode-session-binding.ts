@@ -20,6 +20,7 @@ export class RunOpenCodeSessionBinding {
   constructor(private readonly runtime: RuntimeStatusSource) {}
 
   bind(runId: string, handle: string): void {
+    this.sessionByRunId.delete(runId)
     const paneKey = this.runtime.getTerminalPaneKey(handle)
     const rows = paneKey ? (this.runtime.getAgentStatusSnapshotForPane?.(paneKey) ?? []) : []
     const row = rows

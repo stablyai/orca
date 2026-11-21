@@ -244,7 +244,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
   })
 
-  readonly openCodeSessionBinding = new RunOpenCodeSessionBinding(this)
+  readonly openCodeSessionBinding = new RunOpenCodeSessionBinding({
+    getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
+    getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey)
+  })
 
   protected readonly orchestrationMailboxPointerDelivery = createRuntimeMailboxPointerDelivery(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: structural view of this runtime's own members; no value conversion.
