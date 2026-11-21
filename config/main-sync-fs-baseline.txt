@@ -523,6 +523,7 @@
 1 src/main/warp-themes/discovery.ts
 1 src/main/webhooks/webhook-call-file.ts
 2 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-newer-agent-hooks.ts # one read of the small newer-agent hooks file per signed-in account, next to the ledger's own read (STA-16837)
 1 src/main/window/desktop-integration/custom-app-icon.ts
 3 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
