@@ -166,7 +166,13 @@ export function BotChatMoreButton({
           </Button>
         </DropdownMenuTrigger>
       </span>
-      <DropdownMenuContent align="end" className="w-44">
+      {/* React bubbles portal events to the row, which would open the chat on a menu pick. */}
+      <DropdownMenuContent
+        align="end"
+        className="w-44"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
         <BotChatMenuItems bot={bot} chat={chat} kind="dropdown" onOpen={onOpen} />
       </DropdownMenuContent>
     </DropdownMenu>
