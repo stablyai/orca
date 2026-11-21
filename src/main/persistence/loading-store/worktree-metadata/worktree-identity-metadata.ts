@@ -267,7 +267,14 @@ export function setWorktreeMetaForHost(
   if (!legacy || legacy.hostId === executionHostId) {
     state.worktreeMeta[worktreeId] = updated
   }
-  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+  const preservesExternalConversationLinks =
+    !migrated &&
+    identityKeys.length <= 1 &&
+    !('externalConversations' in meta) &&
+    existing?.externalConversations === updated.externalConversations
+  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS, undefined, undefined, {
+    preservesExternalConversationLinks
+  })
   for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
     try {
       listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })

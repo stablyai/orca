@@ -13,8 +13,16 @@ import type { PartitionEditorViews } from '../workspace-sessions/layout-editor-v
 import type { ProfileSaveDomains } from '../../profile-save-domains'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
+export type StateWriteOptions = {
+  /** Set only when the write leaves every host's and folder's external conversation links unchanged. */
+  preservesExternalConversationLinks?: boolean
+}
+
 /** Undefined means any domain may have changed. */
-export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
+export type StateWriteListener = (
+  dirtyDomains: readonly string[] | undefined,
+  options?: StateWriteOptions
+) => void
 /** One host's worktree metadata row before and after a write. */
 export type WorktreeMetaWriteListener = (write: {
   worktreeId: string
@@ -130,9 +138,10 @@ export function scheduleSave(
   owner: WriteSchedulingOperations,
   domains: ProfileSaveDomains,
   writtenHostId?: ExecutionHostId,
-  written?: WrittenWorkspaceScope
+  written?: WrittenWorkspaceScope,
+  options?: StateWriteOptions
 ): void {
-  scheduleDomainSave(owner, domains, writtenHostId, written)
+  scheduleDomainSave(owner, domains, writtenHostId, written, options)
 }
 
 /** Startup load, migration and maintenance resume only: their changes span the profile. */
@@ -144,7 +153,8 @@ function scheduleDomainSave(
   owner: WriteSchedulingOperations,
   dirtyDomains: readonly string[] | undefined,
   writtenHostId?: ExecutionHostId,
-  written?: WrittenWorkspaceScope
+  written?: WrittenWorkspaceScope,
+  options?: StateWriteOptions
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
   notifyWorkspaceSessionWritten(
@@ -156,7 +166,7 @@ function scheduleDomainSave(
   )
   for (const listener of runtime.stateWriteListeners) {
     try {
-      listener(dirtyDomains)
+      listener(dirtyDomains, options)
     } catch (error) {
       // The state already changed; one observer's failure must not hide it from the rest or skip its save.
       console.error('[store] state write listener failed:', error)

@@ -17,11 +17,12 @@ import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-ope
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
-  scheduleSave: (domains: ProfileSaveDomains) => void
+  scheduleSave: (domains: ProfileSaveDomains, options?: StateWriteOptions) => void
   removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
   hydrateRepo: (repo: Repo) => Repo
@@ -34,8 +35,8 @@ export class FolderWorkspacePersistenceOperations {
     return this.operations.state
   }
 
-  private scheduleSave(domains: ProfileSaveDomains): void {
-    this.operations.scheduleSave(domains)
+  private scheduleSave(domains: ProfileSaveDomains, options?: StateWriteOptions): void {
+    this.operations.scheduleSave(domains, options)
   }
 
   private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
@@ -269,7 +270,9 @@ export class FolderWorkspacePersistenceOperations {
       workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
-    this.scheduleSave(['folderWorkspaces'])
+    this.scheduleSave(['folderWorkspaces'], {
+      preservesExternalConversationLinks: !('externalConversations' in updates)
+    })
     return workspace
   }
 
