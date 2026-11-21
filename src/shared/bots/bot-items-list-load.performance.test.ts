@@ -48,10 +48,19 @@ describe('loadBotItemsList work', () => {
       const deeper = await loadBotItemsList(counted, read, { whole: true, parts: [], more: true })
       expect(calls).toBe(2)
       expect(deeper.items.filter(closed)).toHaveLength(150)
-      // The chat-filtered list reads its loaded pages again, as it always did.
+      // The chat-filtered list reads its loaded pages again, as it always did: Closed rows alone.
       calls = 0
-      await loadBotItemsList(counted, read, WHOLE, { pageUnmoved: true })
+      const pages: unknown[] = []
+      const paged: BotItemsListCall = (params) => {
+        if (params.closedCursor) {
+          pages.push(params.closedOnly)
+        }
+        return counted(params)
+      }
+      await loadBotItemsList(paged, read, WHOLE, { pageUnmoved: true })
       expect(calls).toBe(2)
+      expect(older || pages.every((closedOnly) => closedOnly === true)).toBe(true)
+      expect(pages).toHaveLength(1)
     }
   })
 
@@ -65,7 +74,7 @@ describe('loadBotItemsList work', () => {
       calls += 1
       return older(params)
     }
-    await loadBotItemsList(counted, read, WHOLE, { live: () => calls === 0 })
+    await loadBotItemsList(counted, read, WHOLE, { live: () => calls === 0, pageUnmoved: true })
     expect(calls).toBe(1)
   })
 
