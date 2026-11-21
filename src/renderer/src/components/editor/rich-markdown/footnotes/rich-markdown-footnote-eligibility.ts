@@ -16,7 +16,7 @@ export const FOOTNOTE_CANDIDATE_PATTERN = /^ {0,3}(?:> ?)* {0,3}\[\^[^\s[\]]+\]:
 
 const FOOTNOTE_CANDIDATE_LINE_PATTERN = /^ {0,3}(?:> ?)* {0,3}\[\^[^\s[\]]+\]:/
 const BLOCKQUOTE_PREFIX_PATTERN = /^ {0,3}(?:> ?)+/
-const SINGLE_LINE_REFERENCE_LINK_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]+\S/
+const SINGLE_LINE_REFERENCE_LINK_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]*\S/
 const MULTILINE_REFERENCE_LINK_LABEL_PATTERN = /^ {0,3}\[[^\]]+\]:[ \t]*$/
 const MULTILINE_REFERENCE_LINK_TARGET_PATTERN = /^ {0,3}\S/
 const TRANSPORT_ENVELOPE_PATTERN = /\[\[ORCA_RICH_MD:[a-f0-9]{32}:/
@@ -103,7 +103,10 @@ export function hasNonFootnoteReferenceLinkCandidate(contentWithoutCode: string)
         }
       }
 
-      if (SINGLE_LINE_REFERENCE_LINK_PATTERN.test(line)) {
+      if (
+        !FOOTNOTE_CANDIDATE_LINE_PATTERN.test(line) &&
+        SINGLE_LINE_REFERENCE_LINK_PATTERN.test(line)
+      ) {
         return true
       }
 
