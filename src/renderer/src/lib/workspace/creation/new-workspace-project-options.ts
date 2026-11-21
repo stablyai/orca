@@ -38,6 +38,8 @@ export type NewWorkspaceProjectOption =
       badgeColor: string
       detail: string
       checkout?: NewWorkspaceProjectCheckout
+      /** Hosts the row is set up on, so a search can name one ("host project"). */
+      hostLabels?: readonly string[]
     }
   | {
       kind: 'project-group'
@@ -142,6 +144,9 @@ export function buildNewWorkspaceProjectOptions(
       displayName: project.displayName,
       badgeColor: project.badgeColor,
       detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0),
+      hostLabels: (setupDirectoriesByProjectId.get(project.id) ?? []).map((directory) =>
+        getSetupHostLabel(directory.hostId, hostLabelById)
+      ),
       detailSource: project.providerIdentity ? ('provider' as const) : ('generic' as const)
     }))
 
@@ -163,6 +168,7 @@ export function buildNewWorkspaceProjectOptions(
             displayName: eligibleRepoById.get(setup.repoId)?.displayName || setup.displayName,
             badgeColor: project.badgeColor,
             detail: getCheckoutDetail(setup, hostLabelById),
+            hostLabels: [getSetupHostLabel(setup.hostId, hostLabelById)],
             checkout: { projectHostSetupId: setup.id, hostId: setup.hostId, repoId: setup.repoId }
           }
         ]
@@ -186,8 +192,14 @@ function getCheckoutDetail(
   if (setup.hostId === LOCAL_EXECUTION_HOST_ID) {
     return setup.path
   }
-  const hostLabel = hostLabelById.get(setup.hostId)?.trim() || getExecutionHostLabel(setup.hostId)
-  return `${hostLabel} · ${setup.path}`
+  return `${getSetupHostLabel(setup.hostId, hostLabelById)} · ${setup.path}`
+}
+
+function getSetupHostLabel(
+  hostId: ExecutionHostId,
+  hostLabelById: ReadonlyMap<ExecutionHostId, string>
+): string {
+  return hostLabelById.get(hostId)?.trim() || getExecutionHostLabel(hostId)
 }
 
 // Setup ids can repeat across hosts, so a checkout is keyed by both.

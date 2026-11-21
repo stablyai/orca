@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard } from 'react-native'
 import { getComposerRepoWorktreeBranches } from '../../../../../src/shared/new-workspace/composer-branch-selection'
 import {
@@ -37,6 +37,7 @@ import {
 } from '../../source-selection/presentation/new-workspace-project-targets'
 import { NewWorktreeFormSheet } from '../forms/NewWorktreeFormSheet'
 import { NewWorktreeModalDrawers } from './NewWorktreeModalDrawers'
+import { NewWorktreeQuickPick } from './NewWorktreeQuickPick'
 import { useNewWorkspaceAgentSelection } from '../runtime/use-new-workspace-agent-selection'
 import { useNewWorkspaceCreateSubmit } from '../runtime/use-new-workspace-create-submit'
 import { useNewWorkspaceExecutionTarget } from '../runtime/use-new-workspace-execution-target'
@@ -245,6 +246,11 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, hostLabelById),
     [hostLabelById, hostPlatform, repos, selectedProjectId, t]
   )
+  const hostLabelFor = useCallback(
+    (repo: MobileWorkspaceRepo) =>
+      getNewWorkspaceRunTarget(repo, hostPlatform, hostLabelById).label,
+    [hostLabelById, hostPlatform]
+  )
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, hostLabelById)
     : null
@@ -293,6 +299,14 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onRetryLoad={retryLoad}
         project={selectedProject}
         runTarget={selectedRunTarget}
+        quickPick={
+          <NewWorktreeQuickPick
+            projects={projectPickerItems}
+            repos={repos}
+            hostLabelFor={hostLabelFor}
+            onPick={(repo) => selectRepo(repo, true)}
+          />
+        }
         projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}
         selectedRepoIsGit={selectedRepoIsGit}
         selectedRepoConnectionId={selectedRepoConnectionId}
@@ -348,6 +362,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         jiraSites={runtime.jiraConnection.sites}
         sshReady={!executionTarget.sshGate.requiresConnection}
         projectPickerItems={projectPickerItems}
+        projectSearchRepos={repos}
+        hostLabelFor={hostLabelFor}
         selectedProjectId={selectedProjectId}
         runTargetPickerItems={runTargetPickerItems}
         pickerAgentOptions={agentSelection.pickerAgentOptions}
