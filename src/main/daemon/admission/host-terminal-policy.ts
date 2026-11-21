@@ -104,6 +104,7 @@ export class HostTerminalPolicy {
   private initialization?: Promise<void>
   private timer?: ReturnType<typeof setTimeout>
   private unchangedPolls = 0
+  private pollEpoch = 0
   private log: (event: string, details: Record<string, unknown>) => void = () => {}
   private readonly environment: number | null
 
@@ -156,8 +157,9 @@ export class HostTerminalPolicy {
 
   private async poll(): Promise<void> {
     const before = `${this.savedMaximum}|${this.savedUnreadable}`
+    const epoch = this.pollEpoch
     await this.refresh()
-    if (this.disposed) {
+    if (this.disposed || epoch !== this.pollEpoch) {
       return
     }
     this.unchangedPolls =
@@ -284,6 +286,7 @@ export class HostTerminalPolicy {
             if (replaced && !this.disposed) {
               this.revision += 1
               this.unchangedPolls = 0
+              this.pollEpoch += 1
               if (this.timer) {
                 this.scheduleNextPoll()
               }
