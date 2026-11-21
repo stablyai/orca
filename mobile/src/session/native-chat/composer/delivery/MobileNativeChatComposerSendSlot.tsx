@@ -84,6 +84,7 @@ export function MobileNativeChatComposerSendSlot({
     canStop: stop !== null,
     sendBlocked: sendDisabled,
     canSend,
+    sending,
     editing: attaching,
     draft: value,
     attachmentCount
