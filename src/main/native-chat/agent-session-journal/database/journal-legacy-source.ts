@@ -1,6 +1,9 @@
 import Database from '../../../sqlite/sync-database'
 import { ensureJournalAdditiveTables, journalPragmaNumber } from './journal-database'
-import { createAgentSessionRecordTablesSql } from './journal-database-schema'
+import {
+  createAgentSessionRecordTablesSql,
+  JOURNAL_DB_SCHEMA_VERSION
+} from './journal-database-schema'
 
 /**
  * Opens the original journal read-only, shaped as this build's writable open would have left it.
@@ -14,7 +17,7 @@ export function openJournalLegacySource(
   return openJournalLegacySourceChecked(filename, options).source
 }
 
-/** Also names the tables the original's version created that it no longer has. */
+/** Also names the tables the original's version created that it no longer has; none when newer. */
 export function openJournalLegacySourceChecked(
   filename: string,
   options: { timeout?: number } = {}
@@ -28,20 +31,40 @@ export function openJournalLegacySourceChecked(
   }
 }
 
-/** Every journal version created these with its first table; history and revisions read them. */
 const HISTORY_TABLES = ['journal_rows', 'journal_sessions']
+const RECORD_TABLES = [
+  'agent_session_records',
+  'agent_session_operations',
+  'agent_session_retired_claim_keys',
+  'agent_session_tabs',
+  'agent_session_store_meta'
+]
 
-/** Returns the tables the original's version created that it lacks. */
+/**
+ * Tables each released version created, frozen: a later schema change never makes a file it did not
+ * write damaged. Change it only with JOURNAL_LEGACY_DAMAGE_CHECK, so a recorded skip is checked again.
+ */
+const RELEASED_TABLES: Readonly<Record<number, readonly string[]>> = {
+  3: HISTORY_TABLES,
+  4: [...HISTORY_TABLES, ...RECORD_TABLES]
+}
+
+/** What a recorded damaged original was judged by; a build that judges differently checks again. */
+export const JOURNAL_LEGACY_DAMAGE_CHECK = JSON.stringify(RELEASED_TABLES)
+
+/** The tables a journal of `version` must have; none for a version no release wrote. */
+export function journalLegacyRequiredTables(version: number): readonly string[] {
+  return RELEASED_TABLES[version] ?? []
+}
+
 function presentCurrentSchema(source: Database.Database): string[] {
   const current = new Database(':memory:')
   try {
     current.exec(createAgentSessionRecordTablesSql())
     const version = journalPragmaNumber(source, 'user_version')
-    // Schema 4 created its record tables with its version; a version-4 file without them is damaged.
-    const required = [
-      ...(version > 0 ? HISTORY_TABLES : []),
-      ...(version >= 4 ? tableNames(current) : [])
-    ]
+    const required = journalLegacyRequiredTables(version)
+    // A newer file's record tables are never stood in for, as before this check.
+    const unfilled = version > JOURNAL_DB_SCHEMA_VERSION ? tableNames(current) : required
     ensureJournalAdditiveTables(current)
     const present = new Set(tableNames(source))
     for (const { name, sql } of current
@@ -49,7 +72,7 @@ function presentCurrentSchema(source: Database.Database): string[] {
         "SELECT name, sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'"
       )
       .all()) {
-      if (!required.includes(String(name)) && !present.has(String(name))) {
+      if (!unfilled.includes(String(name)) && !present.has(String(name))) {
         source.exec(String(sql).replace(/^CREATE TABLE /, 'CREATE TEMP TABLE '))
       }
     }

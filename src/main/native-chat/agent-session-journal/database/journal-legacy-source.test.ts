@@ -15,6 +15,13 @@ import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
 import { journalSqlReaderPath } from '../journal-sql-worker-bundle.test-fixture'
 import { applyJournalSqlMaintenance } from '../journal-sql-maintenance'
+import Database from '../../../sqlite/sync-database'
+import {
+  createAgentSessionRecordTablesSql,
+  createJournalTablesSql,
+  JOURNAL_DB_SCHEMA_VERSION
+} from './journal-database-schema'
+import { journalLegacyRequiredTables } from './journal-legacy-source'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -93,4 +100,40 @@ it('still refuses a version-four journal that lost the record tables its version
     'no such table: agent_session_records'
   )
   expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
+})
+
+it('requires of a released journal exactly the tables its migration created', () => {
+  // A failure here means a migration changed the original journal's tables. Files a release wrote
+  // keep their tables: leave their lists frozen, add the new version's list, and change the check.
+  const migrated = new Database(':memory:')
+  migrated.exec(createJournalTablesSql() + createAgentSessionRecordTablesSql())
+  const created = migrated
+    .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
+    .all()
+    .map(({ name }) => String(name))
+  migrated.close()
+  expect(JOURNAL_DB_SCHEMA_VERSION).toBe(4)
+  expect(created).toEqual([
+    'agent_session_operations',
+    'agent_session_records',
+    'agent_session_retired_claim_keys',
+    'agent_session_store_meta',
+    'agent_session_tabs',
+    'journal_imports',
+    'journal_repairs',
+    'journal_rows',
+    'journal_sessions',
+    'journal_set_aside'
+  ])
+  expect(journalLegacyRequiredTables(3)).toEqual(['journal_rows', 'journal_sessions'])
+  expect(journalLegacyRequiredTables(4)).toEqual([
+    'journal_rows',
+    'journal_sessions',
+    'agent_session_records',
+    'agent_session_operations',
+    'agent_session_retired_claim_keys',
+    'agent_session_tabs',
+    'agent_session_store_meta'
+  ])
+  expect(journalLegacyRequiredTables(5)).toEqual([])
 })

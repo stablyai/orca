@@ -4,6 +4,7 @@ import { readJournalLegacyClaims } from './journal-legacy-adoption'
 import { missingJournalLegacyClaims, recoverJournalLegacyClaims } from './journal-legacy-claims'
 import { readMeta, recordJournalLegacyFailure, writeMeta } from './journal-legacy-reconcile-marks'
 import {
+  JOURNAL_LEGACY_DAMAGE_CHECK,
   journalLegacyChatRevisionKey,
   journalLegacyFailureKey,
   openJournalLegacySourceChecked
@@ -13,7 +14,7 @@ import {
   type JournalLegacySourceReceipt
 } from './journal-legacy-source-receipt'
 
-/** The original as it was when found damaged, with why; read again only once it changes. */
+/** The original found damaged, the check that judged it, and why; read again once either changes. */
 export const JOURNAL_LEGACY_SOURCE_DAMAGED = 'journal.legacy-source-damaged.v1'
 
 /**
@@ -42,7 +43,7 @@ export function openReconcilableJournalLegacySource(
     source.close()
   }
   console.warn(`[agent-session-journal] skipping chats in a damaged older Orca journal: ${error}`)
-  const value = JSON.stringify({ receipt: captured, error })
+  const value = JSON.stringify({ receipt: captured, check: JOURNAL_LEGACY_DAMAGE_CHECK, error })
   // An original without a certifiable identity is checked each launch but recorded once.
   if (value !== damaged) {
     runJournalTransaction(db, () => writeMeta(db, JOURNAL_LEGACY_SOURCE_DAMAGED, value))
@@ -81,7 +82,11 @@ function keepOriginalClaims(source: Database.Database, db: Database.Database, er
 function damagedReceipt(value: string): string | undefined {
   try {
     const parsed: unknown = JSON.parse(value)
-    return parsed && typeof parsed === 'object' && 'receipt' in parsed
+    return parsed &&
+      typeof parsed === 'object' &&
+      'receipt' in parsed &&
+      'check' in parsed &&
+      parsed.check === JOURNAL_LEGACY_DAMAGE_CHECK
       ? JSON.stringify(parsed.receipt)
       : undefined
   } catch {

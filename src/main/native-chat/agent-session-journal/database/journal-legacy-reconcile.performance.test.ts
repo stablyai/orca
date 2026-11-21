@@ -10,7 +10,6 @@ import {
 } from './journal-domain-database'
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
-import { JOURNAL_LEGACY_SOURCE_DAMAGED } from './journal-legacy-source-damage'
 import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { recoverJournalLegacyClaims } from './journal-legacy-claims'
 import * as legacyClaims from './journal-legacy-claims'
@@ -303,16 +302,21 @@ it.each([
       expect(keys.filter((key) => key.startsWith('journal.legacy-failed:')).sort()).toEqual(
         Array.from({ length: size }, (_, index) => `journal.legacy-failed:added-${index}`).sort()
       )
-      expect(keys).toContain(JOURNAL_LEGACY_SOURCE_DAMAGED)
+      expect(keys).toContain('journal.legacy-source-damaged.v1')
       // Later launches write nothing: the claims are kept and the file is recorded.
       expect(perLaunch.slice(1).map(({ writes }) => writes)).toEqual([0, 0])
     }
+    // #46001: the first launch reads each chat a few times; later ones skip the recorded file.
+    expect(small.perLaunch[0].reads).toBeLessThanOrEqual(270)
+    expect(large.perLaunch[0].reads).toBeLessThanOrEqual(2070)
+    const later = (launches: { reads: number }[]) => launches.slice(1).map(({ reads }) => reads)
     if (linked) {
       // Without an identity to compare, each launch rechecks the claims, linearly and read-only.
-      expect(large.perLaunch[1].reads).toBeLessThanOrEqual(small.perLaunch[1].reads * 10)
+      expect(Math.max(...later(small.perLaunch))).toBeLessThanOrEqual(230)
+      expect(Math.max(...later(large.perLaunch))).toBeLessThanOrEqual(1670)
     } else {
-      expect(large.perLaunch.slice(1)).toEqual(small.perLaunch.slice(1))
+      expect(later(small.perLaunch)).toEqual([3, 3])
+      expect(later(large.perLaunch)).toEqual([3, 3])
     }
-    expect(large.perLaunch[0].reads).toBeLessThanOrEqual(small.perLaunch[0].reads * 10)
   }
 )
