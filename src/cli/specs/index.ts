@@ -14,6 +14,7 @@ import { COMPUTER_COMMAND_SPECS } from './computer'
 import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { MANAGED_SERVER_COMMAND_SPECS } from './managed-server'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
+import { AGENT_RESUME_COMMAND_SPECS } from './agent-resume'
 import { AGENT_LAUNCH_COMMAND_SPECS } from './agent-launch'
 import { SLACK_COMMAND_SPECS } from './slack'
 import { GOOGLE_COMMAND_SPECS } from './google'
@@ -63,6 +64,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
+  ...AGENT_RESUME_COMMAND_SPECS,
   ...AGENT_CONVERSATION_COMMAND_SPECS,
   ...CHAT_COMMAND_SPECS,
   ...SLACK_COMMAND_SPECS,

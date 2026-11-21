@@ -912,6 +912,10 @@ import { SendRecordedParams } from './structured-agent-session/structured-agent-
 import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
+import {
+  RecordedAgentSessionsParams,
+  ResumeRecordedAgentSessionParams
+} from './terminal/recorded-agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
@@ -1097,6 +1101,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launchReplay': AgentLaunchReplay,
   'agent.list': AgentListParams,
   'agent.read': AgentReadParams,
+  'agent.resume': ResumeRecordedAgentSessionParams,
+  'agent.sessions': RecordedAgentSessionsParams,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,

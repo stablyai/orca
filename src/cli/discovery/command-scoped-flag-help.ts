@@ -10,6 +10,12 @@ const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'agent resume': {
+    pane: '--pane <paneKey>      Original pane key from agent sessions',
+    session:
+      '--session <id>        Recorded provider conversation ID; requires --agent without --pane',
+    agent: '--agent <id>          Agent that owns the recorded conversation'
+  },
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
     for: '--for bot:<name>       Make the item for another bot'
