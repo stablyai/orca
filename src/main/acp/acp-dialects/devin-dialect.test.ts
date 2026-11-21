@@ -7,6 +7,17 @@ const commands = [
   {
     name: 'login',
     description: 'Authenticate with an API key',
+    input: { hint: '[api-key]' },
+    _meta: { 'cognition.ai/category': 'Account' }
+  },
+  {
+    name: 'logout',
+    description: 'Clear authentication',
+    _meta: { 'cognition.ai/category': 'Account' }
+  },
+  {
+    name: 'status',
+    description: 'Check authentication status',
     _meta: { 'cognition.ai/category': 'Account' }
   },
   {
@@ -50,15 +61,16 @@ it('withholds exactly the commands that switch the session mode behind the picke
   const switching = commands
     .filter((command) => command.description.startsWith('Switch to '))
     .map((command) => command.name)
-    .sort()
-  expect([...DEVIN_ACP_DIALECT.withheldCommands!].sort()).toEqual(switching)
+  expect([...DEVIN_ACP_DIALECT.withheldCommands!].sort()).toEqual(
+    [...switching, 'login', 'logout'].sort()
+  )
 })
 
 it('keeps the rest of the session commands, and leaves out the withheld ones', () => {
   const options = new AcpStructuredOptions(DEVIN_ACP_DIALECT)
   options.adoptCommands(commands)
   expect(options.readCommands()?.map((command) => command.name)).toEqual([
-    'login',
+    'status',
     'compact',
     'context'
   ])

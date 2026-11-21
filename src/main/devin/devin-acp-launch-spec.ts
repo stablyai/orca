@@ -47,14 +47,16 @@ export const DEVIN_LAUNCH_SPEC: AcpLaunchSpec = {
   env: {},
   // Each of these overrides what a picker showed or what the account pin holds: an inherited mode,
   // model or fallback model would run every chat under a selection the chat never made, a key or
-  // API URL would spend someone else's credentials, and a sessions folder would write history
-  // outside the account. (`DEVIN_STORE` does not exist on 3000.14.30821.)
+  // API URL would spend someone else's credentials, and either session store variable would write
+  // history outside the account. (`DEVIN_STORE` does not exist on 3000.14.30821; the store override
+  // is DEVIN_SESSION_STORE.)
   scrubEnvironment: (env) => {
     const scrubbed = [
       'DEVIN_PERMISSION_MODE',
       'DEVIN_MODEL',
       'DEVIN_REFUSAL_FALLBACK',
       'DEVIN_SESSIONS_DIR',
+      'DEVIN_SESSION_STORE',
       'DEVIN_SANDBOX',
       'DEVIN_API_URL',
       'WINDSURF_API_KEY'
