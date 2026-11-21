@@ -8,13 +8,10 @@ describe('the agent settings hint', () => {
     expect(nativeChatPermissionSettingsHint({ ...own, reported: undefined })).toBe('settings')
   })
 
-  it('says a reported mode Orca cannot name is not shown', () => {
+  it('says a received mode Orca has no name for is not shown', () => {
     expect(nativeChatPermissionSettingsHint({ ...own, reported: 'read-only' })).toBe(
       'unnamed-report'
     )
-    expect(
-      nativeChatPermissionSettingsHint({ ...own, reported: undefined, reportedUnnamed: true })
-    ).toBe('unnamed-report')
   })
 
   it('adds nothing once the pill names a mode, Plan or a deferred pick', () => {

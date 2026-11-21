@@ -75,6 +75,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   }
   const current = state.permissionMode ?? undefined
   // Own delegates to the agent, so show the mode it reports running in; the saved choice stays Own.
+  // null reads as no report: it can't tell a policy Orca has no name for from no mode at all.
   const reportedValue = own ? (state.reportedPermissionMode ?? undefined) : undefined
   const shown = reportedValue ?? current
   const known = support.modes.find((mode) => mode === shown)
@@ -103,8 +104,6 @@ export function structuredAgentSessionPermissionDescriptor(state: {
       type: 'select',
       currentValue: current,
       ...(reportedValue !== undefined ? { reportedValue } : {}),
-      // null is a report of a mode Orca has no name for, unlike no report at all.
-      ...(own && state.reportedPermissionMode === null ? { reportedUnnamed: true as const } : {}),
       settingsAgent: state.record.agent,
       choices: support.modes.map((value) => ({
         value,

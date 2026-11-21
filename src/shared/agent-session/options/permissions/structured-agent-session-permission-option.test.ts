@@ -90,21 +90,17 @@ describe('the permission mode picker', () => {
     expect(explicit?.kind).not.toHaveProperty('reportedValue')
   })
 
-  it('tells a reported mode Orca cannot name apart from no report', () => {
-    const own = {
-      ...live('codex', { permissionMode: 'ask' }),
-      permissionOwnSupported: true,
-      permissionMode: 'own'
-    }
-    expect(permission({ ...own, reportedPermissionMode: null })?.kind).toMatchObject({
-      reportedUnnamed: true
-    })
-    for (const state of [
-      { ...own, reportedPermissionMode: undefined },
-      { ...own, reportedPermissionMode: 'full-access' },
-      { ...own, permissionMode: 'ask', reportedPermissionMode: null }
-    ]) {
-      expect(permission(state)?.kind).not.toHaveProperty('reportedUnnamed')
+  it('reads a null report as no report, since null carries no mode', () => {
+    // A Codex reply without policy fields, a Claude clear and an ACP agent without a mode selector all report null.
+    for (const agent of ['codex', 'claude', 'opencode']) {
+      const own = {
+        ...live(agent, { permissionMode: 'ask' }),
+        permissionOwnSupported: true,
+        permissionMode: 'own'
+      }
+      const cleared = permission({ ...own, reportedPermissionMode: null })
+      expect(cleared?.kind).toMatchObject({ currentValue: 'own' })
+      expect(cleared).toEqual(permission({ ...own, reportedPermissionMode: undefined }))
     }
   })
 
