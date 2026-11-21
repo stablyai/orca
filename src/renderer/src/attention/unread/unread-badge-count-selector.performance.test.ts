@@ -1,14 +1,16 @@
 import { expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { createUnreadBadgeCountSelector } from './unread-badge-count-selector'
 
-// Perf contract (#46026): remote status writes replace the status map and folder activity writes replace the
-// folder list. Neither can change which worktrees the Dock counts, so neither may rescan worktree rows.
+// Perf contract (#46026): the store takes several writes a second at 100+ agents. A write may cost the Dock only
+// the rows it replaced: remote status and folder activity writes read no worktree rows, and a change inside one
+// repo reads only that repo's rows, at 100 and 1,000 worktrees alike.
 
-type Write = (state: AppState) => AppState
+const ROWS_PER_REPO = 10
 
 const FOLDER: FolderWorkspace = {
   id: 'folder-1',
@@ -26,32 +28,41 @@ const FOLDER: FolderWorkspace = {
   updatedAt: 1
 }
 
-function worktreeBucketReadsAfter(worktreeCount: number, write: Write): number {
-  const base = createTestStore().getState()
+let rowReads = 0
+
+/** A worktree whose unread flag counts reads, which every count pass must make per row. */
+function countedWorktree(index: number, isUnread: boolean): Worktree {
+  const repoId = `repo-${Math.floor(index / ROWS_PER_REPO)}`
+  const worktree = makeWorktree({ id: `${repoId}::/wt-${index}`, repoId })
+  Object.defineProperty(worktree, 'isUnread', {
+    get() {
+      rowReads += 1
+      return isUnread
+    },
+    enumerable: true
+  })
+  return worktree
+}
+
+type Write = (state: AppState) => AppState
+
+function rowReadsAfter(worktreeCount: number, write: Write): number {
   const buckets: AppState['worktreesByRepo'] = {}
   for (let index = 0; index < worktreeCount; index += 1) {
-    const repoId = `repo-${index % (worktreeCount / 10)}`
-    const worktree = makeWorktree({ id: `${repoId}::/wt-${index}`, repoId, isUnread: true })
-    buckets[repoId] = [...(buckets[repoId] ?? []), worktree]
+    const worktree = countedWorktree(index, index % 2 === 0)
+    buckets[worktree.repoId] = [...(buckets[worktree.repoId] ?? []), worktree]
   }
-  let reads = 0
-  const countedBuckets = new Proxy(buckets, {
-    get(target, property) {
-      reads += 1
-      return typeof property === 'string' ? target[property] : undefined
-    }
-  })
   const before: AppState = {
-    ...base,
-    worktreesByRepo: countedBuckets,
+    ...createTestStore().getState(),
+    worktreesByRepo: buckets,
     folderWorkspaces: [FOLDER],
     hideWorkspacesFromOtherDevices: true
   }
   const select = createUnreadBadgeCountSelector()
   select(before)
-  reads = 0
+  rowReads = 0
   select(write(before))
-  return reads
+  return rowReads
 }
 
 const remoteStatusWrite: Write = (state) => ({
@@ -64,12 +75,26 @@ const folderActivityWrite: Write = (state) => ({
   folderWorkspaces: [{ ...FOLDER, lastActivityAt: 2 }]
 })
 
-it('a remote status write that keeps every device id reads no worktree buckets at N and 10N', () => {
-  expect(worktreeBucketReadsAfter(100, remoteStatusWrite)).toBe(0)
-  expect(worktreeBucketReadsAfter(1_000, remoteStatusWrite)).toBe(0)
+/** Replaces repo-0's bucket, as a worktree activity stamp or an unread flip does. */
+const oneRepoWrite: Write = (state) => ({
+  ...state,
+  worktreesByRepo: {
+    ...state.worktreesByRepo,
+    'repo-0': Array.from({ length: ROWS_PER_REPO }, (_, index) => countedWorktree(index, true))
+  }
 })
 
-it('a folder activity write reads no worktree buckets at N and 10N', () => {
-  expect(worktreeBucketReadsAfter(100, folderActivityWrite)).toBe(0)
-  expect(worktreeBucketReadsAfter(1_000, folderActivityWrite)).toBe(0)
+it('a remote status write that keeps every device id reads no worktree rows at N and 10N', () => {
+  expect(rowReadsAfter(100, remoteStatusWrite)).toBe(0)
+  expect(rowReadsAfter(1_000, remoteStatusWrite)).toBe(0)
+})
+
+it('a folder activity write reads no worktree rows at N and 10N', () => {
+  expect(rowReadsAfter(100, folderActivityWrite)).toBe(0)
+  expect(rowReadsAfter(1_000, folderActivityWrite)).toBe(0)
+})
+
+it('a write inside one repo reads only that repo at N and 10N', () => {
+  expect(rowReadsAfter(100, oneRepoWrite)).toBe(ROWS_PER_REPO)
+  expect(rowReadsAfter(1_000, oneRepoWrite)).toBe(ROWS_PER_REPO)
 })

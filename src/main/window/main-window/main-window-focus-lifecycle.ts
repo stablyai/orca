@@ -27,6 +27,7 @@ import { registerRendererDocumentNavigation } from '../security/renderer-documen
 import { createRendererRecoveryReloadWatchdog } from '../renderer-recovery/renderer-recovery-reload-watchdog'
 import { createRendererLaunchFailureBackoff } from '../renderer-recovery/renderer-launch-failure-backoff'
 import { trackRendererLivenessAtDeath } from '../renderer-recovery/renderer-liveness-at-death'
+import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
@@ -268,6 +269,8 @@ export function installMainWindowFocusLifecycle(args: {
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
+    // Why: the dead renderer can no longer correct the count; the reload sends it again.
+    setUnreadDockBadgeCount(0)
     // macOS reports close teardown as renderer killed/SIGKILL; do not treat window-close noise as a crash.
     if (!isWindowClosing()) {
       // Let the recorder classify crashes so expected-teardown evidence remains reachable.

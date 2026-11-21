@@ -5,8 +5,7 @@ import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { sameBucketRecords } from './unread-bucket-record-equality'
-import { countUnreadFolderRows, countUnreadWorktrees } from './unread-badge-count'
+import { countUnreadFolderRows, countUnreadWorktreesInBucket } from './unread-badge-count'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -26,23 +25,6 @@ type UnreadBadgeCountState = Pick<
   | 'runtimeStatusByEnvironmentId'
 >
 
-/** The worktree fields the count reads (`id` embeds `repoId`), so equality over them is a sound cache key. */
-function sameBadgeWorktree(previous: Worktree, next: Worktree): boolean {
-  const previousCreator = previous.creatorProvenance
-  const nextCreator = next.creatorProvenance
-  return (
-    previous.runtimeOwnerEnvironmentId === next.runtimeOwnerEnvironmentId &&
-    previousCreator?.kind === nextCreator?.kind &&
-    (previousCreator?.kind !== 'paired-device' ||
-      (nextCreator?.kind === 'paired-device' &&
-        previousCreator.deviceId === nextCreator.deviceId)) &&
-    previous.id === next.id &&
-    previous.hostId === next.hostId &&
-    previous.isUnread === next.isUnread &&
-    previous.isArchived === next.isArchived
-  )
-}
-
 /** Inputs both counts read: which hosts the sidebar shows. */
 function sameHostScope(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
   return (
@@ -50,17 +32,6 @@ function sameHostScope(previous: UnreadBadgeCountState, next: UnreadBadgeCountSt
     previous.visibleWorkspaceHostIds === next.visibleWorkspaceHostIds &&
     previous.settings?.activeRuntimeEnvironmentId === next.settings?.activeRuntimeEnvironmentId &&
     previous.hideWorkspacesFromOtherDevices === next.hideWorkspacesFromOtherDevices
-  )
-}
-
-function sameWorktreeInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
-  return (
-    previous.repos === next.repos &&
-    sameBucketRecords(
-      selectWorktreesByRepo(previous),
-      selectWorktreesByRepo(next),
-      sameBadgeWorktree
-    )
   )
 }
 
@@ -109,10 +80,13 @@ function samePairings(
   return true
 }
 
-/** Subscribe the Dock sync to the badge integer, so raw-map and title churn neither rescans nor rerenders. Compare each state's read set to its predecessor; transitive equality preserves the cached count across unchanged runs. */
+type BucketCount = { bucket: readonly Worktree[]; count: number }
+
+/** Subscribe the Dock sync to the badge integer, so raw-map and title churn neither rescans nor rerenders. Each count reuses its cache while its inputs are unchanged; worktrees recount only the repo buckets a write replaced. */
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState) => number {
   let previousState: UnreadBadgeCountState | undefined
   let pairings: ReadonlyMap<string, string> | null = null
+  let bucketCounts = new Map<string, BucketCount>()
   let worktreeCount = 0
   let folderCount = 0
 
@@ -142,20 +116,34 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
       previous === undefined ||
       !samePairings(pairings, statePairings) ||
       !sameHostScope(previous, state)
-    // Why two caches: folder activity writes replace the folder list without touching worktree rows.
-    const worktreesStale = scopeStale || !sameWorktreeInputs(previous, state)
-    const foldersStale = scopeStale || !sameFolderInputs(previous, state)
+    const reposStale = previous === undefined || scopeStale || previous.repos !== state.repos
+    const worktreesStale =
+      previous === undefined ||
+      reposStale ||
+      selectWorktreesByRepo(previous) !== selectWorktreesByRepo(state)
+    const foldersStale = previous === undefined || scopeStale || !sameFolderInputs(previous, state)
     if (worktreesStale || foldersStale) {
       const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
       const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
       if (worktreesStale) {
-        worktreeCount = countUnreadWorktrees({
-          worktreeBuckets: selectWorktreesByRepo(state),
+        const scope = {
           repoMap: getIndexedRepoMap(state.repos),
           visibleHostIds,
           defaultHostId,
           hiddenOtherDevicePairings: statePairings
-        })
+        }
+        const nextCounts = new Map<string, BucketCount>()
+        let total = 0
+        for (const [repoId, bucket] of Object.entries(selectWorktreesByRepo(state))) {
+          const cached = reposStale ? undefined : bucketCounts.get(repoId)
+          // Why: a write replaces only the buckets it touched, so the rest keep their count.
+          const count =
+            cached?.bucket === bucket ? cached.count : countUnreadWorktreesInBucket(bucket, scope)
+          nextCounts.set(repoId, { bucket, count })
+          total += count
+        }
+        bucketCounts = nextCounts
+        worktreeCount = total
       }
       if (foldersStale) {
         folderCount = countUnreadFolderRows({

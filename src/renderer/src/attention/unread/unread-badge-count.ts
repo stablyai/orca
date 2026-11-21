@@ -13,6 +13,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
@@ -28,25 +29,25 @@ export type UnreadBadgeCountSources = {
   hiddenOtherDevicePairings: ReadonlyMap<string, string> | null
 }
 
-/** Unread worktrees; each row counts its flag, as the sidebar dot does. */
-export function countUnreadWorktrees(
-  sources: Omit<UnreadBadgeCountSources, 'folders' | 'projectGroups'>
+/** Unread worktrees in one repo bucket; each row counts its flag, as the sidebar dot does. */
+export function countUnreadWorktreesInBucket(
+  worktrees: readonly Worktree[],
+  sources: Omit<UnreadBadgeCountSources, 'worktreeBuckets' | 'folders' | 'projectGroups'>
 ): number {
   const { visibleHostIds, defaultHostId } = sources
-  // Why host-keyed: the sidebar shows same-id copies on two hosts as two rows.
+  // Why host-keyed: the sidebar shows same-id copies on two hosts as two rows; ids embed the repo, so buckets never share one.
   const unreadWorktrees = new Set<string>()
-  for (const worktrees of Object.values(sources.worktreeBuckets)) {
-    for (const worktree of worktrees) {
-      // Why: the sidebar never renders an archived worktree, nor one on a host it is not showing.
-      if (
-        worktree.isUnread &&
-        !worktree.isArchived &&
-        (!sources.hiddenOtherDevicePairings ||
-          !isWorkspaceOwnedBySomeoneElse(worktree, sources.hiddenOtherDevicePairings)) &&
-        worktreeMatchesVisibleHost(worktree, visibleHostIds, sources.repoMap, defaultHostId)
-      ) {
-        unreadWorktrees.add(getWorktreeHostIdentity(worktree))
-      }
+  for (const worktree of worktrees) {
+    // Why: the sidebar never renders an archived worktree, nor one on a host it is not showing.
+    if (
+      worktree.isUnread &&
+      !worktree.isArchived &&
+      !isWorktreeRetiredByRemoval(worktree) &&
+      (!sources.hiddenOtherDevicePairings ||
+        !isWorkspaceOwnedBySomeoneElse(worktree, sources.hiddenOtherDevicePairings)) &&
+      worktreeMatchesVisibleHost(worktree, visibleHostIds, sources.repoMap, defaultHostId)
+    ) {
+      unreadWorktrees.add(getWorktreeHostIdentity(worktree))
     }
   }
   return unreadWorktrees.size
