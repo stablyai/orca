@@ -157,7 +157,7 @@ export function CustomRelayServerSettings(): React.JSX.Element {
         <p className="text-xs text-muted-foreground">
           {t(
             'settings.customRelay.validation',
-            'Use HTTPS URLs and a nonempty client ID. The relay URL must be an origin without a path. URLs cannot contain credentials, queries, or fragments. HTTP is allowed only on localhost, 127.0.0.1, or [::1] in unpackaged builds.'
+            'Use HTTPS URLs and a nonempty client ID. Both URLs must be origins without a path. URLs cannot contain credentials, queries, or fragments. HTTP is allowed only on localhost, 127.0.0.1, or [::1] in unpackaged builds.'
           )}
         </p>
         {state?.environmentOverrides ? (

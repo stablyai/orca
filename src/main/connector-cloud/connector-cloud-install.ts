@@ -64,7 +64,8 @@ export function createConnectorCloud({
     process.env.ORCA_CONNECTOR_URL,
     !environment.isPackaged()
   )
-  const canUseCloudAccount = () => !requiresExplicitCloudServiceUrl(explicitOrigin)
+  const canUseCloudAccount = (current = getOrcaCloudAuthConfig()) =>
+    current.configured && !requiresExplicitCloudServiceUrl(current.config, explicitOrigin)
   const migratePlaces = botPlaceMigrationOnHello(
     {
       list: () => store.listAutomations(),
@@ -118,7 +119,7 @@ export function createConnectorCloud({
     account: () => (canUseCloudAccount() ? connectorAccount(userDataPath) : null),
     mintFor: (account) => async () => {
       const current = getOrcaCloudAuthConfig()
-      return current.configured && canUseCloudAccount()
+      return current.configured && canUseCloudAccount(current)
         ? desktopConnectorTokenMint(current.config, userDataPath, account)()
         : SIGNED_OUT
     },
