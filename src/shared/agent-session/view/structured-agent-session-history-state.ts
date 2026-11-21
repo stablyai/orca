@@ -12,6 +12,11 @@ import {
   ownItemCount
 } from './structured-agent-session-item-retention'
 import { foldStructuredAgentSubagentRosterPage } from './structured-agent-session-subagent-roster'
+import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import {
+  noteStreamedTextRevision,
+  onlyStreamedTextChanged
+} from './structured-agent-session-streamed-text-rows'
 import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
 import { agentSessionHasOlderTranscript } from '../conversation-context/agent-session-context-clear'
 
@@ -78,6 +83,62 @@ export function mergeItems(
     }
   }
   return [...byId.values()].sort(compareAgentJournalItems)
+}
+
+/** Retained rows already fit the limits, which only grow, so rows revised in place skip the rescan. */
+export function mergeLiveItems(
+  current: AgentJournalRenderItem[],
+  incoming: readonly AgentJournalRenderItem[],
+  removedIds: readonly string[]
+): { items: AgentJournalRenderItem[]; rescan: boolean } {
+  const inPlace = removedIds.length === 0 ? replaceItemsInPlace(current, incoming) : null
+  return inPlace
+    ? { items: inPlace, rescan: false }
+    : { items: mergeItems(current, incoming, removedIds), rescan: true }
+}
+
+/** Revisions of loaded rows at their own positions; null when any row is new, moved or changes owner, so retention may need a fresh scan. */
+function replaceItemsInPlace(
+  current: AgentJournalRenderItem[],
+  incoming: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem[] | null {
+  let next: AgentJournalRenderItem[] | null = null
+  let textOnly = true
+  for (const item of incoming) {
+    const index = rowIndexAt(current, item)
+    const prior = current[index]
+    if (!prior || isRootAgentJournalItem(prior) !== isRootAgentJournalItem(item)) {
+      return null
+    }
+    if (item.revision >= prior.revision) {
+      textOnly &&= onlyStreamedTextChanged(prior, item)
+      next ??= current.slice()
+      next[index] = item
+    }
+  }
+  if (next && textOnly) {
+    noteStreamedTextRevision(next, current)
+  }
+  return next ?? current
+}
+
+/** Rows are in position order, so each lookup is a binary search. */
+function rowIndexAt(rows: readonly AgentJournalRenderItem[], item: AgentJournalRenderItem): number {
+  let low = 0
+  let high = rows.length - 1
+  while (low <= high) {
+    const middle = (low + high) >>> 1
+    const order = compareAgentJournalItems(rows[middle], item)
+    if (order === 0) {
+      return rows[middle].itemId === item.itemId ? middle : -1
+    }
+    if (order < 0) {
+      low = middle + 1
+    } else {
+      high = middle - 1
+    }
+  }
+  return -1
 }
 
 /** Streamed revisions replace their row in place and new rows append past the tail, keeping every other row's

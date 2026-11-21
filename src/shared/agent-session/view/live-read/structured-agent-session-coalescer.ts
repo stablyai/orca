@@ -14,7 +14,12 @@ function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
     event.queuedMessages !== undefined ||
     event.currentRequests !== undefined ||
     event.batch.removedItemIds.length > 0 ||
-    event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
+    // Replies and reasoning are what stream; every other row applies at once.
+    event.batch.items.some(
+      (item) =>
+        item.body.kind !== 'message' ||
+        (item.body.role !== 'assistant' && item.body.role !== 'reasoning')
+    )
   )
 }
 
@@ -82,9 +87,27 @@ function mergeBatch(
   }
 }
 
+/** Whether the viewer is hidden (a minimized window, a backgrounded phone), and when it shows. */
+export type StructuredAgentSessionViewerVisibility = {
+  hidden: () => boolean
+  subscribeShown: (shown: () => void) => () => void
+  /** Called just before text held while hidden is drawn. */
+  heldDrawn?: () => void
+}
+
+export type StructuredAgentSessionCoalescing = {
+  /** How long streamed text batches wait to merge. */
+  ms?: number
+  /** While hidden, batches keep merging instead of applying, and apply at once when shown. */
+  visibility?: StructuredAgentSessionViewerVisibility
+}
+
 export function createStructuredAgentSessionEventCoalescer(
   emit: (event: AgentSessionSubscribeEvent) => void,
-  delayMs = STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS
+  {
+    ms: delayMs = STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS,
+    visibility
+  }: StructuredAgentSessionCoalescing = {}
 ): {
   push: (event: AgentSessionSubscribeEvent) => void
   flush: () => void
@@ -103,6 +126,12 @@ export function createStructuredAgentSessionEventCoalescer(
       emit(event)
     }
   }
+  const stopShownWatch = visibility?.subscribeShown(() => {
+    if (pending) {
+      visibility.heldDrawn?.()
+    }
+    flush()
+  })
   return {
     push(event) {
       if (bypassCoalescing(event)) {
@@ -114,10 +143,11 @@ export function createStructuredAgentSessionEventCoalescer(
         return
       }
       pending = pending ? mergeBatch(pending, event) : event
-      timer ??= setTimeout(flush, delayMs)
+      timer ??= setTimeout(() => (visibility?.hidden() ? (timer = null) : flush()), delayMs)
     },
     flush,
     dispose() {
+      stopShownWatch?.()
       if (timer) {
         clearTimeout(timer)
       }

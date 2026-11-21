@@ -10,7 +10,7 @@ afterEach(cleanup)
 
 function documentOf(
   content: string,
-  props: { math?: boolean; fadeWords?: boolean } = {}
+  props: { math?: boolean; fadeFrom?: number } = {}
 ): HTMLElement {
   const node = document.createElement('div')
   node.innerHTML = renderToStaticMarkup(

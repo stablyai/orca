@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
+import * as coalescing from './structured-agent-session-coalescer'
 import {
   type AgentSessionTextAppendCapabilities,
   createAgentSessionTextAppendReader
@@ -48,12 +48,15 @@ export function startStructuredAgentSessionLiveRead(args: {
   hydrate?: (shouldStop: () => boolean) => Promise<void>
   sessionId: string
   subscribe: StructuredAgentSessionLiveSubscribe
-  /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
-  coalesceMs?: number
+  /** How streamed text batches merge, and whether a hidden viewer holds them; defaults apply. */
+  coalesce?: coalescing.StructuredAgentSessionCoalescing
   /** The appends the host advertises; opens wait for it, and null or a rejection means none. */
-  textAppend?: Promise<AgentSessionTextAppendCapabilities | null>
+  textAppend?:
+    | Promise<AgentSessionTextAppendCapabilities | null>
+    | AgentSessionTextAppendCapabilities
   /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
   promptSuggestions?: Promise<boolean> | boolean
+  liveTextViewer?: Parameters<typeof createStructuredAgentSessionSubscribeAsks>[0]['liveTextViewer']
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
@@ -79,11 +82,11 @@ export function startStructuredAgentSessionLiveRead(args: {
   let replacedOpenGeneration = 0
   const asks = createStructuredAgentSessionSubscribeAsks(args)
   let shouldStopCoalescedEvent = (): boolean => true
-  const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
+  const coalescer = coalescing.createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
       args.applyEvent(event)
     }
-  }, args.coalesceMs)
+  }, args.coalesce)
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()
@@ -108,11 +111,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const applyReadFailure = (error: unknown): void => {
     const refusal = readAgentSessionErrorRefusal(error)
     failedFinally = isFinalAgentSessionReadRefusal(refusal)
-    if (refusal) {
-      args.applyError(agentSessionReadFailureText(error), refusal)
-    } else {
-      args.applyError(agentSessionReadFailureText(error))
-    }
+    args.applyError(agentSessionReadFailureText(error), ...(refusal ? [refusal] : []))
   }
   const reportReadFailure = (error: unknown): void => {
     if (!isUnattachedAgentSessionReadRefusal(error)) {
@@ -186,6 +185,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     const opensSubscription = event.type !== 'end' && openingFrameGeneration === eventOpenGeneration
     if (opensSubscription) {
       openingFrameGeneration = 0
+      asks.registered()
     }
     // First resumed batch replaces detached state; apply alone so coalescing cannot turn it into unchanged state.
     if (opensSubscription) {
@@ -223,7 +223,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe()
     unsubscribe = (): void => {}
     try {
-      // Local desktop reads ask for no appends, so their subscribe still goes out in the same turn.
+      // Local reads answer at once, so their subscribe still goes out in the same turn.
       const asked = asks.read()
       const { textAppend, capabilities } = asked instanceof Promise ? await asked : asked
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
@@ -312,6 +312,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       stopHostContactWatch()
       reconnectScheduler.dispose()
       coalescer.dispose()
+      asks.dispose()
       unsubscribe()
     }
   }

@@ -32,6 +32,8 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 export type NativeChatTranscriptRowContext = {
   turnBot?: BotChatIdentity | null
   agentName?: string
+  /** The chat this transcript shows, so its replies draw at once only text their own chat held. */
+  heldTextSession?: string
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
   expandSignal: boolean

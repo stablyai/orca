@@ -14,6 +14,10 @@ import {
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 
+// The live read waits for the app to be active before drawing streamed text.
+vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(), removeItem: vi.fn() }
 }))

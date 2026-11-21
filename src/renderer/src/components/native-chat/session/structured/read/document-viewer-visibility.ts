@@ -1,0 +1,67 @@
+import type { StructuredAgentSessionViewerVisibility } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-coalescer'
+import type { StructuredAgentSessionLiveTextViewer } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-text-viewer'
+
+const documentHidden = (): boolean =>
+  typeof document !== 'undefined' && document.visibilityState === 'hidden'
+
+function subscribeDocumentShown(shown: () => void): () => void {
+  if (typeof document === 'undefined') {
+    return () => {}
+  }
+  const onChange = (): void => {
+    if (!documentHidden()) {
+      shown()
+    }
+  }
+  document.addEventListener('visibilitychange', onChange)
+  return () => document.removeEventListener('visibilitychange', onChange)
+}
+
+const heldDrawnBySession = new Map<string, number>()
+/** Chats whose catch-up counts are kept; a chat past this is long closed, and at worst one reply of
+ *  it draws its next words at once. */
+const HELD_DRAWN_CHATS_KEPT = 64
+
+/** How many times a chat's text held while the window was hidden has been drawn; its text landing
+ *  across a change was held. */
+export function documentHeldDrawnCount(sessionId: string | undefined): number {
+  return sessionId === undefined ? 0 : (heldDrawnBySession.get(sessionId) ?? 0)
+}
+
+/** A minimized or hidden window merges a chat's streaming text until it shows, then draws it once. */
+export function documentViewerVisibility(
+  sessionId: string
+): StructuredAgentSessionViewerVisibility {
+  return {
+    hidden: documentHidden,
+    heldDrawn: () => {
+      const count = documentHeldDrawnCount(sessionId) + 1
+      heldDrawnBySession.delete(sessionId)
+      heldDrawnBySession.set(sessionId, count)
+      if (heldDrawnBySession.size > HELD_DRAWN_CHATS_KEPT) {
+        heldDrawnBySession.delete(heldDrawnBySession.keys().next().value!)
+      }
+    },
+    subscribeShown: subscribeDocumentShown
+  }
+}
+
+/** A read runs only while a view of its chat is shown in a tab, so its window's visibility is
+ *  whether the chat is on screen. */
+export function documentLiveTextViewer(
+  supported: StructuredAgentSessionLiveTextViewer['supported'],
+  setShown: StructuredAgentSessionLiveTextViewer['setShown']
+): StructuredAgentSessionLiveTextViewer {
+  return {
+    supported,
+    shown: () => !documentHidden(),
+    subscribeShown: (changed) => {
+      if (typeof document === 'undefined') {
+        return () => {}
+      }
+      document.addEventListener('visibilitychange', changed)
+      return () => document.removeEventListener('visibilitychange', changed)
+    },
+    setShown
+  }
+}

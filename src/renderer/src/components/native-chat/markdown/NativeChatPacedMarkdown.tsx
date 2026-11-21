@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react'
+import { useRef, type ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
 
@@ -8,18 +8,21 @@ export function NativeChatPacedMarkdown({
   content,
   streaming,
   ...props
-}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeWords'> & {
+}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeFrom' | 'fadeHold'> & {
   rowKey: string
   streaming: boolean
 }): React.JSX.Element {
-  const paced = useNativeChatPacedText(rowKey, content, streaming)
+  const root = useRef<HTMLDivElement | null>(null)
+  const paced = useNativeChatPacedText(rowKey, content, streaming, root)
   return (
     <NativeChatMarkdown
       {...props}
+      ref={root}
       rowKey={rowKey}
       content={paced.text}
       streaming={streaming || paced.revealing}
-      fadeWords={paced.fading}
+      fadeFrom={paced.fadeFrom}
+      fadeHold={paced.fadeHold}
     />
   )
 }

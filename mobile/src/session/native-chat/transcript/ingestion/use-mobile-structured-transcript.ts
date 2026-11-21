@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
-  agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
 } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
@@ -12,6 +11,11 @@ import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/nativ
 import { omitNativeChatThreadGoalRows } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 import { createStructuredQuestionProjection } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
+import {
+  noteStreamedTextProjection,
+  rowsBesideStreamedText,
+  streamedRowsFromFloor
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   projectAutomationRunNotStartedItem,
   projectAutomationSavedItem,
@@ -54,10 +58,9 @@ export function useMobileStructuredTranscript(
   // A rewind's new epoch restarts sequences, so the press's rows are not in it.
   const clearSentTail =
     clearSent?.sessionKey === sessionKey && clearSent.epoch === state.epoch ? clearSent.tail : null
-  const latestClear = useMemo(
-    () => latestAgentSessionContextClearSequence(state.items),
-    [state.items]
-  )
+  // A streaming reply never moves the /clear floor, so its text revisions keep this memo.
+  const clearRows = rowsBesideStreamedText(state.items)
+  const latestClear = useMemo(() => latestAgentSessionContextClearSequence(clearRows), [clearRows])
   const clearing = agentSessionContextClearOutstanding(state.items, latestClear, clearSentTail)
   // Retire a press that hides nothing (its divider landed, or its rows left), so a later trim cannot re-arm it.
   if (clearSent?.sessionKey === sessionKey && !clearing) {
@@ -66,7 +69,7 @@ export function useMobileStructuredTranscript(
   const floor = clearing ? clearSentTail + 1 : latestClear
   const transcriptItems = useMemo(
     () =>
-      withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items, floor), {
+      withNativeChatCutTurnNotices(streamedRowsFromFloor(state.items, floor), {
         agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined
       }),
     [agent, floor, state.items]
@@ -78,8 +81,15 @@ export function useMobileStructuredTranscript(
   const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
   const messages = useMemo(
     () =>
-      // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(projectMessages(transcriptItems, optimistic, state.submissions)),
+      // Linked to the last messages when only a reply's text moved, so turn structure holds.
+      noteStreamedTextProjection(
+        transcriptItems,
+        [optimistic, state.submissions],
+        // The goal strip on the composer shows goal state, as on desktop.
+        omitNativeChatThreadGoalRows(
+          projectMessages(transcriptItems, optimistic, state.submissions)
+        )
+      ),
     [transcriptItems, optimistic, state.submissions, projectMessages]
   )
   return {

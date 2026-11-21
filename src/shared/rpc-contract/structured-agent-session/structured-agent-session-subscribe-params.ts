@@ -6,7 +6,9 @@ const SubscribeCapabilities = z.object({
   textAppend: z.literal(1).optional(),
   toolOutputAppend: z.literal(1).optional(),
   // This reader shows suggestions on screen; the host pauses generating them while none does.
-  promptSuggestions: z.literal(1).optional()
+  promptSuggestions: z.literal(1).optional(),
+  // This reader takes live text only while it says it is shown: now, then via `agentSession.liveTextShown`.
+  liveTextViewer: z.object({ id: z.string().min(1).max(64), shown: z.boolean() }).optional()
 })
 
 export const SubscribeParams = z
@@ -14,5 +16,15 @@ export const SubscribeParams = z
     sessionId: SessionId,
     cursor: JournalCursor.optional(),
     capabilities: SubscribeCapabilities.optional()
+  })
+  .strict()
+
+/** A live-text viewer saying it is shown or hidden: one connection's view of one chat. */
+export const LiveTextShownParams = z
+  .object({
+    sessionId: SessionId,
+    // The viewer's own id from its subscribe, since windows can share one connection.
+    viewerId: z.string().min(1).max(64),
+    shown: z.boolean()
   })
   .strict()

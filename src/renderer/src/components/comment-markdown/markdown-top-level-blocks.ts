@@ -6,6 +6,7 @@ import remarkParse from 'remark-parse'
 import { remarkChatMath } from './chat-markdown-math'
 import { chatMathCodeFences } from './chat-markdown-math-nodes'
 import { unified } from 'unified'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 export type MarkdownBlock = {
   /** Source offset, retained for settled blocks on append. */
@@ -101,7 +102,8 @@ export function splitMarkdownTopLevelBlocks(
   const reparsed = grewFromPrevious ? previous.blocks.at(-unsettled) : undefined
   const base = reparsed?.start ?? 0
   const baseLine = reparsed?.line ?? 1
-  const tail = source.slice(base)
+  // Kept blocks and their trees slice this tail, so a copy pins only it, not this whole version.
+  const tail = base > 0 ? ownRetainedString(source.slice(base)) : source
   const tree = parse ? parse(tail) : (math ? mathBlockParser : blockParser).parse(tail)
   if (math) {
     chatMathCodeFences(tree, tail)

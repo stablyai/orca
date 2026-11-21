@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
 
@@ -22,6 +22,58 @@ function batch(
 }
 
 describe('structured agent session event coalescer', () => {
+  it("holds a hidden viewer's streaming text, then draws the newest of it once it shows", () => {
+    vi.useFakeTimers()
+    const events: AgentSessionSubscribeEvent[] = []
+    let hidden = true
+    let shown = (): void => {}
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event), {
+      ms: 50,
+      visibility: {
+        hidden: () => hidden,
+        subscribeShown: (onShown) => {
+          shown = onShown
+          return () => {}
+        }
+      }
+    })
+    const reply = (sequence: number, text: string) => ({
+      ...batch(sequence),
+      batch: {
+        ...batch(sequence).batch,
+        items: [
+          {
+            itemId: 'reply',
+            revision: 1,
+            sequence: 1,
+            observedAt: 1,
+            body: {
+              kind: 'message' as const,
+              role: 'assistant' as const,
+              blocks: [{ type: 'text' as const, text }]
+            }
+          }
+        ]
+      }
+    })
+    for (let window = 1; window <= 20; window++) {
+      coalescer.push(reply(window, 'word '.repeat(window)))
+      vi.advanceTimersByTime(60)
+    }
+    expect(events).toEqual([])
+    hidden = false
+    shown()
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      batch: {
+        cursor: { sequence: 20 },
+        items: [{ body: { blocks: [{ text: 'word '.repeat(20) }] } }]
+      }
+    })
+    coalescer.dispose()
+    vi.useRealTimers()
+  })
+
   it('passes a queue list through at once, with anything it held merged ahead of it', () => {
     const events: AgentSessionSubscribeEvent[] = []
     const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
@@ -80,5 +132,36 @@ describe('structured agent session event coalescer', () => {
       { id: 's-1', text: 'add a test' },
       null
     ])
+  })
+
+  it('reports held text drawn only when a show had text waiting', () => {
+    vi.useFakeTimers()
+    let hidden = true
+    let shown = (): void => {}
+    let drawn = 0
+    const coalescer = createStructuredAgentSessionEventCoalescer(() => {}, {
+      ms: 50,
+      visibility: {
+        hidden: () => hidden,
+        heldDrawn: () => {
+          drawn += 1
+        },
+        subscribeShown: (onShown) => {
+          shown = onShown
+          return () => {}
+        }
+      }
+    })
+    hidden = false
+    shown()
+    expect(drawn).toBe(0)
+    hidden = true
+    coalescer.push(batch(1))
+    vi.advanceTimersByTime(100)
+    hidden = false
+    shown()
+    expect(drawn).toBe(1)
+    coalescer.dispose()
+    vi.useRealTimers()
   })
 })

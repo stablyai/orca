@@ -8,9 +8,10 @@ import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal
 import type {
   StructuredAgentSessionEventTarget,
   StructuredAgentSessionSinkAdmission,
-  StructuredAgentSessionAppendOptions
+  StructuredAgentSessionAppendOptions,
+  LiveTextRead,
+  LiveTextReaders
 } from './structured-agent-session-event-sink'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type StructuredAgentSessionPublishOptions = Pick<
   StructuredAgentSessionAppendOptions,
@@ -28,19 +29,24 @@ export function createLiveTextPublication(
   submit: (
     operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
   ) => StructuredAgentSessionSinkAdmission,
-  current: (bound: StructuredAgentSessionEventTarget) => boolean,
-  read: () => readonly AgentJournalRenderItem[]
+  target: () => StructuredAgentSessionEventTarget | null,
+  read: LiveTextRead
 ): () => StructuredAgentSessionSinkAdmission {
+  // Asked each window, so a viewer who arrives mid-stream gets the next one.
+  const nobodyTakes = (readers: LiveTextReaders | null | undefined): boolean =>
+    readers === null || (readers?.appends === false && read(readers).length === 0)
   return () =>
-    submit({
-      bytes: 1,
-      publicationKey: 'live-text',
-      run: (bound) => {
-        if (current(bound)) {
-          bound.publishLiveText?.(read())
-        }
-      }
-    })
+    nobodyTakes(target()?.liveTextReaders?.())
+      ? { accepted: true }
+      : submit({
+          bytes: 1,
+          publicationKey: 'live-text',
+          run: (bound) => {
+            if (target() === bound) {
+              bound.publishLiveText?.(read)
+            }
+          }
+        })
 }
 
 export function createChildWorkPublication(

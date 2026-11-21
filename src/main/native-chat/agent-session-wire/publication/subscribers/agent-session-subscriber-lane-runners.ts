@@ -2,10 +2,8 @@ import {
   deliverToSubscriber,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
-import {
-  publishSubscriberLiveText,
-  republishSubscriberBackgroundTasks
-} from './agent-session-live-publications'
+import { republishSubscriberBackgroundTasks } from './agent-session-live-publications'
+import { publishSubscriberLiveText } from './agent-session-subscriber-live-text'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import {
   SubscriberDeliveryLane,

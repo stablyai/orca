@@ -1,12 +1,16 @@
+import { appendWithinUtf8ByteLimit } from './agent-session-delta-prefix'
+
 // Coalesce token deltas into text snapshots to reduce journal writes and subscriber frames.
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
 
 export const AGENT_SESSION_DELTA_COALESCE_MS = 60
+/** Quiet time after the last delta before a stream's unsaved text is saved. */
+export const AGENT_SESSION_TEXT_IDLE_SAVE_MS = 1000
 
 /** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
 export const AGENT_SESSION_STREAMED_TEXT_TOTAL_MAX_BYTES = 32 * 1024 * 1024
-export const AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER = '\n[Orca: streamed output truncated]'
+export { AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER } from './agent-session-delta-prefix'
 export const AGENT_SESSION_MAX_STREAMS = 256
 
 export type AgentSessionDeltaSnapshot = {
@@ -15,11 +19,21 @@ export type AgentSessionDeltaSnapshot = {
   truncated: boolean
 }
 
+/** What `emit` returns when it took the snapshot without saving it (only shown it live). */
+export const AGENT_SESSION_DELTA_SHOWN_ONLY = 'shown-only'
+
 export type AgentSessionDeltaCoalescerDeps = {
   /** Emit the complete snapshot, not the increment. */
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
   /** False skips an accepted snapshot; emit reports actual sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
+  /** Runs once a stream `applies` to has had no text for `ms`; each later quiet save of that stream
+   *  needs twice the quiet, so however sparse its deltas a stream gets only logarithmically many. */
+  idle?: {
+    ms: number
+    applies?: (key: string) => boolean
+    run: (key: string, text: string) => void
+  }
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -39,6 +53,8 @@ export type AgentSessionDeltaCoalescer = {
   forget: (key: string) => void
   dispose: () => void
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** The retained text, or undefined past `maxLength`; a longer text is never joined. */
+  textWithin: (key: string, maxLength: number) => string | undefined
   dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
   /** External writes satisfy the current snapshot until more text arrives. */
   markFlushed: (key: string) => void
@@ -68,6 +84,9 @@ export function createAgentSessionDeltaCoalescer(
       observedBytes: number
       truncated: boolean
       dirty: boolean
+      appendedAt: number
+      quietMs: number
+      cancelIdle: (() => void) | null
     }
   >()
   let totalRetainedBytes = 0
@@ -83,7 +102,7 @@ export function createAgentSessionDeltaCoalescer(
       stream.dirty = false
       return true
     }
-    const text = stream.chunks.join('')
+    const text = joined(stream)
     const emitted = deps.emit(key, text, {
       text,
       observedBytes: stream.observedBytes,
@@ -93,6 +112,10 @@ export function createAgentSessionDeltaCoalescer(
       return false
     }
     stream.dirty = false
+    // A save starts the quiet-save backoff over, so the next pause still saves within a second.
+    if (emitted !== AGENT_SESSION_DELTA_SHOWN_ONLY) {
+      stream.quietMs = deps.idle?.ms ?? 0
+    }
     return true
   }
 
@@ -101,6 +124,35 @@ export function createAgentSessionDeltaCoalescer(
       cancelTimer = null
       flushAll()
     }, windowMs)
+  }
+
+  type Stream = NonNullable<ReturnType<typeof streams.get>>
+  // Keep the joined text so rereading an unchanged stream copies nothing.
+  const joined = (stream: Stream): string => {
+    const text = stream.chunks.length === 1 ? stream.chunks[0] : stream.chunks.join('')
+    stream.chunks = text ? [text] : []
+    return text
+  }
+
+  // Measured from the last delta, never the last save, so continuous streaming saves nothing extra.
+  const armIdle = (key: string, stream: Stream, ms: number): void => {
+    const idle = deps.idle
+    if (!idle) {
+      return
+    }
+    stream.cancelIdle = schedule(() => {
+      stream.cancelIdle = null
+      if (streams.get(key) !== stream) {
+        return
+      }
+      const quiet = performance.now() - stream.appendedAt
+      if (quiet < stream.quietMs) {
+        armIdle(key, stream, stream.quietMs - quiet)
+        return
+      }
+      stream.quietMs *= 2
+      idle.run(key, joined(stream))
+    }, ms)
   }
 
   const flushAll = (): boolean => {
@@ -118,6 +170,9 @@ export function createAgentSessionDeltaCoalescer(
 
   return {
     append: (key, delta) => {
+      if (delta.length === 0) {
+        return true
+      }
       let stream = streams.get(key)
       if (!stream) {
         // Flush before eviction so a new untrusted ID cannot erase observed output.
@@ -135,6 +190,7 @@ export function createAgentSessionDeltaCoalescer(
             const evicted = streams.get(oldest)
             if (evicted) {
               totalRetainedBytes -= evicted.retainedBytes
+              evicted.cancelIdle?.()
             }
             streams.delete(oldest)
             evictable.delete(oldest)
@@ -147,7 +203,10 @@ export function createAgentSessionDeltaCoalescer(
           textLength: 0,
           observedBytes: 0,
           truncated: false,
-          dirty: false
+          dirty: false,
+          appendedAt: 0,
+          quietMs: deps.idle?.ms ?? 0,
+          cancelIdle: null
         }
         if (!deps.isProtected?.(key)) {
           evictable.add(key)
@@ -177,6 +236,10 @@ export function createAgentSessionDeltaCoalescer(
         stream.dirty = true
       }
       streams.set(key, stream)
+      stream.appendedAt = performance.now()
+      if (!stream.cancelIdle && deps.idle?.applies?.(key) !== false) {
+        armIdle(key, stream, stream.quietMs)
+      }
       // Share one timer across streams to bound wakeups per window.
       scheduleFlush()
       return true
@@ -186,6 +249,7 @@ export function createAgentSessionDeltaCoalescer(
     forget: (key) => {
       const stream = streams.get(key)
       if (stream) {
+        stream.cancelIdle?.()
         totalRetainedBytes -= stream.retainedBytes
         streams.delete(key)
         evictable.delete(key)
@@ -194,15 +258,22 @@ export function createAgentSessionDeltaCoalescer(
     dispose: () => {
       cancelTimer?.()
       cancelTimer = null
+      for (const stream of streams.values()) {
+        stream.cancelIdle?.()
+      }
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
+    },
+    textWithin: (key, maxLength) => {
+      const stream = streams.get(key)
+      return stream && stream.textLength <= maxLength ? joined(stream) : undefined
     },
     snapshot: (key) => {
       const stream = streams.get(key)
       return stream
         ? {
-            text: stream.chunks.join(''),
+            text: joined(stream),
             observedBytes: stream.observedBytes,
             truncated: stream.truncated
           }
@@ -215,7 +286,7 @@ export function createAgentSessionDeltaCoalescer(
               {
                 key,
                 snapshot: {
-                  text: stream.chunks.join(''),
+                  text: joined(stream),
                   observedBytes: stream.observedBytes,
                   truncated: stream.truncated
                 }
@@ -230,73 +301,4 @@ export function createAgentSessionDeltaCoalescer(
       }
     }
   }
-}
-
-function appendWithinUtf8ByteLimit(
-  current: string[],
-  currentBytes: number,
-  delta: string,
-  deltaBytes: number,
-  maxBytes: number
-): { chunks: string[]; retainedBytes: number; truncated: boolean } {
-  const available = Math.max(0, maxBytes - currentBytes)
-  if (deltaBytes <= available) {
-    // Append in place to avoid copying the entire prefix for every token.
-    if (delta.length > 0) {
-      current.push(delta)
-    }
-    return {
-      chunks: current,
-      retainedBytes: currentBytes + deltaBytes,
-      truncated: false
-    }
-  }
-  return truncateStreamPrefix(current, delta, maxBytes)
-}
-
-function truncateStreamPrefix(
-  current: string[],
-  delta: string,
-  maxBytes: number
-): { chunks: string[]; retainedBytes: number; truncated: boolean } {
-  const marker = Buffer.from(AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER, 'utf8')
-  const headBytes = Math.max(0, maxBytes - marker.byteLength)
-  const boundedHead = Number.isSafeInteger(maxBytes) && maxBytes >= 0
-  const combined = boundedHead
-    ? Buffer.allocUnsafe(headBytes)
-    : Buffer.concat([
-        ...current.map((chunk) => Buffer.from(chunk, 'utf8')),
-        Buffer.from(delta, 'utf8')
-      ])
-  let end = boundedHead
-    ? writeStreamPrefix(combined, current, delta)
-    : Math.min(combined.byteLength, headBytes)
-  if (!boundedHead) {
-    while (end > 0 && (combined[end] & 0b1100_0000) === 0b1000_0000) {
-      end -= 1
-    }
-  }
-  const visibleMarker = marker.subarray(0, Math.min(marker.byteLength, maxBytes - end))
-  const text = combined.subarray(0, end).toString('utf8') + visibleMarker.toString('utf8')
-  return {
-    chunks: text ? [text] : [],
-    retainedBytes: Buffer.byteLength(text, 'utf8'),
-    truncated: true
-  }
-}
-
-function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): number {
-  let end = 0
-  for (const chunk of chunks) {
-    if (end === buffer.length) {
-      return end
-    }
-    const written = buffer.write(chunk, end, buffer.length - end, 'utf8')
-    end += written
-    // Independent chunk encoding preserves split-surrogate replacement.
-    if (written < Buffer.byteLength(chunk, 'utf8')) {
-      return end
-    }
-  }
-  return end + buffer.write(delta, end, buffer.length - end, 'utf8')
 }

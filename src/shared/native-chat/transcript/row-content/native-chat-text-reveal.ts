@@ -22,6 +22,132 @@ export type NativeChatTextRevealFrames = {
   now: () => number
   request: (step: () => void) => number
   cancel: (frame: number) => void
+  /** How long the last step took to render, timed by the surface from the step to its commit. */
+  stepCost?: (ms: number) => void
+}
+
+/** Until the display's own frames are measured, assume 60 Hz. */
+const FRAME_MS = 1000 / 60
+const MIN_FRAME_MS = 1000 / 240
+const MAX_FRAME_MS = 1000 / 30
+/** Recent frame gaps the display period is read from. */
+const FRAME_GAP_SAMPLES = 15
+
+/** The display's frame period: the lower quartile of recent gaps, so steps and long frames don't
+ *  raise it and a lone fast double-frame doesn't lower it. */
+function displayFramePeriod(gaps: readonly number[]): number {
+  if (gaps.length < 3) {
+    return FRAME_MS
+  }
+  const sorted = [...gaps].sort((a, b) => a - b)
+  const quartile = sorted[Math.floor(sorted.length / 4)]!
+  return Math.min(MAX_FRAME_MS, Math.max(MIN_FRAME_MS, quartile))
+}
+
+/** Recent steps whose render cost sets the spacing; their median, so one slow step doesn't. */
+const STEP_COST_SAMPLES = 3
+
+function medianStepCost(costs: readonly number[]): number {
+  const sorted = [...costs].sort((a, b) => a - b)
+  return sorted[Math.floor((sorted.length - 1) / 2)] ?? 0
+}
+/** However slowly the reply renders, it still moves at least this often. */
+const MAX_STEP_MS = 6000
+/** A wait longer than this many frames sleeps on a timer instead of asking for every frame. */
+const PARK_FRAMES = 2
+/** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
+const HIDDEN_STEP_MS = 100
+
+/** A reveal frame clock that steps at most every `stepMs`, and slower when a step is slow to
+ *  render: the surface reports each step's own render time, and the median of the last few is
+ *  kept to at most `busyShare` of the time between steps. Restarting a request keeps the spacing. */
+export function nativeChatRevealStepFrames(
+  stepMs: number,
+  busyShare = 1
+): NativeChatTextRevealFrames {
+  let steppedAt = -Infinity
+  let spacing = stepMs
+  const stepCosts: number[] = []
+  let lastFrame: number | undefined
+  const gaps: number[] = []
+  let period = FRAME_MS
+  let nextId = 0
+  const pending = new Map<
+    number,
+    { frame: number; park?: ReturnType<typeof setTimeout>; timer: ReturnType<typeof setTimeout> }
+  >()
+  const cancel = (id: number): void => {
+    const waiting = pending.get(id)
+    if (waiting) {
+      cancelAnimationFrame(waiting.frame)
+      clearTimeout(waiting.park)
+      clearTimeout(waiting.timer)
+      pending.delete(id)
+    }
+  }
+  return {
+    now: () => performance.now(),
+    stepCost: (ms) => {
+      stepCosts.push(Math.max(0, ms))
+      if (stepCosts.length > STEP_COST_SAMPLES) {
+        stepCosts.shift()
+      }
+    },
+    request: (step) => {
+      const id = ++nextId
+      const fire = (at: number): void => {
+        cancel(id)
+        spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / busyShare))
+        steppedAt = at
+        step()
+      }
+      // Frames between steps are only waited through: a long wait sleeps until a frame before the step.
+      const awaitFrame = (from: number): void => {
+        const waiting = pending.get(id)!
+        const due = steppedAt + spacing
+        // Waking two frames early leaves a gap between frames to keep reading the display's rate.
+        if (due - from > (PARK_FRAMES + 1) * period) {
+          lastFrame = undefined
+          waiting.park = setTimeout(
+            () => {
+              waiting.frame = requestAnimationFrame(onFrame)
+            },
+            due - from - PARK_FRAMES * period
+          )
+          return
+        }
+        waiting.frame = requestAnimationFrame(onFrame)
+      }
+      const onFrame = (frameStart: number): void => {
+        // A gap past two of the slowest frames is a restart after idling, not the display's rate.
+        if (lastFrame !== undefined && frameStart - lastFrame <= 2 * MAX_FRAME_MS) {
+          gaps.push(frameStart - lastFrame)
+          if (gaps.length > FRAME_GAP_SAMPLES) {
+            gaps.shift()
+          }
+          period = displayFramePeriod(gaps)
+        }
+        lastFrame = frameStart
+        // Half a frame early is the nearest frame to the step's time.
+        if (frameStart < steppedAt + spacing - period / 2) {
+          awaitFrame(frameStart)
+          return
+        }
+        fire(frameStart)
+      }
+      const now = performance.now()
+      pending.set(id, {
+        frame: -1,
+        timer: setTimeout(
+          () => fire(performance.now()),
+          Math.max(0, steppedAt + spacing - now) + HIDDEN_STEP_MS
+        )
+      })
+      awaitFrame(now)
+      return id
+    },
+    cancel
+  }
 }
 
 function endsWord(char: string): boolean {
@@ -128,31 +254,20 @@ export function receiveNativeChatText(
     : advanceNativeChatText(arriveNativeChatText(previous, text, now), now, revealMs)
 }
 
-/** Step each frame until complete and return cancellation. Deadline timers keep hidden windows on time when animation frames stop. */
+/** Step on the frame clock until complete and return cancellation. The clock spaces the steps. */
 export function playNativeChatTextReveal(
   current: () => NativeChatTextReveal,
   step: (next: NativeChatTextReveal) => void,
   frames: NativeChatTextRevealFrames,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): () => void {
-  let frame = 0
-  let deadline: ReturnType<typeof setTimeout> | undefined
   const tick = (): void => {
-    frames.cancel(frame)
-    clearTimeout(deadline)
-    const now = frames.now()
-    const next = advanceNativeChatText(current(), now, revealMs)
+    const next = advanceNativeChatText(current(), frames.now(), revealMs)
     step(next)
-    if (next.shown >= next.source.length) {
-      return
+    if (next.shown < next.source.length) {
+      frame = frames.request(tick)
     }
-    frame = frames.request(tick)
-    const earliest = Math.min(...next.arrivals.map((arrival) => arrival.at + revealMs))
-    deadline = setTimeout(tick, Math.max(0, earliest - now))
   }
-  tick()
-  return () => {
-    frames.cancel(frame)
-    clearTimeout(deadline)
-  }
+  let frame = frames.request(tick)
+  return () => frames.cancel(frame)
 }

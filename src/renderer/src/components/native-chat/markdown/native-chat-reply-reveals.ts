@@ -5,6 +5,9 @@ import {
   type NativeChatReplyReveals
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 
+/** The chat a transcript shows, so its replies draw at once only text their own chat held. */
+export const NativeChatHeldTextSessionContext = createContext<string | undefined>(undefined)
+
 /** Absent outside a transcript: such a row neither begins nor is remembered. */
 export const NativeChatReplyRevealsContext = createContext<NativeChatReplyReveals | null>(null)
 

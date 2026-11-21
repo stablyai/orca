@@ -2,11 +2,15 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import {
+  AGENT_SESSION_TEXT_IDLE_SAVE_MS,
+  createAgentSessionDeltaCoalescer
+} from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
-import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
+import { codexJournalItem } from './codex-structured-item-translation'
+import { codexRunningStreamBody, codexShowsLiveText } from './codex-streamed-item-body'
 import {
   codexStructuredItemKey,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
@@ -51,6 +55,7 @@ export function createCodexStructuredItemStreams(
   let retainedPatchBytes = 0
 
   const forgetState = (key: string): void => {
+    live.forget(key)
     coalescer.forget(key)
     states.forget(key)
     checkpointLengths.delete(key)
@@ -93,16 +98,16 @@ export function createCodexStructuredItemStreams(
   }
 
   const append = (key: string, state: CodexItemStreamState, text: string): boolean => {
-    const translated = codexStreamingJournalItem(state.item, text)
-    if (!translated.body) {
-      return true
-    }
-    const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
-    return appendCodexItemAndPublish(deps.sink, state.identity, body, {
-      ...attributionOf(key),
-      ...(state.startedAt === undefined ? {} : { observedAt: state.startedAt })
-    }).accepted
+    const body = codexRunningStreamBody(state.item, text)
+    const observed = state.startedAt === undefined ? {} : { observedAt: state.startedAt }
+    const committed = codexShowsLiveText(state.item) ? live.committed(key) : undefined
+    const options = { ...attributionOf(key), ...observed }
+    return (
+      !body ||
+      appendCodexItemAndPublish(deps.sink, state.identity, body, options, committed).accepted
+    )
   }
+  const isText = (key: string): boolean => codexShowsLiveText(states.get(key)?.item)
 
   const shouldPersist = (key: string, textLength: number): boolean => {
     const checkpointLength = checkpointLengths.get(key) ?? 0
@@ -129,11 +134,32 @@ export function createCodexStructuredItemStreams(
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
-    shouldEmit: shouldPersist,
-    emit: (key, text) => {
-      return persist(key, text, false)
+    // Below the gate only a live publication is due, which reads text only for a viewer.
+    shouldEmit: (key, textLength) => {
+      const save = shouldPersist(key, textLength)
+      if (!save && isText(key)) {
+        live.publish()
+      }
+      return save
+    },
+    emit: (key, text) => persist(key, text, false),
+    idle: {
+      ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
+      applies: isText,
+      // A refused save stays pending for the next barrier; quiet never retries on its own.
+      run: (key, text) => {
+        if (checkpointLengths.get(key) !== text.length) {
+          persist(key, text, true)
+        }
+      }
     }
   })
+
+  const live = new StructuredAgentSessionLiveTextRows(
+    deps.sink,
+    (key, maxLength) => (isText(key) ? coalescer.textWithin(key, maxLength) : undefined),
+    (key, text) => codexRunningStreamBody(states.get(key)?.item, text)
+  )
 
   const ensureState = (
     threadId: string,
@@ -275,6 +301,7 @@ export function createCodexStructuredItemStreams(
     },
     flush,
     dispose: () => {
+      live.dispose()
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()

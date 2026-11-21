@@ -22,6 +22,7 @@ import {
 } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered-agent'
+import { projectionBesideStreamedText } from '../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */
 export type MobileNativeChatForkOffer = 'hidden' | 'reserved' | 'disabled' | 'available'
@@ -81,17 +82,19 @@ export function useMobileNativeChatFork(input: {
     [host, registered, input.sessionForkSupport, inheritedOriginal]
   )
   const { messages, turnJournal, agentWorking, sessionId, agent, createFork } = input
+  // Turn keys read message ids and turns, never reply text, so they hold while a reply streams.
+  const structure = projectionBesideStreamedText(messages)
   const turns = useMemo(() => {
-    const membership = nativeChatTurnMembership(messages, turnJournal)
+    const membership = nativeChatTurnMembership(structure, turnJournal)
     const keyById = new Map(
-      messages.map((message, index) => [message.id, membership.turnKeys[index]])
+      structure.map((message, index) => [message.id, membership.turnKeys[index]])
     )
     return {
       keyById,
       liveTurnKey: membership.liveTurnKey,
       latestTurnKey: membership.turnKeys.findLast((key) => key !== undefined)
     }
-  }, [messages, turnJournal])
+  }, [structure, turnJournal])
   const contextFloorSequence = latestAgentSessionContextClearSequence(turnJournal?.items ?? [])
   // The sheet's row is a display projection; only one naming the agent's own message forks.
   const { forkableItemIds, inheritedThroughSequence } = useMemo(

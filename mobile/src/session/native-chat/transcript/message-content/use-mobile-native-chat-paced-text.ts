@@ -7,47 +7,19 @@ import {
   useSyncExternalStore
 } from 'react'
 import {
+  nativeChatRevealStepFrames,
   playNativeChatTextReveal,
   receiveNativeChatText,
-  startNativeChatTextReveal,
-  type NativeChatTextRevealFrames
+  startNativeChatTextReveal
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from '../tool-results/mobile-native-chat-reply-reveals'
 import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-chat-growth-hold'
 
 /** Phones spread each arrival over less time than desktop, so new words show sooner. */
 const REVEAL_MS = 180
-/** Each reveal step parses and draws the reply again, so phones step at most 30 times a second. */
-const REVEAL_STEP_MS = 1000 / 30
-/** Half a 60 Hz frame, so a step lands on every second frame there and every fourth at 120 Hz. */
-const FRAME_SLACK_MS = 8
-/** The animation frame each pending step is waiting on. */
-const waitingSteps = new Map<number, number>()
-
-const FRAMES: NativeChatTextRevealFrames = {
-  now: () => performance.now(),
-  request: (step) => {
-    const due = performance.now() + REVEAL_STEP_MS - FRAME_SLACK_MS
-    const wait = (frameStart: number): void => {
-      if (frameStart < due) {
-        waitingSteps.set(id, requestAnimationFrame(wait))
-        return
-      }
-      waitingSteps.delete(id)
-      step()
-    }
-    const id = requestAnimationFrame(wait)
-    waitingSteps.set(id, id)
-    return id
-  },
-  cancel: (id) => {
-    const frame = waitingSteps.get(id)
-    if (frame !== undefined) {
-      cancelAnimationFrame(frame)
-      waitingSteps.delete(id)
-    }
-  }
-}
+const STEP_MS = 1000 / 30
+/** A slow-drawing reply leaves at least half the JS thread to scrolling and input. */
+const REVEAL_BUSY_SHARE = 1 / 2
 
 export type MobileNativeChatPacedText = { text: string; revealing: boolean }
 
@@ -62,13 +34,14 @@ export function useMobileNativeChatPacedText(
   const held = useSyncExternalStore(growth.subscribe, growth.held, growth.held)
   const list = paced ? (chat ?? undefined) : undefined
   const immediate = list === undefined || list.reducedMotion
+  const [frames] = useState(() => nativeChatRevealStepFrames(STEP_MS, REVEAL_BUSY_SHARE))
   const [initial] = useState(() =>
     startNativeChatTextReveal(
       text,
       streaming,
       list?.drawn.get(rowKey),
       list?.begun.has(rowKey) === true,
-      FRAMES.now(),
+      frames.now(),
       REVEAL_MS
     )
   )
@@ -81,14 +54,16 @@ export function useMobileNativeChatPacedText(
       text,
       streaming,
       immediate,
-      FRAMES.now(),
+      frames.now(),
       REVEAL_MS
     )
     setShown(pace.current.shown)
     list?.drawn.set(rowKey, pace.current)
     list?.begun.delete(rowKey)
-  }, [text, streaming, immediate, list, rowKey])
+  }, [text, streaming, immediate, list, rowKey, frames])
 
+  // A step's cost runs from the step to its commit.
+  const stepStartedAt = useRef<number | null>(null)
   const behind = !immediate && shown < text.length
   // Held, the reveal waits; its deadlines keep running, so it catches up in one step after.
   useEffect(() => {
@@ -104,14 +79,22 @@ export function useMobileNativeChatPacedText(
     return playNativeChatTextReveal(
       () => pace.current,
       (next) => {
+        // A step that shows nothing new renders nothing, so there is no cost to time.
+        stepStartedAt.current = next.shown === pace.current.shown ? null : performance.now()
         pace.current = next
         list?.drawn.set(rowKey, next)
         setShown(next.shown)
       },
-      FRAMES,
+      frames,
       REVEAL_MS
     )
-  }, [behind, text, list, rowKey, streaming, held])
+  }, [behind, text, list, rowKey, streaming, held, frames])
+  useLayoutEffect(() => {
+    if (stepStartedAt.current !== null) {
+      frames.stepCost?.(performance.now() - stepStartedAt.current)
+      stepStartedAt.current = null
+    }
+  }, [shown, frames])
 
   return immediate
     ? { text, revealing: false }

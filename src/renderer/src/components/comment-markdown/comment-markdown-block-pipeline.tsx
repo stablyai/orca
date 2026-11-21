@@ -13,26 +13,49 @@ import {
 } from './markdown-top-level-blocks'
 
 type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
+type RehypePlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
 export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
   math,
-  fadeWords,
+  fadeFrom,
+  fadeHoldFrom,
+  fadeHoldTo,
+  fadeBase = 0,
   block,
   ...props
 }: React.ComponentProps<typeof Markdown> & {
   math: boolean
-  fadeWords: boolean
+  /** Source offset in this block where fading words start; none renders plain. */
+  fadeFrom?: number
+  /** Block offsets of selected fading words, whose groups keep their word elements. */
+  fadeHoldFrom?: number
+  fadeHoldTo?: number
+  /** Where this block starts in the whole content. */
+  fadeBase?: number
   block?: MarkdownBlock
 }) {
   const renderMath = useChatMathRendering(math)
-  const plugins = React.useMemo(
+  const plugins = React.useMemo<RehypePlugins>(
     () => [
       ...(props.rehypePlugins ?? []),
       ...(math ? [renderMath] : []),
-      ...(fadeWords ? [rehypeWordFade] : [])
+      ...(fadeFrom === undefined
+        ? []
+        : [
+            [
+              rehypeWordFade,
+              {
+                from: fadeFrom,
+                base: fadeBase,
+                ...(fadeHoldFrom !== undefined && fadeHoldTo !== undefined
+                  ? { hold: { from: fadeHoldFrom, to: fadeHoldTo } }
+                  : {})
+              }
+            ] satisfies RehypePlugins[number]
+          ])
     ],
-    [props.rehypePlugins, math, renderMath, fadeWords]
+    [props.rehypePlugins, math, renderMath, fadeFrom, fadeHoldFrom, fadeHoldTo, fadeBase]
   )
   const parsedPlugins = React.useMemo<RemarkPlugins>(() => {
     if (!block?.tree) {

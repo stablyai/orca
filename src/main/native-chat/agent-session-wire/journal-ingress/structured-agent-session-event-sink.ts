@@ -17,13 +17,14 @@ import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
-import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionEphemeralPublications } from './structured-agent-session-ephemeral-publications'
 import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
 import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
-import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
-import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
+import {
+  createStructuredAgentSessionItemAppend,
+  createStructuredAgentSessionResolvedAppend
+} from './structured-agent-session-resolved-append'
 import {
   createStructuredAgentSessionTransitionMembers,
   type StructuredAgentSessionTransitionSink
@@ -63,10 +64,24 @@ export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppe
 
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
+/** Who a live read is for; a source whose rows only an append reader takes skips the read without one. */
+export type LiveTextReaders = {
+  appends: boolean
+  /** Whether any reader still takes this row's live text; absent, every one does. */
+  takes?: (itemId: string) => boolean
+}
+export type LiveTextRead = (readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
+
+/** The row as written, so live text can reuse its placement without saving. */
+export type StructuredAgentSessionItemCommitted = (
+  item: AgentJournalRenderItem,
+  epoch: string
+) => void
+
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   /** Reads the existing stream owner; no text is copied into the sink. */
   bindLiveText?(source: {
-    read(epoch: string): readonly AgentJournalRenderItem[]
+    read(epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
     flush(): void
   }): () => void
   publishLiveText?(): StructuredAgentSessionSinkAdmission
@@ -77,7 +92,8 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: StructuredAgentSessionItemAppendOptions
+    options: StructuredAgentSessionItemAppendOptions,
+    onCommitted?: StructuredAgentSessionItemCommitted
   ): void
   appendTombstone(
     identity: AgentJournalItemIdentity,
@@ -97,7 +113,8 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: StructuredAgentSessionItemAppendOptions
+    options: StructuredAgentSessionItemAppendOptions,
+    onCommitted?: StructuredAgentSessionItemCommitted
   ): StructuredAgentSessionSinkAdmission
   /** The writer chooses the identity at its position; the bound sizes any choice. */
   tryAppendResolvedItem?(
@@ -157,7 +174,9 @@ export type StructuredAgentSessionEventTarget = {
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
   publishPromptSuggestion?: (suggestion: AgentSessionPromptSuggestion | null) => void
-  publishLiveText?: (items: readonly AgentJournalRenderItem[]) => void
+  /** Who is subscribed; `read` runs only when one of them can take what it reads. Null for nobody. */
+  liveTextReaders?: () => LiveTextReaders | null
+  publishLiveText?: (read: LiveTextRead) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
 }
@@ -251,25 +270,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       run: (bound) => bound.publish()
     })
 
-  const appendItem: NonNullable<StructuredAgentSessionEventSink['tryAppendItem']> = (
-    identity,
-    body,
-    options
-  ) => {
-    const reservedBytes = estimateStructuredAgentSessionItemBytes(identity, body)
-    return queue.submit({
-      bytes: reservedBytes,
-      steps: (bound) => [
-        {
-          kind: 'item',
-          identity,
-          body,
-          reservedBytes,
-          options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
-        }
-      ]
-    })
-  }
+  const appendItem = createStructuredAgentSessionItemAppend(queue)
 
   const appendTombstone = (
     identity: AgentJournalItemIdentity
@@ -287,7 +288,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       observeExit: exit.record,
       observeRootExit: rootExit.observe,
       onRootExit: rootExit.listen,
-      appendItem: (identity, body, options) => void appendItem(identity, body, options),
+      appendItem: (identity, body, options, onCommitted) =>
+        void appendItem(identity, body, options, onCommitted),
       tryAppendItem: appendItem,
       ...resolvedAppend,
       ...createStructuredAgentSessionTransitionMembers(queue),

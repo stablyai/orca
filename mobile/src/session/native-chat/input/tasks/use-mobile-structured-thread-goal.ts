@@ -20,6 +20,7 @@ import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import { AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useRouteRelaysCapability } from '../../../../worktree/execution-hosts/workspace-server-context'
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 export type MobileStructuredThreadGoal = {
   /** Scopes the strip's expansion to the conversation. */
@@ -78,9 +79,11 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
   const sendRef = useRef<ChatSend>(async () => 'rejected')
   // One hook serves every chat tab, so each conversation counts only its own changes.
   const [pending, setPending] = useState<Readonly<Record<string, number>>>({})
+  const goalRows = rowsBesideStreamedText(journalItems)
   const report = useMemo(
-    () => agentSessionThreadGoalReport({ journalItems, support, reported, journalEpoch }),
-    [journalItems, support, reported, journalEpoch]
+    // Goal rows never carry reply text, so a streaming reply keeps the memo.
+    () => agentSessionThreadGoalReport({ journalItems: goalRows, support, reported, journalEpoch }),
+    [goalRows, support, reported, journalEpoch]
   )
   const relayed = useRouteRelaysCapability(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY)
   const changes: MobileStructuredThreadGoal['changes'] = !report

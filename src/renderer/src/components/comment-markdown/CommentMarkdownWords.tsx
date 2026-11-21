@@ -1,108 +1,75 @@
-import { memo, useLayoutEffect, useRef, useState, type ComponentProps } from 'react'
+import type { ComponentProps } from 'react'
 import type { ExtraProps } from 'react-markdown'
-import { markdownWordTokens } from './comment-markdown-word-fade'
+import { markdownWordTokens, type MarkdownFadeHold } from './comment-markdown-word-fade'
 
-type FadeArrival = { end: number; at: number }
-type FadeWindow = { text: string; arrivals: FadeArrival[] }
+/** Reading the selection flushes layout, so one listener keeps the selected range. A Range is
+ *  live, so testing it against a node later touches only the DOM tree. */
+let selectedRange: Range | null = null
+let rangeWatchers = 0
+function readDocumentRange(): void {
+  const selection = document.getSelection()
+  selectedRange =
+    selection && !selection.isCollapsed && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+}
 
-/** One clock per text node; settled words become one plain text prefix. */
-export const CommentMarkdownWords = memo(function CommentMarkdownWords({
+/** The content offsets of the fading words a selected range reaches in `root`, whose nodes the
+ *  selection would lose if they merged into plain text; current while watched. */
+export function selectedFadingWords(root: Element | null): MarkdownFadeHold | undefined {
+  const range = selectedRange
+  if (root === null || range?.intersectsNode(root) !== true) {
+    return undefined
+  }
+  let hold: MarkdownFadeHold | undefined
+  for (const word of root.querySelectorAll<HTMLElement>('[data-word]')) {
+    if (range.intersectsNode(word)) {
+      const words = word.parentElement
+      const from = Number(words?.dataset.fadeStart)
+      const to = Number(words?.dataset.fadeEnd)
+      if (Number.isFinite(from) && Number.isFinite(to)) {
+        hold = { from: Math.min(hold?.from ?? from, from), to: Math.max(hold?.to ?? to, to) }
+      }
+    }
+  }
+  return hold
+}
+
+export function watchDocumentRange(): () => void {
+  if (rangeWatchers++ === 0) {
+    readDocumentRange()
+    document.addEventListener('selectionchange', readDocumentRange)
+  }
+  return () => {
+    if (--rangeWatchers === 0) {
+      document.removeEventListener('selectionchange', readDocumentRange)
+    }
+  }
+}
+
+/** A text node of a fading block: text before the fade window stays plain, and each word in the
+ *  window is a span keyed by its offset, so it keeps its node as older words leave the window. */
+export function CommentMarkdownWords({
   node,
   children,
   ...props
 }: ComponentProps<'span'> & ExtraProps): React.ReactNode {
-  const wordGroup = node?.properties.dataWordGroup !== undefined
-  const text = wordGroup ? String(children ?? '') : ''
-  const [initial] = useState<FadeWindow>(() => ({
-    text,
-    arrivals: [{ end: text.length, at: performance.now() }]
-  }))
-  const groupRef = useRef<HTMLSpanElement>(null)
-  const fadeWindow = useRef(initial)
-  const [settled, setSettled] = useState(0)
-  useLayoutEffect(() => {
-    if (!wordGroup) {
-      return
-    }
-    const current = fadeWindow.current
-    // Clock new words at commit, so abandoned renders never schedule a fade.
-    if (current.text !== text) {
-      if (!text.startsWith(current.text)) {
-        current.arrivals = []
-        setSettled(0)
-      }
-      current.text = text
-      current.arrivals.push({ end: text.length, at: performance.now() })
-    }
-    let timer = 0
-    const selected = (): boolean => {
-      const selection = document.getSelection()
-      const group = groupRef.current
-      return Boolean(
-        group &&
-        selection &&
-        !selection.isCollapsed &&
-        (group.contains(selection.anchorNode) ||
-          group.contains(selection.focusNode) ||
-          selection.containsNode(group, true))
-      )
-    }
-    const schedule = (): void => {
-      const first = current.arrivals[0]
-      if (!first) {
-        document.removeEventListener('selectionchange', onSelectionChange)
-        return
-      }
-      timer = window.setTimeout(
-        () => {
-          if (selected()) {
-            return
-          }
-          const now = performance.now()
-          let end = 0
-          current.arrivals = current.arrivals.filter((arrival) => {
-            if (arrival.at + 300 > now) {
-              return true
-            }
-            end = Math.max(end, arrival.end)
-            return false
-          })
-          if (end > 0) {
-            setSettled(end)
-          }
-          schedule()
-        },
-        Math.max(0, first.at + 300 - performance.now())
-      )
-    }
-    const onSelectionChange = (): void => {
-      window.clearTimeout(timer)
-      if (!selected()) {
-        schedule()
-      }
-    }
-    document.addEventListener('selectionchange', onSelectionChange)
-    schedule()
-    return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('selectionchange', onSelectionChange)
-    }
-  }, [text, wordGroup])
-  if (!wordGroup) {
+  const from = node?.properties.dataFadeFrom
+  if (typeof from !== 'number') {
     return <span {...props}>{children}</span>
   }
+  const text = String(children ?? '')
+  const start = Number(node?.properties.dataFadeOffset ?? 0) + from
   return (
-    <span ref={groupRef} data-word-group="">
-      {text.slice(0, settled)}
-      {markdownWordTokens(text.slice(settled)).map(({ value, offset }) =>
+    <span data-word-group="" data-fade-start={start} data-fade-end={start - from + text.length}>
+      {text.slice(0, from)}
+      {markdownWordTokens(text.slice(from)).map(({ value, offset }) =>
         value.trim() === '' ? (
           value
         ) : (
-          <span key={settled + offset} data-word="">
+          <span key={start + offset} data-word="">
             {value}
           </span>
         )
       )}
     </span>
   )
-})
+}

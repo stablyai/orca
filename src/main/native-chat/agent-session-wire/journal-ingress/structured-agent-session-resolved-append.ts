@@ -1,3 +1,5 @@
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
@@ -74,5 +76,52 @@ export function createStructuredAgentSessionResolvedAppend(
         options,
         true
       )
+  }
+}
+
+// One batch's committed rows, indexed once however many of its saves ask.
+const committedRows = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  Map<string, AgentJournalRenderItem>
+>()
+
+function committedRow(items: readonly AgentJournalRenderItem[], itemId: string) {
+  let rows = committedRows.get(items)
+  if (!rows) {
+    rows = new Map(items.map((item) => [item.itemId, item]))
+    committedRows.set(items, rows)
+  }
+  return rows.get(itemId)
+}
+
+/** One provider item; `onCommitted` receives the row as written. */
+export function createStructuredAgentSessionItemAppend(
+  queue: StructuredAgentSessionSinkQueue
+): NonNullable<StructuredAgentSessionEventSink['tryAppendItem']> {
+  return (identity, body, options, onCommitted) => {
+    const reservedBytes = estimateStructuredAgentSessionItemBytes(identity, body)
+    const itemId = onCommitted && agentJournalItemKey(identity)
+    return queue.submit({
+      bytes: reservedBytes,
+      steps: (bound) => [
+        {
+          kind: 'item',
+          identity,
+          body,
+          reservedBytes,
+          options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
+        }
+      ],
+      ...(onCommitted
+        ? {
+            onResolved: (result) => {
+              const item = result.items && itemId && committedRow(result.items, itemId)
+              if (item && result.cursor) {
+                onCommitted(item, result.cursor.epoch)
+              }
+            }
+          }
+        : {})
+    })
   }
 }
