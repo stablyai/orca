@@ -91,6 +91,8 @@ function mergeBatch(
 export type StructuredAgentSessionViewerVisibility = {
   hidden: () => boolean
   subscribeShown: (shown: () => void) => () => void
+  /** Called just before text held while hidden is drawn. */
+  heldDrawn?: () => void
 }
 
 export type StructuredAgentSessionCoalescing = {
@@ -124,7 +126,12 @@ export function createStructuredAgentSessionEventCoalescer(
       emit(event)
     }
   }
-  const stopShownWatch = visibility?.subscribeShown(flush)
+  const stopShownWatch = visibility?.subscribeShown(() => {
+    if (pending) {
+      visibility.heldDrawn?.()
+    }
+    flush()
+  })
   return {
     push(event) {
       if (bypassCoalescing(event)) {

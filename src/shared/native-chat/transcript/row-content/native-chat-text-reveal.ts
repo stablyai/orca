@@ -60,8 +60,7 @@ const HIDDEN_STEP_MS = 100
 
 /** A reveal frame clock that steps at most every `stepMs`, and slower when a step is slow to
  *  render: the surface reports each step's own render time, and the median of the last few is
- *  kept to at most `busyShare` of the time between steps. Other work on the thread never slows the
- *  reveal. Restarting a request keeps the spacing. */
+ *  kept to at most `busyShare` of the time between steps. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
   stepMs: number,
   busyShare = 1
@@ -120,7 +119,8 @@ export function nativeChatRevealStepFrames(
         waiting.frame = requestAnimationFrame(onFrame)
       }
       const onFrame = (frameStart: number): void => {
-        if (lastFrame !== undefined) {
+        // A gap past two of the slowest frames is a restart after idling, not the display's rate.
+        if (lastFrame !== undefined && frameStart - lastFrame <= 2 * MAX_FRAME_MS) {
           gaps.push(frameStart - lastFrame)
           if (gaps.length > FRAME_GAP_SAMPLES) {
             gaps.shift()

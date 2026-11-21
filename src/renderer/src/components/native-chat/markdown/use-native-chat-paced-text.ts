@@ -1,11 +1,12 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import {
   isDocumentRangeSelectedIn,
   watchDocumentRange
 } from '@/components/comment-markdown/CommentMarkdownWords'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
-import { documentShownCount } from '../session/structured/read/document-viewer-visibility'
+import { documentHeldDrawnCount } from '../session/structured/read/document-viewer-visibility'
 import {
   nativeChatRevealStepFrames,
   nativeChatTextAppended,
@@ -86,7 +87,7 @@ export function useNativeChatPacedText(
     [root]
   )
   const [grew, setGrew] = useState(initial.shown < text.length)
-  const shownCount = useRef(documentShownCount())
+  const heldDrawn = useRef(documentHeldDrawnCount())
 
   useLayoutEffect(() => {
     const previous = pace.current
@@ -94,8 +95,8 @@ export function useNativeChatPacedText(
       setGrew(true)
     }
     // Text held while the window was hidden is drawn at once, without a fade.
-    const caughtUp = shownCount.current !== documentShownCount()
-    shownCount.current = documentShownCount()
+    const caughtUp = heldDrawn.current !== documentHeldDrawnCount()
+    heldDrawn.current = documentHeldDrawnCount()
     pace.current = receiveNativeChatText(
       previous,
       text,
@@ -110,8 +111,6 @@ export function useNativeChatPacedText(
     reveals?.drawn.set(rowKey, pace.current)
   }, [text, streaming, reducedMotion, reveals, rowKey, setShown])
 
-  // A step's cost is its own render, from the step to its commit, so other work never slows it.
-  const stepStartedAt = useRef<number | null>(null)
   const behind = !reducedMotion && shown < text.length
   useEffect(() => {
     if (!behind) {
@@ -125,19 +124,14 @@ export function useNativeChatPacedText(
       (next) => {
         pace.current = next
         reveals?.drawn.set(rowKey, next)
-        stepStartedAt.current = performance.now()
-        setShown(next.shown)
+        // Rendered here, so a step's cost is its own render and never the work queued before it.
+        const startedAt = performance.now()
+        flushSync(() => setShown(next.shown))
+        frames.stepCost?.(performance.now() - startedAt)
       },
       frames
     )
   }, [behind, text, reveals, rowKey, streaming, setShown, frames])
-  useLayoutEffect(() => {
-    if (stepStartedAt.current !== null) {
-      frames.stepCost?.(performance.now() - stepStartedAt.current)
-      stepStartedAt.current = null
-    }
-  }, [shown, frames])
-
   const revealing = !reducedMotion && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)
   useEffect(() => {

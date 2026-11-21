@@ -18,6 +18,8 @@ import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-cha
 /** Phones spread each arrival over less time than desktop, so new words show sooner. */
 const REVEAL_MS = 180
 const STEP_MS = 1000 / 30
+/** A slow-drawing reply leaves at least half the JS thread to scrolling and input. */
+const REVEAL_BUSY_SHARE = 1 / 2
 
 export type MobileNativeChatPacedText = { text: string; revealing: boolean }
 
@@ -32,7 +34,7 @@ export function useMobileNativeChatPacedText(
   const held = useSyncExternalStore(growth.subscribe, growth.held, growth.held)
   const list = paced ? (chat ?? undefined) : undefined
   const immediate = list === undefined || list.reducedMotion
-  const [frames] = useState(() => nativeChatRevealStepFrames(STEP_MS))
+  const [frames] = useState(() => nativeChatRevealStepFrames(STEP_MS, REVEAL_BUSY_SHARE))
   const [initial] = useState(() =>
     startNativeChatTextReveal(
       text,
@@ -60,7 +62,7 @@ export function useMobileNativeChatPacedText(
     list?.begun.delete(rowKey)
   }, [text, streaming, immediate, list, rowKey, frames])
 
-  // A step's cost is its own render, from the step to its commit, so other work never slows it.
+  // A step's cost runs from the step to its commit.
   const stepStartedAt = useRef<number | null>(null)
   const behind = !immediate && shown < text.length
   // Held, the reveal waits; its deadlines keep running, so it catches up in one step after.
@@ -77,9 +79,10 @@ export function useMobileNativeChatPacedText(
     return playNativeChatTextReveal(
       () => pace.current,
       (next) => {
+        // A step that shows nothing new renders nothing, so there is no cost to time.
+        stepStartedAt.current = next.shown === pace.current.shown ? null : performance.now()
         pace.current = next
         list?.drawn.set(rowKey, next)
-        stepStartedAt.current = performance.now()
         setShown(next.shown)
       },
       frames,

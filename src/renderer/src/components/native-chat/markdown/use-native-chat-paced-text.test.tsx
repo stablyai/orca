@@ -2,6 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
+import { documentViewerVisibility } from '../session/structured/read/document-viewer-visibility'
 
 it('draws text held while the window was hidden at once, without fading it in', () => {
   const root = { current: null }
@@ -12,7 +13,7 @@ it('draws text held while the window was hidden at once, without fading it in', 
     { initialProps: { text: first } }
   )
   act(() => {
-    document.dispatchEvent(new Event('visibilitychange'))
+    documentViewerVisibility.heldDrawn?.()
   })
   rerender({ text: held })
   expect(result.current.text).toBe(held)
