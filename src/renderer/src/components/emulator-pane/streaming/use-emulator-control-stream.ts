@@ -11,7 +11,7 @@ import { RotateOrientation } from '../../../../../shared/rpc-contract/emulator/e
 import type { EmulatorStreamOrientation } from '../frame/emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750
-const KEYBOARD_FRAME_DELAY_MS = 4
+export const KEYBOARD_FRAME_DELAY_MS = 4
 const SERVE_SIM_CONFIG_MESSAGE_TAG = 130
 
 // serve-sim pushes {width, height, orientation} on connect and on every rotate, fold or resize.

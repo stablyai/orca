@@ -13,7 +13,11 @@ import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import type { ServeSimKeyboardFrame } from '../../../../../shared/emulator/emulator-keyboard-frame'
-import { ANDROID_KEY_BUTTONS, type ScrcpyKeyboard } from '../streaming/use-emulator-control-stream'
+import {
+  ANDROID_KEY_BUTTONS,
+  KEYBOARD_FRAME_DELAY_MS,
+  type ScrcpyKeyboard
+} from '../streaming/use-emulator-control-stream'
 import { pasteTextIntoEmulator, type EmulatorKeyboardPasteResult } from './emulator-keyboard-paste'
 import {
   HeldSimulatorInput,
@@ -50,14 +54,11 @@ export function useEmulatorScreenKeyboard({
   const [heldInput] = useState(() => new HeldSimulatorInput())
   const simulatorSinks = useMemo<HeldSimulatorInputSinks>(
     () => ({
-      sendKeys: (presses) => {
-        const frames = presses.flatMap(
-          (press) => simulatorKeyFrames(press, physicalKeysRef.current) ?? []
-        )
-        if (frames.length > 0 && captureActiveRef.current) {
-          sendKeyboardFrames(frames)
-        }
-      },
+      keyFrames: (press) => simulatorKeyFrames(press, physicalKeysRef.current),
+      sendFrames: (frames) =>
+        captureActiveRef.current && sendKeyboardFrames(frames)
+          ? (frames.length - 1) * KEYBOARD_FRAME_DELAY_MS
+          : null,
       typeText: (text) =>
         callRuntimeRpc({ kind: 'local' }, 'emulator.type', { text, worktree: worktreeId })
     }),
@@ -78,6 +79,8 @@ export function useEmulatorScreenKeyboard({
     }
     const syncId = ++layoutSyncIdRef.current
     heldInput.startSync()
+    // A dead key the simulator took under the old layout no longer owns the Mac's next composition.
+    physicalDeadKeyRef.current = false
     void callRuntimeRpc<{ physicalKeys: boolean }>(
       { kind: 'local' },
       'emulator.syncKeyboardLayout',
@@ -94,7 +97,7 @@ export function useEmulatorScreenKeyboard({
         physicalKeysRef.current = physicalKeys
         heldInput.finishSync(simulatorSinks)
       })
-  }, [heldInput, scrcpyKeyboard, simulatorSinks, worktreeId])
+  }, [heldInput, physicalDeadKeyRef, scrcpyKeyboard, simulatorSinks, worktreeId])
 
   const cancelActivePaste = useCallback((): void => {
     pasteRequestIdRef.current += 1
@@ -135,6 +138,9 @@ export function useEmulatorScreenKeyboard({
     }
   }, [canInteract, setCaptureActive])
 
+  // Input still held when the pane closes must not reach the device afterwards.
+  useEffect(() => () => heldInput.clear(), [heldInput])
+
   const enableKeyboardCapture = useCallback(() => {
     if (canInteract) {
       try {
@@ -163,8 +169,16 @@ export function useEmulatorScreenKeyboard({
       const simulatorOption = !scrcpyKeyboard && (physicalKeysRef.current || heldInput.holding)
       // A key the host input method is composing with is the IME's; its text arrives on commit.
       const imeKey = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+      // Only a simulator known to follow the Mac layout composes dead keys from physical keys.
       const simulatorDeadKey =
-        simulatorOption && (event.key === 'Dead' || (imeKey && physicalDeadKeyRef.current))
+        !scrcpyKeyboard &&
+        physicalKeysRef.current &&
+        !heldInput.syncingLayout &&
+        (event.key === 'Dead' || (imeKey && physicalDeadKeyRef.current))
+      if (event.key === 'Dead' && !simulatorDeadKey) {
+        // The Mac composes this dead key, so its composition must reach the device.
+        physicalDeadKeyRef.current = false
+      }
       // Android takes whatever character the host layout produced as text, Option and AltGr ones too.
       const androidText = scrcpyKeyboard !== null && [...event.key].length === 1
       // AltGr arrives as Ctrl+Alt on Windows and Linux; its characters are text, not a Ctrl shortcut.
@@ -173,7 +187,7 @@ export function useEmulatorScreenKeyboard({
       const optionText = androidText && isMacUserAgent()
       if (
         !canInteract ||
-        (imeKey && !simulatorDeadKey) ||
+        ((imeKey || event.key === 'Dead') && !simulatorDeadKey) ||
         event.metaKey ||
         (event.ctrlKey && !altGraphText) ||
         (event.altKey && !simulatorOption && !optionText && !altGraphText)
@@ -212,11 +226,9 @@ export function useEmulatorScreenKeyboard({
           key: event.key,
           shift: event.shiftKey
         }
-        if (!heldInput.holdKey(press)) {
-          const frames = simulatorKeyFrames(press, physicalKeysRef.current)
-          if (!frames || !sendKeyboardFrames(frames)) {
-            return
-          }
+        // A key the simulator can't press is left to the proxy, which commits its text.
+        if (heldInput.pressKey(press, simulatorSinks) === 'unsupported') {
+          return
         }
         if (event.key === 'Dead' || !imeKey) {
           physicalDeadKeyRef.current = event.key === 'Dead'
@@ -243,8 +255,8 @@ export function useEmulatorScreenKeyboard({
       keyboardProxyRef,
       physicalDeadKeyRef,
       scrcpyKeyboard,
-      sendKeyboardFrames,
-      setCaptureActive
+      setCaptureActive,
+      simulatorSinks
     ]
   )
 
