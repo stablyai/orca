@@ -22,6 +22,7 @@ const CLICK_SLOP = 4
 
 // `moved`: once past the slop it stays a drag, even if it ends back at the start.
 type PointerGesture = {
+  pointerId: number
   start: PanZoomPoint
   last: PanZoomPoint
   pan: boolean
@@ -216,22 +217,26 @@ export function usePanZoomViewport({
     gestureRef.current = null
     setDragging(false)
   }, [])
+  const ownGesture = (event: React.PointerEvent): PointerGesture | null =>
+    gestureRef.current?.pointerId === event.pointerId ? gestureRef.current : null
   const canvasHandlers = useMemo<PanZoomViewport['canvasHandlers']>(
     () => ({
       onPointerDown: (event) => {
-        if (event.button !== 0 || (!geometry && !onClickOutsideContent)) {
+        // A second finger joins nothing: only the first pointer drives the gesture.
+        if (event.button !== 0 || gestureRef.current || (!geometry && !onClickOutsideContent)) {
           return
         }
         event.currentTarget.setPointerCapture(event.pointerId)
         const point = { x: event.clientX, y: event.clientY }
         // Touch and pen have no Alt key, so they keep dragging to pan.
         const pan = event.altKey || event.pointerType === 'touch' || event.pointerType === 'pen'
-        gestureRef.current = { start: point, last: point, pan, alt: event.altKey, moved: false }
+        const { pointerId, altKey: alt } = event
+        gestureRef.current = { pointerId, start: point, last: point, pan, alt, moved: false }
         setDragging(pan)
       },
       onPointerMove: (event) => {
         setAltHeld(event.altKey)
-        const gesture = gestureRef.current
+        const gesture = ownGesture(event)
         if (gesture && !gesture.moved) {
           const { x, y } = gesture.start
           gesture.moved = Math.hypot(event.clientX - x, event.clientY - y) >= CLICK_SLOP
@@ -257,9 +262,12 @@ export function usePanZoomViewport({
         })
       },
       onPointerUp: (event) => {
-        const gesture = gestureRef.current
+        const gesture = ownGesture(event)
+        if (!gesture) {
+          return
+        }
         endDrag()
-        if (!gesture || gesture.alt) {
+        if (gesture.alt) {
           return
         }
         const moved = Math.hypot(event.clientX - gesture.start.x, event.clientY - gesture.start.y)
@@ -276,8 +284,8 @@ export function usePanZoomViewport({
           toggleZoomAt(point)
         }
       },
-      onPointerCancel: endDrag,
-      onLostPointerCapture: endDrag
+      onPointerCancel: (event) => ownGesture(event) && endDrag(),
+      onLostPointerCapture: (event) => ownGesture(event) && endDrag()
     }),
     [endDrag, geometry, offset, onClickOutsideContent, scale, toggleZoomAt]
   )
