@@ -336,7 +336,9 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     redeem.mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE }))
     openDialog()
 
-    await screen.findByRole('button', { name: 'Use it' })
+    const use = await screen.findByRole('button', { name: 'Use it' })
+    // A credential hand-off: never focused on open, so Enter can't spend this account's token unseen.
+    expect(document.activeElement).not.toBe(use)
     expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
     // Open, the paste form's Cancel · Reconnect is the only footer: Use it steps aside.
     fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
