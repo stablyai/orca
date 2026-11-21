@@ -1,3 +1,4 @@
+import { EditorWordCountProvider } from '../word-count/EditorWordCount'
 import { Suspense, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
@@ -96,97 +97,108 @@ export function EditorPanelShell({
   markdownAnnotationsEnabled
 }: EditorPanelShellProps): JSX.Element {
   return (
-    <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
-      {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
-        <EditorPanelHeader
-          activeFile={activeFile}
-          copiedPathVisible={copiedPathVisible}
-          isSingleDiff={model.isSingleDiff}
-          isDiffSurface={model.isDiffSurface}
-          isMarkdown={model.isMarkdown}
-          isCsv={model.isCsv}
-          isNotebook={model.isNotebook}
-          isSvg={model.isSvg}
-          customEditorTitles={model.customEditorTitles}
-          hasEditorToggle={model.hasEditorToggle}
-          availableEditorToggleModes={model.availableEditorToggleModes}
-          effectiveToggleValue={model.effectiveToggleValue}
-          canOpenPreview={model.canOpenPreview}
-          canShowMarkdownPreview={model.canShowMarkdownPreview}
-          canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
-          isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
-          shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
-          canExportMarkdownToPdf={model.canExportMarkdownToPdf}
-          showMarkdownTableOfContents={showMarkdownTableOfContents}
-          canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
-          markdownFrontmatterVisible={markdownFrontmatterVisible}
-          sideBySide={sideBySide}
-          openFileState={model.openFileState}
-          onCopyPath={onCopyPath}
-          onOpenDiffTargetFile={onOpenDiffTargetFile}
-          onOpenPreview={onOpenPreview}
-          onOpenMarkdownPreview={onOpenMarkdownPreview}
-          onToggleSideBySide={onToggleSideBySide}
-          onEditorToggleChange={onEditorToggleChange}
-          onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
-          onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
-          onExportMarkdownToPdf={onExportMarkdownToPdf}
-          createArtifactRequest={createArtifactRequest}
+    <EditorWordCountProvider
+      fileId={
+        activeFile.mode === 'edit' &&
+        !model.isDiffSurface &&
+        !model.activeCustomEditor &&
+        (model.resolvedLanguage === 'markdown' || model.resolvedLanguage === 'plaintext')
+          ? activeFile.id
+          : ''
+      }
+    >
+      <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
+        {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
+          <EditorPanelHeader
+            activeFile={activeFile}
+            copiedPathVisible={copiedPathVisible}
+            isSingleDiff={model.isSingleDiff}
+            isDiffSurface={model.isDiffSurface}
+            isMarkdown={model.isMarkdown}
+            isCsv={model.isCsv}
+            isNotebook={model.isNotebook}
+            isSvg={model.isSvg}
+            customEditorTitles={model.customEditorTitles}
+            hasEditorToggle={model.hasEditorToggle}
+            availableEditorToggleModes={model.availableEditorToggleModes}
+            effectiveToggleValue={model.effectiveToggleValue}
+            canOpenPreview={model.canOpenPreview}
+            canShowMarkdownPreview={model.canShowMarkdownPreview}
+            canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
+            isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
+            shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
+            canExportMarkdownToPdf={model.canExportMarkdownToPdf}
+            showMarkdownTableOfContents={showMarkdownTableOfContents}
+            canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+            markdownFrontmatterVisible={markdownFrontmatterVisible}
+            sideBySide={sideBySide}
+            openFileState={model.openFileState}
+            onCopyPath={onCopyPath}
+            onOpenDiffTargetFile={onOpenDiffTargetFile}
+            onOpenPreview={onOpenPreview}
+            onOpenMarkdownPreview={onOpenMarkdownPreview}
+            onToggleSideBySide={onToggleSideBySide}
+            onEditorToggleChange={onEditorToggleChange}
+            onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
+            onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
+            onExportMarkdownToPdf={onExportMarkdownToPdf}
+            createArtifactRequest={createArtifactRequest}
+          />
+        )}
+        <Suspense fallback={<EditorLoadingFallback />}>
+          <EditorContent
+            activeFile={activeFile}
+            viewStateScopeId={activeViewStateId ?? activeFile.id}
+            fileContents={fileContents}
+            diffContents={diffContents}
+            editBuffers={editorDrafts}
+            openFiles={openFiles}
+            worktreeEntries={model.worktreeEntries}
+            resolvedLanguage={model.resolvedLanguage}
+            isMarkdown={model.isMarkdown}
+            isMermaid={model.isMermaid}
+            isSvg={model.isSvg}
+            isCsv={model.isCsv}
+            isNotebook={model.isNotebook}
+            customEditor={model.activeCustomEditor}
+            mdViewMode={model.mdViewMode}
+            inlineMarkdownRenderState={model.inlineMarkdownRenderState}
+            isChangesMode={model.isDiffSurface && !model.isSingleDiff}
+            sideBySide={sideBySide}
+            pendingEditorReveal={pendingEditorReveal}
+            handleContentChange={onContentChange}
+            handleContentChangeForFile={onContentChangeForFile}
+            handleDirtyStateHint={onDirtyStateHint}
+            handleSave={onSave}
+            handleSaveForFile={onSaveForFile}
+            reloadContent={onReloadContent}
+            showMarkdownTableOfContents={showMarkdownTableOfContents}
+            showMarkdownFrontmatter={markdownFrontmatterVisible}
+            onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+          />
+        </Suspense>
+        <UntitledFileRenameDialog
+          open={renameDialogFile !== null}
+          currentName={renameDialogFile?.relativePath ?? ''}
+          worktreePath={
+            renameDialogFile
+              ? getUntitledFileRoot(
+                  renameDialogFile,
+                  findFirstIndexedWorktree(
+                    selectWorktreesByRepo(useAppStore.getState()),
+                    renameDialogFile.worktreeId
+                  )?.path
+                )
+              : ''
+          }
+          disableBrowse={disableRenameBrowse}
+          externalError={renameError}
+          onClose={onCloseRenameDialog}
+          onConfirm={onRenameConfirm}
         />
-      )}
-      <Suspense fallback={<EditorLoadingFallback />}>
-        <EditorContent
-          activeFile={activeFile}
-          viewStateScopeId={activeViewStateId ?? activeFile.id}
-          fileContents={fileContents}
-          diffContents={diffContents}
-          editBuffers={editorDrafts}
-          openFiles={openFiles}
-          worktreeEntries={model.worktreeEntries}
-          resolvedLanguage={model.resolvedLanguage}
-          isMarkdown={model.isMarkdown}
-          isMermaid={model.isMermaid}
-          isSvg={model.isSvg}
-          isCsv={model.isCsv}
-          isNotebook={model.isNotebook}
-          customEditor={model.activeCustomEditor}
-          mdViewMode={model.mdViewMode}
-          inlineMarkdownRenderState={model.inlineMarkdownRenderState}
-          isChangesMode={model.isDiffSurface && !model.isSingleDiff}
-          sideBySide={sideBySide}
-          pendingEditorReveal={pendingEditorReveal}
-          handleContentChange={onContentChange}
-          handleContentChangeForFile={onContentChangeForFile}
-          handleDirtyStateHint={onDirtyStateHint}
-          handleSave={onSave}
-          handleSaveForFile={onSaveForFile}
-          reloadContent={onReloadContent}
-          showMarkdownTableOfContents={showMarkdownTableOfContents}
-          showMarkdownFrontmatter={markdownFrontmatterVisible}
-          onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-        />
-      </Suspense>
-      <UntitledFileRenameDialog
-        open={renameDialogFile !== null}
-        currentName={renameDialogFile?.relativePath ?? ''}
-        worktreePath={
-          renameDialogFile
-            ? getUntitledFileRoot(
-                renameDialogFile,
-                findFirstIndexedWorktree(
-                  selectWorktreesByRepo(useAppStore.getState()),
-                  renameDialogFile.worktreeId
-                )?.path
-              )
-            : ''
-        }
-        disableBrowse={disableRenameBrowse}
-        externalError={renameError}
-        onClose={onCloseRenameDialog}
-        onConfirm={onRenameConfirm}
-      />
-    </div>
+      </div>
+    </EditorWordCountProvider>
   )
 }
 

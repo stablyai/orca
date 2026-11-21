@@ -1,3 +1,4 @@
+import { EditorWordCountDisplay } from '../../word-count/EditorWordCount'
 import { useMemo } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -148,6 +149,7 @@ export function EditorPanelHeader({
         onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
+      <EditorWordCountDisplay />
       {canOpenPreview && (
         <TooltipProvider>
           <Tooltip>

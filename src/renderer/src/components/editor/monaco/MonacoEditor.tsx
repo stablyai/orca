@@ -1,3 +1,4 @@
+import { useMonacoWordCount } from '../word-count/use-editor-word-count'
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import type { editor, IRange } from 'monaco-editor'
@@ -92,6 +93,7 @@ export default function MonacoEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
+  useMonacoWordCount(passiveMirror ? null : mountedEditor, fileId)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const languageRef = useRef(language)

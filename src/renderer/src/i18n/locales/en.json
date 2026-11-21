@@ -602,6 +602,12 @@
     }
   },
   "editor": {
+    "wordCount": {
+      "documentOne": "{{value}} word",
+      "documentMany": "{{value}} words",
+      "selectedOne": "{{value}} word selected",
+      "selectedMany": "{{value}} words selected"
+    },
     "richMarkdown": {
       "tooLarge": "File is larger than the {{limit}} rich editing limit. Showing source mode instead.",
       "openAnyway": "Open anyway"
