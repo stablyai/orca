@@ -32,7 +32,7 @@ type SpawnHost = {
 export async function alignManagedAgentLaunchAtSpawn(
   spawn: {
     launchCommand: string | undefined
-    codexRuntime: 'host' | 'wsl'
+    codexRuntime?: 'host' | 'wsl'
     getSettings?: () => SpawnHost['settings']
   },
   shell: AgentStartupShell
