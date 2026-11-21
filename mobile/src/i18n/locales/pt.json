@@ -1256,7 +1256,12 @@
       "directionPad": "DIRECIONAL",
       "showDirectionPad": "Mostrar direcional",
       "showDirectionPadDescription": "Fixe o direcional de setas na barra lateral. Sem ele, a barra lista as teclas de seta.",
-      "showShortcut": "Mostrar atalho {{label}}"
+      "showShortcut": "Mostrar atalho {{label}}",
+      "shortcutRows": "Linhas de atalhos",
+      "shortcutRowsDescription": "Empilha teclas integradas em 1 a 4 linhas na barra do terminal",
+      "decreaseRows": "Diminuir linhas de atalhos",
+      "increaseRows": "Aumentar linhas de atalhos",
+      "rowHeader": "Linha {{row}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Usar uma redefinição de limite de taxa?",
@@ -2435,7 +2440,9 @@
       "addCustomShortcut": "Adicionar atalho personalizado",
       "control": "Ctrl",
       "alt": "Alt",
-      "shift": "Shift"
+      "shift": "Shift",
+      "collapseShortcutRows": "Recolher linhas de atalhos",
+      "expandShortcutRows": "Expandir linhas de atalhos"
     },
     "activeContent": {
       "createTab": "Criar Aba",

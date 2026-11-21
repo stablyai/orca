@@ -48,5 +48,52 @@ export const styles = themedStyleSheet(() => ({
   },
   deleteButtonPressed: {
     opacity: feedback.pressedOpacity
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  stepperButton: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.control,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.translucentFill
+  },
+  stepperButtonPressed: {
+    opacity: feedback.pressedOpacity
+  },
+  stepperButtonDisabled: {
+    opacity: feedback.disabledOpacity
+  },
+  stepperValue: {
+    minWidth: 24,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums']
+  },
+  rowHeader: {
+    height: 36,
+    justifyContent: 'center',
+    paddingHorizontal: LIST_ROW_PADDING,
+    backgroundColor: colors.bgPanel
+  },
+  rowDividerContent: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: LIST_ROW_PADDING,
+    backgroundColor: colors.bgPanel
+  },
+  rowHeaderText: {
+    fontSize: typography.metaSize,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    color: colors.textMuted,
+    textTransform: 'uppercase'
   }
 }))

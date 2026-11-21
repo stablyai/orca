@@ -1129,7 +1129,12 @@
       "directionPad": "방향 패드",
       "showDirectionPad": "방향 패드 표시",
       "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",
-      "showShortcut": "{{label}} 단축키 표시"
+      "showShortcut": "{{label}} 단축키 표시",
+      "shortcutRows": "단축키 행 수",
+      "shortcutRowsDescription": "터미널 막대에 기본 키를 1~4개 행으로 쌓아 표시합니다",
+      "decreaseRows": "단축키 행 줄이기",
+      "increaseRows": "단축키 행 늘리기",
+      "rowHeader": "{{row}}행"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",
@@ -2031,7 +2036,9 @@
       "switchToPhoneMode": "휴대폰 모드로 전환",
       "pasteFromClipboard": "클립보드에서 붙여넣기",
       "paste": "붙여넣기",
-      "addCustomShortcut": "사용자 지정 단축키 추가"
+      "addCustomShortcut": "사용자 지정 단축키 추가",
+      "collapseShortcutRows": "단축키 행 접기",
+      "expandShortcutRows": "단축키 행 펼치기"
     },
     "activeContent": {
       "createTab": "탭 만들기",

@@ -1135,7 +1135,12 @@
       "directionPad": "STEUERKREUZ",
       "showDirectionPad": "Steuerkreuz anzeigen",
       "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
-      "showShortcut": "Tastenkürzel {{label}} anzeigen"
+      "showShortcut": "Tastenkürzel {{label}} anzeigen",
+      "shortcutRows": "Kurzbefehlzeilen",
+      "shortcutRowsDescription": "Integrierte Tasten in 1 bis 4 Zeilen über der Terminalleiste anordnen",
+      "decreaseRows": "Kurzbefehlzeilen verringern",
+      "increaseRows": "Kurzbefehlzeilen erhöhen",
+      "rowHeader": "Zeile {{row}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
@@ -2035,7 +2040,9 @@
       "switchToPhoneMode": "In den Smartphone-Modus wechseln",
       "pasteFromClipboard": "Aus der Zwischenablage einfügen",
       "paste": "Einfügen",
-      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
+      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen",
+      "collapseShortcutRows": "Kurzbefehlzeilen einklappen",
+      "expandShortcutRows": "Kurzbefehlzeilen ausklappen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",

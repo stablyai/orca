@@ -1521,7 +1521,12 @@
       "directionPad": "DIRECTION PAD",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
-      "showShortcut": "Show {{label}} shortcut"
+      "showShortcut": "Show {{label}} shortcut",
+      "shortcutRows": "Shortcut Rows",
+      "shortcutRowsDescription": "Stack built-in keys across 1 to 4 rows on the terminal bar",
+      "decreaseRows": "Decrease shortcut rows",
+      "increaseRows": "Increase shortcut rows",
+      "rowHeader": "Row {{row}}"
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
@@ -2323,7 +2328,9 @@
       "switchToPhoneMode": "Switch to phone mode",
       "pasteFromClipboard": "Paste from clipboard",
       "paste": "Paste",
-      "addCustomShortcut": "Add custom shortcut"
+      "addCustomShortcut": "Add custom shortcut",
+      "collapseShortcutRows": "Collapse shortcut rows",
+      "expandShortcutRows": "Expand shortcut rows"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",

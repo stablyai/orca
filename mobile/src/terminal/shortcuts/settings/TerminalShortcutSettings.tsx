@@ -25,12 +25,19 @@ import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '.
 import {
   getDefaultTerminalAccessoryLayout,
   loadTerminalAccessoryLayout,
-  reorderTerminalAccessoryBuiltInIds,
+  reorderTerminalAccessoryBuiltInRows,
   saveTerminalAccessoryLayout,
-  setTerminalAccessoryBuiltInVisible
+  setTerminalAccessoryBuiltInVisible,
+  setTerminalAccessoryRowCount
 } from '../../key-input/terminal-accessory-layout'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { SmartRailRow } from '../../../components/list/SmartRailRow'
+import {
+  ShortcutRowDivider,
+  ShortcutRowHeader,
+  ShortcutRowsSettingRow,
+  buildShortcutReorderItems
+} from './ShortcutRowsControls'
 
 // Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
@@ -144,7 +151,18 @@ export function TerminalShortcutSettings({
   const reorderBuiltInKeys = useCallback(
     (orderedKeys: string[]) => {
       setShortcutLayout((current) => {
-        const next = reorderTerminalAccessoryBuiltInIds(current, orderedKeys)
+        const next = reorderTerminalAccessoryBuiltInRows(current, orderedKeys)
+        persistLayout(next)
+        return next
+      })
+    },
+    [persistLayout]
+  )
+
+  const changeRowCount = useCallback(
+    (nextRowCount: number) => {
+      setShortcutLayout((current) => {
+        const next = setTerminalAccessoryRowCount(current, nextRowCount)
         persistLayout(next)
         return next
       })
@@ -179,13 +197,10 @@ export function TerminalShortcutSettings({
     [persistCustomKeys]
   )
 
-  const orderedAccessoryKeys = useMemo(() => {
-    const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-    return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
-      const key = byId.get(id)
-      return key ? [key] : []
-    })
-  }, [shortcutLayout.orderedBuiltInIds])
+  const { rowCount, items: builtInItems } = useMemo(
+    () => buildShortcutReorderItems(shortcutLayout, TERMINAL_ACCESSORY_KEYS),
+    [shortcutLayout]
+  )
 
   return (
     <>
@@ -238,23 +253,43 @@ export function TerminalShortcutSettings({
           'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
         )}
       >
+        <ShortcutRowsSettingRow
+          key="rowCount"
+          rowCount={rowCount}
+          onChangeRowCount={changeRowCount}
+        />
+        {rowCount > 1 ? (
+          <ShortcutRowHeader
+            key="row1"
+            label={t('components.terminalShortcutSettings.rowHeader', 'Row {{row}}', { row: 1 })}
+          />
+        ) : null}
         <DragReorderList
           key="builtIn"
-          items={orderedAccessoryKeys}
-          itemKey={(shortcutKey) => shortcutKey.id}
+          items={builtInItems}
+          itemKey={(item) => item.id}
+          isItemDraggable={(item) => item.kind === 'key'}
           rowHeight={REORDER_ROW_HEIGHT}
           scrollRef={scrollRef}
           scrollOffsetY={scrollOffsetY}
           scrollContentHeight={scrollContentHeight}
           onDragActiveChange={onDragActiveChange}
           onReorder={reorderBuiltInKeys}
-          renderRow={(shortcutKey) => (
-            <ShortcutBarRow
-              shortcutKey={shortcutKey}
-              visible={shortcutLayout.visibleBuiltInIds.includes(shortcutKey.id)}
-              onToggle={(visible) => toggleBuiltInKey(shortcutKey.id, visible)}
-            />
-          )}
+          renderRow={(item) =>
+            item.kind === 'divider' ? (
+              <ShortcutRowDivider
+                label={t('components.terminalShortcutSettings.rowHeader', 'Row {{row}}', {
+                  row: item.rowNumber
+                })}
+              />
+            ) : (
+              <ShortcutBarRow
+                shortcutKey={item.shortcutKey}
+                visible={shortcutLayout.visibleBuiltInIds.includes(item.shortcutKey.id)}
+                onToggle={(visible) => toggleBuiltInKey(item.shortcutKey.id, visible)}
+              />
+            )
+          }
         />
         <ListRow
           key="reset"

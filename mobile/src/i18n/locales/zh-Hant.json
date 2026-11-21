@@ -1132,7 +1132,12 @@
       "directionPad": "方向鍵盤",
       "showDirectionPad": "顯示方向鍵盤",
       "showDirectionPadDescription": "將方向鍵盤固定在側邊欄。關閉後，側邊欄會列出各個方向鍵。",
-      "showShortcut": "顯示 {{label}} 快捷鍵"
+      "showShortcut": "顯示 {{label}} 快捷鍵",
+      "shortcutRows": "快捷鍵列數",
+      "shortcutRowsDescription": "在終端工具列上將內建按鍵堆疊為 1 至 4 列",
+      "decreaseRows": "減少快捷鍵列數",
+      "increaseRows": "增加快捷鍵列數",
+      "rowHeader": "第 {{row}} 列"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "要使用速率限制重設額度嗎？",
@@ -2029,7 +2034,9 @@
       "switchToPhoneMode": "切換到手機模式",
       "pasteFromClipboard": "從剪貼簿貼上",
       "paste": "貼上",
-      "addCustomShortcut": "新增自訂快速鍵"
+      "addCustomShortcut": "新增自訂快速鍵",
+      "collapseShortcutRows": "收合快捷鍵列",
+      "expandShortcutRows": "展開快捷鍵列"
     },
     "activeContent": {
       "createTab": "建立分頁",

@@ -1129,7 +1129,12 @@
       "directionPad": "方向パッド",
       "showDirectionPad": "方向パッドを表示",
       "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",
-      "showShortcut": "{{label}} ショートカットを表示"
+      "showShortcut": "{{label}} ショートカットを表示",
+      "shortcutRows": "ショートカット行数",
+      "shortcutRowsDescription": "ターミナルバーに組み込みキーを1〜4行で重ねて表示",
+      "decreaseRows": "ショートカット行を減らす",
+      "increaseRows": "ショートカット行を増やす",
+      "rowHeader": "{{row}}行目"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",
@@ -2031,7 +2036,9 @@
       "switchToPhoneMode": "スマートフォンモードに切り替え",
       "pasteFromClipboard": "クリップボードから貼り付け",
       "paste": "貼り付け",
-      "addCustomShortcut": "カスタムショートカットを追加"
+      "addCustomShortcut": "カスタムショートカットを追加",
+      "collapseShortcutRows": "ショートカット行を折りたたむ",
+      "expandShortcutRows": "ショートカット行を展開"
     },
     "activeContent": {
       "createTab": "タブを作成",

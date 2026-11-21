@@ -44,15 +44,24 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     flex: 1,
     minWidth: 0
   },
+  keyRowsStack: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel
+  },
   keyRow: {
     height: KEY_ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: KEY_GAP,
-    paddingHorizontal: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    paddingHorizontal: spacing.sm
+  },
+  collapseRowButton: {
+    width: 28,
+    height: KEY_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: KEY_RADIUS
   },
   keyScroll: {
     flex: 1,

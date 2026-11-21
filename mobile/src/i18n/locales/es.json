@@ -1175,7 +1175,12 @@
       "directionPad": "CRUCETA",
       "showDirectionPad": "Mostrar cruceta",
       "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
-      "showShortcut": "Mostrar atajo {{label}}"
+      "showShortcut": "Mostrar atajo {{label}}",
+      "shortcutRows": "Filas de atajos",
+      "shortcutRowsDescription": "Apila teclas integradas en 1 a 4 filas en la barra de la terminal",
+      "decreaseRows": "Reducir filas de atajos",
+      "increaseRows": "Aumentar filas de atajos",
+      "rowHeader": "Fila {{row}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "¿Usar un restablecimiento de límites de uso?",
@@ -2091,7 +2096,9 @@
       "switchToPhoneMode": "Cambiar al modo teléfono",
       "pasteFromClipboard": "Pegar desde el portapapeles",
       "paste": "Pegar",
-      "addCustomShortcut": "Agregar atajo personalizado"
+      "addCustomShortcut": "Agregar atajo personalizado",
+      "collapseShortcutRows": "Contraer filas de atajos",
+      "expandShortcutRows": "Expandir filas de atajos"
     },
     "activeContent": {
       "createTab": "Crear pestaña",

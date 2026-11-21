@@ -43,6 +43,8 @@ export type DragReorderListProps<ItemT> = {
   itemKey: (item: ItemT) => string
   canMove?: (item: ItemT) => boolean
   isMoveDisabled?: (item: ItemT) => boolean
+  /** Controls whether a row shows a drag handle; non-draggable headers can still shift around drops. */
+  isItemDraggable?: (item: ItemT) => boolean
   rowHeight?: number
   scopeKey?: string
   rowPresentation?: 'settings' | 'plain'
@@ -60,11 +62,13 @@ export type DragReorderListProps<ItemT> = {
   scrollContentHeight: SharedValue<number>
 }
 
+/** Vertically drag-reorderable list backed by Reanimated shared values. */
 export function DragReorderList<ItemT>({
   items,
   itemKey,
   canMove,
   isMoveDisabled,
+  isItemDraggable,
   rowHeight,
   scopeKey = '',
   rowPresentation = 'settings',
@@ -243,17 +247,23 @@ export function DragReorderList<ItemT>({
     [setAutoScrollActive]
   )
 
+  const rowCanDrag = useCallback(
+    (item: ItemT) => (!canMove || canMove(item)) && (isItemDraggable?.(item) ?? true),
+    [canMove, isItemDraggable]
+  )
+  const rowCanShift = useCallback((item: ItemT) => !canMove || canMove(item), [canMove])
+
   const commitReorder = useCallback(
     (orderedKeys: string[], movedId: string, dragged = false) => {
       if (currentCatalog.current !== catalog) {
         return
       }
-      const movableKeys = new Set(items.filter((item) => !canMove || canMove(item)).map(itemKey))
-      const nextMovable = orderedKeys.filter((key) => movableKeys.has(key))
+      const shiftableKeys = new Set(items.filter(rowCanShift).map(itemKey))
+      const nextShiftable = orderedKeys.filter((key) => shiftableKeys.has(key))
       let at = 0
-      const next = keys.map((key) => (movableKeys.has(key) ? nextMovable[at++]! : key))
+      const next = keys.map((key) => (shiftableKeys.has(key) ? nextShiftable[at++]! : key))
       const changed = next.join(KEY_SEPARATOR) !== keySignature
-      const move = changed ? dragReorderMove(nextMovable, movedId) : null
+      const move = changed ? dragReorderMove(nextShiftable, movedId) : null
       if (move && onMove?.(move) === false) {
         if (dragged) {
           runOnUI(() => {
@@ -277,7 +287,7 @@ export function DragReorderList<ItemT>({
       onMove,
       keySignature,
       catalog,
-      canMove,
+      rowCanShift,
       items,
       itemKey,
       keys,
@@ -290,24 +300,24 @@ export function DragReorderList<ItemT>({
   // move up/down accessibility actions that commit the same reorder.
   const moveRowByAccessibilityAction = useCallback(
     (key: string, delta: number) => {
-      const movableKeys = items.filter((item) => !canMove || canMove(item)).map(itemKey)
-      const fromIndex = movableKeys.indexOf(key)
+      const shiftableKeys = items.filter(rowCanShift).map(itemKey)
+      const fromIndex = shiftableKeys.indexOf(key)
       if (fromIndex === -1) {
         return
       }
-      const toIndex = Math.min(Math.max(fromIndex + delta, 0), movableKeys.length - 1)
+      const toIndex = Math.min(Math.max(fromIndex + delta, 0), shiftableKeys.length - 1)
       if (toIndex === fromIndex) {
         return
       }
-      const nextMovable = [...movableKeys]
-      nextMovable.splice(fromIndex, 1)
-      nextMovable.splice(toIndex, 0, key)
+      const nextShiftable = [...shiftableKeys]
+      nextShiftable.splice(fromIndex, 1)
+      nextShiftable.splice(toIndex, 0, key)
       let at = 0
-      const movable = new Set(movableKeys)
-      const next = keys.map((entry) => (movable.has(entry) ? nextMovable[at++]! : entry))
+      const shiftable = new Set(shiftableKeys)
+      const next = keys.map((entry) => (shiftable.has(entry) ? nextShiftable[at++]! : entry))
       commitReorder(next, key)
     },
-    [keys, commitReorder, canMove, items, itemKey]
+    [keys, commitReorder, rowCanShift, items, itemKey]
   )
 
   // A removed handle may never finalize its native gesture.
@@ -349,7 +359,7 @@ export function DragReorderList<ItemT>({
           rowHeight={rowHeight}
           ready={ready}
           measurementKey={measurementKey}
-          movable={!canMove || canMove(item)}
+          movable={rowCanDrag(item)}
           disabled={isMoveDisabled?.(item) ?? false}
           presentation={rowPresentation}
           liftFromRow={liftFromRow}
