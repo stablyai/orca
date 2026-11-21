@@ -21,6 +21,7 @@ import { upgradeDirectMobileRelay } from '../relay/mobile-relay-direct-upgrade'
 import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
 import { directProbeTimeoutMsForEndpoint } from '../relay/mobile-direct-return-probe'
 import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct-upgrade-controller'
+import { MobileDirectTailnetFallback } from './mobile-direct-tailnet-fallback'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { skipsDirectEndpoint } from './undialable-direct-endpoint'
@@ -29,9 +30,10 @@ type EndpointLifecycle = {
   setForeground(foreground: boolean): void
   nudge(reason: ForegroundNudgeReason): void
   stop(): void
+  learnTailnetEndpoint(endpoint: string): void
 }
 
-type EndpointOwner = EndpointLifecycle & {
+type EndpointOwner = Pick<EndpointLifecycle, 'setForeground' | 'nudge' | 'stop'> & {
   start(): Promise<void>
 }
 
@@ -43,12 +45,39 @@ export function startMobileEndpointLifecycle(
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
+  let tailnetFallback: MobileDirectTailnetFallback | null = null
+  let currentTailnetEndpoint: string | undefined
+  let relayActive = initialHost.relay !== undefined
+
+  const installTailnetFallback = (tailnetEndpoint: string): void => {
+    if (stopped || relayActive || directPathForEndpoint(initialHost.endpoint) === 'tailscale') {
+      return
+    }
+    if (currentTailnetEndpoint === tailnetEndpoint) {
+      return
+    }
+    tailnetFallback?.stop()
+    currentTailnetEndpoint = tailnetEndpoint
+    tailnetFallback = new MobileDirectTailnetFallback(logical, (path) =>
+      connect(
+        path === 'tailscale' ? tailnetEndpoint : initialHost.endpoint,
+        initialHost.deviceToken,
+        initialHost.publicKeyB64,
+        { onLog }
+      )
+    )
+    tailnetFallback.start()
+    tailnetFallback.setForeground(foreground)
+  }
 
   const startSupervisor = async (relay: MobileRelayEndpoint): Promise<void> => {
     if (stopped) {
       return
     }
     const supervisor = createSupervisor(logical, initialHost, relay, onLog)
+    relayActive = true
+    tailnetFallback?.stop()
+    tailnetFallback = null
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -59,6 +88,9 @@ export function startMobileEndpointLifecycle(
     owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
     void owner.start()
   } else {
+    if (initialHost.tailnetEndpoint) {
+      installTailnetFallback(initialHost.tailnetEndpoint)
+    }
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
       upgrade: (client, host) =>
         upgradeDirectMobileRelay({
@@ -75,6 +107,7 @@ export function startMobileEndpointLifecycle(
     setForeground(next) {
       foreground = next
       owner.setForeground(next)
+      tailnetFallback?.setForeground(next)
     },
     nudge(reason) {
       // Why: a focus nudge can precede the AppState listener; keep the closure in
@@ -83,11 +116,14 @@ export function startMobileEndpointLifecycle(
         foreground = true
       }
       owner.nudge(reason)
+      tailnetFallback?.nudge()
     },
     stop() {
       stopped = true
       owner.stop()
-    }
+      tailnetFallback?.stop()
+    },
+    learnTailnetEndpoint: installTailnetFallback
   }
 }
 

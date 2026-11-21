@@ -25,6 +25,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   }
 
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
+  logical.learnTailnetEndpoint = endpointLifecycle.learnTailnetEndpoint
   endpointLifecycle.setForeground(AppState.currentState === 'active')
   const appStateSubscription = AppState.addEventListener('change', (state) => {
     endpointLifecycle.setForeground(state === 'active')
