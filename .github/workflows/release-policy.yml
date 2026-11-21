@@ -29,6 +29,9 @@ jobs:
           persist-credentials: false
       - name: Enforce release policy
         uses: actions/github-script@v8
+        env:
+          # User ID of the release App's bot (orca-release[bot]); see isReleaseAppBot.
+          RELEASE_APP_BOT_ID: ${{ vars.RELEASE_APP_BOT_ID }}
         with:
           script: |
             const { pathToFileURL } = await import("node:url")
