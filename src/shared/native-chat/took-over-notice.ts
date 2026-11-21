@@ -3,8 +3,8 @@
 import type { AgentJournalItemBody } from '../agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from './native-chat-types'
 
-/** What the divider and the goal show. `home` marks the agent's first chat, which draws its header
- *  above the divider. Host-written beside the `took-over` origin. */
+/** What the divider and the goal show. `home` marks the agent's first chat; the renderer no longer reads
+ *  it, but hosts still write it for older peers. Host-written beside the `took-over` origin. */
 export type TookOverNotice = { workspace: string; goal?: string; home?: true }
 
 /** How the turn's text starts and where the owner's words begin in it, so status can name it. */

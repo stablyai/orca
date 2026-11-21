@@ -80,6 +80,9 @@ jobs:
 
           ## Testing
           Generated from published release assets by the README Downloads Badge workflow.
+
+          ## Performance
+          None, because this only refreshes the generated downloads badge SVG; application paths and the generation schedule are unchanged.
           BODY
             pr_url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
               --title "Update README downloads badge" --body-file "$body")"
