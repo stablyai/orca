@@ -3659,6 +3659,7 @@
       "open": "Open {{name}}",
       "row": {
         "started": "Started",
+        "forItems": "for",
         "reopened": "Reopened",
         "followedUp": "Sent follow-up to",
         "handedOff": "Handed off to",

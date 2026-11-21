@@ -1,12 +1,12 @@
 import { Fragment } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import { NATIVE_CHAT_INLINE_CHIP } from '../events/native-chat-inline-chip'
-import { cn } from '@/lib/class-names'
 import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
@@ -147,11 +147,8 @@ export function NativeChatAgentMessageSenderNames({
   return (
     <>
       {shown.map((sender, index) => (
-        // A name keeps its comma and host; among several it wraps rather than shrink below 6rem.
-        <span
-          key={sender.party.address}
-          className="flex min-w-0 max-w-fit grow basis-24 items-center gap-1"
-        >
+        // Its pieces sit in the row itself, so a name cut short takes no more than its chip.
+        <Fragment key={sender.party.address}>
           <SenderChip
             from={from}
             sender={sender}
@@ -167,7 +164,7 @@ export function NativeChatAgentMessageSenderNames({
               ,
             </span>
           ) : null}
-        </span>
+        </Fragment>
       ))}
     </>
   )
@@ -191,22 +188,43 @@ function SenderChip({
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
-      <span className="min-w-0 truncate text-chat-foreground" title={label}>
-        {label}
-      </span>
+      <SenderTooltip label={label}>
+        <span className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground">
+          {label}
+        </span>
+      </SenderTooltip>
     )
   }
   return (
-    <button
-      type="button"
-      aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
-      title={label}
-      className={cn(NATIVE_CHAT_INLINE_CHIP, 'min-w-0')}
-      onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
-      }
-    >
-      <span className="min-w-0 max-w-60 truncate">{label}</span>
-    </button>
+    <SenderTooltip label={label}>
+      <button
+        type="button"
+        aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
+        className={NATIVE_CHAT_INLINE_CHIP}
+        onClick={() =>
+          void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+        }
+      >
+        <span className="min-w-0 truncate">{label}</span>
+      </button>
+    </SenderTooltip>
+  )
+}
+
+/** The whole name on hover, as an item chip shows its title. */
+function SenderTooltip({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactElement
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -36,6 +36,7 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
+import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
 
 function lead(
   from: AgentMessageSource,
@@ -93,6 +94,7 @@ export function NativeChatAgentMessageCard({
   const expandable =
     canCopy || merged.length > 0 || message.blocks.some((block) => block.type === 'image-ref')
   const words = lead(from, message, t)
+  const items = message.agentStartItems ?? []
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
@@ -108,7 +110,20 @@ export function NativeChatAgentMessageCard({
         />
       }
       badge={agentMessageBadge(worker, view.dot)}
-      label={expandable ? `${words} ${sender ? senderName : unnamedSenderLabel(t)}` : undefined}
+      label={
+        expandable
+          ? [
+              words,
+              sender ? senderName : unnamedSenderLabel(t),
+              ...(items.length > 0
+                ? [
+                    t('components.native-chat.agentMessage.row.forItems', 'for'),
+                    items.map((item) => item.title).join(', ')
+                  ]
+                : [])
+            ].join(' ')
+          : undefined
+      }
       timestamp={message.timestamp}
       disclosureKey={`agent-message:${message.id}`}
       onOpenChange={(open) => {
@@ -145,10 +160,7 @@ export function NativeChatAgentMessageCard({
         ) : null
       }
     >
-      {/* One sender cuts short in its chip on one line; several may wrap to a second line. */}
-      <span
-        className={`flex min-w-0 items-center gap-x-1 whitespace-nowrap ${shown.length > 1 ? 'flex-wrap' : ''}`}
-      >
+      <span className="flex min-w-0 items-center gap-x-1">
         <span className="shrink-0">{words}</span>
         {shown.length === 0 ? (
           <span className="min-w-0 truncate">{unnamedSenderLabel(t)}</span>
@@ -162,6 +174,16 @@ export function NativeChatAgentMessageCard({
           />
         )}
         {more > 0 ? <span className="shrink-0">+{more}</span> : null}
+        {items.length > 0 ? (
+          <>
+            <span className="shrink-0">
+              {t('components.native-chat.agentMessage.row.forItems', 'for')}
+            </span>
+            {items.map((item) => (
+              <ItemChip key={item.uid} item={item} />
+            ))}
+          </>
+        ) : null}
       </span>
     </NativeChatEventRow>
   )

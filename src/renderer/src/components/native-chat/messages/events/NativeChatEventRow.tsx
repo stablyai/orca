@@ -210,9 +210,11 @@ export function NativeChatEventRow({
         >
           <NativeChatEventIcon badge={badge}>{icon}</NativeChatEventIcon>
         </span>
+        {/* Always one line: its parts sit side by side and the ones that can shrink (chips, names)
+            cut short with an ellipsis; clipping only sideways keeps chip focus rings whole. */}
         <span
           className={cn(
-            'relative min-w-0 line-clamp-2',
+            'relative flex min-w-0 items-center gap-x-1 overflow-x-clip whitespace-nowrap [&>*]:min-w-0 [&>*]:overflow-x-clip [&>*]:text-ellipsis',
             toggles &&
               'pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto'
           )}

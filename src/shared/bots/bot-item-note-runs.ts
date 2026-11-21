@@ -1,5 +1,5 @@
 // How a chat draws item changes: the item mail the bot reads stays hidden (its note shows the change),
-// the bot's note that only links workers whose Started rows this chat shows stays hidden,
+// the bot's note that only links workers to items joins those workers' Started rows next to it,
 // the owner's quick changes to one item, with nothing shown between them, fold into the first, and the
 // bot's notes in one turn, with only tool work between them, fold into the first (its row stays put
 // while a live turn adds to it, and shows the latest note's time).
@@ -8,6 +8,7 @@ import { isNativeChatOrcaCard } from '../native-chat/native-chat-orca-card'
 import { nativeChatRowRendersContent } from '../native-chat/transcript/row-content/native-chat-row-content'
 import { nativeChatRowRendersProse } from '../native-chat/transcript/folding/native-chat-trailing-run'
 import { botItemNoteIsQuiet } from './bot-item-note-lines'
+import type { BotItemNoteItem, BotItemNoteView } from './bot-item-note'
 
 /** The sender item mail names. */
 export const BOT_ITEM_MAIL_SENDER = 'orca:items'
@@ -52,7 +53,7 @@ export function foldBotItemNotes<T extends readonly NativeChatMessage[]>(
     return messages
   }
   const out = messages.map((message) => (isBotItemMail(message) ? hidden(message) : message))
-  dropOwnWorkerLinks(out, turnKeys)
+  joinWorkerLinksToStarts(out, turnKeys)
   foldOwnerMoves(messages, out)
   foldBotTurnNotes(out, turnKeys)
   return out
@@ -81,34 +82,65 @@ function linkedDispatches(message: NativeChatMessage): string[] | null {
   return ids
 }
 
-/** Matched by Dispatch id, never by name. A link line hides only when each worker's Started row comes
- *  before it, or in its own turn (the live turn often links just before it starts), so a line the
- *  reader already saw never vanishes when a later turn brings the row; another chat's or the owner's
- *  link, or one naming a worker this chat never started, always shows. */
-function dropOwnWorkerLinks(
+/** Matched by Dispatch id, never by name. A link line joins each worker's Started row ("Started X for
+ *  item") when that row is in its own turn (the live turn may link just before it starts) or is the
+ *  last row drawn before it; a link far from its start, another chat's or the owner's, or one naming
+ *  a worker this chat never started keeps its own line. */
+function joinWorkerLinksToStarts(
   out: NativeChatMessage[],
   turnKeys: readonly (string | undefined)[]
 ): void {
-  const started = new Map<string, { index: number; turn: string | undefined }[]>()
+  const starts: number[] = []
   out.forEach((message, index) => {
-    const id = message.agentStart ? message.agentStartDispatchId : undefined
-    if (id) {
-      started.set(id, [...(started.get(id) ?? []), { index, turn: turnKeys[index] }])
+    if (message.agentStart && message.agentStartDispatchId) {
+      starts.push(index)
     }
   })
-  if (started.size === 0) {
+  if (starts.length === 0) {
     return
   }
   out.forEach((message, index) => {
-    const turn = turnKeys[index]
-    const shown = (id: string) =>
-      started
-        .get(id)
-        ?.some((row) => row.index < index || (turn !== undefined && row.turn === turn)) === true
-    if (linkedDispatches(message)?.every(shown)) {
-      out[index] = hidden(message)
+    const ids = linkedDispatches(message)
+    if (!ids) {
+      return
     }
+    const turn = turnKeys[index]
+    const nearby = (start: number): boolean => {
+      if (turn !== undefined && turnKeys[start] === turn) {
+        return true
+      }
+      for (let between = start + 1; between < index; between++) {
+        if (!rowDrawsNothing(out[between]!)) {
+          return false
+        }
+      }
+      return start < index
+    }
+    const joined = ids.map((id) =>
+      starts.find((start) => out[start]!.agentStartDispatchId === id && nearby(start))
+    )
+    if (joined.some((start) => start === undefined)) {
+      return
+    }
+    const items = linkedItems(message.botItemNote!)
+    for (const start of new Set(joined as number[])) {
+      const row = out[start]!
+      const kept = (row.agentStartItems ?? []).filter(
+        (item) => !items.some((linked) => linked.uid === item.uid)
+      )
+      out[start] = { ...row, agentStartItems: [...kept, ...items] }
+    }
+    out[index] = hidden(message)
   })
+}
+
+/** Each item a note names once, as of its last entry. */
+function linkedItems(note: BotItemNoteView): BotItemNoteItem[] {
+  const items = new Map<string, BotItemNoteItem>()
+  for (const { uid, number, title, status } of note.entries) {
+    items.set(uid, { uid, number, title, status })
+  }
+  return [...items.values()]
 }
 
 function foldOwnerMoves(messages: readonly NativeChatMessage[], out: NativeChatMessage[]): void {
