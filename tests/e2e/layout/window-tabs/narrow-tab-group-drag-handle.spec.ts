@@ -83,7 +83,19 @@ async function tabThroughStrip(
   groupId: string
 ): Promise<{ label: string; fullyVisible: boolean }[]> {
   const tab = page.locator(`[data-tab-group-strip-id="${groupId}"] [data-tab-id]`).first()
-  // Why: focusing a group can hand focus to its terminal a beat later, so retry until Tab from the tab lands in the strip.
+  // A strip whose controls all hid (or parked invisible) beside an icon-only tab has nothing to land on: report none.
+  const hasStripControl = await page.evaluate(
+    (id) =>
+      [...document.querySelectorAll<HTMLElement>(`[data-tab-group-strip-id="${id}"] button`)].some(
+        (button) =>
+          !button.closest('[data-tab-id]') && button.checkVisibility({ visibilityProperty: true })
+      ),
+    groupId
+  )
+  if (!hasStripControl) {
+    return []
+  }
+  // Why: focusing a group can hand focus to its terminal a beat later, so retry Tab from the tab.
   await expect
     .poll(async () => {
       await tab.focus()
