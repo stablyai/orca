@@ -139,12 +139,13 @@ export function useBotChatItems(
       })
         .then((value) => {
           if (live) {
-            // What the answer repeats keeps its identity.
-            const next =
-              asked && last ? mergeNamedBotItems(last, value, asked) : reuseEqualJson(last, value)
-            if (next !== last) {
-              last = next
-              setRead({ chats, value: next })
+            // What the answer repeats keeps its identity. A whole read is a new read even when equal,
+            // so loaded Closed pages are read again after it.
+            const merged = asked && last ? mergeNamedBotItems(last, value, asked) : null
+            const next = merged ?? reuseEqualJson(last, value)
+            if (next !== last || !merged) {
+              last = next === last ? { ...next } : next
+              setRead({ chats, value: last })
             }
             missed = false
             setFailed(false)

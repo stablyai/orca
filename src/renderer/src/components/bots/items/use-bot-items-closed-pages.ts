@@ -91,6 +91,8 @@ export function useBotItemsClosedPages(
     setPages({ ...pages, base: read, items: pages.items.filter((item) => !named.has(item.uid)) })
   }
   const generation = useRef(0)
+  const latest = useRef(read)
+  latest.current = read
 
   const depth = pages?.depth ?? 0
   const current = pages !== null && pages.base === read
@@ -125,7 +127,10 @@ export function useBotItemsClosedPages(
   const items = useMemo(() => loadedItems(read, shownPages, shownEnd), [read, shownPages, shownEnd])
   // Every Closed item the read counts is shown (a named read moved the last unloaded one out): no more.
   const closedTotal = (read?.counts.done ?? 0) + (read?.counts.canceled ?? 0)
-  const allShown = useMemo(() => items.filter(isClosed).length >= closedTotal, [items, closedTotal])
+  const allShown = useMemo(
+    () => new Set(items.filter(isClosed).map((item) => item.uid)).size >= closedTotal,
+    [items, closedTotal]
+  )
   const paged = current ? pages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
   const cursor = allShown ? null : paged
   const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
@@ -135,6 +140,9 @@ export function useBotItemsClosedPages(
     const mine = ++generation.current
     const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
     if (generation.current === mine) {
+      // Items a named read refreshed while this page was out: the read's copies are the newer ones.
+      const since = latest.current ? botItemsNamedSince(latest.current, read) : null
+      const fresh = since ? next.items.filter((item) => !since.has(item.uid)) : next.items
       setPages((prev) => {
         // Still the pages this one continues (a named read since kept them): it joins them.
         const same = prev !== null && prev.chats === chats && prev.cursor === cursor
@@ -142,7 +150,7 @@ export function useBotItemsClosedPages(
           base: same ? prev.base : read,
           chats,
           depth: (same ? prev.depth : 0) + 1,
-          items: [...(same ? prev.items : []), ...next.items],
+          items: [...(same ? prev.items : []), ...fresh],
           cursor: next.nextClosedCursor ?? null
         }
       })

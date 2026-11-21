@@ -95,15 +95,23 @@ export function filterBotItems(items: readonly BotItem[], filter: BotItemFilter)
   )
 }
 
-/** Each item by the Dispatches it links, the lineage's newest too, so a worker's ask finds its item. */
+/** Each item by the Dispatches it links, the lineage's newest too, so a worker's ask finds its item:
+ *  an open item over a Closed one, else the later one. */
 export function botItemsByDispatch(items: readonly BotItem[]): Map<string, BotItem> {
   const byDispatch = new Map<string, BotItem>()
+  const closed = (item: BotItem) => item.status === 'done' || item.status === 'canceled'
+  const set = (ref: string, item: BotItem) => {
+    const held = byDispatch.get(ref)
+    if (!held || closed(held) || !closed(item)) {
+      byDispatch.set(ref, item)
+    }
+  }
   for (const item of items) {
     for (const link of item.links) {
       if (link.kind === 'dispatch') {
-        byDispatch.set(link.ref, item)
+        set(link.ref, item)
         if (link.latest) {
-          byDispatch.set(link.latest, item)
+          set(link.latest, item)
         }
       }
     }

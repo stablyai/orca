@@ -76,9 +76,11 @@ const LIST = defineMethod({
     // An older client names one chat; a group's panel names its rooms' member sessions.
     const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
     const chat = chatIds ? { chatIds } : {}
-    const seenEventId = botItemEventId(
-      context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
-    )
+    // Read after the rows, so a mark another device moved meanwhile is the one sent.
+    const seenEventId = (): string =>
+      botItemEventId(
+        context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
+      )
     if (params.uids) {
       // What a notice named: those items (an absent one is deleted or out of scope), with the counts.
       const named = await store.list({
@@ -91,7 +93,7 @@ const LIST = defineMethod({
       return {
         items: await botItems.views(named.items, params.summary),
         counts: named.counts,
-        seenEventId
+        seenEventId: seenEventId()
       }
     }
     // Every open item, then closed ones a page at a time; a Closed page asked alone skips the open.
@@ -107,10 +109,13 @@ const LIST = defineMethod({
     })
     const closedRows = closed.items.slice(0, BOT_ITEM_LIMITS.listPage)
     const lastClosed = closedRows.at(-1)
+    // An item closed between the two reads is in both: once, as Closed.
+    const closedUids = new Set(closedRows.map((item) => item.uid))
+    const stillOpen = open.filter((item) => !closedUids.has(item.uid))
     return {
-      items: await botItems.views([...open, ...closedRows], params.summary),
+      items: await botItems.views([...stillOpen, ...closedRows], params.summary),
       counts: closed.counts,
-      seenEventId,
+      seenEventId: seenEventId(),
       ...(closed.items.length > BOT_ITEM_LIMITS.listPage && lastClosed
         ? { nextClosedCursor: `${lastClosed.lastActivityAt}:${lastClosed.number}` }
         : {})
