@@ -25,7 +25,7 @@ export type AgentAttentionUnreadWrite = {
 export type AgentAttentionDeliveryRequest = {
   workspaceId: string
   subjectKey: string | null
-  /** Carried so the delivery owner can apply its own suppress-while-focused policy. */
+  /** On-screen worktree. Suppress while focused skips a notification only when the person can already see it. */
   workspaceIsActive: boolean
 }
 
@@ -85,7 +85,8 @@ export function resolveAgentAttention(
   const delivery: AgentAttentionDeliveryRequest = {
     workspaceId,
     subjectKey,
-    workspaceIsActive: surface.isWorkspaceActive(workspaceId)
+    // Selection stays true while Dashboard or Settings covers the worktree. Visibility is what the setting names.
+    workspaceIsActive: surface.isWorkspaceViewed(workspaceId)
   }
   if (!request.settlesTurn) {
     return { admitted: true, unread: null, delivery }
