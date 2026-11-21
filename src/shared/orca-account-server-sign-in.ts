@@ -57,6 +57,19 @@ export type OrcaAccountApprovalPrompt = {
   expiresAt: number
 }
 
+// Why a fixed list: a paired computer sends this link and the phone opens it, so the phone can't take
+// that computer's word for which site its Orca Cloud is.
+const ORCA_CLOUD_SIGN_IN_PAGE_ORIGINS: ReadonlySet<string> = new Set(['https://login.onorca.dev'])
+
+/** Whether `url` is an https page of Orca Cloud's own sign-in site. */
+export function isOrcaCloudSignInPage(url: string): boolean {
+  try {
+    return ORCA_CLOUD_SIGN_IN_PAGE_ORIGINS.has(new URL(url).origin)
+  } catch {
+    return false
+  }
+}
+
 export type OrcaAccountSignInPrompt = OrcaAccountAuthorizeRequest | OrcaAccountApprovalPrompt
 
 export function isOrcaAccountApprovalPrompt(
