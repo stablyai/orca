@@ -32,6 +32,20 @@ export async function stopCodexSharedChatWorkload(input: {
   return terminalsGone !== false && leftovers
 }
 
+/** Lets the server drop these threads; true when Codex confirmed each (or can't unsubscribe). */
+export async function unsubscribeCodexThreads(
+  rpc: Pick<CodexAppServerConnection, 'request'>,
+  threads: readonly string[],
+  timeoutMs: number
+): Promise<boolean> {
+  const results = await Promise.allSettled(
+    threads.map((threadId) => rpc.request('thread/unsubscribe', { threadId }, { timeoutMs }))
+  )
+  return results.every(
+    (result) => result.status === 'fulfilled' || isCodexAppServerUnsupportedError(result.reason)
+  )
+}
+
 /** true: listed and confirmed gone; false: one survived or Codex failed; null: Codex can't list
  *  (older versions only clean), so the process sweep alone decides. */
 async function stopListedTerminals(input: {
@@ -110,7 +124,12 @@ async function stopTaggedProcesses(
       targets.length > 0
         ? await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
         : first
-    if (!after || after.unreadable.length > 0 || after.tagged(leaseId).length > 0) {
+    if (
+      !after ||
+      !after.bounded ||
+      after.unreadable.length > 0 ||
+      after.tagged(leaseId).length > 0
+    ) {
       return false
     }
     // A target the last reading didn't list must really be gone, not merely unreadable now.

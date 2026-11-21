@@ -520,10 +520,26 @@ describe('shared Codex app-servers', () => {
       sessionId: 'b',
       skillRoots: []
     })
+    const sibling = await stuck.pool.open(launch(), chat().handlers, {
+      sessionId: 'c',
+      skillRoots: []
+    })
     const threadB = await startThread(connB)
     stuck.servers[0]!.terminals.set(threadB, new Set(['p2']))
     await connB.close()
     expect(connB.processTreeUnproven).toBe(true)
+    expect(sibling.closed).toBe(false)
+  })
+
+  it('stops the server for a chat alone on it whose leftover command survived its cleanup', async () => {
+    const { servers, pool } = fakeCodex('ends', 'exited', false)
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.terminals.set(threadA, new Set(['p1']))
+    await expect(connA.close()).resolves.toBe(true)
+    expect(connA.processTreeUnproven).toBe(false)
+    const next = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    expect(next.pid).not.toBe(servers[0]!.pid)
   })
 
   it('lets go of a thread that opens after its chat closed', async () => {
@@ -542,6 +558,7 @@ describe('shared Codex app-servers', () => {
   it("leaves Stop unproven when an older Codex can't list commands and one is left under the server", async () => {
     const { servers, pool, sweep } = fakeCodex('ends', 'exited', true, { listUnsupported: true })
     const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
     await startThread(connA)
     sweep.leftovers = true
     await connA.close()

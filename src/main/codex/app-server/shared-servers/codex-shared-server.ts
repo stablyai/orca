@@ -1,9 +1,9 @@
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
-import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
 import {
   stopCodexSharedChatWorkload,
+  unsubscribeCodexThreads,
   type CodexSharedServerProcessSweep
 } from './codex-shared-server-chat-workload'
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
@@ -234,7 +234,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     const owned = this.router.release(lease)
     // Threads that opened after the chat left are let go here, and their commands stopped below.
     let workloadGone = (await Promise.all(lease.abandoning)).every(Boolean)
-    const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
     // Turns ending doesn't end the commands they started; the chat's own are stopped alone.
     workloadGone &&= await stopCodexSharedChatWorkload({
       rpc: physical,
@@ -244,15 +243,19 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       serverPid: this.pid,
       timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
     })
-    // A chat that already resumed one of these threads here owns its subscription now.
-    // Abandoned threads were already let go by abandon().
-    const unclaimed = owned.filter((threadId) => !this.router.isClaimed(threadId))
-    const unsubscribed = await Promise.allSettled(
-      unclaimed.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
+    // A chat that resumed one of these threads here owns its subscription now; abandoned threads
+    // were already let go by abandon().
+    workloadGone &&= await unsubscribeCodexThreads(
+      physical,
+      owned.filter((threadId) => !this.router.isClaimed(threadId)),
+      RELEASE_REQUEST_TIMEOUT_MS
     )
-    workloadGone &&= unsubscribed.every(
-      (result) => result.status === 'fulfilled' || isCodexAppServerUnsupportedError(result.reason)
-    )
+    if (!workloadGone && !this.hasExited) {
+      await this.stopIfAlone(lease)
+    }
+    if (this.hasExited) {
+      return this.reapedVerdict()
+    }
     return { writerStopped: true, workloadGone }
   }
 
@@ -269,16 +272,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
     this.router.retire(threadId)
     lease.abandonedThreads.add(threadId)
-    const physical = this.physical
     const letGo =
-      !physical || this.closed
+      !this.physical || this.closed
         ? Promise.resolve(false)
-        : physical
-            .request('thread/unsubscribe', { threadId }, { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS })
-            .then(
-              () => true,
-              (error: unknown) => isCodexAppServerUnsupportedError(error)
-            )
+        : unsubscribeCodexThreads(this.physical, [threadId], RELEASE_REQUEST_TIMEOUT_MS)
     lease.abandoning.add(letGo)
     return letGo
   }
@@ -287,12 +284,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return this.releasingThreads.get(threadId) ?? Promise.resolve()
   }
 
-  /** A turn that ignores Stop: with no other chat on the server, stop the server (its exit is the
-   *  proof); with any other chat on it, whatever that chat is doing, only drain it. */
+  /** A chat's work that its own cleanup couldn't stop or prove gone: with no other chat on the
+   *  server, stop the server (its exit reaps the tree); else drain it so it ends with the last. */
   private async stopIfAlone(lease: CodexSharedServerLease): Promise<void> {
     this.draining = true
     if ([...this.leases].some((other) => other !== lease) || !this.physical) {
-      console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: a stopped turn kept running`)
+      console.warn(
+        `[codex-shared-server] pid ${this.pid ?? '?'}: a stopped chat's work outlived its cleanup`
+      )
       return
     }
     await this.physical.close()
