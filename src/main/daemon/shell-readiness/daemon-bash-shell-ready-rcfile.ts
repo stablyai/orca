@@ -7,6 +7,8 @@ import { getPosixClaudeShellFunction } from '../../../shared/shell/launch/agents
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../../pty/shell-startup/bash-prompt-command-composition'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,
+  BASH_LOGIN_PROFILE_ZSH_HANDOFF_CLOSE_BLOCK,
+  BASH_LOGIN_PROFILE_ZSH_HANDOFF_OPEN_BLOCK,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK
 } from '../../pty/shell-startup/shell-templates'
 
@@ -19,6 +21,7 @@ __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
 unset _orca_shell_features
 unset -f __orca_has_feature
+${BASH_LOGIN_PROFILE_ZSH_HANDOFF_OPEN_BLOCK}
 # A system bashrc may already run ble.sh; it never exports this state, so exported copies are inherited.
 for __orca_ble_var in _ble_attached _ble_decode_bind_state; do
   [[ -n "\${!__orca_ble_var+set}" ]] || continue
@@ -33,6 +36,7 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
+${BASH_LOGIN_PROFILE_ZSH_HANDOFF_CLOSE_BLOCK}
 # Force bracketed paste on older readline so multiline startup prompts remain one literal paste.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 __orca_restore_agent_teams_path() {
