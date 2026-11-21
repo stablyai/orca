@@ -141,15 +141,32 @@ export function ownOptionsInclude(args: readonly string[], flags: readonly strin
   )
 }
 
-/** Parse target-less flags or marker values, including --marker=value, with exact CLI option matching. */
+/** Parse target-less flags or marker values, including --marker=value and -mvalue, with exact CLI
+ *  option matching; tokens after `--` are prompt text, so `devin -- "fix -r bug"` resumes nothing. */
 export function resumeInvocationFromOptions(
   args: readonly string[],
   options: { targetless: readonly string[]; markers: readonly string[] }
 ): StructuredAgentResumeInvocation | null {
-  if (args.some((token) => options.targetless.includes(token))) {
+  const terminator = args.indexOf('--')
+  const own = terminator === -1 ? args : args.slice(0, terminator)
+  if (own.some((token) => options.targetless.includes(token))) {
     return { target: null }
   }
-  const inline = args.find((token) =>
+  // A short option takes its value attached too, as clap accepts `-rVALUE` and `-r=VALUE`.
+  const attached = own.find((token) =>
+    options.markers.some(
+      (marker) =>
+        marker.length === 2 &&
+        !marker.startsWith('--') &&
+        token.length > marker.length &&
+        token.startsWith(marker)
+    )
+  )
+  if (attached !== undefined) {
+    const target = attached.slice(2).replace(/^=/u, '')
+    return { target: target.length > 0 ? target : null }
+  }
+  const inline = own.find((token) =>
     options.markers.some((marker) => token.startsWith(`${marker}=`))
   )
   if (inline !== undefined) {
@@ -157,8 +174,8 @@ export function resumeInvocationFromOptions(
     return { target: target.length > 0 ? target : null }
   }
   return invocationAfter(
-    args,
-    args.findIndex((token) => options.markers.includes(token))
+    own,
+    own.findIndex((token) => options.markers.includes(token))
   )
 }
 
