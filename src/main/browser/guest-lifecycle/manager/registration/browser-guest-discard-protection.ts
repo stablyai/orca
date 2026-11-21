@@ -2,14 +2,12 @@ import {
   installBrowserGuestIdleProtection,
   readBrowserGuestIdleProtection
 } from './browser-guest-idle-protection'
-
 export {
   setBrowserGuestSemanticVisibility,
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
-import { createFormPostNavigationTracker } from './browser-guest-form-post-navigation'
-import { watchBrowserGuestNavigationMethods } from './browser-guest-form-post-methods'
+import { readBrowserGuestActiveEntryFormData } from './browser-page-state-form-data'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -163,28 +161,13 @@ export function installBrowserGuestDiscardProtection(
       channel !== BROWSER_GUEST_PROTECTION_REPORT ||
       guest.isDestroyed() ||
       event.sender !== guest ||
+      event.senderFrame !== guest.mainFrame ||
       !payload ||
       typeof payload !== 'object'
     ) {
       return
     }
-    // Any frame may report: an embedded form can POST to the top page, and a false report only
-    // keeps a page from being discarded.
-    if ('formPost' in payload && typeof payload.formPost === 'string') {
-      formPost.submitted(payload.formPost)
-      return
-    }
-    if ('formPostCancelled' in payload && typeof payload.formPostCancelled === 'string') {
-      formPost.cancelled(payload.formPostCancelled)
-      return
-    }
-    if (event.senderFrame !== guest.mainFrame) {
-      return
-    }
     if ('ready' in payload && payload.ready === true) {
-      if ('loadType' in payload && payload.loadType === 'navigate' && formPost.freshlyNavigated()) {
-        owner.currentPost = false
-      }
       snapshot()
       return
     }
@@ -215,13 +198,10 @@ export function installBrowserGuestDiscardProtection(
     publish()
   }
   // Only the current document protects; restored back/forward entries reload on demand.
-  const formPost = createFormPostNavigationTracker()
-  const methods = watchBrowserGuestNavigationMethods(guest, formPost)
   const navigation = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
-      methods.started(details.url)
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -230,11 +210,13 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
-    owner.currentPost = methods.committed()
+    owner.currentPost = readBrowserGuestActiveEntryFormData(guest) === 'form-data'
     owner.mediaGranted = false
     publish()
   }
   const settled = (): void => {
+    // Chromium may record the page's form body after the commit event.
+    owner.currentPost ||= readBrowserGuestActiveEntryFormData(guest) === 'form-data'
     owner.navigating = false
     owner.unavailable = false
     snapshot()
@@ -274,7 +256,6 @@ export function installBrowserGuestDiscardProtection(
   guest.on('did-navigate', committed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
-    methods.dispose()
     stopIdleProtection()
     if (owners.get(guest) === owner) {
       owners.delete(guest)

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { GET_PAGE_STATE } from '../../../browser/guest-lifecycle/manager/registration/browser-page-state-form-data.test-fixture'
 import { afterEach, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './browser-commands'
 import { runWithActiveRpcCaller } from '../../rpc/callers/active-call'
@@ -89,7 +90,7 @@ export async function attach(pageId: string, rendererId = 99) {
     debugger: { isAttached: () => false },
     loadURL: async () => {},
     navigationHistory: {
-      getAllEntries: () => [{ url: 'https://example.test/', title: 'Page' }],
+      getAllEntries: () => [{ url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }],
       getActiveIndex: () => 0
     },
     close: () => {
@@ -133,7 +134,7 @@ export function rig() {
     goto: async () => {
       navigationStarted()
       await pendingNavigation
-      return { url: 'https://example.test/', title: 'Page' }
+      return { url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }
     }
   }
   const offscreen = {

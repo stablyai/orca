@@ -1,4 +1,5 @@
 import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
+import { readBrowserPageStateFormData } from './manager/registration/browser-page-state-form-data'
 import { BrowserError } from '../browser-error'
 import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
@@ -202,7 +203,9 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
       !Number.isInteger(index) ||
       index < 0 ||
       index >= entries.length ||
-      entries.some((entry) => !entry.url)
+      entries.some((entry) => !entry.url) ||
+      // A restore reloads with GET; only a page Chromium records as no form POST is discarded.
+      readBrowserPageStateFormData(entries[index]?.pageState) !== 'none'
     ) {
       return false
     }

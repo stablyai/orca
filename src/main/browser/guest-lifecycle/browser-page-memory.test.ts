@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { GET_PAGE_STATE } from './manager/registration/browser-page-state-form-data.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   prepareBrowserPageAttach,
@@ -61,8 +62,8 @@ function attach(id: number, partition = 'persist:profile') {
     loadURL: vi.fn(() => load),
     navigationHistory: {
       getAllEntries: () => [
-        { url: 'https://example.test/a', title: 'A', pageState: 'fixture-opaque-state' },
-        { url: 'https://example.test/b', title: 'B', pageState: 'fixture-opaque-state' }
+        { url: 'https://example.test/a', title: 'A', pageState: GET_PAGE_STATE },
+        { url: 'https://example.test/b', title: 'B', pageState: GET_PAGE_STATE }
       ],
       getActiveIndex: () => 1,
       restore: vi.fn(() => load)
@@ -103,8 +104,8 @@ it('keeps the cold identity/history, gates every consumer on load and fences ret
   expect(action).not.toHaveBeenCalled()
   expect(second.guest.navigationHistory.restore).toHaveBeenCalledWith({
     entries: [
-      { url: 'https://example.test/a', title: 'A', pageState: 'fixture-opaque-state' },
-      { url: 'https://example.test/b', title: 'B', pageState: 'fixture-opaque-state' }
+      { url: 'https://example.test/a', title: 'A', pageState: GET_PAGE_STATE },
+      { url: 'https://example.test/b', title: 'B', pageState: GET_PAGE_STATE }
     ],
     index: 1
   })

@@ -9,7 +9,6 @@ import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-vis
 import { installBrowserGuestEditProtection } from './browser/edit-protection/browser-guest-edit-protection'
 import { isHeaderRewriteSiteHost } from '../shared/browser/identity/browser-site-hosts'
 import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../shared/browser/identity/browser-subframe-unload'
-import { installBrowserGuestFormPostReport } from './browser/edit-protection/browser-guest-form-post-report'
 import { installBrowserGuestPageVisibilityReport } from './browser/visibility/browser-guest-page-visibility-report'
 import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../shared/browser/guest-lifecycle/browser-guest-page-visibility'
 
@@ -43,9 +42,6 @@ if (!process.isMainFrame) {
     }
   })
 }
-installBrowserGuestFormPostReport({
-  send: (channel, payload) => ipcRenderer.send(channel, payload)
-})
 // Electron's visibilityState override runs in every frame of the guest.
 installBrowserGuestPageVisibilityReport((state) =>
   ipcRenderer.send(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, state)
