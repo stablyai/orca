@@ -9,6 +9,9 @@ vi.mock('@orca/process-host', () => ({ spawnProcess: spawn }))
 
 import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-server'
 
+// macOS launches spawn only after their async PATH lookup settles.
+const untilSpawned = (): Promise<void> => vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+
 const CHUNKS = 256
 const CHUNK_BYTES = 64 * 1024
 
@@ -29,7 +32,7 @@ it.each([1, CHUNKS])(
     const pauseStderr = vi.spyOn(stderr, 'pause')
     const stdin = new PassThrough()
     const child = Object.assign(new EventEmitter(), { stdout, stderr, stdin, kill: vi.fn() })
-    spawn.mockReturnValue(child)
+    spawn.mockReset().mockReturnValue(child)
     const events: WorkerThreadChildEvent[] = []
     const port = Object.assign(new EventEmitter(), {
       postMessage: (event: WorkerThreadChildEvent) => events.push(event)
@@ -37,6 +40,7 @@ it.each([1, CHUNKS])(
     serveWorkerThreadChildProcesses(port)
     try {
       port.emit('message', { type: 'spawn', id: 1, spec: { program: 'fixture', args: [] } })
+      await untilSpawned()
       await nextTurn()
       if (chunks === 1) {
         expect(pauseStdout).not.toHaveBeenCalled()
@@ -95,8 +99,7 @@ it.each(['cancel-spawn', 'kill'] as const)(
     port.emit('message', { type: 'spawn', id: 2, spec: { program: 'kept', args: [] } })
     port.emit('message', { type: stop, id: 1 })
     port.emit('message', { type: 'stdin-end', id: 2 })
-    // macOS launches wait for their async PATH lookup first.
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+    await untilSpawned()
 
     expect(spawn).toHaveBeenCalledOnce()
     expect(spawn.mock.calls[0]?.[0]).toMatchObject({ program: 'kept' })
@@ -122,7 +125,7 @@ it('keeps output on the worker once the reader discards it', async () => {
   })
   serveWorkerThreadChildProcesses(port)
   port.emit('message', { type: 'spawn', id: 1, spec: { program: 'git', args: [] } })
-  await nextTurn()
+  await untilSpawned()
   stdout.write('read')
   await nextTurn()
   port.emit('message', { type: 'discard-output', id: 1 })
