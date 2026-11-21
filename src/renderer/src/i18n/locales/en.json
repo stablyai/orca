@@ -21219,6 +21219,7 @@
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
           "none": "None",
+          "off": "Off",
           "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
@@ -27678,6 +27679,7 @@
       "titleOne": "Give {{person}} access to {{name}}?",
       "titleMany": "Give {{count}} people access to {{name}}?",
       "confirm": "Give access",
+      "reject": "Reject",
       "confirmWarning": "They’ll act as you on {{computer}}.",
       "confirmComputer": "Run commands and change files",
       "confirmNoApprovals": "Acts without asking first",
@@ -27838,7 +27840,12 @@
         "title": "Delete the webhook for “{{automation}}”?",
         "note": "Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.",
         "confirm": "Delete webhook",
-        "done": "Webhook deleted"
+        "done": "Webhook deleted",
+        "withAutomation": {
+          "title": "Delete “{{automation}}” and its webhook?",
+          "note": "Nothing else starts this automation, so it's deleted with its run history. The webhook's URL stops working, and calls still waiting are cancelled.",
+          "confirm": "Delete both"
+        }
       },
       "recentCalls": "Recent calls",
       "showFewer": "Show fewer",
@@ -28340,6 +28347,8 @@
       "ownerStep": "Step {{step}} of 3",
       "otherAccount": "Switch account",
       "keyMissed": "Downloaded the key and Orca didn’t pick it up?",
+      "pickHostKey": "Pick the key file to import:",
+      "pickKeyHere": "Choose a file on this computer",
       "action": {
         "makeNewKey": "Make a new key",
         "importKey": "Import a key file",
@@ -28699,15 +28708,6 @@
         "open": "Open",
         "stopped": "This link no longer works",
         "stoppedDetail": "Ask whoever shared it for a new one.",
-        "ask": "Ask for approval",
-        "askDetail": "Picked for bots made from a link",
-        "full": "Full access",
-        "fullDetail": "Runs commands without asking",
-        "chatsDetail": "Starts from your chat permission setting",
-        "askLine": "Asks before running commands. Your own allow rules still apply.",
-        "fullLine": "Runs commands without asking.",
-        "chatsLine": "Asks as your chats do.",
-        "change": "(Change)",
         "origin": "From {{who}}'s link",
         "originAnonymous": "From a shared link",
         "back": "Back",
@@ -29012,6 +29012,7 @@
       },
       "thisComputer": "this computer",
       "pageUnrouted": "Can’t reach {{host}} to open this page in its browser. Reconnect {{host}}, then try again.",
+      "botWorkspaceUnavailable": "This agent’s workspace isn’t available here now, so the page can’t open in it.",
       "signIn": {
         "waitingFirst": "Log in with the Orca account {{host}} should use, in Orca’s browser for {{host}}. Check the page shows {{code}}.",
         "waiting": "Approve in Orca’s browser for {{host}}. Check the page shows {{code}}.",
@@ -29712,6 +29713,10 @@
     "kimiProduct": "Kimi Code",
     "cursorProduct": "Cursor CLI",
     "hermesProduct": "Hermes Agent",
+    "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
+    "kiloProduct": "Kilo CLI",
+    "mimoCodeProduct": "MiMo Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

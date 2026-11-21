@@ -220,7 +220,7 @@ describe('New bot on the phone', () => {
     const sheet = await mount(
       props({
         computers: [COMPUTERS[0]],
-        offer: {
+        seed: {
           proposal: {
             name: 'Release',
             purpose: 'Tracks the release.',

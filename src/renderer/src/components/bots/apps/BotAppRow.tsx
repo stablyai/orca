@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import { composioLogoUrl } from '../../../../../shared/composio/composio-apps'
-import { LOGO_TILES } from './brand-logo-tiles'
+import { COMPOSIO_DARK_MARKS, LOGO_TILES } from './brand-logo-tiles'
 
 /** A coloured tile's mark colour and its hairline on a dark page; the white tile otherwise. */
 export function brandTileClass(tile: string | undefined): string {
@@ -14,11 +14,49 @@ export function brandTileClass(tile: string | undefined): string {
 export function composioLogo(
   slug: string | undefined,
   logo?: string | null
-): { src: string; fill: string | undefined } {
+): { src: string; fill: string | undefined; darkMark: boolean } {
   return {
     src: (slug && LOGO_TILES.filled[slug]) || logo || composioLogoUrl(slug ?? ''),
-    fill: slug ? LOGO_TILES.composio[slug] : undefined
+    fill: slug ? LOGO_TILES.composio[slug] : undefined,
+    darkMark: slug ? COMPOSIO_DARK_MARKS.has(slug) : false
   }
+}
+
+/**
+ * Inside a connector list's row: every logo is its bare mark in one 20 px box, with no tile, so the rows' icons read
+ * as one size. A logo that is a full square of colour (LOGO_TILES.composio) is that square at 20 px.
+ */
+export const BotLogoBare = React.createContext(false)
+
+/** A bare logo's box; see BotLogoBare. */
+export const BARE_LOGO_BOX = 'flex size-5 shrink-0 items-center justify-center'
+
+/** A logo Composio serves, bare (see BotLogoBare): a full square of colour at 20 px, else its mark. */
+export function BareComposioLogo({
+  src,
+  fill,
+  darkMark
+}: ReturnType<typeof composioLogo>): React.JSX.Element {
+  return fill ? (
+    <span
+      style={{ backgroundColor: fill }}
+      className={cn(
+        BARE_LOGO_BOX,
+        'overflow-hidden rounded-[5px] dark:outline-1 dark:-outline-offset-1 dark:outline-white/14'
+      )}
+    >
+      <img src={src} alt="" draggable={false} className="size-full object-contain" />
+    </span>
+  ) : (
+    <span className={BARE_LOGO_BOX}>
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        className={cn('size-5 object-contain', darkMark && 'dark:brightness-0 dark:invert')}
+      />
+    </span>
+  )
 }
 
 /** An app's mark on its tile: the colour its brand sits on (white unless LOGO_TILES says), plain icons on muted. */
@@ -42,9 +80,19 @@ export function BotAppLogo({
   /** md: a list row; lg: a setup step's heading. */
   size?: 'sm' | 'md' | 'lg'
 }): React.JSX.Element {
+  const bare = useContext(BotLogoBare)
   const image = icon || !(slug || logo) ? undefined : composioLogo(slug, logo)
   const fill = image?.fill
   const background = fill ?? tile
+  if (bare) {
+    return image ? (
+      <BareComposioLogo {...image} />
+    ) : (
+      <span className={cn(BARE_LOGO_BOX, plain ? 'text-muted-foreground' : 'text-foreground')}>
+        {icon}
+      </span>
+    )
+  }
   return (
     <span
       data-size={size}

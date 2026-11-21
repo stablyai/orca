@@ -74,15 +74,25 @@ export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ 
   takesSessionMeta: antigravityTakesSystemPrompt
 })
 
-/** 1.x: appended to the user's own inline instructions, never replacing them. 2.x ignores those, so
- *  they follow the user's own global AGENTS.md in a config folder that links the rest of theirs. */
-export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
-  text,
-  file,
-  emptyFolder,
-  env,
-  version
-}): Promise<AcpInstructionsLaunch | null> => {
+/** OpenCode 1.x and its forks: appended to the user's own inline instructions in `variable`, never
+ *  replacing them. */
+function inlineConfigInstructions(variable: string): AcpInstructionsDelivery {
+  return async ({ env, file }) => {
+    const content = withOpenCodeInstructionsFile(env[variable], await file())
+    return content === null ? null : { env: { [variable]: content } }
+  }
+}
+
+const deliverOpenCode1Instructions = inlineConfigInstructions('OPENCODE_CONFIG_CONTENT')
+export const deliverKiloInstructions = inlineConfigInstructions('KILO_CONFIG_CONTENT')
+export const deliverMimoInstructions = inlineConfigInstructions('MIMOCODE_CONFIG_CONTENT')
+
+/** 1.x: as its forks. 2.x ignores inline instructions, so they follow the user's own global
+ *  AGENTS.md in a config folder that links the rest of theirs. */
+export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async (
+  input
+): Promise<AcpInstructionsLaunch | null> => {
+  const { text, emptyFolder, env, version } = input
   if (openCodeTakesConfigDirInstructions(version)) {
     const configDir = await emptyFolder()
     const release = () => removeTreeKeepingLinkTargets(configDir)
@@ -96,12 +106,12 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
     })
     return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
   }
-  const content = withOpenCodeInstructionsFile(env.OPENCODE_CONFIG_CONTENT, await file())
-  return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }
+  return deliverOpenCode1Instructions(input)
 }
 
-// A path keeps the text out of the process list and clear of argument-length limits.
-export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) => ({
+// OMP and Auggie, both built on Pi, read the file; a path keeps the text out of the process list
+// and clear of argument-length limits.
+export const deliverAppendSystemPromptInstructions: AcpInstructionsDelivery = async ({ file }) => ({
   args: [`--append-system-prompt=${await file()}`]
 })
 
@@ -128,6 +138,13 @@ export const deliverHermesInstructions: AcpInstructionsDelivery = async ({ text,
 // running Kimi treats a removed one as stale and stops following it.
 export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, join('.kimi-code', 'AGENTS.md'), 'Kimi', text)
+  return {}
+}
+
+// Goose takes no system prompt over ACP and rebuilds its own from the folder's `.goosehints` before
+// every model call, so a reopened chat reads what its latest launch wrote (checked live on 1.60.2).
+export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, '.goosehints', 'Goose', text)
   return {}
 }
 

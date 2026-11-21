@@ -46,7 +46,10 @@ const SPECS = {
   hermes: acpLaunchSpecFor('hermes')!,
   copilot: acpLaunchSpecFor('copilot')!,
   kimi: acpLaunchSpecFor('kimi')!,
-  kiro: acpLaunchSpecFor('kiro')!
+  kiro: acpLaunchSpecFor('kiro')!,
+  goose: acpLaunchSpecFor('goose')!,
+  kilo: acpLaunchSpecFor('kilo')!,
+  'mimo-code': acpLaunchSpecFor('mimo-code')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -58,7 +61,10 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
   copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
   kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
-  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' },
+  goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' },
+  kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
+  'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -67,7 +73,10 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   hermes: '0.23.3',
   copilot: '1.0.114',
   kimi: '2.7.2',
-  kiro: '3.1.0'
+  kiro: '3.1.0',
+  goose: '1.60.2',
+  kilo: '7.8.32',
+  'mimo-code': '0.1.17'
 }
 
 let dataDirectory = ''
@@ -152,6 +161,25 @@ describe('ACP launch: standing instructions', () => {
     expect(config.instructions[0]).toBe('/home/user/mine.md')
     await expectPrivateFile(config.instructions[1])
   })
+
+  it.each([
+    ['kilo', 'KILO_CONFIG_CONTENT'],
+    ['mimo-code', 'MIMOCODE_CONFIG_CONTENT']
+  ] as const)(
+    "adds them to the OpenCode fork %s's inline instructions after the user's own",
+    async (agent, variable) => {
+      const mine = JSON.stringify({ model: 'x/y', instructions: ['/home/user/mine.md'] })
+      const resolved = await launch(agent, {
+        instructions: PREAMBLE,
+        launchEnv: { [variable]: mine }
+      })
+      const config = JSON.parse(resolved.env[variable] ?? '')
+      expect(config).toMatchObject({ model: 'x/y' })
+      expect(config.instructions[0]).toBe('/home/user/mine.md')
+      await expectPrivateFile(config.instructions[1])
+      expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBeUndefined()
+    }
+  )
 
   it("gives OpenCode 2.x them after the user's own global AGENTS.md, in a config folder linking the rest of theirs", async () => {
     const xdg = join(dataDirectory, 'opencode-xdg')
@@ -249,7 +277,10 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.cwd).toBe(workspacePath)
     const undo = await resolved.aroundNewSession?.(resolved.cwd)
     try {
-      const path = join(workspacePath, '.cursor', 'rules', 'orca-standing-instructions.mdc')
+      const rules = join(workspacePath, '.cursor', 'rules')
+      const [name] = await readdir(rules)
+      expect(name).toMatch(/^orca-standing-instructions-.+\.mdc$/)
+      const path = join(rules, name)
       const lines = (await readFile(path, 'utf8')).split('\n')
       expect(lines[0]).toBe('---')
       expect(lines).toContain('alwaysApply: true')
@@ -261,6 +292,20 @@ describe('ACP launch: standing instructions', () => {
       await undo?.()
     }
     expect(await readdir(workspacePath)).toEqual([])
+  })
+
+  it("writes them to Goose's .goosehints in the folder it runs in", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-goose-'))
+    try {
+      const resolved = await launch('goose', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.args).toEqual((await launch('goose', { workspacePath: home })).args)
+      const written = await readFile(join(home, '.goosehints'), 'utf8')
+      expect(written).toBe(
+        `<!-- Orca writes this file for Goose chats in this folder; edits are replaced. -->\n\n${PREAMBLE}\n`
+      )
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 
   it("writes them to Hermes's .hermes.md in the folder it runs in, rewriting it at each launch", async () => {
