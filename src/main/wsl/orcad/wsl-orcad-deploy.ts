@@ -173,8 +173,8 @@ async function launchOverTransport(
             releaseIncumbentAdmission: incumbent.releaseAdmission
           }
         : {}),
-      // Update anyway passes an uncounted census only with full force, pinned to the confirmed build.
-      force: intent === 'force' || options.pastUncountedTerminals !== undefined,
+      // Only a confirmed Update anyway passes an uncounted census; plain Force defers it back to that confirm.
+      force: options.pastUncountedTerminals ? true : intent === 'force' && 'live-terminals',
       appVersion,
       recordedNodeRuntimeProbe: true,
       localWslHost: true,

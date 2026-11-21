@@ -31,6 +31,16 @@ describe('planOrcadUpdate with a daemon that cannot answer the census', () => {
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable'
     })
+    // Only a census the server answered may be forced past later.
+    expect(plan(false, [])).toMatchObject({ forceable: true })
+    expect(
+      planOrcadUpdate({
+        record: { ...emptyOrcadActivationRecord(), active: '0.1.0+e2c8eab1a4b9' },
+        candidateVersion: '0.1.0+8cc9da34df17',
+        census: UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+        candidateDaemonProtocol: { protocolVersion: 61, previousProtocolVersions: [60] }
+      })
+    ).not.toHaveProperty('forceable')
     // Terminals orcad runs itself end with it, so force cannot pass them.
     expect(plan(true, [], 2)).toMatchObject({
       action: 'defer',

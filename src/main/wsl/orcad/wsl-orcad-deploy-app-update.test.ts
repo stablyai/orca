@@ -214,6 +214,30 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     await expect(launch()).resolves.toMatchObject({ outcome: 'deferred', forceable: true })
   })
 
+  it('passes an uncounted census only for a confirmed Update anyway, pinned to its build', async () => {
+    const deferral = {
+      outcome: 'installed-not-activated',
+      fullVersion: '1.5.0+ab',
+      code: 'orcad_update_terminal_census_unavailable',
+      reason: 'no session count'
+    }
+    mocks.deploy.mockResolvedValueOnce(deferral).mockResolvedValueOnce(deferral)
+    await launch(undefined, { intent: 'force' })
+    // Plain Force keeps the uncounted census for the confirm that names what ends.
+    expect(mocks.deploy.mock.calls[0]?.[0]).toMatchObject({ force: 'live-terminals' })
+
+    await launch(undefined, {
+      intent: 'update',
+      pastUncountedTerminals: { incumbentVersion: '1.4.0+aa' }
+    })
+    const confirmed = mocks.deploy.mock.calls[1]?.[0]
+    expect(confirmed).toMatchObject({ force: true })
+    expect(confirmed.admitRecord(activeOld, '1.5.0+ab')).toBeNull()
+    expect(confirmed.admitRecord({ ...activeOld, active: '1.4.5+cc' }, '1.5.0+ab')).toBe(
+      "This host's server changed since the update was confirmed. Review it and update again."
+    )
+  })
+
   it('reports a deferral when the incumbent could not be proven serving', async () => {
     mocks.incumbent.mockResolvedValueOnce({
       census: {
@@ -411,7 +435,8 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       await launch(undefined, { intent: 'update' })
       expect(mocks.deploy.mock.calls[0][0].admitRecord(newer, '1.5.0+ab')).toMatch(/last ran/)
       await launch(undefined, { intent: 'force' })
-      expect(mocks.deploy.mock.calls[1][0]).toMatchObject({ force: true })
+      // Force passes version admission; live terminals still need their own confirm.
+      expect(mocks.deploy.mock.calls[1][0]).toMatchObject({ force: 'live-terminals' })
       expect(mocks.deploy.mock.calls[1][0].admitRecord(newer, '1.5.0+ab')).toBeNull()
     })
 

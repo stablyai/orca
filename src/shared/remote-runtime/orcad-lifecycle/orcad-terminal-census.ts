@@ -16,12 +16,13 @@ export const OrcadTerminalCensusSchema = z.object({
   /** In-process fallback sessions end with orcad, unlike daemon sessions; absent on older hosts. */
   inProcessSessions: CountSchema.optional(),
   /** Admission-fence expiry, epoch ms; 0 means reopened. Absence never proves older servers fenced admission. */
-  admissionClosedUntil: z.number().finite().nonnegative().optional(),
-  /** Set by the desktop's census client on a reply it parsed; absent on every census nobody answered. */
-  answered: z.literal(true).optional()
+  admissionClosedUntil: z.number().finite().nonnegative().optional()
 })
 
-export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>
+export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema> & {
+  /** Client-side stamp, never on the wire: the desktop's census client parsed a server reply. */
+  answered?: true
+}
 
 /** A daemon that could not answer: unknown, never zero. */
 export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> = Object.freeze({
