@@ -3,6 +3,7 @@ import { AlertCircle, Download, Loader2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -41,6 +42,9 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const hosts = useAppStore((s) => s.agentCliUpdates)
   const hostNames = useAppStore(useShallow(remoteHostNames))
+  const hasOtherHosts = useAppStore(
+    (s) => !isPairedWebClientWindow() && s.runtimeEnvironments.length > 0
+  )
   const checkAgentCliUpdates = useAppStore((s) => s.checkAgentCliUpdates)
   // This computer is checked at launch; other hosts when a chat starts there.
   useEffect(() => {
@@ -52,16 +56,17 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
       .map(([hostKey, host]) => ({ hostKey, rows: agentCliUpdateRows(hostKey, host) }))
       .filter((group) => group.rows.length > 0)
       .sort((a, b) => (a.hostKey === '' ? -1 : b.hostKey === '' ? 1 : 0))
-    const remote = listed.some((group) => group.hostKey !== '')
+    // With any other host added (server, WSL host or VM), a local-only list still names this computer.
+    const showHostHeadings = hasOtherHosts || listed.some((group) => group.hostKey !== '')
     return listed.map((group) => ({
       ...group,
-      label: !remote
+      label: !showHostHeadings
         ? null
         : group.hostKey === ''
           ? t('agentCliUpdate.thisComputer', 'This computer')
           : (hostNames[group.hostKey] ?? group.hostKey)
     }))
-  }, [hosts, hostNames, t])
+  }, [hosts, hostNames, hasOtherHosts, t])
 
   const rows = groups.flatMap((group) => group.rows)
   if (rows.length === 0) {

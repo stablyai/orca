@@ -6,6 +6,7 @@ import { normalizeRightSidebarRoute } from '@/store/slices/right-sidebar/right-s
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
 import { useInstalledPluginRouteReconciliation } from '../plugin-panels/use-installed-plugin-route-reconciliation'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import { openBotConnectorPage } from '@/components/bots/bot-connector-page'
 
 // The last route request the panel saw, kept across unmounts: Settings unmounts it, and a request
 // made there (open a bot's Connectors) is still new when the panel mounts again.
@@ -93,6 +94,10 @@ export function useRightSidebarTabRouting({
     if (tab === 'explorer') {
       showRightSidebarFiles()
       return
+    }
+    // Connectors again, while it shows a connector's page: back to the list.
+    if (tab === 'bot-connectors' && effectiveTab === 'bot-connectors') {
+      openBotConnectorPage(null)
     }
     setRightSidebarTab(tab)
   }

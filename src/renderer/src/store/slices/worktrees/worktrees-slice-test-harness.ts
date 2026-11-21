@@ -1,4 +1,4 @@
-import { withAgentStatusOwnership } from '../agent-status/status-ownership/agent-status-ownership-boundary'
+import { withStatusTransaction } from '../../status-transaction/status-transaction-boundary'
 import { createAgentStatusSlice } from '../agent-status/agent-status'
 import { createPaneForegroundAgentSlice } from '../agent-status/pane-authority/pane-foreground-agent'
 import { vi, type Mock } from 'vitest'
@@ -132,7 +132,7 @@ export function resetRemoteRuntimeMocks() {
 /** Supplies the worktree slice with the minimal UI and runtime state needed to exercise creation and teardown. */
 export function createTestStore() {
   return create<AppState>()(
-    withAgentStatusOwnership(
+    withStatusTransaction(
       (...a) =>
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This slice fixture supplies the state read by worktree actions; unrelated slices are intentionally omitted.
         ({

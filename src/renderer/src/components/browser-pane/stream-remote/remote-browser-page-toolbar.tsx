@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { RefreshCw, SquareMousePointer } from 'lucide-react'
+import { MarkupDrawButton } from '../annotate/markup-tools/MarkupDrawButton'
+import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -8,8 +9,6 @@ import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/feedback/browser-egress-indicator'
-import { MarkupDrawButton } from '../annotate/markup-tools/MarkupDrawButton'
-import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserReloadControl } from '../assemble-chrome/toolbar/browser-reload-control'
 import { useBrowserReloadControlLabels } from '../navigate/use-browser-reload-control-labels'
 import {
@@ -18,6 +17,12 @@ import {
 } from '../navigate/browser-reload-action'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  BrowserAnnotateToolButton,
+  type BrowserChromeElementTools,
+  type BrowserChromeMarkupTool,
+  type BrowserChromeNoteActions
+} from '../assemble-chrome/toolbar/browser-annotate-tool-button'
 
 export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
@@ -31,10 +36,9 @@ export function RemoteBrowserPageToolbar({
   busy,
   loading,
   loadErrorCode,
-  markup,
-  frameUrl,
-  isActive,
   history,
+  pickerAvailable,
+  annotateTools,
   onBack,
   onForward,
   onReload,
@@ -52,10 +56,13 @@ export function RemoteBrowserPageToolbar({
   busy: boolean
   loading: boolean
   loadErrorCode: number | null
-  markup: MarkupModeController
-  frameUrl: string | null
-  isActive: boolean
   history: { canGoBack: boolean; canGoForward: boolean }
+  pickerAvailable: boolean
+  annotateTools: {
+    tools: BrowserChromeElementTools
+    markup: BrowserChromeMarkupTool
+    notes: BrowserChromeNoteActions
+  }
   onBack: () => void
   onForward: () => void
   onReload: (ignoreCache: boolean) => void
@@ -142,36 +149,21 @@ export function RemoteBrowserPageToolbar({
         )
       }
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon-xs"
-            variant="muted-field-icon"
-            aria-disabled="true"
-            aria-label={t(
-              'auto.components.browser.pane.BrowserPane.deb5293610',
-              'Browser annotations unavailable in remote runtime'
-            )}
-            onClick={(event) => {
-              event.preventDefault()
-            }}
-          >
-            <SquareMousePointer className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {t(
-            'auto.components.browser.pane.BrowserPane.8b7e6d1f5a',
-            'Browser annotations are only available in local browser tabs.'
-          )}
-        </TooltipContent>
-      </Tooltip>
-      <MarkupDrawButton
-        onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
-        disabled={!frameUrl}
-        active={markup.isActive}
-        surfaceActive={isActive}
-      />
+      {pickerAvailable ? (
+        <BrowserAnnotateToolButton
+          tools={annotateTools.tools}
+          markup={annotateTools.markup}
+          notes={annotateTools.notes}
+          showTourAnchors={false}
+        />
+      ) : (
+        <MarkupDrawButton
+          onClick={annotateTools.markup.onToggle}
+          disabled={annotateTools.markup.disabled}
+          active={annotateTools.markup.active}
+          surfaceActive={annotateTools.markup.canShowDiscoveryHint}
+        />
+      )}
     </BrowserNavigationControlRow>
   )
 }

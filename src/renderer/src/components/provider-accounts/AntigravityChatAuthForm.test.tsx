@@ -448,3 +448,30 @@ it('asks a signed-in host to replace its account, not reuse the cached sign-in',
     })
   )
 })
+
+it('tells Settings after a saved method change, so the Google sign-in choice reads the new route', async () => {
+  const target = { kind: 'environment', environmentId: 'method-saved-host' } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+    async (_owner, config) => config ?? { method: 'agent-platform' }
+  )
+  const onSaved = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <TooltipProvider>
+      <AntigravityChatSignInRow
+        owner={target}
+        label="Test host"
+        disabled={false}
+        onSaved={onSaved}
+      />
+    </TooltipProvider>
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('combobox')).toHaveTextContent('Google Agent Platform')
+  )
+  expect(onSaved).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('combobox'))
+  await user.click(screen.getByRole('option', { name: /^Google account/ }))
+  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+  expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, personal)
+})

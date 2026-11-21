@@ -7,6 +7,7 @@ import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/sta
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../store'
 import {
+  closeTrackedTopologyStores,
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as WORKTREE,
   openTopologyStore,
@@ -28,7 +29,8 @@ const PANE_KEY = `${TAB}:${LEAF}`
 
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -123,21 +125,17 @@ describe('sleep → quit → resume', () => {
     store.stageWorkspaceSessionBeforeUnload(structuredClone(window))
 
     const relaunched = await reopenTopologyStore(store, directory)
-    try {
-      const expected = {
-        record: record('quit', 2),
-        worktreeRecord: record('quit', 2),
-        tabs: [TAB],
-        binding: PTY
-      }
-      expect(heldForPane(relaunched)).toEqual(expected)
-      relaunched.setWorkspaceSession(structuredClone(relaunched.getWorkspaceSession()))
-      expect(heldForPane(relaunched)).toEqual(expected)
-      expect(resumeCommand(heldForPane(relaunched).record)).toBe(
-        "codex '-c' 'disable_paste_burst=true' 'resume' 'session-2'"
-      )
-    } finally {
-      await relaunched.freezeWritesAsync()
+    const expected = {
+      record: record('quit', 2),
+      worktreeRecord: record('quit', 2),
+      tabs: [TAB],
+      binding: PTY
     }
+    expect(heldForPane(relaunched)).toEqual(expected)
+    relaunched.setWorkspaceSession(structuredClone(relaunched.getWorkspaceSession()))
+    expect(heldForPane(relaunched)).toEqual(expected)
+    expect(resumeCommand(heldForPane(relaunched).record)).toBe(
+      "codex '-c' 'disable_paste_burst=true' 'resume' 'session-2'"
+    )
   })
 })

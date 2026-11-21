@@ -183,7 +183,7 @@ describe('STA-4823 D29 — an unreadable config.toml must not become a trust-onl
     }
   ] satisfies readonly CodexTrustEntry[]
 
-  it('refuses the write rather than rebuilding the file from the trust entries alone', () => {
+  it('refuses hook and project trust writes when the existing config is unreadable', () => {
     const configPath = join(runtimeHomePath, 'config.toml')
     realFs.writeFileSync(configPath, USER_CONFIG, 'utf-8')
     denials.denyExistence(configPath)
@@ -191,13 +191,6 @@ describe('STA-4823 D29 — an unreadable config.toml must not become a trust-onl
     expect(() => upsertHookTrustEntries(configPath, ENTRY)).toThrow('EPERM')
 
     expect(realFs.readFileSync(configPath, 'utf-8')).toBe(USER_CONFIG)
-  })
-
-  it('also refuses a project-trust write when the existing config cannot be read', () => {
-    const configPath = join(runtimeHomePath, 'config.toml')
-    realFs.writeFileSync(configPath, USER_CONFIG, 'utf-8')
-    denials.denyExistence(configPath)
-
     expect(() => upsertProjectTrustLevel(configPath, '/tmp/project', 'trusted')).toThrow('EPERM')
     expect(realFs.readFileSync(configPath, 'utf-8')).toBe(USER_CONFIG)
   })
@@ -303,28 +296,9 @@ describe('STA-4823 D31 — an unreadable pane registry must not erase every attr
     paneRegistry._internals.resetCache()
   }
 
-  it('preserves existing records and retries the one-shot spawn mutation', () => {
+  it('reports unreadable attribution and preserves records for the queued spawn retry', () => {
     seedTwoAttributedPanes()
     const before = realFs.readFileSync(registryPath(), 'utf-8')
-    denials.denyReads(registryPath())
-
-    paneRegistry.recordCodexPaneAccount('pty-3', {
-      selectionKey: 'host',
-      accountId: 'account-3',
-      homeRoute: 'account-home'
-    } as never)
-
-    expect(realFs.readFileSync(registryPath(), 'utf-8')).toBe(before)
-
-    denials.release(registryPath())
-    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
-    paneRegistry._internals.resetCache()
-    expect(paneRegistry.getCodexPaneAccount(PANE)).toMatchObject({ accountId: 'account-1' })
-    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
-  })
-
-  it('does not cache the erasure, so attribution returns when the file does', () => {
-    seedTwoAttributedPanes()
     denials.denyReads(registryPath())
 
     expect(paneRegistry.getCodexPaneAccount(PANE)).toBeNull()
@@ -335,8 +309,19 @@ describe('STA-4823 D31 — an unreadable pane registry must not erase every attr
       })
     ).toThrow('registry could not be read')
 
-    denials.release(registryPath())
+    paneRegistry.recordCodexPaneAccount('pty-3', {
+      selectionKey: 'host',
+      accountId: 'account-3',
+      homeRoute: 'account-home'
+    } as never)
 
+    expect(realFs.readFileSync(registryPath(), 'utf-8')).toBe(before)
+
+    denials.release(registryPath())
     expect(paneRegistry.getCodexPaneAccount(PANE)).toMatchObject({ accountId: 'account-1' })
+    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
+    paneRegistry._internals.resetCache()
+    expect(paneRegistry.getCodexPaneAccount(OTHER_PANE)).toMatchObject({ accountId: 'account-2' })
+    expect(paneRegistry.getCodexPaneAccount('pty-3')).toMatchObject({ accountId: 'account-3' })
   })
 })

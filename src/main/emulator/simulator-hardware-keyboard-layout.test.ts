@@ -1,11 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  SimulatorHardwareKeyboardSync,
   iosHardwareLayoutForMacLayout,
   isUSHardwareKeyboard,
   parseAppleKeyboardsDefaults,
   withHardwareLayout,
   withOriginalHardwareLayouts
 } from './simulator-hardware-keyboard-layout'
+
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('../ipc/keyboard/macos-keyboard-input-source', () => ({
+  readCurrentKeyboardLayoutSourceId: async () => 'com.apple.keylayout.US'
+}))
+vi.mock('../ipc/keyboard/macos-keyboard-layout-snapshot', () => ({
+  readMacKeyboardLayoutSnapshot: async () => null
+}))
 
 // Entries from the iOS 27.2 runtime's USBKeyboardLayouts.plist.
 const IOS_LAYOUTS = {
@@ -65,5 +75,33 @@ describe('simulator AppleKeyboards', () => {
     expect(isUSHardwareKeyboard(['en_US@sw=QWERTY;hw=U.S.'])).toBe(true)
     expect(isUSHardwareKeyboard(['tr_TR@sw=Turkish-Q;hw=Automatic'])).toBe(false)
     expect(isUSHardwareKeyboard(['en_US@sw=QWERTY;hw=German'])).toBe(false)
+  })
+})
+
+describe('SimulatorHardwareKeyboardSync', () => {
+  it('rewrites a keyboard added after a sync even when the Mac layout is unchanged', async () => {
+    const writes: string[][] = []
+    let keyboards = ['"en_US@sw=QWERTY;hw=French"']
+    runProcessMock.mockImplementation(async ({ args }: { args: string[] }) => {
+      const joined = args.join(' ')
+      if (joined.includes('getenv')) {
+        return { code: 0, stdout: '/rt', stderr: '' }
+      }
+      if (joined.includes('plutil') || joined.includes('-convert')) {
+        return { code: 0, stdout: JSON.stringify(IOS_LAYOUTS), stderr: '' }
+      }
+      if (joined.includes('defaults read')) {
+        return { code: 0, stdout: `(${keyboards.join(',')})`, stderr: '' }
+      }
+      if (joined.includes('defaults write')) {
+        writes.push(args.slice(args.indexOf('-array') + 1))
+      }
+      return { code: 0, stdout: '', stderr: '' }
+    })
+    const sync = new SimulatorHardwareKeyboardSync()
+    await sync.sync('udid')
+    keyboards = ['"en_US@sw=QWERTY;hw=French"', '"fr_FR@sw=AZERTY;hw=French"']
+    await sync.sync('udid')
+    expect(writes.at(-1)).toEqual(['en_US@sw=QWERTY;hw=U.S.', 'fr_FR@sw=AZERTY;hw=U.S.'])
   })
 })

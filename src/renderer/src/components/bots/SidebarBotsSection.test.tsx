@@ -249,7 +249,8 @@ describe('SidebarBotsSection', () => {
 
   it('leaves the folded header without its controls, so Tab cannot reach them', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
-    threeUnplacedBots()
+    mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-2' })]
+    useAppStore.setState({ folderWorkspaces: [home(), home({ id: 'fw-2' })] })
     useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     renderSection()
     const controls = (): (HTMLElement | null)[] => [
@@ -258,9 +259,10 @@ describe('SidebarBotsSection', () => {
       screen.queryByRole('button', { name: 'New bot or group' })
     ]
     expect(controls()).toEqual([null, null, null])
+    expect(screen.queryByRole('button', { name: 'Templates' })).toBeNull()
     // The fold button and the faces stay; the folded summary still counts the rest.
     expect(screen.getByRole('button', { name: /^Expand Bots,/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Show 3 more bots' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Show 2 more bots' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
     expect(controls().every(Boolean)).toBe(true)

@@ -1,6 +1,6 @@
 import { logActiveWorkspaceChanges } from './active-workspace-change-log'
 import { bindAppRuntimeStatusStore } from './slices/runtime-status/views/app-runtime-status-binding'
-import { withAgentStatusOwnership } from './slices/agent-status/status-ownership/agent-status-ownership-boundary'
+import { withStatusTransaction } from './status-transaction/status-transaction-boundary'
 import { withBrowserInitializationPresentations } from './slices/browser/hosts/browser-initialization-presentation-store'
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
 import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -98,7 +98,7 @@ const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) 
 // Presentation ownership follows accepted buffer reconciliation; probes see the caller’s patch.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
-  withAgentStatusOwnership(
+  withStatusTransaction(
     withBrowserInitializationPresentations(
       withEditorBufferRecords(
         withAppStoreWritePolicies(

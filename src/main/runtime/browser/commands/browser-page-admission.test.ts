@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserCommands } from './browser-commands'
 import { AgentBrowserBridgeUtilityCommands } from '../../../browser/agent-browser/commands/agent-browser-bridge-page-commands'
@@ -14,6 +14,15 @@ import {
   closeBrowserMemoryPage
 } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
+
+beforeEach(() => {
+  setRuntimeDesktopSurface(rendererWindowSurfaceForTest({ send: vi.fn() }))
+})
 const { native } = vi.hoisted(() => {
   const native: { guest: Electron.WebContents | null } = { guest: null }
   return { native }
@@ -57,9 +66,10 @@ it('does not execute an admitted page command before restored load, and propagat
       getRegisteredPageWebContentsId: (page: string) => tabs.get(page),
       getActivePageId: () => 'gate-page'
     }),
-    getAuthoritativeWindow: () => ({ webContents: { send: () => tabs.set('gate-page', 10) } }),
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
     resolveWorkspaceSelector: async () => ({ id: 'workspace' })
   } as unknown as RuntimeBrowserCommandHost
+  setRuntimeDesktopSurface(rendererWindowSurfaceForTest({ send: () => tabs.set('gate-page', 10) }))
   const targets = new RuntimeBrowserCommandTargets(host)
   const action = vi.fn(async () => 'ready')
   const pending = targets.withPageOperation({ page: 'gate-page' }, action)
@@ -96,7 +106,7 @@ it('stops a page that is still loading instead of waiting for the load it ends',
       stop
     }),
     getRuntimeBrowserPageRegistry: () => ({ getPage: () => undefined }),
-    getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } })
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID
   } as unknown as RuntimeBrowserCommandHost
   const commands = new RuntimeBrowserCommands(host)
   await expect(commands.browserStop({ page: 'loading-page' })).resolves.toEqual({
@@ -222,7 +232,7 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
     const host = {
       getAgentBrowserBridge: () => bridge,
       getRuntimeBrowserPageRegistry: () => ({ getPage: () => undefined }),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } })
+      getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID
     } as unknown as RuntimeBrowserCommandHost
     const commands = new RuntimeBrowserCommands(host)
     const failed = commands.browserSnapshot({ page: pageId })

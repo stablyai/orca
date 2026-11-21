@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { create } from 'zustand'
 import type { AppState } from '@/store/types'
-import { withAgentStatusOwnership } from '@/store/slices/agent-status/status-ownership/agent-status-ownership-boundary'
+import { withStatusTransaction } from '@/store/status-transaction/status-transaction-boundary'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useTerminalPaneTabState } from '../controller/use-terminal-pane-tab-state'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
@@ -81,7 +81,7 @@ it('keeps raw leaf identity through explicit precedence, foreground fallback and
 it('seeds foreground-only title identity at the actual cold ownership boundary', () => {
   const { tabId, leafId } = PANES.a
   const store = create<AppState>()(
-    withAgentStatusOwnership(() => ({
+    withStatusTransaction(() => ({
       ...useAppStore.getState(),
       agentStatusByPaneKey: acceptedAgentStatuses(),
       paneForegroundAgentByPaneKey: {

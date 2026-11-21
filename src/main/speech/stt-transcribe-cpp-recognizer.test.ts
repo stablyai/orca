@@ -93,20 +93,12 @@ describe('createTranscribeCppRecognizer', () => {
     ])
   })
 
-  it('commits a single-phrase span with its live text, without decoding again', async () => {
-    const { recognizer, posted } = await start()
-    await recognizer.feed('s', audio(speech(1, 2), silence(1)), RATE)
-    decode = () => 'A second decode.'
-    await recognizer.finish('s')
-
-    expect(transcript(posted)).toEqual([{ partial: 'One.' }, { chunk: 'One.', samples: 300 }])
-  })
-
-  it('commits once 20 s of audio waits, then starts a new span', async () => {
+  it('commits after the span window and reuses the next single-phrase live result', async () => {
     const { recognizer, posted } = await start()
     for (const word of [1, 2, 3, 4, 5]) {
       await recognizer.feed('s', audio(speech(word, 4), silence(1)), RATE)
     }
+    decode = () => 'A second decode.'
     await recognizer.finish('s')
 
     expect(transcript(posted)).toEqual([

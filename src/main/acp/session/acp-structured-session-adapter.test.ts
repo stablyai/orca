@@ -270,6 +270,46 @@ describe('ACP structured session adapter: approvals', () => {
     expect(rig.adapter.runningPermissionMode(SESSION)).toBe('full-access')
     expect(rig.adapter.permissionModeRequiresAcquisition(SESSION, 'full-access')).toBe(false)
   })
+  it('follows a mode the agent switches to itself, so Ask can switch it back', async () => {
+    const mode = (currentValue: string) => ({
+      id: 'mode',
+      name: 'Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue,
+      options: ['plan', 'default', 'auto-edit', 'auto', 'yolo'].map((value) => ({
+        value,
+        name: value
+      }))
+    })
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('qwen-code')!,
+      script: (agent) => {
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: [mode('auto')] })
+        )
+        agent.on('session/set_config_option', (frame) => {
+          const { value } = z.object({ value: z.string() }).parse(frame.params)
+          agent.reply(frame, { configOptions: [mode(value)] })
+        })
+      }
+    })
+    await rig.acquire({ permissionMode: 'ask' })
+    expect(rig.adapter.runningPermissionMode(SESSION)).toBe('ask')
+
+    // Qwen 0.28 after the person picks "Allow All Edits" on an edit approval.
+    rig.child().agent.notify('session/update', {
+      sessionId: PROVIDER_SESSION,
+      update: { sessionUpdate: 'current_mode_update', currentModeId: 'auto-edit' }
+    })
+    await waitFor(() => expect(rig.adapter.runningPermissionMode(SESSION)).toBe('accept-edits'))
+
+    await rig.adapter.applyPermissionMode({ sessionId: SESSION, fence: 1, mode: 'ask' })
+    expect(rig.sent('session/set_config_option').at(-1)?.params).toMatchObject({
+      configId: 'mode',
+      value: 'default'
+    })
+  })
 })
 
 describe('ACP structured session adapter: requests a Stop cancels', () => {
