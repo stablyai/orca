@@ -7,6 +7,7 @@ import {
 } from './activation-deferred-tab-admission'
 import { revealActivationDeferredTabs } from './background-terminal-worktree-mount'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
+import { isUnboundRestoredTerminalTab } from './unbound-restored-terminal-tab'
 
 /** Warm one deferred tab per idle effect pass after reveal; mount revision schedules the next pass without blocking the switch frame. */
 export function useActivationDeferredTabAdmission(
@@ -44,11 +45,15 @@ export function useActivationDeferredTabAdmission(
     }
     return scheduleActivationDeferredAdmission(() => {
       // Tabs can change between scheduling and admission; stale IDs would strand the restriction.
-      const allTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(
-        (tab) => tab.id
-      )
+      const state = useAppStore.getState()
+      const tabs = state.tabsByWorktree[worktreeId] ?? []
+      const allTabIds = tabs.map((tab) => tab.id)
+      // Unbound saved tabs spawn nothing while hidden, so warming them only leaves an empty xterm that can never park; they mount when shown.
+      const warmableTabIds = tabs
+        .filter((tab) => !isUnboundRestoredTerminalTab(tab, state))
+        .map((tab) => tab.id)
       const nextTabId = pickNextActivationDeferredTabId(
-        allTabIds,
+        warmableTabIds,
         activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)
       )
       if (!nextTabId) {
