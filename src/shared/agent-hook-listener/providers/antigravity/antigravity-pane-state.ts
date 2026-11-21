@@ -45,7 +45,7 @@ export type AntigravityPaneChildState = {
   settledLaunches: Map<number, AntigravityLaunch>
   launchStepsByCall: Map<string, number>
   currentLaunch?: AntigravityLaunch
-  highestEvictedLaunchStep?: number
+  rootStepFrontier?: number
   pendingOlderLaunchStep?: number
   expectedChildren: Set<string>
   helpersIdleAt?: number

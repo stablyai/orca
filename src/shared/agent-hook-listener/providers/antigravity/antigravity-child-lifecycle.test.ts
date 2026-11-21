@@ -486,17 +486,26 @@ it('settles only the launch whose root result reports a failure', async () => {
 })
 
 it.each([
-  ['PreToolUse', 'PostToolUse'],
-  ['PostToolUse', 'PreToolUse']
-])(
-  'keeps the root question visible after a settled launch delivers %s then %s',
-  async (first, late) => {
+  ['PreToolUse', 'PostToolUse', true],
+  ['PostToolUse', 'PreToolUse', true],
+  ['PreToolUse', 'PostToolUse', false],
+  ['PostToolUse', 'PreToolUse', false]
+] as const)(
+  'keeps the root question visible across %s then %s replay (result before pairing: %s)',
+  async (first, late, resultBeforePair) => {
     const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
     const failure =
       'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
-    hook('root', first, oldLaunch)
-    launchResult(5, failure, 'ERROR')
-    expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+    expect(hook('root', first, oldLaunch)?.payload).toMatchObject({
+      toolName: 'invoke_subagent',
+      antigravitySpawnPending: true
+    })
+    expect(hook('root', first, oldLaunch)).toBeNull()
+    if (resultBeforePair) {
+      launchResult(5, failure, 'ERROR')
+      expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+      expect(hook('root', first, oldLaunch)).toBeNull()
+    }
 
     hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
     const question = {
@@ -513,18 +522,40 @@ it.each([
     expect(hook('root', 'PreToolUse', question)?.payload).toMatchObject(waiting)
     expect(hook('root', late, oldLaunch)).toBeNull()
     expect(row.payload).toMatchObject(waiting)
+    if (!resultBeforePair) {
+      expect(hook('root', late, oldLaunch)).toBeNull()
+      launchResult(5, failure, 'ERROR')
+      expect((await poll())?.payload).toMatchObject(waiting)
+      expect(row.payload.antigravitySpawnPending).toBeUndefined()
+    }
+
+    expect(hook('root', late, oldLaunch)?.payload).toMatchObject({
+      ...waiting,
+      antigravitySpawnPending: true
+    })
+    expect((await poll())?.payload).toMatchObject(waiting)
+    expect(row.payload.antigravitySpawnPending).toBeUndefined()
+    expect(hook('root', late, oldLaunch)).toBeNull()
 
     expect(hook('root', 'PostToolUse', question)?.payload.state).toBe('working')
-    spawn(undefined, 8)
-    launchResult(8, failure, 'ERROR')
-    expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
-    expect(
-      hook('root', 'PostToolUse', { ...launch(8), modelName: 'model-c' })?.payload
-    ).toMatchObject({
+    transcript('foreign')
+    expect(hook('foreign', 'PreToolUse', { ...question, stepIdx: 1000 })).toBeNull()
+    expect(hook('root', first, launch(8))?.payload).toMatchObject({
       state: 'working',
       toolName: 'invoke_subagent',
-      model: 'model-c'
+      model: 'model-b'
     })
+    if (resultBeforePair) {
+      launchResult(8, failure, 'ERROR')
+      expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+    }
+    const currentPhase = hook('root', late, { ...launch(8), modelName: 'model-c' })
+    if (late === 'PostToolUse') {
+      expect(currentPhase?.payload).toMatchObject({ toolName: 'invoke_subagent', model: 'model-c' })
+    } else {
+      expect(currentPhase).toBeNull()
+      expect(row.payload.model).toBe('model-b')
+    }
   }
 )
 
@@ -579,11 +610,15 @@ it('keeps a newer root question visible after a late PostToolUse from a pending 
   expect(settled?.payload.antigravitySpawnPending).toBeUndefined()
 })
 
-it('holds an old first-delivered phase through a newer question until its matching root result', async () => {
+it('holds first-delivered and replayed older phases through newer questions and result-cache turnover', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   try {
     const failure =
       'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+    const replayedLaunch = { ...launch(8), prompt: 'Earlier task', modelName: 'model-a' }
+    hook('root', 'PreToolUse', replayedLaunch)
+    hook('root', 'PostToolUse', replayedLaunch)
+    launchResult(8, failure, 'ERROR')
     for (let step = 10; step <= 266; step++) {
       spawn(undefined, step)
       launchResult(step, failure, 'ERROR')
@@ -608,7 +643,7 @@ it('holds an old first-delivered phase through a newer question until its matchi
     }
     expect(hook('root', 'PreToolUse', question)?.payload).toMatchObject(waiting)
     expect(hook('root', 'PostToolUse', launch(11))).toBeNull()
-    const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
+    const oldLaunch = { ...launch(267), prompt: 'Earlier task', modelName: 'model-a' }
     expect(hook('root', 'PreToolUse', oldLaunch)?.payload).toMatchObject({
       ...waiting,
       antigravitySpawnPending: true
@@ -625,16 +660,37 @@ it('holds an old first-delivered phase through a newer question until its matchi
     expect(hook('root', 'Stop', { fullyIdle: true })?.payload).toMatchObject(held)
 
     transcript('foreign')
-    launchResult(5, failure, 'ERROR', 'foreign')
+    launchResult(267, failure, 'ERROR', 'foreign')
     expect(hook('foreign', 'PreInvocation')).toBeNull()
-    launchResult(6, failure, 'ERROR')
+    launchResult(268, failure, 'ERROR')
     expect((await poll())?.payload).toMatchObject(held)
 
-    launchResult(5, failure, 'ERROR')
+    launchResult(267, failure, 'ERROR')
     expect((await poll())?.antigravityHelpersDrained).toBe(true)
     expect(row.payload).not.toHaveProperty('antigravitySpawnPending')
     vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
     expect((await poll())?.payload.state).toBe('done')
+
+    hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
+    expect(hook('root', 'PreToolUse', { ...question, stepIdx: 271 })?.payload).toMatchObject(
+      waiting
+    )
+    const replayHeld = { ...waiting, antigravitySpawnPending: true }
+    expect(hook('root', 'PostToolUse', replayedLaunch)?.payload).toMatchObject(replayHeld)
+    expect((await poll())?.payload).toMatchObject(replayHeld)
+
+    transcript('replacement', true)
+    hook('replacement', 'PreInvocation', { prompt: 'Replacement task', modelName: 'model-c' })
+    expect(hook('replacement', 'PreToolUse', launch(1))?.payload).toMatchObject({
+      state: 'working',
+      toolName: 'invoke_subagent',
+      prompt: 'Replacement task',
+      model: 'model-c',
+      antigravitySpawnPending: true
+    })
+    launchResult(1, failure, 'ERROR', 'replacement')
+    expect((await poll())?.payload).toMatchObject({ state: 'working', prompt: 'Replacement task' })
+    expect(row.payload.antigravitySpawnPending).toBeUndefined()
   } finally {
     vi.useRealTimers()
   }

@@ -38,7 +38,6 @@ function retainUnpairedLaunch(
     if (!oldest.done) {
       const [evictedStep, evictedLaunch] = oldest.value
       releaseLaunchIdentity(pane, evictedStep, evictedLaunch)
-      pane.highestEvictedLaunchStep = Math.max(pane.highestEvictedLaunchStep ?? 0, evictedStep)
     }
   }
   pane.settledLaunches.set(step, launch)
@@ -47,43 +46,37 @@ function retainUnpairedLaunch(
 export function trackAntigravityLaunch(
   pane: AntigravityPaneChildState,
   eventName: 'PreToolUse' | 'PostToolUse',
-  step: unknown,
+  key: number | undefined,
   callId: string | undefined,
   toolName: string,
   args: unknown,
   completedBookkeepingOnly = false
 ): 'current' | 'stale' | 'hold' {
   const phase = eventName === 'PreToolUse' ? PRE_TOOL_USE : POST_TOOL_USE
-  const key = typeof step === 'number' && Number.isSafeInteger(step) && step >= 0 ? step : undefined
   const tasks = toolName === 'swarm' && isRecord(args) ? args.tasks : undefined
   const swarmSize = toolName === 'swarm' ? (Array.isArray(tasks) && tasks.length) || 1 : undefined
   const pending = pane.pendingLaunches.get(key)
   const settled = key === undefined ? undefined : pane.settledLaunches.get(key)
   const prior = settled ?? pending
-  const older = key !== undefined && key <= (pane.highestEvictedLaunchStep ?? -1)
+  const older = key !== undefined && key <= (pane.rootStepFrontier ?? -1)
   if (
     prior &&
     prior.callId === callId &&
     prior.toolName === toolName &&
-    prior.swarmSize === swarmSize
+    prior.swarmSize === swarmSize &&
+    (settled || !completedBookkeepingOnly || older)
   ) {
-    if (settled && key !== undefined) {
-      const finishesCurrentLaunch =
-        !completedBookkeepingOnly &&
-        pending === undefined &&
-        pane.currentLaunch === settled &&
-        phase === POST_TOOL_USE &&
-        (settled.phases & phase) === 0
-      settled.phases |= phase
-      if (settled.phases === PAIRED) {
-        releaseLaunchIdentity(pane, key, settled)
-      }
-      return finishesCurrentLaunch ? 'current' : 'stale'
+    const finishesCurrentLaunch =
+      !completedBookkeepingOnly &&
+      (!settled || pending === undefined) &&
+      pane.currentLaunch === prior &&
+      phase === POST_TOOL_USE &&
+      (prior.phases & phase) === 0
+    prior.phases |= phase
+    if (settled && key !== undefined && prior.phases === PAIRED) {
+      releaseLaunchIdentity(pane, key, settled)
     }
-    if (!completedBookkeepingOnly || older) {
-      prior.phases |= phase
-      return pane.currentLaunch === prior ? 'current' : 'stale'
-    }
+    return finishesCurrentLaunch ? 'current' : 'stale'
   }
   if (completedBookkeepingOnly && !older) {
     return 'stale'

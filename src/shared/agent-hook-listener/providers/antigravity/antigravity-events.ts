@@ -132,11 +132,11 @@ export function normalizeAntigravityEvent(
   }
 
   const { toolCallId, toolName, toolInputSource } = readAntigravityToolCall(hookPayload)
-  const launchPhase =
-    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
-    isAntigravityHelperSpawnCall(toolName, toolInputSource)
-      ? eventName
-      : undefined
+  const toolPhase =
+    eventName === 'PreToolUse' || eventName === 'PostToolUse' ? eventName : undefined
+  const launchPhase = isAntigravityHelperSpawnCall(toolName, toolInputSource)
+    ? toolPhase
+    : undefined
   const isCompletedBookkeeping = Boolean(
     transcriptPath &&
     eventName !== 'Stop' &&
@@ -170,16 +170,15 @@ export function normalizeAntigravityEvent(
   ) {
     paneState.rootConversationId = conversationId
   }
-  if (
-    launchPhase &&
-    toolName &&
-    conversationId &&
-    conversationId === paneState.rootConversationId
-  ) {
+  const rootHook = conversationId !== undefined && conversationId === paneState.rootConversationId
+  const step = hookPayload.stepIdx
+  const toolStep =
+    typeof step === 'number' && Number.isSafeInteger(step) && step >= 0 ? step : undefined
+  if (launchPhase && toolName && rootHook) {
     const disposition = trackAntigravityLaunch(
       paneState,
       launchPhase,
-      hookPayload.stepIdx,
+      toolStep,
       toolCallId,
       toolName,
       toolInputSource,
@@ -194,6 +193,9 @@ export function normalizeAntigravityEvent(
     }
   } else {
     paneState.currentLaunch = undefined
+  }
+  if (rootHook && origin !== 'child' && toolPhase && toolName && toolStep !== undefined) {
+    paneState.rootStepFrontier = Math.max(paneState.rootStepFrontier ?? -1, toolStep)
   }
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
