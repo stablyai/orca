@@ -4,6 +4,9 @@ import type { SpeechModelManifest } from '../../shared/speech/speech-types'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { resolveCloudTranscriptionTarget } from './cloud-transcription-target'
+import type { CloudDictationSession } from './cloud-dictation-session'
+import { readSonioxSpeechApiKey } from './soniox-api-key-store'
+import { SonioxRealtimeSession } from './soniox-realtime-session'
 import type { SttEventSink } from './stt-service'
 import {
   MAX_STT_SESSIONS,
@@ -92,10 +95,7 @@ export async function startSttDictation(
       await requireModelReady(state, modelId)
       // A cloud dictation needs no recognizer; free one nobody else uses.
       await teardownIdleSttEngine(state)
-      session.cloud = new OpenAiTranscriptionSession(
-        () => resolveCloudTranscriptionTarget(modelId),
-        engineDictationLanguage(manifest, language)
-      )
+      session.cloud = await startCloudSession(state, session, manifest, language)
     }
     throwIfCanceled(state, session)
     session.phase = 'active'
@@ -106,6 +106,42 @@ export async function startSttDictation(
     releaseSttSession(state, session)
     throw error
   }
+}
+
+async function startCloudSession(
+  state: SttSessionState,
+  session: SttSession,
+  manifest: SpeechModelManifest,
+  language: string | undefined
+): Promise<CloudDictationSession> {
+  const dictationLanguage = engineDictationLanguage(manifest, language)
+  if (manifest.provider !== 'soniox') {
+    return new OpenAiTranscriptionSession(
+      () => resolveCloudTranscriptionTarget(manifest.id),
+      dictationLanguage
+    )
+  }
+  const stream = new SonioxRealtimeSession({
+    readApiKey: readSonioxSpeechApiKey,
+    language: dictationLanguage,
+    terms: session.vocabulary,
+    // Events reach whichever sink the session holds now; a re-attached client replaces it.
+    sink: (event) => session.sink(event),
+    onFailure: (error) => failCloudSession(state, session, error),
+    isCanceled: () => state.sessions.get(session.owner) !== session
+  })
+  await stream.start()
+  return stream
+}
+
+/** A stream that broke mid-dictation ends it like a crashed on-device engine; a stopping one reports through its stop. */
+function failCloudSession(state: SttSessionState, session: SttSession, error: string): void {
+  if (session.phase !== 'active' || state.sessions.get(session.owner) !== session) {
+    return
+  }
+  state.sessions.delete(session.owner)
+  session.sink({ type: 'error', error })
+  session.sink({ type: 'stopped' })
 }
 
 // Sessions share one recognizer, so a second model would load another copy; refuse it while others use the first.

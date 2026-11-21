@@ -26,6 +26,7 @@ import { miniMaxApiKeyEnvelopeFile } from '../../minimax/minimax-api-key-store'
 import { openCodeGoApiKeyEnvelopeFile } from '../../opencode/accounts/opencode-go-api-key-store'
 import { composioKeyEnvelopeFile } from '../../composio/composio-key-store'
 import { openAiCompatibleSpeechProviderEnvelopeFile } from '../../speech/openai-compatible-speech-provider-store'
+import { sonioxSpeechApiKeyEnvelopeFile } from '../../speech/soniox-api-key-store'
 
 type PlaintextCredentialTarget = {
   path: string
@@ -63,7 +64,8 @@ function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
     miniMaxApiKeyEnvelopeFile(),
     openCodeGoApiKeyEnvelopeFile(),
     composioKeyEnvelopeFile(),
-    openAiCompatibleSpeechProviderEnvelopeFile()
+    openAiCompatibleSpeechProviderEnvelopeFile(),
+    sonioxSpeechApiKeyEnvelopeFile()
   ]
 }
 

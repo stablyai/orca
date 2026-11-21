@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 
 type OpenAiTranscriptionSettingsRowProps = {
   /** 'compatible' is the base URL + model provider, set up in its own dialog. */
-  variant?: 'openai' | 'compatible'
+  variant?: 'openai' | 'compatible' | 'soniox'
   configured: boolean
   disabled: boolean
   onConfigure: () => void
@@ -24,53 +24,74 @@ export function OpenAiTranscriptionSettingsRow({
 }: OpenAiTranscriptionSettingsRowProps): React.JSX.Element {
   const t = useTranslate()
   const copy =
-    variant === 'compatible'
+    variant === 'soniox'
       ? {
-          title: t(
-            'components.settings.voice.openAiCompatible.title',
-            'OpenAI-compatible provider'
-          ),
+          title: t('components.settings.voice.soniox.title', 'Soniox real-time transcription'),
           configured: t(
-            'components.settings.voice.openAiCompatible.rowConfigured',
-            'Base URL and model saved for the OpenAI-compatible model.'
+            'components.settings.voice.soniox.rowConfigured',
+            'API key configured for the Soniox model.'
           ),
           missing: t(
-            'components.settings.voice.openAiCompatible.rowMissing',
-            'Add a base URL and model before selecting the OpenAI-compatible model.'
-          ),
-          edit: t('components.settings.voice.openAiCompatible.edit', 'Edit'),
-          clear: t(
-            'components.settings.voice.openAiCompatible.removeLabel',
-            'Remove OpenAI-compatible provider'
-          ),
-          add: t('components.settings.voice.openAiCompatible.setUp', 'Set up')
-        }
-      : {
-          title: t(
-            'auto.components.settings.OpenAiTranscriptionSettingsRow.ff28e99b54',
-            'OpenAI transcription'
-          ),
-          configured: t(
-            'auto.components.settings.OpenAiTranscriptionSettingsRow.b59b9b2b51',
-            'API key configured for cloud speech-to-text models.'
-          ),
-          missing: t(
-            'auto.components.settings.OpenAiTranscriptionSettingsRow.893790e13b',
-            'Add an OpenAI API key before selecting cloud speech-to-text models.'
+            'components.settings.voice.soniox.rowMissing',
+            'Add a Soniox API key before selecting the Soniox model.'
           ),
           edit: t(
             'auto.components.settings.OpenAiTranscriptionSettingsRow.a622bc3b37',
             'Replace key'
           ),
-          clear: t(
-            'auto.components.settings.OpenAiTranscriptionSettingsRow.ae2df8f511',
-            'Disconnect OpenAI API key'
-          ),
+          clear: t('components.settings.voice.soniox.clearLabel', 'Disconnect Soniox API key'),
           add: t(
             'auto.components.settings.OpenAiTranscriptionSettingsRow.85c589cd61',
             'Add API key'
           )
         }
+      : variant === 'compatible'
+        ? {
+            title: t(
+              'components.settings.voice.openAiCompatible.title',
+              'OpenAI-compatible provider'
+            ),
+            configured: t(
+              'components.settings.voice.openAiCompatible.rowConfigured',
+              'Base URL and model saved for the OpenAI-compatible model.'
+            ),
+            missing: t(
+              'components.settings.voice.openAiCompatible.rowMissing',
+              'Add a base URL and model before selecting the OpenAI-compatible model.'
+            ),
+            edit: t('components.settings.voice.openAiCompatible.edit', 'Edit'),
+            clear: t(
+              'components.settings.voice.openAiCompatible.removeLabel',
+              'Remove OpenAI-compatible provider'
+            ),
+            add: t('components.settings.voice.openAiCompatible.setUp', 'Set up')
+          }
+        : {
+            title: t(
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.ff28e99b54',
+              'OpenAI transcription'
+            ),
+            configured: t(
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.b59b9b2b51',
+              'API key configured for cloud speech-to-text models.'
+            ),
+            missing: t(
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.893790e13b',
+              'Add an OpenAI API key before selecting cloud speech-to-text models.'
+            ),
+            edit: t(
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.a622bc3b37',
+              'Replace key'
+            ),
+            clear: t(
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.ae2df8f511',
+              'Disconnect OpenAI API key'
+            ),
+            add: t(
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.85c589cd61',
+              'Add API key'
+            )
+          }
 
   return (
     <div

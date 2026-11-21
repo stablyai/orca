@@ -13,6 +13,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useDictationSetupPoller } from '../use-dictation-setup-poller'
 import {
+  cloudModelServiceLabel,
   cloudModelNeedsKey,
   dictationModelRowAction,
   downloadDictationModel,
@@ -61,7 +62,8 @@ function formatSize(bytes: number | null | undefined, t: Translate): string {
 }
 
 function modelMetadata(model: MobileSpeechModel, t: Translate): string {
-  const details = model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes, t)
+  const details =
+    model.provider === 'openai' ? cloudModelServiceLabel(model) : formatSize(model.sizeBytes, t)
   if (isModelInFlight(model) && model.progress != null) {
     return t('components.dictationSetupSheet.modelProgress', '{{details}} · {{progress}}%', {
       details,

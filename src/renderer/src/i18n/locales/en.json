@@ -23147,7 +23147,8 @@
             "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
             "senseVoice": "Fast. For Chinese, Japanese and Korean.",
             "nemotron": "{{languages}} languages, including Arabic, Hindi and Japanese."
-          }
+          },
+          "sendsToSoniox": "Words appear as you speak. Sends your audio to Soniox."
         },
         "vocabulary": {
           "title": "Vocabulary",
@@ -23258,6 +23259,18 @@
           "correctionWord": "Correction word",
           "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
           "correctionWordOff": "None"
+        },
+        "soniox": {
+          "title": "Soniox real-time transcription",
+          "description": "Audio streams to Soniox only while the Soniox model is selected, and words appear as you speak.",
+          "rowConfigured": "API key configured for the Soniox model.",
+          "rowMissing": "Add a Soniox API key before selecting the Soniox model.",
+          "clearLabel": "Disconnect Soniox API key",
+          "keyName": "Your Soniox key",
+          "saved": "Soniox API key saved",
+          "saveFailed": "Failed to save Soniox API key",
+          "cleared": "Soniox API key cleared",
+          "clearFailed": "Failed to clear Soniox API key"
         }
       },
       "repositoryHooks": {

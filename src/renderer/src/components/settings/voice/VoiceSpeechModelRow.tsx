@@ -117,7 +117,7 @@ export function VoiceSpeechModelRow({
     action = button(t('components.settings.voice.models.use', 'Use'), () => onUse(manifest.id))
   } else if (isCloud) {
     action = button(
-      manifest.provider === 'openai'
+      manifest.provider === 'openai' || manifest.provider === 'soniox'
         ? t('auto.components.settings.OpenAiTranscriptionSettingsRow.85c589cd61', 'Add API key')
         : t('components.settings.voice.models.setUpCloud', 'Set up'),
       () => onSetUpCloud(manifest.id)

@@ -25,6 +25,8 @@ const speechModelSchema = z.looseObject({
   id: z.string(),
   label: salvagedOptional('label', z.string()),
   provider: salvagedOptional('provider', z.enum(SPEECH_MODEL_PROVIDERS)),
+  // Absent from older hosts; an unknown service still reads as a cloud model.
+  cloudService: salvagedOptional('cloudService', z.string()),
   status: salvagedOptional('status', z.enum(SPEECH_MODEL_STATUSES)),
   sizeBytes: salvagedOptional('sizeBytes', z.number().nullable()),
   progress: salvagedOptional('progress', z.number().nullable()),

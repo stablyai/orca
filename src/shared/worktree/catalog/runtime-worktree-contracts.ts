@@ -179,6 +179,8 @@ export type RuntimeSpeechModelSummary = {
   id: string
   label: string
   provider: 'local' | 'openai'
+  /** The service a cloud model sends audio to; absent for local models and from older hosts. */
+  cloudService?: 'openai' | 'openai-compatible' | 'soniox'
   sizeBytes: number | null
   recommended: boolean
   status: 'ready' | 'not-downloaded' | 'downloading' | 'extracting' | 'error'

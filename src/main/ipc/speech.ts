@@ -24,6 +24,7 @@ import {
   clearOpenAiCompatibleSpeechProvider,
   summarizeOpenAiCompatibleSpeechProvider
 } from '../speech/openai-compatible-speech-provider-store'
+import { registerSonioxSpeechKeyHandlers } from './speech-soniox-key'
 import type {
   DictationContext,
   OpenAiCompatibleSpeechProvider
@@ -96,6 +97,8 @@ export function registerSpeechHandlers(
     await clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
+
+  registerSonioxSpeechKeyHandlers()
 
   ipcMain.handle('speech:getOpenAiCompatibleProvider', async () => {
     try {

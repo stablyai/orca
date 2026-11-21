@@ -29,6 +29,7 @@ import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { speechModelRatingLanguage } from './speech-model-quality'
 import { suggestSpeechModel } from './speech-model-suggestion'
+import { useSonioxKeySetup } from './use-soniox-key-setup'
 
 type VoicePaneProps = {
   settings: GlobalSettings
@@ -134,6 +135,13 @@ export function VoicePane({
   }
 
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
+  const soniox = useSonioxKeySetup({
+    catalog,
+    modelStates,
+    selectedModel,
+    onUpdateVoiceSettings: updateVoiceSettings,
+    onRefreshModelStates: refreshModelStates
+  })
 
   const compatibleModel = catalog.find((m) => m.provider === 'openai-compatible')
   const compatibleConfigured =
@@ -152,8 +160,11 @@ export function VoicePane({
   }
 
   const openCloudSetup = (modelId: string): void => {
-    if (catalog.find((m) => m.id === modelId)?.provider === 'openai-compatible') {
+    const provider = catalog.find((m) => m.id === modelId)?.provider
+    if (provider === 'openai-compatible') {
       openCompatibleDialog(modelId)
+    } else if (provider === 'soniox') {
+      soniox.open(modelId)
     } else {
       openOpenAiDialog(modelId)
     }
@@ -326,6 +337,7 @@ export function VoicePane({
                   onClear={() => void removeCompatibleProvider()}
                 />
               ) : null}
+              {soniox.row}
             </>
           }
         />
@@ -366,6 +378,8 @@ export function VoicePane({
         onOpenChange={setCompatibleDialogOpen}
         onSaved={handleCompatibleSaved}
       />
+
+      {soniox.dialog}
 
       <OpenAiTranscriptionKeyDialog
         open={openAiDialogOpen}
