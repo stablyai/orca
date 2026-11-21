@@ -125,6 +125,9 @@ export function mergeSnapshotAndSessions(
     }
   }
   const shownLocally = new Set<string>()
+  // Local chat rows were added first, so a same-id row in the project is this machine's.
+  const isShownLocally = (worktreeId: string, repoId: string): boolean =>
+    shownLocally.has(worktreeId) || groups.hasRow(repoId, worktreeId)
   for (const wt of local?.terminalSamples ?? []) {
     const placement = localSamplePlacement(ctx, wt)
     if (placement) {
@@ -134,7 +137,7 @@ export function mergeSnapshotAndSessions(
   }
   for (const { host, rows } of paired) {
     for (const wt of rows.terminalSamples) {
-      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt, shownLocally))
+      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt, isShownLocally))
     }
   }
 

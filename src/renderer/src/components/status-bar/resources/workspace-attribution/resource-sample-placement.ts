@@ -37,8 +37,8 @@ export function placementInputs(ctx: MergeContext): readonly unknown[] {
 }
 
 /**
- * Null for a workspace a paired machine hosts, so its load is never attributed here. A record
- * stamped with a paired host drops only chat-only samples: a live local terminal is local evidence.
+ * Null for a workspace a paired machine hosts, so its load is never attributed here. Terminals follow
+ * the repo's host, as before. Chats run here, so only a record stamped with a paired host drops them.
  */
 export function localSamplePlacement(
   ctx: MergeContext,
@@ -47,7 +47,7 @@ export function localSamplePlacement(
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
   const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-  if (runtimeHostId || (isChatOnlySample(wt) && stampedRuntimeHostId(ctx, wt.worktreeId))) {
+  if (isChatOnlySample(wt) ? stampedRuntimeHostId(ctx, wt.worktreeId) : runtimeHostId) {
     return null
   }
   return {
@@ -59,12 +59,12 @@ export function localSamplePlacement(
   }
 }
 
-/** `shownLocally` holds workspaces this machine's terminals already show; a paired sample beside them is host-qualified. */
+/** A paired sample beside a workspace this machine's own sample already shows is host-qualified. */
 export function pairedSamplePlacement(
   ctx: MergeContext,
   host: RuntimeHostResourceSample,
   wt: WorktreeMemory,
-  shownLocally?: ReadonlySet<string>
+  shownLocally?: (worktreeId: string, repoId: string) => boolean
 ): SamplePlacement {
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
@@ -72,7 +72,7 @@ export function pairedSamplePlacement(
   const ambiguous = ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ?? false
   const recordHostId = stampedRuntimeHostId(ctx, wt.worktreeId)
   const owned =
-    !shownLocally?.has(wt.worktreeId) &&
+    !shownLocally?.(wt.worktreeId, repoId) &&
     (recordHostId
       ? recordHostId === canonicalExecutionHostId(host.hostId)
       : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId)

@@ -185,10 +185,9 @@ export function useResourceUsageDerivedModel({
     return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
       const repoId =
         resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
-      return (
-        !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId &&
-        (worktree.sessions.length > 0 || !stampedRuntimeHostId(hostCtx, worktree.worktreeId))
-      )
+      return worktree.sessions.length === 0
+        ? !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
+        : !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId
     })
   }, [
     open,

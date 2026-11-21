@@ -2,10 +2,10 @@ import type { MemorySnapshot, WorktreeMemory } from '../../shared/diagnostics/pr
 
 /** What a sample recorded to rebuild the terminal-only snapshot paired clients have always received. */
 export type PairedReplyParts = {
-  /** Terminal-only usage and history for workspaces whose row also counts chats. */
+  /** Terminal-only usage, and a reader for their history, for workspaces that have had chats. */
   terminalRows: ReadonlyMap<
     string,
-    Pick<WorktreeMemory, 'cpu' | 'memory' | 'privateMemory' | 'history'>
+    { usage: Pick<WorktreeMemory, 'cpu' | 'memory' | 'privateMemory'>; readHistory: () => number[] }
   >
   /** Sessions whose pane key came from startup restore; paired replies send them without one. */
   restoredSessionIds: ReadonlySet<string>
@@ -33,7 +33,7 @@ function pairedRow(wt: WorktreeMemory, parts: PairedReplyParts): WorktreeMemory 
   const { chats: _chats, ...row } = wt
   return {
     ...row,
-    ...terminal,
+    ...(terminal ? { ...terminal.usage, history: terminal.readHistory() } : {}),
     sessions: restored
       ? wt.sessions.map((session) =>
           parts.restoredSessionIds.has(session.sessionId) ? { ...session, paneKey: null } : session

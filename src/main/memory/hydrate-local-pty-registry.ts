@@ -187,9 +187,10 @@ async function hydrateLocalPtyRegistry(
       ptyId: info.sessionId,
       worktreeId,
       sessionId: info.sessionId,
-      // Keeps hydrated rows labeled by their tab and classified as agents before their pane mounts.
-      paneKey: info.paneKey && parsePaneKey(info.paneKey) ? info.paneKey : null,
-      restored: true,
+      // Unmounted, so no pane owns it yet: pane-matching consumers keep seeing null.
+      paneKey: null,
+      // Lets the Resource Manager name the row by its tab and classify it before the pane mounts.
+      ...(info.paneKey && parsePaneKey(info.paneKey) ? { restoredPaneKey: info.paneKey } : {}),
       pid:
         typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null
     })

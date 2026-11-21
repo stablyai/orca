@@ -77,6 +77,11 @@ export class ProjectGroupAssembly {
     return row
   }
 
+  hasRow(repoId: string, worktreeId: string): boolean {
+    const state = this.repos.get(repoId)
+    return state !== undefined && this.position(state, worktreeId) !== undefined
+  }
+
   /** The workspace's row, safe to change in this merge; undefined when it has none yet. */
   rowToUpdate(repoId: string, worktreeId: string): UnifiedWorktreeRow | undefined {
     const state = this.repos.get(repoId)

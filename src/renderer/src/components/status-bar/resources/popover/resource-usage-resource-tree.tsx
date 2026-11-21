@@ -62,6 +62,52 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
   return copy
 }
 
+type ProjectRowsProps = {
+  activeWorktreeId: string | null
+  collapsedWorktrees: Set<string>
+  worktreeById: ReturnType<typeof useWorktreeMap>
+  toggleWorktree: (worktreeId: string) => void
+  navigateToWorktree: (worktreeId: string) => void
+  onDelete: (worktreeId: string) => void
+  onKillSession: (session: UnifiedSessionRow) => void
+  navigateToTab: (tabId: string, paneKey: string | null) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
+}
+
+/** Memoized: an unchanged project skips reconciling its rows when another project or machine updates. */
+const ProjectRows = React.memo(function ProjectRows({
+  group,
+  activeWorktreeId,
+  collapsedWorktrees,
+  worktreeById,
+  toggleWorktree,
+  navigateToWorktree,
+  onDelete,
+  onKillSession,
+  navigateToTab,
+  onOpenChat
+}: ProjectRowsProps & { group: UnifiedProjectGroup }): React.JSX.Element {
+  return (
+    <>
+      {group.worktrees.map((wt) => (
+        <WorktreeRow
+          key={wt.worktreeId}
+          worktree={wt}
+          storeRecord={worktreeById.get(wt.worktreeId) ?? null}
+          isActive={wt.worktreeId === activeWorktreeId}
+          isCollapsed={collapsedWorktrees.has(wt.worktreeId)}
+          onToggle={toggleWorktree}
+          onNavigate={navigateToWorktree}
+          onDelete={onDelete}
+          onKillSession={onKillSession}
+          navigateToTab={navigateToTab}
+          onOpenChat={onOpenChat}
+        />
+      ))}
+    </>
+  )
+})
+
 export function ResourceTree({
   repos,
   sortOption,
@@ -111,15 +157,7 @@ export function ResourceTree({
     [repos, sortOption, sortedGroups]
   )
 
-  // An unchanged row (and an unchanged project's rows) reuses its element, so React skips it untouched.
-  const [elements] = useState(
-    () =>
-      new WeakMap<
-        UnifiedWorktreeRow | UnifiedProjectGroup,
-        { inputs: readonly unknown[]; element: React.JSX.Element }
-      >()
-  )
-  const shared = [
+  const rowProps: ProjectRowsProps = {
     activeWorktreeId,
     collapsedWorktrees,
     worktreeById,
@@ -129,47 +167,10 @@ export function ResourceTree({
     onKillSession,
     navigateToTab,
     onOpenChat
-  ]
-  const cachedElement = (
-    owner: UnifiedWorktreeRow | UnifiedProjectGroup,
-    inputs: readonly unknown[],
-    build: () => React.JSX.Element
-  ): React.JSX.Element => {
-    const cached = elements.get(owner)
-    if (cached && cached.inputs.every((input, i) => input === inputs[i])) {
-      return cached.element
-    }
-    const element = build()
-    elements.set(owner, { inputs, element })
-    return element
-  }
-
-  const renderWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element =>
-    cachedElement(wt, shared, () => buildWorktree(wt))
-  const renderRows = (group: UnifiedProjectGroup): React.JSX.Element =>
-    cachedElement(group, shared, () => <>{group.worktrees.map(renderWorktree)}</>)
-
-  const buildWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element => {
-    const storeRecord = worktreeById.get(wt.worktreeId) ?? null
-    return (
-      <WorktreeRow
-        key={wt.worktreeId}
-        worktree={wt}
-        storeRecord={storeRecord}
-        isActive={wt.worktreeId === activeWorktreeId}
-        isCollapsed={collapsedWorktrees.has(wt.worktreeId)}
-        onToggle={toggleWorktree}
-        onNavigate={navigateToWorktree}
-        onDelete={onDelete}
-        onKillSession={onKillSession}
-        navigateToTab={navigateToTab}
-        onOpenChat={onOpenChat}
-      />
-    )
   }
 
   if (sortedRepos.length === 1) {
-    return renderRows(sortedRepos[0])
+    return <ProjectRows group={sortedRepos[0]} {...rowProps} />
   }
 
   return (
@@ -222,7 +223,11 @@ export function ResourceTree({
               </div>
             </div>
 
-            {!repoCollapsed && <div className="border-t border-border/30">{renderRows(group)}</div>}
+            {!repoCollapsed && (
+              <div className="border-t border-border/30">
+                <ProjectRows group={group} {...rowProps} />
+              </div>
+            )}
           </div>
         )
       })}
