@@ -1,8 +1,9 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
 import {
+  codexTranscriptPollOwner,
   pollCodexTranscriptStatus,
-  readCodexTranscriptPoll,
-  type CodexTranscriptPollReads
+  type CodexTranscriptPollReads,
+  withCodexTranscriptPoll
 } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
@@ -73,7 +74,7 @@ export class AgentHookResultRetryScheduler {
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
-      (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
+      (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal)
     )
   }
 
@@ -131,11 +132,13 @@ export class AgentHookResultRetryScheduler {
     version?: string,
     delayMs?: number
   ): void {
-    if (source === 'claude') {
-      return
-    }
-    // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
     if (source !== 'codex' && source !== 'muse') {
+      // Nested CLIs inherit pane keys. Only a different accepted provider displaces the poll.
+      const prior = this.transcriptPollScheduler.peek(original.paneKey)
+      const provider = original.payload.agentType
+      if (prior && provider && prior.source !== provider) {
+        this.transcriptPollScheduler.clear(original.paneKey)
+      }
       return
     }
     if (!shouldPollHookTranscript(this.host.state, source, original)) {
@@ -155,7 +158,8 @@ export class AgentHookResultRetryScheduler {
         delayMs: museDelayMs
       },
       hookTranscriptWatchPath(this.host.state, source, original.paneKey),
-      museDelayMs
+      museDelayMs,
+      source === 'codex' ? codexTranscriptPollOwner(this.host.state, original.paneKey) : source
     )
   }
 
@@ -173,7 +177,7 @@ export class AgentHookResultRetryScheduler {
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll, signal: AbortSignal) {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
@@ -182,22 +186,16 @@ export class AgentHookResultRetryScheduler {
       return
     }
     // Why: rollout reads stay off the event loop; the next tick waits for this one.
-    return readCodexTranscriptPoll(this.host.state, paneKey).then((reads) => {
-      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
-      const current = this.transcriptPollScheduler.peek(paneKey)
-      const owner = this.ownsTranscriptPoll(paneKey, poll)
-        ? poll
-        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
-          ? current
-          : undefined
-      try {
-        if (owner) {
-          this.applyTranscriptPoll(paneKey, owner, reads)
-        }
-      } finally {
-        reads.batch.release()
-      }
-    })
+    return withCodexTranscriptPoll(
+      this.host.state,
+      paneKey,
+      signal,
+      () => {
+        const current = this.transcriptPollScheduler.peek(paneKey)
+        return current && this.ownsTranscriptPoll(paneKey, current) ? current : undefined
+      },
+      (owner, reads) => this.applyTranscriptPoll(paneKey, owner, reads)
+    )
   }
 
   // Keep the identity check at callback time: a newer event supersedes this

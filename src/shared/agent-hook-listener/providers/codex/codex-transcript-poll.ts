@@ -34,18 +34,35 @@ export type CodexTranscriptPollReads = {
   identities: CodexSubagentIdentityRead[]
 }
 
+export function codexTranscriptPollOwner(
+  state: HookListenerState,
+  paneKey: string
+): object | 'codex' {
+  return (
+    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent ??
+    state.codexSubagentRosterByPaneKey.get(paneKey) ??
+    'codex'
+  )
+}
+
 /** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */
 export async function readCodexTranscriptPoll(
   state: HookListenerState,
-  paneKey: string
+  paneKey: string,
+  live: () => boolean = () => true,
+  signal?: AbortSignal
 ): Promise<CodexTranscriptPollReads> {
   const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const parent = transcript?.parent
   // A replaced or cleared pane makes the rest of these reads unappliable; stop opening rollouts for it.
   const batch = new RolloutReadBatch(
     () =>
+      live() &&
       state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
-      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript &&
+      transcript?.parent === parent,
+    signal
   )
   try {
     const transcriptReads = transcript?.parent.filePath
@@ -62,6 +79,30 @@ export async function readCodexTranscriptPoll(
     // Callers release on success; a rejected read must not keep its share of the budget.
     batch.release()
     throw error
+  }
+}
+
+/** A newer hook for the same session can apply the reads to its latest row. */
+export async function withCodexTranscriptPoll<T>(
+  state: HookListenerState,
+  paneKey: string,
+  signal: AbortSignal,
+  currentOwner: () => T | undefined,
+  apply: (owner: T, reads: CodexTranscriptPollReads) => void
+): Promise<void> {
+  const reads = await readCodexTranscriptPoll(
+    state,
+    paneKey,
+    () => currentOwner() !== undefined,
+    signal
+  )
+  try {
+    const owner = signal.aborted ? undefined : currentOwner()
+    if (owner !== undefined) {
+      apply(owner, reads)
+    }
+  } finally {
+    reads.batch.release()
   }
 }
 

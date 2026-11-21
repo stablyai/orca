@@ -10,6 +10,8 @@ const ROOT_RECONCILIATION_MS = 5_000
 type TranscriptWakeup<T> = {
   value: T
   filePath?: string
+  owner?: string | object
+  controller: AbortController
   watcher?: TranscriptNativeWatcher
   watcherBound: boolean
   nextBindAt: number
@@ -29,7 +31,7 @@ export class AgentTranscriptPollScheduler<T> {
 
   constructor(
     private readonly delayMs: number,
-    private readonly onDue: (key: string, value: T) => void | Promise<void>
+    private readonly onDue: (key: string, value: T, signal: AbortSignal) => void | Promise<void>
   ) {
     this.deadlines = new CodexSubagentPollScheduler(delayMs, (key, entry) => {
       if (this.entries.get(key) !== entry) {
@@ -44,10 +46,12 @@ export class AgentTranscriptPollScheduler<T> {
       entry.initialCheck = false
       let pending: void | Promise<void> = undefined
       try {
-        pending = this.onDue(key, entry.value)
+        pending = this.onDue(key, entry.value, entry.controller.signal)
       } finally {
         if (pending) {
-          this.inFlight.set(key, entry)
+          if (this.entries.get(key) === entry) {
+            this.inFlight.set(key, entry)
+          }
           void pending
             .catch((error: unknown) => {
               console.error('[agent-hooks] transcript poll failed:', error)
@@ -61,9 +65,10 @@ export class AgentTranscriptPollScheduler<T> {
   }
 
   private settle(key: string, entry: TranscriptWakeup<T>): void {
-    if (this.inFlight.get(key) === entry) {
-      this.inFlight.delete(key)
+    if (this.inFlight.get(key) !== entry) {
+      return
     }
+    this.inFlight.delete(key)
     const current = this.entries.get(key)
     if (current?.dueWhileInFlight) {
       // A wake or newer hook came due mid-read; run again at the normal cadence instead of the sparse probe.
@@ -79,9 +84,15 @@ export class AgentTranscriptPollScheduler<T> {
   }
 
   /** An explicit `delayMs` shorter than the pending one (a Muse hook ending a quiet back-off) replaces it. */
-  schedule(key: string, value: T, filePath?: string, delayMs?: number): void {
+  schedule(
+    key: string,
+    value: T,
+    filePath?: string,
+    delayMs?: number,
+    owner?: string | object
+  ): void {
     let entry = this.entries.get(key)
-    if (entry && entry.filePath !== filePath) {
+    if (entry && (entry.filePath !== filePath || entry.owner !== owner)) {
       this.clear(key)
       entry = undefined
     }
@@ -89,6 +100,8 @@ export class AgentTranscriptPollScheduler<T> {
       entry = {
         value,
         filePath,
+        owner,
+        controller: new AbortController(),
         watcherBound: false,
         nextBindAt: 0,
         scheduled: false,
@@ -158,6 +171,7 @@ export class AgentTranscriptPollScheduler<T> {
     // A read that never settles must not stall the pane's next poll forever.
     this.inFlight.delete(key)
     this.deadlines.clear(key)
+    entry.controller.abort()
     entry.watcher?.dispose()
   }
 
@@ -165,6 +179,7 @@ export class AgentTranscriptPollScheduler<T> {
     this.inFlight.clear()
     this.deadlines.clearAll()
     for (const entry of this.entries.values()) {
+      entry.controller.abort()
       entry.watcher?.dispose()
     }
     this.entries.clear()
