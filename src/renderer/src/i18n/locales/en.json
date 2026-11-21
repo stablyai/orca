@@ -25260,7 +25260,8 @@
       "organizations": "Organizations",
       "listFailed": "Failed to list projects",
       "detailsFailed": "Failed to load details",
-      "viewFailed": "Failed to fetch project view"
+      "viewFailed": "Failed to fetch project view",
+      "chooseProject": "Choose a project"
     },
     "error": {
       "notFoundState": "Could not find this project or view.",

@@ -24902,7 +24902,8 @@
       "organizations": "组织",
       "listFailed": "无法列出项目",
       "detailsFailed": "无法加载详情",
-      "viewFailed": "无法获取项目视图"
+      "viewFailed": "无法获取项目视图",
+      "chooseProject": "选择项目"
     },
     "error": {
       "notFoundState": "找不到此项目或视图",
