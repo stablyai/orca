@@ -268,7 +268,8 @@ const TREE_KINDS: Record<BotChatOrigin, BotItemChatKind> = {
   automation: 'automation',
   slack: 'thread',
   linear: 'thread',
-  github: 'thread'
+  github: 'thread',
+  dingtalk: 'thread'
 }
 
 /** The chat filter's choices: the bot's chats and any chat an item names, each with its open items
