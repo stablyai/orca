@@ -6,17 +6,32 @@ import { describeAutomationSchedule } from '../../../../../shared/automations/sc
 import { automationEventKind } from '../../../../../shared/automation-event-triggers'
 import { formatUiAutomationScheduleDescriptor } from '../../automations/details/automation-schedule-label'
 import { eventLabel } from '../bot-automation-when'
-import { pickedOf, toggled, type BotShareContext, type BotShareList } from './bot-share-pages'
+import {
+  pickedOf,
+  toggled,
+  unpackableSkills,
+  type BotShareContext,
+  type BotShareList
+} from './bot-share-pages'
 import { MemoryList, SafetyCheckList } from './BotShareFlagPages'
 import { Tick } from './BotShareTick'
 import { BotShareItem } from './BotShareRows'
 
 function notShared(why: string): string {
-  return why === 'webhook'
-    ? translate('bots.share.webhookNotShared', 'Webhook · not shared')
-    : why === 'command'
-      ? translate('bots.share.commandNotShared', 'Command · not shared')
-      : translate('bots.share.notShared', 'Not shared')
+  switch (why) {
+    case 'webhook':
+      return translate('bots.share.webhookNotShared', 'Webhook · not shared')
+    case 'command':
+      return translate('bots.share.commandNotShared', 'Command · not shared')
+    case 'link':
+      return translate('bots.share.linkNotShared', 'Has a link inside · not shared')
+    case 'size':
+      return translate('bots.share.tooLargeNotShared', 'Too large · not shared')
+    case 'unreadable':
+      return translate('bots.share.unreadableNotShared', "Can't be read · not shared")
+    default:
+      return translate('bots.share.notShared', 'Not shared')
+  }
 }
 
 export function scheduleWhen(rrule: string): string {
@@ -35,6 +50,7 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
   const duplicates = ctx.candidate.leftOut.filter(
     (entry) => entry.kind === 'skill' && entry.why === 'duplicate'
   )
+  const unpackable = unpackableSkills(ctx.candidate.leftOut)
   const picked = pickedOf(
     ctx.selection.skills,
     all.map((skill) => skill.name)
@@ -72,6 +88,15 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
           detail={t('bots.share.duplicateSkill', 'Same name, in {{folder}} · not shared', {
             folder: entry.from ?? ''
           })}
+        />
+      ))}
+      {unpackable.map((entry) => (
+        <BotShareItem
+          key={`unpackable:${entry.name}`}
+          off
+          lead={<Tick checked={false} label={entry.name} />}
+          title={entry.name}
+          detail={notShared(entry.why)}
         />
       ))}
     </>

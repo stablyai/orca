@@ -99,6 +99,29 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
     expect(shareable.skills.map((skill) => skill.name)).toEqual(['electron'])
   })
 
+  it('leaves out a skill with a link inside, so the others still share by default', async () => {
+    await write(home, 'skills/notes/SKILL.md', skillText('notes', 'Own skill'))
+    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+    await write(project, 'README.md', 'Project readme\n')
+    await symlink(join(project, 'README.md'), join(project, '.agents/skills/deploy/README.md'))
+
+    const shareable = await read()
+    expect(shareable.skills.map((skill) => skill.name)).toEqual(['notes'])
+    expect(shareable.leftOut).toContainEqual({ kind: 'skill', name: 'deploy', why: 'link' })
+
+    const candidates = new BotShareCandidates(join(root, 'candidates'))
+    const summary = await candidates.prepare({
+      bot,
+      shareable,
+      selection: {},
+      packageId: 'package-1'
+    })
+    expect(summary.bot.skills.map((skill) => skill.name)).toEqual(['notes'])
+    expect(summary.files.map((file) => file.path)).toContain('skills/notes/SKILL.md')
+    expect(summary.files.some((file) => file.path.startsWith('skills/deploy/'))).toBe(false)
+    await candidates.dispose()
+  })
+
   it("keeps the bot's own skill when a linked project has one of the same name", async () => {
     await write(home, 'skills/triage/SKILL.md', skillText('triage', 'Own copy'))
     await write(project, '.agents/skills/triage/SKILL.md', skillText('triage', 'Project copy'))

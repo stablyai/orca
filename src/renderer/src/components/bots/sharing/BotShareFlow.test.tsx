@@ -214,6 +214,14 @@ it('lists a same-named skill that is left out with the folder it is in', async (
   ).toBeDefined()
 })
 
+it('lists a skill with a link inside as not shared, even when it is the only one', async () => {
+  calls.skills = []
+  calls.leftOut = [{ kind: 'skill', name: 'deploy', why: 'link' }]
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('button', { name: /Skills/ }))
+  expect(await screen.findByText('Has a link inside · not shared')).toBeDefined()
+})
+
 it('picks every memory file with Include memory, and All clears or picks them all', async () => {
   render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
   fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))

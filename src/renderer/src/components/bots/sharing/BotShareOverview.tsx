@@ -20,6 +20,7 @@ import { botShareCheckSummary } from './bot-share-flags'
 import {
   allMemory,
   pickedOf,
+  unpackableSkills,
   type BotShareContext,
   type BotShareList,
   type BotSharePage
@@ -158,6 +159,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
       .filter((e) => pickedOf(selection.eventSuggestions, [e.automationId]).length > 0)
       .map((e) => e.name)
   ]
+  const skillsLeftOut = unpackableSkills(leftOut).length
   const webhooks = leftOut.filter((entry) => entry.kind === 'automation').length
   const automations = available.schedules.length + events.length
   const tools = pickedOf(
@@ -195,8 +197,8 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
         <PartRow
           icon={<BookOpen />}
           title={t('bots.share.skills', 'Skills')}
-          empty={available.skills.length === 0}
-          value={partValue(skills, available.skills.length, t)}
+          empty={available.skills.length + skillsLeftOut === 0}
+          value={partValue(skills, available.skills.length + skillsLeftOut, t)}
           onOpen={list('skills')}
         />
         <PartRow

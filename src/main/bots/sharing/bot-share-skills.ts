@@ -148,7 +148,40 @@ export async function readShareSkills(
       leftOut.push(entry)
     }
   }
-  return skills.sort((left, right) => left.name.localeCompare(right.name, 'en-US'))
+  return (await packable(skills, leftOut)).sort((left, right) =>
+    left.name.localeCompare(right.name, 'en-US')
+  )
+}
+
+/** The skills the packager can read: one it refuses (a link or a special file inside, too big) is
+ *  left out with why, so it never stops the others from going out with the default picks. */
+async function packable(
+  skills: BotShareSkill[],
+  leftOut: BotShareLeftOut[]
+): Promise<BotShareSkill[]> {
+  const refusals = await Promise.all(
+    skills.map((skill) =>
+      ownSkillFiles(skill.directory).then(
+        () => null,
+        (error: unknown) => unpackableWhy(error)
+      )
+    )
+  )
+  return skills.filter((skill, index) => {
+    const why = refusals[index]
+    if (why !== null) {
+      leftOut.push({ kind: 'skill', name: skill.name, why })
+    }
+    return why === null
+  })
+}
+
+function unpackableWhy(error: unknown): 'link' | 'size' | 'unreadable' {
+  const code = error instanceof Error ? error.message : ''
+  if (code === 'skill-package-link' || code === 'skill-path-escape') {
+    return 'link'
+  }
+  return code.endsWith('-limit') ? 'size' : 'unreadable'
 }
 
 /** A skill's own files: a folder inside it whose SKILL.md declares a name and description (the rule
