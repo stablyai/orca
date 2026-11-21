@@ -3,6 +3,7 @@ import {
   buildHardWrappedPathLogicalLineCandidates,
   rangeForParsedFileLink
 } from './wrapped-terminal-link-ranges'
+import { findTerminalFileLinksAtBufferPosition } from './terminal-link-buffer-hit-testing'
 
 type TestBufferLine = {
   isWrapped: boolean
@@ -223,5 +224,35 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
       start: { x: firstRow.indexOf('C:') + 1, y: 1 },
       end: { x: secondFragment.length * 2, y: 2 }
     })
+  })
+})
+
+describe('file links wrapped inside a table cell', () => {
+  it('joins a path broken across rows of one cell without merging other cells or rows', () => {
+    const cellWidth = 'docs/reports/generated-weekly-summary-of-open'.length
+    const row = (file: string, about: string): string =>
+      `│ ${file.padEnd(cellWidth)} │ ${about.padEnd(30)} │`
+    const separator = `├${'─'.repeat(cellWidth + 2)}┼${'─'.repeat(32)}┤`
+    const rows = [
+      row('docs/reports/generated-weekly-summary-of-open', 'Items still open after review'),
+      row('-items.md (draft)', 'and their current owners'),
+      separator,
+      row('see docs/one.md', 'x'),
+      row('and docs/two.md', 'y')
+    ].map((text) => makeBufferLine(text))
+    const buffer = { getLine: (y: number) => rows[y] }
+    const pathsAt = (x: number, y: number): string[] => {
+      const { links, guesses } = findTerminalFileLinksAtBufferPosition(buffer, { x, y }, 90)
+      return [...links, ...guesses].map((link) => link.pathText)
+    }
+    const fullPath = 'docs/reports/generated-weekly-summary-of-open-items.md'
+
+    expect(pathsAt(10, 1)).toContain(fullPath)
+    expect(pathsAt(6, 2)).toContain(fullPath)
+    // Only the path's own cells take the click, not the next cell on the same row.
+    expect(pathsAt(60, 1)).not.toContain(fullPath)
+    // A row wrapped at a space keeps that space, so sibling paths stay apart.
+    expect(pathsAt(8, 4)).toContain('docs/one.md')
+    expect([...pathsAt(10, 1), ...pathsAt(8, 4)].join('\n')).not.toMatch(/│|anddocs|md-/)
   })
 })

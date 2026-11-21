@@ -13,7 +13,7 @@ import type {
   TerminalLinkBufferRange
 } from './terminal-link-buffer'
 
-type WrappedLogicalRow = {
+export type WrappedLogicalRow = {
   y: number
   text: string
   sourceText: string
@@ -27,6 +27,8 @@ export type WrappedLogicalLine = {
   text: string
   rows: WrappedLogicalRow[]
   fingerprint: string
+  /** Rows are separate segments (one table cell), so a link must not span the cells between them. */
+  rowScopedLinks?: true
 }
 
 const MAX_SOFT_WRAPPED_LINK_ROWS = 200
@@ -129,7 +131,7 @@ function getWrappedRowsFingerprint(rows: WrappedLogicalRow[]): string {
     .join('\n')
 }
 
-function toWrappedLogicalLine(rows: WrappedLogicalRow[], text: string): WrappedLogicalLine {
+export function toWrappedLogicalLine(rows: WrappedLogicalRow[], text: string): WrappedLogicalLine {
   return { text, rows: [...rows], fingerprint: getWrappedRowsFingerprint(rows) }
 }
 
