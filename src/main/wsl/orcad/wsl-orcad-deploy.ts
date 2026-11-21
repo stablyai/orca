@@ -42,7 +42,12 @@ import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-o
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
 import { removeFailedFreshWslOrcadInstall } from './wsl-orcad-failed-install-removal'
-import { probeWslActiveOrcad, readWslOrcadPid } from './wsl-orcad-active-probe'
+import {
+  probeWslActiveOrcad,
+  readWslOrcadPid,
+  type WslOrcadLaunchMode
+} from './wsl-orcad-active-probe'
+import { relaunchAsWslHost } from './wsl-orcad-host-relaunch'
 import { wslOrcadConnectStateHints } from './wsl-orcad-connect-state-snapshot'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
 import { adoptUnrecordedWslOrcad } from './wsl-orcad-instance-adoption'
@@ -234,11 +239,15 @@ async function launchOverTransport(
     return { outcome: 'deferred', distro: name, ...deferredUpdate }
   }
   clearOrcadUpdateFailedThisLaunch(failureHost)
+  // A holder, not a let: control flow would not see the probe closure set it.
+  const launch: { mode: WslOrcadLaunchMode } = { mode: 'unknown' }
   const probe = async () => {
     const answer = await probeWslActiveOrcad(context, localOrcadDir, deployed.fullVersion, signal)
     probed = { fullVersion: deployed.fullVersion, pid: answer.pid }
+    launch.mode = answer.launch
     return answer.readiness
   }
+  let notWslHost: WslHostDeferredUpdate | null = null
   let readiness: ServeReadiness
   if (deployed.outcome === 'already-active') {
     // A stopped distro ended the active slot with it; the one-fence deploy already woke it.
@@ -256,6 +265,21 @@ async function launchOverTransport(
       await wakeAlreadyActiveOrcad(slot)
       return probe()
     })
+    // Started without the WSL host marker (#43632): restart it as one when no terminal runs.
+    if (launch.mode === 'other') {
+      const relaunch = await relaunchAsWslHost({
+        context,
+        slot,
+        fullVersion: deployed.fullVersion,
+        paired: options.pairedOffer ?? null,
+        readIncumbent: options.readIncumbent
+      })
+      if (relaunch.outcome === 'restarted') {
+        readiness = await probe()
+      } else {
+        notWslHost = relaunch.deferredUpdate
+      }
+    }
   } else {
     readiness = await probe()
   }
@@ -265,7 +289,8 @@ async function launchOverTransport(
     activeVersion: deployed.fullVersion,
     readiness
   })
-  return readyLaunch({ fullVersion: deployed.fullVersion, readiness })
+  const ready = await readyLaunch({ fullVersion: deployed.fullVersion, readiness })
+  return notWslHost ? { ...ready, deferredUpdate: notWslHost } : ready
 
   async function readyLaunch(serving: {
     fullVersion: string

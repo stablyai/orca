@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   localVersion: vi.fn(),
   readRecord: vi.fn(),
   removeFailed: vi.fn(),
+  launchMode: vi.fn(() => 'wsl-host'),
+  stopIdle: vi.fn(),
   transaction: vi.fn(async (): Promise<unknown> => null)
 }))
 vi.mock('./wsl-orcad-failed-install-removal', () => ({
@@ -64,8 +66,12 @@ vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof ActiveProbe>()),
   probeWslActiveOrcad: async (...args: unknown[]) => ({
     readiness: await mocks.probe(...args),
-    pid: 4242
+    pid: 4242,
+    launch: mocks.launchMode()
   })
+}))
+vi.mock('../../managed-server/lifecycle/orcad-idle-restart-stop', () => ({
+  stopIdleOrcadForRestart: mocks.stopIdle
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-version-gc', () => ({
   provenLiveDaemonVersion: () => null,
@@ -197,5 +203,42 @@ describe('deployAndLaunchWslOrcad', () => {
     mocks.probe.mockRejectedValueOnce(refused)
     await expect(launch()).rejects.toBe(refused)
     expect(mocks.wake).toHaveBeenCalledTimes(3)
+  })
+
+  // #43632: an orcad an SSH host started serves the distro without the WSL host marker.
+  function sshStartedServer(liveSessions: number) {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: '1.5.0+ab' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
+    mocks.launchMode.mockReturnValueOnce('other')
+    mocks.incumbent.mockResolvedValueOnce({
+      census: { liveSessions, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+      readiness: READINESS,
+      recount: vi.fn(),
+      releaseAdmission: vi.fn()
+    })
+    mocks.stopIdle.mockResolvedValueOnce({ state: 'retired', version: '1.5.0+ab' })
+  }
+
+  it('restarts an SSH-started server as a WSL host when no terminal runs on it', async () => {
+    sshStartedServer(0)
+    mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: READINESS })
+    const launched = await launch()
+    expect(mocks.stopIdle).toHaveBeenCalledOnce()
+    // The wake after the stop starts it over the WSL transport, then the probe reads it again.
+    expect(mocks.wake).toHaveBeenCalledTimes(2)
+    expect(mocks.probe).toHaveBeenCalledTimes(2)
+    expect(launched).toMatchObject({ outcome: 'ready' })
+    expect(launched).not.toHaveProperty('deferredUpdate')
+  })
+
+  it('leaves an SSH-started server with live terminals running and offers the restart', async () => {
+    sshStartedServer(2)
+    const launched = await launch()
+    expect(mocks.stopIdle).not.toHaveBeenCalled()
+    expect(mocks.wake).toHaveBeenCalledTimes(1)
+    expect(launched).toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host', forceable: false }
+    })
   })
 })

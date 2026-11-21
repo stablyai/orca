@@ -14117,7 +14117,15 @@
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Orca restarts it as a WSL host when it next connects with no terminals running.",
+          "restartAsWslHost": {
+            "button": "Restart as WSL host",
+            "title": "Restart as WSL host?",
+            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "cancel": "Cancel",
+            "action": "End terminals and restart"
+          }
         },
         "restartServer": {
           "action": "Restart Orca’s server…",
@@ -25804,7 +25812,7 @@
       "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
       "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
-      "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Disconnect that SSH host, finish any work in {{distro}}'s terminals, run wsl --terminate {{distro}} in Windows, then try again. Orca then starts the server as a WSL host.",
+      "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again. Orca also restarts it on its own when it next connects with no terminals running.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
       "exportIncompletePreview": "Some saved state in these projects can't move yet:",

@@ -5,6 +5,7 @@
  * and a host with a Remove still pending is never touched.
  */
 import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 
@@ -62,5 +63,10 @@ export function wslMoveHostUpdatePending(
   environmentId: string
 ): { updatePending?: boolean } {
   const status = service.getStatuses().find((entry) => entry.environmentId === environmentId)
-  return status?.state === 'ready' ? { updatePending: !!status.deferredUpdate } : {}
+  if (status?.state !== 'ready') {
+    return {}
+  }
+  // A server waiting to restart as a WSL host waits on no update.
+  const deferred = status.deferredUpdate
+  return { updatePending: !!deferred && deferred.code !== ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE }
 }
