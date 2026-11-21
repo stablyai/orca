@@ -2,6 +2,7 @@ import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
 } from '../../../../shared/agent-launch/installation/managed-runtime-install'
+import { i18n } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ManagedRuntimeInstallRow } from './ManagedRuntimeInstallRow'
 
@@ -34,9 +35,13 @@ function installing(phase: ManagedRuntimeOperation['phase']): ManagedRuntimeInst
   }
 }
 
-function row(state: ManagedRuntimeInstallState, agentLabel = 'Antigravity') {
+function row(
+  state: ManagedRuntimeInstallState,
+  agentLabel = 'Antigravity',
+  width = NARROWEST_SETTINGS
+) {
   return defineFixture({
-    width: NARROWEST_SETTINGS,
+    width,
     render: () => (
       <ManagedRuntimeInstallRow
         observation={{
@@ -62,6 +67,8 @@ function row(state: ManagedRuntimeInstallState, agentLabel = 'Antigravity') {
 }
 
 export const downloading = row(installing('downloading'))
+// A typical Settings width, where the bar fits on the line beside the download count.
+export const downloadingWide = row(installing('downloading'), 'Antigravity', 520)
 export const unpacking = row(installing('extracting'))
 export const verifying = row(installing('verifying'))
 export const externalWithoutOrcaCopy = row({ ...base, source: 'external' })
@@ -83,3 +90,30 @@ export const installedByOrca = row({
 const LONG_NAME = 'GitHub Copilot CLI'
 export const verifyingLongName = row(installing('verifying'), LONG_NAME)
 export const externalLongName = row({ ...base, source: 'external' }, LONG_NAME)
+export const notInstalled = row(base)
+export const failed = row({
+  ...base,
+  operation: {
+    id: 'op-1',
+    kind: 'install',
+    phase: 'failed',
+    downloadedBytes: 0,
+    totalBytes: null,
+    error: "Couldn't reach the download server. Check your connection and try again."
+  }
+})
+
+// Fixture pages share one i18n instance; run these shots last, then restart the server.
+function localized(state: ManagedRuntimeInstallState, language: string) {
+  return defineFixture({
+    ...row(state, LONG_NAME),
+    interact: async () => {
+      await i18n.changeLanguage(language)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
+  })
+}
+export const germanExternalLongName = localized({ ...base, source: 'external' }, 'de')
+export const germanVerifyingLongName = localized(installing('verifying'), 'de')
+export const russianExternalLongName = localized({ ...base, source: 'external' }, 'ru')
+export const russianVerifyingLongName = localized(installing('verifying'), 'ru')
