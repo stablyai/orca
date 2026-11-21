@@ -1,7 +1,8 @@
 // Keep mounted for fading; hidden state is inert and excluded from assistive technology.
-// Why no rim: a raised fill (secondary on the dark canvas) and the shadow separate the pill from text behind it.
+// Why no rim: the secondary fill and the shadow separate the pill from text behind it.
 // The transparent border keeps the size and gives forced-colors mode a button edge.
-// Dark hover lifts the fill relative to itself: Match Terminal's accent sits only 2% above secondary.
+// Light hover darkens relative to itself (light accent equals secondary); dark hover uses accent,
+// whose small Match Terminal step keeps a dim terminal palette's label contrast where it was.
 
 import { ArrowDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -30,7 +31,7 @@ export function NativeChatJumpToLatest({
       aria-hidden={!visible || undefined}
       onMouseDown={keepFocus}
       onClick={onJump}
-      className="absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-transparent bg-popover px-3 text-xs font-medium text-popover-foreground shadow-floating transition-[opacity,translate,background-color,color] duration-150 ease-out hover:bg-accent hover:text-accent-foreground dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-[color-mix(in_srgb,var(--secondary-foreground)_12%,var(--secondary))] dark:hover:text-secondary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0"
+      className="absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-transparent bg-secondary px-3 text-xs font-medium text-secondary-foreground shadow-floating transition-[opacity,translate,background-color,color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--secondary-foreground)_6%,var(--secondary))] dark:hover:bg-accent dark:hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0"
     >
       <ArrowDown className="size-3.5" />
       <span>{label ?? t('components.native-chat.jumpToLatest', 'Jump to latest')}</span>
