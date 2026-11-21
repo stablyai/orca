@@ -40,13 +40,13 @@ export function runtimeSalvage(runtime: {
   const deps: SalvageOfferDeps = {
     store,
     items: {
-      ask: async (botId, { title, description, ask }) => {
+      ask: async (botId, { title, ask }) => {
         const chatId = bot(botId)?.chatSessionId
         if (!chatId) {
           return null
         }
         const input = { ownerBotId: botId, chatId, source: { kind: 'home' as const, title: null } }
-        const { uid } = await items().orcaAsk({ ...input, title, description }, ask, WHY)
+        const { uid } = await items().orcaAsk({ ...input, title }, ask, WHY)
         const made = await items().get(uid)
         return made && made.questionEvent !== null
           ? { uid, number: made.number, question: made.questionEvent }

@@ -33,7 +33,7 @@ export type SalvageOfferDeps = {
     /** Orca's item asking the owner; null when the bot has no chat to put it in. */
     ask: (
       botId: string,
-      text: { title: string; description: string; ask: BotItemAsk }
+      text: { title: string; ask: BotItemAsk }
     ) => Promise<{ uid: string; number: number; question: number } | null>
     /** Asks again; the new question's event. */
     reask: (uid: string, ask: BotItemAsk) => Promise<number>

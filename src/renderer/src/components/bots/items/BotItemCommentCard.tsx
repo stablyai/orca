@@ -169,9 +169,10 @@ export function BotItemCommentCard({
         <div className="pl-7">
           {words.trim() ? (
             // 8 lines of 19 px; a question's footer follows, so its Show more reads as the body's.
+            // Orca's own question (salvage's list) is never cut: its lines are what's decided on.
             <BotItemClampedText
               text={words}
-              clampClassName="max-h-[152px]"
+              clampClassName={event.actor.kind === 'orca' ? 'max-h-none' : 'max-h-[152px]'}
               fade
               quietToggle={waiting || shape.decisions.length > 0}
             />

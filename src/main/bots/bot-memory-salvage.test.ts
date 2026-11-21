@@ -85,17 +85,25 @@ describe("the owner's answer to a proposal", () => {
     ['none', []],
     ['1, 3', [1, 3]],
     ['3 and 1', [1, 3]],
-    ['2 2 2', [2]]
+    ['2 2 2', [2]],
+    ['Keep 1, 3', [1, 3]]
   ])('reads %j exactly', (text, kept) => {
     expect(parseSalvageAnswer(text, 3)).toEqual(kept)
   })
 
-  it.each(["don't keep all", 'keep all except 3', 'yes', '1, 4', '0', '1-3', 'keep 1', ''])(
-    'restores nothing for %j',
-    (text) => {
-      expect(parseSalvageAnswer(text, 3)).toBeNull()
-    }
-  )
+  it.each([
+    "don't keep all",
+    'keep all except 3',
+    'yes',
+    '1, 4',
+    '0',
+    '1-3',
+    'keep',
+    'keep all 1',
+    ''
+  ])('restores nothing for %j', (text) => {
+    expect(parseSalvageAnswer(text, 3)).toBeNull()
+  })
 })
 
 describe("a bot's salvage record", () => {

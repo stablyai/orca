@@ -98,12 +98,13 @@ export function salvageLineDate(line: string): string | null {
   return parseBotMemoryFacts(line)[0]?.date ?? null
 }
 
-const NUMBERS = /^\d+(?:(?:\s*,\s*|\s+and\s+|\s+)\d+)*$/
+const NUMBERS = /^(?:keep )?(\d+(?:(?:\s*,\s*|\s+and\s+|\s+)\d+)*)$/
 
 /**
  * The numbers an owner's answer keeps, of `count` listed; null when it isn't one of the exact
  * forms, which restores nothing. The whole comment is read: "all" or "keep all", "none" or "keep
- * none", or numbers apart by commas, spaces or "and". Anything else, a number outside 1..count
+ * none", or numbers apart by commas, spaces or "and", with "keep" before them or not ("Keep 1, 3" is
+ * a quick reply). Anything else, a number outside 1..count
  * included, is unreadable, so "keep all except 3" never keeps all.
  */
 export function parseSalvageAnswer(text: string, count: number): number[] | null {

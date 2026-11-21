@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { BotItemStatus } from '../../shared/bots/bot-items'
 import { SALVAGE } from './bot-memory-salvage'
 import { salvageOffer, type SalvageOfferDeps } from './bot-memory-salvage-offer'
+import { salvageProposalText, salvageShownLine } from '../../shared/bots/bot-memory-salvage-text'
 import { BotSalvageStore, salvageFileIo } from './bot-memory-salvage-store'
 import { botMemoryHistoryAuthor } from '../../shared/bots/bot-memory-history-copy'
 import { statusMigrationPlan } from './bot-memory-status-migration'
@@ -91,8 +92,8 @@ describe('salvage offers decisions the status move took', () => {
     await w.moved(DECISION, SECOND, STATUS)
     await salvageOffer('b1', w.deps)
     expect(w.asked).toHaveLength(1)
-    expect(w.asked[0].ask.context).toContain(`1. \` ${DECISION} \` (journal 2026-11)`)
-    expect(w.asked[0].ask.context).toContain(`2. \` ${SECOND} \``)
+    expect(w.asked[0].ask.context).toContain(`1. ${salvageShownLine(DECISION)}`)
+    expect(w.asked[0].ask.context).toContain(`2. ${salvageShownLine(SECOND)}`)
     expect(w.asked[0].ask.context).not.toContain('ctx_ab12cd34')
     expect(await w.states()).toEqual({
       [DECISION]: 'proposed',
@@ -251,5 +252,38 @@ describe('the salvage record file', () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe("salvage's question", () => {
+  const offered = (replaced: boolean[]) =>
+    replaced.map((r, i) => ({
+      line: `- 2026-11-0${i + 1} owner picked option ${i + 1}`,
+      month: '2026-11',
+      replacedBy: r ? '- 2026-11-20 reverted' : null
+    }))
+  const labels = (replaced: boolean[]) =>
+    salvageProposalText(offered(replaced)).ask.questions[0].options.map(({ label }) => label)
+
+  it('offers Keep all only when no line may have been replaced', () => {
+    expect(labels([false, false])).toEqual(['Keep all', 'Keep none'])
+  })
+
+  it('recommends keeping the rest when a line may have been replaced, and never offers it in one tap', () => {
+    expect(labels([false, true, false])).toEqual(['Keep 1, 3', 'Keep none'])
+    expect(salvageProposalText(offered([false, true])).ask.questions[0].recommended).toBe(0)
+    expect(labels([true])).toEqual(['Keep none'])
+  })
+
+  it('shows each line as plain text under its number, with a later line under it', () => {
+    const context = salvageProposalText([
+      {
+        line: '- 2026-11-01 owner picked **bold** `x`',
+        month: '2026-11',
+        replacedBy: '- 2026-11-09 #1 reverted'
+      }
+    ]).ask.context
+    expect(context).toContain('1. 2026-11-01 owner picked \\*\\*bold\\*\\* \\`x\\`')
+    expect(context).toContain('*\u21b3 Later: 2026-11-09 \\#1 reverted*')
   })
 })
