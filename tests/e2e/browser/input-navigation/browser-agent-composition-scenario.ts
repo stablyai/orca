@@ -45,10 +45,13 @@ export async function runAgentInputDuringUserCompositionScenario(page: Page): Pr
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 })
 
-    // Fill never borrows window focus, but its page focus move still discards the composition on macOS.
+    // Fill, eval and raw focus never borrow window focus, but their page focus move still discards the
+    // composition on macOS.
     for (const [method, params] of [
       ['browser.click', { element: '#target' }],
-      ['browser.fill', { element: '#probe', value: 'agent' }]
+      ['browser.fill', { element: '#probe', value: 'agent' }],
+      ['browser.eval', { expression: 'document.getElementById("notes").focus()' }],
+      ['browser.exec', { command: 'focus #notes' }]
     ] as const) {
       const refused: unknown = await page.evaluate(
         ({ id, m, p }) => window.api.runtime.call({ method: m, params: { page: id, ...p } }),
@@ -56,11 +59,13 @@ export async function runAgentInputDuringUserCompositionScenario(page: Page): Pr
       )
       expect(JSON.stringify(refused)).toContain('typing with an input method')
     }
-    expect(await evalInPage(page, pageId, 'window.__clicks')).toBe('0')
-    expect(await evalInPage(page, pageId, 'document.getElementById("probe").value')).toBe('')
     expect(await readCompositionLog(page)).toEqual([])
 
     await cdp.send('Input.insertText', { text: '中' })
+    // Why after the commit: eval is refused while composing, and a refused input never runs later.
+    expect(await evalInPage(page, pageId, 'window.__clicks')).toBe('0')
+    expect(await evalInPage(page, pageId, 'document.getElementById("probe").value')).toBe('')
+    expect(await evalInPage(page, pageId, 'document.activeElement?.id ?? ""')).not.toBe('notes')
     await rpc(page, 'browser.click', { page: pageId, element: '#target' })
     await expect.poll(() => evalInPage(page, pageId, 'window.__clicks')).toBe('1')
     expect((await readCompositionLog(page))[0]).toBe('compositionend:中')

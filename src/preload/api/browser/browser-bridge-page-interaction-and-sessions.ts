@@ -80,11 +80,16 @@ export const browserPageInteractionAndSessionsApi = {
     return () => ipcRenderer.removeListener(BROWSER_AGENT_VIEWPORT_CHANNEL, listener)
   },
   onAgentInputFocusGuard: (
-    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
+    callback: (data: {
+      browserPageId: string
+      token: string
+      active: boolean
+      holdFocus?: boolean
+    }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { browserPageId: string; token: string; active: boolean }
+      data: { browserPageId: string; token: string; active: boolean; holdFocus?: boolean }
     ) => callback(data)
     ipcRenderer.on('browser:agentInputFocusGuard', listener)
     return () => ipcRenderer.removeListener('browser:agentInputFocusGuard', listener)

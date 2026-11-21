@@ -9,7 +9,12 @@ import type { DesktopBrowserBridgeHostNotice } from '../../../shared/browser/cli
 export type BrowserAgentPresenceApi = {
   /** Main asks the pane to keep the user's focus through an agent press; `ready` answers it. */
   onAgentInputFocusGuard: (
-    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
+    callback: (data: {
+      browserPageId: string
+      token: string
+      active: boolean
+      holdFocus?: boolean
+    }) => void
   ) => () => void
   agentInputFocusGuardReady: (token: string, composing: boolean) => void
   /** Main marks the pages an agent drives; the tab strip badges them. */

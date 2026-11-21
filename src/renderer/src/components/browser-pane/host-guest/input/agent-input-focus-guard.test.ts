@@ -5,6 +5,7 @@ import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
   endAgentInputFocusGuard,
+  isAgentInputMovingFocus,
   watchUserComposition
 } from './agent-input-focus-guard'
 import { webviewRegistry } from '../webview-registry'
@@ -78,6 +79,22 @@ describe('agent input focus guard', () => {
     terminal.dispatchEvent(composingInput('deleteContentBackward'))
 
     expect(beginAgentInputFocusGuard('page-1', 'input-1')).toBe('composing')
+  })
+
+  it('only answers for page script, so a user who clicks into the page keeps it', () => {
+    const webview = mountPage('page-1')
+    const terminal = focusTerminal()
+
+    compose(terminal, 'compositionupdate', '한')
+    expect(beginAgentInputFocusGuard('page-1', 'script-1', false)).toBe('composing')
+    compose(terminal, 'compositionend')
+    expect(beginAgentInputFocusGuard('page-1', 'script-2', false)).toBe('ready')
+    expect(isAgentInputMovingFocus()).toBe(false)
+
+    webview.focus()
+    endAgentInputFocusGuard('script-2')
+    vi.runAllTimers()
+    expect(document.activeElement).toBe(webview)
   })
 
   it('guards a press once the composition ended by typing or the user left it', () => {

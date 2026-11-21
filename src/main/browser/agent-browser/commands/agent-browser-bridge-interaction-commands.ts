@@ -154,7 +154,11 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
-      async (sessionName) => {
+      async (sessionName, target) => {
+        // A --fn condition is page script, like eval.
+        if (options?.fn) {
+          await this.refuseWhileUserComposes(this.requireTargetWebContents(target))
+        }
         const { args, conditionTimeoutMs, processTimeoutMs } = agentBrowserWaitArguments(
           options ?? {}
         )

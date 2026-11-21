@@ -73,12 +73,16 @@ export function watchUserComposition(): () => void {
 /** Refuses the input while the user composes; otherwise holds their focus until the input ends. */
 export function beginAgentInputFocusGuard(
   browserPageId: string,
-  token: string
+  token: string,
+  holdFocus = true
 ): 'ready' | 'composing' {
   if (isUserComposing()) {
     return 'composing'
   }
-  guardUserFocus(browserPageId, token)
+  // Why: page script never takes the window's focus; giving focus back after it would pull it from a user who clicked into the page.
+  if (holdFocus) {
+    guardUserFocus(browserPageId, token)
+  }
   return 'ready'
 }
 
