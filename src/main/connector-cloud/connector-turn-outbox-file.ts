@@ -38,7 +38,8 @@ const StoredOutbox = z.object({
       failure: ConnectorFailure.optional().catch(undefined),
       links: z.array(ConnectorWorkLink).optional().catch(undefined),
       mirror: z.literal(true).optional().catch(undefined),
-      stateOnly: z.literal(true).optional().catch(undefined)
+      stateOnly: z.literal(true).optional().catch(undefined),
+      resumes: z.literal(true).optional().catch(undefined)
     })
   )
 })

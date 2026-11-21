@@ -53,7 +53,9 @@ export function withCodexStartupImageCommand(command: string, shell: AgentStartu
     if (executable.toLowerCase() === 'codex' || parsed.tokens.includes('--%')) {
       return command
     }
-    return `${POWERSHELL_PREFIX}${command}${POWERSHELL_SUFFIX}`
+    // Without the call operator PowerShell parses a quoted path as a string expression (#46114).
+    const callOperator = `'"`.includes(command[firstSpan.start]) ? '& ' : ''
+    return `${POWERSHELL_PREFIX}${callOperator}${command}${POWERSHELL_SUFFIX}`
   }
   if (index === 0 && executable === 'codex') {
     return command

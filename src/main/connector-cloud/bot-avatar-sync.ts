@@ -15,14 +15,22 @@ const RETRY_MS = 60_000
 // A picture the cloud refused for a bot it doesn't know (yet: the hello registering it may still be
 // on its way) waits this long, doubling per refusal up to the cap, unless a bot write comes first.
 const MAX_REFUSED_WAIT_MS = 30 * 60_000
+// Sends in flight at once, so a large roster never fans out into one request per bot.
+const MAX_CONCURRENT_SENDS = 4
 
 export class BotAvatarSync {
   // Per bot, the avatar the cloud last took.
   private readonly sent = new Map<string, string>()
-  // One send per bot at a time, so an older picture never lands after a newer one.
-  private readonly sending = new Set<string>()
+  // One send per bot at a time, so an older picture never lands after a newer one; the picture in flight.
+  private readonly sending = new Map<string, string>()
   // Per bot, the avatar the cloud refused as an unknown bot, and until when it waits.
   private readonly refused = new Map<string, { avatar: string; waitMs: number; until: number }>()
+  // Bots waiting for a send slot, each as last seen.
+  private readonly queued = new Map<string, SyncedBot>()
+  // A picture changed while bots were off: the roster is read again once they are on.
+  private staleWhileOff = false
+  // Bots a pass met while their send was in flight: their picture may have changed since.
+  private readonly changedWhileSending = new Set<string>()
   // Bot writes so far, so a refusal that crossed one is not kept.
   private writes = 0
   private retry: ReturnType<typeof setTimeout> | null = null
@@ -46,16 +54,39 @@ export class BotAvatarSync {
 
   private pass(): void {
     if (!this.deps.bots.enabled()) {
+      // Queued sends resume when bots are enabled again.
+      if (this.queued.size > 0 || this.staleWhileOff) {
+        this.retryLater()
+      }
+      if (this.sending.size > 0) {
+        for (const bot of this.deps.bots.list()) {
+          const flying = this.sending.get(bot.id)
+          if (flying !== undefined && flying !== bot.avatar) {
+            this.changedWhileSending.add(bot.id)
+          }
+        }
+      }
       return
     }
+    this.staleWhileOff = false
     let waiting = false
+    const present = new Set<string>()
     for (const bot of this.deps.bots.list()) {
-      if (
-        !(bot.slack || bot.github) ||
-        !bot.avatar ||
-        this.sent.get(bot.id) === bot.avatar ||
-        this.sending.has(bot.id)
-      ) {
+      present.add(bot.id)
+      if (!(bot.slack || bot.github) || !bot.avatar) {
+        this.queued.delete(bot.id)
+        continue
+      }
+      const flying = this.sending.get(bot.id)
+      if (flying !== undefined) {
+        // Only a picture other than the one in flight needs a look once it lands.
+        if (flying !== bot.avatar) {
+          this.changedWhileSending.add(bot.id)
+        }
+        continue
+      }
+      if (this.sent.get(bot.id) === bot.avatar) {
+        this.queued.delete(bot.id)
         continue
       }
       const refused = this.refused.get(bot.id)
@@ -63,10 +94,36 @@ export class BotAvatarSync {
         waiting = true
         continue
       }
-      void this.send(bot, bot.avatar)
+      this.queued.set(bot.id, bot)
+    }
+    // A bot deleted while it waited for a slot is not sent.
+    for (const id of this.queued.keys()) {
+      if (!present.has(id)) {
+        this.queued.delete(id)
+      }
     }
     if (waiting) {
       this.retryLater()
+    }
+    this.pump()
+  }
+
+  private pump(): void {
+    if (!this.deps.bots.enabled()) {
+      // Queued sends resume when bots are enabled again.
+      if (this.queued.size > 0) {
+        this.retryLater()
+      }
+      return
+    }
+    for (const [id, bot] of this.queued) {
+      if (this.sending.size >= MAX_CONCURRENT_SENDS) {
+        return
+      }
+      this.queued.delete(id)
+      if (bot.avatar && !this.sending.has(id)) {
+        void this.send(bot, bot.avatar)
+      }
     }
   }
 
@@ -88,7 +145,7 @@ export class BotAvatarSync {
     if (!cloud) {
       return
     }
-    this.sending.add(bot.id)
+    this.sending.set(bot.id, avatar)
     const writes = this.writes
     let sent = false
     let refused = false
@@ -107,8 +164,16 @@ export class BotAvatarSync {
     this.sending.delete(bot.id)
     if (sent) {
       this.sent.set(bot.id, avatar)
-      // The picture may have changed while this one was on its way.
-      this.pass()
+      // The picture may have changed while this one was on its way: only then is the roster read again.
+      if (this.changedWhileSending.delete(bot.id)) {
+        // While bots are off a pass only reads again once they are on.
+        if (this.deps.bots.enabled()) {
+          this.pass()
+        } else {
+          this.staleWhileOff = true
+          this.retryLater()
+        }
+      }
     } else if (refused && writes === this.writes) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.
       const before = this.refused.get(bot.id)
@@ -122,7 +187,11 @@ export class BotAvatarSync {
       // A bot write came in meanwhile and may have registered it, or changed its picture.
       this.pass()
     } else {
+      // The cloud may have taken it before the answer was lost: what it holds is unknown.
+      this.sent.delete(bot.id)
       this.retryLater()
     }
+    this.changedWhileSending.delete(bot.id)
+    this.pump()
   }
 }

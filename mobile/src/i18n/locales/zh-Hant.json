@@ -687,6 +687,9 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "將所選文字作為引用加入訊息"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "common": {

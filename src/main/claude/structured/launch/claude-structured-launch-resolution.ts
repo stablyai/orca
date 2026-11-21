@@ -95,8 +95,8 @@ export type ClaudeStructuredLaunch = {
   cliFlag: ClaudeCliFlagCheck
   /** Chain identity is independent of whether a transcript exists to resume. */
   continuesChain: boolean
-  /** The user's Command setting this launch runs, as written; absent for the stock CLI. */
-  configuredCommand?: string
+  /** The name of the program the user's Command runs, never its arguments; absent for the stock CLI. */
+  configuredProgram?: string
   /** Chain head replaced by this rewind fork. */
   forkedFromKey?: string
 }
@@ -296,7 +296,7 @@ export function claudeStructuredLaunchPart(
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
         continuesChain,
-        ...(sources.configured ? { configuredCommand: sources.configured } : {}),
+        ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }
           : {})

@@ -3,6 +3,7 @@ import { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access
 import type { BotAccessDecision } from '../../../src/shared/connector-bot-access-contract'
 import { salvagingArray } from '../../../src/shared/validation/zod-salvage'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 
@@ -58,4 +59,13 @@ export async function decideBotAccessRequest(
   } catch {
     return { ok: false, error: DECIDE_FAILED_CODE }
   }
+}
+
+/** A host's waiting access requests, every bot's; null when the read fails or the host refuses it. */
+export async function readHostAccessRequests(
+  client: RpcClient
+): Promise<readonly ConnectorAccessRequest[] | null> {
+  const reply = await botAccessRequestsRead.request(client).catch(() => null)
+  const read = reply && readHostMethodReply(reply, botAccessRequestsRead.interpret)
+  return read?.kind === 'answered' && read.value.ok ? read.value.value : null
 }

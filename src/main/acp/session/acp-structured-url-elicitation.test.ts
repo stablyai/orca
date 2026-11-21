@@ -105,4 +105,26 @@ describe('ACP URL elicitation', () => {
     await rig.settle()
     expect((await rig.rig.rows()).some((item) => item.body.kind === 'approval')).toBe(false)
   })
+  // Droid 1.16.0 asks a signed-out client to open its device sign-in page during session/new.
+  it('cancels a sign-in page asked for before the session exists, so the chat reads signed out', async () => {
+    const rig = await openAcpAdapterRig({
+      script: (agent) =>
+        agent.on('session/new', async (frame) => {
+          const { sessionId: _, ...beforeSession } = signIn(URL)
+          const { result } = await agent.request(0, 'elicitation/create', beforeSession)
+          if (
+            typeof result === 'object' &&
+            result !== null &&
+            'action' in result &&
+            result.action === 'cancel'
+          ) {
+            agent.fail(frame, -32000, 'Authentication required: Sign-in was cancelled.')
+          } else {
+            agent.fail(frame, -32603, 'Internal error')
+          }
+        })
+    })
+    await rig.acquire()
+    expect(rig.openVerdict()?.fact.kind).toBe('notSignedIn')
+  })
 })

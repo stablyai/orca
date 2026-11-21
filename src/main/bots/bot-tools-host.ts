@@ -34,6 +34,7 @@ import {
 } from './bot-tools-file'
 import { resolveBotToolInput } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
+import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { redactBotToolProblems } from './bot-tool-redaction'
 import { cliWithLaunchTools, withRelayProblems, type BotLaunchTools } from './bot-launch-tools'
 import type { BotAgent } from '../../shared/bot-types'
@@ -196,8 +197,16 @@ export async function botToolProblems(
   cli: BotToolsHome,
   { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
 ): Promise<Record<string, BotToolProblem>> {
+  const own = await readBotToolServers(cli.folder)
+  // Its chats start without them, so each row says why instead of looking ready.
+  const off = acpLaunchSpecFor(cli.agent)?.botToolsOff
+  if (off) {
+    return Object.fromEntries(
+      own.map((server) => [server.name, { kind: 'failed', detail: `Off: ${off}.` }])
+    )
+  }
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
-  const servers = (await readBotToolServers(cli.folder)).filter(
+  const servers = own.filter(
     (server) =>
       (!remote || 'url' in server) &&
       !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))

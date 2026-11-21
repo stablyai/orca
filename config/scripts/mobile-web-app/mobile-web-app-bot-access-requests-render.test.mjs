@@ -221,6 +221,8 @@ async function openSettings(capabilities) {
   await openMobileBotSheet(opened.page, BOT.name)
   await opened.page.click('[data-testid="bot-sheet-tab-settings"]')
   await waitForText(opened.page, 'Needs permission')
+  // Requests are on Settings' Who can ask page, as on the desktop.
+  await opened.page.getByRole('button', { name: /^Who can ask, / }).click()
   return opened
 }
 
@@ -236,7 +238,7 @@ describeRender('a bot’s access requests in its sheet, in a real browser', () =
     expect(text).toContain('@lee · Slack (Acme)')
 
     await page.click('[aria-label="Review Lee Park"]')
-    await waitForText(page, 'Give Lee Park access to Atlas?')
+    await waitForText(page, 'Give Lee access to Atlas?')
     expect(decisions(await page.evaluate(() => globalThis.__orcaRenderCheckRequests))).toEqual([])
     await page.click('text=Give access')
     let requests = await waitForRecordedRequests(page, ['bots.access.decide'])

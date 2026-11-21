@@ -13,6 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
+import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { Bot } from '../../../../shared/bot-types'
@@ -22,6 +23,7 @@ import { BotAvatar } from './BotAvatar'
 import { BotGroupFaces } from './BotGroupFaces'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { botQuietLine } from './BotPanelHeader'
+import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { useBotGroupDelete } from './use-bot-group-delete'
 
@@ -81,6 +83,8 @@ export function BotGroupPanelHeader({
   filter: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  // The group's own server, so an empty room still says it is down.
+  const offline = useBotHostOffline(group.hostId)
   const [managing, setManaging] = useState(false)
   const deleteGroup = useBotGroupDelete()
   const names = members.slice(0, NAMED).map((bot) => bot.name)
@@ -105,7 +109,7 @@ export function BotGroupPanelHeader({
     { running: null, next: next ? { name: next.bot.name, at: next.at } : null },
     now
   )
-  const line =
+  const line = (compact: boolean): React.ReactNode =>
     needsYou > 0 || working > 0 ? (
       <>
         {needsYou > 0 ? needs : null}
@@ -115,8 +119,8 @@ export function BotGroupPanelHeader({
           workingText
         ) : null}
       </>
-    ) : idle.short === null ? (
-      idle.text
+    ) : idle.short === null || compact ? (
+      (idle.short ?? idle.text)
     ) : (
       <>
         <span className="@max-[284px]:hidden">{idle.text}</span>
@@ -175,9 +179,13 @@ export function BotGroupPanelHeader({
       </DropdownMenu>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold leading-5">{group.name}</div>
-        <div className="truncate text-xs leading-4 text-muted-foreground" title={fullLine}>
-          {members.length > 0 ? line : t('bots.groups.panel.noMembers', 'No bots in this group')}
-        </div>
+        <BotPanelHostLine hostId={group.hostId} offline={offline} title={fullLine}>
+          {(compact) =>
+            members.length > 0
+              ? line(compact)
+              : t('bots.groups.panel.noMembers', 'No bots in this group')
+          }
+        </BotPanelHostLine>
       </div>
       {filter}
       <Tooltip>

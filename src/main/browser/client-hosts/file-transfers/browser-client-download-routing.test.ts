@@ -41,11 +41,14 @@ function environment(input: {
   transport.bind({
     fileChannelNegotiated: true,
     fileChannelAvailability: 'negotiated',
-    sendFileChannelRequest: async (_method, params) => {
-      writes.push({
-        browserPageId: (params as { browserPageId: string }).browserPageId,
-        hostLabel: input.environmentId
-      })
+    sendFileChannelRequest: async (method, params) => {
+      // The download's begin isn't a write; its answer is never read.
+      if (!method.endsWith('begin')) {
+        writes.push({
+          browserPageId: (params as { browserPageId: string }).browserPageId,
+          hostLabel: input.environmentId
+        })
+      }
       return {
         ok: true,
         result: {

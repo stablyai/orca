@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -46,7 +47,8 @@ function renderRow(answer: (method: string, params: unknown) => unknown): void {
   render(
     <ConfirmationDialogContext.Provider value={confirm}>
       <BotWebhooksCard bot={bot} />
-    </ConfirmationDialogContext.Provider>
+    </ConfirmationDialogContext.Provider>,
+    { wrapper: TooltipProvider }
   )
 }
 

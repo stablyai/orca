@@ -96,22 +96,24 @@ vi.mock('../stream-remote/use-remote-browser-page-stream', () => ({
   useRemoteBrowserPageStream: () => ({ reconnectRemoteStream: vi.fn() })
 }))
 
-vi.mock('../stream-remote/use-remote-browser-page-input', () => ({
-  useRemoteBrowserPageInputQueue: () => ({
-    enqueueRemoteInput: vi.fn(),
-    clearPendingRemoteWheel: vi.fn(),
-    resetRemoteInputQueue: vi.fn(),
-    pendingRemoteWheelRef: { current: null },
-    remoteWheelFrameRef: { current: null },
-    remoteWheelInFlightRef: { current: false }
-  }),
-  useRemoteBrowserPageInput: () => ({
-    getRemoteImagePoint: () => null,
-    handleRemotePointerDown: vi.fn(),
-    handleRemotePointerUp: vi.fn(),
-    handleRemoteScreenshotKeyDown: vi.fn()
-  })
-}))
+vi.mock('../stream-remote/use-remote-browser-page-input', async () => {
+  const { RemoteBrowserInputQueue } = await import('../stream-remote/remote-browser-input-queue')
+  const inputQueue = new RemoteBrowserInputQueue()
+  return {
+    useRemoteBrowserPageInputQueue: () => ({
+      inputQueue,
+      enqueueRemoteInput: vi.fn(),
+      clearPendingRemoteInput: vi.fn(),
+      resetRemoteInputQueue: vi.fn()
+    }),
+    useRemoteBrowserPageInput: () => ({
+      getRemoteImagePoint: () => null,
+      handleRemotePointerDown: vi.fn(),
+      handleRemotePointerUp: vi.fn(),
+      handleRemoteScreenshotKeyDown: vi.fn()
+    })
+  }
+})
 
 vi.mock('../stream-remote/use-remote-browser-page-wheel', () => ({
   useRemoteBrowserPageWheel: vi.fn()

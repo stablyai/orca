@@ -46,7 +46,11 @@ export class BotItemsOwner extends BotItemsWrites {
     actor: BotItemOwnerActor,
     images: readonly BotItemCommentImage[] = [],
     now = Date.now(),
-    requestId?: string
+    requestId?: string,
+    /** The question event a quick reply answers: refused once the agent is asking another. */
+    questionEventId?: number,
+    /** A comment of its own: it answers no question, so a Needs you item keeps waiting on it. */
+    plain = false
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
     if (!commentText.trim() && images.length === 0) {
@@ -58,13 +62,27 @@ export class BotItemsOwner extends BotItemsWrites {
       if (made !== null) {
         return { uid, eventId: made }
       }
-      // While the bot asks, a comment is the answer: it names the question, and the move it makes says so.
-      const answers =
+      if (
+        questionEventId !== undefined &&
+        item.status === 'needs_you' &&
+        item.questionEvent !== null &&
+        item.questionEvent !== questionEventId &&
+        this.askedByBot(item.questionEvent)
+      ) {
+        throw new BotItemError(
+          'item_changed',
+          `Item ${item.number} has a new question. Read it, then reply.`
+        )
+      }
+      // While the bot asks, a comment not sent as plain is the answer: it names the question, and the
+      // move it makes says so. A plain one leaves the item waiting on its question.
+      const asked =
         item.status === 'needs_you' &&
         item.questionEvent !== null &&
         this.askedByBot(item.questionEvent)
-          ? botItemEventId(item.questionEvent)
-          : undefined
+          ? item.questionEvent
+          : null
+      const answers = asked !== null && !plain ? botItemEventId(asked) : undefined
       const eventId = this.writeOwnerComment(
         item,
         commentText,
@@ -72,11 +90,12 @@ export class BotItemsOwner extends BotItemsWrites {
         now,
         images,
         requestId,
-        answers
+        answers,
+        plain
       )
       this.endSnooze(uid, actor, now)
-      // A reply to the bot's question hands the item back to it.
-      if (item.status === 'needs_you') {
+      // A reply hands the item back to the bot.
+      if (item.status === 'needs_you' && !(asked !== null && plain)) {
         this.writeStatus(uid, 'working', null, actor, now)
         const moved = { from: item.status, to: 'working', ...(answers ? { cause: 'answer' } : {}) }
         this.appendEvent(uid, 'status', actor, moved, true, now)
@@ -110,13 +129,15 @@ export class BotItemsOwner extends BotItemsWrites {
     now: number,
     images: readonly BotItemCommentImage[] = [],
     requestId?: string,
-    answers?: string
+    answers?: string,
+    plain = false
   ): number {
     const data = {
       text: commentText,
       ...(images.length > 0 ? { images } : {}),
       ...(requestId === undefined ? {} : { requestId }),
-      ...(answers === undefined ? {} : { answers })
+      ...(answers === undefined ? {} : { answers }),
+      ...(plain ? { plain: true } : {})
     }
     return this.appendEvent(item.uid, 'commented', actor, data, true, now)
   }

@@ -2,19 +2,23 @@ import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycl
 import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import {
   JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
-  type JournalConnectorReplyFill
+  type JournalConnectorReplyFill,
+  type JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
 import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { capAnswer } from '../connector-cloud/connector-snapshot'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export type EndedTurnReplies = {
   sessionId: string
   turnItemId: string
   /** The deliveries the turn answered, opener first (connectorReplyTurnStamps). */
   stamps: readonly AgentJournalConnectorDelivery[]
+  /** The turn's opening message: a continuation fills only the rows its admission claimed. */
+  openerItemId?: string
   outcome: AgentJournalTurnOutcome
   prose: string
   bot: boolean
@@ -24,8 +28,18 @@ export type EndedTurnReplies = {
   tookMs?: number
 }
 
+/** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
+ *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time. */
+export type FilledTurn = { covered: ReadonlySet<string>; paused: boolean; resumesAt?: number }
+
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
-export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<ReadonlySet<string>>
+export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<FilledTurn>
+
+/** Cuts a usage-limit turn's own rows when its continue is pending; false fills them as failed. */
+export type UsageLimitPause = (
+  turn: EndedTurnReplies,
+  rows: readonly JournalConnectorReplyRow[]
+) => Promise<false | { resumesAt?: number }>
 
 const keyOf = (account: string, deliveryId: string): string => `${account}\0${deliveryId}`
 
@@ -36,12 +50,13 @@ const keyOf = (account: string, deliveryId: string): string => `${account}\0${de
  */
 export function conversationReplyFill(
   journal: () => ConnectorReplyJournal | null,
-  filled: () => void
+  filled: () => void,
+  pause?: UsageLimitPause
 ): ConversationReplyFill {
   return async (turn) => {
     const store = journal()
     if (!store || turn.stamps.length === 0) {
-      return new Set()
+      return { covered: new Set(), paused: false }
     }
     const order = new Map<string, number>()
     for (const stamp of turn.stamps) {
@@ -64,16 +79,39 @@ export function conversationReplyFill(
       prose: turn.prose,
       bot: turn.bot
     })
-    // The earliest unfilled row per conversation keys the answer.
+    // The group's head keys its answer: its earliest stamp per conversation, filled or sent or not,
+    // so a partial fill or a deleted row never moves the key.
     const answers = new Map<string, string>()
+    for (const stamp of turn.stamps) {
+      const conversation = JSON.stringify([stamp.account, stamp.conversation])
+      if (!answers.has(conversation)) {
+        answers.set(conversation, stamp.deliveryId)
+      }
+    }
+    const covered = new Set(rows.map((row) => row.conversation.externalId))
+    // A row a continuation claimed is that continuation's turn's to fill; one a cut still owes is
+    // its continuation's or its close's.
+    const claimedHere = (row: JournalConnectorReplyRow) =>
+      row.claimMessageId !== undefined &&
+      agentJournalSubmissionKey(row.claimMessageId) === turn.openerItemId
+    const own = rows.filter(
+      (row) => !row.fill && (claimedHere(row) || (row.claimMessageId === undefined && !row.cut))
+    )
+    const paused =
+      outcome === 'failed' && turn.failure?.category === 'usage_limit' && own.length > 0
+        ? await pause?.(turn, own)
+        : false
+    if (paused) {
+      return { covered, paused: true, ...paused }
+    }
     const fills: JournalConnectorReplyFill[] = []
-    for (const row of rows.filter((candidate) => !candidate.fill)) {
+    for (const row of own) {
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
-      answers.set(conversation, answerDeliveryId)
       fills.push({
         account: row.account,
         deliveryId: row.deliveryId,
+        ...(claimedHere(row) ? { expect: { claimMessageId: row.claimMessageId! } } : {}),
         outcome,
         answerDeliveryId,
         turnItemId: turn.turnItemId,
@@ -86,6 +124,6 @@ export function conversationReplyFill(
     if (await store.fillOutcomes(fills)) {
       filled()
     }
-    return new Set(rows.map((row) => row.conversation.externalId))
+    return { covered, paused: false }
   }
 }
