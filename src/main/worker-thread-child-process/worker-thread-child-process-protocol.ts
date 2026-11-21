@@ -32,9 +32,17 @@ export type WorkerThreadChildErrorPayload = {
 
 export type WorkerThreadChildEvent =
   // Posted once the server listens, before it handles any request: a worker lost before it ran nothing.
-  | { type: 'ready' }
+  // A launcher's record directory, and its command line, which its children share until they exec.
+  | {
+      type: 'ready'
+      spawnRecordDir?: string
+      launcherCmdline?: string
+      launcherStartTicks?: number
+      launcherSid?: number
+    }
   // Posted in the same turn the process is created, so a worker lost after that still reported the pid.
-  | { type: 'spawn'; id: number; pid: number | undefined }
+  // 'recorded': the launcher holds a record of this child until it ends (see endLostSpawns).
+  | { type: 'spawn'; id: number; pid: number | undefined; recorded?: true }
   | { type: 'group-terminated'; id: number }
   // Structured clone turns a Buffer into a plain Uint8Array.
   | { type: 'stdout' | 'stderr'; id: number; chunk: Uint8Array }

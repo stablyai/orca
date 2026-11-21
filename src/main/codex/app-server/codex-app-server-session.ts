@@ -101,7 +101,8 @@ export async function runCodexAppServerSession<T>(
           // Preserve the bootstrap's ownership, gate and exec-status pipes.
           stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
-          ...(spec.detached ? { detached: true } : {})
+          ...(spec.detached ? { detached: true } : {}),
+          ...(spec.closeInheritedFds ? { closeInheritedFds: true } : {})
         })
     }
   )

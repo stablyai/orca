@@ -23,6 +23,13 @@ import { resolveObservabilityConsent } from '../observability'
 import { getLogsDirectory } from '../observability/logs-directory'
 import { setHeavyWorkerHost } from '../utility-worker-host/heavy-worker-spawn'
 import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
+import { CHILD_SPAWNER_HOST_NAME } from '../utility-worker-host/child-spawner-host-name'
+import { UTILITY_WORKER_NO_HEAP_SAMPLING_ARG } from '../utility-worker-host/utility-worker-host-protocol'
+import { installIsolatedChildSpawner } from '../worker-thread-child-process/worker-thread-child-process'
+import { pruneOrphanedSpawnRecords } from '../worker-thread-child-process/lost-spawn-processes'
+import { resolveProviderExecPath } from '../provider-process/provider-process-supervisor'
+import { setDefaultProcessLaunch } from '@orca/process-host/default-process-launch'
+import { launchProcessSpecOnWorker } from '../git/command-runner/process-capture/process-spec-worker-launch'
 
 const CRASH_LIMIT = 3
 const CRASH_WINDOW_MS = 5 * 60_000
@@ -110,4 +117,51 @@ export function installElectronHeavyWorkerHost(): void {
     retry: () => host.retry(),
     pauseMessage: () => host.pauseMessage
   })
+}
+
+/**
+ * Linux: short-lived children (git, gh, probes) start from a utility process, whose fd table
+ * Chromium builds fresh, so none of them can hold main's Chromium sockets after main dies. When
+ * the host can't start, its in-process fallback starts them through the fd-closing helper instead.
+ */
+export function installElectronChildSpawnerHost(): void {
+  if (process.platform !== 'linux') {
+    return
+  }
+  const host = new UtilityWorkerHost(
+    CHILD_SPAWNER_HOST_NAME,
+    hostEntry,
+    ({ filename, name, workerData, inProcessWorkerData }) =>
+      spawnWorkerThread(filename, {
+        name,
+        workerData:
+          inProcessWorkerData && typeof workerData === 'object'
+            ? { ...workerData, ...inProcessWorkerData }
+            : workerData
+      }),
+    undefined,
+    undefined,
+    undefined,
+    [UTILITY_WORKER_NO_HEAP_SAMPLING_ARG]
+  )
+  installIsolatedChildSpawner(() =>
+    host.spawn({
+      filename: resolveWorkerThreadEntryPath(
+        currentWorkerEntryLayout(__dirname),
+        'worker-thread-child-process-entry.js'
+      ),
+      name: 'orca-child-process-spawner',
+      workerData: { recordSpawns: true },
+      // Only a worker in the launcher records pids; in main its messages can't be lost in transit.
+      inProcessWorkerData: {
+        fdClosingHelper: resolveProviderExecPath('linux'),
+        recordSpawns: false
+      }
+    })
+  )
+  void pruneOrphanedSpawnRecords()
+  // Every runProcess without its own launch (git probes, gh, ps, lsof...) starts there too.
+  setDefaultProcessLaunch((spec, onTerminated) =>
+    launchProcessSpecOnWorker(spec, undefined, onTerminated, !spec.onChildTerminated, true)
+  )
 }

@@ -65,6 +65,9 @@ export async function readAgentCliVersion(
       ...launch,
       args: [...prefixArgs, '--version'],
       terminationBarrier: true,
+      // A CLI's --version can hang for minutes (e.g. a version manager installing); it must not
+      // keep a crashed main's renderer and GPU alive meanwhile.
+      closeInheritedFds: true,
       signal: operation?.signal,
       timeoutMs:
         timeoutMs === null

@@ -100,7 +100,8 @@ export function startNativeHost(
               args: launch.args,
               cwd: dirname(launch.program),
               stdio: 'pipe',
-              detached: true
+              detached: true,
+              closeInheritedFds: true
             }
       )
     } catch (error) {

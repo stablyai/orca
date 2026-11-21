@@ -1,8 +1,10 @@
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
+import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { hasLocalCommandSelection } from '../../../ipc/command-path/command-path-resolver'
 import {
+  childSpawnerIsIsolated,
   isWorkerChildStdinWriteError,
   spawnProcessOnWorkerThread,
   spawnWorkerReadyNow,
@@ -10,7 +12,7 @@ import {
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
-type CaptureOptions = {
+export type CaptureOptions = {
   cwd?: string | URL
   env?: NodeJS.ProcessEnv
   encoding?: string | null
@@ -36,11 +38,52 @@ export async function capturesOnWorker(
   if (process.platform === 'win32') {
     return options.spawnOnWorkerThread !== false && whenSpawnWorkerReady()
   }
+  // Linux: the launcher keeps main's Chromium sockets out of Git, so Git waits for it rather than
+  // starting on main; only a start gate, rechecked at creation, stays on main (through the helper).
+  if (keepsMainFdsOut() && !options.canStart) {
+    return options.spawnOnWorkerThread !== false && whenSpawnWorkerReady()
+  }
   if (options.canStart || hasLocalCommandSelection(command)) {
     return false
   }
   // A booting worker would delay this result, so main spawns meanwhile unless the caller must stay off main.
   return options.spawnOnWorkerThread === true ? whenSpawnWorkerReady() : spawnWorkerReadyNow()
+}
+
+/** Linux with the launcher installed: Git kept on main still must not inherit main's Chromium sockets. */
+export function keepsMainFdsOut(): boolean {
+  return process.platform === 'linux' && childSpawnerIsIsolated()
+}
+
+/** Starts through the fd-closing helper, in its own group when the capture owns one. */
+export function spawnWithoutMainFds(
+  command: string,
+  args: readonly string[],
+  options: { cwd?: unknown; env?: NodeJS.ProcessEnv; detached?: boolean }
+): ChildProcess {
+  return spawnProcess({
+    program: command,
+    args: [...args],
+    cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
+    env: options.env,
+    detached: options.detached === true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    closeInheritedFds: true
+  })
+}
+
+/** Main's error text per platform; a Windows overflow ends the whole tree, or a hook holding the pipe blocks close. */
+export function withMainErrorText<O extends CaptureOptions>(
+  options: O,
+  command: string,
+  args: readonly string[],
+  stop: (error: Error) => void
+): O {
+  return {
+    ...options,
+    ...(process.platform !== 'darwin' ? { errorCommand: [command, ...args].join(' ') } : {}),
+    ...(process.platform === 'win32' ? { onOverflow: stop } : {})
+  }
 }
 
 /** A second, passive stderr listener: execFile still captures every byte. */

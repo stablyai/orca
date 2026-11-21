@@ -75,7 +75,9 @@ export function startNotebookKernel({
     program: python,
     args: [bridgePath],
     cwd,
-    detached: process.platform !== 'win32'
+    detached: process.platform !== 'win32',
+    // A slow kernel start can keep the bridge running well after main dies.
+    closeInheritedFds: true
   })
   let settle: (result: KernelStartResult) => void = () => {}
   const ready = new Promise<KernelStartResult>((resolve) => {

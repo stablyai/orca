@@ -6,6 +6,7 @@ import { untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { gitSpawn, type GitSpawnOptions } from './git-spawn'
 import {
   canSpawnOnWorkerThread,
+  childSpawnerIsIsolated,
   spawnProcessOnWorkerThread,
   type WorkerThreadChildProcess
 } from '../../worker-thread-child-process/worker-thread-child-process'
@@ -15,7 +16,31 @@ export function spawnGitStreamChild(
   command: ResolvedCommand,
   args: string[],
   spawnOptions: GitSpawnOptions
-): { child: ChildProcess | WorkerThreadChildProcess; ownedGroupChild: ChildProcess | null } {
+): {
+  child: ChildProcess | WorkerThreadChildProcess
+  ownedGroupChild: ChildProcess | null
+  workerOwnsGroup?: true
+} {
+  if (
+    process.platform === 'linux' &&
+    !command.wsl &&
+    childSpawnerIsIsolated() &&
+    canSpawnOnWorkerThread()
+  ) {
+    // From the utility-process spawner, so the child holds none of main's Chromium sockets.
+    const spawnStartedAt = performance.now()
+    const child = spawnProcessOnWorkerThread({
+      program: command.binary,
+      args: command.args,
+      cwd: command.cwd,
+      env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
+      terminationBarrier: true
+    })
+    child.stdin.end()
+    recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
+    // It leads its own group, which the worker stops; a stop sent before the pid arrives waits for it.
+    return { child, ownedGroupChild: null, workerOwnsGroup: true }
+  }
   if (process.platform !== 'win32' && !command.wsl) {
     const child = spawnNativeProcess(
       command.binary,

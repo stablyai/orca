@@ -7,8 +7,10 @@
 // Usage: orca-provider-exec --cli-input-fd7 <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
 //          <stdin-end|stdin-end-and-sigterm> -- <command> [args...]
 // The fixed --cli-input-fd7 prefix identifies the private input protocol.
+// On Linux it first closes every fd above 7, so none of these pids holds the launcher's sockets.
 // Linux also: orca-provider-exec --exec-without-inherited-fds -- <command> [args...] execs in place
-// keeping only fds 0-2 and NODE_CHANNEL_FD, so a durable child can't hold the launcher's sockets.
+// keeping only fds 0-2 and NODE_CHANNEL_FD, so a durable child can't hold the launcher's sockets;
+// with ORCA_EXEC_STATUS_FD set, a failed exec reports its errno on that fd.
 #if !defined(__APPLE__)
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -48,6 +50,9 @@ enum {
     EXIT_EXEC_FAILED = 127,
 };
 enum { STDIN_END_GRACE_MAX_MS = 1000, SIGTERM_GRACE_MAX_MS = 3000 };
+#if defined(__linux__)
+static const char EXEC_STATUS_FD_ENV[] = "ORCA_EXEC_STATUS_FD";
+#endif
 
 static const int STOP_SIGNALS[] = {SIGTERM, SIGINT, SIGHUP};
 enum { STOP_SIGNAL_COUNT = sizeof STOP_SIGNALS / sizeof STOP_SIGNALS[0] };
@@ -157,10 +162,11 @@ static int set_cloexec(int fd, int enabled) {
 #define SYS_close_range __NR_close_range
 #endif
 
-// Marks every fd above 2 close-on-exec; walks /proc where close_range is missing or filtered.
-static int cloexec_inherited_fds(void) {
+// Closes, or with `on_exec` marks close-on-exec, every fd from `first`; walks /proc where
+// close_range is missing or filtered.
+static int release_fds_from(unsigned first, int on_exec) {
 #if defined(SYS_close_range)
-    if (syscall(SYS_close_range, 3U, ~0U, CLOSE_RANGE_CLOEXEC) == 0) {
+    if (syscall(SYS_close_range, first, ~0U, on_exec ? CLOSE_RANGE_CLOEXEC : 0U) == 0) {
         return 0;
     }
     if (errno != ENOSYS && errno != EINVAL && errno != EPERM) {
@@ -176,8 +182,13 @@ static int cloexec_inherited_fds(void) {
     // readdir returns NULL for both the end and an error; only errno tells them apart.
     for (errno = 0; (entry = readdir(dir)) != NULL; errno = 0) {
         unsigned fd;
-        if (parse_ms(entry->d_name, INT_MAX, &fd) == 0 && fd > 2 && (int)fd != dirfd(dir) &&
-                set_cloexec((int)fd, 1) != 0 && errno != EBADF) {
+        if (parse_ms(entry->d_name, INT_MAX, &fd) != 0 || fd < first || (int)fd == dirfd(dir)) {
+            continue;
+        }
+        // Linux releases the fd even when close reports an error.
+        if (!on_exec) {
+            close((int)fd);
+        } else if (set_cloexec((int)fd, 1) != 0 && errno != EBADF) {
             failed = 1;
         }
     }
@@ -188,23 +199,45 @@ static int cloexec_inherited_fds(void) {
     return failed ? -1 : 0;
 }
 
-// Fails closed: an unproven cleanup or a malformed NODE_CHANNEL_FD never execs.
+// Reads an optional fd number from `name`; -1 when unset, -2 when malformed or not open.
+static int env_fd(const char *name) {
+    const char *text = getenv(name);
+    unsigned fd = 0;
+    if (text == NULL) {
+        return -1;
+    }
+    if (parse_ms(text, INT_MAX, &fd) != 0 || fd < 3 || fcntl((int)fd, F_GETFD) < 0) {
+        return -2;
+    }
+    return (int)fd;
+}
+
+// Fails closed: an unproven cleanup or a malformed NODE_CHANNEL_FD never execs. The optional
+// ORCA_EXEC_STATUS_FD stays close-on-exec, so its EOF means the exec succeeded; a failed exec
+// writes its errno there first, so the launcher can report what a direct spawn would have.
 static int exec_without_inherited_fds(char *argv[]) {
-    const char *channel = getenv("NODE_CHANNEL_FD");
-    unsigned channel_fd = 0;
-    if (channel != NULL &&
-            (parse_ms(channel, INT_MAX, &channel_fd) != 0 || channel_fd < 3 ||
-                fcntl((int)channel_fd, F_GETFD) < 0)) {
-        fputs("orca-provider-exec: NODE_CHANNEL_FD is not an open descriptor\n", stderr);
+    int channel_fd = env_fd("NODE_CHANNEL_FD");
+    int status_fd = env_fd(EXEC_STATUS_FD_ENV);
+    if (channel_fd == -2 || status_fd == -2 || (status_fd >= 0 && status_fd == channel_fd)) {
+        fputs("orca-provider-exec: NODE_CHANNEL_FD or the exec status fd is not usable\n", stderr);
         return EXIT_USAGE;
     }
-    if (cloexec_inherited_fds() != 0 ||
-            (channel != NULL && set_cloexec((int)channel_fd, 0) != 0)) {
+    if (release_fds_from(3U, 1) != 0 || (channel_fd >= 0 && set_cloexec(channel_fd, 0) != 0)) {
         fputs("orca-provider-exec: could not close inherited descriptors\n", stderr);
         return EXIT_BOOTSTRAP;
     }
+    unsetenv(EXEC_STATUS_FD_ENV);
+    // execvp, as libuv uses on Linux: same PATH search and /bin/sh retry as a direct Node spawn.
     execvp(argv[0], argv);
-    fprintf(stderr, "orca-provider-exec: exec %s failed: %s\n", argv[0], strerror(errno));
+    int error = errno;
+    if (status_fd >= 0) {
+        char frame[16];
+        int length = snprintf(frame, sizeof frame, "%d\n", error);
+        if (length > 0 && (size_t)length < sizeof frame) {
+            write_all(status_fd, frame, (size_t)length);
+        }
+    }
+    fprintf(stderr, "orca-provider-exec: exec %s failed: %s\n", argv[0], strerror(error));
     return EXIT_EXEC_FAILED;
 }
 #endif
@@ -731,6 +764,12 @@ int main(int argc, char *argv[]) {
             return EXIT_USAGE;
         }
     }
+#if defined(__linux__)
+    // Nothing here needs fds above the protocol's; without this the CLI and both helper pids hold
+    // the launcher's sockets (e.g. Chromium IPC), keeping its children alive after it dies.
+    // Best effort: a failed walk leaves them inherited, as before, rather than refusing the CLI.
+    release_fds_from(INPUT_FD + 1, 0);
+#endif
     // A host passes its own nonblocking sockets; the gate, status and CLI stdio expect blocking ones.
     for (int fd = 1; fd <= INPUT_FD; fd++) {
         int flags = fcntl(fd, F_GETFL);
