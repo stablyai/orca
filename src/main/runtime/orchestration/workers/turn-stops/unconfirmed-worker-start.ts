@@ -53,12 +53,12 @@ export function observeUnconfirmedWorkerStart(
     return
   }
   const seen = readWorkerPresence(db, dispatchId)
-  if (seen?.presence === 'working') {
-    confirmUnknownWorkerStart(db, dispatchId)
-    return
-  }
-  // A rest or exit already seen is its own news, and this start's alert is never sent twice.
+  // Any presence but this alert's own was reported as its own news; a working or resting worker
+  // also proves its turn ran, and an alert is never sent twice.
   if (seen && seen.fence !== START_UNCONFIRMED_FENCE) {
+    if (seen.presence !== 'gone') {
+      confirmUnknownWorkerStart(db, dispatchId)
+    }
     return
   }
   observeWorker(

@@ -64,7 +64,7 @@ describe('an unconfirmed worker start', () => {
     expect(alerts()).toEqual([])
   })
 
-  it('is not sent again once the worker was seen at rest after it', () => {
+  it('is not sent again once the worker was seen at rest after it, which proves it ran', () => {
     const { db, dispatchId, target, deps, alerts } = unknownStart('dispatch_input')
     observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'terminal' }, deps)
     observeWorker(
@@ -82,6 +82,7 @@ describe('an unconfirmed worker start', () => {
     observeUnconfirmedWorkerStart(db, dispatchId, { surface: 'terminal' }, deps)
 
     expect(alerts()).toHaveLength(1)
+    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
   })
 
   it('marks a worker seen working before the verdict ready instead of alerting', () => {
