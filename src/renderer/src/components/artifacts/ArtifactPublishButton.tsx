@@ -55,7 +55,6 @@ export function ArtifactPublishButton({
   const popoverContentRef = useRef<HTMLDivElement>(null)
   const dismissedByExternalFocusRef = useRef(false)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const signingIn = useAppStore((state) => Boolean(state.orcaProfileSignInProgress))
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
@@ -115,10 +114,9 @@ export function ArtifactPublishButton({
       setOpen(false)
     }
     const handleWindowBlur = (): void => {
-      if (signingIn && !isEmbeddedPageElement(document.activeElement)) {
-        return
+      if (isEmbeddedPageElement(document.activeElement)) {
+        dismiss()
       }
-      dismiss()
     }
     const handleFocusIn = (event: FocusEvent): void => {
       if (isEmbeddedPageElement(event.target)) {
@@ -131,7 +129,7 @@ export function ArtifactPublishButton({
       window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('focusin', handleFocusIn, true)
     }
-  }, [busy, open, setOpen, signingIn])
+  }, [busy, open, setOpen])
 
   const publish = async (): Promise<void> => {
     if (blocked || !signedIn || !sharingEnabled) {

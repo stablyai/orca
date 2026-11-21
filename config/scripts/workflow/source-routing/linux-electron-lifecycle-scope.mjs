@@ -129,15 +129,21 @@ export async function collectLinuxElectronLifecycleInputs(root = process.cwd()) 
   return inputs
 }
 
-export function linuxElectronLifecycleScope(changedFiles, inputs) {
+/** The verdict paths alone settle, so callers can skip collecting the dependency graph. */
+export function linuxElectronLifecycleMandatoryScope(changedFiles) {
   if (!changedFiles.length) {
     return { run: true, reason: 'Missing changed-path evidence' }
   }
   const forced = changedFiles.find((file) =>
     FORCE_PREFIXES.some((prefix) => file === prefix || file.startsWith(prefix))
   )
-  if (forced) {
-    return { run: true, reason: `Shared input changed: ${forced}` }
+  return forced ? { run: true, reason: `Shared input changed: ${forced}` } : null
+}
+
+export function linuxElectronLifecycleScope(changedFiles, inputs) {
+  const mandatory = linuxElectronLifecycleMandatoryScope(changedFiles)
+  if (mandatory) {
+    return mandatory
   }
   // Fixtures may read non-code assets beside their sources by relative path.
   const inputDirs = new Set([...inputs].map((file) => path.posix.dirname(file)))
@@ -160,7 +166,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       input += chunk
     }
     const changed = input.split(/\r?\n/).filter(Boolean)
-    const scope = linuxElectronLifecycleScope(changed, await collectLinuxElectronLifecycleInputs())
+    const scope =
+      linuxElectronLifecycleMandatoryScope(changed) ??
+      linuxElectronLifecycleScope(changed, await collectLinuxElectronLifecycleInputs())
     console.error(scope.reason)
     process.stdout.write(`run=${scope.run}\n`)
   }

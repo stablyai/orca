@@ -19,11 +19,15 @@ export type MobilePushFilter = {
   sound?: boolean
 }
 
+export const MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS = 128
+
 /** Persisted on the paired DeviceEntry so a host restart can push without the phone re-registering. */
 export type MobilePushRegistration = {
   registrationId: string
   filter: MobilePushFilter
   expiresAt: number
+  /** Same phone token, same digest on every host, so a mirroring host can tell which phones the owning host pushes. */
+  tokenDigest?: string
 }
 
 export type MobilePushRegisterInput = {
@@ -90,7 +94,12 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   return {
     registrationId: registration.registrationId,
     filter,
-    expiresAt: registration.expiresAt
+    expiresAt: registration.expiresAt,
+    ...(typeof registration.tokenDigest === 'string' &&
+    registration.tokenDigest.length > 0 &&
+    registration.tokenDigest.length <= MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS
+      ? { tokenDigest: registration.tokenDigest }
+      : {})
   }
 }
 

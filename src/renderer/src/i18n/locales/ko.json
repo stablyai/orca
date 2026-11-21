@@ -23601,5 +23601,8 @@
     "dontSend": "보내지 않음",
     "sending": "전송 중…",
     "sendReport": "보고서 보내기"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "이 컴퓨터"
   }
 }

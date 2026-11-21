@@ -33,6 +33,7 @@ import {
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
 import { claudeRoutedHomeAsync } from './claude-profile-routed-home'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../../shared/agent-accounts/claude/claude-system-default-usage'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 const command = vi.hoisted(() => ({ path: '/unused-claude' }))
@@ -246,6 +247,15 @@ describe('ClaudeProfileRouter', () => {
     await vi.waitFor(() => expect(f.setup.calls).toBe(2))
     f.setup.settle()
     await expect(rebuilt).resolves.toMatchObject({ configDir: f.home('b') })
+  })
+
+  it('reads System default usage from its own login while a saved account is selected', () => {
+    const f = fixture()
+    expect(f.router.accountUsagePreparation(CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID)).toEqual({
+      configDir: join(f.userHome, '.claude'),
+      envPatch: {},
+      provenance: 'system'
+    })
   })
 
   it('publishes the selected folder, System default as empty, and no file without accounts', async () => {

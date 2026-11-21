@@ -202,8 +202,8 @@ export function BotItemBody({
     isVisible: true
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
-  const sendComment = (text: string, paths: readonly string[] = []): void => {
-    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
+  const sendComment = (text: string, paths: readonly string[] = [], questionId?: string): void => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId)
     jumpToLatest()
   }
   const sendLatest = useLatestHandler(sendComment)
@@ -233,22 +233,13 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, waitingLine } = useBotItemQuestionSteps(
+  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
     bot,
     item,
     view.events,
     sendLatest,
     pending.shown
   )
-  // The box's Enter, "Replying to" a line of several questions, answers that line like a quick reply.
-  const sendFromBox = (text: string, paths: readonly string[]): void => {
-    const line = steps ? `${steps.askId}:${steps.current}` : null
-    if (steps && line && paths.length === 0 && comment.current?.replyingTo() === line) {
-      steps.answer(steps.current, text)
-      return
-    }
-    sendComment(text, paths)
-  }
   const quickReplies = useMemo(
     () =>
       deleted
@@ -392,7 +383,7 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
-                onSend={sendFromBox}
+                onSend={fromBox}
               />
             )}
           </NativeChatPaneFileDropSurface>

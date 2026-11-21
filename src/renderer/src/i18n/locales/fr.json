@@ -24326,5 +24326,8 @@
     "dontSend": "Ne pas envoyer",
     "sending": "Envoi…",
     "sendReport": "Envoyer le rapport"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Cet ordinateur"
   }
 }

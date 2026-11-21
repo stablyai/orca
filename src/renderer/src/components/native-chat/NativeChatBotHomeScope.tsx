@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
+import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
 import {
-  nativeChatFirstScreenSignIn,
   NativeChatBotKickoffContext,
   useNativeChatBotKickoffView,
   type NativeChatBotKickoffView

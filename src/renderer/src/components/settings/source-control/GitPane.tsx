@@ -2,8 +2,6 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlGroupOrder } from '../../../../../shared/source-control/listing/source-control-group-order'
-import { Label } from '../../ui/label'
-import { Switch } from '../../ui/switch'
 import { useAppStore } from '../../../store/index'
 
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -24,31 +22,15 @@ import {
   compareAgainstUpstreamMatchesSearch
 } from './CompareAgainstUpstreamSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
+import { getKeepLocalMainUpToDateTitle } from './keep-local-main-up-to-date-setting'
 import {
-  KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
-  getKeepLocalMainUpToDateTitle
-} from './keep-local-main-up-to-date-setting'
-import { Trans } from 'react-i18next'
-import { i18n } from '@/i18n/i18n'
+  KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION,
+  KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS,
+  KeepLocalMainUpToDateSetting
+} from './KeepLocalMainUpToDateSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 
-const KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION =
-  'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
-const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
-  'main',
-  'master',
-  'origin/main',
-  'git diff',
-  'behind main',
-  'up to date',
-  'stale main',
-  'refresh local main',
-  'base ref',
-  'fresh base',
-  'safely',
-  'worktree'
-]
 const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
   'group order',
   'changes first',
@@ -188,41 +170,12 @@ export function GitPane({
       description: KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION,
       keywords: KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS
     }) ? (
-      <SearchableSetting
-        key="refresh-base-ref"
-        id={KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID}
-        title={keepLocalMainUpToDateTitle}
-        description={KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION}
-        keywords={KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS}
-        className="flex items-center justify-between gap-4 py-3"
-      >
-        <div className="space-y-0.5">
-          <Label>{keepLocalMainUpToDateTitle}</Label>
-          <p className="text-xs text-muted-foreground">
-            <Trans
-              i18n={i18n}
-              defaults={t(
-                'auto.components.settings.GitPane.refreshLocalBaseDescription',
-                'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as <mainBranch>main</mainBranch> or <masterBranch>master</masterBranch>. This keeps commands like <diffCommand>git diff main...HEAD</diffCommand> from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
-              )}
-              components={{
-                mainBranch: <code />,
-                masterBranch: <code />,
-                diffCommand: <code />
-              }}
-            />
-          </p>
-        </div>
-        <Switch
-          aria-label={keepLocalMainUpToDateTitle}
-          checked={settings.refreshLocalBaseRefOnWorktreeCreate}
-          onCheckedChange={(checked) =>
-            updateSettings({
-              refreshLocalBaseRefOnWorktreeCreate: checked
-            })
-          }
-        />
-      </SearchableSetting>
+      <KeepLocalMainUpToDateSetting
+        key={`refresh-base-ref:${runtimeTargetEnvironmentId(hostScope.target) ?? 'local'}`}
+        hostScope={hostScope}
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: t('auto.components.settings.GitPane.53a0daed73', 'Source control group order'),

@@ -44,7 +44,9 @@ const SPECS = {
   antigravity: acpLaunchSpecFor('antigravity')!,
   cursor: acpLaunchSpecFor('cursor')!,
   hermes: acpLaunchSpecFor('hermes')!,
-  copilot: acpLaunchSpecFor('copilot')!
+  copilot: acpLaunchSpecFor('copilot')!,
+  kimi: acpLaunchSpecFor('kimi')!,
+  kiro: acpLaunchSpecFor('kiro')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -54,14 +56,18 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
-  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' }
+  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
+  kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   omp: '17.2.9',
   cursor: '2026.11.19-f005e9d',
   hermes: '0.23.3',
-  copilot: '1.0.114'
+  copilot: '1.0.114',
+  kimi: '2.7.2',
+  kiro: '3.1.0'
 }
 
 let dataDirectory = ''
@@ -124,6 +130,14 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.sessionMeta).toEqual({
       antigravity: { systemPrompt: { append: PREAMBLE } }
     })
+  })
+
+  it('gives Kiro them as an always-included steering document on its new session', async () => {
+    const resolved = await launch('kiro', { instructions: PREAMBLE })
+    expect(resolved.sessionMeta).toEqual({
+      kiro: { steering: [{ name: 'orca', inclusion: 'always', content: PREAMBLE }] }
+    })
+    expect(resolved.sessionMetaOnReopen).toBeUndefined()
   })
 
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {
@@ -273,6 +287,19 @@ describe('ACP launch: standing instructions', () => {
       if (process.platform !== 'win32') {
         expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
       }
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))
+    try {
+      await writeFile(join(home, 'AGENTS.md'), 'Workspace instructions')
+      await launch('kimi', { instructions: PREAMBLE, workspacePath: home })
+      const written = await readFile(join(home, '.kimi-code', 'AGENTS.md'), 'utf8')
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
+      expect(await readFile(join(home, 'AGENTS.md'), 'utf8')).toBe('Workspace instructions')
     } finally {
       await rm(home, { recursive: true, force: true })
     }

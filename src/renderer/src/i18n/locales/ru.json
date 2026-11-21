@@ -24569,5 +24569,8 @@
     "dontSend": "Не отправлять",
     "sending": "Отправка…",
     "sendReport": "Отправить отчёт"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Этот компьютер"
   }
 }

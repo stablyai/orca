@@ -170,7 +170,8 @@ function renderLinearSections(model: ConnectionPresentationModel) {
     linearWorkspaceLabel,
     linearWorkspaces,
     setShowLinearDisplayPicker,
-    setShowLinearWorkspacePicker
+    setShowLinearWorkspacePicker,
+    bindLinearAccountHost
   } = model
   return (
     <>
@@ -180,7 +181,12 @@ function renderLinearSections(model: ConnectionPresentationModel) {
             title={t('tasks.filterSheet.linearWorkspace', 'Linear workspace')}
             value={linearWorkspaceLabel}
             navigates
-            onPress={() => openFromFilterSheet(model, () => setShowLinearWorkspacePicker(true))}
+            onPress={() =>
+              openFromFilterSheet(model, () => {
+                bindLinearAccountHost()
+                setShowLinearWorkspacePicker(true)
+              })
+            }
           />
         </Section>
       ) : null}

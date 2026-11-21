@@ -19,6 +19,9 @@ import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/wo
 import type { HostScreenController } from '../use-host-screen-controller'
 import { useWorkspaceNotificationMutes } from './use-workspace-notification-mutes'
 
+// worktree.set resolves git worktrees only, so these refuse a folder workspace's id.
+const GIT_WORKTREE_ONLY_ACTIONS = new Set(['rename', 'toggleRead', 'togglePin', 'moveToStatus'])
+
 /** The workspace row menu, in the desktop row menu's words. */
 export function useWorkspaceRowMenuActions(args: {
   controller: HostScreenController
@@ -44,7 +47,8 @@ export function useWorkspaceRowMenuActions(args: {
   // A server row's writes go through the desktop; with that server unreachable they cannot land.
   const serverUnreachable =
     server.server !== null && (server.routeHost === null || server.server.state !== 'connected')
-  return [
+  const isFolder = folderIdOfSelector(row.worktreeId) !== undefined
+  const menu: ActionSheetAction[] = [
     ...buildWorktreeNavigationActions({
       hostId,
       worktreeId: row.worktreeId,
@@ -124,10 +128,9 @@ export function useWorkspaceRowMenuActions(args: {
     {
       id: 'delete',
       // Desktop's folder rows say Remove Workspace: the folder stays on disk.
-      label:
-        folderIdOfSelector(row.worktreeId) !== undefined
-          ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
-          : t('common.delete', 'Delete'),
+      label: isFolder
+        ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
+        : t('common.delete', 'Delete'),
       destructive: true,
       onPress: () => state.setConfirmDelete(row),
       // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
@@ -142,4 +145,5 @@ export function useWorkspaceRowMenuActions(args: {
         : {})
     }
   ]
+  return isFolder ? menu.filter((action) => !GIT_WORKTREE_ONLY_ACTIONS.has(action.id ?? '')) : menu
 }

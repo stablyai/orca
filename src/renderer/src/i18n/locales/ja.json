@@ -25229,5 +25229,8 @@
     "dontSend": "送信しない",
     "sending": "送信中…",
     "sendReport": "レポートを送信"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "このコンピューター"
   }
 }
