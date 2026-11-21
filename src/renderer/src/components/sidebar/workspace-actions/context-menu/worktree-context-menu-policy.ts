@@ -6,6 +6,8 @@ import {
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type {
@@ -52,6 +54,19 @@ export const EMPTY_REPO_MAP: ReadonlyMap<string, Repo> = new Map()
 // Return the shared empty reference while closed; open menus read current maps.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
+}
+
+/** Twin hosts share one worktree id bucket, so a row's copy menu offers only that row's host, keeping unstamped legacy tabs. */
+export function agentSessionTabsOfRow(
+  tabs: readonly Tab[],
+  rowHostId: ExecutionHostId
+): readonly Tab[] {
+  return tabs.filter(
+    (tab) =>
+      tab.contentType === 'agent-session' &&
+      tab.entityId.trim() !== '' &&
+      (!tab.executionHostId || tab.executionHostId === rowHostId)
+  )
 }
 
 // Reveal Developer on Option/Alt at right-click; altKey works across macOS, Windows and Linux.

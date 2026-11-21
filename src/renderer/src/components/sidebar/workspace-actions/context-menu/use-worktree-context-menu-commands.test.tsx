@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 
@@ -149,4 +150,50 @@ describe('New Child Worktree ownership', () => {
       })
     }
   )
+})
+
+describe('Copy Tab ID and Session ID', () => {
+  it('copies the tab bar orcaTabId form and the session address form', () => {
+    const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+    const state = useAppStore.getState()
+    const { result } = renderHook(() =>
+      useWorktreeContextMenuCommands({
+        worktree: makeWorktree({ id: 'project::/worker', repoId: 'project' }),
+        repo: localRepo,
+        getState: useAppStore.getState,
+        openModal: state.openModal,
+        setMenuOpenState: () => {},
+        folderWorkspaceId: null,
+        activeContextWorktrees: [],
+        batchDeleteWorktrees: [],
+        createGroupDialogActiveRef: { current: false },
+        createProjectGroup: state.createProjectGroup,
+        isMultiContext: false,
+        moveProjectToGroup: state.moveProjectToGroup,
+        scopeRef: { current: null },
+        setCreateGroupDialogOpen: () => {},
+        setWorkspaceUnreadByUser: state.setWorkspaceUnreadByUser,
+        setWorktreesPinnedAndReveal: state.setWorktreesPinnedAndReveal,
+        showsUnread: false,
+        sleepableWorktrees: [],
+        subtreeSleepableWorktrees: [],
+        updateWorktreeMeta: state.updateWorktreeMeta,
+        validParent: null,
+        statusesForWorktree: () => []
+      })
+    )
+    const tab = makeUnifiedTab({
+      id: 'structured-agent-session-session-1',
+      worktreeId: 'project::/worker',
+      groupId: 'g',
+      contentType: 'agent-session',
+      entityId: 'session-1',
+      label: 'Fix the login redirect'
+    })
+    act(() => result.current.handleCopyAgentTabId(tab))
+    expect(writeClipboardText).toHaveBeenCalledWith('orcaTabId: structured-agent-session-session-1')
+    act(() => result.current.handleCopyAgentSessionId(tab))
+    expect(writeClipboardText).toHaveBeenCalledWith('orca_session_id:session-1')
+  })
 })
