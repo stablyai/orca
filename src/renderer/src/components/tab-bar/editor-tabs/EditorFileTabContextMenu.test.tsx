@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
@@ -13,7 +13,7 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-it('opens the Files tree at the file from the context menu, even when another tab is active', () => {
+function openNotesTabContextMenu(filePath: string, relativePath: string): void {
   const worktree = makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, path: 'C:/project' })
   useAppStore.setState({
     repos: [TEST_REPO],
@@ -33,8 +33,8 @@ it('opens the Files tree at the file from the context menu, even when another ta
       <EditorFileTabContextMenu
         file={{
           id: 'notes-tab',
-          filePath: 'C:/project/docs/notes.md',
-          relativePath: 'docs/notes.md',
+          filePath,
+          relativePath,
           worktreeId: 'wt-1',
           language: 'markdown',
           mode: 'edit',
@@ -66,6 +66,10 @@ it('opens the Files tree at the file from the context menu, even when another ta
   )
 
   fireEvent.contextMenu(screen.getByRole('button', { name: 'notes.md' }))
+}
+
+it('opens the Files tree at the file from the context menu, even when another tab is active', () => {
+  openNotesTabContextMenu('C:/project/docs/notes.md', 'docs/notes.md')
   fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Orca Explorer' }))
 
   expect(useAppStore.getState()).toMatchObject({
@@ -74,4 +78,12 @@ it('opens the Files tree at the file from the context menu, even when another ta
     rightSidebarExplorerView: 'files',
     pendingExplorerReveal: { worktreeId: 'wt-1', filePath: 'C:/project/docs/notes.md' }
   })
+})
+
+it('omits the Orca Explorer action for files outside the tab worktree', () => {
+  openNotesTabContextMenu('C:/elsewhere/notes.md', 'C:/elsewhere/notes.md')
+
+  expect(
+    within(screen.getByRole('menu')).queryByRole('menuitem', { name: 'Reveal in Orca Explorer' })
+  ).toBeNull()
 })
