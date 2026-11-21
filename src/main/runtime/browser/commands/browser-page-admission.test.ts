@@ -36,7 +36,8 @@ vi.mock('electron', () => ({
 vi.mock(
   '../../../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection',
   () => ({
-    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
+    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' }),
+    noteBrowserGuestFormData: () => {}
   })
 )
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({

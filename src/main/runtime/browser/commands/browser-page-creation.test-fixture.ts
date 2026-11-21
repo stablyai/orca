@@ -42,7 +42,8 @@ vi.mock('../../../browser/sessions/profiles/browser-session-registry', () => ({
 vi.mock(
   '../../../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection',
   () => ({
-    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
+    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' }),
+    noteBrowserGuestFormData: () => {}
   })
 )
 vi.mock('../../../browser/guest-lifecycle/browser-main-window-readiness', () => ({
