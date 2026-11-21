@@ -27,6 +27,7 @@ import {
   allowNativeBrowserPopup,
   isNativeBrowserPopupRequest
 } from '../../popups/presentation/browser-popup-native-window'
+import { watchBrowserPopupSiteFrameRemoval } from '../navigation/browser-guest-frame-user-agent-demand'
 import { isBrowserRouteGuestPopup } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-app-launch'
 
@@ -44,6 +45,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
         this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
+        watchBrowserPopupSiteFrameRemoval(window.webContents)
         this.inheritAgentLead(guest.id, window.webContents.id)
       }
     }
@@ -208,6 +210,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         return false
       }
       this.attachGuestPolicies(contents, owner)
+      watchBrowserPopupSiteFrameRemoval(contents)
       this.inheritAgentLead(openerGuest.id, contents.id)
       return true
     })

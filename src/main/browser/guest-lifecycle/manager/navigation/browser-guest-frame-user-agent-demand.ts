@@ -154,18 +154,16 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
 }
 
 /**
- * Route popups skip the tab manager, so their demand is noted here: a navigation's target needs
- * rewrites from its first request, the committed page until the next commit, and site iframes as
- * in a tab.
+ * Popup windows run no guest preload in their iframes to report an unload, and Electron 43 reports
+ * frame creation but not removal. So each new site iframe earns a few checks of the tracked frames
+ * (only those, not the frame tree), 2 s to 16 s apart, then none: an idle popup does no work, and
+ * an iframe removed later keeps the header listener (as every session had before) until the popup
+ * navigates or closes. Call after the listener that notes the popup's subframe navigations.
  */
-export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
+export function watchBrowserPopupSiteFrameRemoval(contents: Electron.WebContents): void {
   const { id, session } = contents
-  // Electron 43 reports frame creation but not removal, and route popups run no guest preload to
-  // report an iframe's unload. So each new site iframe earns a few checks of the tracked frames
-  // (only those, not the frame tree), 2 s to 16 s apart, then none: an idle popup does no work,
-  // and an iframe removed later keeps the header listener (as every session had before) until the
-  // popup navigates or closes.
   let recheck: NodeJS.Timeout | null = null
+  let seen = getBrowserGuestFrameUserAgentDemand(id).size
   const scheduleRecheck = (delay: number): void => {
     recheck = setTimeout(() => {
       recheck = null
@@ -183,14 +181,35 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
     }, delay)
     recheck.unref?.()
   }
-  const watchNewSiteFrames = (demandBefore: number): void => {
-    if (getBrowserGuestFrameUserAgentDemand(id).size > demandBefore) {
+  const onSubframeStart = (details: Electron.Event<{ isMainFrame: boolean }>): void => {
+    if (details.isMainFrame) {
+      return
+    }
+    const size = getBrowserGuestFrameUserAgentDemand(id).size
+    if (size > seen) {
       if (recheck) {
         clearTimeout(recheck)
       }
       scheduleRecheck(POPUP_FRAME_RECHECK_MS.first)
     }
+    seen = size
   }
+  contents.on('did-start-navigation', onSubframeStart)
+  contents.on('did-redirect-navigation', onSubframeStart)
+  contents.once('destroyed', () => {
+    if (recheck) {
+      clearTimeout(recheck)
+    }
+  })
+}
+
+/**
+ * Route popups skip the tab manager, so their demand is noted here: a navigation's target needs
+ * rewrites from its first request, the committed page until the next commit, and site iframes as
+ * in a tab.
+ */
+export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
+  const { id, session } = contents
   const onStart = (
     details: Electron.Event<{
       url: string
@@ -199,9 +218,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
     }>
   ): void => {
     if (!details.isMainFrame) {
-      const demandBefore = getBrowserGuestFrameUserAgentDemand(id).size
       noteBrowserGuestSubframeNavigation(contents, details.url, details.frame)
-      watchNewSiteFrames(demandBefore)
     } else {
       setBrowserGuestPageUserAgentDemand(
         session,
@@ -213,6 +230,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   }
   contents.on('did-start-navigation', onStart)
   contents.on('did-redirect-navigation', onStart)
+  watchBrowserPopupSiteFrameRemoval(contents)
   contents.on('did-navigate', () => {
     setBrowserGuestPageUserAgentDemand(
       session,
@@ -238,9 +256,6 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
     }
   )
   contents.once('destroyed', () => {
-    if (recheck) {
-      clearTimeout(recheck)
-    }
     clearBrowserGuestUserAgentDemand(id)
   })
 }
