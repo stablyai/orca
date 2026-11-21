@@ -108,7 +108,14 @@ export function BotRow({
       age={age}
       line={
         // Time by the name, Up next count under it; both end where the fold strip starts.
-        line || limit || description || fold || upNextNew > 0 || lookNeedsYou || hostPill || offline ? (
+        line ||
+        limit ||
+        description ||
+        fold ||
+        upNextNew > 0 ||
+        lookNeedsYou ||
+        hostPill ||
+        offline ? (
           <BotRowLineView
             line={line}
             limit={offline ? null : limit}

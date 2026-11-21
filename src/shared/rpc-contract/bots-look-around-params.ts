@@ -1,10 +1,18 @@
 import * as z from 'zod'
 import {
+  BotLookAroundSchema,
   LOOK_AROUND_EVERY_CHOICES,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
-  SUGGESTION_LIMITS
+  patchesLookSchedule,
+  patchLookAround,
+  SUGGESTION_LIMITS,
+  type BotLookAround
 } from '../bots/bot-look-around'
-import { LookAroundTimeZoneInput, LookAroundTimesInput } from '../bots/bot-look-around-times'
+import {
+  assertLookScheduleRunnable,
+  LookAroundTimeZoneInput,
+  LookAroundTimesInput
+} from '../bots/bot-look-around-times'
 import { OFFER_SOURCES } from '../bots/bot-connector-offer'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
@@ -52,6 +60,31 @@ export const BotLookAroundSet = z.object({
   /** The editing client's zone, saved with a schedule edit when none is and it is the host's. */
   editorTimeZone: z.string().trim().min(1).max(100).optional()
 })
+
+/** The Look around fields a bot update may change. */
+export const BotLookAroundUpdate = BotLookAroundSchema.omit({ since: true })
+  .partial()
+  .extend({
+    every: z.enum(LOOK_AROUND_EVERY_CHOICES).optional(),
+    times: LookAroundTimesInput.optional(),
+    timezone: LookAroundTimeZoneInput.optional(),
+    editorTimeZone: z.string().trim().min(1).max(100).optional()
+  })
+
+/** `patchLookAround`, then, for a schedule edit, throws (saving nothing) when the schedule it
+ *  leaves can't run as the owner set it. */
+export function patchBotLookAround(
+  setting: BotLookAround,
+  patch: z.infer<typeof BotLookAroundUpdate>,
+  now: number,
+  hostTimeZone?: string
+): BotLookAround {
+  const next = patchLookAround(setting, patch, now, hostTimeZone)
+  if (patchesLookSchedule(patch)) {
+    assertLookScheduleRunnable(next)
+  }
+  return next
+}
 
 /** `orca bot look-around show`: the setting and when the next look is, as Settings shows them. */
 export const BotLookAroundGet = z.object({

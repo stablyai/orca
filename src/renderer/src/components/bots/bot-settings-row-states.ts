@@ -2,7 +2,11 @@
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { BotTools } from '../../../../shared/bot-tools'
-import { lookedDay, type BotLookAround, type LookAroundEvery } from '../../../../shared/bots/bot-look-around'
+import {
+  lookedDay,
+  type BotLookAround,
+  type LookAroundEvery
+} from '../../../../shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../../shared/bots/bot-tidy-up'
 import { botToolsLine } from '../../../../shared/bots/bot-tool-labels'
 import { lookAroundScheduleLine } from './bot-look-around-copy'

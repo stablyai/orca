@@ -24,6 +24,14 @@ vi.mock('./bot-chat-session', async (original) => ({
 
 const MONDAY_NOON = new Date(2026, 9, 26, 12, 1).getTime()
 
+/** Armed a day before Monday noon, so Monday's slots are owed. */
+function armedYesterday(store: BotLookAroundStore): void {
+  store.update('b1', (state) => ({
+    state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
+    result: null
+  }))
+}
+
 function harness(
   options: {
     bot?: Partial<Bot>
@@ -187,10 +195,7 @@ describe('Look around runner', () => {
 
   it('starts no look until the host is in full wake, and records a held slot as late', async () => {
     const { runner, store, sessions, setNow, host } = harness({ turn: success })
-    store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    armedYesterday(store)
     // 4:00 PM: the host just woke, so no look starts.
     host.setSettled(false)
     setNow(new Date(2026, 9, 26, 16, 0, 30).getTime())
@@ -209,10 +214,7 @@ describe('Look around runner', () => {
 
   it('records an on-time scheduled look with its slot and not as late', async () => {
     const { runner, store, setNow } = harness({ turn: success })
-    store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    armedYesterday(store)
     setNow(new Date(2026, 9, 26, 16, 1).getTime())
     await runner.tick()
     await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
@@ -227,10 +229,7 @@ describe('Look around runner', () => {
     ['the next morning, before its first slot', new Date(2026, 9, 27, 7, 30).getTime()]
   ])('starts exactly the look Next look names as due, %s', async (_case, time) => {
     const { runner, store, sessions, setNow } = harness({ turn: success })
-    store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    armedYesterday(store)
     setNow(time)
     const said = lookAroundDecision(LOOK_AROUND_DEFAULTS, store.get('b1'), time).next
     await runner.tick()
@@ -244,10 +243,7 @@ describe('Look around runner', () => {
 
   it('records a slot whose catch-up ended unrun once, apart from failures', async () => {
     const { runner, store, setNow } = harness({ turn: success })
-    store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    armedYesterday(store)
     // Back Tuesday at 7:30 AM: Monday's 8:00 PM look went by while Orca wasn't running.
     setNow(new Date(2026, 9, 27, 7, 30).getTime())
     await runner.tick()
@@ -258,10 +254,7 @@ describe('Look around runner', () => {
 
   it('records no missed slot while the host is just waking', async () => {
     const { runner, store, setNow, host } = harness({ turn: success })
-    store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    armedYesterday(store)
     host.setSettled(false)
     setNow(new Date(2026, 9, 27, 7, 30).getTime())
     await runner.tick()
@@ -273,10 +266,7 @@ describe('Look around runner', () => {
     const ctx: { h?: ReturnType<typeof harness> } = {}
     const h = harness({ turn: success, preparing: () => ctx.h!.host.setFullWake(!dark) })
     ctx.h = h
-    h.store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    armedYesterday(h.store)
     h.setNow(new Date(2026, 9, 26, 16, 1).getTime())
     await h.runner.tick()
     await vi.waitFor(() => expect(h.sessions.release).toHaveBeenCalledTimes(1))
@@ -293,23 +283,16 @@ describe('Look around runner', () => {
   })
 
   it('doesn’t call a slot late when the hold was before the owner turned it on or moved a time', async () => {
-    const { runner, store, setNow, setBot, host } = harness({
-      turn: success,
-      bot: {
-        lookAround: { on: true, every: 'custom', weekdaysOnly: true, focus: '', times: ['15:00'] }
-      }
+    const at = (time: string): Partial<Bot> => ({
+      lookAround: { on: true, every: 'custom', weekdaysOnly: true, focus: '', times: [time] }
     })
-    store.update('b1', (state) => ({
-      state: { ...state, armedAt: MONDAY_NOON - 86_400_000 },
-      result: null
-    }))
+    const { runner, store, setNow, setBot, host } = harness({ turn: success, bot: at('15:00') })
+    armedYesterday(store)
     // 3:00 PM is held for the host's wake, then the owner moves it to 4:00 PM.
     host.setSettled(false)
     setNow(new Date(2026, 9, 26, 15, 0, 30).getTime())
     await runner.tick()
-    setBot({
-      lookAround: { on: true, every: 'custom', weekdaysOnly: true, focus: '', times: ['16:00'] }
-    })
+    setBot(at('16:00'))
     host.setSettled(true)
     setNow(new Date(2026, 9, 26, 16, 3).getTime())
     await runner.tick()

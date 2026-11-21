@@ -1,5 +1,3 @@
-export { LOOK_FAILURES, LOOK_RUN_LIMIT_MS } from './bot-look-around-run-outcome'
-import { LOOK_FAILURES, LOOK_RUN_LIMIT_MS, lookFailureOf } from './bot-look-around-run-outcome'
 // Starts each bot's looks: on its Look around hours, and on Look now (Settings, or a bot's onboarding).
 // A look is a new conversation in the bot's home whose session the store records before it starts,
 // which is how its launch, its tool calls and Orca's own commands know it may only read.
@@ -26,7 +24,9 @@ import {
   lookFailureIsQuiet,
   usageLimitAlreadyNoted
 } from './bot-look-around-failures'
+import { HeldLookSlots } from './bot-look-around-held'
 import { lookAroundPrompt } from './bot-look-around-prompt'
+import { LOOK_FAILURES, LOOK_RUN_LIMIT_MS, lookFailureOf } from './bot-look-around-run-outcome'
 import { lookAroundDecision, lookAroundDueAt } from './bot-look-around-schedule'
 import {
   BACKGROUND_RUN_STOP_GRACE_MS,
@@ -68,20 +68,12 @@ export type BotLookAroundRunnerDeps = {
   now: () => number
 }
 
-/** What a bot's looks are due under, to tell a held slot from one an edit made due. */
-function scheduleKey(bot: Bot): string {
-  const setting = botLookAround(bot)
-  return JSON.stringify([setting.every, setting.times, setting.weekdaysOnly, setting.timezone])
-}
-
 export class BotLookAroundRunner {
   /** Bots with a look running in this process. */
   private readonly running = new Set<string>()
   private ticking = false
   private checkedAbandoned = false
-  /** Per bot, the due slot the host's power held back (asleep, just woken or in a dark wake), and
-   *  the schedule it was due under; only that slot, still due under that schedule, runs as late. */
-  private readonly held = new Map<string, { slot: number; schedule: string }>()
+  private readonly held = new HeldLookSlots()
   /** Looks this process started; only a recorded run outside it was cut off by a restart. */
   private readonly ownSessions = new Set<string>()
 
@@ -89,22 +81,6 @@ export class BotLookAroundRunner {
 
   private change(botId: string, next: (state: BotLookState) => BotLookState): void {
     this.deps.store.update(botId, (state) => ({ state: next(state), result: null }))
-  }
-
-  private noteHeld(bot: Bot, slot: number): void {
-    if (this.held.get(bot.id)?.slot !== slot) {
-      console.info('[bots] look-around held until the host is in full wake', {
-        botId: bot.id,
-        slot
-      })
-    }
-    this.held.set(bot.id, { slot, schedule: scheduleKey(bot) })
-  }
-
-  /** The slot was held for the host's power and is still due under the schedule it was held under. */
-  private heldLate(bot: Bot, slot: number): boolean {
-    const hold = this.held.get(bot.id)
-    return hold?.slot === slot && hold.schedule === scheduleKey(bot)
   }
 
   /** A receipt only for a bot unchanged since the slot, seen by an awake host: one paused, turned
@@ -185,14 +161,14 @@ export class BotLookAroundRunner {
       if (settled && (await this.deps.power.checkFullWake())) {
         for (const { bot, slot } of due) {
           if (!this.running.has(bot.id)) {
-            const late = this.heldLate(bot, slot)
+            const late = this.held.isLate(bot, slot)
             void this.run(bot, { scheduledFor: slot, ...(late ? { late: true } : {}) })
           }
         }
       } else {
         // Remembered, so the look reads as late once it starts.
         for (const { bot, slot } of due) {
-          this.noteHeld(bot, slot)
+          this.held.note(bot, slot)
         }
       }
     } finally {
@@ -262,7 +238,7 @@ export class BotLookAroundRunner {
       history: lookHistory(this.deps.store.get(bot.id), startedAt)
     })
     if (slot) {
-      this.held.delete(bot.id)
+      this.held.clear(bot.id)
     }
     // Recorded before the session exists, so its launch already knows it only reads.
     let before: BotLookState | undefined
@@ -340,7 +316,7 @@ export class BotLookAroundRunner {
       )
       // Taken back at its opening message, its slot still due: the host's power held it.
       if (deferred && slot && this.mayStart(bot.id, sessionId, slot.scheduledFor)) {
-        this.noteHeld(bot, slot.scheduledFor)
+        this.held.note(bot, slot.scheduledFor)
       }
       this.running.delete(bot.id)
       this.ownSessions.delete(sessionId)

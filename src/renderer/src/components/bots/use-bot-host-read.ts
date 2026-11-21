@@ -334,16 +334,3 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
 
   return value
 }
-
-export function useBotHostReadError<T>(read: BotHostRead<T>, bot: Bot | null): unknown {
-  const hostId = bot?.hostId
-  const id = bot?.id
-  const key = bot ? botRefKey(bot) : null
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      hostId && id ? read.subscribe({ hostId, id }, listener) : NO_SUBSCRIPTION(),
-    [read, hostId, id]
-  )
-  const snapshot = useCallback(() => (key ? read.errorSnapshot(key) : null), [read, key])
-  return useSyncExternalStore(subscribe, snapshot, snapshot)
-}

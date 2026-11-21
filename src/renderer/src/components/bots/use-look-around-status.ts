@@ -1,16 +1,16 @@
 // A bot's Look around as its host decides it, read off or on: the saved setting and its schedule
 // state. Null from a host too old to answer, which also can't save custom times or a zone.
-import { useEffect } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { BOT_WORK_KINDS } from '../../../../shared/bots/bot-change-scope'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotLookAround, UpNextState } from '../../../../shared/bots/bot-look-around'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { callBotRpc } from '@/lib/bot-hosts'
+import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
 import { createBotHostUnseenCounts } from '@/lib/bot-host-per-bot-read'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
-import { createBotHostRead, useBotHostRead, useBotHostReadError } from './use-bot-host-read'
+import { createBotHostRead, useBotHostRead } from './use-bot-host-read'
 
 export type LookAroundStatus = { setting: BotLookAround; upNext: UpNextState }
 
@@ -103,8 +103,16 @@ export async function lookAroundHostTakesCustom(bot: Bot): Promise<boolean> {
   }
 }
 
+/** The latest status read's error, null once a read lands. */
 export function useLookAroundReadError(bot: Bot): unknown {
-  return useBotHostReadError(statusRead, bot)
+  const { hostId, id } = bot
+  const key = botRefKey(bot)
+  const subscribe = useCallback(
+    (listener: () => void) => statusRead.subscribe({ hostId, id }, listener),
+    [hostId, id]
+  )
+  const snapshot = useCallback(() => statusRead.errorSnapshot(key), [key])
+  return useSyncExternalStore(subscribe, snapshot, snapshot)
 }
 
 export function refreshLookAroundStatus(bot: Bot): void {

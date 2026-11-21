@@ -1054,8 +1054,6 @@
       "connectorOnlyYou": "仅你",
       "memorySource": "来自 {{source}}",
       "lookAround": {
-        "firstLook": "首次巡视：{{time}}",
-        "notArmed": "首次巡视会在第一次对话几小时后进行。",
         "took": "用时 {{value}} 分钟",
         "suggestions": "{{value}} 条建议",
         "title": "巡视",
@@ -1066,8 +1064,6 @@
         "focus": "查找内容",
         "focusPlaceholder": "等待我处理的 PR、#eng 中的问题、本周到期的议题",
         "focusDescription": "可选。留空则查找所有等待你处理的事项。",
-        "lastLooked": "上次巡视",
-        "whileRunning": "Orca 必须在这台电脑上运行。",
         "looking": "巡视中…"
       },
       "tools": {

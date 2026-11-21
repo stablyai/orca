@@ -68,9 +68,13 @@ export function LookAroundRow({
       ? {
           kind: 'alert',
           label: needsYou,
-          reason: t('bots.upcoming.lookTurnedOff', 'Turned itself off after {{count}} failed looks', {
-            count: failing
-          })
+          reason: t(
+            'bots.upcoming.lookTurnedOff',
+            'Turned itself off after {{count}} failed looks',
+            {
+              count: failing
+            }
+          )
         }
       : paused(t)
     : looking
