@@ -1,7 +1,9 @@
-import { lstat, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   COMMIT_ID,
+  errorCode,
   forEachBounded,
   isSamePath,
   normalizeHead,
@@ -135,13 +137,37 @@ export async function resolveBranchCheckouts(
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
 }
 
+// One no-follow read per ref where the platform has O_NOFOLLOW (not Windows).
+const NO_FOLLOW = constants.O_NOFOLLOW
+
 async function readLooseRefFile(path: string): Promise<string> {
+  if (NO_FOLLOW === undefined) {
+    return readLooseRefFileByLstat(path)
+  }
+  try {
+    return normalizeHead(
+      await readFile(path, { encoding: 'utf8', flag: constants.O_RDONLY | NO_FOLLOW })
+    )
+  } catch (error) {
+    const code = errorCode(error)
+    if (code === 'ELOOP' || code === 'EMLINK') {
+      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
+    }
+    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
+    if (code === 'EISDIR') {
+      return ''
+    }
+    rethrowUnlessMissing(error)
+    return ''
+  }
+}
+
+async function readLooseRefFileByLstat(path: string): Promise<string> {
   try {
     const entry = await lstat(path)
     if (entry.isSymbolicLink()) {
       return (await readRefLink(path)) ?? UNRESOLVED_HEAD
     }
-    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
     if (entry.isDirectory()) {
       return ''
     }

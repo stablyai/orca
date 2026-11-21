@@ -121,7 +121,7 @@ export async function readOptional(path: string): Promise<string> {
   }
 }
 
-function errorCode(error: unknown): unknown {
+export function errorCode(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
 
