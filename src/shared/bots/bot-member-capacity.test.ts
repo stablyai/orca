@@ -28,16 +28,22 @@ describe('planBotMemberAdds', () => {
     ])
     expect(plan).toEqual({ ok: false, full: { scope: 'workspace', limit: 50, names: ['Ben'] } })
   })
-
-  it('counts a workspace on its own: another one still has room', () => {
-    const plan = planBotMemberAdds(linear(50), [
-      { id: 'new-a', name: 'Ann', source: 'linear', workspaceId: 'org-2' }
-    ])
-    expect(plan.ok).toBe(true)
-  })
 })
 
 describe('applyBotMemberUpdates at a limit', () => {
+  it('removes the named member and adds a person once in a workspace with room', () => {
+    const fullWorkspace = linear(50)
+    const revoked = { id: 'revoked', name: 'Ben', source: 'linear', workspaceId: 'org-2' }
+    const added = { id: 'new-a', name: 'Ann', source: 'linear', workspaceId: 'org-2' }
+
+    expect(
+      applyBotMemberUpdates([...fullWorkspace, revoked], {
+        removeMembers: [{ id: 'revoked', source: 'linear', workspaceId: 'org-2' }],
+        addMembers: [added, added]
+      })
+    ).toEqual([...fullWorkspace, added])
+  })
+
   it('saves nobody and says who, and the owner’s window can read it', () => {
     let thrown: unknown
     try {

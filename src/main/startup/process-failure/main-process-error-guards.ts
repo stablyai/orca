@@ -1,5 +1,7 @@
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { removeBootstrapFatalExitGuard } from './bootstrap-fatal-exit-guard'
+import { isNativePtyException } from '../../daemon/pty-subprocess/daemon-native-pty-exception'
+import { quitAfterFatalException } from './fatal-exception-quit'
 
 type FatalMainProcessErrorKind = 'main_uncaught_exception' | 'main_unhandled_rejection'
 
@@ -97,23 +99,68 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
   }
 }
 
-export function installUncaughtPipeErrorGuard(): void {
-  const onUncaughtException = (error: unknown): void => {
-    const errorCode = readErrorProperty(error, 'code')
-    if (errorCode === 'EIO' || errorCode === 'EPIPE') {
-      return
-    }
+type StdioStream = Pick<NodeJS.WritableStream, 'on'>
 
-    // #9441: the next rethrow leaves no macOS crash report; persist evidence first.
-    recordFatalMainProcessError('main_uncaught_exception', error)
-    process.off('uncaughtException', onUncaughtException)
-    // Throwing inside the handler exits with status 7; rethrow next tick to retain the real stack.
-    setImmediate(() => {
-      throw error
+/** Console output is diagnostic only; a dead terminal or full log volume must not fault main. */
+export function installStdioWriteErrorSink(
+  streams: readonly (readonly [name: string, stream: StdioStream | undefined])[] = [
+    ['stdout', process.stdout],
+    ['stderr', process.stderr]
+  ]
+): void {
+  for (const [streamName, stream] of streams) {
+    let failed = false
+    // Node re-emits a failed sync write as an async 'error' event; console swallows only the first.
+    // Stdio retries at most once per event-loop turn, so output resumes once space frees up.
+    stream?.on('error', (error: unknown) => {
+      if (failed) {
+        return
+      }
+      failed = true
+      try {
+        // Not console: it writes to the stream that just failed.
+        recordDurableCrashBreadcrumb('main_stdio_write_failed', {
+          stream: streamName,
+          errorCode: boundedString(readErrorProperty(error, 'code') ?? '', 100),
+          // libuv has no name for some errnos (e.g. EDQUOT) and reports code UNKNOWN.
+          errno: boundedString(readErrorProperty(error, 'errno') ?? '', 20)
+        })
+      } catch {
+        // The log volume that failed may also hold the trace.
+      }
     })
   }
+}
 
-  process.on('uncaughtException', onUncaughtException)
+// A hostile error (e.g. a throwing getter) must still reach the fatal path, not escape it.
+function isBenignNativePtyFault(error: unknown): boolean {
+  try {
+    return isNativePtyException(error)
+  } catch {
+    return false
+  }
+}
+
+// Stays installed for good: Electron's default handler shows a modal that blocks main until someone clicks OK.
+export function installUncaughtExceptionQuitGuard(
+  quit: () => void = quitAfterFatalException
+): void {
+  let quitting = false
+  process.on('uncaughtException', (error: unknown): void => {
+    const errorCode = readErrorProperty(error, 'code')
+    // A local PTY that died under us is not a main-process fault (same rule as the daemon and orcad).
+    if (errorCode === 'EIO' || errorCode === 'EPIPE' || isBenignNativePtyFault(error)) {
+      return
+    }
+    // Faults during teardown (or while recording) are expected once main is broken; quit once.
+    if (quitting) {
+      return
+    }
+    quitting = true
+    // #9441: persist evidence before the process exits.
+    recordFatalMainProcessError('main_uncaught_exception', error)
+    quit()
+  })
   removeBootstrapFatalExitGuard()
 }
 

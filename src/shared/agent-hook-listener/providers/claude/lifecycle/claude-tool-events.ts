@@ -12,6 +12,15 @@ export function isClaudeToolEvent(eventName: unknown): boolean {
   )
 }
 
+/** A tool call a plugin made, which Claude can run outside the lead's turn (#43998). */
+export function isClaudePluginToolCall(hookPayload: Record<string, unknown>): boolean {
+  return (
+    readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])?.startsWith(
+      CLAUDE_PLUGIN_TOOL_USE_ID_PREFIX
+    ) === true
+  )
+}
+
 /** Restates the cached lead for a plugin call's tool hook unless it asks the user; while the lead waits, every event flows through. */
 export function restatePluginToolCall(
   state: HookListenerState,
@@ -20,11 +29,10 @@ export function restatePluginToolCall(
   hookPayload: Record<string, unknown>,
   isAskUserQuestion: boolean
 ): ParsedAgentStatusPayload | null {
-  const toolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const isPluginToolActivity =
     isClaudeToolEvent(eventName) &&
-    toolUseId?.startsWith(CLAUDE_PLUGIN_TOOL_USE_ID_PREFIX) === true &&
+    isClaudePluginToolCall(hookPayload) &&
     !isAskUserQuestion &&
     lead?.state !== 'waiting'
   return isPluginToolActivity

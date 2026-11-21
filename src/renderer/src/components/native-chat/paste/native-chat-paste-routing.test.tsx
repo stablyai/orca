@@ -2,12 +2,14 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as I18nModule from '@/i18n/i18n'
 
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import { NativeChatPaneCover } from '../../terminal-pane/chat/NativeChatPaneCover'
+import { registerNativeChatComposerDestination } from '../composer/focus/native-chat-composer-destination'
+import { dispatchAppMenuPasteEvent } from '@/lib/clipboard/menu/app-menu-paste'
 
 import { registerTerminalPanePasteListeners } from '../../terminal-pane/input/paste/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from '../../terminal-pane/layout/close/use-terminal-pane-close-actions'
@@ -217,6 +219,44 @@ describe('paste inside a chat cover never reaches the terminal', () => {
     })
     expect(answer.value).toBe('answer')
     expect(mocks.error).not.toHaveBeenCalled()
+  })
+})
+
+describe('paste while a question card is open', () => {
+  function withComposer(hidden: boolean) {
+    const f = fixture()
+    const answer = document.createElement('input')
+    f.cover(<ChatRoot answer={answer} />)
+    const composerRoot = document.createElement('div')
+    composerRoot.hidden = hidden
+    answer.parentElement!.append(composerRoot)
+    const pasteFromClipboard = vi.fn()
+    const handlePasteEvent = vi.fn()
+    const fields = { pasteFromClipboard, handlePasteEvent, contains: () => false }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only these handle fields.
+    const composer = fields as unknown as NativeChatComposerHandle
+    const release = registerNativeChatComposerDestination(composerRoot, { current: composer }, true)
+    onTestFinished(release)
+    return { f, answer, pasteFromClipboard, handlePasteEvent }
+  }
+
+  it('sends transcript paste to the answer, not the composer the card hides', async () => {
+    const { f, answer, handlePasteEvent } = withComposer(true)
+    await act(async () => {
+      paste(f.pane.container.querySelector('[data-testid="transcript"]')!, 'answer')
+    })
+    expect(answer.value).toBe('answer')
+    expect(handlePasteEvent).not.toHaveBeenCalled()
+  })
+
+  it('gives menu paste to the focused answer over a visible editor', async () => {
+    const { answer, pasteFromClipboard } = withComposer(false)
+    answer.focus()
+    await act(async () => {
+      expect(dispatchAppMenuPasteEvent()).toBe(true)
+    })
+    expect(answer.value).toBe('menu text')
+    expect(pasteFromClipboard).not.toHaveBeenCalled()
   })
 })
 

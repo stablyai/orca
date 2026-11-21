@@ -5,7 +5,12 @@ import { makeTestBot } from './bot.test-fixture'
 describe('a Look around edit', () => {
   it('changes only the fields it names, so quick edits keep each other', () => {
     const bot = makeTestBot({ id: 'b1', agent: 'claude' })
-    const first = applyBotUpdates(bot, { lookAround: { weekdaysOnly: false } })
+    const edit = BotUpdate.parse({
+      botId: 'b1',
+      updates: { lookAround: { weekdaysOnly: false, since: 1 } }
+    })
+    expect(edit.updates).toEqual({ lookAround: { weekdaysOnly: false } })
+    const first = applyBotUpdates(bot, edit.updates)
     const second = applyBotUpdates(first, { lookAround: { focus: 'CI on main' } })
     expect(second.lookAround).toEqual({
       on: true,
@@ -13,12 +18,6 @@ describe('a Look around edit', () => {
       weekdaysOnly: false,
       focus: 'CI on main'
     })
-  })
-
-  it('travels as just the changed field', () => {
-    expect(
-      BotUpdate.parse({ botId: 'b1', updates: { lookAround: { on: false } } }).updates
-    ).toEqual({ lookAround: { on: false } })
   })
 
   it('stamps when Look around and Tidy-up are turned back on, and keeps it through other edits', () => {
@@ -41,11 +40,5 @@ describe('a Look around edit', () => {
     expect(edited.lookAround?.since).toBe(stamped)
     expect(edited.tidyUp?.since).toBe(stamped)
     vi.useRealTimers()
-  })
-
-  it('never takes a since from a client', () => {
-    expect(
-      BotUpdate.parse({ botId: 'b1', updates: { lookAround: { on: true, since: 1 } } }).updates
-    ).toEqual({ lookAround: { on: true } })
   })
 })

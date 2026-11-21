@@ -33,12 +33,13 @@ export function getStructuredAgentLaunchStatus(
 
 /** Whether any agent's chat create in this worktree is still unsettled: pending or unanswered. */
 export function hasStructuredAgentLaunchInWorktree(worktreeId: string): boolean {
+  const checkedAgents = new Set<TuiAgent>()
   for (const state of structuredLaunchStates()) {
-    if (
-      state.intent.worktreeId === worktreeId &&
-      getStructuredAgentLaunchStatus(worktreeId, state.intent.agent) !== 'idle'
-    ) {
-      return true
+    if (state.intent.worktreeId === worktreeId && !checkedAgents.has(state.intent.agent)) {
+      checkedAgents.add(state.intent.agent)
+      if (getStructuredAgentLaunchStatus(worktreeId, state.intent.agent) !== 'idle') {
+        return true
+      }
     }
   }
   return false

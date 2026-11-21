@@ -3,6 +3,7 @@ import type { TaskRow, TaskStatus } from '../orchestration-records'
 import { settleActiveDispatchesForTask } from '../dispatch-context/dispatch-completion'
 import type { OrchestrationDb } from '../orchestration-db'
 import { remoteHoldOnTask } from '../remote-owned/remote-placements'
+import { retireNeverSentReservation } from '../remote-owned/remote-placement-hold'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -36,6 +37,9 @@ export function updateTaskStatus(
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(id) as { id: string } | undefined
+    if (status === 'failed' || status === 'blocked') {
+      retireNeverSentReservation(this, id)
+    }
     // A Task placed on a paired server is held by its attempt there exactly as by a local one.
     const remote = remoteHoldOnTask(this, id)
     const remoteDispatch = { id: remote?.dispatchId ?? '(a start on a paired server)' }

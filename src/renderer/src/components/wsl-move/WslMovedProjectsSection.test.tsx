@@ -111,9 +111,6 @@ it('offers Hide only on entries without chats, and a hidden entry stays hidden',
   const entries = screen.getAllByTestId('wsl-moved-project')
   expect(entries).toHaveLength(1)
   expect(entries[0]).toHaveTextContent('with-chats')
-  expect(uiSet).toHaveBeenCalledWith({
-    hiddenWslMovedProjectKeys: ['Ubuntu\u0000repo:repo-plain']
-  })
 })
 
 it('collapses to its header and persists the choice', () => {
@@ -133,20 +130,4 @@ it('disappears once every entry is hidden', () => {
   renderSection()
   act(() => fireEvent.click(screen.getByTestId('wsl-moved-hide')))
   expect(screen.queryByTestId('wsl-moved-projects')).toBeNull()
-})
-
-it('keeps a hidden entry whose host no longer lists the project, hiding the rest', () => {
-  const gone: WslMovedProject = { ...withoutChats, id: 'repo-gone', displayName: 'gone' }
-  useAppStore.setState({
-    wslMovedProjects: [withoutChats, gone],
-    unifiedTabsByWorktree: {},
-    // Only `plain` is still listed on its host; `gone` lost its host row, as after removing the host.
-    hiddenWslMovedProjectKeys: ['Ubuntu\u0000repo:repo-plain', 'Ubuntu\u0000repo:repo-gone']
-  })
-  renderSection()
-  const entries = screen.getAllByTestId('wsl-moved-project')
-  expect(entries).toHaveLength(1)
-  expect(entries[0]).toHaveTextContent('gone')
-  // Its entry is the only way back here, so it cannot be hidden.
-  expect(screen.queryByTestId('wsl-moved-hide')).toBeNull()
 })

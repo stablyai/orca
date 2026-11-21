@@ -42,7 +42,8 @@ export type StructuredAgentSessionChildExitSession = Pick<
 
 export type StructuredAgentSessionGenerationEnded = (
   sessionId: string,
-  options?: { restate?: boolean }
+  /** settled: the dead generation's leftovers are written. */
+  options?: { restate?: boolean; settled?: boolean }
 ) => void
 
 export type StructuredAgentSessionChildExitContext<
@@ -303,7 +304,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     endChild()
     // Unexpected death rebaselines fences; requested close preserves outstanding Stop replies.
     // Always publish generation end and wake delivery, even when cleanup writes failed.
-    context.generationEnded(sessionId, { restate: released && !expected })
+    context.generationEnded(sessionId, { restate: released && !expected, settled: true })
     await wakeQueuedDelivery()
   }
 }

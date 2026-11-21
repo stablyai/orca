@@ -1,4 +1,5 @@
 import { ConnectorAnswerFields } from '../connector-prompt-contract'
+import type { ConnectorTurnActivity } from './connector-turn-activity-contract'
 // Mirror of cloud/packages/connector-contract/src for the machine side of the Orca Cloud connector.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
@@ -376,7 +377,7 @@ export type ConnectorEvent =
     })
   /** Only to a cloud that lists `replies.outbox`: the outcome of the admitted deliveries one turn
    *  answered in one conversation, keyed by answerDeliveryId (one of deliveryIds). */
-  | {
+  | ({
       kind: 'reply'
       conversation: ConnectorConversation
       deliveryIds: string[]
@@ -386,9 +387,11 @@ export type ConnectorEvent =
       failure?: ConnectorFailure
       links?: ConnectorWorkLink[]
       turnId?: number
-    }
+    } & { /** How long an answered turn ran. */ tookMs?: number })
   /** Whether workers its agent started still run; only to a cloud that lists `workers`. */
   | (PaneEvent & { kind: 'workers'; running: boolean })
+  /** Only to a cloud that lists `turn.activity`. */
+  | (PaneEvent & ConnectorTurnActivity)
   | {
       kind: 'snapshot'
       conversations: (PaneEvent & {

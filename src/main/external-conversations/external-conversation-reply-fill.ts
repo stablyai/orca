@@ -8,7 +8,7 @@ import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/jo
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
-import { capUtf8 } from '../connector-cloud/connector-snapshot'
+import { capAnswer } from '../connector-cloud/connector-snapshot'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -20,6 +20,8 @@ export type EndedTurnReplies = {
   bot: boolean
   failure?: ConnectorFailure
   links: ConnectorWorkLink[]
+  /** How long the turn ran; absent when its start predates this watch. */
+  tookMs?: number
 }
 
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
@@ -75,9 +77,10 @@ export function conversationReplyFill(
         outcome,
         answerDeliveryId,
         turnItemId: turn.turnItemId,
-        ...(prose ? { prose: capUtf8(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
+        ...(prose ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
-        ...(turn.links.length > 0 ? { links: turn.links } : {})
+        ...(turn.links.length > 0 ? { links: turn.links } : {}),
+        ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {})
       })
     }
     if (await store.fillOutcomes(fills)) {

@@ -1,4 +1,6 @@
 import { runProcess } from '@orca/process-host'
+import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
+import { getSystem32ExePath } from '../../windows/windows-command-paths'
 
 const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
@@ -21,7 +23,7 @@ function runLocalProviderCommand(
 }
 
 export async function isExternalAutomationCommandOnPath(command: string): Promise<boolean> {
-  const finder = process.platform === 'win32' ? 'where' : 'which'
+  const finder = process.platform === 'win32' ? getSystem32ExePath('where.exe') : 'which'
   try {
     await runLocalProviderCommand(finder, [command], {
       timeoutMs: LOCAL_COMMAND_LOOKUP_TIMEOUT_MS,
@@ -33,8 +35,11 @@ export async function isExternalAutomationCommandOnPath(command: string): Promis
   }
 }
 
-export function runLocalAutomationCommand(command: string, args: string[]): Promise<void> {
-  return runLocalProviderCommand(command, args, {
+export async function runLocalAutomationCommand(command: string, args: string[]): Promise<void> {
+  // Windows npm shims are .cmd files that a bare name cannot spawn.
+  const program =
+    process.platform === 'win32' ? ((await resolveCommandOnLocalPath(command)) ?? command) : command
+  return runLocalProviderCommand(program, args, {
     timeoutMs: LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS,
     timeoutMessage: `Local automation command timed out after ${LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS}ms.`
   })

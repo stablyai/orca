@@ -89,7 +89,7 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
 
 // Only live legacy work needs takeover attestation; settled work has no authority left to seize.
 describe('adopted Run binding without --takeover-legacy', () => {
-  it('fences a bind while legacy work is still live, and names the recovery command', () => {
+  it('requires each claimant to acknowledge takeover while legacy work remains live', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: false })
 
     expect(() =>
@@ -112,6 +112,20 @@ describe('adopted Run binding without --takeover-legacy', () => {
       coordinator_pane_key: null,
       consumer_generation: 0
     })
+
+    db.bindRun({
+      runId: adoptedRunId,
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
+      takeoverLegacy: true
+    })
+    expect(() =>
+      db.bindRun({
+        runId: adoptedRunId,
+        coordinatorHandle: 'term_second_coord',
+        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222'
+      })
+    ).toThrowError(expect.objectContaining({ code: 'consumer_fenced' }))
   })
 
   it('withholds legacy takeover advice and refuses explicit worker takeovers without effects', () => {
@@ -197,25 +211,6 @@ describe('adopted Run binding without --takeover-legacy', () => {
         })
         ?.messages.map((message) => message.id)
     ).toContain(recoveryMessageId)
-  })
-
-  // Each new claimant needs its own takeover acknowledgment.
-  it('keeps fencing new claimants while legacy work stays live', () => {
-    const { db, adoptedRunId } = createAdoptedFixture({ settleWork: false })
-    db.bindRun({
-      runId: adoptedRunId,
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
-      takeoverLegacy: true
-    })
-
-    expect(() =>
-      db.bindRun({
-        runId: adoptedRunId,
-        coordinatorHandle: 'term_second_coord',
-        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222'
-      })
-    ).toThrowError(expect.objectContaining({ code: 'consumer_fenced' }))
   })
 })
 

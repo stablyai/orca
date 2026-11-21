@@ -5,6 +5,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../../../shared/workspace-disk-space/workspace-space-types'
 import type { Store } from '../../persistence/loading-store/store'
+import { WorkspaceSpaceScanCancelledError } from '../../workspaces/space-analysis/workspace-space-scan-control'
 
 const {
   handlers,
@@ -12,8 +13,7 @@ const {
   removeHandlerMock,
   handleMock,
   persistAnalysisSnapshotMock,
-  readAnalysisSnapshotMock,
-  WorkspaceSpaceScanCancelledErrorMock
+  readAnalysisSnapshotMock
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
   return {
@@ -24,8 +24,7 @@ const {
       handlers.set(channel, handler)
     }),
     persistAnalysisSnapshotMock: vi.fn(),
-    readAnalysisSnapshotMock: vi.fn(),
-    WorkspaceSpaceScanCancelledErrorMock: class WorkspaceSpaceScanCancelledError extends Error {}
+    readAnalysisSnapshotMock: vi.fn()
   }
 })
 
@@ -38,10 +37,6 @@ vi.mock('electron', () => ({
 
 vi.mock('../../workspaces/space-analysis/workspace-space-analysis', () => ({
   analyzeWorkspaceSpace: analyzeWorkspaceSpaceMock
-}))
-
-vi.mock('../../workspaces/space-analysis/workspace-space-scan-control', () => ({
-  WorkspaceSpaceScanCancelledError: WorkspaceSpaceScanCancelledErrorMock
 }))
 
 vi.mock('../../workspaces/space-analysis/workspace-space-analysis-snapshot', () => ({
@@ -183,32 +178,26 @@ describe('registerWorkspaceSpaceHandlers', () => {
     }
   })
 
-  it('cancels the in-flight scan', async () => {
-    const store = createStore()
-    let signal: AbortSignal | undefined
-    analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
-      signal = options.signal
-      return new Promise<WorkspaceSpaceAnalysis>(() => {})
-    })
+  it('settles an in-flight scan as cancelled without saving a snapshot', async () => {
+    analyzeWorkspaceSpaceMock.mockImplementationOnce(
+      (_store, { signal }: { signal: AbortSignal }) =>
+        new Promise<WorkspaceSpaceAnalysis>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new WorkspaceSpaceScanCancelledError()), {
+            once: true
+          })
+        })
+    )
 
-    registerWorkspaceSpaceHandlers(store)
-    const analyzeHandler = handlers.get('workspaceSpace:analyze')
-    const cancelHandler = handlers.get('workspaceSpace:cancel')
-    void analyzeHandler!(createEvent())
+    registerWorkspaceSpaceHandlers(createStore())
+    const analyze = handlers.get('workspaceSpace:analyze')!
+    const cancel = handlers.get('workspaceSpace:cancel')!
+    const pending = analyze(createEvent())
 
-    await expect(cancelHandler!()).resolves.toBe(true)
-    expect(signal?.aborted).toBe(true)
-    await expect(cancelHandler!()).resolves.toBe(false)
-  })
-
-  it('returns a normal cancelled result instead of rejecting expected cancellation', async () => {
-    const store = createStore()
-    analyzeWorkspaceSpaceMock.mockRejectedValueOnce(new WorkspaceSpaceScanCancelledErrorMock())
-
-    registerWorkspaceSpaceHandlers(store)
-    const analyzeHandler = handlers.get('workspaceSpace:analyze')
-
-    await expect(analyzeHandler!(createEvent())).resolves.toEqual({ ok: false, cancelled: true })
+    const cancelled = cancel()
+    const duplicate = cancel()
+    await expect(cancelled).resolves.toBe(true)
+    await expect(duplicate).resolves.toBe(false)
+    await expect(pending).resolves.toEqual({ ok: false, cancelled: true })
     expect(persistAnalysisSnapshotMock).not.toHaveBeenCalled()
   })
 })

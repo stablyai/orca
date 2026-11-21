@@ -55,7 +55,7 @@ export function signedOutStore(waits = false): Partial<AppState> {
 export async function click(name: string): Promise<void> {
   for (let tries = 0; tries < 60; tries++) {
     const button = [...document.querySelectorAll('button')].find(
-      (candidate) => candidate.textContent?.trim() === name
+      (candidate) => !candidate.disabled && candidate.textContent?.trim() === name
     )
     if (button) {
       button.click()

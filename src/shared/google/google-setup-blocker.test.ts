@@ -5,7 +5,6 @@ import {
   googleSetupActionsLine,
   type GoogleSetupBlocker,
   googleSetupBlocker,
-  googleSetupBlockerLine,
   googleSetupDoneRefusal,
   GOOGLE_SETUP_PAUSED_AFTER_MS
 } from './google-setup-blocker'
@@ -89,31 +88,22 @@ function blocker(
 }
 
 describe('where a Google setup is stuck', () => {
-  it('asks for the key before the sign-in when none was saved', () => {
-    const stuck = blocker(run({ steps: { client: keyDone } }), { client: null, accounts: [] })
-    expect(stuck?.kind).toBe('no-key')
-    expect(actions(stuck)).toBe('Make a new key · Import a key file')
-  })
+  it('distinguishes a missing key, another project’s key and a deleted key before sign-in', () => {
+    const keyStep = run({ steps: { client: keyDone } })
+    const without = blocker(keyStep, { client: null, accounts: [] })
+    expect(without?.kind).toBe('no-key')
+    expect(actions(without)).toBe('Make a new key · Import a key file')
 
-  it('says when the saved key is from another project', () => {
-    const stuck = blocker(run({ steps: { client: keyDone } }), {
+    const otherProject = blocker(keyStep, {
       client: { ...client, projectId: 'orca-old' },
       accounts: []
     })
-    expect(stuck).toMatchObject({ kind: 'key-other-project', keyProjectId: 'orca-old' })
-  })
+    expect(otherProject).toMatchObject({ kind: 'key-other-project', keyProjectId: 'orca-old' })
 
-  it('offers a new key once Google no longer knows the saved one', () => {
-    const stuck = blocker(run({ steps: { client: keyDone } }), {
-      client,
-      clientKey: 'gone',
-      accounts: []
-    })
-    expect(stuck?.kind).toBe('key-gone')
-    expect(actions(stuck)).toBe('Make a new key · Start over')
-    expect(
-      blocker(run({ steps: { client: keyDone } }), { client, clientKey: 'unknown', accounts: [] })
-    ).toBeNull()
+    const gone = blocker(keyStep, { client, clientKey: 'gone', accounts: [] })
+    expect(gone?.kind).toBe('key-gone')
+    expect(actions(gone)).toBe('Make a new key · Start over')
+    expect(blocker(keyStep, { client, clientKey: 'unknown', accounts: [] })).toBeNull()
   })
 
   it('offers Check again after Turn on or the admin request, since Orca never hears either fix', () => {
@@ -166,10 +156,11 @@ describe('where a Google setup is stuck', () => {
 
   it('shows a stopped setup with Continue and Start over', () => {
     const stuck = blocker(run({ state: 'failed', lastError: 'No room for another project' }), null)
-    expect(stuck && googleSetupBlockerLine(stuck)).toBe(
-      'Setup stopped: No room for another project'
-    )
-    expect(actions(stuck)).toBe('Continue · Start over')
+    expect(stuck).toMatchObject({
+      kind: 'stopped',
+      reason: 'No room for another project',
+      actions: [{ id: 'continue' }, { id: 'start-over' }]
+    })
   })
 
   it('pauses a bot step only once its turn has ended for a while', () => {
@@ -195,11 +186,8 @@ const { publish: _publish, ...unpublished } = signedIn().steps
 const { connect: _connect, ...unsigned } = signedIn().steps
 
 describe("the bot's done", () => {
-  it('stands once every chosen service is ready', () => {
+  it('stands once every chosen service is ready, including for an imported app without a named account', () => {
     expect(googleSetupDoneRefusal(signedIn(), { client, accounts: [account()] })).toBeNull()
-  })
-
-  it('stands for an imported app, which names no account', () => {
     const imported = signedIn({
       account: undefined,
       answers: { path: { values: ['import'], at: 2 } }

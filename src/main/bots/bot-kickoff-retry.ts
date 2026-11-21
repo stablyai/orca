@@ -14,8 +14,9 @@ export function botKickoffFingerprint(sessionId: string, kickoff = BOT_CREATED_K
   })
 }
 
-/** True when the Chat holds only Orca's kickoff, its turn has ended (or it was refused), and the bot said nothing. On
- *  its own Orca resends it once; the owner's Try again (`asked`) resends it whenever that holds. */
+/** True when the Chat holds Orca's kickoff and nothing that reached the agent from its owner, its turn
+ *  has ended (or it was refused), and the bot said nothing. On its own Orca resends it once, only when
+ *  the kickoff is all the Chat holds; the owner's Try again (`asked`) resends it whenever that holds. */
 export function kickoffNeedsRetry(
   sessionId: string,
   { items, submissions }: Pick<AgentJournalSnapshot, 'items' | 'submissions'>,
@@ -23,23 +24,28 @@ export function kickoffNeedsRetry(
   kickoffText = BOT_CREATED_KICKOFF
 ): boolean {
   const kickoff = botKickoffFingerprint(sessionId, kickoffText)
-  // Anything the owner sent ends it; unasked, so does a second kickoff.
+  const kickoffs = submissions.filter((submission) => submission.payloadFingerprint === kickoff)
+  // Anything the owner sent that reached the agent ends it; one its failed start refused never
+  // did, so Try again still sends. Unasked, any other send ends it.
   if (
-    submissions.length === 0 ||
+    kickoffs.length === 0 ||
     (!asked && submissions.length !== 1) ||
-    submissions.some((submission) => submission.payloadFingerprint !== kickoff)
+    submissions.some(
+      (submission) =>
+        submission.payloadFingerprint !== kickoff && submission.dispatchState !== 'rejected'
+    )
   ) {
     return false
   }
   const turns = items.flatMap((item) => (item.body.kind === 'turn' ? [item.body] : []))
   const spoke = items.some((item) => item.body.kind === 'message' && item.body.role === 'assistant')
   // A kickoff still in flight, or accepted with its turn not open yet, is pending: not ended.
-  const accepted = submissions.filter((submission) => submission.dispatchState === 'accepted')
-  const inFlight = submissions.some(
+  const accepted = kickoffs.filter((submission) => submission.dispatchState === 'accepted')
+  const inFlight = kickoffs.some(
     (submission) => submission.dispatchState === 'pending' || submission.dispatchState === 'unknown'
   )
   // Refused before a turn opened (its agent failed to start) ends it too.
-  const refused = submissions.at(-1)?.dispatchState === 'rejected'
+  const refused = kickoffs.at(-1)?.dispatchState === 'rejected'
   const turnsEnded =
     turns.length > 0 &&
     turns.length >= accepted.length &&
@@ -75,10 +81,10 @@ export async function retryBotKickoff(
     const kickoff = botFirstKickoff(bot)
     const sends = await deps.fingerprints(bot.chatSessionId)
     const fingerprint = botKickoffFingerprint(bot.chatSessionId, kickoff)
+    // Asked, the owner's own sends are read too: one that never reached the agent leaves it unset.
     if (
-      sends.length === 0 ||
-      (!asked && sends.length !== 1) ||
-      sends.some((send) => send.fingerprint !== fingerprint)
+      !sends.some((send) => send.fingerprint === fingerprint) ||
+      (!asked && (sends.length !== 1 || sends[0].fingerprint !== fingerprint))
     ) {
       return false
     }

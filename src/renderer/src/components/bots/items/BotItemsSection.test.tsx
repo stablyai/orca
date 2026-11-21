@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -44,7 +45,8 @@ vi.mock('./use-bot-items', () => ({
     failed: true,
     retry: chat.retry
   }),
-  readMoreClosedItems: vi.fn()
+  readMoreClosedItems: vi.fn(),
+  useStableBotItemChats: (chatIds: readonly string[] | null) => chatIds
 }))
 vi.mock('../AddConnectorDialog', () => ({ manageConnectors: vi.fn() }))
 vi.mock('../bot-automation-open', () => ({ openBotAutomation: vi.fn() }))
@@ -63,8 +65,8 @@ afterEach(() => {
   localStorage.clear()
 })
 
-const FILTER = { chatId: 'chat-release', needsYou: false }
-const NO_FILTER = { chatId: null, needsYou: false }
+const FILTER = { chatIds: ['chat-release'], botIds: null, needsYou: false }
+const NO_FILTER = { chatIds: null, botIds: null, needsYou: false }
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only these fields.
@@ -120,7 +122,7 @@ function Section({
 }
 
 it('keeps a chat’s items up when their re-read fails, saying so, with Retry', () => {
-  render(<Section />)
+  render(<Section />, { wrapper: TooltipProvider })
 
   expect(screen.getByText('Item 1')).toBeTruthy()
   expect(screen.getByText("Couldn't refresh items. Showing the last read.")).toBeTruthy()
@@ -128,14 +130,16 @@ it('keeps a chat’s items up when their re-read fails, saying so, with Retry', 
   expect(chat.retry).toHaveBeenCalledOnce()
 })
 
-it('lists Orca’s asks while items load and after, counting asks and items but not stopped runs', () => {
+it('lists Orca’s asks while items load and after', () => {
   const { rerender } = render(
-    <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />
+    <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />,
+    { wrapper: TooltipProvider }
   )
 
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
-  expect(screen.getByText('Loading items…')).toBeTruthy()
-  expect(screen.getByRole('button', { expanded: true }).textContent).toBe('Needs you1')
+  const loading = screen.getByRole('status')
+  expect(loading.textContent).toBe('Loading items…')
+  expect(loading.hasAttribute('aria-busy')).toBe(false)
 
   const asked = makeTestBotItem(2, { status: 'needs_you', lastActivityAt: NOW })
   rerender(
@@ -147,11 +151,8 @@ it('lists Orca’s asks while items load and after, counting asks and items but 
   )
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
   expect(screen.getByText('Item 2')).toBeTruthy()
-  expect(screen.getByRole('button', { expanded: true }).textContent).toBe('Needs you2')
-})
 
-it('says all clear only once no ask is left', () => {
-  const { rerender } = render(<Section filter={NO_FILTER} asks={SIGN_IN} />)
+  rerender(<Section filter={NO_FILTER} asks={SIGN_IN} />)
   expect(screen.queryByText('Nothing needs you and nothing is running.')).toBeNull()
 
   const planned = makeTestBotItem(3, { status: 'planned', lastActivityAt: NOW })

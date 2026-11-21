@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ProjectCombobox from '@/components/new-workspace/project-selection/ProjectCombobox'
 import type { ProjectComboboxAddProjectMenu } from '../project-selection/ProjectComboboxAddProjectOption'
-import RunTargetCombobox from '@/components/new-workspace/run-target/RunTargetCombobox'
+import WorkspaceRunTargetCombobox from '../run-target/WorkspaceRunTargetCombobox'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/workspace/creation/new-workspace-project-options'
@@ -213,7 +213,7 @@ export function NewWorkspaceComposerProjectSection({
             <label className="flex h-5 min-w-0 items-center truncate text-xs font-medium text-muted-foreground">
               {t('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
             </label>
-            <RunTargetCombobox
+            <WorkspaceRunTargetCombobox
               hostOptions={projectHostSetupOptions ?? []}
               hostValue={selectedProjectHostSetupId ?? null}
               hostExecutionHostId={selectedRepoExecutionHostId}

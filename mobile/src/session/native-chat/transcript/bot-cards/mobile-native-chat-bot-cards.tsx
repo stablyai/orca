@@ -14,10 +14,14 @@ import {
   MobileNativeChatConnectorOfferRow
 } from '../MobileNativeChatConnectorOfferRow'
 import { MobileBotCreateOfferCard } from './MobileBotCreateOfferCard'
+import { MobileBotImportDoneCard } from './MobileBotImportDoneCard'
+import { MobileBotImportPlanCard } from './MobileBotImportPlanCard'
 import { MobileBotMemoryUpdatedRow } from './MobileBotMemoryUpdatedRow'
 import { MobileBotRequestCard } from './MobileBotRequestCard'
 import { MobileBotToolAddedCard } from './MobileBotToolAddedCard'
 import { MobileBotWebhookCard } from './MobileBotWebhookCard'
+import { MobileComposioSetupCard } from './MobileComposioSetupCard'
+import { MobileGoogleSetupCard } from './MobileGoogleSetupCard'
 
 export type MobileBotCardContext = {
   /** The transcript row carrying the card: its fold and its offer answer key. */
@@ -36,17 +40,25 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
     <MobileBotMemoryUpdatedRow note={note} cardId={cardId} fontScale={fontScale} />
   ),
   // A sign-in or webhook offer is the host's line on the phone.
-  connectorOffer: (offer, { fontScale }) =>
+  connectorOffer: (offer, { cardId, fontScale }) =>
     isConnectorCardOffer(offer) ? (
-      <MobileNativeChatConnectorOfferRow offer={offer} fontScale={fontScale} />
+      <MobileNativeChatConnectorOfferRow offer={offer} cardId={cardId} fontScale={fontScale} />
     ) : null,
-  importPlan: 'phoneFallback',
-  importDone: 'phoneFallback',
+  importPlan: (plan, { cardId, fontScale }) => (
+    <MobileBotImportPlanCard plan={plan} cardId={cardId} fontScale={fontScale} />
+  ),
+  importDone: (done, { fontScale }) => (
+    <MobileBotImportDoneCard done={done} fontScale={fontScale} />
+  ),
   botRequest: (card, { cardId, fallback, fontScale }) => (
     <MobileBotRequestCard card={card} cardId={cardId} fallback={fallback} fontScale={fontScale} />
   ),
-  googleSetup: 'phoneFallback',
-  composioSetup: 'phoneFallback',
+  googleSetup: (card, { fallback, fontScale }) => (
+    <MobileGoogleSetupCard card={card} fallback={fallback} fontScale={fontScale} />
+  ),
+  composioSetup: (card, { fallback, fontScale }) => (
+    <MobileComposioSetupCard card={card} fallback={fallback} fontScale={fontScale} />
+  ),
   createOffer: (offer, { cardId, fallback, fontScale }) => (
     <MobileBotCreateOfferCard
       offer={offer}

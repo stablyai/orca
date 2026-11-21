@@ -46,6 +46,10 @@ describe('web repos preload API', () => {
       pairingCode
     })
 
+    await expect(
+      globals.window.api.runtimeEnvironments.resolve({ selector: 'web-server-a' })
+    ).rejects.toThrow('Unknown Orca runtime environment: web-server-a')
+
     resolveCatalog({
       id: 'repo-list',
       ok: true,

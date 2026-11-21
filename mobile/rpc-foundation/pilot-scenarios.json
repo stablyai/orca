@@ -5914,6 +5914,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -5964,6 +5965,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6003,6 +6005,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6058,6 +6061,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6087,6 +6091,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": true,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6137,6 +6142,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6188,6 +6194,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6361,6 +6368,39 @@
         },
         {
           "checkpoint": "degraded-to-legacy"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-chat-owned",
+      "operation": "aiVault.resume-preparation",
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "claude",
+            "codexHome": null,
+            "executionHostId": "local",
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "agent_session_conflict",
+              "message": "agent_session_conflict"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-before-launch"
         }
       ]
     },

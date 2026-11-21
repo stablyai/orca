@@ -1,3 +1,5 @@
+import type { NativeChatTaskList } from '../../../shared/native-chat/input/task-lists/native-chat-task-list'
+import { readJournalDomainLatestTaskList } from './journal-domain-latest-task-list'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
@@ -32,6 +34,10 @@ import {
   type JournalFirstSubmittedPrompt
 } from './journal-domain-first-submitted-prompt'
 
+import {
+  readJournalDomainTurnAttribution,
+  type JournalTurnAttribution
+} from './journal-domain-turn-attribution'
 export type JournalConsumerRead =
   | { kind: 'naming-prompt'; hostStartedAt?: number }
   | { kind: 'automation-run'; messageId: string; inputIds: readonly string[] }
@@ -40,7 +46,9 @@ export type JournalConsumerRead =
   /** Automation-result notes since the last clear, with the sends that read them. */
   | { kind: 'automation-result-notes' }
   | { kind: 'operation-window'; anchors: JournalOperationWindowAnchors }
+  | { kind: 'turn-attribution'; turnId: string; through: number }
   | { kind: 'prompt-item'; end: 'first' | 'last' }
+  | { kind: 'latest-task-list' }
   | { kind: 'run-mentions'; runId: string }
   | { kind: 'turn-ran-since'; openedAt: number | null }
   | { kind: 'ended-turn-count' }
@@ -56,7 +64,9 @@ export type JournalConsumerReadResult =
   | { kind: 'bot-memory-sources'; sources: BotMemorySources }
   | { kind: 'automation-result-notes'; snapshot: AgentJournalSnapshot }
   | { kind: 'operation-window'; window: JournalOperationWindow }
+  | { kind: 'turn-attribution'; attribution: JournalTurnAttribution }
   | { kind: 'prompt-item'; item: AgentJournalRenderItem | null }
+  | { kind: 'latest-task-list'; list: NativeChatTaskList | null }
   | {
       kind: 'run-mentions'
       items: AgentJournalRenderItem[]
@@ -74,6 +84,12 @@ export function readJournalDomainConsumer(
   scope: JournalSqlScope,
   operation: JournalConsumerRead
 ): JournalConsumerReadResult {
+  if (operation.kind === 'turn-attribution') {
+    return {
+      kind: operation.kind,
+      attribution: readJournalDomainTurnAttribution(scope, operation.turnId, operation.through)
+    }
+  }
   if (operation.kind === 'first-submitted-prompt') {
     return {
       kind: operation.kind,
@@ -106,6 +122,8 @@ export function readJournalDomainConsumer(
       }
     case 'prompt-item':
       return { kind: operation.kind, item: readJournalDomainPromptItem(scope, operation.end) }
+    case 'latest-task-list':
+      return { kind: operation.kind, list: readJournalDomainLatestTaskList(scope) }
     case 'run-mentions':
       return { kind: operation.kind, ...readJournalDomainRunMentions(scope, operation.runId) }
     case 'turn-ran-since':

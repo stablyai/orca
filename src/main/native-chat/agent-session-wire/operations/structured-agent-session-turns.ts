@@ -183,12 +183,17 @@ export async function performSend(
       fence: ctx.fence,
       handoverRecorded: true as const
     }
-    await (ctx.forkInstall
-      ? ctx.journal.write({ kind: 'submission', input: acceptedSubmission }, () => ({
-          receipt: ctx.operationReceipt,
-          forkInstall: ctx.forkInstall
-        }))
-      : ctx.journal.appendSubmission(acceptedSubmission, undefined, ctx.operationReceipt))
+    const sending = ctx.journal.holdSending()
+    try {
+      await (ctx.forkInstall
+        ? ctx.journal.write({ kind: 'submission', input: acceptedSubmission }, () => ({
+            receipt: ctx.operationReceipt,
+            forkInstall: ctx.forkInstall
+          }))
+        : ctx.journal.appendSubmission(acceptedSubmission, undefined, ctx.operationReceipt))
+    } finally {
+      sending()
+    }
   } catch (error) {
     forgetNativeChatPrompt(ctx.journal, input.clientMessageId)
     return agentSessionAdmissionWriteRefusal(ctx, error)

@@ -28,28 +28,19 @@ export type ResourceManagerTooltipLine = {
 
 export function getResourceManagerTooltipLines(
   args: {
-    memoryLabel: string
     sessionCount: number | null
     spaceScanReady: boolean
   },
   t: Translate = translate
 ): ResourceManagerTooltipLine[] {
-  const rawMemoryLabel = args.memoryLabel.trim()
-  const memoryLabel =
-    rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
-      ? t(
-          'auto.components.status.bar.resource.manager.terminal.copy.memoryUnavailable',
-          'memory unavailable'
-        )
-      : rawMemoryLabel
-  // Translate whole summary lines so locales can reorder fields and separators.
+  // Why: no memory values while closed; sampling is paused, so any figure here would be stale.
   const lines: ResourceManagerTooltipLine[] = [
     {
       id: 'summary',
       text: t(
-        'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
-        'Resource Manager - {{memory}} - {{sessions}}',
-        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount, t) }
+        'auto.components.status.bar.resource.manager.terminal.copy.ariaLabel',
+        'Resource Manager, {{sessions}}',
+        { sessions: formatTerminalSessionCount(args.sessionCount, t) }
       ),
       emphasized: false
     }

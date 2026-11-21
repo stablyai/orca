@@ -78,7 +78,13 @@ function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean
   if (process.platform === 'win32') {
     return hardenExistingWindowsFile(targetPath)
   }
-  chmodSync(targetPath, isDirectory ? 0o700 : 0o600)
+  const mode = isDirectory ? 0o700 : 0o600
+  // A no-op chmod still bumps ctime, which misses every other process's cache and makes them chmod back.
+  if (currentEntry?.mode === mode) {
+    hardenedPathsThisProcess.set(targetPath, currentEntry)
+    return true
+  }
+  chmodSync(targetPath, mode)
   rememberHardenedPath(targetPath, isDirectory)
   return true
 }

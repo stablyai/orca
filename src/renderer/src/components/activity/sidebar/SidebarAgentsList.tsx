@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
@@ -10,6 +10,7 @@ import { hasActivityThreadWorkspace } from '@/components/activity/thread-list/ac
 import { useActivityThreadActionBindings } from '@/components/activity/thread-list/use-activity-thread-action-bindings'
 import { ActivityThreadListPane } from '@/components/activity/thread-list/activity-thread-list-pane'
 import { useAgentPaneThreads } from '@/components/activity/threads/use-agent-pane-threads'
+import { getFocusedAgentPaneKeyForWorktree } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
 import '@/components/activity/thread-list/activity-thread-controls'
 import { ActivityThreadOptionsMenu } from '@/components/activity/thread-list/activity-thread-options-menu'
 import type {
@@ -43,7 +44,9 @@ export default function SidebarAgentsList({
 }: SidebarAgentsListProps): React.JSX.Element | null {
   useTranslation()
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
-  const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
+  const selectedPaneKey = useAppStore((s) =>
+    active && s.activeWorktreeId ? getFocusedAgentPaneKeyForWorktree(s, s.activeWorktreeId) : null
+  )
 
   const threads = useAgentPaneThreads({
     query: listProps.query,
@@ -53,12 +56,7 @@ export default function SidebarAgentsList({
     showChildAgents,
     badgeOnly: !active
   })
-  const { selectedPaneKeyIsLive, visibleThreads } = threads
-
-  if ((!active && selectedPaneKey !== null) || !selectedPaneKeyIsLive) {
-    // Reset selection when leaving Activity or when its pane vanishes.
-    setSelectedPaneKey(null)
-  }
+  const { visibleThreads } = threads
 
   const counts = { attention: 0, working: 0 }
   for (const thread of visibleThreads) {
@@ -83,11 +81,7 @@ export default function SidebarAgentsList({
   return (
     <>
       {badge}
-      <SidebarAgentsListBody
-        {...listProps}
-        threads={threads}
-        setSelectedPaneKey={setSelectedPaneKey}
-      />
+      <SidebarAgentsListBody {...listProps} threads={threads} />
     </>
   )
 }
@@ -101,11 +95,9 @@ function SidebarAgentsListBody({
   setQuery,
   optionsTarget,
   scrollTopRef,
-  threads,
-  setSelectedPaneKey
+  threads
 }: Omit<SidebarAgentsListProps, 'active' | 'badgeTarget'> & {
   threads: ReturnType<typeof useAgentPaneThreads>
-  setSelectedPaneKey: (paneKey: string | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
   // Subscribe here because the translated search row mounts conditionally.
@@ -154,8 +146,7 @@ function SidebarAgentsListBody({
     visibleThreads,
     markAllReadThreads,
     acknowledgeAgents: storeData.acknowledgeAgents,
-    unacknowledgeAgents: storeData.unacknowledgeAgents,
-    setSelectedPaneKey
+    unacknowledgeAgents: storeData.unacknowledgeAgents
   })
 
   const worktreesByRepo = selectWorktreesByRepo(storeData)

@@ -5,7 +5,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecyc
 import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import {
   paneKeyOf,
   tabsInOrder,
@@ -83,7 +83,7 @@ export type RuntimeLeafProjectionInput = RuntimePtyRegistryView & {
   /** Pane key → the pane's latest neutral title reset. */
   paneTitleResets: (paneKey: string) => PaneTitleReset | null
   /** Each partition the holder loaded, with the desktop's focused panes and the live tab titles. */
-  partitions: readonly Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>[]
+  partitions: readonly LoadedWorkspaceLayoutRead[]
   generatedTitlesEnabled: boolean
   /** The last projection: `ptyGeneration` counts a leaf's terminal changes across projections. */
   previous: RuntimeLeafProjection | null
