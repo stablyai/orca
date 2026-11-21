@@ -6,6 +6,7 @@ import type { LegacyClaim } from './journal-legacy-content-proof'
 import {
   JOURNAL_LEGACY_ORIGINAL,
   JOURNAL_LEGACY_RETIREMENT,
+  JOURNAL_LEGACY_RETIREMENT_REPORTED,
   type JournalLegacyRetirementState
 } from './journal-legacy-retirement-state'
 import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
@@ -66,6 +67,7 @@ export type JournalPagedMaintenanceKind =
 
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
+  | { kind: 'legacy-retirement-reported'; value: string }
   | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
   | {
       kind: 'legacy-originals-keep'
@@ -137,7 +139,8 @@ export function applyJournalSqlMaintenance(
         receipt: value(JOURNAL_LEGACY_SOURCE_RECEIPT),
         kept: value(JOURNAL_LEGACY_REVISIONS_KEPT) !== null,
         convertedBy: value(JOURNAL_LEGACY_CONVERTED_BY),
-        retirement: value(JOURNAL_LEGACY_RETIREMENT)
+        retirement: value(JOURNAL_LEGACY_RETIREMENT),
+        reported: value(JOURNAL_LEGACY_RETIREMENT_REPORTED)
       }
     }
     case 'legacy-claims-absorb': {
@@ -161,6 +164,12 @@ export function applyJournalSqlMaintenance(
       }
       return true
     }
+    case 'legacy-retirement-reported':
+      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
+        JOURNAL_LEGACY_RETIREMENT_REPORTED,
+        operation.value
+      )
+      return true
     case 'legacy-retirement-save':
       db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
         JOURNAL_LEGACY_RETIREMENT,

@@ -167,7 +167,8 @@ function finishRetirement(slot: RecordStoreSlot): Promise<void> {
   return slot.retiring
 }
 
-/** Whether this profile holds a structured chat: a record or tab in the journal database. */
+/** Whether this profile holds a structured chat: a record or tab in the journal database, or an
+ *  original journal an older Orca may have written beside an empty store. */
 export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
@@ -178,9 +179,14 @@ export function hasPersistedStructuredAgentSessionStore(
     return false
   }
   try {
-    return journalDatabaseHoldsAgentSessions(databasePath)
+    if (journalDatabaseHoldsAgentSessions(databasePath)) {
+      return true
+    }
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true
   }
+  // An empty store beside the original: an older Orca may have written chats there since, and
+  // opening the store is what takes them in.
+  return databasePath === currentPath && fileExists(journalDatabasePath(stateDirectory))
 }
