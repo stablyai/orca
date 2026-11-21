@@ -6,7 +6,7 @@ import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-para
 import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -343,7 +343,7 @@ export function MobileBotSettingsTab(props: {
         label: t('bots.settings.sameAsChats', 'Same as chats'),
         description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
       },
-      ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
+      ...modes.map((mode) => ({ id: mode, ...mobilePermissionModeCopy(bot.agent, mode, t) }))
     ]
     return (
       <>
