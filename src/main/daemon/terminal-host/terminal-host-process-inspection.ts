@@ -18,6 +18,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
+import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
 import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
@@ -99,6 +100,23 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
+  // Idle shell panes poll forever; a recent full capture plus the PTY's foreground group answers them in O(1).
+  if (
+    args.steadyState === true &&
+    args.jobMembershipOnly === true &&
+    incarnationMatches &&
+    process.platform === 'darwin' &&
+    !session.processNameIsSpawnFile
+  ) {
+    const shell = await readProvenIdleShell(
+      session,
+      () => !args.currentSession || args.currentSession() === session
+    )
+    if (shell !== null) {
+      args.onTier?.('cheap')
+      return { foregroundProcess: shell, hasChildProcesses: false }
+    }
+  }
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
@@ -133,7 +151,11 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
+      const outputChunks = session.outputChunks
       const snapshot = await getStrictProcessTableSnapshotWithAge()
+      if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
+      }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
