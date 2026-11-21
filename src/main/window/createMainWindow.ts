@@ -51,6 +51,7 @@ import { installWindowsPathRegistryChangeListener } from '../pty/environment/win
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
 import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from './web-contents-listener-budget'
+import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(
@@ -247,6 +248,8 @@ export function createMainWindow(
   })
 
   mainWindow.on('closed', () => {
+    // Why: macOS keeps Orca running with no renderer to keep the count current.
+    setUnreadDockBadgeCount(0)
     closeDashboardPopout()
     closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()

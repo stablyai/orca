@@ -5,6 +5,7 @@ import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-b
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { settleTeardownWithinDeadline, type NamedQuitTeardown } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
+import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
@@ -64,6 +65,7 @@ function stopNativeObserversAndTray(updateQuitInProgress: boolean): void {
   }
   // Remove the Windows tray icon only after renderer vetoes are past.
   destroySystemTray()
+  setUnreadDockBadgeCount(0)
 }
 
 function retireBrowsers(): NamedQuitTeardown[] {

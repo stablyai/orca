@@ -13,6 +13,8 @@ import PinnedTabCloseDialog from './components/terminal-pane/layout/close/Pinned
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
+import { UnreadDockBadgeSync } from './attention/unread/UnreadDockBadgeSync'
+import { isWebClientLocation } from './app-shell/platform/web-client-location'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
@@ -22,6 +24,7 @@ import {
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
   hasCustomTitleBar,
+  isMac,
   supportsLinuxTilingWindowMode
 } from './app-shell/chrome/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/chrome/use-app-chrome-layout'
@@ -44,6 +47,9 @@ import { PluginShotReplayMount } from './components/plugins/view/PluginShotRepla
 import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
 import { useAppStore } from './store'
+
+// Only the macOS desktop app has a Dock badge.
+const showsDockBadge = isMac && !isWebClientLocation()
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -111,6 +117,9 @@ function App(): React.JSX.Element {
           <AddToChatPointMenuHost />
           <LinkRoutingPreferenceDialogProvider>
             <AppBackgroundServices />
+            {showsDockBadge && (
+              <UnreadDockBadgeSync floatingTerminalOpen={floatingWorkspace.open} />
+            )}
             <SpaceWindowStatePublisher />
             <AppWorkspaceShell layout={layout} floatingWorkspace={floatingWorkspace} />
             <AppRootSurfaces
