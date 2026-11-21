@@ -177,11 +177,7 @@ export function BotPictureOutfits({
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent animation="height">
-        <div
-          role="group"
-          aria-label={label}
-          className="mx-auto grid w-fit grid-cols-5 gap-2 pt-1 pb-1"
-        >
+        <div role="group" aria-label={label} className="mx-auto grid w-fit grid-cols-5 gap-2 p-1">
           <OutfitTile
             id={id}
             color={color}

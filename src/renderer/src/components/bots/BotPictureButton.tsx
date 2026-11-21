@@ -55,7 +55,11 @@ export function BotPictureButton({
           {children}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80">
+      <PopoverContent
+        // A window too short for the open picker scrolls the card; any other fits it whole.
+        wheelScroll
+        className="scrollbar-sleek w-80 overflow-y-auto overscroll-contain"
+      >
         {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged; the top
             padding matches the gap beside the preview. */}
         <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'pt-3')}>

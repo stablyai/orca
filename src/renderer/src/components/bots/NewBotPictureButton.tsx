@@ -31,11 +31,22 @@ export function NewBotPictureButton({
   const rootRef = useRef<HTMLDivElement>(null)
   useBotAvatarIntakeHost(rootRef, intake)
   const { line } = intake
-  // The popover stays inside the dialog's padding, so a narrow dialog narrows it rather than its edge.
-  const [dialog, setDialog] = useState<HTMLElement | null>(null)
+  // The popover stays inside the dialog's padding sideways, so a narrow dialog narrows it rather than its
+  // edge; downward it may pass the dialog, so an open outfit grid shows whole.
+  const [dialogWidth, setDialogWidth] = useState<number | null>(null)
   useEffect(() => {
-    setDialog(rootRef.current?.closest<HTMLElement>('[role="dialog"]') ?? null)
+    const dialog = rootRef.current?.closest<HTMLElement>('[role="dialog"]')
+    if (!dialog) {
+      return
+    }
+    const observer = new ResizeObserver(() => setDialogWidth(dialog.clientWidth))
+    observer.observe(dialog)
+    return () => observer.disconnect()
   }, [])
+  const widthStyle = {
+    '--new-bot-picture-width':
+      dialogWidth === null ? '20rem' : `${dialogWidth - 2 * DIALOG_PADDING_PX}px`
+  } as React.CSSProperties
   return (
     <div ref={rootRef} className="flex items-center gap-3">
       <Popover onOpenChange={(open) => open && line.kind === 'error' && intake.dismiss()}>
@@ -66,9 +77,11 @@ export function NewBotPictureButton({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          collisionBoundary={dialog}
           collisionPadding={DIALOG_PADDING_PX}
-          className="w-[min(20rem,var(--radix-popover-content-available-width))]"
+          style={widthStyle}
+          // A window too short for the open picker scrolls the card; any other fits it whole.
+          wheelScroll
+          className="w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] scrollbar-sleek overflow-y-auto overscroll-contain"
         >
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
           <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'pt-3')}>
