@@ -106,7 +106,10 @@ export function createRemoteRuntimeClientHandshake(
       const helloRefused =
         !readyAccepted &&
         error instanceof RemoteRuntimeClientError &&
-        error.closeCode === UNSUPPORTED_HELLO_CLOSE_CODE
+        // Why invalid_runtime_response: older hosts can answer the v2 hello with a frame it
+        // rejects instead of the 4001 close — a version gap, not a different server (#43180).
+        (error.closeCode === UNSUPPORTED_HELLO_CLOSE_CODE ||
+          error.code === 'invalid_runtime_response')
       if (handshake.framing !== 'v2' || (!helloRefused && !authShapeRefused)) {
         return null
       }

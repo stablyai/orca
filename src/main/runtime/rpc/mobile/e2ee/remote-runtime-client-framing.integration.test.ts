@@ -32,7 +32,7 @@ vi.mock('./mobile-e2ee-auth-validation', async (importOriginal) => {
   }
 })
 
-type HostKind = 'current' | 'v2-without-token-capabilities' | 'pre-v2'
+type HostKind = 'current' | 'v2-without-token-capabilities' | 'pre-v2' | 'pre-v2-legacy-ready'
 type TestHost = {
   connection: PairedRuntimeConnection
   authFramings: ('legacy' | 'v2')[]
@@ -92,6 +92,11 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
         const refusesV2 = kind === 'pre-v2'
         if (refusesV2 && !JSON.parse(text).publicKeyB64) {
           ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
+        // Some pre-v2 generations answered the v2 hello with a legacy ready frame instead of closing.
+        if (kind === 'pre-v2-legacy-ready' && !JSON.parse(text).publicKeyB64) {
+          ws.send(JSON.stringify({ type: 'e2ee_ready' }))
           return
         }
       }
@@ -175,6 +180,18 @@ describe('remote runtime client E2EE framing', () => {
 
     expect(host.authFramings).toEqual(['legacy', 'legacy'])
     expect(host.capabilities[0]).toContain('test.capability.v1')
+    expect(createRemoteRuntimeClientHandshake(host.connection.hostPublicKeyB64).framing).toBe(
+      'legacy'
+    )
+  })
+
+  it('falls back to legacy when a pre-v2 host answers the v2 hello with a legacy ready (#43180)', async () => {
+    const host = await startHost('pre-v2-legacy-ready')
+
+    await expect(ping(host)).resolves.toBe('pong')
+    await expect(ping(host)).resolves.toBe('pong')
+
+    expect(host.authFramings).toEqual(['legacy', 'legacy'])
     expect(createRemoteRuntimeClientHandshake(host.connection.hostPublicKeyB64).framing).toBe(
       'legacy'
     )

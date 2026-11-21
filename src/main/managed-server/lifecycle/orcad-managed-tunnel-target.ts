@@ -113,12 +113,16 @@ export async function environmentForwardChecks(
       if (identity.verdict !== 'foreign' || !targeting.readPublishedKey) {
         return identity
       }
-      // A refusal from the slot's own new server is a replaced pairing, not a port another Orca took.
       const publishedKey = await targeting.readPublishedKey(input)
-      return publishedKey &&
-        publishedKey !== getPreferredPairingOffer(input.environment).publicKeyB64
-        ? { verdict: 'replaced', detail: identity.detail, environment: input.environment }
-        : identity
+      const pinnedKey = getPreferredPairingOffer(input.environment).publicKeyB64
+      // A refusal from the slot's own new server is a replaced pairing, not a port another Orca took.
+      if (publishedKey && publishedKey !== pinnedKey) {
+        return { verdict: 'replaced', detail: identity.detail, environment: input.environment }
+      }
+      // The slot still offers the pinned key, so its server is this desktop's own — an older one
+      // whose handshake frames this client rejects on shape (#43180). That proves no identity;
+      // stay retryable instead of telling the user to forget the server and lose their sessions.
+      return publishedKey ? { verdict: 'unreachable', detail: identity.detail } : identity
     }
   }
 }
