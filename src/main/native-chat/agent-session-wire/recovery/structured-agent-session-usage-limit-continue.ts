@@ -12,6 +12,8 @@ import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-
 import { usageLimitContinueMutation } from './structured-agent-session-usage-limit-continue-message'
 import {
   cancelsCut,
+  isUsageLimitChatOpen,
+  openUsageLimitChats,
   usageLimitCutDisposition,
   type UsageLimitCutDisposition
 } from './structured-agent-session-usage-limit-disposition'
@@ -30,6 +32,15 @@ export class StructuredAgentSessionUsageLimitContinue {
   private readonly attempts = new Map<string, Attempt>()
   private readonly holds = new UsageLimitAccountHolds()
   private readonly cold: UsageLimitColdCuts
+  private shown = new Set<string>()
+  private readonly told = new Set<(sessionId?: string) => void>()
+
+  /** A chat's (or, with none named, every chat's) continue may have ended without a status publish:
+   *  the setting turned, or the chat closed. */
+  onDispositionChange(listener: (sessionId?: string) => void): () => void {
+    this.told.add(listener)
+    return () => this.told.delete(listener)
+  }
 
   constructor(private readonly deps: UsageLimitContinueDeps) {
     this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger })
@@ -43,6 +54,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       // Other settings writes change nothing published here.
       if (this.enabled() !== enabled) {
         enabled = !enabled
+        this.told.forEach((listener) => listener())
         void this.publishScheduled().catch((error: unknown) =>
           this.deps.host.logger.warn('publishing usage-limit schedules failed', {
             scope: 'usage-limit-continue',
@@ -79,20 +91,13 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.cold.forget(id)
   }
 
-  /** Chats still open: those with a tab, and tabless ones nobody closed (bot and worker chats). */
-  private listOpen(): string[] {
-    const { store } = this.deps.host
-    return [...new Set([...store.listVisibleSessionIds(), ...store.listBackgroundSessionIds()])]
-  }
-
-  private isOpen(id: string): boolean {
-    const { store } = this.deps.host
-    return store.isSessionTabVisible(id) || store.isSessionInBackground(id)
-  }
-
   /** Drops what the sweep keeps for chats no longer open. */
   private retainShown(visible: readonly string[]): void {
     const shown = new Set(visible)
+    // A closed chat has no status publish when it never loaded: say its continue ended here.
+    const closed = [...this.shown].filter((id) => !shown.has(id))
+    this.shown = shown
+    closed.forEach((id) => this.told.forEach((listener) => listener(id)))
     for (const id of this.attempts.keys()) {
       if (!shown.has(id)) {
         this.attempts.delete(id)
@@ -149,7 +154,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         this.enabled() &&
         this.holds.schedulable(id, cut, this.deps.now()) &&
         record?.location.executionHostId === this.deps.host.store.hostId &&
-        this.isOpen(id),
+        isUsageLimitChatOpen(this.deps.host.store, id),
       cancel: record?.usageLimitContinueCancel,
       attempt: cut && attempt?.identity === identity(cut) ? attempt : undefined
     })
@@ -165,7 +170,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       record !== null &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
-      this.isOpen(id) &&
+      isUsageLimitChatOpen(this.deps.host.store, id) &&
       !cancelsCut(record.usageLimitContinueCancel, cut)
     )
   }
@@ -190,7 +195,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     // Off, nothing is sent, but an account switch still moves when Continue applies.
     this.running = true
     try {
-      const visible = this.listOpen()
+      const visible = openUsageLimitChats(this.deps.host.store)
       this.retainShown(visible)
       // Visibility and workspace sleep can change without a journal or settings commit.
       await this.publishScheduled()

@@ -5,6 +5,21 @@ import { USAGE_LIMIT_CONTINUE_CHAIN_LIMIT } from './structured-agent-session-usa
  *  (Phase 1 §1.5). */
 export type UsageLimitCutDisposition = 'pending' | 'ended' | 'ambiguous'
 
+type OpenChats = {
+  listVisibleSessionIds(): string[]
+  listBackgroundSessionIds(): string[]
+  isSessionTabVisible(id: string): boolean
+  isSessionInBackground(id: string): boolean
+}
+
+/** Chats still open: those with a tab, and tabless ones nobody closed (bot and worker chats). */
+export const openUsageLimitChats = (store: OpenChats): string[] => [
+  ...new Set([...store.listVisibleSessionIds(), ...store.listBackgroundSessionIds()])
+]
+
+export const isUsageLimitChatOpen = (store: OpenChats, id: string): boolean =>
+  store.isSessionTabVisible(id) || store.isSessionInBackground(id)
+
 type Cancel = { turnItemId: string; resetsAt: number } | undefined
 
 /** A person's cancel of this very cut. */
