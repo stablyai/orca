@@ -9,7 +9,7 @@ import {
   type LaunchedAgentReadinessRuntime
 } from './launched-agent-composer-readiness'
 
-/** A fresh launch's wait that only ran out while `agent` itself is in front: a slow start, not a failed one.
+/** A fresh launch's wait that only ran out while `agent` itself, from that launch, is in front: a slow start, not a failed one.
  *  Marker-only agents never qualify, since a startup dialog only withholds their marker. */
 async function isSlowLaunchedAgent(
   runtime: Pick<OrcaRuntimeService, 'isExactAgentInFront'>,
@@ -19,13 +19,15 @@ async function isSlowLaunchedAgent(
   error: unknown
 ): Promise<boolean> {
   const ptyId = args.reusesTerminal ? null : freshLaunchPtyId(handle, args.creation)
+  const incarnationId = args.creation?.incarnationId
   return (
     ptyId !== null &&
+    !!incarnationId &&
     error instanceof Error &&
     error.message === 'timeout' &&
     !readTerminalStartFailure(error) &&
     getLaunchedAgentReadinessLane(agent) !== 'composer-marker' &&
-    (await runtime.isExactAgentInFront(ptyId, agent))
+    (await runtime.isExactAgentInFront(ptyId, agent, incarnationId))
   )
 }
 
