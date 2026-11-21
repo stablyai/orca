@@ -153,3 +153,29 @@ it('a terminal title change reads no other workspace, at N and 10N workspaces', 
   expect(scannedRowsPerTitleChange(200)).toBe(0)
   expect(scannedRowsPerTitleChange(2_000)).toBe(0)
 })
+
+function titleNotifications(apply: () => void): number {
+  let notifications = 0
+  const stop = useAppStore.subscribe(() => {
+    notifications += 1
+  })
+  apply()
+  stop()
+  return notifications
+}
+
+it('a parked pane title that drives its tab notifies store subscribers once, and not at all when unchanged', () => {
+  useAppStore.setState({
+    tabsByWorktree: { 'wt-0': [makeTab({ id: 'tab-0', worktreeId: 'wt-0', createdAt: 0 })] },
+    unifiedTabsByWorktree: { 'wt-0': [unifiedTerminalTab('wt-0', 'tab-0')] },
+    runtimePaneTitlesByTabId: {},
+    activeWorktreeId: 'wt-1'
+  })
+  const apply = (): void =>
+    useAppStore.getState().setRuntimePaneTitle('tab-0', 1, '⠋ Codex', { alsoTabTitle: true })
+
+  expect(titleNotifications(apply)).toBe(1)
+  expect(useAppStore.getState().runtimePaneTitlesByTabId['tab-0']?.[1]).toBe('⠋ Codex')
+  expect(useAppStore.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('⠋ Codex')
+  expect(titleNotifications(apply)).toBe(0)
+})
