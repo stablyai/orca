@@ -1,8 +1,6 @@
 import {
   compareAppVersions,
   hasReachedAppVersion,
-  isPerfPrereleaseAppVersion,
-  isPrereleaseAppVersion,
   isValidAppVersion
 } from '../../../../../shared/app-lifecycle/identity/app-version'
 import {
@@ -19,6 +17,10 @@ import {
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
+import {
+  inferRemoteServerCheckOptions,
+  isDedicatedRepoVersion
+} from './remote-server-update-channel-policy'
 import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
@@ -134,12 +136,17 @@ export async function inspectRemoteServerUpdate(
   const support = status.remoteUpdateSupport ?? null
   const versionComparable =
     currentVersion !== null && isValidAppVersion(currentVersion) && isValidAppVersion(clientVersion)
-  const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
+  const clientUsesDedicatedRepo = isDedicatedRepoVersion(clientVersion)
+  const outdated =
+    !clientUsesDedicatedRepo &&
+    versionComparable &&
+    compareAppVersions(currentVersion, clientVersion) < 0
   // A newer server is not heading to this app's version; offering it would read as a downgrade.
   const comparedTarget =
-    getRemoteServerNewerThanClientVersion({ currentVersion, clientVersion }) === null
-      ? clientVersion
-      : currentVersion
+    clientUsesDedicatedRepo ||
+    getRemoteServerNewerThanClientVersion({ currentVersion, clientVersion }) !== null
+      ? currentVersion
+      : clientVersion
   const statusFields = {
     currentVersion,
     clientVersion,
@@ -158,9 +165,15 @@ export async function inspectRemoteServerUpdate(
     }
   }
 
-  if (checkOptions) {
+  // Dedicated-repo client builds (hourly/daily/adhoc) are never served by the server's updater feed;
+  // ask the server's own feed whether a newer release is actually available for its channel.
+  const effectiveCheckOptions =
+    checkOptions ??
+    (clientUsesDedicatedRepo ? inferRemoteServerCheckOptions(currentVersion) : undefined)
+
+  if (effectiveCheckOptions) {
     try {
-      const first = await transport.check(environment.id, checkOptions)
+      const first = await transport.check(environment.id, effectiveCheckOptions)
       const checked =
         first.status.state === 'available' || first.status.state === 'not-available'
           ? first
@@ -220,12 +233,7 @@ export async function runRemoteServerUpdate(
   }
   onProgress(next)
   try {
-    const inferredCheckOptions = {
-      includePrerelease:
-        entry.targetVersion !== null && isPrereleaseAppVersion(entry.targetVersion),
-      includePerfPrerelease:
-        entry.targetVersion !== null && isPerfPrereleaseAppVersion(entry.targetVersion)
-    }
+    const inferredCheckOptions = inferRemoteServerCheckOptions(entry.targetVersion)
     await transport.check(entry.environmentId, options.checkOptions ?? inferredCheckOptions)
     const available = await pollRemoteServerUpdater(
       entry.environmentId,
