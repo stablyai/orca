@@ -186,6 +186,27 @@ describe('the owner proof of a row its stamps don’t mark', () => {
     expect(quiet.answered).toEqual(new Set())
   })
 
+  it('still counts this turn’s answer once an earlier fill’s row was sent and deleted', async () => {
+    const rows = [row('r1')]
+    const f = fill(rows)
+    const stamps = [
+      { account: 'acct', conversation: DM, deliveryId: 'r1', ownerAsked: true as const }
+    ]
+    // Recovery fills first; the cloud accepts it and the row is deleted.
+    expect((await f.run(turn('Done.\n\nNO_REPLY', stamps))).answered).toEqual(
+      new Set([DM.externalId])
+    )
+    rows.length = 0
+    // The live end of that same turn, later: no row left, the answer still counts.
+    expect((await f.run(turn('Done.\n\nNO_REPLY', stamps))).answered).toEqual(
+      new Set([DM.externalId])
+    )
+    // Another turn does not inherit it.
+    expect(
+      (await f.run({ ...turn('Done.\n\nNO_REPLY', stamps), turnItemId: 'turn-2' })).answered
+    ).toEqual(new Set())
+  })
+
   it('counts a row an earlier fill already answered for this turn, but not one of another turn', async () => {
     const filledBy = (turnItemId: string): JournalConnectorReplyRow => ({
       ...row('r1'),
