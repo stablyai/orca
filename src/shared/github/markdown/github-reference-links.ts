@@ -57,6 +57,11 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
       continue
     }
 
+    // Bare `#123` may belong to another repo; the session repo's issue link would 404.
+    if (match[1] === undefined && match[2] === undefined) {
+      continue
+    }
+
     const owner = match[1] ?? defaultRepo.owner
     const repo = match[2] ?? defaultRepo.repo
     const number = match[3]
@@ -85,7 +90,7 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
   return parts
 }
 
-/** Turns `#123` and `owner/repo#123` in an mdast tree's text into issue links, in place. */
+/** Turns `owner/repo#123` in an mdast tree's text into issue links, in place. Bare `#123` stays text. */
 export function linkGitHubReferences(node: MarkdownNode, defaultRepo: GitHubRepoReference): void {
   if (!node.children || node.type === 'link' || node.type === 'image') {
     return
