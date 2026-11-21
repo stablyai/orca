@@ -56,7 +56,15 @@ export function projectOrchestrationFleetAttention(
   if (facts.pendingApproval) {
     categories.push('approval')
   }
-  if (facts.outcome === 'failed') {
+  // A failed start that never had a process leaves nothing for a coordinator to recover.
+  const failedWithoutProcess =
+    facts.outcome === 'failed' &&
+    facts.liveness.verdict === 'unverifiable' &&
+    facts.liveness.reason === 'unsupervised_settled' &&
+    !facts.pendingInput &&
+    !facts.pendingGuidance &&
+    !facts.pendingApproval
+  if (facts.outcome === 'failed' && !failedWithoutProcess) {
     categories.push('failure')
   }
   if (facts.interrupted) {
