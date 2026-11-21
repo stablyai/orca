@@ -21,12 +21,14 @@ export type AgentPaneThreadReuseCache = {
   previousByPaneKey: Map<string, PaneThreadInputs & { thread: AgentPaneThread }>
   previousList: AgentPaneThread[]
   generatedTitlesEnabled?: boolean
-  /** Panes whose thread was added, replaced or dropped by the last build. */
-  changedPaneKeys: ReadonlySet<string>
+  /** Set by a reader of build changes; without one, builds skip the bookkeeping. */
+  trackChanges?: boolean
+  /** Panes whose thread was added, replaced or dropped by the last build; null when untracked. */
+  changedPaneKeys: ReadonlySet<string> | null
 }
 
 export function createAgentPaneThreadReuseCache(): AgentPaneThreadReuseCache {
-  return { previousByPaneKey: new Map(), previousList: [], changedPaneKeys: new Set() }
+  return { previousByPaneKey: new Map(), previousList: [], changedPaneKeys: null }
 }
 
 const NO_EVENTS: readonly ActivityEvent[] = []
@@ -188,7 +190,7 @@ export function buildAgentPaneThreads(
   // A thread depends only on its pane's inputs, so unchanged panes keep their thread without rebuilding it.
   const reusable = reuseCache?.generatedTitlesEnabled === generatedTitlesEnabled
   const nextByPaneKey = new Map<string, PaneThreadInputs & { thread: AgentPaneThread }>()
-  const changedPaneKeys = new Set<string>()
+  const changedPaneKeys = reuseCache?.trackChanges ? new Set<string>() : null
   let keptPaneCount = 0
   const built = paneKeys
     .map((paneKey) => {
@@ -212,9 +214,11 @@ export function buildAgentPaneThreads(
               buildPaneThread(paneKey, inputs, generatedTitlesEnabled)
             )
       nextByPaneKey.set(paneKey, { ...inputs, thread })
-      keptPaneCount += Number(previous !== undefined)
-      if (previous?.thread !== thread) {
-        changedPaneKeys.add(paneKey)
+      if (changedPaneKeys) {
+        keptPaneCount += Number(previous !== undefined)
+        if (previous?.thread !== thread) {
+          changedPaneKeys.add(paneKey)
+        }
       }
       return thread
     })
@@ -224,7 +228,7 @@ export function buildAgentPaneThreads(
     return built
   }
   const result = arrayItemsEqual(reuseCache.previousList, built) ? reuseCache.previousList : built
-  if (keptPaneCount < reuseCache.previousByPaneKey.size) {
+  if (changedPaneKeys && keptPaneCount < reuseCache.previousByPaneKey.size) {
     for (const paneKey of reuseCache.previousByPaneKey.keys()) {
       if (!nextByPaneKey.has(paneKey)) {
         changedPaneKeys.add(paneKey)

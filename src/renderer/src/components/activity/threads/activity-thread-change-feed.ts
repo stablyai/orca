@@ -24,6 +24,10 @@ export function publishActivityThreadChanges(
 ): void {
   threadsByPaneKey[mode] = build?.previousByPaneKey ?? new Map()
   const paneKeys = build && !firstBuild ? build.changedPaneKeys : null
+  if (build) {
+    // Tracking costs each build a pass, so only builds with a reader pay; a later reader resyncs.
+    build.trackChanges = changeListeners[mode].size > 0
+  }
   if (paneKeys === null || paneKeys.size > 0) {
     for (const listener of changeListeners[mode]) {
       listener(paneKeys)

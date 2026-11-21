@@ -31,6 +31,7 @@ function startPublisher(): Publisher {
   let statuses: AcceptedAgentStatuses | null = null
   let stopStatuses = (): void => {}
   let acknowledgedAt: Readonly<Record<string, number>> | null = null
+  let flushedInputs: ReturnType<typeof getActivityThreadInputs> | null = null
   let sentReset = false
   let lastSentAt = 0
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -54,7 +55,8 @@ function startPublisher(): Publisher {
     }
     lastSentAt = Date.now()
     // Building here, not per store write, keeps a burst of writes to one build per interval.
-    const snapshot = readActivityThreadSnapshot('all', getActivityThreadInputs('all'))
+    flushedInputs = getActivityThreadInputs('all')
+    const snapshot = readActivityThreadSnapshot('all', flushedInputs)
     const state = useAppStore.getState()
     watchStatuses(state.agentStatusByPaneKey)
     const acknowledged = state.acknowledgedAgentsByPaneKey
@@ -89,8 +91,9 @@ function startPublisher(): Publisher {
     return null
   }
 
+  // Store writes Activity does not read keep the same inputs and schedule nothing.
   const schedule = (): void => {
-    if (timer === null) {
+    if (timer === null && getActivityThreadInputs('all') !== flushedInputs) {
       timer = setTimeout(flush, Math.max(0, lastSentAt + PUBLISH_INTERVAL_MS - Date.now()))
     }
   }
