@@ -21,12 +21,19 @@ import {
 } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   mobileWebBundleBrotliPath,
-  type MobileWebBundleAsset
+  type MobileWebBundleAsset,
+  type MobileWebBundleCatalog
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 import {
+  MOBILE_WEB_BUNDLE_LOCALE_CATALOG_MAX_REPLY_BYTES,
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
+  MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_BYTES,
+  MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_METHOD,
   MobileWebBundleLocaleCatalogParamsSchema,
+  MobileWebBundleLocaleCatalogRangeParamsSchema,
   type MobileWebBundleLocaleCatalogParams,
+  type MobileWebBundleLocaleCatalogRangeParams,
+  type MobileWebBundleLocaleCatalogRangeResult,
   type MobileWebBundleLocaleCatalogResult
 } from '../../../../../shared/mobile-web-bundle/locale-catalog-contract'
 import {
@@ -64,21 +71,34 @@ function abortIfDisconnected(ctx: RpcContext): void {
   }
 }
 
+function findCatalog(bundle: BundledMobileWebBundle, locale: string): MobileWebBundleCatalog {
+  const entry = bundle.manifest.catalogs?.find((catalog) => catalog.locale === locale)
+  if (!entry) {
+    throw bundleError('mobile_web_bundle_asset_unknown')
+  }
+  return entry
+}
+
+// Its own budget, so a page's catalog reads never wait behind its shell's bundle download.
+function catalogReadBucket(ctx: RpcContext): string {
+  return `catalog:${mobileWebBundleReadBucket(ctx)}`
+}
+
 /** Answer from the build's own catalog file, so the page reads the strings it was built with. */
 async function readLocaleCatalog(
   params: MobileWebBundleLocaleCatalogParams,
   ctx: RpcContext
 ): Promise<MobileWebBundleLocaleCatalogResult> {
   const bundle = await requireBundle()
-  const entry = bundle.manifest.catalogs?.find((catalog) => catalog.locale === params.locale)
-  if (!entry) {
-    throw bundleError('mobile_web_bundle_asset_unknown')
-  }
+  const entry = findCatalog(bundle, params.locale)
   if (params.knownSha256 === entry.sha256) {
     return { locale: entry.locale, sha256: entry.sha256, catalog: null }
   }
-  // Its own budget, so a page's one catalog read never waits behind its shell's bundle download.
-  const release = acquireMobileWebBundleReadSlot(`catalog:${mobileWebBundleReadBucket(ctx)}`)
+  // Pages that predate ranges read this as no catalog; sent whole, it would overflow the relay frame.
+  if (entry.byteLength > MOBILE_WEB_BUNDLE_LOCALE_CATALOG_MAX_REPLY_BYTES) {
+    throw bundleError('mobile_web_bundle_asset_unknown')
+  }
+  const release = acquireMobileWebBundleReadSlot(catalogReadBucket(ctx))
   if (!release) {
     throw bundleError('mobile_web_bundle_read_limited')
   }
@@ -149,7 +169,45 @@ type VerifiedWindow = {
   data: Buffer
 }
 
-/** Check build, member, alignment, read slot, asset hash, then window; keep encoding inside the slot to charge deflate work. */
+/** One admitted read: `source`'s window at `offset`, cut once `verified`'s whole file matches its hash. */
+type AdmittedRead = {
+  readonly bucket: string
+  readonly bundle: BundledMobileWebBundle
+  readonly verified: Pick<MobileWebBundleAsset, 'path' | 'sha256'>
+  readonly source: WindowSource
+  readonly offset: number
+  readonly windowBytes: number
+}
+
+/** Check alignment, read slot, the file's hash, then the window; keep encoding inside the slot to charge deflate work. */
+async function readAdmittedWindow<T>(
+  ctx: RpcContext,
+  read: AdmittedRead,
+  encode: (data: Buffer) => Promise<T>
+): Promise<T> {
+  const { bundle, verified, source, offset, windowBytes } = read
+  assertOffsetAddressesAWindow(offset, windowBytes, source)
+  const release = acquireMobileWebBundleReadSlot(read.bucket)
+  if (!release) {
+    throw bundleError('mobile_web_bundle_read_limited')
+  }
+  try {
+    abortIfDisconnected(ctx)
+    if (!(await verifyMobileWebBundleAsset(bundle.root, bundle.manifest.buildId, verified))) {
+      throw bundleError('mobile_web_bundle_asset_changed')
+    }
+    abortIfDisconnected(ctx)
+    const data = await readMobileWebBundleAssetWindow(bundle.root, source, offset, windowBytes)
+    abortIfDisconnected(ctx)
+    return await encode(data)
+  } catch (error) {
+    throw asContractError(error, verified.path)
+  } finally {
+    release()
+  }
+}
+
+/** Check build and member before the admitted read. */
 async function readVerifiedWindow<T>(
   ctx: RpcContext,
   params: MobileWebBundleChunkParams,
@@ -164,26 +222,10 @@ async function readVerifiedWindow<T>(
   }
   const asset = findAsset(bundle, params.path)
   const source = sourceOf(asset)
-  assertOffsetAddressesAWindow(params.offset, windowBytes, source)
-
-  const release = acquireMobileWebBundleReadSlot(mobileWebBundleReadBucket(ctx))
-  if (!release) {
-    throw bundleError('mobile_web_bundle_read_limited')
-  }
-  try {
-    abortIfDisconnected(ctx)
-    if (!(await verifyMobileWebBundleAsset(bundle.root, bundle.manifest.buildId, asset))) {
-      throw bundleError('mobile_web_bundle_asset_changed')
-    }
-    abortIfDisconnected(ctx)
-    const data = await readMobileWebBundleAssetWindow(
-      bundle.root,
-      source,
-      params.offset,
-      windowBytes
-    )
-    abortIfDisconnected(ctx)
-    return await encode({
+  const bucket = mobileWebBundleReadBucket(ctx)
+  const read = { bucket, bundle, verified: asset, source, offset: params.offset, windowBytes }
+  return readAdmittedWindow(ctx, read, (data) =>
+    encode({
       header: {
         buildId: bundle.manifest.buildId,
         path: asset.path,
@@ -194,11 +236,38 @@ async function readVerifiedWindow<T>(
       },
       data
     })
-  } catch (error) {
-    throw asContractError(error, asset.path)
-  } finally {
-    release()
+  )
+}
+
+/** A window of the catalog's file; the page hashes what it reassembles against the `sha256` every window restates. */
+async function readLocaleCatalogRange(
+  params: MobileWebBundleLocaleCatalogRangeParams,
+  ctx: RpcContext
+): Promise<MobileWebBundleLocaleCatalogRangeResult> {
+  const bundle = await requireBundle()
+  const entry = findCatalog(bundle, params.locale)
+  const { locale, sha256, byteLength } = entry
+  const header = { locale, sha256, byteLength, offset: params.offset }
+  if (params.knownSha256 === sha256) {
+    return { ...header, eof: true, encoding: 'identity', dataBase64: null }
   }
+  const read = {
+    bucket: catalogReadBucket(ctx),
+    bundle,
+    verified: entry,
+    source: entry,
+    offset: params.offset,
+    windowBytes: MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_BYTES
+  }
+  return readAdmittedWindow(ctx, read, async (data) => {
+    const encoded = await encodeMobileWebBundleRange(data)
+    return {
+      ...header,
+      eof: params.offset + data.byteLength >= byteLength,
+      encoding: encoded.encoding,
+      dataBase64: encoded.bytes.toString('base64')
+    }
+  })
 }
 
 /** Chunks and brotli windows go out as read: chunks predate encodings, and brotli output does not shrink again. */
@@ -252,5 +321,11 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     permission: 'workspace',
     params: MobileWebBundleLocaleCatalogParamsSchema,
     handler: readLocaleCatalog
+  }),
+  defineMethod({
+    name: MOBILE_WEB_BUNDLE_LOCALE_CATALOG_RANGE_METHOD,
+    permission: 'workspace',
+    params: MobileWebBundleLocaleCatalogRangeParamsSchema,
+    handler: readLocaleCatalogRange
   })
 ]

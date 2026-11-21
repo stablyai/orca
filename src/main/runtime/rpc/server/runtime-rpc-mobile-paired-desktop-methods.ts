@@ -6,6 +6,7 @@ export const PAIRED_DESKTOP_METHODS = [
   'mobileWeb.bundle.brotliRange',
   'mobileWeb.bundle.chunk',
   'mobileWeb.bundle.localeCatalog',
+  'mobileWeb.bundle.localeCatalogRange',
   'mobileWeb.bundle.manifest',
   'mobileWeb.bundle.range',
   'notifications.getMissedSince',
