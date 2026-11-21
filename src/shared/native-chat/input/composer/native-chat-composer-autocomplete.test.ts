@@ -218,6 +218,12 @@ describe('room @ queries with spaces', () => {
     expect(derive('notify @eng - neil please').mode).toBe('none')
   })
 
+  it('hands a new command or skill token to its own menu', () => {
+    expect(derive('ask @eng /').mode).not.toBe('mention')
+    expect(derive('ask @eng /rev').mode).not.toBe('mention')
+    expect(derive('ask @eng $').mode).not.toBe('mention')
+  })
+
   it('needs whitespace before the @ and a word after it', () => {
     expect(derive('a@eng - n').mode).toBe('none')
     expect(derive('@- x').mode).toBe('none')
