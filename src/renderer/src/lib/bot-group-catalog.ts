@@ -11,7 +11,7 @@ import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
-import { activateAndRevealFolderWorkspace } from './workspace/activation/worktree-activation'
+import { activateAndRevealFolderWorkspaceWithOutcome } from './workspace/activation/worktree-activation'
 import type { AppState } from '../store/types'
 import { selectFrontTab } from '../store/slices/tabs/active-tab-selection'
 
@@ -58,11 +58,15 @@ export async function openBotGroupRoom(
     .getState()
     .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(group)) })
   // Group homes are not sidebar rows, so there is nothing to reveal.
-  const opened = activateAndRevealFolderWorkspace(group.folderWorkspaceId, {
+  const outcome = activateAndRevealFolderWorkspaceWithOutcome(group.folderWorkspaceId, {
     executionHostId: group.hostId,
     revealInSidebar: false
   })
-  if (opened === false) {
+  if ('refused' in outcome) {
+    // A blocked path already told the user why; say nothing twice.
+    if (outcome.refused.failureNotified) {
+      return
+    }
     throw new Error(
       translate(
         'bots.groups.homeUnavailable',
