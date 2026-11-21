@@ -16,6 +16,7 @@ import type { NativeChatTabSession } from '../session-actions/tab-session-histor
 import { CopyTabIdMenuItem } from '../pane-actions/CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from '../pane-actions/CloseSplitPaneMenuItem'
+import { TabNotificationMuteMenuItem } from './TabNotificationMuteMenuItem'
 
 const TAB_COLORS = [
   {
@@ -94,6 +95,8 @@ type SortableTabContextMenuProps = {
   closable?: boolean
   /** See `SortableTabProps.canPin`. */
   canPin?: boolean
+  /** See `SortableTabProps.canMuteNotifications`. */
+  canMuteNotifications?: boolean
   /** See `SortableTabProps.canContinueInTerminal`. */
   canContinueInTerminal?: boolean
   onSessionSwitchComplete?: () => void
@@ -126,6 +129,7 @@ export function SortableTabContextMenu({
   isPinned,
   closable = true,
   canPin = true,
+  canMuteNotifications = true,
   canContinueInTerminal = true,
   onSessionSwitchComplete,
   sessionSwitchOpening,
@@ -211,6 +215,7 @@ export function SortableTabContextMenu({
             : t('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </ContextMenuItem>
       ) : null}
+      {canMuteNotifications ? <TabNotificationMuteMenuItem tabId={tab.id} /> : null}
       {onAllowAutoClose ? (
         <ContextMenuItem onSelect={onAllowAutoClose}>
           <Timer className="size-3.5 shrink-0" />

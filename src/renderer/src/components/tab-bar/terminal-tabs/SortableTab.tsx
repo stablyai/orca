@@ -20,6 +20,7 @@ import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard
 import { useSortableTabRename } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
+import { TabNotificationsMutedBadge } from './TabNotificationsMutedBadge'
 import { SortableTabCloseButton } from './SortableTabCloseButton'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { useSortableTabDrag } from './use-sortable-tab-drag'
@@ -77,6 +78,7 @@ export default function SortableTab({
   closable = true,
   sizing = 'terminal',
   canPin = true,
+  canMuteNotifications = true,
   isBotHome = false,
   canContinueInTerminal = true,
   identityIcon,
@@ -250,6 +252,7 @@ export default function SortableTab({
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
+      {canMuteNotifications && !isEditing && <TabNotificationsMutedBadge tabId={tab.id} />}
       {isEditing ? (
         <Input
           ref={setRenameInputElement}
@@ -383,6 +386,7 @@ export default function SortableTab({
         isPinned={isPinned}
         closable={closable}
         canPin={canPin}
+        canMuteNotifications={canMuteNotifications}
         canContinueInTerminal={canContinueInTerminal}
         onActivate={onActivate}
         onClose={onClose}
