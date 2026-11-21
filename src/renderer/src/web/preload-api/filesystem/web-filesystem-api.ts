@@ -29,10 +29,11 @@ import {
 } from '../workspaces/web-runtime-worktree-catalog'
 import { noopUnsubscribe } from '../web-storage'
 import { uploadBrowserFilesToWebAgentSessionAttachments } from '../agents/web-agent-session-attachment-upload'
+import { createTauriNativeFilesystemApi } from '../../tauri-native-filesystem-api'
 
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   const searches = new Map<string, AbortController>()
-  return {
+  const baseFs: NonNullable<Partial<PreloadApi>['fs']> = {
     prepareDroppedPaths: async () => {
       throw new Error('Preparing dropped file paths is not supported in the web client')
     },
@@ -188,6 +189,10 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe
+  }
+  return {
+    ...baseFs,
+    ...createTauriNativeFilesystemApi(baseFs)
   }
 }
 

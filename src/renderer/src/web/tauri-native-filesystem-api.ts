@@ -11,6 +11,10 @@ import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-ca
 import { callRuntimeRpc } from '../runtime/rpc/calls/runtime-rpc-call'
 import { uploadPathsToAgentSessionAttachments } from './tauri-native-attachment-upload'
 import { requireActiveEnvironment } from './runtime/client/web-runtime-session'
+import {
+  createTauriNativeFilesystemReadApi,
+  type NativeFilesystemFallback
+} from './tauri-native-filesystem-read-api'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
 
 const RUNTIME_UPLOAD_CHUNK_BYTES = 384 * 1024
@@ -22,11 +26,14 @@ type NativeFileChunk = {
 }
 
 /** Native file ownership for Tauri's local runtime and structured chat uploads. */
-export function createTauriNativeFilesystemApi(): Partial<FilesystemApi['fs']> {
+export function createTauriNativeFilesystemApi(
+  fallback?: NativeFilesystemFallback
+): Partial<FilesystemApi['fs']> {
   if (!isTauriNativeHost()) {
     return {}
   }
   return {
+    ...createTauriNativeFilesystemReadApi(fallback),
     downloadFolder: downloadTauriSshFolder,
     saveDownloadedFile,
     startDownloadedFile,

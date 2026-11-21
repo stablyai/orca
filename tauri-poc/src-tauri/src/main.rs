@@ -43,7 +43,10 @@ mod external_editor;
 // mod feature_wall;
 mod filesystem_download;
 mod filesystem_import;
+mod filesystem_io;
+mod filesystem_search;
 mod filesystem_upload;
+mod git_inspection;
 // mod keybindings_file;
 // mod local_log_tail;
 mod menu_appearance;
@@ -1178,8 +1181,19 @@ fn main() {
             filesystem_download::poc_finish_downloaded_file,
             filesystem_download::poc_cancel_downloaded_file,
             filesystem_import::poc_import_external_paths,
+            filesystem_io::poc_read_file,
+            filesystem_io::poc_read_file_chunk,
+            filesystem_io::poc_stat,
+            filesystem_io::poc_watch_worktree,
+            filesystem_io::poc_unwatch_worktree,
+            filesystem_search::poc_read_dir,
+            filesystem_search::poc_list_files,
+            filesystem_search::poc_search_files,
             filesystem_upload::poc_stage_external_paths,
             filesystem_upload::poc_read_external_file_chunk,
+            git_inspection::poc_git_status,
+            git_inspection::poc_git_diff,
+            git_inspection::poc_git_check_ignored,
             // Local log tail removed.
             // local_log_tail::poc_read_local_log_tail,
             // local_log_tail::poc_read_local_log_snapshot,
@@ -1220,6 +1234,7 @@ fn main() {
             app.manage(PendingOpenSettingsState::default());
             app.manage(filesystem_download::DownloadSessions::default());
             app.manage(filesystem_download::FolderDownloadSessions::default());
+            app.manage(filesystem_io::FsWatcherState::default());
             let resource_root = app.path().resource_dir().ok();
             app.manage(Arc::new(OrcadRuntime::new(resource_root)));
 

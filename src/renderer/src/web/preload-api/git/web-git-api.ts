@@ -16,6 +16,7 @@ import {
   resolveRuntimeFilePath,
   resolveRuntimeWorktreeByPath
 } from '../workspaces/web-runtime-worktree-catalog'
+import { createTauriNativeGitApi } from '../../tauri-native-git-api'
 
 export const webGitStatusAbortControllers = new Map<string, AbortController>()
 
@@ -48,7 +49,7 @@ export async function callAbortableRuntimeStatus<TResult>(
 }
 
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
-  return {
+  const baseGit: NonNullable<Partial<PreloadApi>['git']> = {
     status: async ({
       worktreePath,
       includeIgnored,
@@ -300,4 +301,5 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     }
   }
+  return { ...baseGit, ...createTauriNativeGitApi(baseGit) }
 }

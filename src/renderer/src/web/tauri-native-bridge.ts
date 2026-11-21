@@ -10,6 +10,7 @@ import { createTauriNativeCliApi } from './tauri-native-cli-api'
 
 export { createTauriNativeFilesystemDropApi } from './tauri-native-filesystem-drop-api'
 export { createTauriNativeFilesystemApi } from './tauri-native-filesystem-api'
+export { createTauriNativeGitApi } from './tauri-native-git-api'
 export { isTauriNativeHost } from './tauri-native-host'
 export { createTauriNativeRepositoriesApi } from './tauri-native-repositories-api'
 export {
