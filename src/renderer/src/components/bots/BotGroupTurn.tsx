@@ -22,6 +22,7 @@ import { useBotAvatarSrc } from './bot-avatar-image'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import {
   type BotGroupTurn as Turn,
+  botGroupOffPageRunningTurn,
   withBotGroupTurnAnswer
 } from '../../../../shared/bots/bot-group'
 import type { BotGroupSession } from './BotGroupSessionReader'
@@ -85,7 +86,15 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     [turn.frozenItems, turn.operationId, turn.workerDispatchIds, readTurn]
   )
   const canonical = items.find((item) => item.body.kind === 'turn')
-  const lifecycle = canonical?.body.kind === 'turn' ? canonical.body : null
+  const offPageLifecycle =
+    turn.frozenItems || !session
+      ? null
+      : botGroupOffPageRunningTurn(
+          { items: session.journalItems ?? noItems, submissions },
+          turn.operationId,
+          session.latestTurn
+        )
+  const lifecycle = canonical?.body.kind === 'turn' ? canonical.body : offPageLifecycle
   const submission = submissions.find(
     (item) => item.clientMessageId === turn.operationId || item.queuedMessageId === turn.operationId
   )
