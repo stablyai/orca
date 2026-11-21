@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Pressable, Text, type HostInstance } from 'react-native'
+import { useState } from 'react'
+import { Pressable, Text } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
@@ -15,7 +15,7 @@ import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet
 import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../components/menu/NativeMenu'
 import { StatusDot } from '../components/feedback/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRefreshHint } from '../query/refresh-hint'
@@ -98,8 +98,6 @@ export function HostScreenHeader({
     onHideSidebar,
     router
   } = controller
-  const moreRef = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [sharedLinksOpen, setSharedLinksOpen] = useState(false)
   // The computer's own bot links, once it lists bots; a server's live under that server's account.
   const listsBots = controller.bots.some(
@@ -189,20 +187,16 @@ export function HostScreenHeader({
         titleOpacity={collapsingTitle?.barTitleOpacity}
         dividerOpacity={collapsingTitle?.barDividerOpacity}
         trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
-            onPress={() => setMenuOpen(true)}
-            active={menuOpen}
-          />
+          <NativeMenu groups={[navigationGroup, hostGroup]}>
+            {(openMenu) => (
+              <NavBarButton
+                icon={MoreHorizontal}
+                accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
+                onPress={openMenu}
+              />
+            )}
+          </NativeMenu>
         }
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={moreRef}
-        groups={[navigationGroup, hostGroup]}
-        onClose={() => setMenuOpen(false)}
       />
       {listsBots ? (
         <HostSharedLinksSheet

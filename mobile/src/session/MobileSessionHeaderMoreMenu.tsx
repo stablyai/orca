@@ -1,5 +1,4 @@
-import type { RefObject } from 'react'
-import type { HostInstance } from 'react-native'
+import type { ReactNode } from 'react'
 import {
   ALargeSmall,
   Columns2,
@@ -9,10 +8,9 @@ import {
   Plus,
   SquareChevronRight
 } from '../components/icons/app-icons'
-import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
+import { AgentSessionHistoryMenuIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
-import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { colors } from '../theme/mobile-theme'
+import { NativeMenu } from '../components/menu/NativeMenu'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -21,18 +19,18 @@ import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host
 
 type Props = {
   controller: MobileSessionController
-  anchorRef: RefObject<HostInstance | null>
   /** A narrow sideways header also moves source control and New tab in here. */
   actionsCollapsed: boolean
+  /** The ⋯ button; call `openMenu` from its press. */
+  children: (openMenu: () => void) => ReactNode
 }
 
-export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsCollapsed }: Props) {
+export function MobileSessionHeaderMoreMenu({ controller, actionsCollapsed, children }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
-    showHeaderMoreActions,
     setShowHeaderMoreActions,
     showAgentSessionHistoryAction,
     showChecksAction,
@@ -96,9 +94,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
               'session.headerMoreActionsSheet.agentHistoryHint',
               'Browse and resume agent sessions'
             ),
-            renderIcon: () => (
-              <MobileAgentSessionHistoryIcon size={17} color={colors.textPrimary} strokeWidth={2} />
-            ),
+            icon: AgentSessionHistoryMenuIcon,
             onPress: openAgentSessionHistory
           }
         ]
@@ -167,11 +163,11 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       : [])
   ]
   return (
-    <PullDownMenu
-      visible={showHeaderMoreActions}
-      anchorRef={anchorRef}
+    <NativeMenu
       groups={[panels, view, tabs]}
-      onClose={() => setShowHeaderMoreActions(false)}
-    />
+      onOpenChange={setShowHeaderMoreActions}
+    >
+      {children}
+    </NativeMenu>
   )
 }

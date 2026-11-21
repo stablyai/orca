@@ -1,6 +1,6 @@
 // One hook as a page: the desktop's HookDetail fields and Recent calls, with its action bar moved into ⋯.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { View, type HostInstance } from 'react-native'
+import { View } from 'react-native'
 import {
   Ellipsis,
   KeyRound,
@@ -13,7 +13,8 @@ import {
 import { webhookStatusFact } from '../../../../src/shared/bots/webhook-card-view'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useNow } from '../../hooks/use-now'
@@ -69,8 +70,6 @@ export function MobileBotWebhookDetail(props: DetailProps) {
   const { hook, ready, busy } = props
   const clipboard = useClipboardWriter()
   const [copying, setCopying] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuAnchor = useRef<HostInstance>(null)
   const paused = hook.state === 'paused'
   // The shown URL is masked; Copy fetches the key-bearing one and never shows it.
   // A reveal answering after the page closed or the key rotated copies nothing.
@@ -113,6 +112,46 @@ export function MobileBotWebhookDetail(props: DetailProps) {
     ? t('bots.webhooks.resume', 'Resume')
     : t('bots.webhooks.pause', 'Pause')
   const { pick } = hook.filters
+  const menuGroups: ActionSheetAction[][] = [
+    [
+      {
+        label: t('bots.webhooks.sample.send', 'Send a sample call'),
+        icon: Send,
+        hint: t('bots.webhooks.sample.note', 'A sample starts a real run.'),
+        disabled: !ready || busy || hook.state !== 'live',
+        onPress: props.onSample
+      },
+      {
+        label: pauseLabel,
+        icon: paused ? Play : Pause,
+        disabled: !ready || busy || hook.state === 'orphaned',
+        onPress: props.onPause
+      },
+      {
+        label: t('bots.webhooks.rotate.open', 'Rotate key…'),
+        icon: RefreshCw,
+        disabled: !ready,
+        onPress: () => props.onOpen('rotate')
+      },
+      {
+        label: hook.adapter
+          ? t('bots.webhooks.secret.changeOpen', 'Change signing secret…')
+          : t('bots.webhooks.secret.add', 'Add signing secret…'),
+        icon: KeyRound,
+        disabled: !ready,
+        onPress: () => props.onOpen('secret')
+      }
+    ],
+    [
+      {
+        label: t('bots.webhooks.delete.open', 'Delete hook…'),
+        icon: Trash2,
+        destructive: true,
+        disabled: !ready || busy,
+        onPress: () => props.onOpen('delete')
+      }
+    ]
+  ]
   return (
     <>
       <SheetHeader
@@ -120,12 +159,15 @@ export function MobileBotWebhookDetail(props: DetailProps) {
         subtitle={mobileWebhookStatus(webhookStatusFact(hook), now, t)}
         onBack={{ label: t('bots.webhooks.back', 'Back to Webhooks'), onPress: props.onBack }}
         trailingButtons={
-          <NavBarButton
-            ref={menuAnchor}
-            icon={Ellipsis}
-            accessibilityLabel={t('bots.webhooks.more', 'More actions')}
-            onPress={() => setMenuOpen(true)}
-          />
+          <NativeMenu groups={menuGroups}>
+            {(openMenu) => (
+              <NavBarButton
+                icon={Ellipsis}
+                accessibilityLabel={t('bots.webhooks.more', 'More actions')}
+                onPress={openMenu}
+              />
+            )}
+          </NativeMenu>
         }
       />
       {props.banner}
@@ -201,51 +243,6 @@ export function MobileBotWebhookDetail(props: DetailProps) {
         hook={hook}
         botName={props.botName}
         version={props.version}
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={menuAnchor}
-        onClose={() => setMenuOpen(false)}
-        groups={[
-          [
-            {
-              label: t('bots.webhooks.sample.send', 'Send a sample call'),
-              icon: Send,
-              hint: t('bots.webhooks.sample.note', 'A sample starts a real run.'),
-              disabled: !ready || busy || hook.state !== 'live',
-              onPress: props.onSample
-            },
-            {
-              label: pauseLabel,
-              icon: paused ? Play : Pause,
-              disabled: !ready || busy || hook.state === 'orphaned',
-              onPress: props.onPause
-            },
-            {
-              label: t('bots.webhooks.rotate.open', 'Rotate key…'),
-              icon: RefreshCw,
-              disabled: !ready,
-              onPress: () => props.onOpen('rotate')
-            },
-            {
-              label: hook.adapter
-                ? t('bots.webhooks.secret.changeOpen', 'Change signing secret…')
-                : t('bots.webhooks.secret.add', 'Add signing secret…'),
-              icon: KeyRound,
-              disabled: !ready,
-              onPress: () => props.onOpen('secret')
-            }
-          ],
-          [
-            {
-              label: t('bots.webhooks.delete.open', 'Delete hook…'),
-              icon: Trash2,
-              destructive: true,
-              disabled: !ready || busy,
-              onPress: () => props.onOpen('delete')
-            }
-          ]
-        ]}
       />
     </>
   )

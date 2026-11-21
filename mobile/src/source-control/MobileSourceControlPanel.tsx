@@ -264,6 +264,7 @@ export function MobileSourceControlPanel({
             ? changesMenuGroups
             : null
       }
+      drawnMenu={activeTab === 'changes' && ready}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
       accessory={

@@ -7,7 +7,7 @@ import { Ellipsis, ExternalLink, Plus, RefreshCw } from '../../components/icons/
 import { botMembersFrom, slackMembersOf, type BotMember } from '../../../../src/shared/bot-types'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -44,8 +44,6 @@ export function MobileBotSlackPage(props: {
 }) {
   const t = useMobileTranslation()
   const { bot, teamId, slack } = props
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuAnchor = useRef(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [busy, setBusy] = useState(false)
   const alive = useRef(true)
@@ -186,14 +184,17 @@ export function MobileBotSlackPage(props: {
         onBack={{ label: t('bots.connectors.back', 'Back to Connectors'), onPress: props.onBack }}
         trailingButtons={
           menu.length > 0 ? (
-            <NavBarButton
-              ref={menuAnchor}
-              icon={Ellipsis}
-              accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
-                name: BOT_CONNECTOR_NAMES.slack
-              })}
-              onPress={() => setMenuOpen(true)}
-            />
+            <NativeMenu groups={[menu]}>
+              {(openMenu) => (
+                <NavBarButton
+                  icon={Ellipsis}
+                  accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
+                    name: BOT_CONNECTOR_NAMES.slack
+                  })}
+                  onPress={openMenu}
+                />
+              )}
+            </NativeMenu>
           ) : undefined
         }
       />
@@ -241,12 +242,6 @@ export function MobileBotSlackPage(props: {
           />
         </SettingsSection>
       ) : null}
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={menuAnchor}
-        onClose={() => setMenuOpen(false)}
-        groups={[menu]}
-      />
     </>
   )
 }

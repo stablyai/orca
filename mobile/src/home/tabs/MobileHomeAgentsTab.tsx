@@ -1,14 +1,13 @@
 import {
   CheckCheck,
-  ChevronRight,
   Search,
   SlidersHorizontal,
   SquareTerminal,
   Trash2,
   WifiOff
 } from '../../components/icons/app-icons'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, ScrollView, Text, View, type HostInstance } from 'react-native'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ActivityIndicator, ScrollView, View } from 'react-native'
 import {
   AGENT_LIST_GROUP_BY_CHOICES,
   agentListRowsIn,
@@ -20,9 +19,8 @@ import {
 import { summarizeAgentListHosts } from '../../agents/agent-list-rows'
 import { loadAgentListView, saveAgentListView } from '../../agents/agent-list-preferences'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../../agents/MobileAgentListRows'
-import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu, type MenuItem } from '../../components/menu/NativeMenu'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useSerializedStoredState } from '../../storage/use-serialized-stored-state'
@@ -61,8 +59,6 @@ export function MobileHomeAgentsTab(props: {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [pickedHost, setPickedHost] = useState<string | null>(null)
-  const [menu, setMenu] = useState<'closed' | 'options' | 'group-by'>('closed')
-  const optionsRef = useRef<HostInstance>(null)
   // An unpaired desktop's filter falls back to every desktop.
   const hostFilter = hosts.some((host) => host.id === pickedHost) ? pickedHost : null
   const { now } = data.agentList
@@ -93,60 +89,49 @@ export function MobileHomeAgentsTab(props: {
     agent: t('agents.groupBy.agent', 'Agent'),
     desktop: t('agents.groupBy.desktop', 'Desktop')
   }
-  const menuGroups: ActionSheetAction[][] =
-    menu === 'group-by'
-      ? [
-          AGENT_LIST_GROUP_BY_CHOICES.map((groupBy) => ({
-            id: groupBy,
-            label: groupByLabels[groupBy],
-            checked: view.groupBy === groupBy,
-            onPress: () => setView({ ...view, groupBy })
-          }))
-        ]
-      : [
-          [
-            {
-              id: 'group-by',
-              label: t('agents.options.groupBy', 'Group by'),
-              skipAutoClose: true,
-              renderIcon: () => (
-                <View style={styles.menuValue}>
-                  <Text style={styles.menuValueText}>{groupByLabels[view.groupBy]}</Text>
-                  <ChevronRight size={16} color={colors.textMuted} />
-                </View>
-              ),
-              onPress: () => setMenu('group-by')
-            },
-            {
-              id: 'unread-only',
-              label: t('agents.options.unreadOnly', 'Unread only'),
-              checked: view.unreadOnly,
-              onPress: () => setView({ ...view, unreadOnly: !view.unreadOnly })
-            },
-            {
-              id: 'show-workers',
-              label: t('agents.options.showWorkers', 'Show worker agents'),
-              checked: view.showWorkers,
-              onPress: () => setView({ ...view, showWorkers: !view.showWorkers })
-            }
-          ],
-          [
-            {
-              id: 'mark-all-read',
-              label: t('agents.options.markAllRead', 'Mark all read'),
-              icon: CheckCheck,
-              disabled: unreadRows.length === 0,
-              onPress: () => props.handlers.onSetRead(unreadRows, true)
-            },
-            {
-              id: 'clear-finished',
-              label: t('agents.options.clearFinished', 'Clear finished'),
-              icon: Trash2,
-              disabled: clearableRows.length === 0,
-              onPress: clearFinished
-            }
-          ]
-        ]
+  const menuGroups: MenuItem[][] = [
+    [
+      {
+        id: 'group-by',
+        label: t('agents.options.groupBy', 'Group by'),
+        value: groupByLabels[view.groupBy],
+        actions: AGENT_LIST_GROUP_BY_CHOICES.map((groupBy) => ({
+          id: groupBy,
+          label: groupByLabels[groupBy],
+          checked: view.groupBy === groupBy,
+          onPress: () => setView({ ...view, groupBy })
+        }))
+      },
+      {
+        id: 'unread-only',
+        label: t('agents.options.unreadOnly', 'Unread only'),
+        checked: view.unreadOnly,
+        onPress: () => setView({ ...view, unreadOnly: !view.unreadOnly })
+      },
+      {
+        id: 'show-workers',
+        label: t('agents.options.showWorkers', 'Show worker agents'),
+        checked: view.showWorkers,
+        onPress: () => setView({ ...view, showWorkers: !view.showWorkers })
+      }
+    ],
+    [
+      {
+        id: 'mark-all-read',
+        label: t('agents.options.markAllRead', 'Mark all read'),
+        icon: CheckCheck,
+        disabled: unreadRows.length === 0,
+        onPress: () => props.handlers.onSetRead(unreadRows, true)
+      },
+      {
+        id: 'clear-finished',
+        label: t('agents.options.clearFinished', 'Clear finished'),
+        icon: Trash2,
+        disabled: clearableRows.length === 0,
+        onPress: clearFinished
+      }
+    ]
+  ]
 
   const filteredHosts = hosts.filter((host) => hostFilter === null || host.id === hostFilter)
   // A desktop still dialing, or connected with its first list read pending, may yet have agents.
@@ -238,13 +223,15 @@ export function MobileHomeAgentsTab(props: {
                 setQuery('')
               }}
             />
-            <MobileHomeTabHeaderButton
-              ref={optionsRef}
-              icon={SlidersHorizontal}
-              accessibilityLabel={t('agents.options.open', 'Agent list options')}
-              active={menu !== 'closed'}
-              onPress={() => setMenu('options')}
-            />
+            <NativeMenu groups={menuGroups}>
+              {(openMenu) => (
+                <MobileHomeTabHeaderButton
+                  icon={SlidersHorizontal}
+                  accessibilityLabel={t('agents.options.open', 'Agent list options')}
+                  onPress={openMenu}
+                />
+              )}
+            </NativeMenu>
           </>
         }
       />
@@ -279,12 +266,6 @@ export function MobileHomeAgentsTab(props: {
       >
         {body}
       </ScrollView>
-      <PullDownMenu
-        visible={menu !== 'closed'}
-        anchorRef={optionsRef}
-        groups={menuGroups}
-        onClose={() => setMenu('closed')}
-      />
     </>
   )
 }
@@ -351,7 +332,5 @@ const styles = themedStyleSheet(() => ({
   content: { paddingHorizontal: spacing.lg },
   search: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   filters: { paddingHorizontal: spacing.lg },
-  menuValue: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 },
-  menuValueText: { fontSize: 15, color: colors.textMuted }
+  connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 }
 }))

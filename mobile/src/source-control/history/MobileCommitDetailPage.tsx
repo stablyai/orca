@@ -1,16 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type HostInstance
-} from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from '../../components/icons/app-icons'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -72,8 +65,6 @@ export function MobileCommitDetailPage({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
-  const moreRef = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [files, setFiles] = useState<FilesState>({ files: null, error: null })
   const [filesReload, setFilesReload] = useState(0)
   const [webUrl, setWebUrl] = useState<string | null>(null)
@@ -182,20 +173,16 @@ export function MobileCommitDetailPage({
         title={t('sourceControl.commitDetail.title', 'Commit')}
         subtitle={shortId}
         trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            active={menuOpen}
-            onPress={() => setMenuOpen(true)}
-            accessibilityLabel={t('sourceControl.commitDetail.more', 'More commit actions')}
-          />
+          <NativeMenu groups={[actions]}>
+            {(openMenu) => (
+              <NavBarButton
+                icon={MoreHorizontal}
+                onPress={openMenu}
+                accessibilityLabel={t('sourceControl.commitDetail.more', 'More commit actions')}
+              />
+            )}
+          </NativeMenu>
         }
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={moreRef}
-        groups={[actions]}
-        onClose={() => setMenuOpen(false)}
       />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: spacing.lg + bottomInset }]}

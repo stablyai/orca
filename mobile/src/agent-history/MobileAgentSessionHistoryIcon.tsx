@@ -1,4 +1,6 @@
+import type { LucideIcon } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
+import type { AppIcon } from '../components/icons/app-icon-types'
 
 type MobileAgentSessionHistoryIconProps = {
   size?: number
@@ -46,3 +48,9 @@ export function MobileAgentSessionHistoryIcon({
     </Svg>
   )
 }
+
+/** The glyph as a menu icon; phones show the matching platform symbol. */
+export const AgentSessionHistoryMenuIcon: AppIcon = Object.assign(
+  MobileAgentSessionHistoryIcon as unknown as LucideIcon,
+  { nativeSymbol: { ios: 'square.on.circle', android: 'category' } }
+)

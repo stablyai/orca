@@ -1,13 +1,13 @@
 // Shared links: every live bot link the computer's Orca account published, with each link's actions.
 // The desktop's Settings › Shared links (BotSharedLinksList).
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { View, type HostInstance } from 'react-native'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { View } from 'react-native'
 import { Copy, Ellipsis, Link2Off, RefreshCw } from '../../components/icons/app-icons'
 import { botPackageName, type BotOwnedShare } from '../../../../src/shared/bots/bot-share-status'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
@@ -32,68 +32,63 @@ function SharedLinkRow(props: {
   onStop: () => void
 }) {
   const t = useMobileTranslation()
-  const anchor = useRef<HostInstance>(null)
-  const [menu, setMenu] = useState(false)
   const { share, bot } = props
   const name = bot?.name ?? share.displayName ?? share.name
   return (
-    <>
-      <ListRow
-        leading={
-          bot ? <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} /> : undefined
-        }
-        title={name}
-        subtitle={share.url.replace(/^https:\/\//, '')}
-        subtitleMono
-        subtitleLines={1}
-        value={botShareDate(share.createdAt)}
-        disabled={props.disabled}
-        onPress={bot ? props.onOpen : undefined}
-        accessory={
-          <NavBarButton
-            ref={anchor}
-            icon={Ellipsis}
-            accessibilityLabel={t('bots.share.moreActions', 'More actions for {{name}}', { name })}
-            onPress={() => setMenu(true)}
-          />
-        }
-      />
-      <PullDownMenu
-        visible={menu}
-        anchorRef={anchor}
-        onClose={() => setMenu(false)}
-        groups={[
-          [
-            {
-              id: 'copy',
-              label: t('bots.share.copyLink', 'Copy link'),
-              icon: Copy,
-              onPress: props.onCopy
-            },
-            // Update link rebuilds from the bot, so it needs the bot here; stopping needs only the link.
-            ...(bot
-              ? [
-                  {
-                    id: 'update',
-                    label: t('bots.share.updateLink', 'Update link'),
-                    icon: RefreshCw,
-                    closeBeforePress: true,
-                    onPress: props.onOpen
-                  }
-                ]
-              : []),
-            {
-              id: 'stop',
-              label: t('bots.share.stopSharing', 'Stop sharing'),
-              icon: Link2Off,
-              destructive: true,
-              closeBeforePress: true,
-              onPress: props.onStop
-            }
-          ]
-        ]}
-      />
-    </>
+    <ListRow
+      leading={bot ? <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} /> : undefined}
+      title={name}
+      subtitle={share.url.replace(/^https:\/\//, '')}
+      subtitleMono
+      subtitleLines={1}
+      value={botShareDate(share.createdAt)}
+      disabled={props.disabled}
+      onPress={bot ? props.onOpen : undefined}
+      accessory={
+        <NativeMenu
+          groups={[
+            [
+              {
+                id: 'copy',
+                label: t('bots.share.copyLink', 'Copy link'),
+                icon: Copy,
+                onPress: props.onCopy
+              },
+              // Update link rebuilds from the bot, so it needs the bot here; stopping needs only the link.
+              ...(bot
+                ? [
+                    {
+                      id: 'update',
+                      label: t('bots.share.updateLink', 'Update link'),
+                      icon: RefreshCw,
+                      closeBeforePress: true,
+                      onPress: props.onOpen
+                    }
+                  ]
+                : []),
+              {
+                id: 'stop',
+                label: t('bots.share.stopSharing', 'Stop sharing'),
+                icon: Link2Off,
+                destructive: true,
+                closeBeforePress: true,
+                onPress: props.onStop
+              }
+            ]
+          ]}
+        >
+          {(openMenu) => (
+            <NavBarButton
+              icon={Ellipsis}
+              accessibilityLabel={t('bots.share.moreActions', 'More actions for {{name}}', {
+                name
+              })}
+              onPress={openMenu}
+            />
+          )}
+        </NativeMenu>
+      }
+    />
   )
 }
 

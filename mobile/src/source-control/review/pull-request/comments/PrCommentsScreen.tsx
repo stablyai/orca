@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
+import { useMemo, useState } from 'react'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { Bot, ListFilter } from '../../../../components/icons/app-icons'
 import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -21,7 +21,7 @@ import { useNow } from '../../../../hooks/use-now'
 import { useKeyboardOcclusion } from '../../../../platform/keyboard/keyboard-occlusion'
 import { useBackClaim } from '../../../../navigation/use-back-claim'
 import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../../../components/menu/NativeMenu'
 import { MobileSegmentedControl } from '../../../../components/controls/MobileSegmentedControl'
 import { SectionHeader } from '../../../../components/list/ListGroup'
 import {
@@ -51,8 +51,6 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
     unresolved.length > 0 ? 'unresolved' : 'all'
   )
   const [hideBots, setHideBots] = useState(false)
-  const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  const filterRef = useRef<HostInstance>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [resolvedLimit, setResolvedLimit] = useState(COMMENT_PAGE)
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
@@ -174,13 +172,27 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
           subtitle={data ? `#${data.pr.number}` : undefined}
           onBack={onBack}
           trailing={
-            <NavBarButton
-              ref={filterRef}
-              icon={ListFilter}
-              active={hideBots}
-              onPress={() => setFilterMenuOpen(true)}
-              accessibilityLabel={t('pullRequest.screens.filterComments', 'Filter comments')}
-            />
+            <NativeMenu
+              groups={[
+                [
+                  {
+                    label: t('pullRequest.screens.hideBots', 'Hide bots'),
+                    icon: Bot,
+                    checked: hideBots,
+                    onPress: () => setHideBots((value) => !value)
+                  }
+                ]
+              ]}
+            >
+              {(openMenu) => (
+                <NavBarButton
+                  icon={ListFilter}
+                  active={hideBots}
+                  onPress={openMenu}
+                  accessibilityLabel={t('pullRequest.screens.filterComments', 'Filter comments')}
+                />
+              )}
+            </NativeMenu>
           }
           footer={
             canComment && data ? (
@@ -304,21 +316,6 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
           )}
         </ScreenFrame>
       </View>
-      <PullDownMenu
-        visible={filterMenuOpen}
-        anchorRef={filterRef}
-        onClose={() => setFilterMenuOpen(false)}
-        groups={[
-          [
-            {
-              label: t('pullRequest.screens.hideBots', 'Hide bots'),
-              icon: Bot,
-              checked: hideBots,
-              onPress: () => setHideBots((value) => !value)
-            }
-          ]
-        ]}
-      />
       {threadShown ? (
         <View style={styles.threadLayer}>
           <PrThreadScreen

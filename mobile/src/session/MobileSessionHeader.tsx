@@ -1,5 +1,5 @@
-import { useRef, useState, useSyncExternalStore } from 'react'
-import { StyleSheet, View, type HostInstance } from 'react-native'
+import { useState, useSyncExternalStore } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
@@ -44,7 +44,6 @@ export function MobileSessionHeader({
     forceReconnectHost,
     worktreeName,
     activePanel,
-    setShowHeaderMoreActions,
     requestLeaveSession,
     visibleTabs,
     showConnectionRetry,
@@ -67,7 +66,6 @@ export function MobileSessionHeader({
   const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
-  const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()
@@ -160,13 +158,18 @@ export function MobileSessionHeader({
           onPress={() => handlePanelTap('sourceControl')}
         />
       ) : null}
-      <NavBarButton
-        ref={moreRef}
-        active={activePanel !== null && !(sourceControlInBar && activePanel === 'sourceControl')}
-        accessibilityLabel={t('session.header.moreActions', 'More session actions')}
-        icon={MoreHorizontal}
-        onPress={() => setShowHeaderMoreActions(true)}
-      />
+      <MobileSessionHeaderMoreMenu controller={controller} actionsCollapsed={actionsCollapsed}>
+        {(openMenu) => (
+          <NavBarButton
+            active={
+              activePanel !== null && !(sourceControlInBar && activePanel === 'sourceControl')
+            }
+            accessibilityLabel={t('session.header.moreActions', 'More session actions')}
+            icon={MoreHorizontal}
+            onPress={openMenu}
+          />
+        )}
+      </MobileSessionHeaderMoreMenu>
     </>
   )
   return (
@@ -219,11 +222,6 @@ export function MobileSessionHeader({
         {tabsInTopBar ? null : tabStrip}
         {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>
-      <MobileSessionHeaderMoreMenu
-        controller={controller}
-        anchorRef={moreRef}
-        actionsCollapsed={actionsCollapsed}
-      />
     </View>
   )
 }

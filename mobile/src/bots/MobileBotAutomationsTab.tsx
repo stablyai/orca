@@ -1,5 +1,4 @@
-import { useRef, useState } from 'react'
-import { Text, View, type HostInstance } from 'react-native'
+import { Text } from 'react-native'
 import {
   CalendarClock,
   Clock,
@@ -18,7 +17,7 @@ import { botWaitTimeFormat } from '../../../src/shared/bots/bot-row-line'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
-import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { DrawnMenu } from '../components/menu/DrawnMenu'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -55,8 +54,6 @@ function AutomationRow(props: {
   onDelete: (() => void) | null
 }) {
   const t = useMobileTranslation()
-  const anchor = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const { automation, failing } = props.row
   const { onEdit, onAskInChat, onViewRuns } = props.actions
   const wontFire = automationWontFireNote(automation, props.bot)
@@ -118,43 +115,40 @@ function AutomationRow(props: {
         ]
       : []
   ]
+  // Drawn: the whole row opens it, and a native menu would also swallow taps on the row's switch.
   return (
-    <View ref={anchor} collapsable={false}>
-      <ListRow
-        title={automation.name}
-        subtitle={automationWhenText(automation, automation.enabled)}
-        leading={<Kind size={18} color={colors.textSecondary} strokeWidth={1.8} />}
-        onPress={() => setMenuOpen(true)}
-        detail={
-          <>
-            {wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : null}
-            {failing ? (
-              <Text style={sheetStyles.alert}>
-                {t('bots.automations.couldNotFinish', 'Couldn’t finish')}
-              </Text>
-            ) : null}
-          </>
-        }
-        accessory={
-          <MobileSwitch
-            value={automation.enabled}
-            onValueChange={props.onSetEnabled}
-            disabled={props.disabled}
-            accessibilityLabel={
-              automation.enabled
-                ? t('bots.automations.pause', 'Pause {{name}}', { name: automation.name })
-                : t('bots.automations.resume', 'Resume {{name}}', { name: automation.name })
-            }
-          />
-        }
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={anchor}
-        groups={menu}
-        onClose={() => setMenuOpen(false)}
-      />
-    </View>
+    <DrawnMenu groups={menu}>
+      {(openMenu) => (
+        <ListRow
+          title={automation.name}
+          subtitle={automationWhenText(automation, automation.enabled)}
+          leading={<Kind size={18} color={colors.textSecondary} strokeWidth={1.8} />}
+          onPress={openMenu}
+          detail={
+            <>
+              {wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : null}
+              {failing ? (
+                <Text style={sheetStyles.alert}>
+                  {t('bots.automations.couldNotFinish', 'Couldn’t finish')}
+                </Text>
+              ) : null}
+            </>
+          }
+          accessory={
+            <MobileSwitch
+              value={automation.enabled}
+              onValueChange={props.onSetEnabled}
+              disabled={props.disabled}
+              accessibilityLabel={
+                automation.enabled
+                  ? t('bots.automations.pause', 'Pause {{name}}', { name: automation.name })
+                  : t('bots.automations.resume', 'Resume {{name}}', { name: automation.name })
+              }
+            />
+          }
+        />
+      )}
+    </DrawnMenu>
   )
 }
 

@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import {
   Copy,
   CircleX,
@@ -19,7 +19,7 @@ import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'
 import type { PRCheckDetail } from '../../../../../../src/shared/github/checks/check-types'
 import { LIST_LEADING_SLOT, LIST_ROW_PADDING } from '../../../../components/list/ListGroup'
-import { PullDownMenu } from '../../../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../../../components/menu/NativeMenu'
 import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { PrMiniButton } from '../PrMiniButton'
@@ -56,9 +56,7 @@ export function PrCheckFailureRow({
   const clipboard = useClipboardWriter()
   const [open, setOpen] = useState(initiallyOpen)
   const [showLog, setShowLog] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
-  const menuRef = useRef<HostInstance>(null)
   const details = entry?.status === 'loaded' ? entry.details : null
   const content = details ? presentCheckDetail(details) : null
   const annotation = content?.annotations[0] ?? null
@@ -149,18 +147,21 @@ export function PrCheckFailureRow({
             </Text>
           </View>
         </Pressable>
-        <Pressable
-          ref={menuRef}
-          onPress={() => setMenuOpen(true)}
-          hitSlop={8}
-          style={({ pressed }) => [styles.more, pressed && styles.morePressed]}
-          accessibilityRole="button"
-          accessibilityLabel={t('pullRequest.screens.checkActions', 'More for {{name}}', {
-            name: check.name
-          })}
-        >
-          <MoreHorizontal size={18} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
+        <NativeMenu groups={menuGroups}>
+          {(openMenu) => (
+            <Pressable
+              onPress={openMenu}
+              hitSlop={8}
+              style={({ pressed }) => [styles.more, pressed && styles.morePressed]}
+              accessibilityRole="button"
+              accessibilityLabel={t('pullRequest.screens.checkActions', 'More for {{name}}', {
+                name: check.name
+              })}
+            >
+              <MoreHorizontal size={18} color={colors.textSecondary} strokeWidth={2.2} />
+            </Pressable>
+          )}
+        </NativeMenu>
       </View>
       {open ? (
         <View style={styles.body}>
@@ -224,12 +225,6 @@ export function PrCheckFailureRow({
           {showLog ? <PRCheckDetailView entry={entry} /> : null}
         </View>
       ) : null}
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={menuRef}
-        groups={menuGroups}
-        onClose={() => setMenuOpen(false)}
-      />
     </View>
   )
 }

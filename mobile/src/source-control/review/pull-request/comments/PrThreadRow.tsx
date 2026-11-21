@@ -1,12 +1,5 @@
-import { useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type HostInstance
-} from 'react-native'
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   ExternalLink,
   FileText,
@@ -29,7 +22,7 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
 import { canEditComment, isResolvableComment } from './pr-comment-actions'
 import { ConfirmModal } from '../../../../components/sheets/ConfirmModal'
-import { PullDownMenu } from '../../../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../../../components/menu/NativeMenu'
 import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { PrMarkdown } from '../PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
@@ -98,8 +91,6 @@ export function PrThreadRow({
   const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HostInstance>(null)
   const root = getPRCommentGroupRoot(group)
   const replies = group.kind === 'thread' ? group.replies : []
   const lastReply = replies.at(-1)
@@ -162,16 +153,22 @@ export function PrThreadRow({
           <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : null}
         {menuGroups.length > 0 ? (
-          <Pressable
-            ref={menuRef}
-            onPress={() => setMenuOpen(true)}
-            hitSlop={8}
-            style={({ pressed }) => [styles.more, pressed && styles.morePressed]}
-            accessibilityRole="button"
-            accessibilityLabel={t('pullRequest.screens.commentActions', 'More for this comment')}
-          >
-            <MoreHorizontal size={18} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
+          <NativeMenu groups={menuGroups}>
+            {(openMenu) => (
+              <Pressable
+                onPress={openMenu}
+                hitSlop={8}
+                style={({ pressed }) => [styles.more, pressed && styles.morePressed]}
+                accessibilityRole="button"
+                accessibilityLabel={t(
+                  'pullRequest.screens.commentActions',
+                  'More for this comment'
+                )}
+              >
+                <MoreHorizontal size={18} color={colors.textSecondary} strokeWidth={2.2} />
+              </Pressable>
+            )}
+          </NativeMenu>
         ) : null}
       </View>
       <View style={styles.body}>
@@ -264,15 +261,6 @@ export function PrThreadRow({
       ) : (
         <View style={styles.row}>{content}</View>
       )}
-      {/* Siblings of the row, so a tap on a closing menu cannot bubble into it and open the thread. */}
-      {menuGroups.length > 0 ? (
-        <PullDownMenu
-          visible={menuOpen}
-          anchorRef={menuRef}
-          groups={menuGroups}
-          onClose={() => setMenuOpen(false)}
-        />
-      ) : null}
       {canMutate ? (
         <ConfirmModal
           visible={confirmDelete}
