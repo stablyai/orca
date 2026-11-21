@@ -44,6 +44,12 @@ function uploadRead(bot: BotRef, version: string, generation: number): Promise<U
   return entry.read
 }
 
+/** The picture already loaded for this version, if any: shown without a read, even while its host is away. */
+function loadedUploadRead(bot: BotRef, version: string): Promise<UploadRead> | null {
+  const cached = uploads.get(botRefKey(bot))
+  return cached?.version === version && cached.loaded ? cached.read : null
+}
+
 /** Only an away paired server is offline; this computer, or a host not listed, is tried. */
 function useBotHostAway(hostId: ExecutionHostId): boolean {
   const read = (): boolean => readBotHostState(hostId) === 'offline'
@@ -64,11 +70,18 @@ export function useBotAvatarSrc(
   // its coming back reads it again, so the row never stays on the initial.
   const generation = useBotHostGeneration(hostId)
   useEffect(() => {
-    if (!uploadKey || away) {
+    if (!uploadKey) {
+      return
+    }
+    // An away server can't answer, but a picture already loaded from it still shows.
+    const pending = away
+      ? loadedUploadRead({ hostId, id }, uploadKey)
+      : uploadRead({ hostId, id }, uploadKey, generation)
+    if (!pending) {
       return
     }
     let live = true
-    void uploadRead({ hostId, id }, uploadKey, generation).then((read) => {
+    void pending.then((read) => {
       if (live && read !== 'failed') {
         setUpload({ key: uploadKey, src: read.src })
       }

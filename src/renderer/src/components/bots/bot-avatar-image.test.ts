@@ -51,9 +51,7 @@ function hostIs(entry: RuntimeEnvironmentStatus): void {
 const flush = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
 
 let nextBot = 0
-function mountAvatar(avatar = 'upload:v1') {
-  nextBot += 1
-  const id = `bot-${nextBot}`
+function mountAvatar(avatar = 'upload:v1', id = `bot-${++nextBot}`) {
   const hook = renderHook(() => useBotAvatarSrc({ id, hostId: HOST, avatar }))
   return { id, hook }
 }
@@ -120,5 +118,21 @@ describe('useBotAvatarSrc on a paired server', () => {
     hostIs(CONNECTED)
     await flush()
     expect(hook.result.current).toBe('data:image/png;base64,UE5H')
+  })
+
+  it('shows a loaded picture in a row mounted while its server is away, without a read', async () => {
+    avatars.answer = () => 'UE5H'
+    hostIs(CONNECTED)
+    const first = mountAvatar()
+    await flush()
+    expect(first.hook.result.current).toBe('data:image/png;base64,UE5H')
+    first.hook.unmount()
+
+    avatars.answer = null
+    hostIs(DISCONNECTED)
+    const again = mountAvatar('upload:v1', first.id)
+    await flush()
+    expect(again.hook.result.current).toBe('data:image/png;base64,UE5H')
+    expect(avatars.reads.filter((read) => read === first.id)).toHaveLength(1)
   })
 })
