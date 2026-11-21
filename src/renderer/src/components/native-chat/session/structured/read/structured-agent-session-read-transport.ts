@@ -4,6 +4,7 @@ import {
   agentSessionTextAppendRequest
 } from '../../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import {
+  AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
@@ -12,7 +13,7 @@ import type { RuntimeClientTarget } from '../../../../../../../shared/remote-run
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { subscribeStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { documentViewerVisibility } from './document-viewer-visibility'
+import { documentLiveTextViewer, documentViewerVisibility } from './document-viewer-visibility'
 
 type LiveReadArgs = Parameters<typeof startStructuredAgentSessionLiveRead>[0]
 
@@ -23,17 +24,20 @@ const LOCAL_TEXT_APPEND: AgentSessionTextAppendCapabilities = { textAppend: 1, t
 function environmentSubscribeAsks(environmentId: string): {
   textAppend: Promise<AgentSessionTextAppendCapabilities | null>
   promptSuggestions: Promise<boolean>
+  liveTextViewer: Promise<boolean>
 } {
   const supported = runtimeEnvironmentSupportsCapabilities(environmentId, [
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
-    AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY
-  ]).catch(() => [false, false, false])
+    AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY
+  ]).catch(() => [false, false, false, false])
   return {
     textAppend: supported.then(([textAppend, toolOutputAppend]) =>
       agentSessionTextAppendRequest({ textAppend, toolOutputAppend })
     ),
-    promptSuggestions: supported.then(([, , promptSuggestions]) => promptSuggestions === true)
+    promptSuggestions: supported.then(([, , promptSuggestions]) => promptSuggestions === true),
+    liveTextViewer: supported.then(([, , , liveTextViewer]) => liveTextViewer === true)
   }
 }
 
@@ -53,6 +57,14 @@ export function startStructuredAgentSessionReadTransport(
     textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
     coalesce: { visibility: documentViewerVisibility(read.sessionId) },
+    // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
+    liveTextViewer: documentLiveTextViewer(asks?.liveTextViewer ?? true, (viewerId, shown) =>
+      callStructuredAgentSession(target, 'agentSession.liveTextShown', {
+        sessionId: read.sessionId,
+        viewerId,
+        shown
+      })
+    ),
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
     subscribe: (params, onEvent, onError, onClose) =>

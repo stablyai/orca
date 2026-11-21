@@ -56,6 +56,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     | AgentSessionTextAppendCapabilities
   /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
   promptSuggestions?: Promise<boolean> | boolean
+  liveTextViewer?: Parameters<typeof createStructuredAgentSessionSubscribeAsks>[0]['liveTextViewer']
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
@@ -110,11 +111,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const applyReadFailure = (error: unknown): void => {
     const refusal = readAgentSessionErrorRefusal(error)
     failedFinally = isFinalAgentSessionReadRefusal(refusal)
-    if (refusal) {
-      args.applyError(agentSessionReadFailureText(error), refusal)
-    } else {
-      args.applyError(agentSessionReadFailureText(error))
-    }
+    args.applyError(agentSessionReadFailureText(error), ...(refusal ? [refusal] : []))
   }
   const reportReadFailure = (error: unknown): void => {
     if (!isUnattachedAgentSessionReadRefusal(error)) {
@@ -188,6 +185,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     const opensSubscription = event.type !== 'end' && openingFrameGeneration === eventOpenGeneration
     if (opensSubscription) {
       openingFrameGeneration = 0
+      asks.registered()
     }
     // First resumed batch replaces detached state; apply alone so coalescing cannot turn it into unchanged state.
     if (opensSubscription) {
@@ -314,6 +312,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       stopHostContactWatch()
       reconnectScheduler.dispose()
       coalescer.dispose()
+      asks.dispose()
       unsubscribe()
     }
   }

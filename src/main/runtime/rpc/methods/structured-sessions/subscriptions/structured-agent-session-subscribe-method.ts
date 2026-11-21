@@ -32,8 +32,8 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     let dispose = (): void => {}
     let releaseViewer = (): void => {}
     const viewer =
-      capabilities?.liveTextViewer === 1
-        ? structuredAgentSessionSubscriptionBase(ctx, params.sessionId)
+      capabilities?.liveTextViewer !== undefined
+        ? `${structuredAgentSessionSubscriptionBase(ctx, params.sessionId)}:${capabilities.liveTextViewer.id}`
         : undefined
     const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
       releaseViewer()
@@ -81,7 +81,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
       ...(viewer
         ? {
             liveTextViewer: viewer,
-            liveTextShown: params.shown === true,
+            liveTextShown: capabilities?.liveTextViewer?.shown === true,
             onLiveTextShown: (set: (shown: boolean) => void) => {
               releaseViewer = registerLiveTextViewer(viewer, set)
             }

@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionViewerVisibility } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-coalescer'
+import type { StructuredAgentSessionLiveTextViewer } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-text-viewer'
 
 const documentHidden = (): boolean =>
   typeof document !== 'undefined' && document.visibilityState === 'hidden'
@@ -42,5 +43,25 @@ export function documentViewerVisibility(
       }
     },
     subscribeShown: subscribeDocumentShown
+  }
+}
+
+/** A read runs only while a view of its chat is shown in a tab, so its window's visibility is
+ *  whether the chat is on screen. */
+export function documentLiveTextViewer(
+  supported: StructuredAgentSessionLiveTextViewer['supported'],
+  setShown: StructuredAgentSessionLiveTextViewer['setShown']
+): StructuredAgentSessionLiveTextViewer {
+  return {
+    supported,
+    shown: () => !documentHidden(),
+    subscribeShown: (changed) => {
+      if (typeof document === 'undefined') {
+        return () => {}
+      }
+      document.addEventListener('visibilitychange', changed)
+      return () => document.removeEventListener('visibilitychange', changed)
+    },
+    setShown
   }
 }
