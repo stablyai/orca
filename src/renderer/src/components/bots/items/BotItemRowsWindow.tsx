@@ -8,6 +8,7 @@
 // group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
 // and leaves Tab and the keys to the panel, as a plain list does.
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { botItemsDocumentHidden, type BotItemsViewport } from './bot-items-viewport'
@@ -163,22 +164,26 @@ export function BotItemRowsWindow({
     // matching them (the font size changed), not every scroll frame, and never for a group out of view.
     const moved = next.start !== windowRange.start || next.end !== windowRange.end
     const resized = rect !== null && Math.abs(rect.height - geometry.total) > 1
+    let read = sizes
     if (element && next.end > next.start && (moved || resized || !sizesRead.current)) {
       sizesRead.current = windowRange.end > windowRange.start
-      const read = readRowSizes(element, sizes)
-      if (read !== sizes) {
-        // New heights re-position the rows, which measures again.
-        setSizes(read)
-      }
+      read = readRowSizes(element, sizes)
     }
-    // An unchanged range over the same rows (most scroll frames) builds nothing.
-    setRange((prev) =>
-      prev.start === next.start &&
-      prev.end === next.end &&
-      prev.band.every((pick) => items[pick.at]?.uid === pick.uid)
-        ? prev
-        : { ...next, band: bandOf(items, next.start, next.end) }
-    )
+    // An unchanged range over the same rows (most scroll frames) updates nothing.
+    if (
+      read === sizes &&
+      !moved &&
+      windowRange.band.every((pick) => items[pick.at]?.uid === pick.uid)
+    ) {
+      return
+    }
+    // New heights re-position the rows, which measures again.
+    const apply = (): void => {
+      setSizes(read)
+      setRange({ ...next, band: bandOf(items, next.start, next.end) })
+    }
+    // Rows a scroll brings into view commit before that frame paints, so it shows no gap.
+    void (viewport.inFrame() ? flushSync(apply) : apply())
   })
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
   useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])

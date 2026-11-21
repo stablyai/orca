@@ -2,7 +2,6 @@
 // when scrolling, resizing or the list's own height moves it. Each long group reads its rows' window from it,
 // so groups add no scroll listeners or observers of their own, and with no group reading it nothing listens.
 import { useMemo } from 'react'
-import { flushSync } from 'react-dom'
 import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
@@ -20,6 +19,9 @@ export type BotItemsViewport = {
   read: () => BotItemsViewportBox | null
   /** This notice is only a scroll: groups' places in the scrolled content are as last measured. */
   scrollOnly: () => boolean
+  /** A scroll or resize frame's notice is running (not a flush during a commit): a change it makes
+   *  should commit before the frame paints. */
+  inFrame: () => boolean
   /** The first listener starts listening to the scroller; the last one leaving stops. */
   subscribe: (listener: () => void) => () => void
   /** Notifies every listener now, once per commit: the list's groups changed shape, which can move a
@@ -45,7 +47,7 @@ function readBox(scroller: HTMLElement): BotItemsViewportBox {
 function listenTo(
   scroller: HTMLElement,
   list: HTMLElement | null,
-  onFrame: (scrollOnly: boolean) => void
+  onFrame: (scrollOnly: boolean, animationFrame: boolean) => void
 ): () => void {
   let frame: number | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -58,9 +60,7 @@ function listenTo(
     frame = null
     timer = null
     if (byUser || !botItemsDocumentHidden()) {
-      // The rows a scroll brings into view commit before this frame paints, so it shows no gap.
-      const scrollOnly = !shaped
-      flushSync(() => onFrame(scrollOnly))
+      onFrame(!shaped, true)
     }
     byUser = false
     shaped = false
@@ -130,13 +130,16 @@ function createViewport(): BotItemsViewport {
   let stop: (() => void) | null = null
   let flushed = false
   let frameScrollOnly = false
-  const onFrame = (scrollOnly = false): void => {
+  let animationFrame = false
+  const onFrame = (scrollOnly = false, fromFrame = false): void => {
     if (scroller) {
       frameBox = readBox(scroller)
       frameScrollOnly = scrollOnly
+      animationFrame = fromFrame
       listeners.forEach((listener) => listener())
       frameBox = null
       frameScrollOnly = false
+      animationFrame = false
     }
   }
   const listen = (): void => {
@@ -146,6 +149,7 @@ function createViewport(): BotItemsViewport {
   return {
     read: () => (scroller ? (frameBox ?? readBox(scroller)) : null),
     scrollOnly: () => frameScrollOnly,
+    inFrame: () => animationFrame,
     subscribe: (listener) => {
       listeners.add(listener)
       if (!stop) {
