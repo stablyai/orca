@@ -221,6 +221,24 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(mocks.hosts[SERVER].setUpApp).not.toHaveBeenCalled()
   })
 
+  it('puts this desktop’s token first when the server’s lapsed, with the paste behind a disclosure', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].handOff.mockResolvedValue(ok({ code: 'one-time', expiresAt: 1 }))
+    redeem.mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE }))
+    openDialog()
+
+    const use = await screen.findByRole('button', { name: 'Use it' })
+    expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
+    expect(screen.getByLabelText('Configuration refresh token')).toBeTruthy()
+
+    fireEvent.click(use)
+    await screen.findByRole('button', { name: 'Approve in Slack' })
+    expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(redeem).toHaveBeenCalledWith({ code: 'one-time' })
+    expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
+  })
+
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {
     mocks.hostEmail = 'me@example.test'
     serverState({ state: 'not_created' })
