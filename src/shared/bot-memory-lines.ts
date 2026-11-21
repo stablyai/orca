@@ -17,6 +17,10 @@ export type BotMemoryFact = {
 export const BOT_MEMORY_SOURCE_SEPARATOR = ' · from: '
 
 const FACT_LINE = /^(\s*[-*]\s+)(.*)$/
+/** The line a new bot's MEMORY.md starts with (bot-home.ts): how to write it, not a fact. */
+const SEEDED_INTRO = 'One line per fact, newest first. Longer notes go in memory/<topic>.md.'
+// Headings, code fences, and table or rule separators hold no fact.
+const NOT_A_FACT = /^(?:#|```|\|?[\s:|-]+\|?$)/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
 function splitLines(text: string): { lines: string[]; eol: string } {
@@ -51,16 +55,20 @@ export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
 }
 
 function factParts(raw: string): (Omit<BotMemoryFact, 'line'> & { prefix: string }) | null {
+  // A list line, or any other line with words in it: every line of MEMORY.md is one fact.
   const listed = FACT_LINE.exec(raw)
-  const body = listed?.[2]?.trim()
-  if (!listed || !body) {
+  const plain = raw.trim()
+  const prose = !listed && plain !== '' && plain !== SEEDED_INTRO && !NOT_A_FACT.test(plain)
+  const body = listed ? listed[2]?.trim() : prose ? plain : ''
+  if (!body) {
     return null
   }
+  const prefix = listed ? listed[1] : (/^\s*/.exec(raw)?.[0] ?? '')
   const dated = DATED_TEXT.exec(body)
   const text = dated ? dated[2].trim() : body
   const at = text.lastIndexOf(BOT_MEMORY_SOURCE_SEPARATOR)
   return {
-    prefix: listed[1],
+    prefix,
     date: dated?.[1] ?? null,
     text: at > 0 ? text.slice(0, at).trim() : text,
     source: at > 0 ? text.slice(at + BOT_MEMORY_SOURCE_SEPARATOR.length).trim() || null : null
@@ -259,7 +267,7 @@ export function editBotMemoryFact(text: string, fact: BotMemoryFact, nextText: s
   if (next === '') {
     lines.splice(fact.line, 1)
   } else {
-    const prefix = FACT_LINE.exec(lines[fact.line] ?? '')?.[1] ?? '- '
+    const prefix = factParts(lines[fact.line] ?? '')?.prefix ?? '- '
     lines[fact.line] = factLine(prefix, fact.date, next, fact.source)
   }
   return lines.join(eol)
@@ -277,9 +285,10 @@ export function addBotMemoryFact(text: string, fact: string, date: string): stri
   }
   const { lines, eol } = splitLines(text)
   const line = factLine('- ', date, next)
-  const first = parseBotMemoryFacts(text)[0]
-  if (first) {
-    lines.splice(first.line, 0, line)
+  // Above the first list line, so prose a file opens with stays first.
+  const first = lines.findIndex((raw) => FACT_LINE.test(raw) && factParts(raw) !== null)
+  if (first !== -1) {
+    lines.splice(first, 0, line)
     return lines.join(eol)
   }
   const body = text.trimEnd()

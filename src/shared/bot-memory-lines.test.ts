@@ -27,8 +27,9 @@ const FILE = [
 ].join('\n')
 
 describe('bot memory lines', () => {
-  it('reads list lines as facts, with their date when they start with one', () => {
+  it('reads every line with words as a fact, with its date when it starts with one', () => {
     expect(parseBotMemoryFacts(FILE)).toEqual([
+      { line: 2, date: null, text: 'Intro prose stays put.', source: null },
       {
         line: 3,
         date: '2026-10-24',
@@ -36,9 +37,13 @@ describe('bot memory lines', () => {
         source: null
       },
       { line: 4, date: '2026-10-25', text: 'Jane owns web-app checkout.', source: null },
-      { line: 5, date: null, text: 'refresh-retry test is flaky on slow clocks.', source: null }
+      { line: 5, date: null, text: 'refresh-retry test is flaky on slow clocks.', source: null },
+      { line: 7, date: null, text: 'See memory/release.md.', source: null }
     ])
-    expect(parseBotMemoryFacts(SEEDED)).toEqual([])
+    // A new bot's how-to line, headings, fences and table rules are not facts.
+    expect(parseBotMemoryFacts(`${SEEDED}\n\`\`\`\n| a | b |\n|---|---|\n---\n`)).toEqual([
+      { line: 5, date: null, text: '| a | b |', source: null }
+    ])
   })
 
   it('counts lines the way the session loader caps them', () => {
@@ -48,7 +53,7 @@ describe('bot memory lines', () => {
   })
 
   it('edits one fact in place and leaves every other byte alone', () => {
-    const [, jane] = parseBotMemoryFacts(FILE)
+    const [, , jane] = parseBotMemoryFacts(FILE)
     const next = editBotMemoryFact(FILE, jane, 'Jane owns checkout;\nask her first.')
     expect(next).toBe(
       FILE.replace(
@@ -56,7 +61,7 @@ describe('bot memory lines', () => {
         '* 2026-10-25 Jane owns checkout; ask her first.'
       )
     )
-    expect(parseBotMemoryFacts(next)[1]).toEqual({
+    expect(parseBotMemoryFacts(next)[2]).toEqual({
       line: 4,
       date: '2026-10-25',
       text: 'Jane owns checkout; ask her first.',
@@ -94,15 +99,16 @@ describe('bot memory lines', () => {
     })
   })
 
-  it('forgets a fact by removing its line', () => {
-    const [dana] = parseBotMemoryFacts(FILE)
+  it('forgets a fact by removing its line, a prose line too', () => {
+    const [intro, dana] = parseBotMemoryFacts(FILE)
+    expect(forgetBotMemoryFact(FILE, intro)).not.toContain('Intro prose')
     const next = forgetBotMemoryFact(FILE, dana)
     expect(next).not.toContain('Dana')
     expect(next.split('\n')).toHaveLength(FILE.split('\n').length - 1)
     expect(editBotMemoryFact(FILE, dana, '   ')).toBe(next)
   })
 
-  it('adds the newest fact above the others, or after the prose when there are none', () => {
+  it('adds the newest fact above the list, after the prose a file opens with', () => {
     expect(addBotMemoryFact(FILE, 'New fact', '2026-10-27').split('\n')[3]).toBe(
       '- 2026-10-27 New fact'
     )
@@ -115,19 +121,21 @@ describe('bot memory lines', () => {
 
   it('round-trips CRLF files without converting them', () => {
     const crlf = FILE.replace(/\n/g, '\r\n')
-    const [dana] = parseBotMemoryFacts(crlf)
+    const [, dana] = parseBotMemoryFacts(crlf)
     const next = addBotMemoryFact(editBotMemoryFact(crlf, dana, 'Edited'), 'Added', '2026-10-27')
     expect(next).not.toMatch(/[^\r]\n/)
     expect(parseBotMemoryFacts(next).map((fact) => fact.text)).toEqual([
+      'Intro prose stays put.',
       'Added',
       'Edited',
       'Jane owns web-app checkout.',
-      'refresh-retry test is flaky on slow clocks.'
+      'refresh-retry test is flaky on slow clocks.',
+      'See memory/release.md.'
     ])
   })
 
   it('finds a fact again after other lines moved, and not once it is gone', () => {
-    const [, jane] = parseBotMemoryFacts(FILE)
+    const [, , jane] = parseBotMemoryFacts(FILE)
     const moved = addBotMemoryFact(FILE, 'Newer fact', '2026-10-27')
     expect(findBotMemoryFact(moved, jane)).toEqual({ ...jane, line: jane.line + 1 })
     expect(findBotMemoryFact(forgetBotMemoryFact(FILE, jane), jane)).toBeUndefined()
@@ -135,5 +143,18 @@ describe('bot memory lines', () => {
 
   it('dates by the local calendar', () => {
     expect(botMemoryDate(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05')
+  })
+})
+
+describe('an undashed line', () => {
+  it('keeps its own shape when edited, and its mark when a chat rewrites it', () => {
+    const file = '# Notes\n2026-11-01 releases on Tuesdays\n'
+    const [fact] = parseBotMemoryFacts(file)
+    expect(editBotMemoryFact(file, fact, 'releases on Wednesdays')).toBe(
+      '# Notes\n2026-11-01 releases on Wednesdays\n'
+    )
+    expect(tagBotMemoryChanges(file, `${file}deploys at noon\n`, 'Slack')).toBe(
+      `${file}deploys at noon · from: Slack\n`
+    )
   })
 })
