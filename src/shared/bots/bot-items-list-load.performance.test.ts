@@ -99,7 +99,7 @@ describe('loadBotItemsList work', () => {
     expect(calls).toBe(1)
   })
 
-  it('reads the loaded items that link a worker for a worker change, a hundred a read', async () => {
+  it('reads the loaded items that link a worker for a worker change, fifty a read', async () => {
     const items = seeded()
     const link = {
       kind: 'dispatch' as const,
@@ -130,7 +130,7 @@ describe('loadBotItemsList work', () => {
     expect(asked).toEqual([['i3', 'i2', 'i1']])
     const changed = read.items.find((item) => item.uid === 'i2')?.links[0]
     expect(changed?.kind === 'dispatch' ? changed.state : null).toBe('completed')
-    // More than one read holds: a read per hundred, however deep Closed is loaded.
+    // More than one read holds: a read per fifty, however deep Closed is loaded.
     for (const item of [...items.slice(0, 100), ...items.slice(200)]) {
       item.links = [link]
     }
@@ -138,6 +138,8 @@ describe('loadBotItemsList work', () => {
     read = await loadBotItemsList(call, read, MORE)
     asked.length = 0
     await loadBotItemsList(call, read, worker)
-    expect(asked.map((uids) => (Array.isArray(uids) ? uids.length : uids))).toEqual([100, 100])
+    expect(asked.map((uids) => (Array.isArray(uids) ? uids.length : uids))).toEqual([
+      50, 50, 50, 50
+    ])
   })
 })

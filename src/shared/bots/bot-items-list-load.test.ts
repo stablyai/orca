@@ -150,6 +150,52 @@ describe('loadBotItemsList', () => {
     expect(calls).toBe(1)
   })
 
+  it('loses no Closed row when items close in bulk after a read stopped for a newer ask', async () => {
+    const items = seeded()
+    const call = host(items)
+    let read = await loadBotItemsList(call, null, WHOLE)
+    read = await loadBotItemsList(call, read, MORE)
+    read = await loadBotItemsList(call, read, MORE)
+    Object.assign(items[0]!, { status: 'needs_you', version: 2 })
+    read = await loadBotItemsList(call, read, WHOLE, { waiting: () => true })
+    const changed: string[] = []
+    for (const item of items.slice(10, 70)) {
+      Object.assign(item, { status: 'done', lastActivityAt: 1000 + item.number, version: 2 })
+      changed.push(item.uid)
+    }
+    read = await loadBotItemsList(call, read, { whole: false, parts: changed, more: false })
+    read = await drain(call, read)
+    const uids = read.items.filter(closed).map((item) => item.uid)
+    expect(new Set(uids).size).toBe(260)
+    expect(uids).toHaveLength(260)
+  })
+
+  it('keeps the list and its Show more page when going on below a stopped read fails', async () => {
+    const items = seeded()
+    const inner = host(items)
+    let read = await loadBotItemsList(inner, null, WHOLE)
+    read = await loadBotItemsList(inner, read, MORE)
+    read = await loadBotItemsList(inner, read, MORE)
+    Object.assign(items[0]!, { status: 'needs_you', version: 2 })
+    read = await loadBotItemsList(inner, read, WHOLE, { waiting: () => true })
+    // The owed page fails; the Show more page after it lands.
+    let failOnce = true
+    const call: BotItemsListCall = (params) => {
+      if (params.closedCursor && failOnce) {
+        failOnce = false
+        return Promise.reject(new Error('offline'))
+      }
+      return inner(params)
+    }
+    read = await loadBotItemsList(call, read, MORE)
+    expect(read.items.filter(closed)).toHaveLength(200)
+    // Still owed, it goes on with the next read.
+    Object.assign(items[159]!, { title: 'Renamed deep', version: 2 })
+    read = await loadBotItemsList(inner, read, { whole: false, parts: ['i1'], more: false })
+    expect(read.items.find((item) => item.uid === 'i160')?.title).toBe('Renamed deep')
+    expect(read.items.filter(closed)).toHaveLength(200)
+  })
+
   it('keeps loaded Closed items when an older host answers a named read whole', async () => {
     const items = seeded()
     const call = host(items, true)
