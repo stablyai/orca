@@ -19,7 +19,8 @@ vi.mock('lucide-react-native', () => ({
   Laptop: 'Icon',
   Mail: 'Icon',
   ShieldAlert: 'Icon',
-  ShieldOff: 'Icon'
+  ShieldOff: 'Icon',
+  UserPlus: 'Icon'
 }))
 vi.mock('../components/list/DisclosureChevron', () => ({
   DisclosureChevron: ({ children }: { children: ReactNode }) => children

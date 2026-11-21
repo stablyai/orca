@@ -323,17 +323,14 @@ export function MobileBotSettingsTab(props: {
   if (page === 'who-can-ask') {
     return (
       <MobileBotWhoCanAskPage
+        {...props}
         bot={accessBot}
-        client={props.client}
         access={access}
-        online={props.online}
         locked={locked}
         banner={offlineBanner}
         onBack={backToSettings}
         save={save}
-        applyBot={applyBot}
         setSaving={setSaving}
-        showToast={props.showToast}
       />
     )
   }
