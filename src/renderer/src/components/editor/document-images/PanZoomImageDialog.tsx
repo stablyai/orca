@@ -114,7 +114,9 @@ export function PanZoomImageDialog({
           }
         }}
         showCloseButton={false}
-        className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
+        // Full window and see-through over a dark scrim; it only fades, so nothing on it moves.
+        overlayClassName="bg-black/80"
+        className="inset-0 top-0 left-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:border-0 dark:shadow-none"
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -189,19 +191,20 @@ function PanZoomImageCanvas({
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
-  const panZoom = usePanZoomViewport({ content })
+  // Fitted images stay clear of the toolbar row above them.
+  const panZoom = usePanZoomViewport({ content, fitPadding: 96, onClickOutsideContent: onClose })
   useViewerZoomCommands(panZoom, 'popup')
 
   return (
     <>
-      {/* Anchor to dialog edges so padding cannot frame the canvas. */}
       <PanZoomImageSurface
         panZoom={panZoom}
         src={imageSrc}
         alt={title}
         content={content}
-        className="absolute inset-0 bg-background"
+        className="absolute inset-0"
         background={background}
+        backdrop
         fallback={fallback}
         onLoad={(event) => {
           const { naturalWidth: width, naturalHeight: height } = event.currentTarget
@@ -213,7 +216,8 @@ function PanZoomImageCanvas({
       />
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-3">
+        {/* Below the titlebar, clear of native window controls. */}
+        <div className="pointer-events-none absolute inset-x-3 top-12 flex items-start gap-3">
           {showTitle ? (
             <span
               aria-hidden
