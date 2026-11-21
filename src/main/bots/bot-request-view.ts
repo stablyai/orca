@@ -200,12 +200,16 @@ const onlyWhatsNew = (shown: string) =>
   `Write only what ${shown} doesn't say: what you do next with it, or where it conflicts with your own work, in one line; with nothing new, just do the next step.`
 const ONLY_WHATS_NEW = onlyWhatsNew('the card')
 
-/** What the sender reads beside the receiving bot's reply. A group room shows the answer on the
- *  answering member's turn, as the owner's chat shows it on a card. */
-export function botAnswerView(record: BotRequestRecord, posted: boolean): Record<string, string> {
-  const owners = askedInOwnersChat(record)
+/** What the sender reads beside the receiving bot's reply. A group room that shows the answer on
+ *  the answering member's turn plays the card's part; one that couldn't leaves it to the sender. */
+export function botAnswerView(
+  record: BotRequestRecord,
+  posted: boolean,
+  shownInRoom = false
+): Record<string, string> {
+  const owners = !record.group && askedInOwnersChat(record)
   const inRoom = `The room already shows this answer on ${record.toBotName}'s turn, so don't repeat, quote or summarize it.`
-  const next = record.group
+  const next = shownInRoom
     ? record.purpose === 'question'
       ? `${inRoom} Finish the job with it. ${onlyWhatsNew('the room')}`
       : `${inRoom} ${onlyWhatsNew('the room')}`

@@ -38,8 +38,12 @@ import { readAgentSessionRecordStore } from '../../../../orchestration/addressin
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
 
 /** The payload a reply to a request carries: what the sender does with the answer. */
-export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): string | undefined {
-  const answer = botAnswerOf(db, original).botAnswer
+export function botAnswerPayload(
+  db: OrchestrationDb,
+  original: MessageRow,
+  shownInRoom = false
+): string | undefined {
+  const answer = botAnswerOf(db, original, shownInRoom).botAnswer
   return answer
     ? JSON.stringify({ requestId: answer.requestId, botAnswer: answer.view })
     : undefined
@@ -48,7 +52,8 @@ export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): str
 /** The answer a reply to a request is, recorded once; empty for a reply to other mail. */
 export function botAnswerOf(
   db: OrchestrationDb,
-  original: MessageRow
+  original: MessageRow,
+  shownInRoom = false
 ): { botAnswer?: { requestId: string; view: Record<string, string> } } {
   const record = botRequestRecord(db, original.id)
   if (!record) {
@@ -68,29 +73,41 @@ export function botAnswerOf(
       "You already answered that request, so send new mail if there's more to say."
     )
   }
-  return { botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted) } }
+  return {
+    botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted, shownInRoom) }
+  }
 }
 
 const GROUP_ANSWER_NOTE_TIMEOUT_MS = 5_000
 
-/** A group member's answer shows in the room on the turn that sent it; elsewhere it is only mail.
- *  Saved before the reply returns, while the turn that sent it is still running; a stalled read
- *  holds the reply back no longer than the bound, and never fails it. */
+/** A group member's first answer to a request shows in the room on the turn that sends it;
+ *  elsewhere it is only mail. Saved before the reply is, while that turn still runs, so the reply
+ *  tells the asker whether the room shows it; a stalled read holds the reply back no longer than
+ *  the bound, and never fails it. True once the room shows it. */
 export async function showGroupAnswer(
   runtime: OrcaRuntimeService,
   original: MessageRow,
   callerSessionId: string | undefined,
   body: string
-): Promise<void> {
-  const group = botRequestRecord(runtime.getOrchestrationDb(), original.id)?.group
-  if (group && callerSessionId === group.targetSessionId) {
-    const noted = runtimeBotGroups(runtime)
-      .noteAnswer(callerSessionId, body)
-      .catch((error: unknown) =>
-        console.warn('[bot-groups] could not show an answer in the room', error)
-      )
-    await withTimeout(noted, GROUP_ANSWER_NOTE_TIMEOUT_MS, undefined)
+): Promise<boolean> {
+  const db = runtime.getOrchestrationDb()
+  const record = botRequestRecord(db, original.id)
+  const group = record?.group
+  if (
+    !group ||
+    callerSessionId !== group.targetSessionId ||
+    !awaitsAnswer(record.purpose) ||
+    db.getBotRequestOutcome(original.id) === 'answered'
+  ) {
+    return false
   }
+  const noted = runtimeBotGroups(runtime)
+    .noteAnswer(callerSessionId, body)
+    .catch((error: unknown) => {
+      console.warn('[bot-groups] could not show an answer in the room', error)
+      return false
+    })
+  return withTimeout(noted, GROUP_ANSWER_NOTE_TIMEOUT_MS, false)
 }
 
 /** True when a reply's payload is the answer to this request. */

@@ -161,6 +161,12 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       terminalRecipient
     })
     const replyFrom = params.from ?? original.to_handle
+    const shownInRoom = await showGroupAnswer(
+      runtime,
+      original,
+      sessionCallerOf(orchestrationCaller)?.sessionId,
+      params.body
+    )
     const reply = db.insertMessage({
       from: replyFrom,
       senderDispatchId: db.getActiveDispatchForIdentity(
@@ -173,15 +179,9 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       threadId: original.thread_id ?? original.id,
       runId: recipient.runId,
       // Refuses a second answer to a bot request, before the original is marked read.
-      payload: botAnswerPayload(db, original)
+      payload: botAnswerPayload(db, original, shownInRoom)
     })
     db.markAsRead([original.id])
-    await showGroupAnswer(
-      runtime,
-      original,
-      sessionCallerOf(orchestrationCaller)?.sessionId,
-      params.body
-    )
 
     const receipt = {
       message: exposeMessage(reply),

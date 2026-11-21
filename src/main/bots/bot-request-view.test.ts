@@ -136,12 +136,17 @@ describe('what the sender reads', () => {
       expect(next).toMatch(/the room shows its answer on Docs's turn/)
       expect(next).not.toMatch(/card|pass it on/)
     }
-    expect(botAnswerView(grouped, false).next).toMatch(
+    expect(botAnswerView(grouped, false, true).next).toMatch(
       /^The room already shows this answer on Docs's turn, so don't repeat, quote or summarize it\. Write only what the room doesn't say/
     )
-    expect(botAnswerView(question, false).next).toMatch(
+    expect(botAnswerView(question, false, true).next).toMatch(
       /^The room already shows this answer on Docs's turn, so don't repeat, quote or summarize it\. Finish the job with it\./
     )
+    // A room that could not show it leaves the answer to the sender, never to a card.
+    expect(botAnswerView(grouped, false).next).toBe(
+      'Pass this answer on to your owner as your final message.'
+    )
+    expect(botAnswerView(question, false).next).toBe('Finish the job with this answer.')
     expect(botRequestUnansweredText(grouped, 'ended')).toBe(
       "Docs read your handoff and ended its turn without a reply; the job is still Docs's, so don't redo it or call it dropped. The room shows Docs's turn."
     )
