@@ -57,10 +57,10 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
   }
 
   private claudeAgentEnded(paneKey: string): boolean {
-    const row = this.state.lastStatusByPaneKey.get(paneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    return row?.agentPresence?.ended === true
+    return (
+      this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))?.agentPresence
+        ?.ended === true
+    )
   }
 
   // A pane's agent-view entry goes when its status row does, or when the row records the agent's exit.

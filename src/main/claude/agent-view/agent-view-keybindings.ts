@@ -116,7 +116,7 @@ export async function readClaudeAgentViewChord(
   try {
     text = await readFile(join(configDir, 'keybindings.json'), 'utf8')
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : undefined
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT' ? null : undefined
   }
   // A half-written edit does not parse; that says nothing about the binding.
   return parseClaudeAgentViewBindings(text) ? (claudeAgentViewChord(text) ?? null) : undefined
