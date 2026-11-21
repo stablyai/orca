@@ -35,6 +35,7 @@ export const BotGroupRemoteMemberSchema = z.object({
   name: BotNameSchema,
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
   agent: z.enum(BOT_AGENTS)
 })
 

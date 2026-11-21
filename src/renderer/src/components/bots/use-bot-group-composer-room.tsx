@@ -43,7 +43,8 @@ export function useBotGroupComposerRoom(
         hostId: `runtime:${member.environmentId}` as const,
         name: member.name,
         avatar: member.avatar,
-        avatarColor: member.avatarColor
+        avatarColor: member.avatarColor,
+        avatarOutfit: member.avatarOutfit
       }))
     ],
     [bots, group]

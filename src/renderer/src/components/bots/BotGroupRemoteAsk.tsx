@@ -52,7 +52,8 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
             hostId: `runtime:${ask.environmentId}`,
             name: ask.name,
             avatar: ask.avatar,
-            avatarColor: ask.avatarColor
+            avatarColor: ask.avatarColor,
+            avatarOutfit: ask.avatarOutfit
           }}
           className="size-6 shrink-0 rounded-md text-xs"
         />
