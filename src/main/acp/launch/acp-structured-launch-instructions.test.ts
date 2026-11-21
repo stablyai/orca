@@ -46,7 +46,8 @@ const SPECS = {
   hermes: acpLaunchSpecFor('hermes')!,
   copilot: acpLaunchSpecFor('copilot')!,
   kimi: acpLaunchSpecFor('kimi')!,
-  kiro: acpLaunchSpecFor('kiro')!
+  kiro: acpLaunchSpecFor('kiro')!,
+  goose: acpLaunchSpecFor('goose')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -58,7 +59,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
   copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
   kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
-  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' },
+  goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -67,7 +69,8 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   hermes: '0.23.3',
   copilot: '1.0.114',
   kimi: '2.7.2',
-  kiro: '3.1.0'
+  kiro: '3.1.0',
+  goose: '1.60.2'
 }
 
 let dataDirectory = ''
@@ -261,6 +264,20 @@ describe('ACP launch: standing instructions', () => {
       await undo?.()
     }
     expect(await readdir(workspacePath)).toEqual([])
+  })
+
+  it("writes them to Goose's .goosehints in the folder it runs in", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-goose-'))
+    try {
+      const resolved = await launch('goose', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.args).toEqual((await launch('goose', { workspacePath: home })).args)
+      const written = await readFile(join(home, '.goosehints'), 'utf8')
+      expect(written).toBe(
+        `<!-- Orca writes this file for Goose chats in this folder; edits are replaced. -->\n\n${PREAMBLE}\n`
+      )
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 
   it("writes them to Hermes's .hermes.md in the folder it runs in, rewriting it at each launch", async () => {
