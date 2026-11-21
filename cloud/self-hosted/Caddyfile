@@ -1,0 +1,28 @@
+(tls-acme) {
+}
+
+(tls-internal) {
+	tls internal
+}
+
+{$ORCA_DOMAIN} {
+	import tls-{$ORCA_TLS}
+
+	request_body {
+		max_size 64KB
+	}
+
+	@admin path /v1/admin /v1/admin/*
+	handle @admin {
+		respond 404
+	}
+
+	@auth path /v1/desktop/auth/* /.well-known/jwks.json /healthz
+	handle @auth {
+		reverse_proxy relay-auth:8080
+	}
+
+	handle {
+		reverse_proxy relay:8080
+	}
+}

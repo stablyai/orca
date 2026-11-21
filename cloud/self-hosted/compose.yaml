@@ -1,0 +1,82 @@
+# Self-hosted Orca relay: relay + relay-auth behind Caddy on one HTTPS origin.
+# Usage: see README.md in this folder.
+name: orca-relay
+
+services:
+  proxy:
+    image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    restart: unless-stopped
+    depends_on: [relay, relay-auth]
+    ports:
+      - '${ORCA_HTTP_PORT:-80}:80'
+      - '${ORCA_HTTPS_PORT:-443}:${ORCA_HTTPS_PORT:-443}'
+    environment:
+      ORCA_DOMAIN: ${ORCA_DOMAIN:?set ORCA_DOMAIN in .env}
+      ORCA_TLS: ${ORCA_TLS:-acme}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  relay-auth:
+    build:
+      context: ..
+      dockerfile: apps/relay-auth/Dockerfile
+    image: orca-relay-auth:local
+    restart: unless-stopped
+    environment:
+      ORCA_AUTH_ISSUER: https://${ORCA_DOMAIN}
+      ORCA_AUTH_CLIENT_ID: orca-desktop
+      ORCA_AUTH_EMAIL: ${ORCA_AUTH_EMAIL:?set ORCA_AUTH_EMAIL in .env}
+      ORCA_AUTH_ADMIN_SECRET: ${ORCA_AUTH_ADMIN_SECRET:?set ORCA_AUTH_ADMIN_SECRET in .env}
+      # Caddy replaces X-Forwarded-For, so its last entry is the real client.
+      ORCA_AUTH_TRUST_PROXY: 'true'
+      # Optional: sign in through your own OIDC provider (see ../apps/relay-auth/README.md).
+      # ORCA_AUTH_UPSTREAM_ISSUER: https://id.example.com
+      # ORCA_AUTH_UPSTREAM_CLIENT_ID: '123456789'
+      # ORCA_AUTH_UPSTREAM_ALLOWED_EMAILS: you@example.com
+    volumes:
+      - auth-data:/data
+
+  relay:
+    build:
+      context: ..
+      dockerfile: apps/relay/Dockerfile
+    image: orca-relay:local
+    restart: unless-stopped
+    depends_on:
+      relay-data-owner:
+        condition: service_completed_successfully
+      relay-auth:
+        condition: service_started
+    environment:
+      ORCA_RELAY_ROLE: combined
+      ORCA_RELAY_PUBLIC_URL: https://${ORCA_DOMAIN}
+      ORCA_RELAY_CELL_URL: https://${ORCA_DOMAIN}
+      ORCA_RELAY_AUTH_ISSUER: https://${ORCA_DOMAIN}
+      ORCA_RELAY_AUTH_AUDIENCE: orca-relay
+      ORCA_RELAY_JWKS_URL: http://relay-auth:8080/.well-known/jwks.json
+      ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: ${ORCA_RELAY_ASSIGNMENT_SIGNING_KEY:?set ORCA_RELAY_ASSIGNMENT_SIGNING_KEY in .env}
+      ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: 'true'
+      ORCA_RELAY_DATA_DIR: /data
+      # Required by the relay's config but unused here: the proxy blocks /v1/admin.
+      ORCA_RELAY_ADMIN_AUDIENCE: https://${ORCA_DOMAIN}/v1/admin
+      ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: relay-admin@example.invalid
+    volumes:
+      - relay-data:/data
+
+  # The relay image runs as `node`, which does not own a new volume.
+  relay-data-owner:
+    image: orca-relay:local
+    pull_policy: never
+    user: root
+    entrypoint: ['chown', 'node:node', '/data']
+    restart: 'no'
+    volumes:
+      - relay-data:/data
+
+volumes:
+  caddy-data:
+  caddy-config:
+  auth-data:
+  relay-data:
