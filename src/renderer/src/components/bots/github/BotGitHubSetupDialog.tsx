@@ -46,8 +46,8 @@ import {
   connectorSetupFor
 } from '../connector-connect-parts'
 import { useConfirmConnectorSignOut } from '../connector-sign-out-confirm'
-import { botGitHubErrorMessage, gitHubMention, gitHubPushesAs } from './bot-github-copy'
-import { ConnectorTryIt } from '../ConnectorTryIt'
+import { botGitHubErrorMessage, gitHubPushesAs } from './bot-github-copy'
+import { GitHubTryItPreview } from './GitHubTryItPreview'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
 import {
   GitHubFinishInBrowser,
@@ -77,6 +77,8 @@ export type BotGitHubSetupStep =
   | {
       kind: 'done'
       login: string
+      /** For the asker's picture in the try-it sample. */
+      userId: string
       installations: ConnectorGitHubInstallation[]
       installUrl: string
     }
@@ -105,7 +107,7 @@ export function botGitHubSetupStep(
     return { kind: 'install', login: account.login, installUrl, requested }
   }
   return on
-    ? { kind: 'done', login: account.login, installations, installUrl }
+    ? { kind: 'done', login: account.login, userId: account.userId, installations, installUrl }
     : { kind: 'turn-on', login: account.login, installations, installUrl }
 }
 
@@ -348,17 +350,10 @@ function BotGitHubSetupFlow({
         // Who can ask is edited later in the GitHub connector's settings (BotGitHubCard), not here.
         return (
           <div className="space-y-4">
-            <ConnectorTryIt
-              heading={t('bots.github.setup.tryIt', 'Try it on any issue or pull request')}
-              ways={[
-                {
-                  key: 'mention',
-                  shown: `${gitHubMention(bot)} …`,
-                  copy: gitHubMention(bot)
-                }
-              ]}
-              note={gitHubPushesAs(bot, hostName)}
-            />
+            <div className="space-y-2">
+              <GitHubTryItPreview bot={bot} login={step.login} userId={step.userId} />
+              <p className="text-xs text-muted-foreground">{gitHubPushesAs(bot, hostName)}</p>
+            </div>
             {installed(step)}
             <DialogFooter>
               <Button autoFocus onClick={onClose}>
