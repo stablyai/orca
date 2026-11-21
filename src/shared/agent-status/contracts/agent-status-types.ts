@@ -178,6 +178,9 @@ export type AgentStatusPayload = {
   mainAgent?: AgentMainAgentStatus
   /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
+  /** Whether the agent's input box holds unsent text, as the agent itself reports it (Pi); absent when
+   *  unreported. Host-local: mail delivery reads it; it is not published to paired clients. */
+  composerDraft?: boolean
 }
 
 /** Parsing always supplies prompt (empty if omitted); optional tool/assistant fields distinguish no update from explicit clearing. */
@@ -341,7 +344,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     (obj.claudeTaskWakeupPending === 'notification' ||
       obj.claudeTaskWakeupPending === 'finishing-turn')
       ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
-      : {})
+      : {}),
+    ...(typeof obj.composerDraft === 'boolean' ? { composerDraft: obj.composerDraft } : {})
   }
 }
 

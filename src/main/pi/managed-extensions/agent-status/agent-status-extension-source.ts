@@ -5,6 +5,10 @@ import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-sourc
 import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-source'
 import { getPiSubagentSnapshotSourceLines } from './agent-status-subagent-roster-source'
+import {
+  getPiAgentStatusComposerDraftPostLines,
+  getPiAgentStatusComposerDraftSourceLines
+} from './agent-status-composer-draft-source'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
@@ -104,9 +108,11 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
   ]
 
   // Pi resumes by transcript; OMP resumes by session ID (#8962).
+  // Pi reads its input box when the body is built, so a queued post carries the latest reading.
+  const composerDraftPost = getPiAgentStatusComposerDraftPostLines(kind)
   const payloadLine =
     kind !== 'omp'
-      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...subagents, ...extra },'
+      ? `    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...subagents,${composerDraftPost.payloadField} ...extra },`
       : '    payload: { hook_event_name: hookEventName, ...metadata, ...subagents, ...extra },'
 
   // Read endpoint files after Orca restarts because PTY-spawn environment stays frozen.
@@ -118,6 +124,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'const HOOK_POST_TIMEOUT_MS = 1000',
     ...getPiAgentStatusPostQueueSourceLines(kind),
     ...(kind === 'pi' ? ['let piUiPromptDepth = 0', 'let piTurnInFlight = false'] : []),
+    ...getPiAgentStatusComposerDraftSourceLines(kind),
     ...modelMetadataSourceLines,
     '',
     ...getPiSubagentSnapshotSourceLines(),
@@ -216,6 +223,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  const paneKey = process.env.ORCA_PANE_KEY',
     '  if (!coords.port || !coords.token || !paneKey) return',
     '  const url = `http://127.0.0.1:${coords.port}${resolveHookPath(ompRuntime)}`',
+    ...composerDraftPost.begin,
     '  const bodyWith = (subagents: Record<string, unknown>): string => JSON.stringify({',
     '    paneKey,',
     "    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || '',",
@@ -250,12 +258,15 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '      timeoutPromise,',
     '    ])',
     "    if (!response.ok) throw new Error('Orca hook HTTP ' + response.status)",
+    ...composerDraftPost.delivered,
     '  } catch (error) {',
     '    // After WSL loopback failure, retry through host curl.exe.',
     '    if (!isWslRuntime()) throw error',
     '    await postViaWindowsCurl(body, ompRuntime)',
+    ...composerDraftPost.delivered,
     '  } finally {',
     '    if (timeout) clearTimeout(timeout)',
+    ...composerDraftPost.end,
     '  }',
     '}',
     '',

@@ -9,8 +9,36 @@ function isPiEditorRule(row: string | undefined): boolean {
   return trimmed.startsWith('─') && trimmed.endsWith('─')
 }
 
-/** Whether Pi's editor shows a typed draft, so mail must wait. False when the cursor is not between
- *  two of Pi's editor rules. Callers check that Pi is the pane's agent. */
+// An extension's own editor (pi-zentui's `| ` rail, a `│ … │` box) can put status rows, such as the
+// model, between the rules. Its layout is unknown here; Orca's Pi extension reports that box's draft.
+// Such a box draws an empty padding row that is only its gutter beside at least one other row; a
+// lone `|` typed into Pi's own box is one row, and longer text starting with `|` is not padding.
+const EXTENSION_EDITOR_GUTTERS = ['|', '│', '┃', '▎', '▌', '▏']
+
+function isGutter(char: string | undefined): boolean {
+  return char !== undefined && EXTENSION_EDITOR_GUTTERS.includes(char)
+}
+
+function isExtensionPaddingRow(row: string): boolean {
+  const trimmed = row.trim()
+  if (!isGutter(trimmed[0])) {
+    return false
+  }
+  const inner = isGutter(trimmed.at(-1)) ? trimmed.slice(1, -1) : trimmed.slice(1)
+  return inner.trim() === ''
+}
+
+function isExtensionEditor(rows: string[]): boolean {
+  const drawn = rows.filter((row) => row.trim() !== '')
+  return (
+    drawn.length > 1 &&
+    drawn.some(isExtensionPaddingRow) &&
+    drawn.every((row) => isGutter(row.trim()[0]))
+  )
+}
+
+/** Whether Pi's built-in editor shows a typed draft, so mail must wait. False when the cursor is not
+ *  between two of Pi's editor rules or an extension draws the box. Callers check that Pi is the pane's agent. */
 export function piComposerHoldsDraft(context: TerminalCursorContext): boolean {
   const cursorIndex = context.rows.length - 1
   let top = cursorIndex
@@ -19,6 +47,9 @@ export function piComposerHoldsDraft(context: TerminalCursorContext): boolean {
   }
   const bottom = context.rowsBelow.findIndex(isPiEditorRule)
   if (top === -1 || top === cursorIndex || bottom === -1) {
+    return false
+  }
+  if (isExtensionEditor([...context.rows.slice(top + 1), ...context.rowsBelow.slice(0, bottom)])) {
     return false
   }
   const hasText = (row: string): boolean => row.trim() !== ''

@@ -22,6 +22,7 @@ import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-compo
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
+import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
 const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
@@ -208,14 +209,18 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return 'prompt'
     }
     const facts = this.terminalRunFacts
-    const state = this.readWholeScreenModel(ptyId)
-    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    // Why: an agent that reports its own input box is believed over any reading of the screen.
+    const reported = this.readAgentReportedComposerDraft(ptyId)
+    const state = reported === undefined ? this.readWholeScreenModel(ptyId) : null
+    const draft =
+      reported ?? (!!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext()))
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
     // launch text; a process it attached to, as after a restart, may hold one typed before, which a
     // screen still restoring cannot rule out yet.
-    const restoring = !state && this.headlessHydrationState.get(ptyId) === 'pending'
+    const restoring =
+      reported === undefined && !state && this.headlessHydrationState.get(ptyId) === 'pending'
     const unattributedSince = facts.noteUnattributedDraft(
       ptyId,
       unattributed && (draft || restoring)
@@ -226,6 +231,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       holdSince !== null &&
       Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
     return holding ? (draft ? 'draft' : 'restoring') : null
+  }
+
+  private readAgentReportedComposerDraft(ptyId: string): boolean | undefined {
+    const join = this.readHookRowJoinForPty(ptyId)
+    return join ? selectFreshExplicitAgentStatusRow(join)?.composerDraft : undefined
   }
 
   // Why: OpenCode's and Pi's composers have no prompt glyph, so only their own panes are read with

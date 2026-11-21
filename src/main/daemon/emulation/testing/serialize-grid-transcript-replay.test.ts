@@ -82,6 +82,9 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // editor rule (row 25) restores with a stray RGB foreground under the jitter schedule.
   'pi-1-6-composer-draft': 16,
   'pi-1-6-composer-draft-wrapped': 2,
+  // Pi 1.6 with pi-zentui 0.33: the same logo cells restore with an extra dim bit.
+  'pi-1-6-zentui-0-33-composer-draft': 14,
+  'pi-1-6-zentui-0-33-composer-empty': 16,
   // Agy/Cline/Prime reproduce background leaks; Prime also has cursor-row diffs after alt-screen repaint.
   'antigravity-1-2-14-busy-thinking': 2,
   'antigravity-1-2-14-command-palette': 4,
