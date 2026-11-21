@@ -66,7 +66,10 @@ export async function createWebRuntimeSessionTerminalResult(
     }
   }
   const intentOwner = captureWebSessionIntentOwner(environmentId)
-  const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
+  const callEnvironment = captureRuntimeEnvironmentCall(
+    environmentId,
+    args.reopen?.pairingRevision ?? intentOwner.pairingRevision
+  )
 
   let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
   if (args.selectWorktree !== false) {
@@ -215,8 +218,18 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     } else {
       const response = await callEnvironment({
-        method: 'session.tabs.createTerminal',
-        params: await buildPlainCreateTerminalParams(environmentId, args),
+        method: args.reopen ? 'session.tabs.reopenTerminal' : 'session.tabs.createTerminal',
+        params: args.reopen
+          ? {
+              worktree: toRuntimeWorktreeSelector(args.worktreeId),
+              targetGroupId: args.targetGroupId,
+              shell: args.shell,
+              cwd: args.cwd,
+              clientMutationId: args.reopen.mutationId,
+              customTitle: args.reopen.customTitle,
+              color: args.reopen.color
+            }
+          : await buildPlainCreateTerminalParams(environmentId, args),
         timeoutMs: 15_000
       })
       const created = unwrapRuntimeRpcResult(

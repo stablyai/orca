@@ -168,6 +168,7 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
         ? { captureRecentlyClosed: options.captureRecentlyClosed }
         : {}),
       remoteCloseOwnedByHost: true,
+      reopenEnvironmentId: runtimeEnvironmentId,
       ...(options?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
