@@ -221,6 +221,11 @@ export function dictationNeedsSetup(setup: MobileSpeechSetup): boolean {
 }
 
 // Keep copy short and host-neutral: the paired computer may be a headless server.
+/** Where a cloud model's audio goes, for its row; hosts before Soniox only had OpenAI-style services. */
+export function cloudModelServiceLabel(model: MobileSpeechModel): string {
+  return model.cloudService === 'soniox' ? 'Soniox' : 'OpenAI API'
+}
+
 export function cloudModelNeedsKey(): string {
   return translate('dictation.setup.cloudModelNeedsKey', 'Needs an OpenAI key')
 }

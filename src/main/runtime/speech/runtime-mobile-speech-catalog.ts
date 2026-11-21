@@ -59,6 +59,7 @@ export class RuntimeMobileSpeechCatalog {
         label: manifest.label,
         // Older phones know only these two; both cloud providers transcribe on this host.
         provider: isLocalSpeechModel(manifest) ? 'local' : 'openai',
+        ...(manifest.provider === 'local' ? {} : { cloudService: manifest.provider }),
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',
