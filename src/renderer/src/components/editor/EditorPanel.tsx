@@ -9,6 +9,8 @@ import { getEditorHeaderCopyState } from './panel/header/editor-header'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { exportActiveMarkdownToPdf } from './markdown/export/export-active-markdown'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
+import { EditorViewCommands } from './EditorViewCommands'
+import { applyEditorViewToggle } from './apply-editor-view-toggle'
 import { EditorPanelShell } from './panel/EditorPanelShell'
 import { DiffNavigationProvider } from './diff/review/diff-navigation-context'
 import { EditorCommandOwnerContext } from './commands/editor-command-owner-context'
@@ -32,9 +34,8 @@ import {
 import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom-editors'
-import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { editorPanelFileActions } from './panel/editor-panel-file-actions'
-import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
+import { useEditorViewSwitch } from './useEditorViewSwitch'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -93,6 +94,8 @@ function EditorPanelInner({
   const customEditors = useFileCustomEditors(activeFileId, activeFile?.filePath)
   const markdownReviewNotesEnabled = useAppStore((s) => isMarkdownReviewNotesEnabled(s.settings))
   const panelRef = useRef<HTMLDivElement>(null)
+  const viewSwitch = useEditorViewSwitch(activeFile, activeViewStateId)
+
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
@@ -249,28 +252,15 @@ function EditorPanelInner({
       void openEditorHtmlPreview(activeFile.id, activeViewStateId)
     }
   }
-  const handleEditorToggleChange = (next: EditorToggleValue): void => {
-    // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
-    runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
-      applyEditorToggle(next)
-    )
-  }
-  const applyEditorToggle = (next: EditorToggleValue): void => {
-    const fileId = activeFile.id
-    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
-      handleOpenDiffTargetFile('rich')
-      return
-    }
-    if (next === 'changes') {
-      setEditorViewMode(fileId, 'changes')
-      return
-    }
-    setEditorViewMode(fileId, 'edit')
-    const markdownMode = applyCustomEditorToggle(fileId, next, model.customEditors.length > 0)
-    if (markdownMode) {
-      setMarkdownViewMode(fileId, markdownMode)
-    }
-  }
+  const applyEditorToggle = (next: EditorToggleValue): void =>
+    applyEditorViewToggle({
+      next,
+      activeFile,
+      model,
+      setEditorViewMode,
+      setMarkdownViewMode,
+      handleOpenDiffTargetFile
+    })
   const disableRenameBrowse = Boolean(
     renameDialogFileOffClient ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
@@ -314,6 +304,14 @@ function EditorPanelInner({
 
   return (
     <EditorCommandOwnerContext value={isCmdSaveOwner}>
+      <EditorViewCommands
+        viewSwitch={viewSwitch}
+        applyToggle={applyEditorToggle}
+        enabled={isVisible && isCmdSaveOwner && model.hasEditorToggle && !activeFile.csvPreviewOnly}
+        panelRef={panelRef}
+        value={model.effectiveToggleValue}
+        modes={model.availableEditorToggleModes}
+      />
       {/* Split panes need independent bridges between diff editors and header controls. */}
       <DiffNavigationProvider>
         <EditorPanelShell
@@ -341,7 +339,7 @@ function EditorPanelInner({
           onToggleSideBySide={() =>
             void updateSettings({ diffDefaultView: sideBySide ? 'inline' : 'side-by-side' })
           }
-          onEditorToggleChange={handleEditorToggleChange}
+          onEditorToggleChange={viewSwitch.handleChange}
           onToggleMarkdownTableOfContents={() =>
             setMarkdownTableOfContentsVisible(
               markdownDocumentStateFileId,

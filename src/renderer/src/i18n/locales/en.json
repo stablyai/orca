@@ -26042,6 +26042,8 @@
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
       "editorToggleChangesView": "Toggle changes view",
+      "editorToggleChanges": "Toggle Changes",
+      "editorCycleViewMode": "Cycle Editor View",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
