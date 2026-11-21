@@ -63,8 +63,10 @@ export function createServerSession({
   const relayedByServerId = new Map()
   // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
-  // Registrations the client holds for the current server, by id; withdrawn when that server stops.
+  // Registrations the client may hold for the current server, withdrawn when it stops; keyed by id and method,
+  // since a server may reuse an id for another capability.
   const clientRegistrations = new Map()
+  const registrationKey = (id, method) => JSON.stringify([id, method])
   // Current workspace folders by uri; a restart sends one change from the initialize set to this.
   let folders = null
 
@@ -374,7 +376,7 @@ export function createServerSession({
   const onRegister = (message) => {
     if (relayToClient(message)) {
       for (const { id, method } of message.params?.registrations ?? []) {
-        clientRegistrations.set(id, { method })
+        clientRegistrations.set(registrationKey(id, method), { id, method })
       }
     }
   }
@@ -384,9 +386,10 @@ export function createServerSession({
     const forwarded = []
     const withdrawn = []
     for (const unregistration of message.params?.unregisterations ?? []) {
-      if (clientRegistrations.has(unregistration.id)) {
+      const key = registrationKey(unregistration.id, unregistration.method)
+      if (clientRegistrations.has(key)) {
         forwarded.push(unregistration)
-        withdrawn.push([unregistration.id, clientRegistrations.get(unregistration.id)])
+        withdrawn.push([key, clientRegistrations.get(key)])
       }
     }
     if (forwarded.length > 0) {
@@ -396,9 +399,9 @@ export function createServerSession({
           return
         }
         // A registration re-added under the same id since then is a new entry and stays.
-        for (const [id, entry] of withdrawn) {
-          if (clientRegistrations.get(id) === entry) {
-            clientRegistrations.delete(id)
+        for (const [key, entry] of withdrawn) {
+          if (clientRegistrations.get(key) === entry) {
+            clientRegistrations.delete(key)
           }
         }
       })
@@ -483,7 +486,7 @@ export function createServerSession({
       id: withdrawId,
       method: 'client/unregisterCapability',
       params: {
-        unregisterations: [...clientRegistrations].map(([id, { method }]) => ({ id, method }))
+        unregisterations: [...clientRegistrations.values()]
       }
     })
     clientRegistrations.clear()
