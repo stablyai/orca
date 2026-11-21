@@ -4,6 +4,7 @@ import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import { rangeForParsedLinkOnRow } from './terminal-link-row-range'
 import { extractTerminalFileLinkReadings, type ParsedTerminalFileLink } from './terminal-links'
 import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
+import { buildTableCellPathLogicalLineCandidates } from './table-cell-terminal-path-links'
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
@@ -52,7 +53,10 @@ export function buildCandidateLogicalLinesForBufferPosition(
   buffer: TerminalLinkBuffer,
   bufferLineNumber: number
 ): WrappedLogicalLine[] {
-  const hardWrappedCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
+  const hardWrappedCandidates = [
+    ...buildTableCellPathLogicalLineCandidates(buffer, bufferLineNumber),
+    ...buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
+  ]
   const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
   const candidates = softWrappedLogicalLine
     ? [...hardWrappedCandidates, softWrappedLogicalLine]
@@ -71,7 +75,9 @@ export function findTerminalFileLinksAtBufferPosition(
   for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
     const readings = extractTerminalFileLinkReadings(logicalLine.text)
     const covering = (parsed: ParsedTerminalFileLink): boolean => {
-      const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+      const range = logicalLine.rowScopedLinks
+        ? rangeForParsedLinkOnRow(logicalLine, parsed.startIndex, parsed.endIndex, position.y)
+        : rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
       return range !== null && rangeContainsBufferPosition(range, position, terminalColumns)
     }
     for (const parsed of readings.links.filter(covering)) {
