@@ -1,4 +1,5 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { WorkerDockPresence } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentModelCatalogSource,
   AgentModelCatalogService
@@ -166,6 +167,7 @@ export type StructuredAgentSessionHostSession = {
 }
 
 export type StructuredAgentSessionHostDeps = {
+  readWorkerDockPresence?: (sessionId: string) => WorkerDockPresence | undefined
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   /** Capabilities come from registry declarations, never adapters. */
