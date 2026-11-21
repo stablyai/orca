@@ -28,6 +28,10 @@ import {
   writeHooksJsonRemote
 } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
+import {
+  findOutdatedManagedEvents,
+  type OutdatedManagedEvents
+} from '../agent-hooks/installation/configuration/managed-hooks-json-outdated-events'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
 
@@ -43,39 +47,20 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-type ManagedEntryScan = { events: CursorEvent[]; outdated: boolean }
-
-// Events whose Orca entries differ from the single entry this build writes; retired events always count.
 async function scanManagedEntries(
   configPath: string,
   scriptPath: string
-): Promise<ManagedEntryScan> {
-  const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-  const scan: ManagedEntryScan = { events: [], outdated: false }
+): Promise<OutdatedManagedEvents<CursorEvent>> {
   // A missing or unreadable file has no Orca entries to repair.
   const raw = await readFile(configPath, 'utf8').catch(() => null)
   const hooks = raw === null ? {} : (parseHooksJsonText(raw)?.hooks ?? {})
-  for (const [eventName, definitions] of Object.entries(hooks)) {
-    const managed = Array.isArray(definitions)
-      ? definitions.filter((definition) =>
-          hookDefinitionHasManagedCommand(definition, isManagedCommand)
-        )
-      : []
-    if (managed.length === 0) {
-      continue
-    }
-    const event = CURSOR_EVENTS.find((candidate) => candidate === eventName)
-    if (!event) {
-      scan.outdated = true
-      continue
-    }
-    const current = getManagedCommand(scriptPath, event)
-    if (managed.length > 1 || managed[0].command !== current) {
-      scan.events.push(event)
-      scan.outdated = true
-    }
-  }
-  return scan
+  return findOutdatedManagedEvents(
+    hooks,
+    CURSOR_EVENTS,
+    (event) => event,
+    createManagedCommandMatcher(getManagedScriptFileName()),
+    (definition, event) => definition.command === getManagedCommand(scriptPath, event)
+  )
 }
 
 export class CursorHookService {
