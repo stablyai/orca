@@ -45,7 +45,7 @@ it("keeps a failed turn's reason on its state-only end, which the cloud stores f
     },
     link,
     async () => [],
-    async () => new Set([link.externalId])
+    async () => ({ covered: new Set([link.externalId]), paused: false })
   )
   expect(told).toBe(true)
   expect(emit).toHaveBeenCalledWith(
@@ -61,7 +61,10 @@ it("keeps a failed turn's reason on its state-only end, which the cloud stores f
 })
 
 it('fills an answered turn with how long it ran, by its own start and end', async () => {
-  const fill = vi.fn<ConversationReplyFill>(async () => new Set(['slack:T1:C1:1.2']))
+  const fill = vi.fn<ConversationReplyFill>(async () => ({
+    covered: new Set(['slack:T1:C1:1.2']),
+    paused: false
+  }))
   const end: ChatTurnEnd = {
     ended: {
       kind: 'turn-ended',
@@ -153,7 +156,10 @@ it('ends a Slack turn its stamps name state-only even when its rows are already 
     return { told, emitted: emit.mock.calls.map(([event]) => event.stateOnly === true) }
   }
   // Recovery already filled, sent and deleted its rows: the fill covers nothing.
-  expect(await run('slack', async () => new Set())).toEqual({ told: true, emitted: [true] })
+  expect(await run('slack', async () => ({ covered: new Set<string>(), paused: false }))).toEqual({
+    told: true,
+    emitted: [true]
+  })
   // The fill failed: recovery drains the rows; the thread still never gets a full end.
   expect(
     await run('slack', async () => {
@@ -161,5 +167,61 @@ it('ends a Slack turn its stamps name state-only even when its rows are already 
     })
   ).toEqual({ told: true, emitted: [true] })
   // Sources outside the outbox keep their full end.
-  expect(await run('github', async () => new Set())).toEqual({ told: false, emitted: [] })
+  expect(await run('github', async () => ({ covered: new Set<string>(), paused: false }))).toEqual({
+    told: false,
+    emitted: []
+  })
+})
+
+it('says a paused turn resumes at the time the scheduler shows, and promises none it does not', async () => {
+  const run = async (resumesAt?: number) => {
+    const emit = vi.fn<ChatTurnEnd['emit']>()
+    const conversation = { source: 'slack' as const, externalId: 'slack:T1:C1:1.2' }
+    await endRepliedTurn(
+      {
+        ended: {
+          kind: 'turn-ended',
+          conversation,
+          paneKey: 'pane',
+          worktreeId: 'wt',
+          turnId: 1,
+          stopReason: 'failure',
+          at: 2
+        },
+        news: {
+          kind: 'turn-ended',
+          sessionId: 'chat-1',
+          outcome: 'failure',
+          readTurn: async () => ({}),
+          at: 2
+        },
+        agent: 'claude',
+        emit,
+        turnFor: () => ({}),
+        workersChecked: async () => undefined,
+        current: () => true
+      },
+      {
+        turnItemId: 'item:turn-1',
+        stamps: [{ account: 'a', conversation, deliveryId: 'd1' }],
+        failure: agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: 9_000 } })
+      },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a replied end reads only source, externalId and bot.
+      conversation as ExternalConversationLink,
+      async () => [],
+      async () => ({
+        covered: new Set([conversation.externalId]),
+        paused: true,
+        ...(resumesAt === undefined ? {} : { resumesAt })
+      })
+    )
+    const [event] = emit.mock.calls[0]!
+    return event.kind === 'turn-ended'
+      ? { resumes: event.resumes, resetsAt: event.failure?.usageLimit?.resetsAt }
+      : null
+  }
+  // An account hold moved the continue past the reset: the line says the later time.
+  expect(await run(12_000)).toEqual({ resumes: true, resetsAt: 12_000 })
+  // The app shows no time (an unknown reset): no promise, the thread stays Working.
+  expect(await run()).toEqual({ resumes: undefined, resetsAt: 9_000 })
 })
