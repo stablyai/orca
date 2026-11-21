@@ -1,20 +1,11 @@
 import { removeManagedCommands } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
 import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
-import {
-  editLoadableHookTrustConfig,
-  type CodexEventLabel,
-  type CodexTrustEntry
-} from '../toml/config-toml-trust'
-import {
-  computeCodexTrustKey as computeTrustKey,
-  getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,
-  parseCodexTrustKey as parseTrustKey
-} from '../identity/codex-trust-identity'
-import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
+import type { CodexEventLabel, CodexTrustEntry } from '../toml/config-toml-trust'
+import { getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath } from '../identity/codex-trust-identity'
 import {
   createCodexHookTrustEntry,
-  getCodexHookTrustSignature
+  getCodexUserHookMirrorSignature
 } from '../../hooks/definitions/codex-hook-identity'
 import {
   CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS,
@@ -23,7 +14,7 @@ import {
 } from '../../hooks/definitions/codex-hook-definition'
 import {
   getTrustedSystemUserHookSignatures,
-  type TrustedSystemHookSignatureState
+  type TrustedSystemHookSignatures
 } from './codex-hook-system-trust'
 
 type MirroredRuntimeUserHookTrustEntry = {
@@ -101,14 +92,14 @@ export function getRuntimeHooksWithSystemUserHooks(
 function collectMirroredRuntimeUserHookTrustEntries(
   runtimeConfigPath: string,
   runtimeHooks: Record<string, HookDefinition[]>,
-  trustedSystemHookSignatures: ReadonlyMap<string, TrustedSystemHookSignatureState>,
+  trustedSystemHookSignatures: TrustedSystemHookSignatures,
   isManagedCommand: (command: string | undefined) => boolean
 ): MirroredRuntimeUserHookTrustEntry[] {
   if (trustedSystemHookSignatures.size === 0) {
     return []
   }
 
-  const entries: MirroredRuntimeUserHookTrustEntry[] = []
+  const runtimeEntries: { entry: CodexTrustEntry; signature: string }[] = []
   const trustSourcePath = getCodexExplicitHomeHookSourcePath(runtimeConfigPath)
   for (const [eventName, definitions] of Object.entries(runtimeHooks)) {
     if (!Array.isArray(definitions)) {
@@ -128,19 +119,33 @@ function collectMirroredRuntimeUserHookTrustEntries(
           definition,
           hook
         )
-        if (!entry) {
-          return
-        }
-        const signature = getCodexHookTrustSignature(entry)
-        const state = trustedSystemHookSignatures.get(signature)
-        if (state !== undefined) {
-          entries.push({
-            entry: { ...entry, trustedHash: state.trustedHash },
-            enabled: state.enabled
-          })
+        if (entry) {
+          runtimeEntries.push({ entry, signature: getCodexUserHookMirrorSignature(entry) })
         }
       })
     })
+  }
+  const runtimeCounts = new Map<string, number>()
+  for (const { signature } of runtimeEntries) {
+    runtimeCounts.set(signature, (runtimeCounts.get(signature) ?? 0) + 1)
+  }
+  const seen = new Map<string, number>()
+  const entries: MirroredRuntimeUserHookTrustEntry[] = []
+  for (const { entry, signature } of runtimeEntries) {
+    const states = trustedSystemHookSignatures.get(signature)
+    if (!states) {
+      continue
+    }
+    const occurrence = seen.get(signature) ?? 0
+    seen.set(signature, occurrence + 1)
+    // Copies pair up in order; when deduplication merged copies, the merged hook runs if any copy did.
+    const state =
+      runtimeCounts.get(signature) === states.length
+        ? states[occurrence]
+        : (states.find((candidate) => candidate?.enabled) ?? states.find(Boolean))
+    if (state) {
+      entries.push({ entry: { ...entry, trustedHash: state.trustedHash }, enabled: state.enabled })
+    }
   }
   return entries
 }
@@ -157,52 +162,6 @@ export function moveMirroredRuntimeUserTrustAfterManagedStatusHook(
       entry: { ...entry, groupIndex: entry.groupIndex + 1 },
       enabled
     }
-  })
-}
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildHookTrustHeaderKeyPattern(key: string): string {
-  const keyVariants = [key]
-  const parsed = parseTrustKey(key)
-  if (parsed && /^[A-Za-z]:[\\/]|^\\\\/.test(parsed.sourcePath)) {
-    const suffix = `:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
-    keyVariants.push(
-      `${parsed.sourcePath.replace(/\\/g, '/')}${suffix}`,
-      `${parsed.sourcePath.replace(/\//g, '\\')}${suffix}`
-    )
-  }
-  const alternatives = [...new Set(keyVariants)].flatMap((variant) => {
-    const quoted = [`"${escapeRegex(escapeTomlString(variant))}"`]
-    if (!variant.includes("'")) {
-      // Codex/manual approval may use raw-backslash literal keys for either Windows path spelling.
-      quoted.push(`'${escapeRegex(variant)}'`)
-    }
-    return quoted
-  })
-  return `(?:${alternatives.join('|')})`
-}
-
-export function applyMirroredRuntimeUserHookTrustStates(
-  tomlPath: string,
-  entries: readonly MirroredRuntimeUserHookTrustEntry[]
-): void {
-  if (entries.length === 0) {
-    return
-  }
-  editLoadableHookTrustConfig(tomlPath, 'skip', (existing) => {
-    let updated = existing
-    for (const { entry, enabled } of entries) {
-      const headerKeyPattern = buildHookTrustHeaderKeyPattern(computeTrustKey(entry))
-      const pattern = new RegExp(
-        `(\\[hooks\\.state\\.${headerKeyPattern}\\]\\r?\\n[ \\t]*enabled[ \\t]*=[ \\t]*)(true|false)`,
-        'g'
-      )
-      updated = updated.replace(pattern, `$1${enabled}`)
-    }
-    return updated
   })
 }
 

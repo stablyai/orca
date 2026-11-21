@@ -17,6 +17,7 @@ import {
 import {
   readHookTrustEntries,
   upsertHookTrustEntries,
+  type CodexEventLabel,
   type CodexTrustEntry
 } from '../toml/config-toml-trust'
 import {
@@ -41,18 +42,21 @@ type HookTrustProvenanceEntry = {
 }
 
 type HookTrustProvenanceFile = {
-  version: 1
+  version: 1 | 2
   entries: Record<string, HookTrustProvenanceEntry>
 }
+
+type HookTrustProvenance = { version: number; entries: Map<string, HookTrustProvenanceEntry> }
+
+// Version 1 snapshots could not record these events, so a missing entry there proves nothing.
+const EVENTS_UNRECORDED_BY_PROVENANCE_V1: ReadonlySet<CodexEventLabel> = new Set(['session_end'])
 
 export function getProvenancePath(runtimeHomePath: string): string {
   return join(runtimeHomePath, '.orca-hook-trust-provenance.json')
 }
 
 /** Missing, unreadable or malformed provenance cannot establish an approval's origin. */
-function readHookTrustProvenance(
-  runtimeHomePath: string
-): Map<string, HookTrustProvenanceEntry> | null {
+function readHookTrustProvenance(runtimeHomePath: string): HookTrustProvenance | null {
   const provenancePath = getProvenancePath(runtimeHomePath)
   let rawProvenance: string
   try {
@@ -78,7 +82,8 @@ function readHookTrustProvenance(
         })
       }
     }
-    return result
+    const version = (parsed as HookTrustProvenanceFile).version
+    return { version: typeof version === 'number' ? version : 1, entries: result }
   } catch {
     return null
   }
@@ -117,7 +122,7 @@ export function snapshotCodexRuntimeHookTrustProvenance(
         ...(state.enabled !== undefined ? { enabled: state.enabled } : {})
       }
     }
-    const file: HookTrustProvenanceFile = { version: 1, entries }
+    const file: HookTrustProvenanceFile = { version: 2, entries }
     const serialized = `${JSON.stringify(file, null, 2)}\n`
     assertGuardedFileCurrent(getProvenancePath(runtimeHomePath))
     writeFileSync(getProvenancePath(runtimeHomePath), serialized, {
@@ -184,7 +189,15 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
-    const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
+    const previous = provenance.entries.get(normalizeHookTrustKeyForLookup(key))
+    if (
+      !previous &&
+      provenance.version < 2 &&
+      EVENTS_UNRECORDED_BY_PROVENANCE_V1.has(parsed.eventLabel)
+    ) {
+      // Why: may predate the snapshot, and promoting it could re-enable a hook disabled in ~/.codex.
+      continue
+    }
     if (
       previous &&
       previous.trustedHash === state.trustedHash &&
@@ -216,55 +229,66 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
     if (!runtimeEntry) {
       continue
     }
-    collectSystemPromotionTargets(
-      promotions,
+    const signature = getCodexHookTrustSignature(runtimeEntry)
+    const targets = listUserHookEntriesWithSignature(
       systemHooksPath,
-      systemConfig.hooks,
+      systemConfig.hooks[eventName],
       eventName,
-      getCodexHookTrustSignature(runtimeEntry),
-      isManagedCommand,
-      state.trustedHash,
-      state.enabled ?? true
+      signature,
+      isManagedCommand
     )
+    const runtimeCopies = listUserHookEntriesWithSignature(
+      canonicalRuntimeHooksPath,
+      runtimeDefinitions,
+      eventName,
+      signature,
+      isManagedCommand
+    )
+    const occurrence = runtimeCopies.findIndex(
+      (copy) => copy.groupIndex === parsed.groupIndex && copy.handlerIndex === parsed.handlerIndex
+    )
+    // Copies pair up in order, so approving one never re-enables a copy disabled in ~/.codex.
+    const paired =
+      runtimeCopies.length === targets.length && occurrence !== -1 ? [targets[occurrence]] : targets
+    for (const target of paired) {
+      promotions.push({ ...target, trustedHash: state.trustedHash, enabled: state.enabled ?? true })
+    }
   }
   if (promotions.length > 0) {
     upsertHookTrustEntries(join(systemHomePath, 'config.toml'), promotions)
   }
 }
 
-// Match by content because runtime positions differ; promote to every identical system hook.
-function collectSystemPromotionTargets(
-  promotions: CodexTrustEntry[],
-  systemHooksPath: string,
-  systemHooks: Record<string, HookDefinition[]>,
+// Match by content because runtime positions differ; identical copies come back in order.
+function listUserHookEntriesWithSignature(
+  hooksPath: string,
+  definitions: HookDefinition[] | undefined,
   eventName: string,
   signature: string,
-  isManagedCommand: (command: string | undefined) => boolean,
-  trustedHash: string,
-  enabled: boolean
-): void {
-  const systemDefinitions = systemHooks[eventName]
-  if (!Array.isArray(systemDefinitions)) {
-    return
+  isManagedCommand: (command: string | undefined) => boolean
+): CodexTrustEntry[] {
+  if (!Array.isArray(definitions)) {
+    return []
   }
-  systemDefinitions.forEach((systemDefinition, groupIndex) => {
-    const hooks = Array.isArray(systemDefinition.hooks) ? systemDefinition.hooks : []
-    hooks.forEach((systemHook, handlerIndex) => {
-      if (isManagedCommand(systemHook.command)) {
+  const entries: CodexTrustEntry[] = []
+  definitions.forEach((definition, groupIndex) => {
+    const hooks = Array.isArray(definition.hooks) ? definition.hooks : []
+    hooks.forEach((hook, handlerIndex) => {
+      if (isManagedCommand(hook.command)) {
         return
       }
-      const systemEntry = createCodexHookTrustEntry(
-        systemHooksPath,
+      const entry = createCodexHookTrustEntry(
+        hooksPath,
         eventName,
         groupIndex,
         handlerIndex,
-        systemDefinition,
-        systemHook
+        definition,
+        hook
       )
-      if (!systemEntry || getCodexHookTrustSignature(systemEntry) !== signature) {
-        return
+      if (entry && getCodexHookTrustSignature(entry) === signature) {
+        entries.push(entry)
       }
-      promotions.push({ ...systemEntry, trustedHash, enabled })
     })
   })
+  return entries
 }

@@ -257,6 +257,35 @@ describe('codex hook trust write-back promotion', () => {
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.enabled).toBe(false)
   })
 
+  it('promotes an in-Orca approval only to its own copy of an identical hook', async () => {
+    mkdirSync(systemCodexDir(), { recursive: true })
+    const handler = { type: 'command', command: USER_HOOK_COMMAND }
+    writeFileSync(
+      join(systemCodexDir(), 'hooks.json'),
+      JSON.stringify({ hooks: { Stop: [{ hooks: [handler, handler] }] } })
+    )
+    const systemTomlPath = join(systemCodexDir(), 'config.toml')
+    const secondCopy: CodexTrustEntry = { ...systemUserStopEntry(), handlerIndex: 1 }
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent('', [
+        systemUserStopEntry(),
+        { ...secondCopy, enabled: false }
+      ])
+    )
+    const service = new CodexHookService()
+    await service.install()
+
+    simulateCodexApproval(runtimeUserStopEntry(), {
+      hash: 'sha256:codex-next-gen-hash-orca-cannot-reproduce'
+    })
+    await service.install()
+
+    expect(readHookTrustEntries(systemTomlPath).get(computeTrustKey(secondCopy))?.enabled).toBe(
+      false
+    )
+  })
+
   it('carries a Codex-written hash verbatim when it differs from the reproduced hash', async () => {
     writeSystemUserHook()
     const service = new CodexHookService()
@@ -321,6 +350,44 @@ describe('codex hook trust write-back promotion', () => {
         computeTrustKey(runtimeUserStopEntry())
       )?.enabled
     ).toBe(false)
+  })
+
+  it('keeps a SessionEnd hook disabled in ~/.codex when an older Orca left its in-Orca approval unrecorded', async () => {
+    mkdirSync(systemCodexDir(), { recursive: true })
+    writeFileSync(
+      join(systemCodexDir(), 'hooks.json'),
+      JSON.stringify({
+        hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: USER_HOOK_COMMAND }] }] }
+      })
+    )
+    const systemEntry: CodexTrustEntry = {
+      ...systemUserStopEntry(),
+      eventLabel: 'session_end'
+    }
+    const systemTomlPath = join(systemCodexDir(), 'config.toml')
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent('', [{ ...systemEntry, enabled: false }])
+    )
+    const service = new CodexHookService()
+    await service.install()
+    // An older Orca could not record session_end approvals in its version 1 provenance.
+    simulateCodexApproval({
+      ...runtimeUserStopEntry(),
+      eventLabel: 'session_end',
+      groupIndex: 0,
+      enabled: true
+    })
+    writeFileSync(
+      join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'),
+      `${JSON.stringify({ version: 1, entries: {} })}\n`
+    )
+
+    await service.install()
+
+    expect(readHookTrustEntries(systemTomlPath).get(computeTrustKey(systemEntry))?.enabled).toBe(
+      false
+    )
   })
 
   it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', async () => {
