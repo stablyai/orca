@@ -22979,6 +22979,8 @@
     }
   },
   "agentPicker": {
+    "kiroChatAgent": "채팅 에이전트",
+    "kiroDefaultAgent": "Kiro 기본값",
     "catalogUnsupportedLaunch": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택은 그대로 적용됩니다.",
     "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "검색, 예: Opus 5.5…",

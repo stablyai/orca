@@ -56,6 +56,7 @@ export type AgentPickerEntry = {
   keptSetup?: { permissions?: readonly AgentChatPermissionMode[]; inheritLabel?: string }
 }
 export type AgentPickerDraft = {
+  kiroChatAgent?: string
   agent: TuiAgent
   surface: AgentPickerSurface
   choices: AgentDedicatedChoices
@@ -152,12 +153,22 @@ export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPi
         ...agentPickerOptions(draft.agent, choices.model, 'terminal').map((option) => option.id)
       ])
     })
-  return projectAgentLaunchInputViews(draft.agent, choices, result, {
+  const views = projectAgentLaunchInputViews(draft.agent, choices, result, {
     ...(authorized && draft.arguments !== undefined ? { agentArgs: draft.arguments } : {}),
     modelContext: entry?.terminal.model,
     sourceKeys: current?.context.literalKeys,
     permissionContext: entry?.terminal.permissionMode
   })
+  if (draft.agent === 'kiro' && draft.kiroChatAgent && draft.surface === 'chat') {
+    return {
+      ...views,
+      chatSessionOptions: {
+        ...(views.chatSessionOptions ?? views.sessionOptions),
+        kiroAgentMode: draft.kiroChatAgent
+      }
+    }
+  }
+  return views
 }
 
 export function agentPickerFreshLaunchInputs(
