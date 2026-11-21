@@ -11,6 +11,9 @@ import { appendJournalLines, type JournalItem, journalLines } from './bot-memory
 
 /** How far back a pass looks the first time after a start, so closes while Orca was down count. */
 const FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
+/** Closed items read per pass, newest first: each close notices on its own, so a pass rarely has
+ *  more than a few new ones. */
+const CLOSED_READ = 100
 
 export type JournalCandidate = JournalItem & { chatId: string }
 
@@ -42,6 +45,7 @@ export function createBotMemoryJournal(deps: {
         await appendJournalLines(deps.fs, deps.folder(bot), lines)
       })
     }
+    // Only after the lines are written: a failed write leaves them for the next pass.
     since.set(bot.id, Math.max(from, ...closed.map((item) => item.closedAt)))
   }
 
@@ -91,7 +95,9 @@ export function journaledItemsNotice(
     bots: () => runtime.bots.list(),
     closedItems: async (botId) => {
       const items = runtime.botItems
-      const page = await items.store().list({ botId, statuses: ['done', 'canceled'], limit: 20 })
+      const page = await items
+        .store()
+        .list({ botId, statuses: ['done', 'canceled'], limit: CLOSED_READ })
       const views = await items.views(page.items)
       return page.items.flatMap((record, index) => {
         const view = views[index]

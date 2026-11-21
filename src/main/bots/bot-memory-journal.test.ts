@@ -71,13 +71,44 @@ describe("a bot's journal lines", () => {
       await appendJournalLines(fs, '/home', [line, '- 2026-12-01 | item #7 | done | Ship'])
     ).toBe(2)
     expect(await appendJournalLines(fs, '/home', [line])).toBe(0)
+    // The same close with a state the cache learned later is not a new line.
+    const later = '- 2026-11-21 | item #1006 | PR #4417 merged | Fix'
+    const earlier = '- 2026-11-21 | item #1006 | PR #4417 open at close | Fix'
+    expect(await appendJournalLines(fs, '/home', [earlier])).toBe(1)
+    expect(await appendJournalLines(fs, '/home', [later])).toBe(0)
     expect(fs.files.get(join('/home', 'memory', 'journal', '2026-11.md'))).toBe(
-      `# Journal 2026-11\n${line}\n`
+      `# Journal 2026-11\n${line}\n${earlier}\n`
     )
   })
 })
 
 describe("the host's journal pass", () => {
+  it('tries lines again on the next pass when the file kept changing', async () => {
+    const fs = memoryFs()
+    let busy = true
+    const replace = fs.replaceText
+    const create = fs.writeText
+    fs.writeText = async (...args) => !busy && create(...args)
+    fs.replaceText = async (...args) => !busy && replace(...args)
+    const journal = createBotMemoryJournal({
+      bots: () => [makeTestBot({ id: 'b1' })],
+      closedItems: async () => [item([])],
+      ownerChat: () => true,
+      folder: () => '/home',
+      serialize: async (_botId, step) => step(),
+      fs,
+      now: () => CLOSED + 1_000
+    })
+    journal.itemsChanged(['b1'])
+    await journal.settled()
+    busy = false
+    journal.itemsChanged(['b1'])
+    await journal.settled()
+    expect(fs.files.get(join('/home', 'memory', 'journal', '2026-11.md'))).toBe(
+      '# Journal 2026-11\n- 2026-11-21 | item #1006 | done | Sidebar search fix\n'
+    )
+  })
+
   it("journals only the owner's closed items, once, however often items change", async () => {
     const fs = memoryFs()
     const bot = makeTestBot({ id: 'b1' })
