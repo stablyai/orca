@@ -30,6 +30,7 @@ import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from '../agent-accounts/usage-credentials/zcode-plan-sites'
+import type { TabSizingSettings } from './tab-sizing'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -508,4 +509,4 @@ export type GlobalSettings = GlobalSettingsBase & {
   voiceDictationModeDefaultedToAuto?: boolean
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
-}
+} & TabSizingSettings
