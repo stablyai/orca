@@ -373,3 +373,22 @@ export const skillsPage = defineFixture({
   render: flow(builder, null),
   interact: () => click('Skills')
 })
+/** Skills left out: a same-named copy, and ones the packager can't read. */
+export const skillsLeftOut = defineFixture({
+  ...base,
+  setup: () =>
+    stub({
+      prepare: async () =>
+        ok({
+          candidate: candidate({
+            leftOut: [
+              { kind: 'skill', name: 'orca', why: 'duplicate', from: 'team-skills' },
+              { kind: 'skill', name: 'deploy', why: 'link' },
+              { kind: 'skill', name: 'datasets', why: 'size' }
+            ]
+          })
+        })
+    }),
+  render: flow(builder, null),
+  interact: () => click('Skills')
+})
