@@ -4,7 +4,10 @@ import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-session-name'
 import { AgentBrowserBridgeRawProcess } from '../helper-process/agent-browser-bridge-raw-process'
 import type { AgentBrowserCleanupOptions } from './agent-browser-cleanup-options'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-cleanup-options'
-import { waitForAgentBrowserSessionExit } from './agent-browser-session-reset'
+import {
+  canSkipAgentBrowserSessionReset,
+  waitForAgentBrowserSessionExit
+} from './agent-browser-session-reset'
 import { runOutsideRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
@@ -214,7 +217,9 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       this.cancelledProcesses.add(session.activeProcess)
       try {
         session.activeProcess.kill()
-      } catch {}
+      } catch {
+        console.warn('[agent-browser] Active helper could not be stopped during cleanup')
+      }
       session.activeProcess = null
     }
 
@@ -226,12 +231,18 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
           ['--session', sessionName, 'close'],
           options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
         )
-        await waitForAgentBrowserSessionExit({
+        const exitOptions = {
           ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
           socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
           sessionName
-        })
-      } catch {}
+        }
+        await waitForAgentBrowserSessionExit(exitOptions)
+        if (this.ownsAgentBrowserSocketDirectory && !canSkipAgentBrowserSessionReset(exitOptions)) {
+          console.warn('[agent-browser] Session close could not be verified')
+        }
+      } catch {
+        console.warn('[agent-browser] Session close failed or timed out')
+      }
 
       await session.proxy.stop()
     })()
