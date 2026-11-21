@@ -1,7 +1,7 @@
 // What a bot could share, read from its record, home and automations: the parts a Share dialog offers,
 // and the ones that never go out.
 import { readdir, readFile, realpath } from 'node:fs/promises'
-import { relative, sep } from 'node:path'
+import { basename, relative, sep } from 'node:path'
 import { isConnectorTrigger } from '../../../shared/automation-event-triggers'
 import { isGoogleTrigger } from '../../../shared/automation-google-triggers'
 import type { Automation } from '../../../shared/automations/automation-definition'
@@ -247,7 +247,7 @@ export async function readBotShareable(input: {
   const homePath = input.home ?? botHomeFolder(input.bot)
   const home: Home = { path: homePath, real: await realpath(homePath) }
   const skillProjects = localSkillProjects(input.bot.skillProjects ?? [], input.repos ?? []).map(
-    (repo) => ({ name: repo.displayName, path: repo.path })
+    (repo) => ({ name: repo.displayName.trim() || basename(repo.path) || repo.id, path: repo.path })
   )
   const soulPath = await ownPath(home, 'SOUL.md')
   if (soulPath === null || soulPath === 'linked') {

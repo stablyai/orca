@@ -67,7 +67,7 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
           }
           title={skill.name}
           detail={
-            skill.optInFrom
+            skill.optInFrom !== undefined
               ? skill.description
                 ? t('bots.share.outsideSkillWith', 'From outside {{project}} · {{description}}', {
                     project: skill.optInFrom,

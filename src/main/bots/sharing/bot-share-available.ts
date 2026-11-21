@@ -27,7 +27,7 @@ export async function availableParts(
       name,
       description: sharedDescription(shared(`skills/${name}/SKILL.md`)) ?? description,
       homePath,
-      ...(optInFrom ? { optInFrom } : {})
+      ...(optInFrom === undefined ? {} : { optInFrom })
     })),
     schedules: shareable.schedules.map(({ automationId, name, rrule, timezone }) => ({
       automationId,

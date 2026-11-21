@@ -7,6 +7,8 @@ export function pickedSkillNames(
   skills: readonly { name: string; optInFrom?: string }[]
 ): string[] {
   return skills
-    .filter((skill) => (names === undefined ? !skill.optInFrom : names.includes(skill.name)))
+    .filter((skill) =>
+      names === undefined ? skill.optInFrom === undefined : names.includes(skill.name)
+    )
     .map((skill) => skill.name)
 }

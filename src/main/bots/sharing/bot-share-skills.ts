@@ -147,7 +147,7 @@ export async function readShareSkills(
         description: skill.description,
         directory: skill.folder,
         homePath: source.homePath(skill.folder),
-        ...(source.optInFrom(skill.folder) ? { optInFrom: source.optInFrom(skill.folder) } : {})
+        ...optInField(source.optInFrom(skill.folder))
       })
     }
   }
@@ -160,6 +160,10 @@ export async function readShareSkills(
   return (await packable(skills, leftOut)).sort((left, right) =>
     left.name.localeCompare(right.name, 'en-US')
   )
+}
+
+function optInField(project: string | undefined): { optInFrom?: string } {
+  return project === undefined ? {} : { optInFrom: project }
 }
 
 /** How many skill folders are checked at once. */
