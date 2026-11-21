@@ -71,6 +71,16 @@ export const groupStop = bindDeferredRpcOperation(
     )
   })
 )
+/** A group's place among the Bots section's rows, as a drag on the desktop saves it. */
+export const groupReorder = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bot-groups.reorder',
+    method: 'bots.groups.reorder',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('group-reordered', z.object({ ok: z.literal(true) }))
+  })
+)
 export const groupDelete = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'bot-groups.delete',
