@@ -27,7 +27,6 @@ import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { botGroupStatus } from '../../../../shared/bots/bot-group-status'
 import { foldBotStatus } from '../../../../shared/bots/bot-row-status'
@@ -52,7 +51,7 @@ import {
   requestOpenedChatFocus,
   roomTabOf
 } from './bot-palette-open-focus'
-import { useBotHostLabel } from './use-bot-host-label'
+import { useBotHostLabels } from './use-bot-host-label'
 import { PaletteHostBadgeChip } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import { cn } from '@/lib/class-names'
 import { UpNextIcon } from './BotUpNextCount'
@@ -86,6 +85,12 @@ export function useBotPaletteSource({
     () => getHostKeyedBotSidebarEntries(bots, groups, folderWorkspaces),
     [bots, groups, folderWorkspaces]
   )
+  // Read only while the palette shows, since this source stays mounted while it is closed.
+  const hostLabels = useBotHostLabels(
+    visible
+      ? entries.map((entry) => (entry.kind === 'bot' ? entry.bot.hostId : entry.group.hostId))
+      : []
+  )
   const homeIdentities = useMemo(
     () => new Set(entries.map((entry) => getFolderWorkspaceHostIdentity(entry.home))),
     [entries]
@@ -113,10 +118,10 @@ export function useBotPaletteSource({
       const purpose = entry.kind === 'bot' ? (purposes.get(botRefKey(entry.bot)) ?? '') : ''
       const name = entry.kind === 'bot' ? entry.bot.name : entry.group.name
       const id = `${entry.kind}:${entry.id}`
+      const hostId = entry.kind === 'bot' ? entry.bot.hostId : entry.group.hostId
+      const hostLabel = hostLabels.get(hostId) ?? null
       let row: BotPaletteRow | null = null
-      const offline = offlineHosts
-        .split('\n')
-        .includes(entry.kind === 'bot' ? entry.bot.hostId : entry.group.hostId)
+      const offline = offlineHosts.split('\n').includes(hostId)
       return {
         purpose,
         at: botSidebarEntryRecency(entry, activityOf(entry).activityAt),
@@ -125,14 +130,20 @@ export function useBotPaletteSource({
           if (row === null) {
             row =
               entry.kind === 'bot'
-                ? botRow(id, entry.bot, entry.home, purpose, offline)
-                : groupRow(id, entry.group, entry.home, botGroupMemberBots(entry.group, bots))
+                ? botRow(id, entry.bot, entry.home, purpose, offline, hostLabel)
+                : groupRow(
+                    id,
+                    entry.group,
+                    entry.home,
+                    botGroupMemberBots(entry.group, bots),
+                    hostLabel
+                  )
           }
           return row
         }
       }
     })
-  }, [bots, entries, offlineHosts, purposes, shown])
+  }, [bots, entries, hostLabels, offlineHosts, purposes, shown])
   const results = useMemo(() => {
     const prepared = preparePaletteQuery(query)
     if (prepared.state === 'empty') {
@@ -233,7 +244,8 @@ function botRow(
   bot: Bot,
   home: FolderWorkspace,
   purpose: string,
-  offline: boolean
+  offline: boolean,
+  hostLabel: string | null
 ): BotPaletteRow {
   return {
     id,
@@ -249,7 +261,7 @@ function botRow(
     ),
     trailing: (
       <>
-        <BotPaletteHostChip hostId={bot.hostId} />
+        <PaletteHostBadgeChip badge={hostLabel ? { hostId: bot.hostId, label: hostLabel } : null} />
         <BotPaletteUpNext bot={bot} />
       </>
     ),
@@ -289,14 +301,17 @@ function groupRow(
   id: string,
   group: BotGroup,
   home: FolderWorkspace,
-  members: readonly Bot[]
+  members: readonly Bot[],
+  hostLabel: string | null
 ): BotPaletteRow {
   return {
     id,
     title: group.name,
     leading: <BotGroupPaletteAvatar group={group} members={members} />,
     line: <BotGroupPaletteLine group={group} home={home} members={members} />,
-    trailing: <BotPaletteHostChip hostId={group.hostId} />,
+    trailing: (
+      <PaletteHostBadgeChip badge={hostLabel ? { hostId: group.hostId, label: hostLabel } : null} />
+    ),
     onSelect: () => {
       const generation = currentBotPaletteGeneration()
       // The room's open resolves with nothing: fulfilled means opened, a rejection means it didn't.
@@ -368,12 +383,6 @@ function AvatarWithStatus({
 }
 
 /** The sidebar row's line, inline; a bot with no activity yet shows what it is for. */
-/** A server's bot or group names its server on the right, as a remote workspace row does. */
-function BotPaletteHostChip({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element | null {
-  const label = useBotHostLabel(hostId)
-  return <PaletteHostBadgeChip badge={label ? { hostId, label } : null} />
-}
-
 function BotGroupPaletteLine({
   group,
   home,

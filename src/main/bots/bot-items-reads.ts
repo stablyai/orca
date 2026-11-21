@@ -20,6 +20,8 @@ export type BotItemListQuery = {
   chatIds?: readonly string[]
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
+  /** Only these items; the counts stay the whole scope's. */
+  uids?: readonly string[]
   limit: number
   /** The last row of the previous page. */
   cursor?: { at: number; number: number }
@@ -68,16 +70,21 @@ export class BotItemsReads extends BotItemsTables {
       .all(...scopeArgs)) {
       counts[statusOf(row.status)] = Number(row.count ?? 0)
     }
+    // Named items are looked up by uid (CROSS JOIN keeps that order), not found in the bot's scan.
+    const from = query.uids
+      ? 'json_each(?) AS named CROSS JOIN items WHERE items.uid = named.value AND'
+      : 'items WHERE'
     const cursor = query.cursor
       ? ' AND (last_activity_at < ? OR (last_activity_at = ? AND number < ?))'
       : ''
     const items = this.db
       .prepare(
-        `SELECT * FROM items WHERE ${scope}
+        `SELECT items.* FROM ${from} ${scope}
            AND status IN (SELECT value FROM json_each(?))${cursor}
          ORDER BY last_activity_at DESC, number DESC LIMIT ?`
       )
       .all(
+        ...(query.uids ? [JSON.stringify(query.uids)] : []),
         ...scopeArgs,
         JSON.stringify(query.statuses),
         ...(query.cursor ? [query.cursor.at, query.cursor.at, query.cursor.number] : []),

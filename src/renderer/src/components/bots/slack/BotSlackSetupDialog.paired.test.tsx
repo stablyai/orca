@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type * as BotHostStatus from '@/lib/bot-host-status'
 
 type Fake = ReturnType<typeof vi.fn>
 const mocks = vi.hoisted(() => {
@@ -13,22 +14,58 @@ const mocks = vi.hoisted(() => {
     hostEmail: string | null
     hosts: Record<string, Record<string, ReturnType<typeof vi.fn>>>
     open: ReturnType<typeof vi.fn>
-  } = { bots: [], hostEmail: 'm4air@example.test', hosts: {}, open: vi.fn() }
+    startHostSignIn: ReturnType<typeof vi.fn>
+    /** The server's verified status as the sign-in action reads it; null leaves the real one. */
+    hostStatus: null | { verified: boolean; approvesInBrowser: boolean }
+    /** The server's own account as the sign-in action reads it, when a test sets one. */
+    hostAccount: unknown
+    refreshAccount: ReturnType<typeof vi.fn>
+  } = {
+    bots: [],
+    hostEmail: 'm4air@example.test',
+    hosts: {},
+    open: vi.fn(),
+    startHostSignIn: vi.fn(),
+    hostStatus: null,
+    hostAccount: undefined,
+    refreshAccount: vi.fn()
+  }
   return state
 })
 vi.mock('@/lib/bot-catalog', () => ({
   useBots: () => mocks.bots,
   readBots: () => mocks.bots,
-  useHostBots: (hostId: string) => mocks.bots.filter((entry) => entry.hostId === hostId)
+  useHostBots: (hostId: string) => mocks.bots.filter((entry) => entry.hostId === hostId),
+  // Sign in on <server> opens the bot's Connectors tab first, which keeps the wait in view.
+  openBotHome: () => true
 }))
 vi.mock('@/lib/bot-connector-host-calls', () => ({
   botSlackCalls: (hostId: string) => mocks.hosts[hostId]
 }))
 vi.mock('@/lib/bot-host-orca-account', () => ({
   useBotHostOrcaAccount: () =>
-    mocks.hostEmail ? { state: 'signed-in', email: mocks.hostEmail } : null
+    mocks.hostAccount !== undefined
+      ? mocks.hostAccount
+      : mocks.hostEmail
+        ? { state: 'signed-in', email: mocks.hostEmail }
+        : null,
+  useBotHostOrcaAccountSettled: () => true,
+  refreshBotHostOrcaAccount: mocks.refreshAccount,
+  startBotHostSignIn: mocks.startHostSignIn
 }))
 vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: mocks.open }))
+vi.mock('@/lib/bot-host-status', async (actual) => {
+  const real = await actual<typeof BotHostStatus>()
+  return {
+    ...real,
+    useBotHostVerified: (hostId: ExecutionHostId) =>
+      mocks.hostStatus ? mocks.hostStatus.verified : real.useBotHostVerified(hostId),
+    useBotHostHas: (hostId: ExecutionHostId, capability: string) =>
+      mocks.hostStatus && capability === ORCA_ACCOUNT_APPROVE_IN_BROWSER_RUNTIME_CAPABILITY
+        ? mocks.hostStatus.approvesInBrowser
+        : real.useBotHostHas(hostId, capability)
+  }
+})
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
@@ -37,6 +74,7 @@ import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { useAppStore } from '@/store'
 import { ORCA_CONNECTED } from '../orca-sign-in.test-fixture'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
+import { ORCA_ACCOUNT_APPROVE_IN_BROWSER_RUNTIME_CAPABILITY } from '../../../../../shared/orca-account-runtime-capabilities'
 
 const SERVER: ExecutionHostId = 'runtime:m4'
 const NOW = 1_800_000_000_000
@@ -108,6 +146,9 @@ beforeEach(() => {
   )
   mocks.bots = [bot({ id: 'mine', slack: { appId: 'A0', teamId: 'T1' } }, 'local')]
   mocks.hostEmail = 'm4air@example.test'
+  mocks.hostStatus = null
+  mocks.hostAccount = undefined
+  mocks.refreshAccount.mockReset().mockResolvedValue(undefined)
   mocks.open.mockReset().mockReturnValue('orca-browser')
   redeem.mockReset()
   writeClipboardText.mockReset().mockResolvedValue(undefined)
@@ -129,6 +170,9 @@ afterEach(() => {
 
 describe('BotSlackSetupDialog on a paired computer', () => {
   it('signs the server in, not this desktop, when the server is signed out', async () => {
+    // Sign in on <server> shows only for a verified server that takes it, its sign-in read.
+    mocks.hostStatus = { verified: true, approvesInBrowser: true }
+    mocks.hostAccount = { state: 'signed-out', storage: { kind: 'os-keychain' } }
     mocks.hosts[SERVER].state.mockResolvedValue({ ok: false, error: 'signed_out' })
     openDialog()
 
@@ -176,6 +220,384 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
     expect(mocks.hosts[SERVER].setUpApp).not.toHaveBeenCalled()
   })
+
+  it('puts this desktop’s token first when the server’s lapsed, with the paste behind a disclosure', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].handOff.mockResolvedValue(ok({ code: 'one-time', expiresAt: 1 }))
+    redeem.mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE }))
+    openDialog()
+
+    const use = await screen.findByRole('button', { name: 'Use it' })
+    // A stray Enter must not spend this desktop's token.
+    expect(document.activeElement).not.toBe(use)
+    const field = screen.getByLabelText('Configuration refresh token')
+    expect(field.closest('[hidden]')).not.toBeNull()
+    const disclosure = screen.getByRole('button', { name: /Paste a token instead/ })
+    fireEvent.click(disclosure)
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(document.activeElement).toBe(field)
+    // A token typed before closing it is still there on reopening.
+    fireEvent.change(field, { target: { value: 'xoxe-typed' } })
+    fireEvent.click(disclosure)
+    fireEvent.click(disclosure)
+    expect(screen.getByLabelText('Configuration refresh token')).toHaveProperty(
+      'value',
+      'xoxe-typed'
+    )
+
+    fireEvent.click(use)
+    await screen.findByRole('button', { name: 'Approve in Slack' })
+    expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(redeem).toHaveBeenCalledWith({ code: 'one-time' })
+    expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
+  })
+
+  it('saves a token pasted beside the offer on the server, and a refused one comes back open with focus on the field', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue({ ok: false, error: 'invalid_grant' })
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Paste a token instead/ }))
+    fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-1-new' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+
+    await waitFor(() =>
+      expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-new' })
+    )
+    expect(mocks.hosts.local.saveGrant).not.toHaveBeenCalled()
+    const field = await screen.findByLabelText('Configuration refresh token')
+    await waitFor(() => expect(document.activeElement).toBe(field))
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('focuses the token field when there is no token to offer', async () => {
+    mocks.bots = []
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    const field = await screen.findByLabelText('Configuration refresh token')
+    expect(document.activeElement).toBe(field)
+    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+  })
+
+  it('keeps a token typed into the paste-only step, in view, when this desktop’s offer arrives late', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    // This desktop's own account isn't read yet, so there is nothing to offer at first.
+    const signedIn = useAppStore.getState().orcaProfileAuthStatus
+    useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    openDialog()
+
+    const typing = await screen.findByLabelText<HTMLInputElement>('Configuration refresh token')
+    expect(document.activeElement).toBe(typing)
+    fireEvent.change(typing, { target: { value: 'xoxe-typed' } })
+    typing.setSelectionRange(4, 4)
+    act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
+
+    await screen.findByRole('button', { name: 'Use it' })
+    const field = screen.getByLabelText<HTMLInputElement>('Configuration refresh token')
+    // The same field, still focused with its caret: typing goes on where it was.
+    expect(field).toBe(typing)
+    expect(document.activeElement).toBe(field)
+    expect(field.selectionStart).toBe(4)
+    expect(field).toHaveProperty('value', 'xoxe-typed')
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /Paste a token instead/ }).getAttribute('aria-expanded')
+    ).toBe('true')
+
+    // The kept token goes through the inline Reconnect, to the server.
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue({ ok: false, error: 'invalid_grant' })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    await waitFor(() =>
+      expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-typed' })
+    )
+    expect(mocks.hosts.local.saveGrant).not.toHaveBeenCalled()
+  })
+
+  it('opens no empty disclosure when a typed token was cleared before the offer arrived', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    const signedIn = useAppStore.getState().orcaProfileAuthStatus
+    useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    openDialog()
+
+    const field = await screen.findByLabelText('Configuration refresh token')
+    fireEvent.change(field, { target: { value: 'xoxe-typed' } })
+    fireEvent.change(field, { target: { value: '' } })
+    // Out of the paste form, so only the (now empty) token could keep it open.
+    act(() => screen.getByRole('button', { name: 'About Slack tokens' }).focus())
+    act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
+
+    await screen.findByRole('button', { name: 'Use it' })
+    expect(
+      screen.getByRole('button', { name: /Paste a token instead/ }).getAttribute('aria-expanded')
+    ).toBe('false')
+  })
+
+  it('keeps the typed token and its focus when this desktop’s offer goes away', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Paste a token instead/ }))
+    const typing = screen.getByLabelText('Configuration refresh token')
+    fireEvent.change(typing, { target: { value: 'xoxe-typed' } })
+    expect(document.activeElement).toBe(typing)
+    act(() =>
+      useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    )
+
+    await screen.findByText('Paste a new token to reconnect.')
+    const field = screen.getByLabelText('Configuration refresh token')
+    expect(field).toBe(typing)
+    expect(document.activeElement).toBe(field)
+    expect(field).toHaveProperty('value', 'xoxe-typed')
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
+  })
+
+  it('leaves focus on a control that stays when this desktop’s offer goes away', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    const about = screen.getByRole('button', { name: 'About Slack tokens' })
+    act(() => about.focus())
+    act(() =>
+      useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    )
+
+    await screen.findByText('Paste a new token to reconnect.')
+    // The field shows now, but does not take focus from what the user was on.
+    expect(screen.getByRole('button', { name: 'About Slack tokens' })).toBe(about)
+    expect(document.activeElement).toBe(about)
+  })
+
+  // Focus when the offer arrives or goes. The paste form someone is in stays open on arrival; a
+  // control that goes away hands focus to where the step asks for input; one that stays keeps it.
+  function signedOutHere(): () => void {
+    const signedIn = useAppStore.getState().orcaProfileAuthStatus
+    useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    return () => act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
+  }
+  const signOutHere = (): void =>
+    act(() =>
+      useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    )
+  function focusOn(element: HTMLElement): HTMLElement {
+    act(() => element.focus())
+    expect(document.activeElement).toBe(element)
+    return element
+  }
+  const field = (): HTMLElement => screen.getByLabelText('Configuration refresh token')
+  const disclosure = (): HTMLElement =>
+    screen.getByRole('button', { name: /Paste a token instead/ })
+
+  it.each([
+    ['the empty field', () => field()],
+    ['the paste-only Cancel', () => screen.getByRole('button', { name: 'Cancel' })]
+  ])(
+    'a late offer keeps the paste form open when focus is on %s, and focus on the field',
+    async (_label, focused) => {
+      serverState({ state: 'grant_expired', teamId: 'T1' })
+      const offerArrives = signedOutHere()
+      openDialog()
+
+      const typing = await screen.findByLabelText('Configuration refresh token')
+      focusOn(focused())
+      offerArrives()
+
+      await screen.findByRole('button', { name: 'Use it' })
+      expect(field()).toBe(typing)
+      expect(typing.closest('[hidden]')).toBeNull()
+      expect(disclosure().getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(typing)
+    }
+  )
+
+  it('a late offer moves focus from the paste-only Reconnect, which goes inline, to the field', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    const offerArrives = signedOutHere()
+    openDialog()
+
+    fireEvent.change(await screen.findByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-typed' }
+    })
+    focusOn(screen.getByRole('button', { name: 'Reconnect' }))
+    offerArrives()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    expect(document.activeElement).toBe(field())
+  })
+
+  it.each([
+    ['the ⓘ', () => screen.getByRole('button', { name: 'About Slack tokens' })],
+    ['the dialog’s close', () => screen.getByRole('button', { name: 'Close' })]
+  ])('a late offer leaves focus on %s, which stays', async (_label, focused) => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    const offerArrives = signedOutHere()
+    openDialog()
+
+    await screen.findByLabelText('Configuration refresh token')
+    const control = focusOn(focused())
+    offerArrives()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    expect(document.activeElement).toBe(control)
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false')
+  })
+
+  const offerReturns = (): void =>
+    act(() =>
+      useAppStore.setState({
+        orcaProfileAuthStatus: {
+          ...ORCA_CONNECTED,
+          cloud: { cloudProfileId: 'c', userId: 'u', email: 'me@example.test', linkedAt: 1 }
+        }
+      })
+    )
+
+  it.each([
+    ['empty', null],
+    ['with a typed token', 'xoxe-typed']
+  ])(
+    'a returning offer reopens a closed disclosure once the user is back in the field (%s)',
+    async (_label, typed) => {
+      serverState({ state: 'grant_expired', teamId: 'T1' })
+      openDialog()
+
+      fireEvent.click(await screen.findByRole('button', { name: /Paste a token instead/ }))
+      fireEvent.click(disclosure())
+      expect(disclosure().getAttribute('aria-expanded')).toBe('false')
+      signOutHere()
+      await screen.findByText('Paste a new token to reconnect.')
+      const typing = field()
+      act(() => screen.getByRole('button', { name: 'About Slack tokens' }).focus())
+      focusOn(typing)
+      if (typed) {
+        fireEvent.change(typing, { target: { value: typed } })
+      }
+      offerReturns()
+
+      await screen.findByRole('button', { name: 'Use it' })
+      expect(field()).toBe(typing)
+      expect(typing.closest('[hidden]')).toBeNull()
+      expect(disclosure().getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(typing)
+      expect(typing).toHaveProperty('value', typed ?? '')
+    }
+  )
+
+  it('a returning offer keeps a disclosure the user closed shut while they are elsewhere', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Paste a token instead/ }))
+    fireEvent.change(field(), { target: { value: 'xoxe-typed' } })
+    fireEvent.click(disclosure())
+    signOutHere()
+    await screen.findByText('Paste a new token to reconnect.')
+    // Focus followed the removed toggle to the field; the user then moves on to the ⓘ.
+    expect(document.activeElement).toBe(field())
+    const about = focusOn(screen.getByRole('button', { name: 'About Slack tokens' }))
+    offerReturns()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    expect(disclosure().getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(about)
+  })
+
+  it.each([
+    ['goes', false],
+    ['arrives', true]
+  ])(
+    'takes no focus back after the user blurred to nothing, when the offer %s',
+    async (_label, late) => {
+      serverState({ state: 'grant_expired', teamId: 'T1' })
+      const signedIn = useAppStore.getState().orcaProfileAuthStatus
+      if (late) {
+        useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+      }
+      openDialog()
+
+      const control = late
+        ? await screen.findByLabelText('Configuration refresh token')
+        : await screen.findByRole('button', { name: 'Use it' })
+      focusOn(control)
+      // The user blurs to nothing; later the offer changes.
+      act(() => control.blur())
+      await act(async () => {})
+      act(() =>
+        useAppStore.setState({
+          orcaProfileAuthStatus: late ? signedIn : { ...ORCA_CONNECTED, cloud: undefined }
+        })
+      )
+      await (late
+        ? screen.findByRole('button', { name: 'Use it' })
+        : screen.findByText('Paste a new token to reconnect.'))
+
+      // Neither place the step moves focus to took it.
+      expect(document.activeElement).not.toBe(field())
+      expect(document.activeElement).not.toBe(
+        screen.queryByRole('button', { name: /Paste a token instead/ })
+      )
+    }
+  )
+
+  it('keeps the paste form open when the window loses focus with the empty field focused', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    const offerArrives = signedOutHere()
+    openDialog()
+
+    const typing = focusOn(await screen.findByLabelText('Configuration refresh token'))
+    // Switching apps blurs the field but leaves it the page's focused element.
+    fireEvent.focusOut(typing)
+    await act(async () => {})
+    expect(document.activeElement).toBe(typing)
+    offerArrives()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    expect(typing.closest('[hidden]')).toBeNull()
+    expect(document.activeElement).toBe(typing)
+  })
+
+  it('leaves focus outside the step, on the dialog’s close, when the offer goes', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    await screen.findByRole('button', { name: 'Use it' })
+    const close = focusOn(screen.getByRole('button', { name: 'Close' }))
+    signOutHere()
+
+    await screen.findByText('Paste a new token to reconnect.')
+    expect(document.activeElement).toBe(close)
+  })
+
+  it.each([
+    ['Use it', false],
+    ['Paste a token instead', false],
+    ['Cancel', false],
+    ['Reconnect', true]
+  ])(
+    'when the offer goes, focus on %s, which goes away, moves to the field',
+    async (name, open) => {
+      serverState({ state: 'grant_expired', teamId: 'T1' })
+      openDialog()
+
+      await screen.findByRole('button', { name: 'Use it' })
+      if (open) {
+        fireEvent.click(disclosure())
+        fireEvent.change(field(), { target: { value: 'xoxe-typed' } })
+      }
+      focusOn(screen.getByRole('button', { name: new RegExp(`^${name}`) }))
+      signOutHere()
+
+      await screen.findByText('Paste a new token to reconnect.')
+      expect(document.activeElement).toBe(field())
+    }
+  )
 
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {
     mocks.hostEmail = 'me@example.test'
@@ -231,5 +653,68 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     await screen.findByText('The install link expired.')
     fireEvent.click(screen.getByRole('button', { name: 'Get a new link' }))
     await waitFor(() => expect(mocks.hosts[SERVER].setUpApp).toHaveBeenCalledTimes(2))
+  })
+
+  it("sends a signed-out server to the server's own sign-in, never this computer's", async () => {
+    mocks.hostStatus = { verified: true, approvesInBrowser: true }
+    mocks.hosts[SERVER].state.mockResolvedValue({ ok: false, error: 'signed_out' })
+    const connect = vi.fn()
+    useAppStore.setState({ connectCurrentOrcaProfile: connect })
+    mocks.startHostSignIn.mockReset().mockResolvedValue(undefined)
+    openDialog()
+
+    const signIn = await screen.findByRole('button', { name: /^Sign in on / })
+    expect(screen.getByText(/^Sign .+ in to Orca Cloud to connect Slack\.$/)).toBeDefined()
+    expect(
+      screen.queryByText('Slack connects through Orca Cloud. Sign in to Orca to continue.')
+    ).toBeNull()
+    fireEvent.click(signIn)
+    expect(mocks.startHostSignIn).toHaveBeenCalledWith(
+      SERVER,
+      expect.objectContaining({ id: 'bot-1' })
+    )
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('asks to update an older server first, and offers nothing until the server is verified', async () => {
+    mocks.hosts[SERVER].state.mockResolvedValue({ ok: false, error: 'signed_out' })
+    mocks.hostStatus = { verified: true, approvesInBrowser: false }
+    openDialog()
+    expect(
+      await screen.findByText(/^Update Orca on .+, then sign it in from here\.$/)
+    ).toBeDefined()
+    expect(screen.queryByRole('button', { name: /^Sign in on / })).toBeNull()
+    cleanup()
+
+    mocks.hostStatus = { verified: false, approvesInBrowser: true }
+    openDialog()
+    await screen.findByText(/^Sign .+ in to Orca Cloud to connect Slack\.$/)
+    expect(screen.queryByRole('button', { name: /^Sign in on / })).toBeNull()
+    expect(screen.queryByText(/^Update Orca on /)).toBeNull()
+  })
+
+  it.each([
+    [
+      'a build without Orca Cloud sign-in',
+      { state: 'unconfigured', storage: { kind: 'os-keychain' } },
+      /^Orca on .+ was built without Orca Cloud sign-in\. Install Orca’s release build there to sign it in\.$/
+    ],
+    [
+      'a server that can’t save a sign-in',
+      { state: 'signed-out', storage: { kind: 'refused', reason: 'no keychain' } },
+      /^.+ can’t save an Orca sign-in: no keychain$/
+    ],
+    ['an account it couldn’t read', null, /^Couldn’t read .+’s Orca sign-in\.$/]
+  ])('offers no sign-in that would fail, and says why, for %s', async (_case, account, says) => {
+    mocks.hosts[SERVER].state.mockResolvedValue({ ok: false, error: 'signed_out' })
+    mocks.hostStatus = { verified: true, approvesInBrowser: true }
+    mocks.hostAccount = account
+    openDialog()
+    expect(await screen.findByText(says)).toBeDefined()
+    expect(screen.queryByRole('button', { name: /^Sign in on / })).toBeNull()
+    if (account === null) {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(mocks.refreshAccount).toHaveBeenCalledWith(SERVER)
+    }
   })
 })

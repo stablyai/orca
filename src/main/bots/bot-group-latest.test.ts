@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
+import { fixture, groupNativeMocks, journal } from './bot-group-native-runtime.test-fixture'
 import { noteBotGroupMemberReply } from './bot-group-latest'
 
 const mocks = groupNativeMocks()
@@ -36,7 +35,11 @@ describe('a group as the sidebar lists it', () => {
         { operationId: asked.turns[0]!.operationId, text: 'Found it', at: asked.createdAt }
       ])
     )
-    await noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      group.members[0]!.sessionId,
+      `t-${asked.turns[0]!.operationId}`
+    )
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
       text: 'Found it',
@@ -92,7 +95,11 @@ describe('a group as the sidebar lists it', () => {
         { operationId: first.turns[0]!.operationId, text: 'First done', at: second.createdAt + 1 }
       ])
     )
-    await noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      group.members[0]!.sessionId,
+      `t-${first.turns[0]!.operationId}`
+    )
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
       text: 'First done'
@@ -121,7 +128,11 @@ describe('a group as the sidebar lists it', () => {
         { operationId: asked.turns[0]!.operationId, text: 'Finished reply', at: last.createdAt }
       ])
     )
-    await noteBotGroupMemberReply(runtime, created.members[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      created.members[0]!.sessionId,
+      `t-${asked.turns[0]!.operationId}`
+    )
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
       text: 'Finished reply'
@@ -149,7 +160,11 @@ describe('a group as the sidebar lists it', () => {
             )
           })
       )
-      const noting = noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
+      const noting = noteBotGroupMemberReply(
+        runtime,
+        group.members[0]!.sessionId,
+        `t-${asked.turns[0]!.operationId}`
+      )
       await vi.waitFor(() => expect(pending).toHaveLength(1))
       await send('Newer owner post')
       for (const resolve of pending) {
@@ -187,7 +202,7 @@ describe('a group as the sidebar lists it', () => {
           { operationId: scout.operationId, text: 'Scout reply', at: 1_000 }
         ])
       })
-      const olderRead = noteBotGroupMemberReply(runtime, scout.sessionId)
+      const olderRead = noteBotGroupMemberReply(runtime, scout.sessionId, `t-${scout.operationId}`)
       await started.promise
 
       try {
@@ -198,7 +213,7 @@ describe('a group as the sidebar lists it', () => {
           mocks.snapshot.mockImplementationOnce(async (sessionId) =>
             journal(sessionId, [{ operationId: turn.operationId, text: reply, at: 1_000 }])
           )
-          await noteBotGroupMemberReply(runtime, turn.sessionId)
+          await noteBotGroupMemberReply(runtime, turn.sessionId, `t-${turn.operationId}`)
           expect(groups.store.listing()[0]?.latest).toMatchObject({ text: reply })
         }
       } finally {
@@ -225,54 +240,3 @@ describe('a group as the sidebar lists it', () => {
     expect(groups.store.listing()[0]).not.toHaveProperty('sidebarOrder')
   })
 })
-
-/** A member's journal with each given operation answered and completed at its time. */
-function journal(sessionId: string, replies: { operationId: string; text: string; at: number }[]) {
-  const stamp = { sequence: 1, revision: 1, observedAt: 1 }
-  return {
-    sessionId,
-    cursor: { epoch: 'e', sequence: 1 },
-    // Each operation's send, accepted, so its turn maps back to the operation.
-    submissions: replies.map(({ operationId }) => ({
-      clientMessageId: operationId,
-      fence: 1,
-      payloadFingerprint: operationId,
-      dispatchState: 'accepted' as const,
-      providerItemId: null,
-      reason: null,
-      submittedAt: 1,
-      resolvedAt: 1
-    })),
-    items: replies.flatMap(({ operationId, text, at }) => {
-      const key = agentJournalSubmissionKey(operationId)
-      return [
-        {
-          ...stamp,
-          itemId: key,
-          body: { kind: 'message' as const, role: 'user' as const, blocks: [] }
-        },
-        {
-          ...stamp,
-          itemId: `turn-${operationId}`,
-          body: {
-            kind: 'turn' as const,
-            turnId: `t-${operationId}`,
-            state: 'completed' as const,
-            userItemId: key,
-            completedAt: at
-          }
-        },
-        {
-          ...stamp,
-          itemId: `reply-${operationId}`,
-          turnScope: { kind: 'turn' as const, turnItemId: `turn-${operationId}` },
-          body: {
-            kind: 'message' as const,
-            role: 'assistant' as const,
-            blocks: [{ type: 'text' as const, text }]
-          }
-        }
-      ]
-    })
-  }
-}

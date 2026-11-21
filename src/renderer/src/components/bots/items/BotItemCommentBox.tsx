@@ -1,8 +1,8 @@
 // The item view's comment box: chat's prompt editor and attachment pieces in one row (attach, text, mic,
 // send), the text on its own row above them from its second line; while the agent's question waits,
-// "Replying to" names it. Enter sends, Shift+Enter adds a line;
-// images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other files as `@path`
-// pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
+// "Replying to" names it and the text opens on its own row, four lines tall. Enter sends, Shift+Enter
+// adds a line; images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other
+// files as `@path` pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
 import {
   useCallback,
   useImperativeHandle,
@@ -75,8 +75,6 @@ export type BotItemCommentBoxHandle = {
   fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
-  /** The waiting question "Replying to" names, by its id; null once hidden. */
-  replyingTo: () => string | null
 }
 
 const NO_TARGET = () => null
@@ -92,18 +90,22 @@ export function BotItemCommentBox({
   hidden = false,
   nav,
   question,
+  onShowQuestion,
   ref
 }: {
   bot: Bot
   item: BotItem
   /** The bot's folder workspace and host, which file drops and uploads resolve against. */
   attachTo: BotItemCommentAttachTarget | null
-  /** Takes the comment as the box empties: it shows and goes to the host from there. */
-  onSend: (text: string, paths: readonly string[]) => void
+  /** Takes the comment as the box empties, with the waiting line "Replying to" names (null once
+   *  hidden): it shows and goes to the host from there. */
+  onSend: (text: string, paths: readonly string[], replyingTo: string | null) => void
   /** Not on screen: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
   /** The agent's question the item waits on: its first line, and whether it gave quick replies. */
   question?: BotItemWaitingQuestion | null
+  /** Brings the comment that asks the question into view, by its event id. */
+  onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
   ref?: Ref<BotItemCommentBoxHandle>
@@ -228,8 +230,9 @@ export function BotItemCommentBox({
     shown.current = draft
   }, [draft, ime])
 
-  const { field, stacked } = useBotItemCommentStacked(draft)
-  const reply = useBotItemReplyMark(box, question ?? null, scopeKey)
+  const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
+  // Replying to a question, the text has its own row and room for an answer from the start.
+  const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
   const caretToEnd = (): void => {
     const node = input.current
     node?.focus()
@@ -239,7 +242,6 @@ export function BotItemCommentBox({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
     type: (typed) => void composer.current?.insertTypedText(typed),
-    replyingTo: () => reply.quote?.id ?? null,
     answer: () => {
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
@@ -279,7 +281,7 @@ export function BotItemCommentBox({
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths)
+    onSend(text, paths, reply.quote?.id ?? null)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
@@ -373,7 +375,7 @@ export function BotItemCommentBox({
         />
       ) : null}
       <NativeChatComposerNotices notices={notices} className="mb-1.5" />
-      {reply.quote ? <BotItemReplyingTo question={reply.quote.line} onHide={reply.hide} /> : null}
+      <BotItemReplyingTo mark={reply} />
       {images.length > 0 ? (
         // Two rows of chips (fewer in a short pane), then they scroll; the padding keeps rings and × in view.
         <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto px-1 pb-0.5 pr-2 pt-2">
@@ -410,8 +412,7 @@ export function BotItemCommentBox({
             onCompositionStart={editorCompositionStart}
             onCompositionEnd={editorCompositionEnd}
             onBlur={editorBlur}
-            // One row, growing to six lines (less in a short pane: `cqh`), then it scrolls.
-            className="scrollbar-sleek block max-h-[min(132px,25cqh)] min-h-8 overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate"
+            className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
           />
         </div>
         {nav}

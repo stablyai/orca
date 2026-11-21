@@ -20,8 +20,11 @@ import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
 import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
-import { useBotItemsShownList, type BotItemsShownList } from './items/use-bot-items-shown-list'
-import type { BotItemsClosedPage } from './items/use-bot-items-closed-pages'
+import {
+  useBotItemsShownList,
+  type BotItemsClosedPage,
+  type BotItemsShownList
+} from './items/use-bot-items-shown-list'
 import type { BotItemWalkList } from './items/use-bot-item-walk'
 
 /** One member as the group panel reads it. */
@@ -87,8 +90,13 @@ const MemberReader = memo(function MemberReader({
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list
-  const { closedTotal, loadMoreClosed, closedEnded } = list
-  const { read: chatListRead, failed: chatFailed, retry: chatRetry } = list.chatRead
+  const { closedTotal, loadMoreClosed, closedEnded, closedEndAt } = list
+  const {
+    read: chatListRead,
+    failed: chatFailed,
+    retry: chatRetry,
+    readMore: chatReadMore
+  } = list.chatRead
   useEffect(() => {
     report(bot.id, {
       bot,
@@ -97,14 +105,20 @@ const MemberReader = memo(function MemberReader({
       seenEventId,
       list: {
         read: listRead,
-        chatRead: { read: chatListRead, failed: chatFailed, retry: chatRetry },
+        chatRead: {
+          read: chatListRead,
+          failed: chatFailed,
+          retry: chatRetry,
+          readMore: chatReadMore
+        },
         items: listItems,
         shown,
         groups,
         staleDays,
         closedTotal,
         loadMoreClosed,
-        closedEnded
+        closedEnded,
+        closedEndAt
       },
       needs,
       stoppedForSignIn,
@@ -123,6 +137,7 @@ const MemberReader = memo(function MemberReader({
     chatListRead,
     chatFailed,
     chatRetry,
+    chatReadMore,
     listItems,
     shown,
     groups,
@@ -130,6 +145,7 @@ const MemberReader = memo(function MemberReader({
     closedTotal,
     loadMoreClosed,
     closedEnded,
+    closedEndAt,
     needs,
     stoppedForSignIn,
     needsYou,
@@ -153,10 +169,15 @@ export function botGroupNeedsYouOutside(counts: {
 }
 
 /** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
-function memberClosed(read: MemberRead): { closed: BotItem[]; more: boolean } {
+function memberClosed(read: MemberRead): {
+  closed: BotItem[]
+  more: boolean
+  endAt: number | null
+} {
   return {
     closed: read.list.shown.filter((item) => item.status === 'done' || item.status === 'canceled'),
-    more: !read.list.closedEnded
+    more: !read.list.closedEnded,
+    endAt: read.list.closedEndAt ?? null
   }
 }
 
@@ -258,7 +279,7 @@ export function useBotGroupItems(
             return closed
           }
           const page = await read.list.loadMoreClosed()
-          return { closed: [...closed.closed, ...page.items], more: page.more }
+          return { closed: [...closed.closed, ...page.items], more: page.more, endAt: null }
         })
       )
       for (const item of members.flatMap((member) => member.closed)) {

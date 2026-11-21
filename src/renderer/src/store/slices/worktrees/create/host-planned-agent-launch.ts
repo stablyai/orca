@@ -3,7 +3,10 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import {
+  WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_HOST_OWNED_SETTINGS_RUNTIME_CAPABILITY
+} from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
@@ -21,20 +24,27 @@ export async function createWorktreeOnRuntimeHost(
   attempt: WorktreeCreateAttempt,
   clientCreateSettings: ClientWorktreeCreateSettings
 ): Promise<CreatedWorktreeResult> {
-  const call = (
+  // A host that owns these settings is edited from Settings; sending ours would override what the user set there.
+  const hostOwnsCreateSettings = await hostSupportsCapability(
+    environmentId,
+    WORKTREE_CREATE_HOST_OWNED_SETTINGS_RUNTIME_CAPABILITY
+  )
+  const call = async (
     launch?: HostAgentLaunch,
     creationLaunch?: NonNullable<WorktreeCreateRequest['options']>['creationAgentLaunch']
-  ): Promise<CreateWorktreeResult> =>
-    callRuntimeRpc<CreateWorktreeResult>(
+  ): Promise<CreatedWorktreeResult> => ({
+    ...(await callRuntimeRpc<CreateWorktreeResult>(
       { kind: 'environment', environmentId },
       'worktree.create',
       {
         ...buildRuntimeWorktreeCreateParams(request, attempt, launch, creationLaunch),
-        // Why: the host's own store defaults would otherwise override the user's choices.
-        ...clientCreateSettings
+        // Why: an older host's own store defaults would otherwise override the user's choices.
+        ...(hostOwnsCreateSettings ? {} : clientCreateSettings)
       },
       { timeoutMs: 10 * 60_000 }
-    )
+    )),
+    ...(hostOwnsCreateSettings ? { hostOwnsCreateSettings: true as const } : {})
+  })
   const creationLaunch = request.options?.creationAgentLaunch
   if (
     creationLaunch &&

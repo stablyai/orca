@@ -98,7 +98,6 @@ export async function initializeAcpStructuredSession(
     antigravityChatAuth: launch.antigravityChatAuth
   })
   const setup = {
-    ...acpSessionStartMeta(spec, meta),
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference
@@ -117,6 +116,7 @@ export async function initializeAcpStructuredSession(
     options.adoptSession(accepted.response, accepted.kind === 'new' ? 'new' : 'loaded')
   }
   if (resume) {
+    const reopenMeta = launch.sessionMetaOnReopen ? sessionMeta : undefined
     const reopenIn = (cwd: string) =>
       retryAcpRequest(
         async () => {
@@ -129,7 +129,7 @@ export async function initializeAcpStructuredSession(
               cwd,
               mcpServers: launch.mcpServers ?? [],
               sessionId: resume.sessionId,
-              ...(sessionMeta && launch.sessionMetaOnReopen ? { _meta: sessionMeta } : {}),
+              ...acpSessionStartMeta(spec, meta, reopenMeta),
               ...setup
             },
             acceptSession
@@ -195,7 +195,7 @@ export async function initializeAcpStructuredSession(
         {
           cwd: launch.cwd,
           mcpServers: launch.mcpServers ?? [],
-          ...(sessionMeta ? { _meta: sessionMeta } : {}),
+          ...acpSessionStartMeta(spec, meta, sessionMeta),
           ...setup
         },
         acceptSession

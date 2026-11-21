@@ -5,7 +5,11 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { expect, it } from 'vitest'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
-import { structuredMailMessage, structuredMailSource } from './structured-mail-source'
+import {
+  structuredMailMessage,
+  structuredMailSource,
+  type MailSourceMessage
+} from './structured-mail-source'
 import { settleStructuredMailAttempt } from './structured-mail-custody'
 import { AgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
@@ -50,6 +54,54 @@ it("calls a federated worker of the Run its worker, and an unrelated chat's Run 
       }).senders[0]!.relation
     expect(toRun(`dispatch:${remote.id}`)).toBe('worker')
     expect(toRun('orca_session_id:22222222-2222-4222-8222-222222222222')).toBeUndefined()
+  } finally {
+    db.close()
+  }
+})
+
+it("sends a local worker's results the thread's turn started back to the thread, and keeps its asks in Orca", () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    const run = db.createRun({
+      objective: 'thread',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: null
+    })
+    const assign = (creatorHandle: string) =>
+      db.createDispatchContext({
+        taskId: db.createTask({ runId: run.id, spec: creatorHandle }).id,
+        assigneeHandle: `term_worker_${creatorHandle}`,
+        creator: { kind: 'terminal', handle: creatorHandle, turnSource: 'connector' },
+        maxDepth: 8
+      })
+    const started = assign('term_coord')
+    const foreign = assign('term_other')
+    // Orca mails as the dispatch itself: a failed start or lost worker (escalation), its question,
+    // its setup status.
+    const mail = (dispatchId: string, type: MailSourceMessage['type']) =>
+      structuredMailSource({
+        db,
+        mailboxHandle: `run:${run.id}`,
+        dispatchId: null,
+        senderSnapshot: () => ({ name: 'Worker', agent: null }),
+        batch: [
+          {
+            id: `m-${dispatchId}-${type}`,
+            from_handle: `dispatch:${dispatchId}`,
+            run_id: run.id,
+            type,
+            payload: null,
+            created_at: '2026-01-01T00:00:00.000Z'
+          }
+        ]
+      }).senders[0]
+    expect(mail(started.id, 'escalation')).toMatchObject({
+      relation: 'worker',
+      toConversation: true
+    })
+    expect(mail(started.id, 'question')).not.toHaveProperty('toConversation')
+    expect(mail(started.id, 'status')).not.toHaveProperty('toConversation')
+    expect(mail(foreign.id, 'escalation')).not.toHaveProperty('toConversation')
   } finally {
     db.close()
   }

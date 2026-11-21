@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { UserRound, X } from 'lucide-react'
 import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useTranslate } from '@/i18n/use-translate'
+import { useBotConnectorPaged } from './bot-connector-page'
 import { botMemberSource, type BotMember } from '../../../../shared/bot-types'
 
 // Chips past these show as "+N": four people after You when open, three avatars when closed.
@@ -24,6 +25,39 @@ export function BotConnectorCaption(props: {
       </p>
       {props.action}
     </div>
+  )
+}
+
+/**
+ * One part of a connector's body: a caption, then its content; on the connector's own page the
+ * content sits in a card. Elsewhere (a folding row, a setup dialog) it reads as before.
+ */
+export function BotConnectorSection(props: {
+  title?: string
+  count?: number
+  action?: React.ReactNode
+  children: React.ReactNode
+}): React.JSX.Element {
+  const paged = useBotConnectorPaged()
+  const caption = props.title ? (
+    <BotConnectorCaption title={props.title} count={props.count} action={props.action} />
+  ) : null
+  if (!paged) {
+    return (
+      <>
+        {caption}
+        {props.children}
+      </>
+    )
+  }
+  return (
+    // A part with nothing to show (e.g. no picker yet) leaves no empty card.
+    <section className="mt-3.5 flex min-w-0 flex-col has-[>div:empty]:hidden">
+      {caption}
+      <div className="min-w-0 rounded-[10px] border border-border bg-card p-3 *:last:mb-0">
+        {props.children}
+      </div>
+    </section>
   )
 }
 

@@ -24,6 +24,7 @@ import {
   type TidyUpChat,
   type TidyUpMemoryFile
 } from './bot-memory-tidy-up'
+import { hostSalvageStore } from './bot-memory-salvage-store'
 import { BotTidyUpRunner } from './bot-memory-tidy-up-runner'
 import { watchBotTurnEnds } from './bot-run-turn-watch'
 
@@ -128,6 +129,7 @@ export function runtimeTidyUpRunner(runtime: OrcaRuntimeService): BotTidyUpRunne
     busy: (bot) => botSessions(bot).some(({ sessionId }) => botTurns.running(sessionId)),
     memory: runtime.bots.memory,
     fs: localBotHomeFilesystem,
+    salvage: hostSalvageStore(),
     memoryFiles,
     homeFolder: (bot) => botHomeFolder(bot),
     sessions: runtimeBotAutomationSessions(runtime),

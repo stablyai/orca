@@ -1,4 +1,5 @@
 import { ChildProcess } from 'node:child_process'
+import type * as childProcessModule from 'node:child_process'
 import { openSync } from 'node:fs'
 import { devNull } from 'node:os'
 import { PassThrough } from 'node:stream'
@@ -10,15 +11,21 @@ import { resetWorkspacePortScanTimeoutBackoffForTests } from './local-workspace-
 import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
 
 const spawnMock = vi.hoisted(() => vi.fn())
+const execFileMock = vi.hoisted(() => vi.fn())
+const lockMock = vi.hoisted(() => vi.fn<() => number | null>())
 vi.mock('@orca/process-host', () => ({ spawnProcess: spawnMock }))
-vi.mock('./darwin-port-scan-lock', () => ({
-  openDarwinPortScanLock: () => openSync(devNull, 'r')
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof childProcessModule>()),
+  execFile: execFileMock
 }))
+vi.mock('./darwin-port-scan-lock', () => ({ openDarwinPortScanLock: lockMock }))
 vi.mock('./port-scan-command-client', () => ({
   runPortScanCommand: (...args: Parameters<typeof runPortScanCommandInProcess>) =>
     runPortScanCommandInProcess(...args),
   isPortScanWorkerUnavailableError: () => false
 }))
+
+type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void
 
 const cwdArgs = ['-O', ...LSOF_NONBLOCKING_ARGS, '-a', '-p', '123,456', '-d', 'cwd', '-Fn']
 const worktrees = [{ id: 'repo::/repo', repoId: 'repo', displayName: 'main', path: '/repo' }]
@@ -56,6 +63,8 @@ describe('Darwin selected-PID cwd completion', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     resetWorkspacePortScanTimeoutBackoffForTests()
     spawnMock.mockReset()
+    execFileMock.mockReset()
+    lockMock.mockReset().mockImplementation(() => openSync(devNull, 'r'))
   })
   afterEach(() => vi.restoreAllMocks())
 
@@ -93,6 +102,59 @@ describe('Darwin selected-PID cwd completion', () => {
     expect(kill).toHaveBeenCalledTimes(1)
     expect(spawnMock.mock.calls.map(([spec]) => spec.program)).toEqual(
       Array.from({ length: 3 }, () => ['/usr/sbin/lsof', '/usr/sbin/lsof', '/bin/ps']).flat()
+    )
+  })
+
+  it('attributes a listener whose workspace path has non-ASCII characters', async () => {
+    const cwdAsLsofPrintsItWithoutUtf8Locale = '/\\xec\\x9e\\x91\\xec\\x97\\x85/repo'
+    spawnMock.mockImplementation(
+      ({ program, args, env }: { program: string; args: string[]; env?: NodeJS.ProcessEnv }) => {
+        if (program === '/usr/sbin/netstat') {
+          return completedChild('')
+        }
+        if (program === '/bin/ps') {
+          return completedChild('789 node server.js\n')
+        }
+        if (args.includes('cwd')) {
+          const cwd = env?.LC_ALL?.endsWith('UTF-8')
+            ? '/작업/repo'
+            : cwdAsLsofPrintsItWithoutUtf8Locale
+          return completedChild(`p789\nfcwd\nn${cwd}\n`)
+        }
+        return completedChild('p789\ncnode\nf20\nd0x3\nn127.0.0.1:4173\n')
+      }
+    )
+    const scan = await scanWorkspacePorts(
+      [{ id: 'repo::/작업/repo', repoId: 'repo', displayName: 'main', path: '/작업/repo' }],
+      undefined,
+      { requireMetadata: true }
+    )
+    expect(scan.ports.find((port) => port.pid === 789)).toMatchObject({
+      kind: 'workspace',
+      owner: { worktreeId: 'repo::/작업/repo', confidence: 'cwd' }
+    })
+  })
+
+  it('runs the execFile fallback in a UTF-8 locale when the scan lock is unavailable', async () => {
+    lockMock.mockReturnValue(null)
+    execFileMock.mockImplementation(
+      (_command: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        queueMicrotask(() => callback(null, 'p789\nfcwd\nn/작업/repo\n', ''))
+        return completedChild('')
+      }
+    )
+    const cwdLsofArgs = ['-O', ...LSOF_NONBLOCKING_ARGS, '-a', '-p', '789', '-d', 'cwd', '-Fn']
+    await expect(
+      runPortScanCommandInProcess('/usr/sbin/lsof', cwdLsofArgs, 'attribution')
+    ).resolves.toMatchObject({ stdout: 'p789\nfcwd\nn/작업/repo\n' })
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(execFileMock).toHaveBeenCalledExactlyOnceWith(
+      '/usr/sbin/lsof',
+      cwdLsofArgs,
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: process.env.PATH, LC_ALL: 'en_US.UTF-8' })
+      }),
+      expect.any(Function)
     )
   })
 })
