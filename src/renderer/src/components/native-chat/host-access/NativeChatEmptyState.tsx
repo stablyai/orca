@@ -29,7 +29,11 @@ export function NativeChatEmptyState({
   retrying?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const fades = useScrollEdgeFades<HTMLDivElement>()
+  const {
+    ref: scrollRef,
+    className: fadeClassName,
+    scrollable
+  } = useScrollEdgeFades<HTMLDivElement>()
   const shownPersona = kind === 'empty' ? persona : null
   const copy = shownPersona
     ? {
@@ -46,13 +50,13 @@ export function NativeChatEmptyState({
   return (
     <div className="native-chat-empty-state h-full min-h-0 w-full overflow-hidden has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring">
       <div
-        ref={fades.ref}
-        role={fades.scrollable ? 'region' : undefined}
-        aria-label={fades.scrollable ? copy.title : undefined}
-        tabIndex={fades.scrollable ? 0 : undefined}
+        ref={scrollRef}
+        role={scrollable ? 'region' : undefined}
+        aria-label={scrollable ? copy.title : undefined}
+        tabIndex={scrollable ? 0 : undefined}
         className={cn(
           'scrollbar-sleek flex h-full min-h-0 w-full flex-col justify-center-safe overflow-y-auto focus-visible:outline-none',
-          fades.className
+          fadeClassName
         )}
       >
         <div className="native-chat-empty-state-content flex w-full shrink-0 flex-col items-center gap-3 p-6 text-center">
