@@ -191,21 +191,28 @@ describe('a group with a bot on another computer', () => {
     })
   })
 
-  it('offers posting again only when the computer could not be reached', async () => {
-    let offline = false
+  it('offers posting again only when the computer gave no answer at all', async () => {
+    let failure: Error | null = null
     const base = remoteFixture({
       status: async () => {
-        if (offline) {
-          throw new Error('The host did not answer')
+        if (failure) {
+          throw failure
         }
       }
     })
     const group = await mixedRoom(base)
-    offline = true
-    const message = await post(base, group, '@Atlas hi')
-    expect(message.remoteAsks![0]).toMatchObject({
+    failure = Object.assign(new Error('The host did not answer'), {
+      code: 'remote_runtime_unavailable'
+    })
+    expect((await post(base, group, '@Atlas hi')).remoteAsks![0]).toMatchObject({
       state: 'failed',
       error: "Couldn't reach Build Box. The host did not answer. Post again to retry."
+    })
+    // A computer that answered with a refusal (say, after a re-pair) refuses a new post too.
+    failure = new Error('The pairing changed')
+    expect((await post(base, group, '@Atlas again')).remoteAsks![0]).toMatchObject({
+      state: 'failed',
+      error: "Couldn't reach Build Box. The pairing changed"
     })
   })
 

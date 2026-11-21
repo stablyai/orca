@@ -48,6 +48,8 @@ describe('a question to a bot on another computer', () => {
   it("names the computer, not the bot again, when the bot didn't answer or was stopped", () => {
     render(<BotGroupRemoteAsk ask={{ ...base, reply: { kind: 'notice' } }} />)
     expect(screen.getByText("Didn't answer on Workstation")).toBeTruthy()
+    // The label is a live region before anything goes wrong, so a later failure is announced.
+    expect(screen.getByRole('status').textContent).toBe("Didn't answer on Workstation")
     cleanup()
     render(<BotGroupRemoteAsk ask={{ ...base, stopped: true }} />)
     expect(screen.getByText('Stopped here')).toBeTruthy()

@@ -18,6 +18,7 @@ import { OrchestrationError } from '../runtime/orchestration/orchestration-error
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { remoteQuestionSummary } from './bot-group-remote-question'
+import { isRemoteServerUnreachable } from '../runtime/orchestration/federation/remote-owned/remote-server-unreachable'
 
 type RemoteBots = NonNullable<z.infer<typeof BotGroupCreate>['remoteBots']>
 
@@ -162,7 +163,8 @@ export function assertRemotePoster(
   }
 }
 
-/** The paired computer didn't answer: posting again may reach it, unlike any other refusal. */
+/** The paired computer gave no answer (off, asleep or off the network): posting again may reach
+ *  it, unlike any other refusal. */
 class RemoteComputerUnreachable extends Error {}
 
 /** The paired computer, refused with the group's own words when its Orca can't take bot questions. */
@@ -175,7 +177,11 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
       throw new Error(`Update Orca on ${name} to add its bots to a group.`)
     }
-    throw new RemoteComputerUnreachable(`Couldn't reach ${name}. ${text(error)}`.trim())
+    const message = `Couldn't reach ${name}. ${text(error)}`.trim()
+    // Only no answer at all may clear by itself; an unpaired computer or a refusal won't.
+    throw isRemoteServerUnreachable(error)
+      ? new RemoteComputerUnreachable(message)
+      : new Error(message)
   }
 }
 
