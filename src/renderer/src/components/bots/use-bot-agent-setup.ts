@@ -36,20 +36,21 @@ function withIntent(setup: BotAgentSetup, intent: BotPermissionIntent): BotAgent
 }
 
 /** What a pick says about the owner's permission. A permission the owner chose is theirs, even the
- *  one already shown, and none chosen is the chats' own. Otherwise an agent with no permissions says
- *  nothing, and neither does a move to another agent that only dropped it, nor an edit (a model, an
- *  effort) that keeps the mode shown. Clearing the shown mode on the same agent chooses the chats' own. */
+ *  one already shown, and none chosen is the chats' own (so Use chat defaults clears a kept mode even
+ *  on an agent with no permissions). Otherwise an agent with no permissions says nothing, and neither
+ *  does a move to another agent that only dropped it, nor an edit (a model, an effort) that keeps the
+ *  mode shown. Clearing the shown mode on the same agent chooses the chats' own. */
 function nextIntent(
   intent: BotPermissionIntent,
   current: BotAgentSetup,
   next: BotAgentSetup,
   permissionPicked: boolean
 ): BotPermissionIntent {
-  if (!offersPermissions(next.agent)) {
-    return intent
-  }
   if (permissionPicked) {
     return next.permissionMode ?? 'inherit'
+  }
+  if (!offersPermissions(next.agent)) {
+    return intent
   }
   if (next.agent !== current.agent) {
     return next.permissionMode && next.permissionMode !== effectiveMode(next.agent, intent)

@@ -79,6 +79,18 @@ describe('useBotAgentSetup with a kept permission', () => {
     expect(result.current.setup).toEqual({ agent: 'codex' })
   })
 
+  it('takes Use chat defaults on an agent without permissions as the chats’ own', () => {
+    const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'full-access'))
+    act(() => result.current.setSetup({ agent: 'pi' }))
+    act(() => result.current.setSetup({ agent: 'pi', launch: { model: 'pi-x' } }))
+    expect(result.current.intent).toBe('full-access')
+    // Use chat defaults resets the agent's setup and reports the permission as chosen.
+    act(() => result.current.setSetup({ agent: 'pi' }, true))
+    expect(result.current.intent).toBe('inherit')
+    act(() => result.current.setSetup({ agent: 'claude' }))
+    expect(result.current.setup).toEqual({ agent: 'claude' })
+  })
+
   it('takes another mode picked on another agent’s pane', () => {
     const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'ask'))
     act(() => result.current.setSetup({ agent: 'codex', permissionMode: 'auto' }))
