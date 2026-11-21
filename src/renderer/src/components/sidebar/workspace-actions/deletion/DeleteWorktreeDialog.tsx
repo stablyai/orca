@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { DeleteWorktreeError } from './DeleteWorktreeError'
 import { useAppStore } from '@/store'
@@ -61,7 +61,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [hostOptions, t]
   )
   const isOpen = activeModal === 'delete-worktree'
-  const deleteButtonRef = useRef<HTMLButtonElement>(null)
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
   const worktreeIds = useMemo(
     () =>
@@ -318,13 +317,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         scrollable
         busy={isDeleting || isSavingForcePreference || isDetachingChildren}
         initialFocus="cancel"
-        onOpenAutoFocus={(event) => {
-          const button = deleteButtonRef.current
-          if (button && !button.disabled) {
-            event.preventDefault()
-            button.focus({ preventScroll: true })
-          }
-        }}
       >
         <DeleteWorktreeDialogHeading
           title={title}
@@ -396,7 +388,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           isDetachingChildren={isDetachingChildren}
           deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
           canForceDelete={canForceDelete}
-          deleteButtonRef={deleteButtonRef}
           onForceDelete={
             preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
           }

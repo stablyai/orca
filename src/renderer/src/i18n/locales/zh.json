@@ -1153,7 +1153,6 @@
         "missing": "此项目已不在 Orca 中。",
         "notYet": "暂不可用",
         "none": "此项目还没有技能。运行项目的设置流程来添加技能；这些技能会在 {{bot}} 的下次聊天中加载。",
-        "more": "另外 {{count}} 个",
         "openFolder": "打开文件夹",
         "noneShort": "无技能",
         "link": "关联项目",
@@ -26265,7 +26264,29 @@
         "google": "以你的身份使用 Gmail、Calendar 和 Drive"
       },
       "mcp": {
-        "adding": "正在添加 {{app}}…"
+        "adding": "正在添加 {{app}}…",
+        "addTitle": "添加 {{app}}",
+        "advanced": "高级",
+        "hostInvalid": "请输入主机名，例如 {{example}}。",
+        "datadog": {
+          "siteLabel": "Datadog 站点"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab 地址（可选）",
+          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com。"
+        },
+        "place": {
+          "usEast": "美国东部",
+          "usWest": "美国西部",
+          "usCentral": "美国中部",
+          "europe": "欧洲",
+          "japan": "日本",
+          "australia": "澳大利亚",
+          "unitedKingdom": "英国"
+        },
+        "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。",
+        "elsewhereOther": "请先在“管理”中移除，再添加其他。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",
@@ -27841,7 +27862,7 @@
       "description": "{{name}} 的 Home Chat 将在 {{agent}} 上重新开始。当前对话会保留在历史记录中。",
       "kept": "保留：灵魂、记忆、自动化、连接器",
       "notKept": "不保留：当前对话",
-      "threads": "正在运行的 Slack 话题会继续使用 {{agent}}，直至结束",
+      "threads": "已有 Orca 聊天的 Slack 话题会保留该聊天的智能体",
       "action": "切换为 {{agent}}"
     },
     "paused": {

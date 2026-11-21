@@ -1661,7 +1661,6 @@
         "missing": "This project is no longer in Orca.",
         "notYet": "Not available yet",
         "none": "No skills in this project yet. Run your project’s setup to add its skills; they load in {{bot}}’s next chat.",
-        "more": "and {{count}} more",
         "openFolder": "Open folder",
         "noneShort": "No skills",
         "link": "Link a project",
@@ -1670,7 +1669,14 @@
         "title": "Skills",
         "listedTitle": "{{agent}} can’t load these skills directly.",
         "listedBody": "{{bot}} gets a list of them in its instructions and reads one when it fits. They won’t appear in its / menu.",
-        "remoteSsh": "On {{host}} over SSH. {{bot}} runs on this computer, so it can’t load these yet."
+        "remoteSsh": "On {{host}} over SSH. {{bot}} runs on this computer, so it can’t load these yet.",
+        "claudeOnly": "Claude only",
+        "notClaude": "Not for Claude",
+        "own": "{{bot}}’s own skills",
+        "ownNone": "No skills of its own yet.",
+        "ownShort": "Own skills",
+        "showMore": "Show {{count}} more",
+        "notLoaded": "No agent loads it"
       },
       "askNewHomeChat": "Ask before a new Home Chat",
       "askNewHomeChatDescription": "Confirm before New Home Chat replaces the conversation a bot carries.",
@@ -27414,7 +27420,7 @@
       "description": "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
       "kept": "Kept: soul, memory, automations, connectors",
       "notKept": "Not kept: the current conversation",
-      "threads": "Slack threads already running stay on {{agent}} until they finish",
+      "threads": "Slack threads with an existing Orca chat keep that chat's agent",
       "action": "Switch to {{agent}}"
     },
     "avatar": {
@@ -28059,6 +28065,7 @@
       "peerAsked": "{{from}} asked {{to}}",
       "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
+      "handoffsPaused": "Paused after {{count}} hand-offs. Reply to continue.",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
       "deleteDescription": "Its bots are not deleted.",
@@ -28760,7 +28767,8 @@
         "unavailable": "Orca Cloud doesn't accept bot shares yet.",
         "avatarRefused": "Orca Cloud refused the bot's picture. Pick another picture, then try again.",
         "tooLarge": "This bot is too large to share. Leave out some memory or skills, then try again."
-      }
+      },
+      "duplicateSkill": "Same name, in {{folder}} · not shared"
     },
     "apps": {
       "title": "Add to {{bot}}",
@@ -28832,7 +28840,29 @@
         "google": "Gmail, Calendar and Drive, as you"
       },
       "mcp": {
-        "adding": "Adding {{app}}…"
+        "adding": "Adding {{app}}…",
+        "addTitle": "Add {{app}}",
+        "advanced": "Advanced",
+        "hostInvalid": "Enter a host name, like {{example}}.",
+        "datadog": {
+          "siteLabel": "Datadog site"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab address (optional)",
+          "hostHint": "For self-managed or Dedicated. Leave empty for GitLab.com."
+        },
+        "place": {
+          "usEast": "US East",
+          "usWest": "US West",
+          "usCentral": "US Central",
+          "europe": "Europe",
+          "japan": "Japan",
+          "australia": "Australia",
+          "unitedKingdom": "United Kingdom"
+        },
+        "elsewhereTitle": "{{app}} is already on {{bot}}",
+        "elsewhereLine": "It’s added at {{place}}. Remove it in Manage to add another.",
+        "elsewhereOther": "Remove it in Manage to add another."
       },
       "unsupported": "This app isn’t supported yet",
       "cantReach": "Can’t reach {{app}}",
@@ -29354,7 +29384,8 @@
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
-        "typeAnswer": "Type your answer"
+        "typeAnswer": "Type your answer",
+        "replaced": "The agent asked a new question. Read it, then reply."
       }
     },
     "search": {

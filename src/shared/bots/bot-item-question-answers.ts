@@ -196,6 +196,19 @@ function lastAsk(events: readonly BotItemEvent[], move: BotItemEvent): BotItemEv
   return undefined
 }
 
+/** The ask the agent waits on, by its event id, with its lines' answers so far. */
+export function botItemWaitingAsk(
+  item: Pick<BotItem, 'question' | 'status'>,
+  events: readonly BotItemEvent[]
+): ({ askId: string } & BotItemQuestionAnswers) | null {
+  for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
+    if (entry.waiting) {
+      return { askId, ...entry }
+    }
+  }
+  return null
+}
+
 /** What the comment box replies to while the agent waits: the first open line of its ask, else its
  *  question asked in prose, by its first line; with `replies` when that line has quick replies. The
  *  item's own question stands in until its event is read. */

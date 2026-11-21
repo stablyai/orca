@@ -132,7 +132,7 @@ describe('ArtifactPublishButton', () => {
     expect(screen.getByRole('button', { name: 'Update shared content' })).toBeInTheDocument()
   })
 
-  it('dismisses on window blur and webview focus without stealing focus back', () => {
+  it('ignores plain window blur, dismisses on webview focus without stealing focus back', () => {
     const onOpenChange = vi.fn()
     render(
       <ArtifactPublishButton
@@ -144,17 +144,22 @@ describe('ArtifactPublishButton', () => {
     )
 
     window.dispatchEvent(new Event('blur'))
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).not.toHaveBeenCalled()
 
-    const closeFocusEvent = new Event('focus', { cancelable: true })
-    mocks.closePopover?.(closeFocusEvent)
-    expect(closeFocusEvent.defaultPrevented).toBe(true)
-
-    onOpenChange.mockClear()
     const webview = document.createElement('webview')
     document.body.appendChild(webview)
     try {
       webview.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+
+      const closeFocusEvent = new Event('focus', { cancelable: true })
+      mocks.closePopover?.(closeFocusEvent)
+      expect(closeFocusEvent.defaultPrevented).toBe(true)
+
+      onOpenChange.mockClear()
+      webview.tabIndex = 0
+      webview.focus()
+      window.dispatchEvent(new Event('blur'))
       expect(onOpenChange).toHaveBeenCalledWith(false)
     } finally {
       webview.remove()
