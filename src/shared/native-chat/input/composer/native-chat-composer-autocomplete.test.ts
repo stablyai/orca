@@ -218,10 +218,41 @@ describe('room @ queries with spaces', () => {
     expect(derive('notify @eng - neil please').mode).toBe('none')
   })
 
-  it('hands a new command or skill token to its own menu', () => {
-    expect(derive('ask @eng /').mode).not.toBe('mention')
-    expect(derive('ask @eng /rev').mode).not.toBe('mention')
-    expect(derive('ask @eng $').mode).not.toBe('mention')
+  it('hands a new command or skill token to its own menu when the agent has one', () => {
+    const withProfile = (draft: string, agent: 'claude' | 'codex') =>
+      deriveComposerAutocomplete(
+        draft,
+        draft.length,
+        COMMANDS,
+        [skill({ name: 'typescript' })],
+        getNativeChatAgentProfile(agent),
+        undefined,
+        null,
+        undefined,
+        undefined,
+        names
+      )
+    expect(withProfile('ask @eng /', 'claude')).toMatchObject({ mode: 'slash', prefix: '/' })
+    expect(withProfile('ask @eng $', 'codex')).toMatchObject({ mode: 'slash', prefix: '$' })
+  })
+
+  it('keeps a `/` or `$` word in a name when no menu takes it', () => {
+    const costs = [{ name: 'Costs $ team' }]
+    const draft = 'ask @costs $'
+    expect(
+      deriveComposerAutocomplete(
+        draft,
+        draft.length,
+        COMMANDS,
+        [],
+        null,
+        undefined,
+        null,
+        undefined,
+        undefined,
+        (query) => nativeChatRoomNameMatches(costs, query)
+      )
+    ).toEqual({ mode: 'mention', query: 'costs $', triggerKey: '@:4' })
   })
 
   it('needs whitespace before the @ and a word after it', () => {
