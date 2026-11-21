@@ -4,7 +4,7 @@ import {
   setOwnBrowserPageWorkspace
 } from './google-setup-page-binding'
 
-const runtime = { bots: { list: () => [{ id: 'ivy', folderWorkspaceId: 'fw-ivy' }] } } as never
+const runtime = { bots: { list: () => [{ id: 'ivy', folderWorkspaceId: 'fw-ivy' }] } }
 const start = (browserPageId: string) => ({ action: 'start' as const, browserPageId })
 
 describe("a setup's browser page", () => {

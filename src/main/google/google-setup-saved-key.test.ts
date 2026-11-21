@@ -13,18 +13,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GoogleSetupRun } from '../../shared/google/google-setup-run'
 import { recordClientDownloadCommit } from '../runtime/browser/downloads/client-download-provenance'
 
-const mocks = vi.hoisted(() => ({
-  home: '',
-  run: null as GoogleSetupRun | null,
-  importClient: vi.fn(async (_text: string) => {})
-}))
+const mocks = vi.hoisted(() => {
+  const state: { home: string; run: GoogleSetupRun | null } = { home: '', run: null }
+  return Object.assign(state, { importClient: vi.fn(async (_text: string) => {}) })
+})
 vi.mock('../bots/bot-home', () => ({ botHomeFolder: () => mocks.home }))
 vi.mock('./google-setup-runs', () => ({ googleSetupRuns: () => ({ get: () => mocks.run }) }))
 vi.mock('./google-connect', () => ({
   getGoogleConnect: () => ({ importClient: mocks.importClient })
 }))
 
-import { importGoogleSetupKeySavedHere } from './google-setup-saved-key'
+import { importGoogleSetupKeySavedHere, type SavedKeyImport } from './google-setup-saved-key'
+
+function candidatesOf(result: SavedKeyImport) {
+  if (result.found) {
+    throw new Error('expected a list to pick from')
+  }
+  return result.candidates
+}
 
 const BOT = { id: 'ivy', folder: 'ivy', folderWorkspaceId: 'fw-ivy' }
 const key = (project: string) =>
@@ -116,7 +122,7 @@ describe('Import file on the agent’s host', () => {
     const listed = await importGoogleSetupKeySavedHere(BOT, async () => {})
     expect(listed).toMatchObject({ found: false, candidates: [{ name: 'client_secret_a.json' }] })
     expect(mocks.importClient).not.toHaveBeenCalled()
-    const [picked] = (listed as { candidates: { name: string; id: string }[] }).candidates
+    const [picked] = candidatesOf(listed)
 
     // Replaced since it was listed: not the file the owner picked.
     writeFileSync(join(downloads, 'client_secret_a.json'), key('a-replaced'))
@@ -140,11 +146,7 @@ describe('Import file on the agent’s host', () => {
   it('still finishes the step when the imported key file can’t be deleted', async () => {
     mocks.run = { ...mocks.run!, browserPageId: 'page-8' }
     writeFileSync(join(downloads, 'client_secret_c.json'), key('c'))
-    const [picked] = (
-      (await importGoogleSetupKeySavedHere(BOT, async () => {})) as {
-        candidates: { name: string; id: string }[]
-      }
-    ).candidates
+    const [picked] = candidatesOf(await importGoogleSetupKeySavedHere(BOT, async () => {}))
     // The folder turns read-only during the import, so the cleanup that follows fails.
     mocks.importClient.mockImplementationOnce(async () => chmodSync(downloads, 0o555))
     const arrived = vi.fn(async () => {})
@@ -161,11 +163,7 @@ describe('Import file on the agent’s host', () => {
   it('keeps the file when the import fails', async () => {
     mocks.run = { ...mocks.run!, browserPageId: 'page-4' }
     writeFileSync(join(downloads, 'client_secret_b.json'), key('b'))
-    const [picked] = (
-      (await importGoogleSetupKeySavedHere(BOT, async () => {})) as {
-        candidates: { name: string; id: string }[]
-      }
-    ).candidates
+    const [picked] = candidatesOf(await importGoogleSetupKeySavedHere(BOT, async () => {}))
     mocks.importClient.mockRejectedValueOnce(new Error('not a desktop client'))
     await expect(importGoogleSetupKeySavedHere(BOT, async () => {}, picked)).rejects.toThrow(
       'not a desktop client'

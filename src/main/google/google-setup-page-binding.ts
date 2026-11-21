@@ -4,7 +4,7 @@ import type { z } from 'zod'
 import type { GoogleSetupWrite } from '../../shared/rpc-contract/google-setup-params'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { getRuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { Bot } from '../../shared/bot-types'
 import { InvalidArgumentError } from '../runtime/rpc/core'
 
 /** This host's own browser, when it has one: which workspace a tab of it belongs to. */
@@ -17,7 +17,7 @@ export function setOwnBrowserPageWorkspace(
 }
 
 export function requireSetupPageInAgentWorkspace(
-  runtime: Pick<OrcaRuntimeService, 'bots'>,
+  runtime: { bots: { list(): readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[] } },
   botId: string,
   change: z.infer<typeof GoogleSetupWrite>['change']
 ): void {

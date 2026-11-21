@@ -123,13 +123,13 @@ describe('client-hosted downloads', () => {
           aborts.push(params as { transferId: string })
           return { ok: true, result: { released: true }, _meta: {} } as never
         }
-        if (method.endsWith('begin')) {
-          return { ok: true, result: { accepted: true, claimed: false }, _meta: {} } as never
-        }
         const chunk = params as { transferId: string; final: boolean }
-        writes.push(chunk)
-        if (writes.length === 1) {
-          await firstWrite
+        // The download's begin isn't a write; its answer is never read.
+        if (!method.endsWith('begin')) {
+          writes.push(chunk)
+          if (writes.length === 1) {
+            await firstWrite
+          }
         }
         return {
           ok: true,

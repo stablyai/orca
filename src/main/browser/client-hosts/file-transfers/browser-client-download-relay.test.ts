@@ -106,9 +106,9 @@ describe('BrowserClientDownloadRelay', () => {
   })
 
   it('tells the page host what started a download as it starts, before any byte', async () => {
-    const calls: { method: string; params: Record<string, unknown> }[] = []
+    const calls: { method: string; params: unknown }[] = []
     const transport = negotiatedTransport((method, params) => {
-      calls.push({ method, params: params as Record<string, unknown> })
+      calls.push({ method, params })
       return method.endsWith('begin')
         ? { accepted: true, claimed: true }
         : { accepted: true, workspaceRelativePath: 'Google setup in Orca' }
@@ -145,23 +145,14 @@ describe('BrowserClientDownloadRelay', () => {
   it('fails a download its host could not be told about, unless the host predates that', async () => {
     const relayFailingBegin = (error: Error) => {
       const writes: unknown[] = []
-      const transport = new BrowserClientFileChannelTransport()
-      transport.bind({
-        fileChannelNegotiated: true,
-        fileChannelAvailability: 'negotiated',
-        sendFileChannelRequest: async (method, params) => {
-          if (method.endsWith('begin')) {
-            throw error
-          }
-          if (!method.endsWith('abort')) {
-            writes.push(params)
-          }
-          return {
-            ok: true,
-            result: { accepted: true, workspaceRelativePath: 'report.pdf' },
-            _meta: {}
-          } as never
+      const transport = negotiatedTransport((method, params) => {
+        if (method.endsWith('begin')) {
+          throw error
         }
+        if (!method.endsWith('abort')) {
+          writes.push(params)
+        }
+        return { accepted: true, workspaceRelativePath: 'report.pdf' }
       })
       const relay = new BrowserClientDownloadRelay({
         stagingRoot: '/tmp/staging',

@@ -42,13 +42,13 @@ function environment(input: {
     fileChannelNegotiated: true,
     fileChannelAvailability: 'negotiated',
     sendFileChannelRequest: async (method, params) => {
-      if (method.endsWith('begin')) {
-        return { ok: true, result: { accepted: true, claimed: false }, _meta: {} } as never
+      // The download's begin isn't a write; its answer is never read.
+      if (!method.endsWith('begin')) {
+        writes.push({
+          browserPageId: (params as { browserPageId: string }).browserPageId,
+          hostLabel: input.environmentId
+        })
       }
-      writes.push({
-        browserPageId: (params as { browserPageId: string }).browserPageId,
-        hostLabel: input.environmentId
-      })
       return {
         ok: true,
         result: {

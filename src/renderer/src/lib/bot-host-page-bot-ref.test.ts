@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  bots: [] as unknown[],
-  opened: [] as string[],
-  toastError: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const bots: unknown[] = []
+  const opened: string[] = []
+  return { bots, opened, toastError: vi.fn() }
+})
 vi.mock('./bot-catalog-snapshot', () => ({ readBots: () => mocks.bots }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock(
