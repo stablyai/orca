@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
+import { botLookAround } from '../../../../../shared/bots/bot-look-around'
 import { botPackageName } from '../../../../../shared/bots/bot-share-status'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { stubBots } from '../../../component-fixtures/fixture-bots'
@@ -77,6 +78,10 @@ function stub(bot: Bot = builder): void {
         waits: [],
         upNext: { state: { running: false, seenAt: 0, lastLookedAt: now - HOUR }, items: [] }
       }
+    }),
+    'bots.lookAround.get': () => ({
+      setting: botLookAround(bot),
+      upNext: { running: false, seenAt: 0, lastLookedAt: now - HOUR }
     }),
     'bots.tidyUp.get': () => ({
       tidyUp: {
