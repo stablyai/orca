@@ -98,7 +98,8 @@ function Toolbar(): React.JSX.Element {
               browserSessionImportState: null,
               pageRoute: { kind: 'local' },
               onImportFromBrowser: noop,
-              onImportFromFile: noop
+              onImportFromFile: noop,
+              refresh: { label: 'Chrome (Person 2)', onRefresh: noop }
             }}
             pageActions={{
               onFind: noop,

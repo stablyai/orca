@@ -86,6 +86,13 @@ export function recordClientRouteCookieImportSource(args: {
   })
 }
 
+export async function readClientRouteCookieImportSource(
+  environmentId: string,
+  profileId: string
+): Promise<BrowserSessionProfileSource | null> {
+  return (await load())[entryKey(environmentId, profileId)] ?? null
+}
+
 export function forgetClientRouteCookieImportSource(args: {
   environmentId: string
   profileId: string

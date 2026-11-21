@@ -1373,6 +1373,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "A origem de importação salva não está mais disponível. Escolha uma origem em Importar Cookies.",
         "notAuthorized": "Não autorizado",
         "profileNotFound": "Perfil de sessão não encontrado.",
         "invalidBrowserProfile": "Nome de perfil do navegador inválido.",
@@ -1417,6 +1418,11 @@
         "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies.",
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
+      },
+      "refresh": {
+        "action": "Atualizar a partir de {{value0}}",
+        "success": "{{value0}} cookies atualizados de {{value1}} em {{value2}}.",
+        "sourceUnavailable": "{{value0}} não está mais disponível. Escolha outra origem em Importar Cookies."
       }
     },
     "googleCookieClear": {

@@ -224,6 +224,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "La source d'import enregistrée n'est plus disponible. Choisissez une source dans Importer des cookies.",
         "notAuthorized": "Non autorisé",
         "profileNotFound": "Profil de session introuvable.",
         "invalidBrowserProfile": "Nom de profil de navigateur invalide.",
@@ -268,6 +269,11 @@
         "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
         "stored": "Enregistré dans le navigateur de {{host}}.",
         "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
+      },
+      "refresh": {
+        "action": "Actualiser depuis {{value0}}",
+        "success": "{{value0}} cookies actualisés depuis {{value1}} dans {{value2}}.",
+        "sourceUnavailable": "{{value0}} n'est plus disponible. Choisissez une autre source dans Importer des cookies."
       }
     },
     "passwords": {

@@ -22010,6 +22010,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "保存されたインポート元は利用できなくなりました。「Cookie のインポート」からソースを選択してください。",
         "notAuthorized": "権限がありません",
         "profileNotFound": "セッションプロファイルが見つかりません。",
         "invalidBrowserProfile": "ブラウザプロファイル名が無効です。",
@@ -22048,6 +22049,11 @@
         "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
+      },
+      "refresh": {
+        "action": "{{value0}} から更新",
+        "success": "{{value1}} から {{value2}} に {{value0}} 件の Cookie を更新しました。",
+        "sourceUnavailable": "{{value0}} は利用できなくなりました。「Cookie のインポート」から別のソースを選択してください。"
       }
     },
     "passwords": {

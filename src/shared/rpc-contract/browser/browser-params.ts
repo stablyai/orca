@@ -113,7 +113,8 @@ export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
   browserProfile: OptionalString,
-  supportsPartitionSkippedCookies: z.literal(true).optional()
+  supportsPartitionSkippedCookies: z.literal(true).optional(),
+  refreshSavedSource: z.literal(true).optional()
 })
 
 export const Drag = ExpectUrlBrowserTarget.extend({

@@ -21,6 +21,10 @@ import {
   detectInstalledBrowsers,
   selectBrowserProfile
 } from '../../../browser/cookies/sources/browser-cookie-detection'
+import {
+  detectedBrowserImportSource,
+  isSavedBrowserImportSource
+} from '../../../browser/cookies/sources/browser-cookie-source-profiles'
 import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
@@ -274,10 +278,17 @@ export class RuntimeBrowserProfiles {
     browserFamily: string
     browserProfile?: string
     supportsPartitionSkippedCookies?: true
+    refreshSavedSource?: true
   }): Promise<BrowserProfileImportFromBrowserResult> {
     const profile = browserSessionRegistry.getProfile(params.profileId)
     if (!profile) {
       return browserCookieImportFailure('profileNotFound')
+    }
+    if (
+      params.refreshSavedSource &&
+      !isSavedBrowserImportSource(profile.source, params.browserFamily, params.browserProfile)
+    ) {
+      return browserCookieImportFailure('savedSourceUnavailable')
     }
     if (
       params.browserProfile &&
@@ -309,12 +320,8 @@ export class RuntimeBrowserProfiles {
       return result
     }
 
-    const profileName =
-      browser.profiles.find((candidate) => candidate.directory === browser.selectedProfile)?.name ??
-      browser.selectedProfile
     browserSessionRegistry.updateProfileSource(params.profileId, {
-      browserFamily: browser.family,
-      profileName,
+      ...detectedBrowserImportSource(browser),
       importedAt: Date.now()
     })
     return { ...result, profileId: params.profileId, executorRuntimeId: this.host.getRuntimeId() }

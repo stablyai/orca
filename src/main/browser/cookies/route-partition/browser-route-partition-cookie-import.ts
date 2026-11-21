@@ -9,7 +9,10 @@ import {
 import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
 import { importCookiesFromBrowser } from '../browser-cookie-import'
 import { importCookiesFromFile } from '../imports/import-cookie-file'
-import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
+import {
+  detectedBrowserImportSource,
+  type DetectedBrowser
+} from '../sources/browser-cookie-source-profiles'
 import { errorMessage } from '../../../../shared/errors/error-message'
 import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
 
@@ -100,12 +103,7 @@ export function browserCookieImportSource(request: {
   }
   return {
     importInto: (partition) => importCookiesFromBrowser(browser, partition),
-    badge: {
-      browserFamily: browser.family,
-      profileName:
-        browser.profiles.find((entry) => entry.directory === browser.selectedProfile)?.name ??
-        browser.selectedProfile
-    }
+    badge: detectedBrowserImportSource(browser)
   }
 }
 

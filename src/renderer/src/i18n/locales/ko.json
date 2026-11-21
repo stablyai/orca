@@ -23287,6 +23287,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "저장된 가져오기 소스를 더 이상 사용할 수 없습니다. 쿠키 가져오기에서 소스를 선택하세요.",
         "notAuthorized": "권한 없음",
         "profileNotFound": "세션 프로필을 찾을 수 없습니다.",
         "invalidBrowserProfile": "브라우저 프로필 이름이 올바르지 않습니다.",
@@ -23328,6 +23329,11 @@
         "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다.",
         "stored": "{{host}}용 브라우저에 저장했습니다.",
         "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
+      },
+      "refresh": {
+        "action": "{{value0}}에서 새로 고침",
+        "success": "{{value1}}에서 {{value2}}(으)로 {{value0}}개의 쿠키를 새로 고쳤습니다.",
+        "sourceUnavailable": "{{value0}}을(를) 더 이상 사용할 수 없습니다. 쿠키 가져오기에서 다른 소스를 선택하세요."
       }
     },
     "passwords": {

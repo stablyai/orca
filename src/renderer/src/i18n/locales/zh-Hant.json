@@ -450,6 +450,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "已儲存的匯入來源已無法使用。請在「匯入 Cookie」中選擇來源。",
         "notAuthorized": "未獲授權",
         "profileNotFound": "找不到工作階段設定檔。",
         "invalidBrowserProfile": "瀏覽器設定檔名稱無效。",
@@ -488,6 +489,11 @@
         "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。",
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
+      },
+      "refresh": {
+        "action": "從 {{value0}} 重新整理",
+        "success": "已從 {{value1}} 向 {{value2}} 重新整理 {{value0}} 個 Cookie。",
+        "sourceUnavailable": "{{value0}} 已無法使用。請在「匯入 Cookie」中選擇其他來源。"
       }
     },
     "passwords": {

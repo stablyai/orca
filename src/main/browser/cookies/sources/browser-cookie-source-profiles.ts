@@ -227,3 +227,29 @@ export function detectFirefox(): DetectedBrowser | null {
   }
   return null
 }
+
+/** Badge for the selected profile; its folder lets Refresh repeat this exact import. */
+export function detectedBrowserImportSource(
+  browser: DetectedBrowser
+): Omit<BrowserSessionProfileSource, 'importedAt'> {
+  return {
+    browserFamily: browser.family,
+    profileName:
+      browser.profiles.find((profile) => profile.directory === browser.selectedProfile)?.name ??
+      browser.selectedProfile,
+    profileDirectory: browser.selectedProfile
+  }
+}
+
+/** Refresh replays only the source this machine recorded, never a folder named by a peer. */
+export function isSavedBrowserImportSource(
+  saved: BrowserSessionProfileSource | null | undefined,
+  browserFamily: string,
+  profileDirectory: string | undefined
+): boolean {
+  return (
+    !!saved?.profileDirectory &&
+    saved.browserFamily === browserFamily &&
+    saved.profileDirectory === profileDirectory
+  )
+}

@@ -23312,6 +23312,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "已保存的导入来源不再可用。请在“导入 Cookie”中选择来源。",
         "notAuthorized": "未获授权",
         "profileNotFound": "未找到会话配置文件",
         "invalidBrowserProfile": "浏览器配置文件名称无效",
@@ -23350,6 +23351,11 @@
         "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。",
         "stored": "已存储到 {{host}} 的浏览器。",
         "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
+      },
+      "refresh": {
+        "action": "从 {{value0}} 刷新",
+        "success": "已从 {{value1}} 向 {{value2}} 刷新 {{value0}} 个 Cookie。",
+        "sourceUnavailable": "{{value0}} 已不可用。请在“导入 Cookie”中选择其他来源。"
       }
     },
     "googleCookieClear": {

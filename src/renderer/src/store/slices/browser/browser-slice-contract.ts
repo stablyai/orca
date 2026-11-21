@@ -306,7 +306,8 @@ export type BrowserSlice = {
     profileId: string,
     browserFamily: string,
     browserProfile?: string,
-    pageRoute?: BrowserPageCookieImportRoute | null
+    pageRoute?: BrowserPageCookieImportRoute | null,
+    options?: { refreshSavedSource?: true }
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]

@@ -67,6 +67,7 @@ import type {
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
+  BrowserCookieImportFromBrowserRequest,
   BrowserCookieImportResult,
   BrowserClientHostCookieImportArgs,
   BrowserProfileCookieImportArgs,
@@ -246,13 +247,13 @@ export type BrowserApi = {
     environmentId: string
   }) => Promise<DetectedBrowserInfo[] | null>
   sessionImportFromBrowser: (
-    args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
+    args: BrowserProfileCookieImportArgs & BrowserCookieImportFromBrowserRequest
   ) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportFromBrowserForClientHost: (
-    args: BrowserClientHostCookieImportArgs & { browserFamily: string; browserProfile?: string }
+    args: BrowserClientHostCookieImportArgs & BrowserCookieImportFromBrowserRequest
   ) => Promise<BrowserCookieImportResult | null>
-  /** Import sources keyed by browser profile ID. */
+  /** Import sources keyed by browser profile ID; empty unless this desktop hosts the pages. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>

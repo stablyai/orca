@@ -16,7 +16,9 @@ import {
   importCookieFileIntoSshRoutePartition,
   importCookiesIntoSshRoutePartition
 } from '../../browser/cookies/route-partition/browser-ssh-route-cookie-import'
+import { isSavedBrowserImportSource } from '../../browser/cookies/sources/browser-cookie-source-profiles'
 import type {
+  BrowserCookieImportFromBrowserRequest,
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileScope
@@ -236,12 +238,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     'browser:session:importFromBrowser',
     async (
       event,
-      args: {
-        profileId: string
-        browserFamily: string
-        browserProfile?: string
-        sshTargetId?: unknown
-      }
+      args: BrowserCookieImportFromBrowserRequest & { sshTargetId?: unknown }
     ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
@@ -258,6 +255,12 @@ export function registerBrowserSessionProfileHandlers(): void {
       const profile = browserSessionRegistry.getProfile(args.profileId)
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
+      }
+      if (
+        args.refreshSavedSource &&
+        !isSavedBrowserImportSource(profile.source, args.browserFamily, args.browserProfile)
+      ) {
+        return browserCookieImportFailure('savedSourceUnavailable')
       }
       const source = browserCookieImportSource(args)
       if ('reason' in source) {

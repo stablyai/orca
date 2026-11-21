@@ -2355,6 +2355,7 @@
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
+        "savedSourceUnavailable": "The saved import source is no longer available. Choose a source under Import Cookies.",
         "serverRepaired": "This server was re-paired during the import. Try again.",
         "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
