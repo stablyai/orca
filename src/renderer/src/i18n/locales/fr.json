@@ -21560,6 +21560,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "Replier ou déplier les lignes",
     "richMarkdown": {
       "tooLarge": "Le fichier est plus volumineux que la limite de modification enrichie {{limit}}. Afficher le mode source à la place.",
       "openAnyway": "Ouvert quand même"

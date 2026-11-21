@@ -497,6 +497,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "摺疊或展開行",
     "richMarkdown": {
       "tooLarge": "檔案大小超過 {{limit}} 的 Markdown 視覺化編輯上限，將改以原始碼模式顯示。",
       "openAnyway": "仍要開啟"

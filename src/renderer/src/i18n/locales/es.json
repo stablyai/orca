@@ -21383,6 +21383,7 @@
     "addTypedPathCode": "Agregar <path/>"
   },
   "editor": {
+    "foldOrUnfoldLines": "Plegar o desplegar líneas",
     "markdownPreview": {
       "tooLarge": "El archivo supera el límite de vista previa de {{limit}}. Abre el archivo para ver su código fuente.",
       "tooLargeInDiff": "El archivo supera el límite de vista previa de {{limit}}. Cambia al modo fuente para ver las diferencias.",

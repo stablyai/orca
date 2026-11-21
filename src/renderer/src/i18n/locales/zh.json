@@ -22895,6 +22895,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "折叠或展开行",
     "richMarkdown": {
       "tooLarge": "文件大小超过富文本编辑的 {{limit}} 上限，已改用源码模式显示",
       "openAnyway": "仍然打开"

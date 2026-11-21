@@ -80,6 +80,20 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     setSelectionAnnotationTarget(null)
     return true
   })
+  const foldLinesAction = editorInstance.addAction({
+    id: 'orca.toggleLineFold',
+    label: translate('editor.foldOrUnfoldLines', 'Fold or Unfold Lines'),
+    precondition: 'foldingEnabled',
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 3,
+    run: (editor) => {
+      const multiline = editor
+        .getSelections()
+        ?.some((range) => range.startLineNumber !== range.endLineNumber)
+      const action = multiline ? 'editor.createFoldingRangeFromSelection' : 'editor.toggleFold'
+      return editor.getAction(action)?.run()
+    }
+  })
   const searchInFilesAction = editorInstance.addAction({
     id: 'orca.searchInFiles',
     label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
@@ -167,6 +181,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       cleanupFindShortcut()
       cleanupAddReviewNoteShortcut()
       pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
+      foldLinesAction.dispose()
       searchInFilesAction.dispose()
       addToChatAction.dispose()
     }

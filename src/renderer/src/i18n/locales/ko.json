@@ -20798,6 +20798,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "줄 접기 또는 펼치기",
     "richMarkdown": {
       "tooLarge": "파일이 {{limit}} 리치 편집 한도보다 큽니다. 대신 소스 모드를 표시합니다.",
       "openAnyway": "무시하고 엽니다"

@@ -22198,6 +22198,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "行を折りたたむ／展開する",
     "richMarkdown": {
       "tooLarge": "ファイルが {{limit}} リッチ編集制限を超えています。代わりにソースモードを表示します。",
       "openAnyway": "とにかく開ける"

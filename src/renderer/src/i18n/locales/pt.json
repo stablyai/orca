@@ -383,6 +383,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "Recolher ou expandir linhas",
     "richMarkdown": {
       "tooLarge": "O arquivo é maior que o limite de {{limit}} para edição avançada. Exibindo o modo de código-fonte.",
       "openAnyway": "Abrir assim mesmo"
