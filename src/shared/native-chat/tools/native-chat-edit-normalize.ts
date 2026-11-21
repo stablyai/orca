@@ -12,6 +12,8 @@ import type { NativeChatEditPatch } from '../native-chat-types'
 
 // NotebookEdit has only new cell text; diff cards would falsely mark unchanged cells added. Keep the generic view.
 const CLAUDE_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace'])
+/** Pi's RPC names are lowercase; Claude's Edit/Write set stays case-sensitive. */
+const PI_FILE_TOOLS = new Set(['edit', 'write'])
 /** Command tools can quote patches without applying them. */
 const COMMAND_PATCH_TOOLS = new Set(['exec', 'shell', 'local_shell'])
 /** Dedicated patch tools apply their envelope; general command tools must explicitly apply it. */
@@ -20,7 +22,12 @@ const PATCH_ENVELOPE_TOOLS = new Set(['apply_patch', ...COMMAND_PATCH_TOOLS])
 const PATCH_TEXT_TOOLS = new Set(['apply_patch', 'Diff'])
 
 export function isEditToolName(name: string): boolean {
-  return CLAUDE_EDIT_TOOLS.has(name) || PATCH_ENVELOPE_TOOLS.has(name) || PATCH_TEXT_TOOLS.has(name)
+  return (
+    CLAUDE_EDIT_TOOLS.has(name) ||
+    PI_FILE_TOOLS.has(name) ||
+    PATCH_ENVELOPE_TOOLS.has(name) ||
+    PATCH_TEXT_TOOLS.has(name)
+  )
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -83,8 +90,8 @@ function multiEditFiles(input: Record<string, unknown>, path: string): NativeCha
   let truncated = false
   for (const entry of input.edits) {
     const edit = record(entry)
-    const oldString = text(edit?.old_string) ?? text(edit?.oldString)
-    const newString = text(edit?.new_string) ?? text(edit?.newString)
+    const oldString = text(edit?.old_string) ?? text(edit?.oldString) ?? text(edit?.oldText)
+    const newString = text(edit?.new_string) ?? text(edit?.newString) ?? text(edit?.newText)
     if (oldString === null && newString === null) {
       continue
     }
@@ -116,7 +123,7 @@ function claudeEditFiles(
   output: string | undefined
 ): NativeChatEditFile[] | null {
   const path = text(input.file_path) ?? text(input.path) ?? 'file'
-  if (name === 'MultiEdit') {
+  if (name === 'MultiEdit' || name === 'edit') {
     return multiEditFiles(input, path)
   }
   const oldString = text(input.old_string) ?? text(input.oldString)
@@ -241,7 +248,7 @@ export function editFilesFromToolPair(pair: {
     }
   }
 
-  if (input && CLAUDE_EDIT_TOOLS.has(pair.name)) {
+  if (input && (CLAUDE_EDIT_TOOLS.has(pair.name) || PI_FILE_TOOLS.has(pair.name))) {
     return claudeEditFiles(pair.name, input, pair.result?.output)
   }
 
