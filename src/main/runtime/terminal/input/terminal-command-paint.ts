@@ -312,10 +312,16 @@ export function isCurrentCommandReport(
 /** The agent's own first-party report, current like `isCurrentCommandReport` and not retired. */
 export function isCurrentFirstPartyReport(
   record: TerminalCommandPaintRecord,
-  status: { updatedAt: number }
+  status: { updatedAt: number; restoredAtRest?: boolean }
 ): boolean {
   const paint = record.commandPaint
-  return !paint || (paint.isCurrentReport(status.updatedAt) && !paint.isRetired({ status }))
+  return (
+    !paint ||
+    ((status.restoredAtRest === true
+      ? paint.isCurrentStatus(status.updatedAt)
+      : paint.isCurrentReport(status.updatedAt)) &&
+      !paint.isRetired({ status }))
+  )
 }
 
 export function admitRestoredTerminalReport(

@@ -110,7 +110,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): AgentStatus | null
   protected abstract readTuiIdleHookTurnForPty(
     ptyId: string,
-    agent: TuiAgent
+    agent: TuiAgent,
+    lastInputAt?: number | null
   ): TuiIdleHookTurn | null
   protected abstract readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
@@ -136,7 +137,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract getExitWaitPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
   protected abstract getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined
   protected abstract getOrchestrationMailboxTerminal(
-    ptyId: string
+    ptyId: string,
+    options?: { ignoreStagedPointerWrite?: boolean }
   ): OrchestrationMailboxTerminal | null
   protected abstract getOrchestrationMailboxTerminalForHandle(
     handle: string
@@ -261,7 +263,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
     handle: string
   ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>
   protected abstract resolveOrchestrationPointerSubmitTarget(
-    ptyId: string
+    ptyId: string,
+    options?: { ignoreStagedPointerWrite?: boolean }
   ): OrchestrationMailboxPointerSubmitTarget | null
   abstract deliverPendingMessagesForHandle(
     handle: string,
@@ -269,7 +272,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): void
   protected abstract writeOrchestrationPointerPty(
     ptyId: string,
-    data: string
+    data: string,
+    options?: { stagePointerText?: boolean }
   ): WriteSettlement | Promise<WriteSettlement>
   protected abstract resolveStructuredMailboxTarget(
     mailboxHandle: string

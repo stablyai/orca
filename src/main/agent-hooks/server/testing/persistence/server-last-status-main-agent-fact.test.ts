@@ -127,4 +127,29 @@ describe('The main agent fact across a restart', () => {
       server.stop()
     }
   })
+
+  it('returns the persisted report timestamp from readRestoredAgentStatus', async () => {
+    const receivedAt = recentTs() - 30_000
+    writeEntry({
+      receivedAt,
+      stateStartedAt: receivedAt - 5_000,
+      payload: {
+        state: 'working',
+        prompt: 'monitoring',
+        agentType: 'antigravity',
+        mainAgent: { state: 'done', stateStartedAt: receivedAt - 2_000 }
+      }
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await expect(server.readRestoredAgentStatus(PANE)).resolves.toMatchObject({
+        state: 'working',
+        mainAgent: { state: 'done', stateStartedAt: receivedAt - 2_000 },
+        receivedAt
+      })
+    } finally {
+      server.stop()
+    }
+  })
 })

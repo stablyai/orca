@@ -20,6 +20,7 @@ export type ReattachedAgentStatusRestoreHost = {
   isRetainedFrameProven(ptyId: string, agent: TerminalAgent): Promise<boolean>
   readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
   readOutputClockAt(ptyId: string): number | null
+  readLastInputAt(ptyId: string): number | null
   requestRepaint(ptyId: string): void
   applyStatus(ptyId: string, status: AgentStatus, options?: { restoredAtRestAt?: number }): void
 }
@@ -35,7 +36,6 @@ export function runReattachedAgentStatusRestore(
   }
   const { incarnationId } = pty
   const generation = host.getLifecycleGeneration(ptyId)
-  const restoreStartedAt = Date.now()
   const isCurrent = (): boolean =>
     host.getPty(ptyId) === pty &&
     pty.incarnationId === incarnationId &&
@@ -62,8 +62,14 @@ export function runReattachedAgentStatusRestore(
       pty.commandPaint?.vouchRetainedPaint()
     }
     if (turn) {
+      if (turn === 'done' && report) {
+        const lastInputAt = host.readLastInputAt(ptyId)
+        if (lastInputAt !== null && report.receivedAt < lastInputAt) {
+          return
+        }
+      }
       host.applyStatus(ptyId, turn === 'done' ? 'idle' : turn, {
-        restoredAtRestAt: turn === 'done' ? restoreStartedAt : undefined
+        restoredAtRestAt: turn === 'done' && report ? report.receivedAt : undefined
       })
     } else if (agent) {
       restoreFromReattachedReadyScreen({

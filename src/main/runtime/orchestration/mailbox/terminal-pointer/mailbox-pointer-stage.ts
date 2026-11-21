@@ -103,7 +103,8 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
         args.deps.getCliCommand(expectedTarget.terminal.handle),
         args.heldDeliveryId,
         expectedTarget.terminal.handle
-      )
+      ),
+      { stagePointerText: true }
     )
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
