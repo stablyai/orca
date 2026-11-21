@@ -83,35 +83,46 @@ export function deriveComposerAutocomplete(
       commandAvailable
     )
   }
+  // Mid-prompt slash tokens use the command menu without dispatch; dollar tokens open the agent’s skills-only menu.
+  const midPrompt = (): ComposerAutocomplete => {
+    const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
+    const query =
+      sigilQuery ??
+      (profile || (sessionSkills?.length ?? 0) > 0
+        ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1]
+        : undefined)
+    if (query === undefined) {
+      return { mode: 'none' }
+    }
+    const isSigil = sigilQuery !== null
+    return deriveSlashAutocomplete(
+      isSigil ? '$' : '/',
+      query,
+      before.length - query.length - 1,
+      isSigil ? [] : agentCommands,
+      profile,
+      discovery,
+      dismissedTriggerKey,
+      sessionSkills,
+      commandAvailable
+    )
+  }
   const mention = matchMentionTrigger(before, mentionNameMatches)
   if (mention) {
+    // A new `/` or `$` token after a spaced name opens its own menu when this agent has one;
+    // otherwise it stays part of the name (`@costs $` still finds "Costs $ team").
+    if (/\s[/$]\S*$/.test(mention.query)) {
+      const menu = midPrompt()
+      if (menu.mode !== 'none') {
+        return menu
+      }
+    }
     const triggerKey = `@:${mention.start}`
     return dismissedTriggerKey === triggerKey
       ? { mode: 'none' }
       : { mode: 'mention', query: mention.query, triggerKey }
   }
-  // Mid-prompt slash tokens use the command menu without dispatch; dollar tokens open the agent’s skills-only menu.
-  const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
-  const query =
-    sigilQuery ??
-    (profile || (sessionSkills?.length ?? 0) > 0
-      ? before.match(MID_PROMPT_SLASH_TRIGGER)?.[1]
-      : undefined)
-  if (query === undefined) {
-    return { mode: 'none' }
-  }
-  const isSigil = sigilQuery !== null
-  return deriveSlashAutocomplete(
-    isSigil ? '$' : '/',
-    query,
-    before.length - query.length - 1,
-    isSigil ? [] : agentCommands,
-    profile,
-    discovery,
-    dismissedTriggerKey,
-    sessionSkills,
-    commandAvailable
-  )
+  return midPrompt()
 }
 
 function deriveSlashAutocomplete(
@@ -241,8 +252,6 @@ export function matchMentionTrigger(
     start === -1 ||
     query.length > MAX_SPACED_MENTION ||
     (start > 0 && !/\s/.test(before[start - 1])) ||
-    // A new `/` or `$` token starts a command or skill, not more of the bot's name.
-    /\s[/$]\S*$/.test(query) ||
     !/^[^\s][^\n]*$/.test(query) ||
     !nameMatches(query)
   ) {
