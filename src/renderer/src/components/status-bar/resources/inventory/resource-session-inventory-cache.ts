@@ -84,6 +84,7 @@ export class ResourceSessionInventoryCache {
     this.active = active
     this.epoch++
     this.pendingRefresh = false
+    this.outdatedRetries = 0
     if (!active) {
       if (this.timer) {
         clearTimeout(this.timer)

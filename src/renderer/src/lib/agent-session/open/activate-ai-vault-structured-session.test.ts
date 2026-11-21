@@ -4,10 +4,19 @@ import type {
   StructuredSessionOpenSource
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
 
-const mocks = vi.hoisted(() => ({ interaction: vi.fn() }))
+const mocks = vi.hoisted(() => ({ interaction: vi.fn(), activate: vi.fn(), owner: vi.fn() }))
 vi.mock('./open-existing-structured-session', () => ({
   openDesktopStructuredSessionInteraction: mocks.interaction,
   revealStructuredSession: vi.fn()
+}))
+vi.mock('../../workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.activate
+}))
+vi.mock('../../workspace/activation/wsl-moved-chat-activation', () => ({
+  activateWslMovedWorkspace: () => false
+}))
+vi.mock('../../workspace/ownership/worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.owner
 }))
 
 import { openDesktopStructuredSession } from './activate-ai-vault-structured-session'
@@ -61,5 +70,21 @@ describe('an open its host answers with nothing found', () => {
     )
     expect(shown.unavailable).toHaveBeenCalled()
     expect(shown.notLocated).not.toHaveBeenCalled()
+  })
+})
+
+describe('a chat its paired host opened', () => {
+  it("selects that host's workspace, not a same-id checkout on this machine", async () => {
+    mocks.owner.mockReturnValue('studio')
+    await answer(
+      { kind: 'history', structuredSession: { sessionId: 's1', workspaceId: 'repo::/w' } },
+      {
+        kind: 'opened',
+        target: { sessionId: 's1', worktreeId: 'repo::/w' },
+        tab: { id: 'tab-1', sessionId: 's1' }
+      }
+    )
+
+    expect(mocks.activate).toHaveBeenCalledWith('repo::/w', { executionHostId: 'runtime:studio' })
   })
 })

@@ -33,8 +33,8 @@ export function resolveSnapshotSessionLabel(
   index: ResourceSessionBindingIndex,
   boundTabId: string | null = null
 ): string {
-  // A restored PTY may carry no pane key yet still be bound to its tab; either names the tab.
-  const tabId = parsePaneKey(session.paneKey)?.tabId ?? boundTabId
+  // The binding follows a pane moved since spawn; a restored PTY's spawn-time key may name its old tab.
+  const tabId = boundTabId ?? parsePaneKey(session.paneKey)?.tabId
   if (tabId) {
     const match = index.tabsByIdByWorktree.get(worktreeId)?.get(tabId)
     const tab = match?.tab
