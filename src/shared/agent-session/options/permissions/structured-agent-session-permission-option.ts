@@ -103,6 +103,8 @@ export function structuredAgentSessionPermissionDescriptor(state: {
       type: 'select',
       currentValue: current,
       ...(reportedValue !== undefined ? { reportedValue } : {}),
+      // null is a report of a mode Orca has no name for, unlike no report at all.
+      ...(own && state.reportedPermissionMode === null ? { reportedUnnamed: true as const } : {}),
       settingsAgent: state.record.agent,
       choices: support.modes.map((value) => ({
         value,

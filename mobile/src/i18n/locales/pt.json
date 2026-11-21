@@ -463,9 +463,7 @@
       "ultra": "Ultra",
       "xhigh": "Extra alto",
       "xhighShort": "Extra alto",
-      "ultracode": "Ultracode",
-      "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
-      "permissionAppliesNextMessageTiming": "Vale para a próxima mensagem · usando {{active}} no momento"
+      "ultracode": "Ultracode"
     },
     "sessionOptionPickers": {
       "agentWorking": "O agente está trabalhando",
@@ -473,7 +471,6 @@
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado",
       "modelFullAccessLabel": "Modelo, {{value}}, acesso total",
       "modelLabel": "Modelo, {{value}}",
-      "modelPermissionsLabel": "Modelo, {{model}}, Permissões: {{permissions}}",
       "permissions": "Permissões",
       "permissionsLabel": "Permissões, {{value}}",
       "settingsLocked": "As configurações do modelo serão desbloqueadas quando este turno terminar.",
@@ -1270,15 +1267,7 @@
     "native-chat": {
       "composer": {
         "planMode": "Plano",
-        "exitPlanMode": "Sair do modo de planejamento",
-        "permissionAsk": "Pedir aprovação",
-        "permissionAcceptEdits": "Aceitar edições",
-        "permissionAuto": "Aprovar por mim",
-        "permissionFullAccess": "Acesso total",
-        "permissionAgentSettings": "Configurações do {{agent}}",
-        "permissionAgentSettingsUsedHint": "Usa suas configurações de permissão do {{agent}}.",
-        "permissionAgentSettingsUnnamedHint": "Usa suas configurações de permissão do {{agent}}. O Orca não consegue exibir este modo.",
-        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}"
+        "exitPlanMode": "Sair do modo de planejamento"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} arquivo alterado",
@@ -3442,6 +3431,9 @@
       "toggleMode": "Alternar",
       "updateFailed": "Não foi possível atualizar",
       "loading": "Carregando configurações de voz…"
+    },
+    "agents": {
+      "permissionOwnAll": "Configurações próprias dos agentes"
     },
     "voiceTranscribeOn": {
       "heading": "TRANSCREVER EM",

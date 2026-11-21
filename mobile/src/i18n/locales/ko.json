@@ -442,9 +442,7 @@
       "toggleOption": "{{value0}} 전환",
       "ultra": "울트라",
       "xhigh": "매우 높음",
-      "xhighShort": "매우 높음",
-      "permissionAppliesNextMessage": "{{saved}}은(는) 다음 메시지부터 적용됩니다. 현재 {{active}} 사용 중",
-      "permissionAppliesNextMessageTiming": "다음 메시지부터 적용 · 현재 {{active}} 사용 중"
+      "xhighShort": "매우 높음"
     },
     "sessionOptionPickers": {
       "agentWorking": "에이전트 작업 중",
@@ -452,7 +450,6 @@
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음",
       "modelFullAccessLabel": "모델, {{value}}, 전체 액세스",
       "modelLabel": "모델, {{value}}",
-      "modelPermissionsLabel": "모델, {{model}}, 권한: {{permissions}}",
       "permissions": "권한",
       "permissionsLabel": "권한, {{value}}",
       "settingsLocked": "이번 턴이 끝나면 모델 설정을 변경할 수 있습니다.",
@@ -1146,15 +1143,7 @@
     "native-chat": {
       "composer": {
         "planMode": "계획",
-        "exitPlanMode": "계획 모드 종료",
-        "permissionAsk": "승인 요청",
-        "permissionAcceptEdits": "편집 허용",
-        "permissionAuto": "대신 승인",
-        "permissionFullAccess": "전체 액세스",
-        "permissionAgentSettings": "{{agent}} 설정",
-        "permissionAgentSettingsUsedHint": "{{agent}} 권한 설정을 사용합니다.",
-        "permissionAgentSettingsUnnamedHint": "{{agent}} 권한 설정을 사용합니다. Orca에서 이 모드를 표시할 수 없습니다.",
-        "permissionFromAgentSettings": "{{mode}}, {{agent}} 설정에서"
+        "exitPlanMode": "계획 모드 종료"
       },
       "goal": {
         "sentAsGoal": "목표로 보냄"
@@ -2966,6 +2955,9 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
+    },
+    "agents": {
+      "permissionOwnAll": "에이전트 자체 설정"
     },
     "voiceTranscribeOn": {
       "heading": "받아쓰기 위치",

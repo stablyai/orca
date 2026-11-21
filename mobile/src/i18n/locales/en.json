@@ -178,6 +178,9 @@
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
     },
+    "agents": {
+      "permissionOwnAll": "Agents' own settings"
+    },
     "voiceTranscribeOn": {
       "heading": "TRANSCRIBE ON",
       "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
@@ -1626,15 +1629,7 @@
       "composer": {
         "planMode": "Plan",
         "exitPlanMode": "Exit plan mode",
-        "pastedTextLabel": "Pasted text",
-        "permissionAsk": "Ask for approval",
-        "permissionAcceptEdits": "Accept edits",
-        "permissionAuto": "Approve for me",
-        "permissionFullAccess": "Full access",
-        "permissionAgentSettings": "{{agent}} settings",
-        "permissionAgentSettingsUsedHint": "Uses your {{agent}} permission settings.",
-        "permissionAgentSettingsUnnamedHint": "Uses your {{agent}} permission settings. Orca can't show this mode.",
-        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
+        "pastedTextLabel": "Pasted text"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -3280,7 +3275,6 @@
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
-      "modelPermissionsLabel": "Model, {{model}}, Permissions: {{permissions}}",
       "permissionsLabel": "Permissions, {{value}}",
       "backToModels": "Back to models",
       "agentWorking": "Agent is working",
@@ -3351,9 +3345,9 @@
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
       "sessionOptions": "Session options",
-      "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · next message",
-      "permissionAppliesNextMessageTiming": "Applies next message · currently using {{active}}"
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",

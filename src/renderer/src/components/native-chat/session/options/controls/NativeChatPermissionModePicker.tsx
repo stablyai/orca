@@ -16,10 +16,8 @@ import {
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import {
-  agentPermissionSettingsHint,
-  agentPermissionSettingsSourceName
-} from '../../../../../../../shared/agent-launch/permissions/agent-permission-settings-source'
+import { agentPermissionSettingsSourceName } from '../../../../../../../shared/agent-launch/permissions/agent-permission-settings-source'
+import { nativeChatPermissionSettingsHint } from './native-chat-permission-settings-hint'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -94,6 +92,8 @@ export type NativeChatPermissionModePickerProps = {
   current: string | undefined
   /** The mode the agent reports running in when `current` is Own. */
   reported?: string
+  /** The agent reported a mode that has no Orca name. */
+  reportedUnnamed?: boolean
   modes: readonly AgentChatPermissionMode[]
   /** Whose descriptions to show; absent describes every agent's. */
   agent?: string | null
@@ -111,6 +111,7 @@ const INHERIT_VALUE = 'inherit'
 function NativeChatPermissionModePickerInner({
   current,
   reported,
+  reportedUnnamed = false,
   modes,
   agent,
   disabled = false,
@@ -164,9 +165,10 @@ function NativeChatPermissionModePickerInner({
           { mode: label, agent: settingsAgent }
         )
       : label
-  const hint = agentPermissionSettingsHint({
+  const hint = nativeChatPermissionSettingsHint({
     current,
     reported,
+    reportedUnnamed,
     deferred: activeLabel !== null
   })
   const tooltipLabel =
@@ -288,6 +290,7 @@ export function NativeChatComposerPermissionPicker({
     <NativeChatPermissionModePicker
       current={current}
       reported={descriptor.kind.reportedValue}
+      reportedUnnamed={descriptor.kind.reportedUnnamed === true}
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
       agent={agent ?? descriptor.kind.settingsAgent ?? null}

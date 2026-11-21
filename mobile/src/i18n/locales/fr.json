@@ -446,9 +446,7 @@
       "toggleOption": "Basculer {{value0}}",
       "ultra": "Ultra",
       "xhigh": "Extra élevé",
-      "xhighShort": "Extra",
-      "permissionAppliesNextMessage": "{{saved}} s’applique à votre prochain message ; réglage utilisé actuellement : {{active}}",
-      "permissionAppliesNextMessageTiming": "S’applique au prochain message · réglage utilisé actuellement : {{active}}"
+      "xhighShort": "Extra"
     },
     "sessionOptionPickers": {
       "agentWorking": "L'agent travaille",
@@ -456,7 +454,6 @@
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé",
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
-      "modelPermissionsLabel": "Modèle, {{model}}, Autorisations : {{permissions}}",
       "permissions": "Autorisations",
       "permissionsLabel": "Autorisations, {{value}}",
       "settingsLocked": "Les paramètres du modèle seront déverrouillés à la fin de ce tour.",
@@ -1189,15 +1186,7 @@
     "native-chat": {
       "composer": {
         "planMode": "Planifier",
-        "exitPlanMode": "Quitter le mode plan",
-        "permissionAsk": "Demander l’approbation",
-        "permissionAcceptEdits": "Accepter les modifications",
-        "permissionAuto": "Approuver pour moi",
-        "permissionFullAccess": "Accès complet",
-        "permissionAgentSettings": "Paramètres de {{agent}}",
-        "permissionAgentSettingsUsedHint": "Utilise vos paramètres d’autorisation de {{agent}}.",
-        "permissionAgentSettingsUnnamedHint": "Utilise vos paramètres d’autorisation de {{agent}}. Orca ne peut pas afficher ce mode.",
-        "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}"
+        "exitPlanMode": "Quitter le mode plan"
       },
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"
@@ -3044,6 +3033,9 @@
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
+    },
+    "agents": {
+      "permissionOwnAll": "Paramètres propres aux agents"
     },
     "voiceTranscribeOn": {
       "heading": "TRANSCRIRE SUR",

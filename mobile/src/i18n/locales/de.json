@@ -442,9 +442,7 @@
       "toggleOption": "{{value0}} umschalten",
       "ultra": "Ultra",
       "xhigh": "Sehr hoch",
-      "xhighShort": "Sehr hoch",
-      "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
-      "permissionAppliesNextMessageTiming": "Gilt ab der nächsten Nachricht · derzeit verwendet: {{active}}"
+      "xhighShort": "Sehr hoch"
     },
     "sessionOptionPickers": {
       "agentWorking": "Agent arbeitet",
@@ -452,7 +450,6 @@
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
-      "modelPermissionsLabel": "Modell, {{model}}, Berechtigungen: {{permissions}}",
       "permissions": "Berechtigungen",
       "permissionsLabel": "Berechtigungen, {{value}}",
       "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
@@ -1150,15 +1147,7 @@
     "native-chat": {
       "composer": {
         "planMode": "Planen",
-        "exitPlanMode": "Planungsmodus verlassen",
-        "permissionAsk": "Genehmigung anfordern",
-        "permissionAcceptEdits": "Änderungen akzeptieren",
-        "permissionAuto": "Genehmigen lassen",
-        "permissionFullAccess": "Vollzugriff",
-        "permissionAgentSettings": "{{agent}}-Einstellungen",
-        "permissionAgentSettingsUsedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}.",
-        "permissionAgentSettingsUnnamedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Orca kann diesen Modus nicht anzeigen.",
-        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen"
+        "exitPlanMode": "Planungsmodus verlassen"
       },
       "goal": {
         "sentAsGoal": "Als Ziel gesendet"
@@ -2968,6 +2957,9 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
+    },
+    "agents": {
+      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     },
     "voiceTranscribeOn": {
       "heading": "TRANSKRIBIEREN AUF",

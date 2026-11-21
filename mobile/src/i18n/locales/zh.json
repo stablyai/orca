@@ -470,9 +470,9 @@
       "on": "开启",
       "permissions": "权限",
       "sessionOptions": "会话选项",
-      "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前使用 {{active}}",
+      "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前为 {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · 下一条消息",
-      "permissionAppliesNextMessageTiming": "下一条消息起生效 · 当前使用 {{active}}",
+      "permissionAppliesNextMessageTiming": "下一条消息生效 · 当前为 {{active}}",
       "setWhenSessionStarts": "请在会话开始时设置",
       "speed": "速度",
       "standard": "标准",
@@ -488,7 +488,6 @@
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认",
       "modelFullAccessLabel": "模型，{{value}}，完全访问权限",
       "modelLabel": "模型，{{value}}",
-      "modelPermissionsLabel": "模型，{{model}}，权限：{{permissions}}",
       "permissions": "权限",
       "applying": "正在应用…",
       "onAttach": "聊天连接后生效",
@@ -1329,15 +1328,7 @@
       },
       "composer": {
         "planMode": "计划",
-        "exitPlanMode": "退出计划模式",
-        "permissionAsk": "请求批准",
-        "permissionAcceptEdits": "接受编辑",
-        "permissionAuto": "替我批准",
-        "permissionFullAccess": "完全访问",
-        "permissionAgentSettings": "{{agent}} 设置",
-        "permissionAgentSettingsUsedHint": "使用你的 {{agent}} 权限设置。",
-        "permissionAgentSettingsUnnamedHint": "使用你的 {{agent}} 权限设置。Orca 无法显示此模式。",
-        "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
+        "exitPlanMode": "退出计划模式"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"
@@ -3495,6 +3486,9 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各智能体自己的设置"
     },
     "voiceTranscribeOn": {
       "heading": "转写位置",

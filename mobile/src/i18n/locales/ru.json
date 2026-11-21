@@ -450,9 +450,7 @@
       "toggleOption": "Переключить {{value0}}",
       "ultra": "Предельный",
       "xhigh": "Очень высокий",
-      "xhighShort": "Очень выс.",
-      "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
-      "permissionAppliesNextMessageTiming": "Со следующего сообщения · сейчас используется: {{active}}"
+      "xhighShort": "Очень выс."
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
@@ -460,7 +458,6 @@
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
-      "modelPermissionsLabel": "Модель, {{model}}, Разрешения: {{permissions}}",
       "permissions": "Разрешения",
       "permissionsLabel": "Разрешения: {{value}}",
       "settingsLocked": "Настройки модели станут доступны после завершения текущего ответа.",
@@ -1228,15 +1225,7 @@
     "native-chat": {
       "composer": {
         "planMode": "План",
-        "exitPlanMode": "Выйти из режима планирования",
-        "permissionAsk": "Запрашивать разрешение",
-        "permissionAcceptEdits": "Разрешать правки",
-        "permissionAuto": "Одобрять за меня",
-        "permissionFullAccess": "Полный доступ",
-        "permissionAgentSettings": "Настройки {{agent}}",
-        "permissionAgentSettingsUsedHint": "Использует ваши настройки разрешений {{agent}}.",
-        "permissionAgentSettingsUnnamedHint": "Использует ваши настройки разрешений {{agent}}. Orca не может показать этот режим.",
-        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}"
+        "exitPlanMode": "Выйти из режима планирования"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
@@ -3116,6 +3105,9 @@
       "title": "Голос",
       "toggleMode": "Переключение",
       "updateFailed": "Не удалось обновить"
+    },
+    "agents": {
+      "permissionOwnAll": "Собственные настройки агентов"
     },
     "voiceTranscribeOn": {
       "heading": "ГДЕ РАСПОЗНАВАТЬ",

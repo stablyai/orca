@@ -442,9 +442,7 @@
       "toggleOption": "{{value0}}を切り替える",
       "ultra": "ウルトラ",
       "xhigh": "最高",
-      "xhighShort": "最高",
-      "permissionAppliesNextMessage": "{{saved}} は次のメッセージから適用されます。現在は {{active}} を使用しています",
-      "permissionAppliesNextMessageTiming": "次のメッセージから適用 · 現在は {{active}} を使用"
+      "xhighShort": "最高"
     },
     "sessionOptionPickers": {
       "agentWorking": "Agent が作業中",
@@ -452,7 +450,6 @@
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
-      "modelPermissionsLabel": "モデル、{{model}}、権限：{{permissions}}",
       "permissions": "権限",
       "permissionsLabel": "権限、{{value}}",
       "settingsLocked": "このターンが完了すると、モデル設定を変更できます。",
@@ -1146,15 +1143,7 @@
     "native-chat": {
       "composer": {
         "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了",
-        "permissionAsk": "承認を求める",
-        "permissionAcceptEdits": "編集を許可",
-        "permissionAuto": "代わりに承認",
-        "permissionFullAccess": "フルアクセス",
-        "permissionAgentSettings": "{{agent}} の設定",
-        "permissionAgentSettingsUsedHint": "{{agent}} の権限設定を使用します。",
-        "permissionAgentSettingsUnnamedHint": "{{agent}} の権限設定を使用します。Orca ではこのモードを表示できません。",
-        "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）"
+        "exitPlanMode": "プランモードを終了"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -2967,6 +2956,9 @@
       "title": "音声",
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
+    },
+    "agents": {
+      "permissionOwnAll": "Agent 独自の設定"
     },
     "voiceTranscribeOn": {
       "heading": "文字起こしの場所",

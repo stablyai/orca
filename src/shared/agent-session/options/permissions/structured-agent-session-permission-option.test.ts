@@ -90,6 +90,24 @@ describe('the permission mode picker', () => {
     expect(explicit?.kind).not.toHaveProperty('reportedValue')
   })
 
+  it('tells a reported mode Orca cannot name apart from no report', () => {
+    const own = {
+      ...live('codex', { permissionMode: 'ask' }),
+      permissionOwnSupported: true,
+      permissionMode: 'own'
+    }
+    expect(permission({ ...own, reportedPermissionMode: null })?.kind).toMatchObject({
+      reportedUnnamed: true
+    })
+    for (const state of [
+      { ...own, reportedPermissionMode: undefined },
+      { ...own, reportedPermissionMode: 'full-access' },
+      { ...own, permissionMode: 'ask', reportedPermissionMode: null }
+    ]) {
+      expect(permission(state)?.kind).not.toHaveProperty('reportedUnnamed')
+    }
+  })
+
   it("shows a newer child's report and keeps the read report over an older one", () => {
     const own = {
       ...live('claude', { permissionMode: 'ask' }),

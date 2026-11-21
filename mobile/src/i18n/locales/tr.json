@@ -442,9 +442,7 @@
       "toggleOption": "{{value0}} aç/kapat",
       "ultra": "Ultra",
       "xhigh": "Ekstra yüksek",
-      "xhighShort": "Çok yüksek",
-      "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
-      "permissionAppliesNextMessageTiming": "Sonraki mesajda geçerli · şu anda {{active}} kullanılıyor"
+      "xhighShort": "Çok yüksek"
     },
     "sessionOptionPickers": {
       "agentWorking": "Ajan çalışıyor",
@@ -452,7 +450,6 @@
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı",
       "modelFullAccessLabel": "Model, {{value}}, tam erişim",
       "modelLabel": "Model, {{value}}",
-      "modelPermissionsLabel": "Model, {{model}}, İzinler: {{permissions}}",
       "permissions": "İzinler",
       "permissionsLabel": "İzinler, {{value}}",
       "settingsLocked": "Bu tur tamamlandığında model ayarlarının kilidi açılır.",
@@ -1150,15 +1147,7 @@
     "native-chat": {
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Plan modundan çık",
-        "permissionAsk": "Onay iste",
-        "permissionAcceptEdits": "Düzenlemeleri kabul et",
-        "permissionAuto": "Benim yerime onayla",
-        "permissionFullAccess": "Tam erişim",
-        "permissionAgentSettings": "{{agent}} ayarları",
-        "permissionAgentSettingsUsedHint": "{{agent}} izin ayarlarınızı kullanır.",
-        "permissionAgentSettingsUnnamedHint": "{{agent}} izin ayarlarınızı kullanır. Orca bu modu gösteremiyor.",
-        "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından"
+        "exitPlanMode": "Plan modundan çık"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
@@ -2968,6 +2957,9 @@
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi"
+    },
+    "agents": {
+      "permissionOwnAll": "Ajanların kendi ayarları"
     },
     "voiceTranscribeOn": {
       "heading": "YAZIYA DÖKME YERİ",

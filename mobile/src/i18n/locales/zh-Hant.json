@@ -442,9 +442,7 @@
       "toggleOption": "切換{{value0}}",
       "ultra": "極致",
       "xhigh": "極高",
-      "xhighShort": "極高",
-      "permissionAppliesNextMessage": "{{saved}} 將從下一則訊息生效；目前使用 {{active}}",
-      "permissionAppliesNextMessageTiming": "下一則訊息起生效 · 目前使用 {{active}}"
+      "xhighShort": "極高"
     },
     "sessionOptionPickers": {
       "agentWorking": "代理程式正在執行",
@@ -452,7 +450,6 @@
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認",
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
-      "modelPermissionsLabel": "模型，{{model}}，權限：{{permissions}}",
       "permissions": "權限",
       "permissionsLabel": "權限，{{value}}",
       "settingsLocked": "本回合結束後即可變更模型設定。",
@@ -1146,15 +1143,7 @@
     "native-chat": {
       "composer": {
         "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式",
-        "permissionAsk": "請求核准",
-        "permissionAcceptEdits": "接受編輯",
-        "permissionAuto": "替我核准",
-        "permissionFullAccess": "完整存取權",
-        "permissionAgentSettings": "{{agent}} 設定",
-        "permissionAgentSettingsUsedHint": "使用你的 {{agent}} 權限設定。",
-        "permissionAgentSettingsUnnamedHint": "使用你的 {{agent}} 權限設定。Orca 無法顯示此模式。",
-        "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定"
+        "exitPlanMode": "結束計畫模式"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
@@ -2961,6 +2950,9 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各代理程式自身的設定"
     },
     "voiceTranscribeOn": {
       "heading": "轉寫位置",
