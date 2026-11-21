@@ -86,6 +86,7 @@ export function mergeSnapshotAndSessions(
       worktreeName: string
       hostLabel?: string
       readOnly?: true
+      unplaced?: true
     }
   ): void {
     const repo = ensureRepo(row.repoId, row.repoName)
@@ -119,6 +120,7 @@ export function mergeSnapshotAndSessions(
       hasLocalSamples: true,
       isRemote: row.isRemote,
       ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
+      unplaced: row.unplaced,
       sessions,
       chats: wt.chats,
       browsers: []
@@ -159,7 +161,8 @@ export function mergeSnapshotAndSessions(
         repoName: (owned && ctx.repoDisplayNameById.get(repoId)) || wt.repoName,
         isRemote: true,
         hostLabel: host.hostLabel,
-        readOnly: true
+        readOnly: true,
+        unplaced: owned ? undefined : true
       })
     }
   }

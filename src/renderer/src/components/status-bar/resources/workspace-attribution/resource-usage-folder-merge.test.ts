@@ -61,4 +61,37 @@ describe('folder Resource Manager rows', () => {
       )
     ).toEqual([])
   })
+
+  it("opens a paired folder workspace's chats only when this window places it on that machine", () => {
+    const chat = { agentSessionId: 'chat-1', agent: 'claude', name: 'Plan', cpu: 1, memory: 512 }
+    const paired = (worktreeId: string): WorktreeMemory => ({
+      ...oldRow,
+      worktreeId,
+      chats: [chat]
+    })
+    const repos = mergeSnapshotAndSessions(
+      null,
+      [],
+      context({
+        worktreeById: new Map([[workspace.id, { ...workspace, hostId: 'runtime:paired' }]]),
+        runtimeHostResources: [
+          {
+            hostId: 'runtime:paired',
+            hostLabel: 'Studio',
+            worktrees: [paired(workspace.id), paired('folder:elsewhere')]
+          }
+        ]
+      })
+    )
+    const rows = repos.flatMap((repo) => repo.worktrees)
+
+    expect(rows.find((row) => row.worktreeId === workspace.id)).toMatchObject({
+      chats: [chat],
+      unplaced: undefined
+    })
+    expect(rows.find((row) => row.worktreeId === 'runtime:paired|folder:elsewhere')).toMatchObject({
+      chats: [chat],
+      unplaced: true
+    })
+  })
 })

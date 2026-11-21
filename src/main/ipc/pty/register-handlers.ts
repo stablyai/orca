@@ -133,6 +133,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:reportRendererDeliveryState')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
+  ipcMain.removeAllListeners('pty:retireListSessions')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:hiddenOutputRestoreApplied')
   ipcMain.removeAllListeners('pty:ackData')

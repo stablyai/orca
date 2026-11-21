@@ -197,6 +197,8 @@ export const ptySessionControlApi = {
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission
   ): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions', scope, admission),
+  retireListSessions: (requestId: string): void =>
+    ipcRenderer.send('pty:retireListSessions', requestId),
   getAuthoritativeBufferSnapshotCapabilities: (
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
