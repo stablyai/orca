@@ -124,10 +124,9 @@ describe('chat naming agent selection', () => {
     expect(launches()).toBe(0)
   })
 
-  // Compatibility: a stored record from a provider with no text generation; new chats can't start one.
-  it('skips a stored Gemini chat under Use chat agent without launching another provider', async () => {
-    const result = await generate({ provider: 'gemini' })
-    expect(result).toMatchObject({ skipAutomatic: true, error: expect.any(String) })
+  // Gemini saves every CLI run, so Use chat agent leaves its chat unnamed rather than launching another provider.
+  it('leaves a Gemini chat under Use chat agent unnamed without launching another provider', async () => {
+    await expect(generate({ provider: 'gemini' })).resolves.toBeNull()
     expect(launches()).toBe(0)
   })
 

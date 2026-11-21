@@ -43,7 +43,12 @@ describe('resolveSourceControlAiForOperation inherited agent', () => {
     expect(agentOf(resolve('branchName', inherited('codex')))).toBe('codex')
   })
 
-  it.each<TuiAgent>(['gemini', 'claude-agent-teams', 'droid'])(
+  it('runs an inherited Claude Agent Teams default through the Claude CLI it launches', () => {
+    expect(agentOf(resolve('branchName', inherited('claude-agent-teams')))).toBe('claude')
+    expect(agentOf(resolve('conversationName', inherited('claude-agent-teams')))).toBe('claude')
+  })
+
+  it.each<TuiAgent>(['gemini', 'droid'])(
     'marks an enabled inherited %s that cannot generate text, without rerouting to Claude',
     (agent) => {
       const branch = resolve('branchName', inherited(agent))
@@ -74,11 +79,11 @@ describe('resolveSourceControlAiForOperation inherited agent', () => {
   it.each<[string, SourceControlAiSettingsInput]>([
     ['a blank', inherited('blank', ['claude'])],
     ['a disabled', inherited('gemini', ['gemini', 'claude'])]
-  ])('keeps the error actionable for %s default with Claude disabled', (_label, settings) => {
+  ])('marks %s default with Claude disabled, since no agent was chosen', (_label, settings) => {
     const branch = resolve('branchName', settings)
     expect(branch).toMatchObject({ ok: false, errorCode: 'sourceControlAgentUnsupported' })
-    expect(skips(branch)).toBe(false)
-    expect(skips(resolve('conversationName', settings))).toBe(false)
+    expect(skips(branch)).toBe(true)
+    expect(skips(resolve('conversationName', settings))).toBe(true)
   })
 
   it('does not mark an explicitly chosen agent that cannot run the action', () => {
@@ -98,6 +103,7 @@ describe('resolveCommitMessageAgentChoice for an action picker', () => {
     expect(resolveCommitMessageAgentChoice('amp', 'codex', [], 'branchName')).toBe('amp')
     expect(resolveCommitMessageAgentChoice(null, 'amp', [])).toBe('amp')
     expect(resolveCommitMessageAgentChoice(null, 'blank', [], 'branchName')).toBe('claude')
+    expect(resolveCommitMessageAgentChoice(null, 'claude-agent-teams', [])).toBe('claude')
   })
 })
 

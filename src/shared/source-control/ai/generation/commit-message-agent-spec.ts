@@ -182,7 +182,7 @@ export function getCommitMessageAgentSpec(agentId: TuiAgent): CommitMessageAgent
 }
 
 /** The default launch agent an action inherits, or null when it is blank, absent or disabled. */
-export function enabledDefaultLaunchAgent(
+function enabledDefaultLaunchAgent(
   defaultTuiAgent: DefaultTuiAgentPreference,
   disabledTuiAgents?: Iterable<unknown> | null
 ): TuiAgent | null {
@@ -191,6 +191,11 @@ export function enabledDefaultLaunchAgent(
     isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
     ? defaultTuiAgent
     : null
+}
+
+// Launch variants that run another agent's CLI generate text through that agent.
+const TEXT_AGENT_FOR_LAUNCH_AGENT: Partial<Record<TuiAgent, TuiAgent>> = {
+  'claude-agent-teams': 'claude'
 }
 
 export function resolveCommitMessageAgentChoice(
@@ -203,7 +208,8 @@ export function resolveCommitMessageAgentChoice(
   if (configuredAgentId) {
     return configuredAgentId
   }
-  const inherited = enabledDefaultLaunchAgent(defaultTuiAgent, disabledTuiAgents)
+  const launchAgent = enabledDefaultLaunchAgent(defaultTuiAgent, disabledTuiAgents)
+  const inherited = launchAgent && (TEXT_AGENT_FOR_LAUNCH_AGENT[launchAgent] ?? launchAgent)
   if (inherited) {
     const usable =
       getCommitMessageAgentSpec(inherited) &&

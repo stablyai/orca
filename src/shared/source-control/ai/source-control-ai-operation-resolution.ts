@@ -1,7 +1,6 @@
 import { isGlobalAiTextAction } from './recipes/source-control-ai-actions'
 import {
   CUSTOM_AGENT_ID,
-  enabledDefaultLaunchAgent,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId,
@@ -181,10 +180,8 @@ export function resolveSourceControlAiForOperation(
     return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
   }
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
-  // A blank or disabled default falls back to Claude; when that is unusable the error stays actionable.
-  inheritedAgent =
-    !preferredAgent &&
-    !!enabledDefaultLaunchAgent(input.settings.defaultTuiAgent, input.settings.disabledTuiAgents)
+  // Nothing was chosen for this action, so the agent comes from the launch default or the Claude fallback.
+  inheritedAgent = !preferredAgent
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
