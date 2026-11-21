@@ -117,6 +117,11 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   retirePty(ptyId: string): void {
     this.deps.pointerDelivery.retirePty(ptyId)
+    this.forgetReleasedPointerPty(ptyId)
+  }
+
+  /** Also called when PTY records are pruned without an exit callback. */
+  forgetReleasedPointerPty(ptyId: string): void {
     try {
       this.deps.getDb()?.forgetReleasedPointerPty(ptyId)
     } catch {
