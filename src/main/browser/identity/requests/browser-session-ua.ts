@@ -1,4 +1,5 @@
 import type { Session } from 'electron'
+import { qaUaDemandLog } from './qa-ua-demand-log'
 import type { BrowserTabIdentity } from '../browser-tab-identity'
 import { getBrowserProcessUserAgentIdentity } from '../browser-process-user-agent'
 import { decideBrowserSessionRequestHeaders } from '../../sessions/requests/browser-session-request-decisions'
@@ -104,6 +105,7 @@ export function installBrowserSessionUserAgentPolicy(
   const refresh = (): void => {
     const needed =
       browserSessionHeaderListenerIgnoresDemand(sess) || hasBrowserSessionUserAgentDemand(sess)
+    qaUaDemandLog('ua-refresh', { needed, installed: !!release, ignores: browserSessionHeaderListenerIgnoresDemand(sess), demand: hasBrowserSessionUserAgentDemand(sess) })
     if (needed && !release) {
       release = listen()
     } else if (!needed && release) {

@@ -1,4 +1,5 @@
 import type { Session } from 'electron'
+import { qaUaDemandLog } from './qa-ua-demand-log'
 
 // Whether a guest's requests need a header rewrite, from its page and from site iframes in it
 // (keyed by frame tree node, which survives the frame's own navigations).
@@ -54,6 +55,7 @@ export function setBrowserGuestPageUserAgentDemand(
   const previous = guests.get(guestId)
   const kept =
     frames === 'keep' && previous?.session === session ? previous.frames : new Set<number>()
+  qaUaDemandLog('page-demand', { guestId, page, frames, sameSession: previous?.session === session, kept: [...kept] })
   write(guestId, { session, page, frames: kept })
 }
 
@@ -65,6 +67,7 @@ export function setBrowserGuestFrameUserAgentDemand(
   demanding: boolean
 ): void {
   const previous = guests.get(guestId)
+  qaUaDemandLog('frame-demand', { guestId, frameTreeNodeId, demanding, hasPrevious: !!previous, sameSession: previous?.session === session, before: previous ? [...previous.frames] : null, page: previous?.page })
   if (previous?.session !== session) {
     if (demanding) {
       write(guestId, { session, page: false, frames: new Set([frameTreeNodeId]) })
@@ -89,6 +92,7 @@ export function getBrowserGuestFrameUserAgentDemand(guestId: number): ReadonlySe
 }
 
 export function clearBrowserGuestUserAgentDemand(guestId: number): void {
+  qaUaDemandLog('clear-guest', { guestId })
   write(guestId, null)
 }
 

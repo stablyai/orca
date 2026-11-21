@@ -9,6 +9,7 @@ import {
 } from '../../../identity/requests/browser-session-ua-demand'
 import { browserSessionHeaderListenerIgnoresDemand } from '../../../identity/requests/browser-session-ua'
 import { rewritesRequestHeaders } from './browser-manager-navigation'
+import { qaUaDemandLog } from '../../../identity/requests/qa-ua-demand-log'
 
 // An unloading frame leaves the frame tree just after its pagehide.
 const REMOVAL_CHECK_DELAY_MS = 250
@@ -99,6 +100,7 @@ export function settleBrowserGuestSubframe(
   frameRoutingId: number
 ): void {
   const frame = webFrameMain.fromId(frameProcessId, frameRoutingId)
+  qaUaDemandLog('settle', { guestId: guest.id, found: !!frame, ftn: frame?.frameTreeNodeId ?? null, url: frame?.url ?? null, origin: frame?.origin ?? null })
   if (!frame || guest.isDestroyed()) {
     return
   }
@@ -142,6 +144,14 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
     const demanding = getBrowserGuestFrameUserAgentDemand(guest.id)
     // Deleting the current entry while iterating a Set is safe.
     for (const id of demanding) {
+      const tracked = frames?.get(id)
+      let state: unknown = null
+      try {
+        state = tracked ? { destroyed: tracked.isDestroyed(), detached: tracked.detached } : 'untracked'
+      } catch (error) {
+        state = `threw ${String(error)}`
+      }
+      qaUaDemandLog('removal-check', { guestId: guest.id, id, state, gone: frameGone(tracked) })
       if (frameGone(frames?.get(id))) {
         setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, id, false)
       }
@@ -160,6 +170,7 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
  */
 export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
   const { id, session } = contents
+  qaUaDemandLog('popup-tracked', { guestId: id })
   // Electron 43 reports frame creation but not removal, and route popups run no guest preload to
   // report an iframe's unload. So each new site iframe earns a few checks of the tracked frames
   // (only those, not the frame tree), 2 s to 16 s apart, then none: an idle popup does no work,
@@ -169,6 +180,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
   const scheduleRecheck = (delay: number): void => {
     recheck = setTimeout(() => {
       recheck = null
+      qaUaDemandLog('popup-recheck', { guestId: id, delay, destroyed: contents.isDestroyed(), demand: [...getBrowserGuestFrameUserAgentDemand(id)], ignores: browserSessionHeaderListenerIgnoresDemand(session) })
       if (
         contents.isDestroyed() ||
         getBrowserGuestFrameUserAgentDemand(id).size === 0 ||
@@ -184,6 +196,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
     recheck.unref?.()
   }
   const watchNewSiteFrames = (demandBefore: number): void => {
+    qaUaDemandLog('popup-watch', { guestId: id, demandBefore, demandNow: [...getBrowserGuestFrameUserAgentDemand(id)], pending: !!recheck })
     if (getBrowserGuestFrameUserAgentDemand(id).size > demandBefore) {
       if (recheck) {
         clearTimeout(recheck)
@@ -198,6 +211,7 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
       frame?: Electron.WebFrameMain | null
     }>
   ): void => {
+    qaUaDemandLog('popup-start', { guestId: id, url: details.url, main: details.isMainFrame, ftn: details.frame?.frameTreeNodeId ?? null })
     if (!details.isMainFrame) {
       const demandBefore = getBrowserGuestFrameUserAgentDemand(id).size
       noteBrowserGuestSubframeNavigation(contents, details.url, details.frame)
