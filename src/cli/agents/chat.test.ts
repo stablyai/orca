@@ -38,3 +38,27 @@ describe('chat rename CLI', () => {
     expect(call).not.toHaveBeenCalled()
   })
 })
+
+describe('chat read CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+  })
+
+  it('refuses a before/after read that names no cursor', async () => {
+    const { client, call } = chatClient(false)
+
+    await expect(
+      CHAT_HANDLERS['chat read']({
+        flags: new Map<string, string | boolean>([
+          ['session', 'chat-1'],
+          ['direction', 'before']
+        ]),
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow('needs --cursor')
+    expect(call).not.toHaveBeenCalled()
+  })
+})
