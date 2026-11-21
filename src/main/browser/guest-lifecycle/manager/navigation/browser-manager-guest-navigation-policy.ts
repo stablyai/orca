@@ -18,7 +18,6 @@ import {
 import { allowPageUnload } from '../../navigation/browser-guest-unload-policy'
 import { initiatingFrameUrl } from '../../prompts/browser-external-app-launch'
 import { isSameExtensionNavigation } from '../../../../../shared/browser/extensions/browser-extension-url'
-import { hasBrowserSessionWebRequestListener } from '../../../sessions/requests/browser-session-web-request-owner'
 import {
   browserNavigationLeavesFaviconOrigin,
   pickDisplayableFaviconUrl,
@@ -27,8 +26,6 @@ import {
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
-    // Whether the current main-frame navigation's request started with a session listener.
-    let listenedAtStart = true
     const navigationGuard = (
       event: Electron.Event<{ initiator?: Electron.WebFrameMain | null }>,
       url: string
@@ -83,18 +80,6 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       }
       this.updatePendingNavigationForRedirect(guest.id, url)
       void this.retargetTabIdentity(guest, url)
-      // A request that started with no session listener skips header rewrites on every hop, so
-      // a redirect into a site that needs one (Teams, Chase) loads afresh with the listener on.
-      if (!listenedAtStart && this.tabRewritesRequestHeaders(guest, url)) {
-        listenedAtStart = true
-        event.preventDefault()
-        // After the cancelled navigation's abort settles.
-        setImmediate(() => {
-          if (!guest.isDestroyed()) {
-            guest.loadURL(url).catch(() => {})
-          }
-        })
-      }
     }
 
     const didFailLoadHandler = (
@@ -166,9 +151,6 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       // getURL() still names the committed document; UA writers need the in-flight target.
       this.startPendingNavigation(guest.id, url)
       void this.presentTabIdentityAtNavigationStart(guest, url, isInPlace)
-      if (!isInPlace) {
-        listenedAtStart = hasBrowserSessionWebRequestListener(guest.session)
-      }
       this.certificateTrustController?.onMainFrameNavigationStarted(guest.id)
       // Replacement navigation must not replay a previous pre-registration failure.
       this.pendingLoadFailuresByGuestId.delete(guest.id)

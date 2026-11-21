@@ -291,36 +291,6 @@ describe('tab identity ownership', () => {
     expect(observed.standingOverride).toBeNull()
     expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
   })
-  it('reloads a navigation that started with no request listener when it redirects into Teams', () => {
-    vi.useFakeTimers()
-    mocks.processUserAgentMode = 'native'
-    mocks.processUserAgent =
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
-    const { handle } = openTab(ORDINARY_URL)
-    const loadURL = vi.fn(async () => {})
-    Object.assign(handle.guest, { loadURL })
-    const willRedirect = mocks.guestOnMock.mock.calls.findLast(
-      ([event]) => event === 'will-redirect'
-    )?.[1]
-    const teamsUrl = 'https://teams.microsoft.com/v2/'
-    try {
-      const ordinary = vi.fn()
-      willRedirect({ preventDefault: ordinary }, 'https://example.org/', false, true)
-      const teams = vi.fn()
-      willRedirect({ preventDefault: teams }, teamsUrl, false, true)
-      vi.runAllTimers()
-      expect(ordinary).not.toHaveBeenCalled()
-      expect(teams).toHaveBeenCalledTimes(1)
-      expect(loadURL).toHaveBeenCalledWith(teamsUrl)
-      // The fresh load's own redirects within Teams stay redirects.
-      const again = vi.fn()
-      willRedirect({ preventDefault: again }, `${teamsUrl}home`, false, true)
-      expect(again).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('turns the header policy off once a site iframe fails or is removed', async () => {
     vi.useFakeTimers()
     mocks.processUserAgentMode = 'native'

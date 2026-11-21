@@ -109,13 +109,18 @@ function postedFormAction(
   const method = button?.hasAttribute('formmethod')
     ? button.formMethod
     : formProperty(target, 'method')
-  const formTarget = button?.hasAttribute('formtarget')
-    ? button.formTarget
-    : formProperty(target, 'target')
+  const formTarget =
+    (button?.hasAttribute('formtarget') ? button.formTarget : formProperty(target, 'target')) ||
+    baseTarget(target.ownerDocument)
   if (method !== 'post' || !targetsTopPage(formTarget.toLowerCase())) {
     return null
   }
   return button?.hasAttribute('formaction') ? button.formAction : formProperty(target, 'action')
+}
+
+// With no target of its own, a form follows the document's first `<base target>`.
+function baseTarget(doc: Document): string {
+  return doc.querySelector('base[target]')?.getAttribute('target') ?? ''
 }
 
 function targetsTopPage(formTarget: string): boolean {
