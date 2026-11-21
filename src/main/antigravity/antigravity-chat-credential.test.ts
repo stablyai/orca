@@ -8,18 +8,12 @@ vi.mock('./antigravity-chat-api-key-store', () => ({
   hasAntigravityChatApiKey: async () => keyFile.saved
 }))
 
-const {
-  assertAntigravityChatCredential,
-  envValue,
-  forgetPlausibleMetadataCredentials,
-  plausibleMetadataCredentials
-} = await import('./antigravity-chat-credential')
+const { assertAntigravityChatCredential, envValue } = await import('./antigravity-chat-credential')
 
 let home = ''
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-chat-home-'))
   keyFile.saved = false
-  forgetPlausibleMetadataCredentials()
 })
 afterEach(() => rmSync(home, { recursive: true, force: true }))
 
@@ -30,11 +24,10 @@ function saveGoogleLogin(): void {
 const noAdc = { GOOGLE_APPLICATION_CREDENTIALS: '/nonexistent/adc.json' }
 const gcloud = { method: 'agent-platform' as const, gcpProject: 'p' }
 
-it('launches a key or gcloud chat without its credential when no Google login is saved', async () => {
+it('launches a key chat without a key when no Google login is saved', async () => {
   await expect(
     assertAntigravityChatCredential({ method: 'gemini-api-key' }, {}, home)
   ).resolves.toBeUndefined()
-  await expect(assertAntigravityChatCredential(gcloud, noAdc, home)).resolves.toBeUndefined()
 })
 
 it('refuses a missing key while a Google login is saved in that chat home', async () => {
@@ -56,36 +49,13 @@ it("says a saved key can't be read rather than that none is saved", async () => 
   ).rejects.toMatchObject({ message: expect.stringContaining("can't be read") })
 })
 
-it('launches gcloud on Google Cloud, where ADC comes from the metadata server', async () => {
+it('never refuses gcloud, whose ADC lookup only the server can answer', async () => {
   saveGoogleLogin()
-  await expect(
-    assertAntigravityChatCredential(
-      gcloud,
-      { ...noAdc, GCE_METADATA_HOST: '169.254.169.254' },
-      home
-    )
-  ).resolves.toBeUndefined()
-  forgetPlausibleMetadataCredentials()
-  expect(await plausibleMetadataCredentials({}, async () => 'Google Compute Engine\n')).toBe(true)
+  await expect(assertAntigravityChatCredential(gcloud, noAdc, home)).resolves.toBeUndefined()
 })
 
-it('refuses gcloud without an ADC file off Google Cloud while a Google login is saved', async () => {
+it('reads Windows environment names case-insensitively', async () => {
   saveGoogleLogin()
-  await plausibleMetadataCredentials({}, async () => 'MacBookPro18,1')
-  await expect(assertAntigravityChatCredential(gcloud, noAdc, home)).rejects.toMatchObject({
-    reason: 'notSignedIn'
-  })
-})
-
-it('leaves a relative ADC path to the server, which resolves it in its own folder', async () => {
-  saveGoogleLogin()
-  await plausibleMetadataCredentials({}, async () => 'none')
-  await expect(
-    assertAntigravityChatCredential(gcloud, { GOOGLE_APPLICATION_CREDENTIALS: 'adc.json' }, home)
-  ).resolves.toBeUndefined()
-})
-
-it('reads Windows environment names case-insensitively', () => {
   expect(envValue({ Gemini_Api_Key: 'k' }, 'GEMINI_API_KEY', 'win32')).toBe('k')
   expect(envValue({ Gemini_Api_Key: 'k' }, 'GEMINI_API_KEY', 'linux')).toBeUndefined()
 })

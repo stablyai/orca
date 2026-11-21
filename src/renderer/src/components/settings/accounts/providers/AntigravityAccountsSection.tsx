@@ -31,10 +31,7 @@ import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/Age
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useRecheckOnce } from './use-recheck-once'
-import {
-  AntigravityGoogleSignInChoice,
-  antigravityGoogleSignInInUse
-} from '../../../provider-accounts/AntigravityGoogleSignInChoice'
+import { AntigravityGoogleSignInChoice } from '../../../provider-accounts/AntigravityGoogleSignInChoice'
 import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
@@ -74,6 +71,7 @@ export function AntigravityAccountsSection({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
+  const rereadQueued = useRef(false)
   const mounted = useRef(true)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
@@ -138,6 +136,8 @@ export function AntigravityAccountsSection({
   /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
   async function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
     if (pending.current) {
+      // A re-read asked for meanwhile (after a Google sign-in pick) runs once the current one ends.
+      rereadQueued.current ||= keepShown && action === 'List'
       return
     }
     pending.current = true
@@ -206,6 +206,10 @@ export function AntigravityAccountsSection({
       pending.current = false
       if (mounted.current) {
         setBusy(false)
+      }
+      if (rereadQueued.current && mounted.current) {
+        rereadQueued.current = false
+        void run('List', undefined, true)
       }
     }
   }
@@ -291,7 +295,9 @@ export function AntigravityAccountsSection({
   const chatDescription = antigravityChatDescription(state, chatRuntime)
   // A pick moves new chats between agy and Orca's server, which the rows' answer follows.
   const reread = () => void run('List', undefined, true)
-  const inUse = antigravityGoogleSignInInUse(state)
+  // Present only for the Google account method once the route has answered (see the host's
+  // chatGoogleSignInInUse); the choice stays hidden otherwise.
+  const inUse = state?.chatGoogleSignInInUse
   const googleSignIn = inUse ? { inUse, changed: reread } : undefined
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
@@ -304,10 +310,12 @@ export function AntigravityAccountsSection({
           googleSignIn={googleSignIn}
         />
       ) : (
-        // Chats here run on agy, which only the Google account method does; Orca's sign-in is the
-        // way to run them on Orca's server instead.
+        // No sign-in form: new chats run on agy, or Orca's server isn't installed or is changing.
+        // The choice shows wherever the host says Google-account chats run.
         <>
-          <AntigravityGoogleSignInChoice owner={owner} inUse="agy" changed={reread} standalone />
+          {googleSignIn && (
+            <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} standalone />
+          )}
           {runtimeRow}
         </>
       )

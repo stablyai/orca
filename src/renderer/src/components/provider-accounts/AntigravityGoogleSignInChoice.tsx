@@ -6,24 +6,13 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
 
-/** Where new Google-account chats run, by the host's answer beside the sign-in form (which shows
- *  only where Orca's server is in use): agy when it is signed in and takes them (#44613), else the
- *  server; unknown while the host hasn't answered. */
-export function antigravityGoogleSignInInUse(
-  state: { chatUsesAgy?: boolean } | null
-): 'agy' | 'orca' | undefined {
-  if (state?.chatUsesAgy === undefined) {
-    return undefined
-  }
-  return state.chatUsesAgy ? 'agy' : 'orca'
-}
+/** What the choice shows (the sign-in new Google-account chats use now, as the host's route
+ *  answered) and whom it tells after a pick, so that answer is read again. */
+export type AntigravityGoogleSignInState = { inUse: 'agy' | 'orca'; changed: () => void }
 
 /** Whose sign-in chats on the Google account method use on this host: agy's own login (agy is
  *  installed for it), or Orca's built-in browser sign-in on Orca's server. Absent on hosts too old
  *  to honor the choice. */
-/** What the choice shows and whom it tells after a pick, so the host's answer is read again. */
-export type AntigravityGoogleSignInState = { inUse: 'agy' | 'orca'; changed: () => void }
-
 export function AntigravityGoogleSignInChoice({
   owner,
   inUse,
@@ -51,26 +40,29 @@ export function AntigravityGoogleSignInChoice({
   if (setting.state !== 'ready') {
     return null
   }
+  const agyLabel = t('accounts.antigravity.googleSignInAgy', "agy's own sign-in")
+  const orcaLabel = t('accounts.antigravity.googleSignInOrca', "Orca's built-in sign-in")
   const row = (
     <AntigravityChatAuthSettingRow
       htmlFor={id}
       label={t('accounts.antigravity.googleSignIn', 'Google account sign-in')}
     >
       <Select
-        // The route in use, whatever was picked before: an explicit agy can't apply where Orca's
-        // agy is switched off and agy isn't signed in.
-        value={inUse}
+        // Keyed on what is stored, so any pick that differs from it is saved, even one matching
+        // what shows (an explicit agy can't apply where Orca's agy is off and agy signed out).
+        value={setting.value}
         onValueChange={(value) => void update(value === 'orca' ? 'orca' : 'agy').then(changed)}
       >
         <SelectTrigger id={id} className="w-full">
-          <SelectValue />
+          {/* The label is the sign-in in use, whatever is stored. */}
+          <SelectValue>{inUse === 'orca' ? orcaLabel : agyLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem
             value="agy"
             description={t('accounts.antigravity.googleSignInAgyOption', 'Sign in by running agy')}
           >
-            {t('accounts.antigravity.googleSignInAgy', "agy's own sign-in")}
+            {agyLabel}
           </SelectItem>
           <SelectItem
             value="orca"
@@ -79,7 +71,7 @@ export function AntigravityGoogleSignInChoice({
               'Sign in through your browser here; no agy needed'
             )}
           >
-            {t('accounts.antigravity.googleSignInOrca', "Orca's built-in sign-in")}
+            {orcaLabel}
           </SelectItem>
         </SelectContent>
       </Select>
