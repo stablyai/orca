@@ -86,6 +86,10 @@ export function useNativeChatComposerKeyDown({
       if (mentionKey?.(event, activeSuggestion)) {
         return
       }
+      // Shift+Enter or plain Alt/Option+Enter adds a line; the editor's keymap inserts it.
+      const newline =
+        event.key === 'Enter' &&
+        (event.shiftKey || (event.altKey && !event.ctrlKey && !event.metaKey))
 
       if (autocomplete.mode !== 'none') {
         const items = autocomplete.mode === 'slash' ? autocomplete.items : mentionFiles.files
@@ -100,7 +104,8 @@ export function useNativeChatComposerKeyDown({
           return
         }
         // Shift keeps its own meaning: a newline for Enter, focus back for Tab.
-        const picks = (event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey
+        const picks =
+          (event.key === 'Enter' && !newline) || (event.key === 'Tab' && !event.shiftKey)
         if (picks && items.length > 0) {
           event.preventDefault()
           if (autocomplete.mode === 'mention') {
@@ -144,7 +149,7 @@ export function useNativeChatComposerKeyDown({
         }
         return
       }
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === 'Enter' && !newline) {
         event.preventDefault()
         if (!modified) {
           send()
