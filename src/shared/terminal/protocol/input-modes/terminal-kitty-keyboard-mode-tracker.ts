@@ -31,11 +31,20 @@ export class TerminalKittyKeyboardModeTracker {
   private baselineProven = false
   // modifyOtherKeys gates the same keys when apps such as pi fall back after an unanswered Kitty query.
   private modifyOtherKeysState = 0
+  private win32InputModeState = false
   private readonly kittyKeyboard: boolean
+  private readonly trackWin32InputMode: boolean
 
-  /** `kittyKeyboard: false` mirrors an xterm with the protocol withheld, which ignores `CSI u`. */
-  constructor(options: { kittyKeyboard?: boolean } = {}) {
+  /** `kittyKeyboard: false` mirrors an xterm with the protocol withheld, which ignores `CSI u`.
+   * `win32InputMode` tracks DECSET 9001, which only Windows console hosts request. */
+  constructor(options: { kittyKeyboard?: boolean; win32InputMode?: boolean } = {}) {
     this.kittyKeyboard = options.kittyKeyboard ?? true
+    this.trackWin32InputMode = options.win32InputMode ?? false
+  }
+
+  /** True while the app has DECSET 9001 (win32 input mode) on; xterm itself ignores the mode. */
+  get win32InputMode(): boolean {
+    return this.win32InputModeState
   }
 
   /** Effective input flags; 0 is also the unknown-state fallback. Use snapshotFlags when proof matters. */
@@ -83,14 +92,18 @@ export class TerminalKittyKeyboardModeTracker {
     this.alternateScreenActive = false
     this.alternateScreenSwitchObserved = false
     this.modifyOtherKeysState = 0
+    this.win32InputModeState = false
   }
 
   /** Snapshots omit Kitty pushes. Mark screens/stacks unproven until snapshot metadata or absolute application output proves flags again. */
   resetForSnapshot(): void {
     // Older snapshots cannot restate modifyOtherKeys; clear dead-app state at shell/process boundaries instead.
     const modifyOtherKeys = this.modifyOtherKeysState
+    // Same-session reattach keeps the live mode; fresh trackers learn it from the rehydrate ?9001h.
+    const win32InputMode = this.win32InputModeState
     this.reset()
     this.modifyOtherKeysState = modifyOtherKeys
+    this.win32InputModeState = win32InputMode
     this.baselineProven = false
     this.currentKnown = false
     this.mainKnown = false
@@ -190,6 +203,10 @@ export class TerminalKittyKeyboardModeTracker {
   private applyScreenSwitch(params: string, enabled: boolean): void {
     for (const rawParam of params.split(';')) {
       const param = Number(rawParam)
+      if (param === 9001) {
+        this.win32InputModeState = this.trackWin32InputMode && enabled
+        continue
+      }
       if (param !== 47 && param !== 1047 && param !== 1049) {
         continue
       }

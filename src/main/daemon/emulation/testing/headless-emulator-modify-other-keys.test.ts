@@ -30,3 +30,20 @@ describe('HeadlessEmulator modifyOtherKeys snapshot (STA-7701)', () => {
     expect(mirror.modifyOtherKeys).toBe(2)
   })
 })
+
+describe('HeadlessEmulator win32 input mode snapshot', () => {
+  it('restores DECSET 9001 into a fresh Windows mirror after a reload', async () => {
+    const emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+    try {
+      await emulator.write('\x1b[?9001hprompt> ')
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?9001h')
+
+      const mirror = new TerminalKittyKeyboardModeTracker({ win32InputMode: true })
+      mirror.adoptSnapshot(snapshot.rehydrateSequences + snapshot.snapshotAnsi, undefined)
+      expect(mirror.win32InputMode).toBe(true)
+    } finally {
+      emulator.dispose()
+    }
+  })
+})

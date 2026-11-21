@@ -17,6 +17,11 @@ import { createTerminalIosHangulPreeditRenderer } from './ime/terminal-ios-hangu
 import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
 import { resolveTerminalJisYenInput } from './keyboard/terminal-jis-yen-input'
 import {
+  encodeWin32InputRecordForAltGr,
+  encodeWin32InputRecordRelease,
+  isAltGrTextKey
+} from './keyboard/terminal-win32-input-records'
+import {
   isNonLatinControlChordKeyup,
   resolveNonLatinControlChordInput
 } from './keyboard/terminal-non-latin-control-chord'
@@ -52,6 +57,8 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
   } = context
   let pendingTerminalInterruptKeyup = false
   let claimedNonLatinControlChordCode: string | null = null
+  // Keys whose key-down went out as a win32 record; their key-up must too, even after AltGr lifts first.
+  const claimedWin32RecordCodes = new Set<string>()
   const pendingTerminalImeCandidateKeyReleases = createTerminalImePendingCandidateKeyReleases()
   const isMac = navigator.userAgent.includes('Mac')
   // Android/ChromeOS UAs also contain "Linux"; scope the candidate-key policy to desktop Linux.
@@ -136,6 +143,26 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     }
     if (isNonLatinControlChordKeyup(event, claimedNonLatinControlChordCode)) {
       claimedNonLatinControlChordCode = null
+      return false
+    }
+    if (event.type === 'keyup' && claimedWin32RecordCodes.delete(event.code)) {
+      pane.terminal.input(encodeWin32InputRecordRelease(event))
+      return false
+    }
+    // The tracker only records DECSET 9001 on Windows, so other platforms never reach this.
+    if (
+      paneKittyKeyboardModesRef.current.get(pane.id)?.win32InputMode === true &&
+      !event.defaultPrevented &&
+      isAltGrTextKey(event)
+    ) {
+      const record = encodeWin32InputRecordForAltGr(event)
+      if (record) {
+        if (event.type === 'keydown') {
+          claimedWin32RecordCodes.add(event.code)
+        }
+        pane.terminal.input(record)
+      }
+      // Swallow the keypress too, or xterm would also send the bare character.
       return false
     }
     const nonLatinControlChord = resolveNonLatinControlChordInput(event)

@@ -14,10 +14,22 @@ export function readKittyKeyboardFlags(terminal: Terminal): number {
 
 // xterm lacks XTMODKEYS state; retain explicit zero after disarm to correct clients that missed it.
 const modifyOtherKeysByTerminal = new WeakMap<Terminal, { level: number; armed: boolean }>()
+// xterm ignores DECSET 9001; ConPTY apps request it and a reloaded renderer can only learn it here.
+const win32InputModeByTerminal = new WeakMap<Terminal, { enabled: boolean }>()
 
 export function trackModifyOtherKeys(terminal: Terminal): void {
   const state = { level: 0, armed: false }
   modifyOtherKeysByTerminal.set(terminal, state)
+  const win32 = { enabled: false }
+  win32InputModeByTerminal.set(terminal, win32)
+  for (const final of ['h', 'l'] as const) {
+    terminal.parser.registerCsiHandler({ prefix: '?', final }, (params) => {
+      if (params.includes(9001)) {
+        win32.enabled = final === 'h'
+      }
+      return false
+    })
+  }
   // Return false to preserve xterm handlers, including RIS.
   terminal.parser.registerCsiHandler({ prefix: '>', final: 'm' }, (params) => {
     if (params[0] === 4) {
@@ -29,6 +41,7 @@ export function trackModifyOtherKeys(terminal: Terminal): void {
   })
   terminal.parser.registerEscHandler({ final: 'c' }, () => {
     state.level = 0
+    win32.enabled = false
     return false
   })
 }
@@ -47,6 +60,7 @@ export function readTerminalModes(terminal: Terminal): TerminalModes {
     applicationCursor: buffer.type === 'normal' ? terminal.modes.applicationCursorKeysMode : false,
     alternateScreen: buffer.type === 'alternate',
     kittyKeyboardFlags: readKittyKeyboardFlags(terminal),
-    ...(modifyOtherKeys?.armed ? { modifyOtherKeys: modifyOtherKeys.level } : {})
+    ...(modifyOtherKeys?.armed ? { modifyOtherKeys: modifyOtherKeys.level } : {}),
+    ...(win32InputModeByTerminal.get(terminal)?.enabled ? { win32InputMode: true } : {})
   }
 }
