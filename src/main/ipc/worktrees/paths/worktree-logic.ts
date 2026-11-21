@@ -1,6 +1,8 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
 import type { WorktreePathSettings } from './worktree-path-settings'
 import type { OrcaWorkspaceLayout } from '../../../../shared/worktree/paths/orca-workspace-layout'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { getEffectiveHostSetting } from '../../../../shared/execution-host/host-setting-overrides'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isWindowsAbsolutePathLike,
@@ -14,7 +16,7 @@ import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { getWslHome, getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 
-type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath' | 'executionHostId'>
 
 export { sanitizeWorktreeName, sanitizeWorktreeBranchName } from './worktree-name-sanitization'
 
@@ -224,10 +226,16 @@ function getEffectiveWorktreeBasePath(
   settings: WorktreePathSettings
 ): string {
   const basePath = getRepoWorktreeBasePath(repo)
-  if (basePath === undefined) {
-    return settings.workspaceDir
+  if (basePath !== undefined) {
+    return resolveWslRepoWorktreeBasePath(repo.path, basePath)
   }
-  return resolveWslRepoWorktreeBasePath(repo.path, basePath)
+  // Settings stores a per-host Workspace directory separately from the client default.
+  return getEffectiveHostSetting(
+    settings,
+    getRepoExecutionHostId(repo),
+    'defaultWorktreeLocation',
+    settings.workspaceDir
+  )
 }
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
