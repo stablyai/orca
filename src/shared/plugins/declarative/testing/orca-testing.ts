@@ -6,6 +6,10 @@
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import {
+  AGENT_LAUNCH_KINDS,
+  type AgentLaunchKind
+} from '../../contributions/plugin-hook-contribution'
 import { createMockHost, type MockHost, type MockHostOptions } from './testing-host'
 import { mountPanel, type MountOptions } from './testing-panel'
 import {
@@ -60,14 +64,29 @@ function fieldsOf(list: unknown, field: string): string[] {
 }
 
 /** `contributes.hooks` entries: each hook and what a failure does. */
-function hookEntriesOf(list: unknown): { event: string; onError?: 'pass' | 'deny' }[] {
+type HookEntryOf = {
+  event: string
+  onError?: 'pass' | 'deny'
+  launchKinds?: readonly AgentLaunchKind[]
+}
+
+function launchKindsOf(value: unknown): { launchKinds?: AgentLaunchKind[] } {
+  if (!Array.isArray(value)) {
+    return {}
+  }
+  const kinds = AGENT_LAUNCH_KINDS.filter((kind) => value.includes(kind))
+  return { launchKinds: kinds }
+}
+
+function hookEntriesOf(list: unknown): HookEntryOf[] {
   return Array.isArray(list)
     ? list.flatMap((entry: unknown) =>
         isRecord(entry) && typeof entry.event === 'string'
           ? [
               {
                 event: entry.event,
-                ...(entry.onError === 'deny' ? { onError: 'deny' as const } : {})
+                ...(entry.onError === 'deny' ? { onError: 'deny' as const } : {}),
+                ...launchKindsOf(entry.launchKinds)
               }
             ]
           : []
