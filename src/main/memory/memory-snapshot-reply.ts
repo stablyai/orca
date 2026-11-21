@@ -152,7 +152,7 @@ function terminalOnlyReply(snapshot: MemorySnapshot): MemorySnapshot {
   }
 }
 
-/** Restored terminals' pane keys are new in replies, so the smallest reply leaves every key out. */
+/** Restored terminals' pane keys are new in replies, so they go before any history does. */
 function withoutPaneKeys(snapshot: MemorySnapshot): MemorySnapshot {
   return {
     ...snapshot,
@@ -161,6 +161,16 @@ function withoutPaneKeys(snapshot: MemorySnapshot): MemorySnapshot {
       sessions: worktree.sessions.map((session) => ({ ...session, paneKey: null }))
     }))
   }
+}
+
+function paneKeyJsonBytes(snapshot: MemorySnapshot): number {
+  let bytes = 0
+  for (const worktree of snapshot.worktrees) {
+    for (const session of worktree.sessions) {
+      bytes += jsonStringBytes(session.paneKey) - 4
+    }
+  }
+  return bytes
 }
 
 function withHistory(snapshot: MemorySnapshot, points: number): MemorySnapshot {
@@ -217,8 +227,8 @@ function fittingHistory(
 /**
  * The snapshot as sent to a paired client, within `budgetBytes` of reply content. Chat detail is
  * extra, so near the limit it goes first (chat lists, chat-only rows, the agent total and chats'
- * share of the totals); then older history, all history, and last pane keys. A host never gives up
- * what its terminals alone would have sent.
+ * share of the totals); then pane keys, older history and all history. A host never gives up what
+ * its terminals alone would have sent.
  */
 export function toMemorySnapshotReply(
   snapshot: MemorySnapshot,
@@ -237,8 +247,11 @@ export function toMemorySnapshotReply(
   }
   const terminals = terminalOnlyReply(snapshot)
   const measureLimit = budgetBytes + allHistoryJsonBytes(terminals, Number.POSITIVE_INFINITY)
-  return (
-    fittingHistory(terminals, jsonBytes(terminals, measureLimit), budgetBytes) ??
-    withHistory(withoutPaneKeys(terminals), 0)
-  )
+  const keyBytes = paneKeyJsonBytes(terminals)
+  const terminalBytes = jsonBytes(terminals, measureLimit + keyBytes)
+  if (terminalBytes <= budgetBytes) {
+    return terminals
+  }
+  const keyless = withoutPaneKeys(terminals)
+  return fittingHistory(keyless, terminalBytes - keyBytes, budgetBytes) ?? withHistory(keyless, 0)
 }
