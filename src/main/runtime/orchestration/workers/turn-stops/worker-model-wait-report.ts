@@ -96,7 +96,7 @@ export function reportWorkerModelWait(
 }
 
 function describeModelWait(notice: WorkerModelWaitNotice, task: string): string {
-  const seen = notice.lastSeen ? ` Last seen: ${oneLine(notice.lastSeen)}` : ''
+  const seen = notice.lastSeen ? ` Last seen: ${sentence(oneLine(notice.lastSeen))}` : ''
   if (notice.kind === 'retrying') {
     return `Worker ${notice.from} is retrying a model API error on task ${task}.${seen} It is still working; nothing was stopped.`
   }
@@ -112,4 +112,8 @@ function oneLine(text: string): string {
 function isOpen(db: OrchestrationDb, dispatchId: string): boolean {
   const status = db.getDispatchContextById(dispatchId)?.status
   return status === 'pending' || status === 'dispatched'
+}
+
+function sentence(text: string): string {
+  return /[.!?…]$/u.test(text) ? text : `${text}.`
 }

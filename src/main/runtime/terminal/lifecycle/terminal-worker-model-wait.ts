@@ -8,8 +8,9 @@ import {
 import { reportWorkerModelWait } from '../../orchestration/workers/turn-stops/worker-model-wait-report'
 import type { WorkerTurnStopDispatch } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
 
-// Long enough for a streaming reply to draw a new line, short enough to stay one look.
-const SCREEN_RECHECK_MS = 4_000
+// Claude draws a streaming reply a line at a time: a slow stream (rig: about 3 tokens a second)
+// drew no new line within 4 s, so the second look waits long enough for one.
+const SCREEN_RECHECK_MS = 20_000
 
 /** A terminal Claude worker whose hooks went quiet in model time: its screen says whether a reply is
  *  still arriving. True keeps the stopwatch running. */
@@ -20,10 +21,15 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
     if (!handle || !ptyId || !this.modelWaitTarget(handle, paneKey)) {
       return false
     }
-    const before = this.readLiveTerminalScreenLines(ptyId)
-    await new Promise((resolve) => setTimeout(resolve, SCREEN_RECHECK_MS))
-    const after = this.readLiveTerminalScreenLines(ptyId)
-    if (before && after && claudeReplyScreen(before) !== claudeReplyScreen(after)) {
+    // Streaming only if both looks saw the reply grow: one redraw (Claude restarting a stalled
+    // request redraws its status) changes the screen once, a reply keeps changing it.
+    const looks: (readonly string[] | null)[] = [this.readLiveTerminalScreenLines(ptyId)]
+    for (let look = 1; look < 3; look++) {
+      await new Promise((resolve) => setTimeout(resolve, SCREEN_RECHECK_MS))
+      looks.push(this.readLiveTerminalScreenLines(ptyId))
+    }
+    const [first, middle, after] = looks
+    if (grew(first, middle) && grew(middle, after)) {
       return true
     }
     if (wait.toolMaybeOpen && after && claudeToolRunsOnScreen(after)) {
@@ -63,4 +69,8 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
       ? { kind: 'remote', attachment }
       : null
   }
+}
+
+function grew(before: readonly string[] | null, after: readonly string[] | null): boolean {
+  return before !== null && after !== null && claudeReplyScreen(before) !== claudeReplyScreen(after)
 }
