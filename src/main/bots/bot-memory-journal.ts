@@ -18,23 +18,30 @@ export type JournalItem = Pick<BotItem, 'number' | 'title' | 'status' | 'links'>
 export function journalLines(item: JournalItem): string[] {
   const date = botMemoryDate(new Date(item.closedAt))
   const title = cleanBotWorkText(item.title)
+  // Each PR once by its full ref ("o/r#7"), so two repos' #7 stay two PRs.
   const prs = [
     ...new Map(
-      item.links.flatMap((link) =>
-        link.kind === 'pr' || (link.kind === 'dispatch' && link.pr)
-          ? [[link.pr?.shown ? link.pr.number : link.ref, link.pr] as const]
-          : []
-      )
+      item.links.flatMap((link) => {
+        if (link.kind !== 'pr' && !(link.kind === 'dispatch' && link.pr)) {
+          return []
+        }
+        const ref = (link.pr?.shown ? link.pr.ref : link.ref).replace(/^pr:/, '')
+        return [[ref, link.pr] as const]
+      })
     )
   ]
   const head = `- ${date} | item #${item.number}`
   if (prs.length === 0) {
     return [`${head} | ${item.status} | ${title}`]
   }
-  return prs.map(([number, pr], index) => {
-    // An unread PR is named by its number too, so it reads the same once the cache learns it.
-    const parsed = typeof number === 'number' ? number : /#(\d+)$/.exec(number)?.[1]
-    const name = parsed !== undefined ? `PR #${parsed}` : number
+  const numberOf = (ref: string): string | undefined => /#(\d+)$/.exec(ref)?.[1]
+  const shared = (ref: string): boolean =>
+    prs.filter(([other]) => numberOf(other) === numberOf(ref)).length > 1
+  return prs.map(([ref, pr], index) => {
+    // Named by number (an unread one too, so it reads the same once the cache learns it), with
+    // its repo when another linked PR has the same number.
+    const number = numberOf(ref)
+    const name = number === undefined || shared(ref) ? `PR ${ref}` : `PR #${number}`
     const state =
       index >= JOURNAL_PRS_PER_ITEM
         ? 'state not read'

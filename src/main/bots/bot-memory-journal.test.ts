@@ -6,7 +6,8 @@ import { appendJournalLines, journalLines } from './bot-memory-journal'
 import {
   createBotMemoryJournal,
   type JournalCandidate,
-  ownerChatOf
+  ownerChatOf,
+  readClosedSince
 } from './bot-memory-journal-runtime'
 
 const CLOSED = new Date(2026, 10, 21, 15, 0).getTime()
@@ -178,5 +179,48 @@ describe("which closed items count as the owner's", () => {
     expect(isOwner('cleared-child')).toBe(false)
     expect(isOwner('legacy-event-run')).toBe(false)
     expect(isOwner('never-recorded')).toBe(true)
+  })
+})
+
+describe('the closes a pass reads', () => {
+  it('reads every page until the window is covered, not just the newest hundred', async () => {
+    // 150 closes in the window, the store's newest activity first.
+    const records = Array.from({ length: 150 }, (_, i) => ({
+      number: i + 1,
+      lastActivityAt: 10_000 - i,
+      closedAt: 10_000 - i,
+      chatId: 'c1'
+    }))
+    const closes = await readClosedSince(
+      async ({ limit, cursor }) => {
+        const from = cursor ? records.findIndex((r) => r.number === cursor.number) + 1 : 0
+        return { items: records.slice(from, from + limit) }
+      },
+      async (page) =>
+        page.map(({ number }) => ({ number, title: 't', status: 'done' as const, links: [] })),
+      9_000
+    )
+    expect(closes).toHaveLength(150)
+  })
+
+  it("keeps two repos' PRs with the same number apart", () => {
+    const repo = (ref: string): BotItemLinkView => ({
+      kind: 'pr',
+      ref: `pr:${ref}`,
+      pr: {
+        shown: true,
+        ref: `pr:${ref}`,
+        number: 7,
+        url: 'https://example.test',
+        state: 'merged',
+        checks: null,
+        review: null,
+        checkedAt: null
+      }
+    })
+    expect(journalLines(item([repo('org/frontend#7'), repo('org/backend#7')]))).toEqual([
+      '- 2026-11-21 | item #1006 | PR org/frontend#7 merged | Sidebar search fix',
+      '- 2026-11-21 | item #1006 | PR org/backend#7 merged | Sidebar search fix'
+    ])
   })
 })

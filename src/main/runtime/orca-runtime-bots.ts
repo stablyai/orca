@@ -177,6 +177,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   set botSessions(hooks: BotSessionHooks) {
     this.botSessionHooks = hooks
     this.botItems.startRecovery()
+    this.botJournal.catchUp()
   }
 
   /** Each bot's looks and Up next, on this host. */
@@ -215,13 +216,17 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime)
 
+  private readonly botJournal = journaledItemsNotice(this, (scope) =>
+    this.botChangeNotices.changed(scope)
+  )
+
   /** What each bot is doing for its owner and needs from them, on this host. */
   readonly botItems = runtimeBotItems({
     workRuntime: this.botWorkRuntime,
     bots: () => this.bots.list(),
     store: () => this.store,
     // Closed items also go to each bot's memory/journal/.
-    notify: journaledItemsNotice(this, (scope) => this.botChangeNotices.changed(scope)),
+    notify: (scope) => this.botJournal(scope),
     sendMail: (mail) => this.botSessions.sendItemMail(mail)
   })
 
