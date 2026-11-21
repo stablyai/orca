@@ -574,7 +574,8 @@
       "choiceChipTooltip": "由 {{choice}} 添加，移除后使用默认值",
       "agentActions": "{{agent}} 操作",
       "defaultAutoBadge": "默认 · 自动",
-      "newAgentsTitle": "新智能体"
+      "newAgentsTitle": "新智能体",
+      "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循“这台电脑”的选择"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -782,7 +783,9 @@
       "rows": {
         "hooksIn": "{{targets}}的钩子",
         "service": "<cmd>orca serve</cmd> 服务器",
-        "terminalDaemon": "终端后台进程"
+        "terminalDaemon": "终端后台进程",
+        "cliCommand": "PATH 中的 <cmd>{{name}}</cmd> 命令行工具",
+        "hookScripts": "钩子脚本"
       },
       "hookTargets": {
         "agents_other": "{{count}} 个智能体",
@@ -794,13 +797,58 @@
       },
       "host": {
         "notConnected": "未连接",
-        "notConnectedRetry": "未连接。请连接此主机，然后点击“重试”"
+        "notConnectedRetry": "未连接。请连接此主机，然后点击“重试”",
+        "connected": "已连接"
       },
       "summary": {
         "hooksIn": "{{targets}}的钩子",
         "service": "<cmd>orca serve</cmd> 服务器",
-        "terminalDaemon": "终端后台进程"
-      }
+        "terminalDaemon": "终端后台进程",
+        "cliCommand": "<cmd>{{name}}</cmd> 命令行工具",
+        "hookScripts": "钩子脚本",
+        "nothing": "应用之外没有需要移除的内容",
+        "loading": "正在检查 Orca 安装了哪些内容…",
+        "done": "已移除，删除应用即可完成卸载",
+        "problems_other": "删除应用前，还有 {{count}} 项需要你处理",
+        "stillInUse": "部分 Orca 文件仍在使用中，暂时保留"
+      },
+      "groupTitle": "卸载",
+      "title": "卸载 Orca",
+      "keywords": {
+        "uninstall": "卸载",
+        "remove": "移除",
+        "delete": "删除",
+        "cleanup": "清理",
+        "hooks": "钩子"
+      },
+      "copyCommand": "复制命令",
+      "quit": "退出 Orca",
+      "next": {
+        "unknown": "退出 Orca，然后删除应用",
+        "macApp": "退出 Orca，然后将它从“应用程序”文件夹拖到废纸篓",
+        "homebrew": "Orca 是通过 Homebrew 安装的，运行以下命令即可移除应用：",
+        "linuxPackage": "运行以下命令即可移除软件包：",
+        "windows": "请在 Windows 卸载程序中完成卸载，卸载程序打开时 Orca 会退出",
+        "appImage": "退出 Orca，然后删除 <path>{{path}}</path>"
+      },
+      "openUninstaller": "打开卸载程序",
+      "agentStatusOff": "智能体状态已关闭，除非你在“设置 → 智能体”中重新开启，否则 Orca 不会再添加钩子",
+      "loadFailed": "Orca 无法检查它安装了哪些内容",
+      "tryAgain": "重试",
+      "keeps": "项目、工作树和 Orca 设置会保留",
+      "keepsShared": "{{name}} 也已安装，因此与它共用的钩子也会保留",
+      "removing": "正在移除…",
+      "button": "卸载",
+      "uninstalling": "正在卸载…",
+      "retry": "重试",
+      "status": {
+        "running": "正在移除",
+        "done": "完成",
+        "problem": "需要处理",
+        "kept": "已保留"
+      },
+      "stepFailed": "Orca 无法完成此步骤",
+      "finishFailed": "Orca 无法完成此操作"
     },
     "notifications": {
       "perfNotices": {
@@ -1239,7 +1287,14 @@
         "title": "技能",
         "listedTitle": "{{agent}} 无法直接加载这些技能",
         "listedBody": "这些技能会以列表形式写入 {{bot}} 的指令，它会在适用时读取对应技能。技能不会出现在它的 / 菜单中",
-        "remoteSsh": "技能位于通过 SSH 连接的 {{host}} 上。{{bot}} 在这台电脑上运行，因此暂时无法加载这些技能"
+        "remoteSsh": "技能位于通过 SSH 连接的 {{host}} 上。{{bot}} 在这台电脑上运行，因此暂时无法加载这些技能",
+        "claudeOnly": "仅限 Claude",
+        "notClaude": "不适用于 Claude",
+        "own": "{{bot}} 自己的技能",
+        "ownNone": "还没有自己的技能",
+        "ownShort": "自有技能",
+        "notLoaded": "没有智能体加载它",
+        "showMore": "再显示 {{count}} 个"
       },
       "askNewHomeChat": "新建主聊天前询问",
       "askNewHomeChatDescription": "使用“新建主聊天”替换机器人当前的对话前，先确认",
@@ -1505,7 +1560,7 @@
           "83f9b126ad": "议题类型只能在议题上设置",
           "f963485d37": "未找到行",
           "a967f23983": "项目视图未加载",
-          "87020f6605": "行没有所有者/仓库/编号 - 无法修补底层项目",
+          "87020f6605": "此行缺少所有者/仓库/编号，无法更新对应的事项",
           "d49ef4b944": "无法保存议题源首选项"
         },
         "sparse": {
@@ -2383,11 +2438,11 @@
         "folderWorkspaceCreateFailedMessage": "无法创建文件夹工作区，请查看上方错误详情，然后重试",
         "setupAgentStartupPolicySaveFailed": "保存设置启动行为失败",
         "5f3d2c8a1b": "解析 MR 基础分支失败",
-        "dropPartiallyAttached_one": "{{count}} 个项目中有 {{failureCount}} 个无法附加",
-        "dropPartiallyAttached_other": "{{count}} 个项目中有 {{failureCount}} 个无法附加",
-        "dropPartiallyAttached": "{{count}} 个项目中有 {{failureCount}} 个无法附加",
+        "dropPartiallyAttached_one": "{{count}} 项中有 {{failureCount}} 项无法附加",
+        "dropPartiallyAttached_other": "{{count}} 项中有 {{failureCount}} 项无法附加",
+        "dropPartiallyAttached": "{{count}} 项中有 {{failureCount}} 项无法附加",
         "githubLinkUnresolvedForProject": "无法加载 {{repository}}#{{number}}，请确认它存在、你有权访问，并且它属于所选项目的 origin 或 upstream 仓库",
-        "githubItemUnresolved": "创建工作区前无法解析该 GitHub 条目",
+        "githubItemUnresolved": "创建工作区前无法解析该 GitHub 事项",
         "folderSetupSupportCheckFailed": "无法确认此主机是否运行文件夹设置脚本，请重试"
       },
       "useGlobalFileDrop": {
@@ -2755,7 +2810,7 @@
         "updatedRelativeTime": "更新于 {{time}}",
         "authorOpenedThisIssue": "<author/> 创建了此议题",
         "middotUpdatedRelativeTime": "· 更新于 {{time}}",
-        "resolvedThreadBy": "{{author}} 发起的已解决讨论串",
+        "resolvedThreadBy": "{{author}} 发起的已解决话题",
         "resolvedCommentBy": "{{author}} 发表的已解决评论",
         "refreshTask": "刷新任务",
         "refreshTaskFailed": "无法刷新此任务，请重试",
@@ -2793,7 +2848,7 @@
         "cb55b0390f": "管理",
         "4f9313984d": "评审人",
         "02cbe2de44": "管道",
-        "itemLoadFailed": "无法加载此项目。请刷新后重试。",
+        "itemLoadFailed": "无法加载此工作项。请刷新后重试。",
         "be3d291837": "文件",
         "c996e2962c": "对话",
         "b3c156dd51": "刷新",
@@ -2816,7 +2871,7 @@
         "f23ea85341": "已解决",
         "6de8ce0cc6": "需要 {{value0}}",
         "22511537d2": "已批准",
-        "3a051b8ade": "工作项目",
+        "3a051b8ade": "工作项",
         "32f8bef818": "无日志输出",
         "4168eb2c51": "解决",
         "commentTooLarge": "评论过长，无法安全提交，",
@@ -3213,7 +3268,7 @@
         "5df7c41d2a": "重试",
         "filesViewed_other": "已查看 {{viewed}} / {{count}} 个文件",
         "updatedRelativeTime": "更新于 {{time}}",
-        "resolvedThreadBy": "{{author}} 发起的已解决讨论串",
+        "resolvedThreadBy": "{{author}} 发起的已解决话题",
         "resolvedCommentBy": "{{author}} 发表的已解决评论",
         "mentionSource": {
           "prAuthor": "PR 作者",
@@ -3701,7 +3756,7 @@
         "recentChatsTerminalsHeader": "最近的聊天和终端",
         "lastActiveTime": "{{value0}}前活跃",
         "resultsFound_other": "找到 {{count}} 个结果",
-        "itemsAvailable_other": "{{count}} 个项目可用",
+        "itemsAvailable_other": "有 {{count}} 项可用",
         "createActionAvailable": "可执行创建工作树操作"
       },
       "github": {
@@ -3780,7 +3835,7 @@
             "8d669084f6": "受限",
             "6efdc0d920": "草稿",
             "d0d0e13a5a": "PR",
-            "af5d8c912a": "受限条目",
+            "af5d8c912a": "受限事项",
             "bb7ebc11e3": "添加编号",
             "9cb1a0c984": "添加文字",
             "2e26a06c70": "添加标签",
@@ -3794,7 +3849,7 @@
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "项目行预览",
-            "4450efea9c": "GitHub 项目"
+            "4450efea9c": "GitHub 事项"
           },
           "ProjectPicker": {
             "96739284c3": "粘贴下面的项目 URL 以查找缺失的项目",
@@ -3823,7 +3878,7 @@
             "989f81dc2a": "列",
             "f949f5b2b7": "配置列",
             "eddfc7a794": "按 {{value0}} 排序",
-            "4f57d2e0b1": "没有项目与此视图的筛选条件匹配"
+            "4f57d2e0b1": "没有与此视图筛选条件匹配的事项"
           },
           "ProjectViewWrapper": {
             "463f1205c0": "加载项目视图",
@@ -3845,8 +3900,8 @@
             "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca，添加它以开始工作，或在 GitHub 中打开",
             "1aa7c952b9": "项目视图",
             "f352abf7c3": "仓库列表正在更新",
-            "1ce21b8cff": "此项目不在选中的仓库中",
-            "030de75bc5": "此项目匹配多个选中的仓库"
+            "1ce21b8cff": "此事项不在所选仓库中",
+            "030de75bc5": "此事项与多个所选仓库匹配"
           },
           "slug": {
             "dialog": {
@@ -3883,11 +3938,11 @@
             }
           },
           "ProjectViewStates": {
-            "3b9c1d5e47": "此视图暂无任何项目",
-            "7e4a2f80c6": "最近添加的项目可能需要一段时间才会显示"
+            "3b9c1d5e47": "此视图暂无事项",
+            "7e4a2f80c6": "最近添加的事项可能需要一段时间才会显示"
           },
           "ProjectRoadmap": {
-            "be52f7b6db": "此路线图视图没有可用于放置条目的日期或迭代字段，因此 Orca 将以列表显示这些条目",
+            "be52f7b6db": "此路线图视图没有可用于放置事项的日期或迭代字段，因此 Orca 将以列表显示这些事项",
             "6405e036e0": "月",
             "f2b1cabef7": "季度",
             "b6afc6fe45": "年",
@@ -3895,12 +3950,12 @@
             "6a088a5da1": "{{value0}} 项未设置日期",
             "86eebd6020": "今天",
             "0bb1c1bc07": "时间轴缩放",
-            "e304235879": "条目",
+            "e304235879": "事项",
             "e077c79083": "无日期"
           },
           "ProjectRoadmapBar": {
             "cd68ccc17a": "{{value0}} — {{value1}}",
-            "7d1220d979": "受限条目"
+            "7d1220d979": "受限事项"
           },
           "ProjectPickerPanels": {
             "04ec212ccb": "路线图",
@@ -4303,7 +4358,7 @@
               "346d409ab2": "选择代理",
               "0adba8fa0c": "代理",
               "ec8f081919": "操作",
-              "ed04233b3e": "保存终端命令或代理提示以便快速访问",
+              "ed04233b3e": "保存后会显示在标签栏菜单中，一键即可运行",
               "dc921c17ee": "提示",
               "5b3f634a55": "添加快捷命令",
               "f9b184fc16": "编辑快捷命令",
@@ -4500,7 +4555,7 @@
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径",
                 "writeRejected": "文件拖放已取消：终端无法接受路径",
                 "skippedSymlinks_other": "已跳过 {{count}} 个符号链接",
-                "skippedItems_other": "已跳过 {{count}} 个条目",
+                "skippedItems_other": "已跳过 {{count}} 项",
                 "failedUploads_other": "{{count}} 个文件上传失败",
                 "uploadingFiles_other": "正在将 {{count}} 个文件上传到运行时…",
                 "uploadingFilesToRemote_other": "正在将 {{count}} 个文件上传到远端…"
@@ -5150,10 +5205,10 @@
             "5c6d25720c": "选择要检查的工作区",
             "c5135e7e4a": "扫描工作区大小，您可以离开此页面",
             "0990a63160": "尚无扫描的工作区大小",
-            "977bdf9a36": "没有可显示的顶级项目",
+            "977bdf9a36": "没有可显示的顶层项",
             "0d1c78d749": "选择 {{value0}}",
             "removedFromSpace_other": "已从空间中移除 {{count}} 个工作区",
-            "topLevelItems_other": "{{formattedCount}} 个顶层条目",
+            "topLevelItems_other": "{{formattedCount}} 个顶层项",
             "selectedCount_other": "已选择 {{count}} 项",
             "reclaimableSize": "可回收 {{size}}",
             "scanning": "正在扫描"
@@ -5820,7 +5875,7 @@
           "closeSkills": "关闭技能",
           "closeTooltip": "关闭 · Esc",
           "moreActions": "更多操作",
-          "sharedLinks": "共享链接",
+          "sharedLinks": "分享链接",
           "emptyCopy": "扫描的技能文件夹为空，请安装共享包，或添加技能后刷新",
           "retry": "重试",
           "remoteShareNotice": "这些技能位于 {{host}}，请在该机器上打开\"技能\"以进行共享",
@@ -13278,8 +13333,8 @@
           "behindMigrating": "运行 Orca 服务器，它会在项目迁移完成后更新",
           "behindCheckFailed": "运行 Orca 服务器，Orca 无法检查它是否落后于此应用",
           "refusedBlockedReason": "此主机尚未设置 Orca。{{reason}}",
-          "refusedLeaveBehind": "此主机的部分已保存项目无法移到其 Orca 服务器：{{items}}。“仍要迁移”会连接此主机，并将这些项目保留在这台电脑上",
-          "refusedLeaveBehindUnnamed": "此主机的部分已保存项目无法移到其 Orca 服务器。“仍要迁移”会连接此主机，并将这些项目保留在这台电脑上",
+          "refusedLeaveBehind": "此主机的部分已保存内容无法移到其 Orca 服务器：{{items}}。“仍要迁移”会连接此主机，并将这些内容保留在这台电脑上",
+          "refusedLeaveBehindUnnamed": "此主机的部分已保存内容无法移到其 Orca 服务器。“仍要迁移”会连接此主机，并将这些内容保留在这台电脑上",
           "windowsBuildUnsupported": "此主机运行的 Windows 版本低于 Windows 10 和 Windows Server 2016，无法运行 Orca 的服务器。请使用 Windows 版本较新的主机，或 Linux、macOS 主机",
           "windowsNoExtractor": "此 Windows 主机上既没有 tar.exe 也没有 PowerShell 的 Expand-Archive，Orca 无法在其中解包服务器。请先在主机上安装 Windows PowerShell 5.1，然后重新连接",
           "runtimeNoexec": "此主机不允许从 ~/.orca-remote 运行程序，Orca 无法在那里启动服务器，这通常意味着主目录以 noexec 方式挂载，请联系主机管理员允许在该目录运行程序，然后重新连接",
@@ -13315,7 +13370,7 @@
         "moveAnyway": {
           "action": "仍要迁移…",
           "title": "仍要迁移此主机",
-          "description": "Orca 会在 {{host}} 上完成设置，但不包含下列已保存的项目，它们会保留在这台电脑上，不会出现在 {{host}} 上，未保存的编辑会被保留，绝不会被删除",
+          "description": "Orca 会在 {{host}} 上完成设置，但不包含下列已保存的内容，它们会保留在这台电脑上，不会出现在 {{host}} 上，未保存的编辑会被保留，绝不会被删除",
           "cancel": "取消",
           "confirm": "仍要迁移"
         },
@@ -13763,7 +13818,7 @@
           "newFileTypes": "更改它打开的文件",
           "newHooks": "可以更改或阻止 Orca 和你的智能体的操作",
           "newSettings": "一个设置页面",
-          "newStatusBarItems": "状态栏项目",
+          "newStatusBarItems": "状态栏项",
           "opensFileTypes": "打开新的文件类型：{{value0}}",
           "becomesDefaultEditor": "成为 {{value0}} 的默认编辑器",
           "needApproval": "需要你的批准",
@@ -14057,7 +14112,7 @@
             "653c105ecc": "更多 PR 操作",
             "f316a8ca2b": "未选择未解决的评论",
             "d00ebdc402": "使用 AI 解决 {{value0}} 评论",
-            "5eb2163b6b": "启动代理前请检查提示词，提示词送达后，Orca 会解决选中的主机讨论串，并回复无法解决的评论",
+            "5eb2163b6b": "启动智能体前请检查提示词，提示词送达后，Orca 会解决选中的主机话题，并回复无法解决的评论",
             "f273f2271c": "已启动代理，已标记 {{value0}} 个为已解决，回复 {{value1}} 个，跳过 {{value2}} 个，失败 {{value3}} 个，{{value4}}",
             "aa95b81a3a": "已启动代理，已标记 {{value0}} 个为已解决，回复 {{value1}} 个，跳过 {{value2}} 个，失败 {{value3}} 个",
             "495b2f8c4b": "已启动代理，但无法解决或回复选中的评论",
@@ -14071,7 +14126,7 @@
               "branch": "同步分支"
             },
             "7e4b2a19c0": "无法确定要回复的 GitHub PR",
-            "430f1a62d4": "无法在主机上解决选中的讨论串",
+            "430f1a62d4": "无法在主机上解决选中的话题",
             "updateReactionFailed": "更新回应失败，",
             "gitlabMoreActions": "更多 MR 操作",
             "gitlabLinkAnother": "关联另一个 MR",
@@ -14833,7 +14888,7 @@
                   "46dc85711b": "GitLab 要求批准后此 MR 才能合并",
                   "893a999c8c": "已请求更改",
                   "c65408a99d": "评审人已对此合并请求提出更改要求",
-                  "01ab632a21": "未解决的讨论串",
+                  "01ab632a21": "未解决的话题",
                   "4191fdfcec": "GitLab 要求合并前解决未完成的讨论",
                   "bf628700f6": "检查必须通过",
                   "37d8637c70": "GitLab 要求流水线成功后此 MR 才能合并",
@@ -19434,7 +19489,7 @@
         "5a1c8d3e6f": "重新登录以恢复产物分享、Orca Relay 和技能分享",
         "1f6b2c9d4e": "重新登录后可用",
         "8d2e4f7a1b": "产物分享",
-        "2c9a5b6e8d": "发布 HTML 和 Markdown 文件，并在 Orca 中管理所有共享链接",
+        "2c9a5b6e8d": "发布 HTML 和 Markdown 文件，并在 Orca 中管理所有分享链接",
         "6e3f1a9c5b": "Orca Relay",
         "4b7d2e8f1a": "通过蜂窝网络或任意 Wi-Fi 将 Orca Mobile 连接到此桌面",
         "9a4c6b2d7e": "技能分享",
@@ -19854,7 +19909,7 @@
         "claudeManagedNotSignedIn": "此 Claude 账户尚未登录，请在 Claude 账户设置中重新登录",
         "codexSystemNotSignedIn": "Codex 尚未登录，请运行 `{{loginCommand}}`",
         "codexManagedNotSignedIn": "此 Codex 账户尚未登录，请在 Codex 账户设置中重新登录",
-        "antigravityNotSignedIn": "尚未登录 Antigravity，请在设置 → 账户 → Antigravity中登录，然后重新发送消息",
+        "antigravityNotSignedIn": "尚未登录 Antigravity，请在设置 → 账户 → Antigravity 中登录，然后重新发送消息",
         "cliMissing": "在运行此聊天的计算机上找不到 {{agent}}，请安装它，或检查设置 → 代理中的命令",
         "cliMissingInWslDistro": "WSL 发行版 {{distro}} 中未安装 {{agent}}。请在 {{distro}} 中安装它，或检查设置 → 智能体中的命令",
         "signInFirst": "请先登录",
@@ -20634,7 +20689,9 @@
         "blocked": "目标受阻",
         "limited": "目标受限",
         "attachmentsUnsupported": "在设定目标之前删除附件",
-        "set": "目标已设定"
+        "set": "目标已设定",
+        "checks_other": "{{count}} 次检查",
+        "last-check": "上次目标检查"
       },
       "fileLinks": {
         "notFound": "未找到文件：{{value0}}",
@@ -21046,8 +21103,8 @@
         "tookOverSome": "已接管 {{count}} 个工作区中的 {{taken}} 个",
         "tookOverOne": "已接管 1 个工作区",
         "tookOverMany": "已接管 {{count}} 个工作区",
-        "watches": "关注内容",
-        "reports": "汇报内容",
+        "watches": "关注",
+        "reports": "汇报",
         "takesOver": "接管",
         "template": "模板",
         "nameTaken": "你已经有一个名为 {{name}} 的机器人",
@@ -21061,7 +21118,7 @@
         "createdAskedMany": "已创建 · 已安排接管 {{count}} 个工作区",
         "createdTookOverSome": "已创建 · 已接管 {{count}} 个工作区中的 {{taken}} 个",
         "deleted": "创建后已删除",
-        "does": "执行工作",
+        "does": "负责",
         "willPropose": "将提议",
         "details": "{{name}} 的详情"
       },
@@ -21476,7 +21533,8 @@
         "addOrg": "添加组织",
         "addWorkspace": "添加工作区",
         "githubAsYou": "它也可以通过你的 gh 登录，以你的身份在 GitHub 上工作",
-        "linearAsYou": "它也可以通过你自己在 Orca 中的 Linear 登录，以你的身份在 Linear 中工作"
+        "linearAsYou": "它也可以通过你自己在 Orca 中的 Linear 登录，以你的身份在 Linear 中工作",
+        "pausedStatus": "已暂停"
       },
       "toolAdded": {
         "removed": "已移除",
@@ -21791,7 +21849,18 @@
           "line_other": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}"
         },
         "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
-        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
+        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件",
+        "ignoredFiles": {
+          "none": "没有 Git 忽略的本地文件",
+          "unavailable": "未检查 Git 忽略的文件",
+          "checking": "正在检查 Git 忽略的文件…",
+          "lost_other": "{{count}} 个 Git 忽略的文件将丢失",
+          "lostIncomplete": "{{count}}+ 个 Git 忽略的文件将丢失",
+          "showPaths": "显示 Git 忽略的路径",
+          "morePaths_other": "另有 {{count}} 个 Git 忽略的路径",
+          "listLabel": "将丢失的 Git 忽略文件",
+          "incompleteNotice": "检查提前结束，此工作树中可能还有更多 Git 忽略的文件会被删除"
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -21970,7 +22039,7 @@
     "status": {
       "bar": {
         "workspaceSpace": {
-          "otherTopLevelItems": "其他顶层项目（{{value0}}）"
+          "otherTopLevelItems": "其他顶层项（{{value0}}）"
         }
       }
     },
@@ -22547,6 +22616,20 @@
           "enabledDescription": "{{host}} 为其智能体和终端发出的通知，包括发送到你手机的推送",
           "sectionDescription": "{{host}} 为其智能体和终端发出的通知"
         }
+      },
+      "hostScope": {
+        "updateHostToChange": "请更新 {{host}} 上的 Orca 以在那里更改此设置",
+        "updateFailed": "无法更新 {{host}} 上的设置"
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "{{host}} 运行时所用的 Orca 账户，用于其机器人的 Slack、GitHub、Linear 和 Webhook",
+          "unread": "无法读取 {{host}} 的 Orca 账户。请更新或重新连接 {{host}}",
+          "signInThere": "在 {{host}} 上运行 `orca auth login` 以登录"
+        }
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "{{host}} 上的 Git 用户名"
       }
     },
     "agentChildRow": {
@@ -23675,7 +23758,7 @@
       "itemsTitle": "一份列表，查看所有工作",
       "groupTitle": "机器人协作",
       "pageAnnounce": "第 {{number}} 页，共 {{count}} 页：{{title}}",
-      "product": "Orca Bots",
+      "product": "Orca 机器人",
       "groupName": "发布小组",
       "releaseBot": "发布机器人",
       "reviewBot": "评审机器人",
@@ -24530,7 +24613,13 @@
       "terminalDescriptionChats": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话和 Antigravity 聊天",
       "terminalDescriptionNoChats": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话，但不会应用于 Antigravity 聊天",
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击“保存”",
-      "apiKeyGet": "获取 API key"
+      "apiKeyGet": "获取 API 密钥",
+      "googleSignIn": "Google 账户登录",
+      "googleSignInAgy": "agy 自带的登录",
+      "googleSignInAgyOption": "通过运行 agy 登录",
+      "googleSignInOrca": "Orca 内置登录",
+      "googleSignInOrcaOption": "在此通过浏览器登录，无需 agy",
+      "googleSignInUpdateFailed": "无法更改 Antigravity 使用 Google 登录的方式"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于您下次启动的 Claude",
@@ -24772,11 +24861,11 @@
     "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器"
   },
   "projectBoard": {
-    "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项",
+    "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出这些事项",
     "noField": "无 {{field}}"
   },
   "projectBoardCard": {
-    "restrictedItem": "受限项",
+    "restrictedItem": "受限事项",
     "itemLabel": "{{number}} — {{title}}"
   },
   "projectViews": {
@@ -24824,7 +24913,7 @@
       "projectNotFound": "未找到项目",
       "viewNotFound": "找不到所选视图",
       "ownerNotFound": "未找到所有者",
-      "itemNotFound": "未找到条目",
+      "itemNotFound": "未找到事项",
       "issueNotFound": "未找到议题",
       "inputRequired": "请输入内容",
       "inputTooLarge": "项目引用过长，无法解析",
@@ -24832,7 +24921,7 @@
       "invalidSlug": "无效的 {{field}}：“{{value}}”不是有效的 GitHub 标识",
       "invalidPositiveInteger": "无效的 {{field}}：必须是正整数",
       "invalidOwnerType": "无效的所有者类型",
-      "invalidItemType": "无效的条目类型",
+      "invalidItemType": "无效的事项类型",
       "missingIds": "缺少 ID",
       "updatesRequired": "需要提供更新内容",
       "commentBodyRequired": "评论内容不能为空",
@@ -24847,9 +24936,9 @@
       "rateLimitNearlyExhausted": "GitHub 速率限制即将用尽（剩余 {{remaining}}/{{limit}}）。约 {{minutes}} 分钟后重置",
       "rateLimited": "已达到 GitHub 速率限制。请几分钟后重试",
       "network": "网络错误 — 请检查你的网络连接",
-      "tooLargeUnknownCount": "此视图条目过多，无法在 Orca 中渲染。请在 GitHub 上缩小视图的筛选范围",
+      "tooLargeUnknownCount": "此视图事项过多，无法在 Orca 中显示。请在 GitHub 上缩小视图的筛选范围",
       "schemaDriftDetail": "无法读取此项目视图：{{detail}}",
-      "tooLargeCount_other": "此视图有 {{count}} 个条目，过多而无法在 Orca 中显示。请在 GitHub 上缩小视图的筛选范围"
+      "tooLargeCount_other": "此视图有 {{count}} 个事项，过多而无法在 Orca 中显示。请在 GitHub 上缩小视图的筛选范围"
     },
     "columns": {
       "type": "类型"
@@ -26095,7 +26184,8 @@
         "signIn": "智能体正在等待你登录",
         "prompt": "智能体停在了一个需要你回答的提示处"
       },
-      "agentInterrupted": "智能体在完成此次运行前被中断"
+      "agentInterrupted": "智能体在完成此次运行前被中断",
+      "botProviderErrorNotSaved": "机器人的这一轮失败了，但此次运行没有保存提供商返回的错误。原始聊天中可能有更多详情"
     },
     "extraAgentArgs": {
       "errors": {
@@ -26134,13 +26224,13 @@
       "resultsToThreadNeedsEvents": "事件所在的话题（仅限事件触发且每次新建对话）",
       "resultsToThreadUnsupported": "事件所在的话题（Orca Cloud 暂不支持）",
       "resultsToNone": "不发送",
-      "channelPlaceholder": "#channel 或 Slack 链接",
+      "channelPlaceholder": "#频道名或 Slack 链接",
       "channelLabel": "频道",
       "prompt": "要做什么？",
       "when": "何时运行",
       "option": "机器人 · {{name}}",
       "channelMissing": "请输入接收结果的频道",
-      "hostUnavailable": "机器人所在的电脑暂时无法承载新的自动化。请稍后重试。",
+      "hostUnavailable": "机器人所在的电脑暂时无法承载新的自动化。请稍后重试",
       "hostNeedsUpdate": "请更新 {host} 上的 Orca 服务器，它的机器人才能使用自动化。",
       "promptMissing": "请输入要做的事",
       "deletedBot": "已删除的机器人",
@@ -26160,7 +26250,9 @@
       "agent": "智能体",
       "agentInChat": "此聊天的智能体",
       "agentInChatHelp": "在聊天中运行时，会继续使用该聊天的智能体",
-      "agentSameAsBot": "与 {{name}} 相同"
+      "agentSameAsBot": "与 {{name}} 相同",
+      "search": "搜索机器人和项目…",
+      "searchEmpty": "没有与搜索匹配的机器人或项目"
     },
     "botEvents": {
       "label": "事件",
@@ -26826,7 +26918,19 @@
       "purposePlaceholder": "它是谁，负责什么",
       "uploadPasteOrDrop": "或上传、粘贴或拖放你自己的图片",
       "pasteHint": "使用 {{shortcut}} 粘贴图片",
-      "changePicture": "更换图片"
+      "changePicture": "更换图片",
+      "identityWatches": "关注{{what}}",
+      "identityReports": "汇报{{what}}",
+      "parts": {
+        "olderHost": "{{host}} 需要更新 Orca 才能添加技能和计划",
+        "skillsKept_other": "{{kept}}/{{count}} 个技能",
+        "schedules_other": "{{count}} 个计划",
+        "needsApp": "需要 {{app}}",
+        "needsApps_other": "需要 {{count}} 个应用",
+        "setUpInFirstChat": "在首次聊天中设置",
+        "skills_other": "{{count}} 个技能",
+        "automations_other": "{{count}} 个自动化"
+      }
     },
     "googleSetup": {
       "otherAccount": "切换账号",
@@ -26926,7 +27030,9 @@
         "checkFailed": "Orca 无法检查 {{services}}"
       },
       "notNow": "暂不",
-      "importSetupFile": "导入设置文件"
+      "importSetupFile": "导入设置文件",
+      "pickHostKey": "选择要导入的密钥文件：",
+      "pickKeyHere": "在这台电脑上选择文件"
     },
     "apps": {
       "paste": {
@@ -27001,13 +27107,13 @@
         "adding": "正在添加 {{app}}…",
         "addTitle": "添加 {{app}}",
         "advanced": "高级",
-        "hostInvalid": "请输入主机名，例如 {{example}}。",
+        "hostInvalid": "请输入主机名，例如 {{example}}",
         "datadog": {
           "siteLabel": "Datadog 站点"
         },
         "gitlab": {
           "hostLabel": "GitLab 地址（可选）",
-          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com。"
+          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com"
         },
         "place": {
           "usEast": "美国东部",
@@ -27019,8 +27125,8 @@
           "unitedKingdom": "英国"
         },
         "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
-        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。",
-        "elsewhereOther": "请先在“管理”中移除，再添加其他。"
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他",
+        "elsewhereOther": "请先在“管理”中移除，再添加其他"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",
@@ -27068,7 +27174,9 @@
       "tomorrowAt": "明天 {{time}}",
       "idleNext": "空闲 · 下次 {{when}} · {{name}}",
       "runningNamed": "正在运行 {{name}}",
-      "nextAt": "下次 {{when}}"
+      "nextAt": "下次 {{when}}",
+      "runsOn": "在 {{host}} 上运行",
+      "disconnected": "已断开连接"
     },
     "needs": {
       "chat": "你与 {{name}} 的聊天",
@@ -27153,7 +27261,7 @@
         "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "subWhere": "条目 {{number}} · {{chat}}",
+        "subWhere": "事项 {{number}} · {{chat}}",
         "showEarlier": "显示更早的内容",
         "place": "{{index}} / {{total}}",
         "deleted": "此事项已删除",
@@ -27341,7 +27449,12 @@
       },
       "ask": {
         "recommended": "推荐",
-        "typeAnswer": "输入你的回答"
+        "typeAnswer": "输入你的回答",
+        "next": "下一个问题",
+        "notSentYet": "尚未发送",
+        "previous": "上一个问题",
+        "step": "第 {{n}} 个，共 {{total}} 个",
+        "replaced": "智能体提出了新问题。请先阅读，再回复"
       }
     },
     "usageLimit": {
@@ -27569,72 +27682,72 @@
       "tf1cc0d2b": "维护带时间戳的时间线，然后起草不追责的事后报告",
       "t06eb5f05": "工作区何时算已完成或已废弃，以及移除前要检查什么",
       "t74b4e16c": "你所选仓库中等待你评审的 PR",
-      "t0fe66681": "逐一评审，列出有风险的更改和缺失的测试，并附上文件和行号",
       "td05f7484": "在这里，有人请求评审时",
       "t24fc7f91": "你交给它的 Bug 报告，以及分配给你的 Linear 议题",
-      "t3a3b9e2d": "在新工作区中复现 Bug，找出它的源头，并提出修复方案",
       "te9483ace": "在这里，复现成功并找到原因时",
       "tfe66a50f": "你所选仓库中的依赖包",
-      "t3db9578a": "列出安全公告和过时的包，最紧急的排在最前；经同意后，每组用一个 PR 升级",
       "tbf712a30": "在这里，每周一上午 9 点",
       "t5a2b3b8b": "你的 Orca 工作区",
-      "t48e9fe67": "列出智能体已完成、但其更改无人评审或尚未开 PR 的工作区",
       "t482524a8": "在这里，工作日上午 9 点",
       "t18501769": "你的 Orca 工作区及其 PR",
-      "td435332d": "列出已完成或已废弃的工作区，并注明未提交的更改；只移除你选中的工作区",
       "tfdf3bf09": "在这里，每周五下午 4 点",
       "t65bcaf6d": "你所选仓库中已合并的 PR",
-      "t416a005b": "检查每项已合并的更改中是否有泄露的密钥、注入、缺失的鉴权检查和不安全的默认值",
       "t3bcc9e3b": "在这里，每周一上午 9 点以及 PR 合并时",
       "tce0bd0d7": "你选择的事故频道及其话题",
       "tb839f732": "在这里，事故期间和事故结束后",
       "t04b7cb64": "你的告警频道和事故议题",
-      "t58250045": "汇总本周的告警和事故，并列出未完成的跟进事项",
       "t2d295326": "Slack 话题和 Linear 评论",
-      "tc9676959": "找出问你但还没回复的问题，以及你答应要做的事",
       "t70ae1d98": "在这里，每天下午 4 点",
       "td98262ca": "你的工作区、PR 和议题",
-      "td70d6dd6": "撰写昨天的笔记和今天的计划",
       "t57cd422e": "你的收件箱",
-      "t7d3f7b6d": "按从新到旧列出需要你回复的邮件。从不发送邮件",
       "ted594472": "在这里，工作日上午 9 点和下午 2 点",
       "td11933c0": "你的日历",
-      "td6435d62": "每次会议前，列出会议相关的议题、PR 和文档",
       "tcba21ee4": "在这里，每次会议前",
       "te28d7fc3": "Linear 项目和 GitHub 仓库",
-      "tced28eef": "写明有哪些变化、哪些受阻、哪些需要决策",
       "tedb5ad96": "在这里，每周五下午 3 点",
       "tbc4fa6a8": "你所选仓库中已合并的 PR 和文档",
-      "tcdf28943": "列出与已合并内容不再一致的文档页面，并指出现在出错的那一行",
       "taf86590e": "在这里，每周三上午 10 点",
       "t6169c507": "你交给它的 Slack 话题和文档",
-      "td891c19a": "起草一页规格说明：问题、决策、范围、待定问题",
       "tfeec79a9": "在这里，你提出要求时",
       "t59e615f3": "你所选团队的 Linear 议题",
-      "t42a253a9": "列出长期无活动的议题、可能重复的议题，以及无人负责的议题",
       "tf8bcd871": "在这里，每月 1 日",
       "t60c282de": "PR、检查和工作区",
-      "t880e24e6": "维护一份简短的就绪清单：失败的检查、等待评审的 PR、未解决的阻碍项",
       "t321180c0": "在这里，工作日上午",
       "t80cd4ca2": "自上次发布以来合并的 PR",
-      "tc039ea1e": "按新增、修复、变更三组，为用户起草发行说明",
       "te98d1920": "你所选仓库中的检查运行",
-      "t0b7bcf99": "区分偶发失败和真实失败，解释每次失败，并维护一份不稳定检查的清单",
       "t9093e7c1": "在这里，每周一上午 9 点以及检查失败时",
       "te3d76a96": "你的部署工具发来的调用",
-      "t0020548b": "根据每次部署上线的 PR 汇总该次部署，并标出失败的部署",
       "t909f52db": "在这里，每次部署后",
       "t6b43d463": "你选择的 Slack 频道",
-      "t63492f9d": "列出未被回答的问题并附上链接。注明哪些已有对应的 Linear 议题",
       "t7d43fb63": "在这里，工作日每 2 小时一次",
       "tfd321156": "Slack 反馈频道",
-      "tbb62ee37": "将反馈按主题归类，附上引述和数量。关联已有的 Linear 议题",
       "t8e7efcec": "报告 Bug 的 Slack 频道",
-      "t9233d1be": "为每份 Bug 报告起草带复现步骤的 Linear 议题；获批后再提交",
       "t82318ddd": "在这里，有人报告 Bug 时",
       "tcc522e10": "你所选仓库中的新议题",
-      "t2c4ed771": "为每个新议题提议标签和重复项，并列出缺失的细节",
-      "tb4812494": "在这里，有新议题时"
+      "tb4812494": "在这里，有新议题时",
+      "t184c26c3": "逐一评审，列出有风险的更改和缺失的测试，并附上文件和行号",
+      "t14af95d2": "在新工作区中复现 Bug，找出它的源头，并提出修复方案",
+      "t4cbd58b2": "列出安全公告和过时的包，最紧急的排在最前；经同意后，每组用一个 PR 升级",
+      "td09aaca2": "列出智能体已完成、但其更改无人评审或尚未开 PR 的工作区",
+      "tc77dab60": "列出已完成或已废弃的工作区，并注明未提交的更改；只移除你选中的工作区",
+      "t1f1e34dc": "检查其中是否有泄露的密钥、注入、缺失的鉴权和不安全的默认值",
+      "t73fb0cb9": "维护带时间戳的时间线，然后起草不追责的事后报告",
+      "t2dfb0b39": "汇总本周的告警和事故，并列出未完成的跟进事项",
+      "t5267e2e4": "找出问你但还没回复的问题，以及你答应要做的事",
+      "t1dff62ff": "撰写昨天的笔记和今天的计划",
+      "t28135469": "按从新到旧列出需要你回复的邮件。从不发送邮件",
+      "t8f8badd3": "每次会议前，列出会议相关的议题、PR 和文档",
+      "tae4b0c5a": "写明有哪些变化、哪些受阻、哪些需要决策",
+      "t9587dcd4": "列出与已合并内容不再一致的文档页面，并指出现在出错的那一行",
+      "tbb32d4f9": "起草一页规格说明：问题、决策、范围、待定问题",
+      "tdf0dfb6a": "列出长期无活动的议题、可能重复的议题，以及无人负责的议题",
+      "tcbcdd3a3": "按新增、修复、变更三组，为用户起草发行说明",
+      "ta96a2b06": "区分偶发失败和真实失败，解释每次失败，并维护一份不稳定检查的清单",
+      "tfdd05e3b": "根据每次部署上线的 PR 汇总该次部署，并标出失败的部署",
+      "tc6b522ce": "列出未被回答的问题并附上链接，并注明哪些已有对应的 Linear 议题",
+      "tcd3680f8": "将反馈按主题归类，附上引述和数量，并关联已有的 Linear 议题",
+      "t2e5a7cae": "为每份 Bug 报告起草带复现步骤的 Linear 议题；获批后再提交",
+      "tb3e482f5": "为每个新议题提议标签和重复项，并列出缺失的细节"
     },
     "firstScreen": {
       "namesMore": "{{names}}，另有 {{count}} 个",
@@ -27801,7 +27914,7 @@
       "choice": {
         "gmail": "Gmail",
         "calendar": "日历",
-        "files": "Drive、Docs 和 Sheets",
+        "files": "云端硬盘、文档和表格",
         "gmailDescription": "搜索和阅读邮件、撰写草稿，在你同意后发送",
         "calendarDescription": "查看、创建和调整事件时间",
         "filesDescription": "查找、读取和编辑文件"
@@ -28086,7 +28199,8 @@
         "unavailable": "Orca Cloud 暂不支持分享机器人",
         "avatarRefused": "Orca Cloud 拒绝了机器人的图片。请选择另一张图片后重试",
         "tooLarge": "此机器人太大，无法分享。请排除部分记忆或技能后重试"
-      }
+      },
+      "duplicateSkill": "同名，位于 {{folder}} · 不会分享"
     },
     "automations": {
       "paused": "已暂停",
@@ -28151,7 +28265,8 @@
       "errors": {
         "accountChanged": "{{host}} 的 Orca 登录状态已变更。请重新开始",
         "accountChangedHere": "这台电脑的 Orca 登录状态已变更。请重新开始",
-        "notRouted": "{{service}} 的页面必须在 {{host}} 对应的 Orca 浏览器中打开。请重新连接 {{host}} 后重新开始"
+        "notRouted": "{{service}} 的页面必须在 {{host}} 对应的 Orca 浏览器中打开。请重新连接 {{host}} 后重新开始",
+        "signedOut": "要连接 {{service}}，请先让 {{host}} 登录 Orca Cloud"
       },
       "thisComputer": "这台电脑",
       "pageUnrouted": "无法连接 {{host}} 以在其浏览器中打开此页面。请重新连接 {{host}} 后重试",
@@ -28163,7 +28278,11 @@
         "cancel": "取消",
         "again": "让 {{host}} 重新登录",
         "start": "在 {{host}} 上登录",
-        "trust": "任何与 {{host}} 配对的人都可以使用其账号的连接器"
+        "trust": "任何与 {{host}} 配对的人都可以使用其账号的连接器",
+        "updateFirst": "请先更新 {{host}} 上的 Orca，然后从这里登录",
+        "unconfigured": "{{host}} 上的 Orca 构建时未包含 Orca Cloud 登录。请在该主机上安装 Orca 正式版后再登录",
+        "unread": "无法读取 {{host}} 的 Orca 登录状态",
+        "readAgain": "重试"
       },
       "notice": {
         "notReachingHost": "Slack、Linear 和 GitHub 无法连接到 {{host}} 上的机器人",
@@ -28178,7 +28297,8 @@
         "linksBelong": "{{name}} 的连接器属于 {{email}}",
         "signedOutFirst": "{{host}} 已从 Orca 退出登录，因此 {{name}} 暂时无法使用 Slack、Linear 或 GitHub",
         "linksBelongElsewhere": "{{name}} 的连接器属于另一个 Orca 账号"
-      }
+      },
+      "botWorkspaceUnavailable": "此智能体的工作区目前在这里不可用，因此无法在其中打开该页面"
     },
     "settingsPage": {
       "paused": "已暂停",
@@ -28236,7 +28356,7 @@
       "correctMention": "更正提及",
       "memberRemoved": "成员已移除",
       "composerPlaceholder": "给分组发消息，输入 @ 提及机器人",
-      "startAConversationWithThisGroupMentionBots": "在此分组中开始对话。使用 @Name 或 @everyone 提及机器人",
+      "startAConversationWithThisGroupMentionBots": "开始与此群组对话。使用 @名称 或 @everyone 提及机器人",
       "repliesValue": "回复：{{value0}}",
       "repliesPrefix": "回复：",
       "whoAnswers": "谁来回复你的消息",
@@ -28298,7 +28418,9 @@
         "members": "成员",
         "membersCount": "成员 {{count}}",
         "noMembers": "此分组中没有机器人"
-      }
+      },
+      "attachmentsHostTooOld": "{{host}} 需要更新才能在群组聊天中附加文件",
+      "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续"
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -28336,7 +28458,7 @@
         "days": "{{days}} 天",
         "never": "永不",
         "title": "多久后将事项标记为“长期无活动”",
-        "shortTitle": "多久算过期"
+        "shortTitle": "多久算长期无活动"
       },
       "memoryFiles_other": "{{count}} 个文件",
       "lookAroundShort": {
@@ -28351,7 +28473,7 @@
       },
       "youAndOthers_other": "你和另外 {{count}} 人",
       "shareAction": "分享",
-      "sharingOn": "开"
+      "sharingOn": "已开启"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "仅按计划运行：退出 Orca 登录期间，其事件已暂停",
@@ -28366,7 +28488,13 @@
       "paused": "退出登录期间已暂停",
       "needsSignIn": "需要登录",
       "signedIn": "已登录 Orca",
-      "continue": "继续"
+      "continue": "继续",
+      "toldBot": "我现在已登录 Orca Cloud",
+      "webhooksChat": "Webhook 需要登录 Orca Cloud。你登录后，我就会创建它",
+      "eventsChat": "{{source}} 事件需要登录 Orca Cloud。你登录后，我就会保存这条规则",
+      "webhooksHostChat": "Webhook 需要 {{host}} 登录 Orca Cloud。它登录后，我就会创建它",
+      "eventsHostChat": "{{source}} 事件需要 {{host}} 登录 Orca Cloud。它登录后，我就会保存这条规则",
+      "webhooksNotReaching": "Orca Cloud 无法连接到 {{name}}，因此暂时无法创建 Webhook"
     },
     "newAgentChat": "新建 {{agent}} 聊天",
     "newChatWithAgent": "与 {{name}} 新建聊天 · {{agent}}",
@@ -28389,7 +28517,7 @@
       "setUpDraft": "设置一个 Webhook，用于 ",
       "name": "Webhook",
       "howToCall": "如何调用",
-      "howToCallText": "任何工具或脚本都可以向 Webhook 的 URL 发送 POST 请求。每个 Webhook 会启动一个自动化，结果会发送到该自动化指定的位置。要添加 Webhook，请对 {{bot}} 说 <code>Set up a webhook that…</code>",
+      "howToCallText": "任何工具或脚本都可以向 Webhook 的 URL 发送 POST 请求。每个 Webhook 会启动一个自动化，结果会发送到该自动化指定的位置。要添加 Webhook，请告诉 {{bot}}：<code>设置一个 Webhook，用于…</code>",
       "hooks": "Webhook",
       "addInChat": "在聊天中添加",
       "editDraft": "更改“{{automation}}”的运行条件：",
@@ -28433,7 +28561,12 @@
         "title": "删除“{{automation}}”的 Webhook？",
         "note": "其 URL 将失效，仍在等待的调用将被取消。新建 Webhook 会获得新的 URL",
         "confirm": "删除 Webhook",
-        "done": "Webhook 已删除"
+        "done": "Webhook 已删除",
+        "withAutomation": {
+          "title": "要删除“{{automation}}”及其 Webhook 吗？",
+          "note": "没有其他方式会启动此自动化，因此它会连同运行历史一起删除。该 Webhook 的 URL 将失效，仍在等待的调用会被取消",
+          "confirm": "全部删除"
+        }
       },
       "recentCalls": "最近调用",
       "showFewer": "显示较少",
@@ -28656,7 +28789,8 @@
         "unreachable": "无法连接 Orca Cloud。请检查网络连接后重试",
         "wrongAccount": "此次登录从另一个 Orca 账号发起。请从当前账号重新使用 GitHub 登录",
         "alreadyLinked": "此 Orca 账号已关联另一位 GitHub 用户。请先在设置 › 机器人 › GitHub 中解除关联",
-        "replaced": "GitHub 连接未完成，可能被后来发起的 Linear 或 GitHub 连接替代。请重新开始"
+        "replaced": "GitHub 连接未完成，可能被后来发起的 Linear 或 GitHub 连接替代。请重新开始",
+        "signedOut": "登录 Orca Cloud 以连接 GitHub"
       },
       "howToAsk": "在议题或 PR 中提及 <code>{{mention}} {{handle}} …</code>",
       "allRepositories": "{{account}} 的所有仓库",
@@ -28716,10 +28850,10 @@
       "controlNone": "你添加的任何人都能通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号",
       "controlOne": "{{person}} 可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号",
       "controlMany": "他们可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号",
-      "controlBrief": "他们可以在这里以你的身份操作。",
-      "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作。",
-      "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作。",
-      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作。",
+      "controlBrief": "他们可以在这里以你的身份操作",
+      "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作",
+      "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作",
+      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作",
       "reachHeading": "{{name}} 可以访问什么",
       "reachComputer": "你在 {{computer}} 上的文件、命令和账号",
       "reachComputerDetail": "以你的身份操作，范围由下方权限决定",
@@ -28758,8 +28892,8 @@
       "fixAskConfirm": "新对话以“请求批准”模式开始？",
       "fixOnlyMeFailed": "无法移除 {{names}}。请重试",
       "reachGoogleDrive": "使用你的 Google Drive 文件",
-      "reachGoogleDocs": "读取和编辑你的 Google Docs 文档",
-      "reachGoogleSheets": "读取和编辑你的 Google Sheets 表格",
+      "reachGoogleDocs": "读取和编辑你的 Google 文档",
+      "reachGoogleSheets": "读取和编辑你的 Google 表格",
       "here": "这里",
       "thisServer": "这台服务器",
       "there": "那里",
@@ -29050,7 +29184,8 @@
         "unavailable": "Linear 未响应。请重试",
         "unreachable": "无法连接 Orca Cloud。请检查网络连接后重试",
         "wrongAccount": "此次登录从另一个 Orca 账号发起。请从当前账号重新连接 Linear",
-        "replaced": "此次 Linear 连接未完成。较新的 Linear 或 GitHub 连接可能已将其取代。请重新开始"
+        "replaced": "此次 Linear 连接未完成。较新的 Linear 或 GitHub 连接可能已将其取代。请重新开始",
+        "signedOut": "登录 Orca Cloud 以连接 Linear"
       },
       "howToAsk": "在议题中提及 <code>@Orca {{handle}}</code>，或添加标签 <code>bot:{{handle}}</code>",
       "connect": {
@@ -29209,7 +29344,8 @@
         "wrongWorkspace": "此机器人的 Slack 应用位于另一个工作区。请先将其从 Slack 中移除",
         "notInstalled": "请先将此机器人添加到 Slack",
         "unreachable": "无法连接 Orca Cloud。请检查网络连接后重试",
-        "handOffExpired": "此交接链接已过期或已使用。请重试"
+        "handOffExpired": "此交接链接已过期或已使用。请重试",
+        "signedOut": "登录 Orca Cloud 以连接 Slack"
       },
       "howToAsk": "在频道中提及 <code>@{{name}}</code>，或向它发送私信",
       "handOff": {
@@ -29387,7 +29523,20 @@
   },
   "tabBar": {
     "createRow": {
-      "hiddenHint": "已隐藏的项目仍可通过搜索或各自的快捷键打开"
+      "hiddenHint": "已隐藏的项仍可通过搜索或各自的快捷键打开",
+      "label": "新建标签页操作，按左右方向键选择，最后一项用于自定义这一行",
+      "shownLabel": "显示在 + 菜单中",
+      "reset": "重置顺序",
+      "allShortcuts": "所有键盘快捷键…",
+      "hiddenLabel": "已隐藏",
+      "hiddenEmpty": "将要隐藏的项拖到这里",
+      "locked": "始终显示",
+      "hide": "隐藏",
+      "show": "显示",
+      "customize": "自定义",
+      "featureOff": "已关闭",
+      "turnOn": "已关闭，显示它即可重新开启",
+      "moreOptions": "更多选项"
     }
   },
   "agentCliUpdate": {
@@ -29449,5 +29598,69 @@
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
     "more": "更多"
+  },
+  "emulatorPane": {
+    "tabIntro": {
+      "hiddenFromMenu": "已从 + 菜单中移除手机模拟器",
+      "hiddenFromMenuHint": "可通过图标行末尾的齿轮按钮恢复",
+      "undoHide": "撤销",
+      "saveFailed": "无法更新 + 菜单"
+    }
+  },
+  "languages": {
+    "search": "搜索语言",
+    "searchPlaceholder": "搜索语言",
+    "pluginsDisabled": "社区翻译需要开启插件",
+    "community": "社区翻译",
+    "loadingPacks": "正在查找社区翻译…",
+    "catalogFailed": "无法加载社区翻译",
+    "noPacks": "暂无社区翻译",
+    "refresh": "检查新翻译",
+    "noMatches": "没有与“{{query}}”匹配的语言",
+    "managePacks": "在插件中浏览",
+    "builtIn": "内置",
+    "coverage": "已翻译 {{percent}}%",
+    "installing": "正在安装…",
+    "changing": "正在切换…",
+    "current": "当前",
+    "incomplete": "不完整",
+    "description": "内置语言和社区翻译，未翻译的文字仍以英文显示",
+    "continue": "继续",
+    "done": "完成",
+    "requestRecorded": "已记录语言请求",
+    "nowUsing": "现在使用 {{language}}",
+    "switchBack": "切回原语言",
+    "changeFailed": "无法切换语言，请重试",
+    "installedUnavailable": "已安装，但此翻译暂时无法加载",
+    "installedSwitchFailed": "已安装，但无法切换语言，请在“设置 → 语言”中重试",
+    "suggestionClose": "关闭",
+    "moreLanguages": "更多语言…",
+    "retry": "重试",
+    "request": "请求添加语言",
+    "byPublisher": "由 {{publisher}} 发布",
+    "deviceTag": "设备语言",
+    "get": "获取",
+    "didNotLoad": "未能加载",
+    "requestQuery": "请求添加“{{query}}”",
+    "requestPlaceholder": "例如 Polski、Tiếng Việt",
+    "requestDescription": "告诉我们需要添加哪种语言，任何人也都可以发布社区翻译",
+    "turnOnPlugins": "在插件中开启",
+    "languageDidNotLoad": "{{language}} 未能加载",
+    "yourLanguage": "你的语言",
+    "offerSentence": "Orca 有 {{language}} 的社区翻译",
+    "offerInstall": "安装 <lang>{{language}}</lang>…",
+    "offerUse": "使用 <lang>{{language}}</lang>",
+    "offerInstalling": "正在安装 <lang>{{language}}</lang>…",
+    "offerSwitching": "正在切换到 <lang>{{language}}</lang>…",
+    "pluginsDisabledCount_other": "{{count}} 个社区翻译需要开启插件",
+    "preparing": "正在准备…",
+    "offerConfirming": "正在等待确认…",
+    "offerRetry": "重试",
+    "suggestionTitle": "<lang>{{language}}</lang> 版 Orca",
+    "systemResolved": "{{system}}（{{language}}）",
+    "suggestionInstall": "安装",
+    "suggestionUse": "使用",
+    "browseOnline": "浏览",
+    "browseOnlineLabel": "在 orca.dev 上浏览社区翻译（在浏览器中打开）"
   }
 }

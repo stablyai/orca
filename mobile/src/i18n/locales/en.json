@@ -6262,7 +6262,13 @@
       "fixAskDone": "New conversations start in Ask for approval.",
       "undo": "Undo",
       "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
-      "newBot": "New bot…"
+      "newBot": "New bot…",
+      "whatTheyCanDo": "What {{person}} can do",
+      "reject": "Reject",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}."
     },
     "accessDecide": {
       "expired": "This request was already answered or has expired.",
