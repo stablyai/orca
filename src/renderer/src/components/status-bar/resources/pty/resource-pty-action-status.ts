@@ -86,17 +86,9 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
     )
   }
 
-  retireError(identity: string): void {
+  retireError = (identity: string): void => {
     if (this.errors.delete(identity)) {
       this.publishRow(identity)
-    }
-  }
-
-  retireErrors(hasSession: (identity: string) => boolean): void {
-    for (const identity of this.errors.keys()) {
-      if (!hasSession(identity)) {
-        this.retireError(identity)
-      }
     }
   }
 

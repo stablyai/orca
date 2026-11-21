@@ -41,3 +41,23 @@ export function removeSessionFromInventory(
 ): DaemonSessionInventory {
   return removeSessionsFromInventory(inventory, new Set([sessionId]))
 }
+
+export function sameListedSession(before: DaemonSession, after: DaemonSession): boolean {
+  return (
+    before === after ||
+    (before.id === after.id &&
+      before.incarnationId === after.incarnationId &&
+      before.inventorySourceId === after.inventorySourceId &&
+      before.routed === after.routed &&
+      before.fencedTermination === after.fencedTermination &&
+      before.idleFencedTermination === after.idleFencedTermination &&
+      before.rootProcessId === after.rootProcessId &&
+      before.foregroundProcess === after.foregroundProcess &&
+      before.cwd === after.cwd &&
+      before.title === after.title &&
+      before.worktreeId === after.worktreeId &&
+      before.paneKey === after.paneKey &&
+      before.agentOwnership === after.agentOwnership &&
+      before.exiting === after.exiting)
+  )
+}

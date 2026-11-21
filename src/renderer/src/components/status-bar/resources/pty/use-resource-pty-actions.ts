@@ -58,17 +58,7 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
   })
   const mounted = useMountedRef()
   const { removeSessions, invalidate, sessionsError, hasSession, subscribeRemoval } = inventory
-  useEffect(
-    () =>
-      subscribeRemoval((identity) => {
-        if (identity === null) {
-          status.retireErrors(hasSession)
-        } else {
-          status.retireError(identity)
-        }
-      }),
-    [hasSession, status, subscribeRemoval]
-  )
+  useEffect(() => subscribeRemoval(status.retireError), [status, subscribeRemoval])
   const flushCompletions = useCallback(() => {
     if (flushTimer.current !== null) {
       clearTimeout(flushTimer.current)
