@@ -48,6 +48,8 @@ export type BotPictureCustom = {
   fallback: string
   after: number
   description: string
+  /** A mascot the carousel no longer offers: drawn and dressed as that mascot. */
+  mascot?: BotMascotId
 }
 
 // A mascot from its bitmap with the outfit's art over it.
@@ -137,7 +139,7 @@ export function BotPicturePicker({
   const [withGenerate] = useState(() => (readAvatarCapability()?.length ?? 0) > 0)
   // With Generate, the user's own picture lives in its slot: one tile, never two. An older
   // picture with no image (an emoji) keeps its own face.
-  const customInSlot = withGenerate && Boolean(custom?.src)
+  const customInSlot = withGenerate && Boolean(custom?.src) && !custom?.mascot
   const order = pictureFaceOrder(
     custom && !customInSlot ? custom.after : null,
     withGenerate ? generateSlot : null
@@ -182,7 +184,9 @@ export function BotPicturePicker({
             current ? <GenerateFaceTile face={face} /> : <GenerateFaceThumb face={face} />
         }
       : key === CUSTOM_FACE
-        ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
+        ? custom?.mascot
+          ? { ...mascotFace(custom.mascot, lookOf(custom.mascot), color), key }
+          : { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
         : mascotFace(key, lookOf(key), color)
   )
   // Every picture an intake takes, shared or not and even the same image again, leaves Generate and
@@ -299,9 +303,13 @@ export function BotPicturePicker({
         {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
         <BotPictureRowFold open={!generating}>
           {onColorChange || onOutfitChange ? (
-            <BotPictureRowFold open={!showingCustom}>
+            <BotPictureRowFold open={!showingCustom || Boolean(custom.mascot)}>
               <BotPictureLook
-                id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
+                id={
+                  (showingCustom ? custom.mascot : undefined) ??
+                  PICKABLE_BOT_MASCOT_IDS[mascotIndex] ??
+                  PICKABLE_BOT_MASCOT_IDS[0]
+                }
                 color={color}
                 onColorChange={onColorChange}
                 outfit={outfit}

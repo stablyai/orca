@@ -317,12 +317,15 @@ export function useBotPictureSetting(
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the loop state is read through its ref
   }, [bot.avatar])
 
+  // A retired mascot kept as the bot's own picture is still drawn and dressed as that mascot.
+  const keptMascot = kept && !kept.png ? parseBotAvatar(kept.avatar) : null
   return {
     value: shown,
     custom: kept && {
       src,
       fallback: botFallback({ name: bot.name, avatar: kept.avatar }),
       after: kept.after,
+      ...(keptMascot?.kind === 'mascot' ? { mascot: keptMascot.id } : {}),
       // A generated picture's caption is the description that made it.
       description:
         generatedPictureDescription(kept.png) ??
