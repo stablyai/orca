@@ -33,7 +33,7 @@ function makeStore(savedTab: boolean) {
     badgeColor: '#000000',
     addedAt: 0
   }
-  return {
+  const store = {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
     getRepos: vi.fn(() => [repo]),
@@ -45,6 +45,7 @@ function makeStore(savedTab: boolean) {
     getSettings: vi.fn(() => ({ workspaceDir: '/tmp/workspaces' })),
     getProjects: vi.fn(() => [])
   }
+  return { store, session }
 }
 
 function syncGraph(
@@ -80,9 +81,11 @@ function syncGraph(
 function makeRuntime(savedTab = false): {
   runtime: OrcaRuntimeService
   renameTerminal: ReturnType<typeof vi.fn>
+  session: WorkspaceSessionState
 } {
+  const { store, session } = makeStore(savedTab)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only store stub; makeStore covers the reads this suite drives.
-  const runtime = new OrcaRuntimeService(makeStore(savedTab) as never)
+  const runtime = new OrcaRuntimeService(store as never)
   const renameTerminal = vi.fn()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only controller stub; only listProcesses is exercised.
   runtime.setPtyController({
@@ -105,7 +108,7 @@ function makeRuntime(savedTab = false): {
   })
   runtime.attachWindow(1)
   syncGraph(runtime, 'probe-worktree')
-  return { runtime, renameTerminal }
+  return { runtime, renameTerminal, session }
 }
 
 describe('terminal list title after renaming an idle terminal', () => {
@@ -122,13 +125,21 @@ describe('terminal list title after renaming an idle terminal', () => {
   })
 
   it('shows the pane title once the tab name is cleared in the UI', async () => {
-    const { runtime } = makeRuntime(true)
+    const { runtime, session } = makeRuntime(true)
+    const savedTab = session.tabsByWorktree[WORKTREE_ID][0]
     const before = await runtime.listTerminals(`id:${WORKTREE_ID}`)
 
     await runtime.renameTerminal(before.terminals[0].handle, 'My Label')
+    // The renderer saves the rename onto the tab, then the user clears it.
+    savedTab.customTitle = 'My Label'
+    syncGraph(runtime, 'My Label')
+    const renamed = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    expect(renamed.terminals[0].title).toBe('My Label')
 
-    const after = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-    expect(after.terminals[0].title).toBe('probe-worktree')
+    savedTab.customTitle = null
+    syncGraph(runtime, 'probe-worktree')
+    const cleared = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    expect(cleared.terminals[0].title).toBe('probe-worktree')
   })
 
   it('keeps the new title when the pane reports a new title after the rename', async () => {
