@@ -77,6 +77,13 @@ describe('a live reply that only grows', () => {
     }
   }
 
+  it('never sends text older than the reader was already sent', async () => {
+    const { events, publish } = stream(false)
+    await publish('one two three')
+    await publish('one two')
+    expect(events).toHaveLength(1)
+  })
+
   it('goes nowhere until the reader holds its text to append to', async () => {
     const { events, publish } = stream(false, () => false)
     await publish('a'.repeat(1024))

@@ -88,8 +88,9 @@ function liveRow(
 ): SubscriberLiveRow {
   const before = prior && prior.source.revision === source.revision ? bodyText(prior.source) : null
   const after = bodyText(source)
-  // A snapshot taken before a durable frame that already carried newer text must not undo it.
-  if (prior && before !== null && after !== null && before.length > after.length && before.startsWith(after)) {
+  // A snapshot read before a durable frame that already carried newer text must not undo it.
+  const stale = before !== null && after !== null && before.length > after.length
+  if (prior && stale && before.startsWith(after)) {
     return prior
   }
   if (prior && before !== null && after !== null && after.startsWith(before)) {
