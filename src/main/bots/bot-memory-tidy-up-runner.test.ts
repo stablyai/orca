@@ -84,7 +84,8 @@ function harness(
       files.get(path) === expected && write(path, text),
     writeText: async (path: string, text: string, opts?: { exclusive?: boolean }) =>
       !(opts?.exclusive && files.has(path)) && write(path, text),
-    makeDirectory: async () => {}
+    makeDirectory: async () => {},
+    statFile: async (path: string) => (files.has(path) ? { size: 0, mtimeMs: 0 } : null)
   }
   const stored = new Map<string, string>()
   const history = createBotMemoryHistory(

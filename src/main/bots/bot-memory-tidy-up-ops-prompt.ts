@@ -17,6 +17,9 @@ function opsChatsText(chats: readonly TidyUpChat[]): string {
   let left: number = TIDY_UP_CHATS.total
   const parts: string[] = []
   for (const chat of chats.slice(0, TIDY_UP_CHATS.max)) {
+    if (left <= 0) {
+      break
+    }
     const rows = chat.lines.flatMap(({ by, text }) =>
       by === 'owner'
         ? ownerTypedSegments(text).map((segment) => `Owner: ${segment}`)

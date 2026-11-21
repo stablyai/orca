@@ -43,7 +43,7 @@ export function hasStandingWords(text: string): boolean {
 }
 
 const OWNER_RULE_MARKS =
-  /\bowner rule\b|\bfrom now on\b|\bowner (?:said|says|wants|prefers|decided)\b/i
+  /\bowner rule\b|\bfrom now on\b|\bgoing forward\b|\bfor all future\b|\binstead of\b|\buse\b[^.;]*\binstead\b|\bowner (?:said|says|wants|prefers|decided)\b/i
 
 // "Never merge … while CI is red", also after a clause break ("PR #4417 pending: never merge",
 // "…, please **don't** merge", "_never_ force push"): a standing word that starts a clause, with

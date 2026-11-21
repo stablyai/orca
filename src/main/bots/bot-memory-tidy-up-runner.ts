@@ -25,7 +25,6 @@ import {
   turnFailed,
   watchBackgroundRun
 } from './bot-background-run'
-import type { BotHomeFilesystem } from './bot-home'
 import {
   failedLooksInARow,
   LOOK_FAILURES_TO_TURN_OFF,
@@ -50,7 +49,7 @@ import {
   tidyNowRefusal,
   tidyUpState
 } from './bot-memory-tidy-up'
-import { memoryFitsOps, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
+import { memoryFitsOps, TIDY_UP_OPS_PILOT_FILE, type TidyUpFiles } from './bot-memory-ops-pilot'
 import { tidyUpFormat } from './bot-memory-tidy-up-format'
 import type { BotTurnWatch } from './bot-run-turn-watch'
 
@@ -63,7 +62,7 @@ export type BotTidyUpRunnerDeps = {
   /** Whether any of the bot's conversations is running a turn. */
   busy: (bot: Bot) => boolean
   memory: Pick<BotMemoryRecord, 'change' | 'history'>
-  fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>
+  fs: TidyUpFiles
   /** The files in the bot's memory/ folder, the archive among them, as far as the prompt reads. */
   memoryFiles: (folder: string) => Promise<TidyUpMemoryFile[]>
   homeFolder: (bot: Bot) => string
@@ -225,7 +224,8 @@ export class BotTidyUpRunner {
       chatCount = chats.length
       const memory = (await this.deps.fs.readText(join(folder, 'MEMORY.md'))) ?? ''
       const files = await this.deps.memoryFiles(folder)
-      const pilot = (await this.deps.fs.readText(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
+      // The marker counts by being there: its contents are never read.
+      const pilot = (await this.deps.fs.statFile(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
       // A pilot bot never falls back to the whole-file reply: it waits until its file fits.
       if (pilot && !memoryFitsOps(memory)) {
         this.change(bot.id, (state) => beginTidyUp(state, sessionId, startedAt))

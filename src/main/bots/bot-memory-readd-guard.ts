@@ -17,8 +17,11 @@ const SAME_LINE = 0.8
 /** Share of the line's key words the owner's own words must hold for the owner to have asked. */
 const OWNER_ASKED = 0.5
 
-const plain = (line: string): string =>
-  lineWords(parseBotMemoryFacts(line)[0]?.text ?? line).join(' ')
+/** A line's words for matching; its whole text when it has none, never empty for a real line. */
+const plain = (line: string): string => {
+  const text = parseBotMemoryFacts(line)[0]?.text ?? line
+  return lineWords(text).join(' ') || text.replace(/\s+/g, ' ').trim().toLowerCase()
+}
 
 /** The lines of `added` a tidy-up moved out of MEMORY.md in the last two weeks, by their words or
  *  near enough, that `ownerWords` doesn't ask for. */
@@ -34,20 +37,20 @@ export function linesToKeepOut(
   if (moved.length === 0) {
     return []
   }
-  const words = new Set(moved.map(plain))
+  const words = new Set(moved.map(plain).filter((word) => word !== ''))
   const movedWords = moved.map(keyWords)
   return added.filter((line) => {
     const mine = keyWords(line)
     return (
       (words.has(plain(line)) ||
         movedWords.some((old) => wordSimilarity(old, mine) >= SAME_LINE)) &&
-      lineCoverage(line, ownerWords) < OWNER_ASKED
+      lineCoverage(parseBotMemoryFacts(line)[0]?.text ?? line, ownerWords) < OWNER_ASKED
     )
   })
 }
 
 type GuardFilesystem = Pick<BotHomeFilesystem, 'readText' | 'replaceText' | 'writeText'> &
-  Partial<Pick<BotHomeFilesystem, 'makeDirectory'>>
+  Partial<Pick<BotHomeFilesystem, 'makeDirectory' | 'statFile'>>
 
 /** What a pilot bot's turn end keeps out of what it added, filed in the archive first so a line
  *  is never lost; undefined off the pilot. */
@@ -58,7 +61,9 @@ export async function readdGuard(
   turn: readonly AgentJournalRenderItem[],
   now = Date.now()
 ): Promise<((added: string[]) => Promise<string[]>) | undefined> {
-  if ((await fs.readText(join(folder, TIDY_UP_OPS_PILOT_FILE))) === null) {
+  const marker = join(folder, TIDY_UP_OPS_PILOT_FILE)
+  const pilot = fs.statFile ? await fs.statFile(marker) : await fs.readText(marker)
+  if (pilot === null) {
     return undefined
   }
   return async (added) => {
@@ -77,22 +82,28 @@ export async function fileKeptOutLines(
   lines: readonly string[],
   today: string
 ): Promise<boolean> {
-  const path = join(folder, 'memory', `${TIDY_UP_ARCHIVE}.md`)
-  const marked = lines.map((line) => `${line.trimEnd()} \u00b7 kept out ${today}`)
-  await fs.makeDirectory?.(join(folder, 'memory'))
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const before = await fs.readText(path)
-    const next = tidyUpFileText(TIDY_UP_ARCHIVE, before, marked)
-    if (next === null) {
-      return true
+  // Any write failure keeps the line in MEMORY.md: it is taken out only once it is filed.
+  try {
+    const path = join(folder, 'memory', `${TIDY_UP_ARCHIVE}.md`)
+    const marked = lines.map((line) => `${line.trimEnd()} \u00b7 kept out ${today}`)
+    await fs.makeDirectory?.(join(folder, 'memory'))
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const before = await fs.readText(path)
+      const next = tidyUpFileText(TIDY_UP_ARCHIVE, before, marked)
+      if (next === null) {
+        return true
+      }
+      const wrote =
+        before === null
+          ? await fs.writeText(path, next, { exclusive: true })
+          : await fs.replaceText(path, before, next)
+      if (wrote) {
+        return true
+      }
     }
-    const wrote =
-      before === null
-        ? await fs.writeText(path, next, { exclusive: true })
-        : await fs.replaceText(path, before, next)
-    if (wrote) {
-      return true
-    }
+    return false
+  } catch (error) {
+    console.warn('[bots] could not file kept-out memory lines', error)
+    return false
   }
-  return false
 }

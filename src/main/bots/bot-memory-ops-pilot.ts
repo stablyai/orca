@@ -1,7 +1,14 @@
 // Which bots run Tidy-up on ops (the pilot), and the owner's own typed words a turn end reads:
 // one physical line at a time, with pasted blocks and quoted lines cut out.
 import { parseBotMemoryFacts } from '../../shared/bot-memory-lines'
+import type { BotHomeFilesystem } from './bot-home'
 import type { TidyUpChat } from './bot-memory-tidy-up'
+
+/** The home files a Tidy-up run reads and writes; the pilot marker is found by `statFile`. */
+export type TidyUpFiles = Pick<
+  BotHomeFilesystem,
+  'readText' | 'writeText' | 'replaceText' | 'makeDirectory' | 'statFile'
+>
 
 /** A bot's Tidy-up runs on ops only while this file is in its home (the pilot). */
 export const TIDY_UP_OPS_PILOT_FILE = '.orca-memory-pilot'

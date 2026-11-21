@@ -329,8 +329,10 @@ export function tidyUpSummaryOf(
       return learned ? [factText(line)] : []
     }),
     replaced: removed.flatMap(({ key, line }) => (plan.replaced.has(key) ? [factText(line)] : [])),
-    filed: [...plan.topics.keys()].flatMap((topic) => {
-      const count = written.get(topic) ?? 0
+    // Lines MEMORY.md really gave up to each topic, also when the topic already had them.
+    filed: [...plan.topics].flatMap(([topic, lines]) => {
+      const gone = [...keysOf(lines)].filter((key) => removed.some((line) => line.key === key))
+      const count = Math.max(written.get(topic) ?? 0, gone.length)
       return count > 0 ? [{ topic, count }] : []
     }),
     moved: removed.filter(

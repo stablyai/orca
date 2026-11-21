@@ -12,7 +12,7 @@ export function lineWords(text: string): string[] {
     text
       .toLowerCase()
       .replace(/\u2019/g, "'")
-      .match(/[a-z0-9][a-z0-9'_-]*/g) ?? []
+      .match(/[\p{L}\p{N}][\p{L}\p{N}'_-]*/gu) ?? []
   )
 }
 
@@ -37,12 +37,19 @@ export function wordSimilarity(x: ReadonlySet<string>, y: ReadonlySet<string>): 
   return shared / (x.size + y.size - shared)
 }
 
-/** How much of `line`'s key words `words` holds: 1 when every one is there. */
+/** How much of `line`'s key words `words` holds: 1 when every one is there. A line with no key
+ *  words (all stopwords, or a script written without spaces) counts as held only when `words`
+ *  contains it whole. */
 export function lineCoverage(line: string, words: string): number {
   const wanted = keyWords(line)
   if (wanted.size === 0) {
-    return 0
+    const whole = line.replace(/\s+/g, ' ').trim().toLowerCase()
+    return whole !== '' && words.replace(/\s+/g, ' ').toLowerCase().includes(whole) ? 1 : 0
   }
   const have = keyWords(words)
-  return [...wanted].filter((word) => have.has(word)).length / wanted.size
+  // Scripts written without spaces read as one long word: found inside the text counts too.
+  const text = words.toLowerCase()
+  const held = (word: string): boolean =>
+    have.has(word) || ([...word].some((char) => char.charCodeAt(0) > 127) && text.includes(word))
+  return [...wanted].filter(held).length / wanted.size
 }

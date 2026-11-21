@@ -3,6 +3,10 @@ import { checkTidyUpOps, memorySnapshot } from './bot-memory-ops'
 import { parseTidyUpOps } from './bot-memory-ops-reply'
 import { memoryFitsOps, ownerTypedSegments } from './bot-memory-ops-pilot'
 import { statusMigrationPlan } from './bot-memory-status-migration'
+import { fileKeptOutLines, linesToKeepOut } from './bot-memory-readd-guard'
+import { tidyUpSummaryOf } from './bot-memory-tidy-up-draft'
+import { tidyUpOpsPrompt } from './bot-memory-tidy-up-ops-prompt'
+import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 
 const MEMORY = [
   '# Memory',
@@ -240,5 +244,59 @@ describe('the status move', () => {
     // Lines leave by their words: a status line whose undated copy stays, stays too.
     const copied = '# M\n- 2026-11-12 #4417 merged at a1b2c3d4\n- #4417 merged at a1b2c3d4\n'
     expect(statusMigrationPlan(copied, '2026-11-21')).toBeNull()
+  })
+})
+
+describe('the pilot around the ops', () => {
+  it('keeps a moved line out by its whole text when it has no key words, and lets its owner ask', () => {
+    const moved = '- 2026-11-01 東京の窓口は田中です'
+    const row: BotMemoryHistoryRow = {
+      id: 'r1',
+      at: 1_000,
+      by: { kind: 'tidy-up' },
+      change: { added: [], removed: [{ line: moved, after: null }] },
+      undoable: true
+    }
+    const other = '- 2026-11-02 大阪の窓口は佐藤です'
+    expect(linesToKeepOut([moved, other], [row], '', 2_000)).toEqual([moved])
+    const asked = `${moved.slice(13)}を戻して`
+    expect(linesToKeepOut([moved], [row], asked, 2_000)).toEqual([])
+  })
+
+  it('reports a failed archive write instead of throwing, so the line stays', async () => {
+    const fs = {
+      readText: async () => null,
+      writeText: async () => {
+        throw new Error('EACCES')
+      },
+      replaceText: async () => false
+    }
+    expect(await fileKeptOutLines(fs, '/home', ['- 2026-11-01 x'], '2026-11-21')).toBe(false)
+  })
+
+  it('keeps a "use ... instead" instruction in MEMORY.md even when it names a PR', () => {
+    const rule =
+      '- 2026-11-01 When PR #4417 is merged, use squash instead of merge for all future PRs'
+    expect(statusMigrationPlan(`# M\n${rule}\n`, '2026-11-21')).toBeNull()
+  })
+
+  it('counts a demoted line even when its topic already had it', () => {
+    const { plan } = check([{ op: 'demote', lines: [ref(5)], topic: 'staging' }])
+    const line = { line: '- 2026-10-05 Staging deploys run on Thursdays', after: null }
+    const made = { added: [], removed: [line] }
+    expect(tidyUpSummaryOf(plan, made, made, new Map()).filed).toEqual([
+      { topic: 'staging', count: 1 }
+    ])
+  })
+
+  it('reads no more chats once the total budget is used', () => {
+    const chat = (title: string) => ({
+      title,
+      lines: [{ by: 'owner' as const, text: 'x'.repeat(5_000) }]
+    })
+    const chats = [...Array.from({ length: 10 }, (_, i) => chat(`full ${i}`)), chat('one too many')]
+    const prompt = tidyUpOpsPrompt({ snapshot: [], files: [], chats })
+    expect(prompt).toContain('full 9')
+    expect(prompt).not.toContain('one too many')
   })
 })
