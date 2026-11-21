@@ -99,7 +99,8 @@ describe('agent completion coordinator', () => {
 
   it('keeps a slow re-check when the pane cannot receive the host exit notice', async () => {
     let result: RuntimeTerminalProcessInspection = {
-      ...processResult('codex'),
+      foregroundProcess: 'codex',
+      hasChildProcesses: true,
       foregroundExitWatched: true
     }
     const dispatchCompletion = vi.fn()
