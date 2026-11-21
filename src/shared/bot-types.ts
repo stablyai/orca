@@ -140,6 +140,10 @@ export const BotItemsStaleSchema = z.union([
   z.literal('never')
 ])
 export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
+/** Its choices in order, as Settings offers them. */
+export const BOT_ITEMS_STALE_CHOICES: readonly BotItemsStale[] = BotItemsStaleSchema.options.map(
+  (option) => option.value
+)
 
 export const BotSchema = z.object({
   id: z.string().min(1),

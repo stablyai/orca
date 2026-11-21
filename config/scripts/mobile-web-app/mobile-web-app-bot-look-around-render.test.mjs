@@ -272,6 +272,7 @@ describeRender('Look around in the phone’s bot sheet', () => {
     const { page, errors } = await openBotHome(['bots.mobile.v1'])
     await openMobileBotSheet(page, BOT.name)
     await page.click('[data-testid="bot-sheet-tab-settings"]')
+    await page.getByRole('button', { name: /^Look around, / }).click()
     await waitForText(page, 'Suggest next steps')
     const text = await bodyText(page)
     for (const line of [
@@ -310,6 +311,7 @@ describeRender('Look around in the phone’s bot sheet', () => {
     const { page, errors } = await openBotHome(['bots.mobile.v1'], 'dark')
     await openMobileBotSheet(page, BOT.name)
     await page.click('[data-testid="bot-sheet-tab-settings"]')
+    await page.getByRole('button', { name: /^Memory upkeep, / }).click()
     await waitForText(page, 'Tidy memory overnight')
     const text = await bodyText(page)
     for (const line of ['Memory upkeep', 'Each night', 'Last tidied', 'Tidy now']) {
