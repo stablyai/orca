@@ -150,6 +150,72 @@ it('rebuilds when a tool append folds into the streaming assistant', () => {
   ])
 })
 
+it('omits assistant rows with no visible content before they can split a tool run', () => {
+  const project = createNativeChatMessageListProjection()
+  const prompt = message('prompt', 0, [{ type: 'text', text: 'Inspect' }], 'user')
+  const lead = message('lead', 1, [{ type: 'text', text: 'Reading' }])
+  const blank = message('blank', 2, [{ type: 'text', text: ' \n\t' }])
+  const empty = message('empty', 3, [])
+  const emptyText = message('empty-text', 4, [{ type: 'text', text: '' }])
+  const call = message(
+    'call',
+    5,
+    [{ type: 'tool-call', name: 'Bash', callId: 'shell', input: { command: 'pwd' } }],
+    'tool'
+  )
+  const result = message(
+    'result',
+    6,
+    [{ type: 'tool-result', callId: 'shell', output: '/repo' }],
+    'tool'
+  )
+  project([prompt, lead])
+  const notice = message('notice', 7, [{ type: 'text', text: ' ', presentation: 'turn-notice' }])
+  const shortened = {
+    ...message('shortened', 8, [{ type: 'text', text: '\t' }]),
+    shortened: true as const
+  }
+  const worker = message('worker', 9, [
+    { type: 'subagent', id: 'worker', groupId: 'workers', label: 'Reviewer', state: 'working' }
+  ])
+  const answer = message('answer', 10, [{ type: 'text', text: 'Done' }])
+
+  const projected = project([
+    prompt,
+    lead,
+    blank,
+    empty,
+    emptyText,
+    call,
+    result,
+    notice,
+    shortened,
+    worker,
+    answer
+  ])
+
+  expect(projected.conversation.map(({ id }) => id)).toEqual([
+    'prompt',
+    'lead',
+    'notice',
+    'shortened',
+    'worker',
+    'answer'
+  ])
+  expect(projected.conversation[1]?.blocks).toEqual([
+    { type: 'text', text: 'Reading' },
+    call.blocks[0],
+    result.blocks[0]
+  ])
+  expect(projected.conversation[4]?.blocks).toEqual([
+    {
+      type: 'subagent-group',
+      groupId: 'workers',
+      agents: [{ id: 'worker', label: 'Reviewer', state: 'working' }]
+    }
+  ])
+})
+
 it('revises the correct duplicate occurrence, including aliases settled to the same row', () => {
   const project = createNativeChatMessageListProjection()
   const tail = message('answer', 1, [{ type: 'text', text: 'Found' }])
@@ -204,7 +270,6 @@ it('drops an empty lead after a same-output fallback changes its tool dependenci
       ({ id, blocks }) => ({ id, blocks })
     )
   ).toEqual([
-    { id: 'lead', blocks: [{ type: 'text', text: '' }] },
     { id: 'result', blocks: [{ type: 'tool-result', callId: 'missing', output: 'Orphan' }] }
   ])
 })

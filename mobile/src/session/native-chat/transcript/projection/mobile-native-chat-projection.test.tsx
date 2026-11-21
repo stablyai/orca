@@ -30,6 +30,69 @@ const result = (id: string): NativeChatBlock => ({
 const spawn = (id: string, state: 'working' | 'completed' = 'working') =>
   row(id, 'system', [{ type: 'subagent', id, groupId: 'live-group', label: id, state }])
 
+it('skips blank assistant messages without hiding tools, images or later streamed words', () => {
+  const commentary = prose('progress', 'Checking')
+  const partial = { ...prose('partial', '\t'), shortened: true as const }
+  const status = {
+    ...prose('status', ' ', 'assistant'),
+    blocks: [{ type: 'text' as const, text: ' ', presentation: 'turn-notice' }]
+  }
+  const read = call('read', 'completed')
+  const image = row('image', 'assistant', [
+    { type: 'text', text: ' ' },
+    { type: 'image-ref', path: '/tmp/result.png' }
+  ])
+  const worker = { ...spawn('worker'), role: 'assistant' as const }
+  const history = [
+    commentary,
+    prose('blank', ' '),
+    row('empty', 'assistant', []),
+    prose('empty-text', ''),
+    row('tool', 'tool', [read, result('read')]),
+    image,
+    partial,
+    status,
+    worker
+  ]
+  const pending = prose('reply', '\n\t')
+  const loaded = projectMobileNativeChatMessages([...history, pending], 'codex')
+  expect(loaded.rows.map((message) => message.id)).toEqual([
+    'progress',
+    'image',
+    'partial',
+    'status',
+    'worker'
+  ])
+  expect(loaded.rows[0]?.blocks).toEqual([
+    { type: 'text', text: 'Checking' },
+    read,
+    { type: 'tool-result', callId: 'read', output: 'contents' }
+  ])
+  expect(loaded.rows[1]?.blocks).toContainEqual({ type: 'image-ref', path: '/tmp/result.png' })
+  expect(loaded.rows.at(-1)?.blocks).toEqual([
+    {
+      type: 'subagent-group',
+      groupId: 'live-group',
+      agents: [{ id: 'worker', label: 'worker', state: 'working' }]
+    }
+  ])
+
+  const live = projectMobileNativeChatMessages(
+    [...history, prose('reply', 'Done')],
+    'codex',
+    loaded
+  )
+  expect(live.rows.map((message) => message.id)).toEqual([
+    'progress',
+    'image',
+    'partial',
+    'status',
+    'worker',
+    'reply'
+  ])
+  expect(live.rows.at(-1)?.blocks).toEqual([{ type: 'text', text: 'Done' }])
+})
+
 it('preserves source positions, tools and orphan ids across successive local replacements', () => {
   const lead = prose('a', 'Checking')
   const roster = spawn('s1')

@@ -7,11 +7,18 @@ import {
 } from '../../input/task-lists/native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from '../notices/native-chat-provider-frame-summary'
 import { isNativeChatProviderTurnStartBlock } from '../turns/native-chat-provider-turn-start'
+import { isNativeChatOrcaCard } from '../../native-chat-orca-card'
 import {
   isReplacedSubagentGroupTwin,
   subagentGroupBlocks
 } from '../subagents/native-chat-subagent-summary'
-import { isSubagentGroupBlock, isTextBlock, type NativeChatBlock } from '../../native-chat-types'
+import {
+  isSubagentBlock,
+  isSubagentGroupBlock,
+  isTextBlock,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../../native-chat-types'
 import { splitNativeChatBlocks } from '../../tools/native-chat-tool-fold'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
 
@@ -19,6 +26,43 @@ import { nativeChatProseToMarkdown } from './native-chat-prose'
 export type NativeChatRowContent = ReturnType<typeof derive>
 
 const derivations = new WeakMap<object, NativeChatRowContent>()
+
+function hasVisibleText(blocks: readonly NativeChatBlock[]): boolean {
+  return blocks.some(
+    (block) =>
+      isTextBlock(block) &&
+      (block.text.trim().length > 0 ||
+        Object.entries(block).some(
+          ([key, value]) => key !== 'type' && key !== 'text' && value !== undefined
+        ))
+  )
+}
+
+export function nativeChatMessageHasVisibleContent(message: NativeChatMessage): boolean {
+  if (
+    message.role !== 'assistant' ||
+    message.shortened === true ||
+    (message.drawnMarkdown?.trim().length ?? 0) > 0 ||
+    isNativeChatOrcaCard(message) ||
+    message.blocks.some(isSubagentBlock)
+  ) {
+    return true
+  }
+  const { prose, hasImages, tools, subagentGroups, backgroundTasks } = deriveNativeChatRowContent(
+    message.blocks
+  )
+  return (
+    hasVisibleText(prose) ||
+    hasImages ||
+    tools.length > 0 ||
+    subagentGroups.length > 0 ||
+    backgroundTasks.length > 0
+  )
+}
+
+export function isVisuallyEmptyNativeChatAssistantMessage(message: NativeChatMessage): boolean {
+  return message.role === 'assistant' && !nativeChatMessageHasVisibleContent(message)
+}
 
 function readMarkdown(this: { prose: NativeChatBlock[] }): string {
   const value = nativeChatProseToMarkdown(this.prose)
