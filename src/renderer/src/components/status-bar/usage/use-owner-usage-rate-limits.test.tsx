@@ -42,7 +42,8 @@ vi.mock('../../../store/index', () => ({
     selector({ settings: null, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
 }))
 
-const { useAccountOwnerUsage, useOwnerUsageRateLimits } = await import('./use-owner-usage-rate-limits')
+const { useAccountOwnerUsage, useOwnerUsageRateLimits } =
+  await import('./use-owner-usage-rate-limits')
 
 function provider(id: ProviderRateLimits['provider'], usedPercent: number): ProviderRateLimits {
   return {

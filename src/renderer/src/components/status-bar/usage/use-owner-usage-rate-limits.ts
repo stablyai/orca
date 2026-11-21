@@ -71,7 +71,10 @@ export function useAccountOwnerUsage(
       followed ? subscribeOwnerAccounts(ownerId, listener) : () => undefined,
     [followed, ownerId]
   )
-  const read = useCallback(() => (followed ? readOwnerAccounts(ownerId) : null), [followed, ownerId])
+  const read = useCallback(
+    () => (followed ? readOwnerAccounts(ownerId) : null),
+    [followed, ownerId]
+  )
   const owned = useSyncExternalStore(subscribe, read, read)
 
   const refreshRemote = useCallback(async () => {
