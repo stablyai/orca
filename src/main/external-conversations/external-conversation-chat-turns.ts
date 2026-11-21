@@ -8,7 +8,6 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { chatPaneKey, type ChatNews } from './external-conversation-chat'
 import { promptRaisedBy } from './external-conversation-prompt-audience'
 import { PromptTurns } from './external-conversation-prompt-turns'
@@ -23,6 +22,7 @@ import {
   endMirroredTurn,
   endRepliedTurn,
   readOnce,
+  botTurnReply,
   type ChatTurnEnd,
   type ChatTurnReplies,
   type SlackMirrorTurn
@@ -295,7 +295,7 @@ export class ChatTurns {
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {
-      return endMirroredTurn(end, mirrored)
+      return endMirroredTurn(end, mirrored, linked.link)
     }
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
@@ -307,11 +307,12 @@ export class ChatTurns {
       return
     }
     // A bot's quiet message is not posted: it said there is nothing to tell.
-    const quiet = (message: string) => Boolean(linked.link.bot) && isQuietBotResult(message)
     void news.readTurn().then(async (turn) => {
-      const { lastAssistantMessage: message, failure } = turn
+      const { failure } = turn
+      const message = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
-      if (await endRepliedTurn(end, turn, linked.link, links, this.deps.replyFill?.())) {
+      const fill = this.deps.replyFill?.()
+      if (await endRepliedTurn(end, turn, linked.link, links, fill, message)) {
         return
       }
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
@@ -335,7 +336,7 @@ export class ChatTurns {
         ...ended,
         ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
-        ...(message && !quiet(message) ? { lastAssistantMessage: message } : {}),
+        ...(message ? { lastAssistantMessage: message } : {}),
         ...(news.outcome === 'failure'
           ? { failure: connectorFailure(failure, linked.link.agent) }
           : {}),

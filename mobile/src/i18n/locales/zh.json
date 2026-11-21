@@ -783,6 +783,9 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "将所选文本作为引用添加到消息中"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "common": {

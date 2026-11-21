@@ -134,6 +134,8 @@ type ListRowProps = {
   subtitle?: string
   /** The subtitle is code, e.g. a command, and is set in the monospace face. */
   subtitleMono?: boolean
+  /** A subtitle that is a status to act on, e.g. "Needs sign-in", in its tone's colour. */
+  subtitleColor?: string
   /** A muted mark in a fixed-width column before the title, e.g. an item's `#35`. */
   marker?: string
   /** Lines the subtitle may take before it cuts; two by default. */
@@ -169,6 +171,7 @@ export function ListRow({
   wrapTitle = false,
   subtitle,
   subtitleMono = false,
+  subtitleColor,
   marker,
   subtitleLines = 2,
   detail,
@@ -209,7 +212,11 @@ export function ListRow({
       </Text>
       {subtitle !== undefined ? (
         <Text
-          style={[listRowStyles.subtitle, subtitleMono && listRowStyles.subtitleMono]}
+          style={[
+            listRowStyles.subtitle,
+            subtitleMono && listRowStyles.subtitleMono,
+            subtitleColor !== undefined && { color: subtitleColor }
+          ]}
           numberOfLines={subtitleLines}
         >
           {subtitle}

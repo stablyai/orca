@@ -16,7 +16,7 @@ import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/la
 import { loadGrokSkillRoots, loadOmpSkillRoots, loadOpenCodeSkillRoots } from './acp-skill-roots'
 import {
   deliverGrokInstructions,
-  deliverOmpInstructions,
+  deliverAppendSystemPromptInstructions,
   deliverOpenCodeInstructions
 } from './acp-instructions'
 
@@ -34,6 +34,13 @@ import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
 import { HERMES_LAUNCH_SPEC } from '../../hermes/hermes-acp-launch-spec'
 import { KIRO_LAUNCH_SPEC } from '../../kiro/kiro-acp-launch-spec'
+import { GOOSE_LAUNCH_SPEC } from '../../goose/goose-acp-launch-spec'
+import { AUGGIE_LAUNCH_SPEC } from '../../auggie/auggie-acp-launch-spec'
+import { KILO_LAUNCH_SPEC } from '../../kilo/kilo-acp-launch-spec'
+import { MIMO_LAUNCH_SPEC } from '../../mimo/mimo-acp-launch-spec'
+import { GEMINI_LAUNCH_SPEC } from '../../gemini/gemini-acp-launch-spec'
+import { DROID_LAUNCH_SPEC } from '../../droid/droid-acp-launch-spec'
+import { QWEN_CODE_LAUNCH_SPEC } from '../../qwen-code/qwen-code-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
 
@@ -151,7 +158,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   skillRoots: loadOmpSkillRoots,
   ownMcpServers: readOmpMcpServers,
-  instructions: deliverOmpInstructions,
+  instructions: deliverAppendSystemPromptInstructions,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: OMP_TRANSCRIPT_IMPORT,
@@ -168,7 +175,14 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   KIMI_LAUNCH_SPEC,
   CURSOR_LAUNCH_SPEC,
   HERMES_LAUNCH_SPEC,
-  KIRO_LAUNCH_SPEC
+  KIRO_LAUNCH_SPEC,
+  GOOSE_LAUNCH_SPEC,
+  AUGGIE_LAUNCH_SPEC,
+  KILO_LAUNCH_SPEC,
+  MIMO_LAUNCH_SPEC,
+  GEMINI_LAUNCH_SPEC,
+  DROID_LAUNCH_SPEC,
+  QWEN_CODE_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
