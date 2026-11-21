@@ -54,20 +54,18 @@ export function withPrefetchedRolloutReads<T>(
 const SKIPPED = Symbol('skipped')
 const prefetchPathsInFlight = new Set<string>()
 
-/** One prefetch read per path at a time: a stalled open must not collect a queued read from every later hook. */
+/** One prefetch read per path until it leaves the queue or its native operation finishes. */
 async function prefetchOnce<T>(
   filePath: string,
-  read: () => Promise<T>
+  read: (releasePath: () => void) => Promise<T>
 ): Promise<T | typeof SKIPPED> {
   if (prefetchPathsInFlight.has(filePath)) {
     return SKIPPED
   }
   prefetchPathsInFlight.add(filePath)
-  try {
-    return await read()
-  } finally {
+  return read(() => {
     prefetchPathsInFlight.delete(filePath)
-  }
+  })
 }
 
 /** Prefetches a cursor's next read; a sync read at the same position consumes it once. */
@@ -77,7 +75,9 @@ export async function prefetchJsonlCursor(
 ): Promise<void> {
   const { filePath, offset, carry } = cursor
   if (filePath && !reads.closed) {
-    const read = await prefetchOnce(filePath, () => readJsonlCursorBytes(cursor, reads.batch))
+    const read = await prefetchOnce(filePath, (releasePath) =>
+      readJsonlCursorBytes(cursor, reads.batch, releasePath)
+    )
     // A read over the byte budget stays unprefetched, so normalization defers it to the poll.
     if (read !== SKIPPED && read !== 'deferred') {
       reads.cursors.push({ filePath, offset, carry, read })
@@ -94,14 +94,16 @@ export async function prefetchRolloutHead(
   if (reads.closed) {
     return
   }
-  const size = await prefetchOnce(filePath, () => rolloutFileSizeAsync(filePath, reads.batch))
+  const size = await prefetchOnce(filePath, (releasePath) =>
+    rolloutFileSizeAsync(filePath, reads.batch, releasePath)
+  )
   if (size === SKIPPED) {
     return
   }
   reads.sizes.set(filePath, size)
   if (wantsHead(size) && !reads.closed) {
-    const head = await prefetchOnce(filePath, () =>
-      readJsonlFirstRecordAsync(filePath, reads.batch)
+    const head = await prefetchOnce(filePath, (releasePath) =>
+      readJsonlFirstRecordAsync(filePath, reads.batch, releasePath)
     )
     if (head !== SKIPPED) {
       reads.firstRecords.set(filePath, head)

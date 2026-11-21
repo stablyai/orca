@@ -1,5 +1,5 @@
 import { RolloutReadBatch } from './codex-rollout-async-reads'
-import { record } from './codex-rollout-jsonl-format'
+import { record, type JsonlCursor } from './codex-rollout-jsonl-format'
 import {
   createPrefetchedRolloutReads,
   withPrefetchedRolloutReads
@@ -34,10 +34,12 @@ export type CodexTranscriptPollReads = {
   identities: CodexSubagentIdentityRead[]
 }
 
+export type CodexTranscriptPollOwner = JsonlCursor | CodexSubagentRoster | 'codex'
+
 export function codexTranscriptPollOwner(
   state: HookListenerState,
   paneKey: string
-): object | 'codex' {
+): CodexTranscriptPollOwner {
   return (
     state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent ??
     state.codexSubagentRosterByPaneKey.get(paneKey) ??

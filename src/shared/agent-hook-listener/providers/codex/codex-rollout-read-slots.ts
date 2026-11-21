@@ -6,6 +6,7 @@ const MAX_QUEUED_ROLLOUT_READS = 4096
 const ROLLOUT_READ_TIMEOUT_MS = 20_000
 
 const nativeReads = new Set<{ stalledAt: number }>()
+const parkedPolls = new Set<() => void>()
 let reportedStall = false
 
 function allReadSlotsStalled(now: number): boolean {
@@ -22,6 +23,14 @@ function allReadSlotsStalled(now: number): boolean {
     console.warn('[agent-hooks] Transcript reads stalled')
   }
   return true
+}
+
+export function parkRolloutPollIfStalled(resume: () => void): (() => void) | undefined {
+  if (!allReadSlotsStalled(monotonicNow())) {
+    return undefined
+  }
+  parkedPolls.add(resume)
+  return () => parkedPolls.delete(resume)
 }
 
 type RolloutReadWaiter = {
@@ -98,7 +107,8 @@ export type RolloutRead = {
 export function withRolloutReadSlot<T>(
   run: (read: RolloutRead) => Promise<T>,
   batch: RolloutReadBatch,
-  unwanted: T
+  unwanted: T,
+  releasePrefetchPath?: () => void
 ): Promise<T> {
   const now = monotonicNow()
   const delay = Math.min(ROLLOUT_READ_TIMEOUT_MS, (batch.expiresAt?.() ?? Infinity) - Date.now())
@@ -108,16 +118,20 @@ export function withRolloutReadSlot<T>(
     allReadSlotsStalled(now) ||
     queuedReads >= MAX_QUEUED_ROLLOUT_READS
   ) {
+    releasePrefetchPath?.()
     return Promise.resolve(unwanted)
   }
   const deadline = now + delay
   // Why: a hung native continuation keeps its byte charges, but must drop the retired caller.
   const budget = batch.budget
-  const { promise, resolve, reject } = Promise.withResolvers<T>()
   let request:
-    | { batch: RolloutReadBatch; resolve: typeof resolve; reject: typeof reject }
-    | undefined = { batch, resolve, reject }
+    | { batch: RolloutReadBatch; resolve: (value: T) => void; reject: (error: unknown) => void }
+    | undefined
+  const promise = new Promise<T>((resolve, reject) => {
+    request = { batch, resolve, reject }
+  })
   let waiter: RolloutReadWaiter | undefined
+  let started = false
   const complete = (outcome: Settled<T>): void => {
     const caller = request
     if (!caller) {
@@ -129,6 +143,9 @@ export function withRolloutReadSlot<T>(
     if (waiter) {
       unlinkWaiter(waiter)
       waiter = undefined
+    }
+    if (!started) {
+      releasePrefetchPath?.()
     }
     if (outcome.ok) {
       caller.resolve(outcome.value)
@@ -152,6 +169,7 @@ export function withRolloutReadSlot<T>(
     }
     // A short lease or a long queue wait can end a caller before its native operation stalls.
     const native = { stalledAt: monotonicNow() + ROLLOUT_READ_TIMEOUT_MS }
+    started = true
     nativeReads.add(native)
     let held = 0
     let retained = 0
@@ -180,9 +198,17 @@ export function withRolloutReadSlot<T>(
       complete(accepted ? outcome : { ok: true, value: unwanted })
       // A caller may leave early. Only native settlement (including close) frees capacity.
       nativeReads.delete(native)
+      releasePrefetchPath?.()
       reportedStall = false
       while (firstWaiter && nativeReads.size < MAX_CONCURRENT_ROLLOUT_READS) {
         firstWaiter.start()
+      }
+      if (parkedPolls.size > 0) {
+        const ready = [...parkedPolls]
+        parkedPolls.clear()
+        for (const resume of ready) {
+          resume()
+        }
       }
     }
     void run({ wanted, reserve }).then(

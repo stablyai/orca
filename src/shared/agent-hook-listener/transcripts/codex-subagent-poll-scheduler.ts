@@ -15,9 +15,18 @@ export class CodexSubagentPollScheduler<T> {
   ) {}
 
   schedule(key: string, value: T, delayMs = this.delayMs): void {
+    const previous = this.entries.get(key)
+    const dueAt = this.now() + delayMs
     this.entries.delete(key)
-    this.entries.set(key, { value, dueAt: this.now() + delayMs })
-    this.arm()
+    this.entries.set(key, { value, dueAt })
+    // A recovery can restore many keys behind an already-armed deadline.
+    if (
+      this.timerDueAt === undefined ||
+      dueAt < this.timerDueAt ||
+      previous?.dueAt === this.timerDueAt
+    ) {
+      this.arm()
+    }
   }
 
   clear(key: string): void {
