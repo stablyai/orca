@@ -41,6 +41,9 @@ export async function readBotOwnChatPanes(
         ? [{ chat, record }]
         : []
     })
+    if (sides.length === 0) {
+      continue
+    }
     // One party read for the bot's side chats, not two lookups for each.
     const root = createCanonicalOrcaSessionResolver(store)
     const parties = readSessionParties(

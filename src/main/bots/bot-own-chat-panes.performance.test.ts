@@ -106,3 +106,21 @@ it('reads a chat a /clear continued into another session from the batch', async 
   // The batch alone: a lookup that missed it would add two point reads.
   expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(1)
 })
+
+it('reads no record history for a bot without side chats', async () => {
+  const bots = Array.from({ length: 5 }, (_, i) =>
+    makeTestBot({ id: `bot-${i}`, folderWorkspaceId: `home-${i}`, chatSessionId: `home-chat-${i}` })
+  )
+  const host = ownChatHost(
+    bots.map((each, i) => homeRecord(`home-chat-${i}`, `Home ${i}`, each.folderWorkspaceId)),
+    bots
+  )
+  const store = await host.sessionRecords()
+  if (!store) {
+    throw new Error('fixture store missing')
+  }
+  const listRecords = vi.spyOn(store, 'listRecords')
+  expect(await readBotOwnChatPanes(host)).toEqual({})
+  // Each bot's base build only: two per bot, none for an ownership pass with nothing to class.
+  expect(listRecords).toHaveBeenCalledTimes(10)
+})
