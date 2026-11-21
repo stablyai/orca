@@ -3,7 +3,7 @@ import { Session } from '../session'
 import { SessionRepaintNudge } from '../session-repaint-nudge'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 
-function createSession() {
+function createSession(extra: Partial<SubprocessHandle> = {}) {
   const resizes: [number, number][] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Session reads only these members.
   const handle = {
@@ -20,7 +20,8 @@ function createSession() {
     terminateOwnedTree: () => 'unavailable' as const,
     onData() {},
     onExit() {},
-    dispose: () => {}
+    dispose: () => {},
+    ...extra
   } as unknown as SubprocessHandle
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Session reads only the options given here.
   const session = new Session({
@@ -80,12 +81,14 @@ describe.skipIf(process.platform === 'win32')('session repaint request', () => {
   })
 })
 
-describe('session repaint nudge on hosts that cannot repaint', () => {
+describe('session repaint nudge across hosts', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
-  it('says so on Windows, where ConPTY would replay its own viewport', () => {
+  it('nudges on Windows too: ConPTY sends no bytes of its own on a resize', async () => {
+    vi.useFakeTimers()
     vi.stubGlobal('process', { ...process, platform: 'win32' })
     const resize = vi.fn()
     expect(
@@ -94,8 +97,18 @@ describe('session repaint nudge on hosts that cannot repaint', () => {
         resize,
         () => true
       )
-    ).toBe(false)
-    expect(resize).not.toHaveBeenCalled()
+    ).toBe(true)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(resize.mock.calls).toEqual([
+      [80, 23],
+      [80, 24]
+    ])
+  })
+
+  it('says so on WinPTY, which redraws its own screen on a resize', () => {
+    const { session, resizes } = createSession({ resizeRedrawsOwnScreen: true })
+    expect(session.requestRepaint()).toBe(false)
+    expect(resizes).toEqual([])
   })
 
   it('says so without a grid to restore', () => {

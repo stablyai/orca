@@ -46,18 +46,18 @@ describe('terminal command paint after a reattach', () => {
     expect(phone.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(false)
 
     // A host that cannot repaint is not asked again for this reattach.
-    const conpty: TerminalCommandPaintRecord = {}
-    awaitReattachedTerminalPaint(conpty, 1_000)
-    conpty.commandPaint?.beginReattachedRepaintRequest()
-    conpty.commandPaint?.settleReattachedRepaintRequest('unavailable')
-    expect(conpty.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
-    expect(conpty.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
+    const noRepaint: TerminalCommandPaintRecord = {}
+    awaitReattachedTerminalPaint(noRepaint, 1_000)
+    noRepaint.commandPaint?.beginReattachedRepaintRequest()
+    noRepaint.commandPaint?.settleReattachedRepaintRequest('unavailable')
+    expect(noRepaint.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
+    expect(noRepaint.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
 
     // A restore still reading the quit's proof may yet lift the fence: nothing is reported meanwhile.
-    conpty.commandPaint?.beginRestoreProof()
-    expect(conpty.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(false)
-    conpty.commandPaint?.settleRestoreProof()
-    expect(conpty.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
+    noRepaint.commandPaint?.beginRestoreProof()
+    expect(noRepaint.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(false)
+    noRepaint.commandPaint?.settleRestoreProof()
+    expect(noRepaint.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
 
     // Output lost while a request is out re-arms it: the answer must not spend the new one.
     const gap: TerminalCommandPaintRecord = {}

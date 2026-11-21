@@ -190,7 +190,7 @@ export type IPtyProvider = {
   resetInputModes(id: string): Promise<void>
   /** Sends ESC [ O to a ?1004 program once no viewer is left to blur; hosts that own no viewers omit it. */
   reportFocusLost?(id: string): Promise<void>
-  /** Redraws the program without input; `unavailable` when this host cannot (ConPTY, no grid). */
+  /** Redraws the program without input; `unavailable` when this host cannot (WinPTY, no grid, older daemons). */
   requestRepaint?(id: string): Promise<PtyRepaintResult>
   /** Ends the startup Kitty-query window; OSC 10/11 authority stays with the owner for life. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number

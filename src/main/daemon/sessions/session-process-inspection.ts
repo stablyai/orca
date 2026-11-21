@@ -26,6 +26,7 @@ export abstract class SessionProcessInspection {
   requestRepaint(): boolean {
     return (
       this.isAlive &&
+      this.subprocess.resizeRedrawsOwnScreen !== true &&
       this.repaintNudge.request(
         () => this.getAppliedSize(),
         (cols, rows) => this.subprocess.resize(cols, rows),

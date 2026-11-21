@@ -212,7 +212,7 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     const reply = await this.client.request<{ nudged?: boolean }>('requestRepaint', {
       sessionId: id
     })
-    // A daemon from before the reply carried this nudged wherever this host's platform lets one.
+    // Daemons before v62 omit the answer; they skipped Windows and nudged everywhere else.
     const nudged = reply?.nudged ?? process.platform !== 'win32'
     return nudged ? 'nudged' : 'unavailable'
   }

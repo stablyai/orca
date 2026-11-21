@@ -276,7 +276,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       .then(async ([agent, , ...reports]) => {
         const report = reports.find((candidate) => candidate !== null)
         const turn = agent && report ? hookLeadTurnState(report) : null
-        // A host that cannot repaint (Windows ConPTY, older daemons) still restores a proven frame.
+        // A host that cannot repaint (SSH, older daemons) still restores a proven frame.
         const proven = !turn && !!agent && (await this.isRetainedFrameProven(ptyId, agent))
         if (!isCurrent()) {
           return
