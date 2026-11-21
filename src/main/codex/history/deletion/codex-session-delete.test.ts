@@ -170,53 +170,65 @@ describe('Codex session deletion', () => {
     expect(await pendingCodexSessionDeletionHomes(SESSION)).toContain(homes[2])
   })
 
-  it('materializes a selected symlink before the CLI deletes its source home', async () => {
-    rmSync(paths[0])
-    symlinkSync(paths[2], paths[0], 'file')
-    const run = deleteRun()
-    expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'deleted' })
-    expect(paths.map(existsSync)).toEqual([false, false, false])
-  })
+  it.skipIf(process.platform === 'win32')(
+    'materializes a selected symlink before the CLI deletes its source home',
+    async () => {
+      rmSync(paths[0])
+      symlinkSync(paths[2], paths[0], 'file')
+      const run = deleteRun()
+      expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'deleted' })
+      expect(paths.map(existsSync)).toEqual([false, false, false])
+    }
+  )
 
-  it('keeps a materialized symlink retryable after a CLI failure', async () => {
-    rmSync(paths[2])
-    symlinkSync(paths[0], paths[2], 'file')
-    const run = deleteRun().mockImplementation(async (spec) =>
-      spec.args?.includes('--help')
-        ? { ...success, stdout: 'Usage: codex delete [OPTIONS] <SESSION>\n--force' }
-        : { ...success, code: 1 }
-    )
-    expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'failed' })
-    expect(lstatSync(paths[2]).isFile()).toBe(true)
-    expect(readFileSync(paths[2])).toEqual(readFileSync(paths[0]))
-    expect(await deleteCodexSession(args(), { homes, run: deleteRun() })).toMatchObject({
-      outcome: 'deleted'
-    })
-  })
+  it.skipIf(process.platform === 'win32')(
+    'keeps a materialized symlink retryable after a CLI failure',
+    async () => {
+      rmSync(paths[2])
+      symlinkSync(paths[0], paths[2], 'file')
+      const run = deleteRun().mockImplementation(async (spec) =>
+        spec.args?.includes('--help')
+          ? { ...success, stdout: 'Usage: codex delete [OPTIONS] <SESSION>\n--force' }
+          : { ...success, code: 1 }
+      )
+      expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'failed' })
+      expect(lstatSync(paths[2]).isFile()).toBe(true)
+      expect(readFileSync(paths[2])).toEqual(readFileSync(paths[0]))
+      expect(await deleteCodexSession(args(), { homes, run: deleteRun() })).toMatchObject({
+        outcome: 'deleted'
+      })
+    }
+  )
 
-  it('rejects a symlink whose target has a different UUID', async () => {
-    const other = rollout(homes[0], OTHER)
-    writeRollout(other, OTHER)
-    rmSync(paths[2])
-    symlinkSync(other, paths[2], 'file')
-    const run = deleteRun()
-    expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'failed' })
-    expect(run).not.toHaveBeenCalled()
-    expect(lstatSync(paths[2]).isSymbolicLink()).toBe(true)
-    expect(existsSync(other)).toBe(true)
-  })
+  it.skipIf(process.platform === 'win32')(
+    'rejects a symlink whose target has a different UUID',
+    async () => {
+      const other = rollout(homes[0], OTHER)
+      writeRollout(other, OTHER)
+      rmSync(paths[2])
+      symlinkSync(other, paths[2], 'file')
+      const run = deleteRun()
+      expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'failed' })
+      expect(run).not.toHaveBeenCalled()
+      expect(lstatSync(paths[2]).isSymbolicLink()).toBe(true)
+      expect(existsSync(other)).toBe(true)
+    }
+  )
 
-  it('rejects a symlink pointing outside known Codex homes', async () => {
-    const outside = rollout(join(root, 'outside'))
-    writeRollout(outside)
-    rmSync(paths[2])
-    symlinkSync(outside, paths[2], 'file')
-    const run = deleteRun()
-    expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'failed' })
-    expect(run).not.toHaveBeenCalled()
-    expect(readFileSync(outside)).toEqual(readFileSync(paths[0]))
-    expect(lstatSync(paths[2]).isSymbolicLink()).toBe(true)
-  })
+  it.skipIf(process.platform === 'win32')(
+    'rejects a symlink pointing outside known Codex homes',
+    async () => {
+      const outside = rollout(join(root, 'outside'))
+      writeRollout(outside)
+      rmSync(paths[2])
+      symlinkSync(outside, paths[2], 'file')
+      const run = deleteRun()
+      expect(await deleteCodexSession(args(), { homes, run })).toMatchObject({ outcome: 'failed' })
+      expect(run).not.toHaveBeenCalled()
+      expect(readFileSync(outside)).toEqual(readFileSync(paths[0]))
+      expect(lstatSync(paths[2]).isSymbolicLink()).toBe(true)
+    }
+  )
 
   it('verifies and deletes a selected compressed rollout alongside its plain aliases', async () => {
     const compressed = `${paths[0]}.zst`

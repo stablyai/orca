@@ -25,11 +25,11 @@ export function useAiVaultSessionDeleteHost(
   const label = useAppStore((s) => selectExecutionHostDisplayLabel(s, session.executionHostId))
   const environmentId = aiVaultSessionRuntimeEnvironmentId(session)
   // Subscribe to the host's verified status so an in-place host update re-enables Delete.
-  const deleteSupported = useRuntimeHostStatusSelector(environmentId, (entry) => {
+  const deleteSupported = useAppStore((s) => {
     if (!environmentId) {
       return true
     }
-    const status = lastVerifiedRuntimeStatus(entry)
+    const status = lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId?.get(environmentId))
     return status?.capabilities
       ? status.capabilities.includes(AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY)
       : null
@@ -80,118 +80,131 @@ export function useAiVaultSessionDeleteAction({
   const pendingSessionIds = useRef(new Set<string>())
 
   const runDelete = useCallback(
-    async (session: AiVaultSession) => {
-      const environmentId = aiVaultSessionRuntimeEnvironmentId(session)
-      // Fence to the pairing that listed this row (or its same-host rotation), never a re-pair elsewhere.
-      const pairingRevision = environmentId
-        ? resolveContinuedRuntimeEnvironmentRevision(environmentId, session.hostPairingRevision)
-        : undefined
-      const hostLabel = selectExecutionHostDisplayLabel(
-        useAppStore.getState(),
-        session.executionHostId
-      )
-      if (environmentId && (await runtimeHostLacksDelete(environmentId, hostLabel))) {
-        toast.error(aiVaultSessionHostUpdateRequiredReason(hostLabel))
+    async function runDelete(session: AiVaultSession): Promise<void> {
+      if (pendingSessionIds.current.has(session.id)) {
         return
       }
-      const confirmed = await confirm({
-        title: translate('common.delete', 'Delete'),
-        description:
-          session.agent === 'codex'
-            ? translate(
-                'auto.components.right.sidebar.AiVaultSessionDeleteDialog.codexDescription',
-                '"{{value0}}" will be permanently deleted from Codex history on this device. Your workspace files will be kept. Close any Codex session using it outside Orca before deleting; Orca cannot detect those sessions.',
-                { value0: session.title }
-              )
-            : environmentId
-              ? translate(
-                  'auto.components.right.sidebar.AiVaultSessionDeleteDialog.remoteDescription',
-                  '"{{value0}}" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
-                  { value0: session.title, value1: agentLabel(session.agent), value2: hostLabel }
-                )
-              : translate(
-                  'auto.components.right.sidebar.AiVaultSessionDeleteDialog.description',
-                  '"{{value0}}" will be deleted. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
-                  { value0: session.title, value1: agentLabel(session.agent) }
-                ),
-        confirmLabel: translate(
-          'auto.components.right.sidebar.AiVaultSessionDeleteDialog.confirm',
-          'Delete'
-        ),
-        confirmVariant: 'destructive'
-      })
-      if (!confirmed) {
-        return
-      }
+      pendingSessionIds.current.add(session.id)
+      const retryToastId = `codex-session-deletion:${session.id}`
       try {
-        const result = await window.api.aiVault.deleteSession({
-          agent: session.agent,
-          sessionId: session.sessionId,
-          filePath: session.filePath,
-          executionHostId: session.executionHostId,
-          ...(pairingRevision !== undefined
-            ? { expectedEnvironmentPairingRevision: pairingRevision }
-            : {})
-        })
-        if (result.outcome === 'rejected' && result.reason === 'host-update-required') {
+        const environmentId = aiVaultSessionRuntimeEnvironmentId(session)
+        // Fence to the pairing that listed this row (or its same-host rotation), never a re-pair elsewhere.
+        const pairingRevision = environmentId
+          ? resolveContinuedRuntimeEnvironmentRevision(environmentId, session.hostPairingRevision)
+          : undefined
+        const hostLabel = selectExecutionHostDisplayLabel(
+          useAppStore.getState(),
+          session.executionHostId
+        )
+        if (environmentId && (await runtimeHostLacksDelete(environmentId, hostLabel))) {
           toast.error(aiVaultSessionHostUpdateRequiredReason(hostLabel))
           return
         }
-        if (result.outcome !== 'deleted') {
-          if (result.outcome === 'failed' && result.detail) {
-            toast.error(
-              result.detail === 'unsupported'
+        const confirmed = await confirm({
+          title: translate('common.delete', 'Delete'),
+          description:
+            session.agent === 'codex'
+              ? translate(
+                  'auto.components.right.sidebar.AiVaultSessionDeleteDialog.codexDescription',
+                  '"{{value0}}" will be permanently deleted from Codex history on this device. Your workspace files will be kept. Close any Codex session using it outside Orca before deleting; Orca cannot detect those sessions.',
+                  { value0: session.title }
+                )
+              : environmentId
                 ? translate(
-                    'auto.components.right.sidebar.AiVaultPanel.codexDeleteUnsupported',
-                    'This Codex version does not support session deletion. Update Codex and try again.'
+                    'auto.components.right.sidebar.AiVaultSessionDeleteDialog.remoteDescription',
+                    '"{{value0}}" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
+                    { value0: session.title, value1: agentLabel(session.agent), value2: hostLabel }
                   )
-                : result.detail === 'active'
-                  ? translate(
-                      'auto.components.right.sidebar.AiVaultPanel.codexDeleteActive',
-                      'This session is still owned by a Codex terminal or native chat. Close its terminal, or delete it from its chat.'
-                    )
-                  : translate(
-                      'auto.components.right.sidebar.AiVaultPanel.codexDeleteIncomplete',
-                      'Deletion incomplete. Some Codex session data may remain. Try Delete again to finish cleanup.'
-                    )
-            )
+                : translate(
+                    'auto.components.right.sidebar.AiVaultSessionDeleteDialog.description',
+                    '"{{value0}}" will be deleted. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
+                    { value0: session.title, value1: agentLabel(session.agent) }
+                  ),
+          confirmLabel: translate(
+            'auto.components.right.sidebar.AiVaultSessionDeleteDialog.confirm',
+            'Delete'
+          ),
+          confirmVariant: 'destructive'
+        })
+        if (!confirmed) {
+          return
+        }
+        try {
+          const result = await window.api.aiVault.deleteSession({
+            agent: session.agent,
+            sessionId: session.sessionId,
+            filePath: session.filePath,
+            executionHostId: session.executionHostId,
+            ...(pairingRevision !== undefined
+              ? { expectedEnvironmentPairingRevision: pairingRevision }
+              : {})
+          })
+          if (result.outcome === 'rejected' && result.reason === 'host-update-required') {
+            toast.error(aiVaultSessionHostUpdateRequiredReason(hostLabel))
             return
           }
-          // Use one failure message rather than exposing raw main-side reasons.
-          throw new Error(result.outcome)
-        }
-        forgetAiVaultSessionResult(session.id)
-        onDeleted?.(session)
-        toast.success(
-          translate('auto.components.right.sidebar.AiVaultPanel.sessionDeleted', 'Session deleted')
-        )
-        // Main already invalidated its caches; this is only for immediate UX.
-        void refresh({ force: true })
-      } catch {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.sessionDeleteFailed',
-            "Couldn't delete the session"
+          if (result.outcome !== 'deleted') {
+            if (result.outcome === 'failed' && result.detail) {
+              toast.error(
+                result.detail === 'unsupported'
+                  ? translate(
+                      'auto.components.right.sidebar.AiVaultPanel.codexDeleteUnsupported',
+                      'This Codex version does not support session deletion. Update Codex and try again.'
+                    )
+                  : result.detail === 'active'
+                    ? translate(
+                        'auto.components.right.sidebar.AiVaultPanel.codexDeleteActive',
+                        'This session is still owned by a Codex terminal or native chat. Close its terminal, or delete it from its chat.'
+                      )
+                    : translate(
+                        'auto.components.right.sidebar.AiVaultPanel.codexDeleteIncomplete',
+                        'Deletion incomplete. Some Codex session data may remain. Try Delete again to finish cleanup.'
+                      ),
+                result.detail === 'incomplete'
+                  ? {
+                      id: retryToastId,
+                      description: session.title,
+                      duration: Infinity,
+                      action: {
+                        label: translate('common.retry', 'Retry'),
+                        onClick: (event) => {
+                          event.preventDefault()
+                          void runDelete(session)
+                        }
+                      }
+                    }
+                  : undefined
+              )
+              return
+            }
+            // Use one failure message rather than exposing raw main-side reasons.
+            throw new Error(result.outcome)
+          }
+          toast.dismiss(retryToastId)
+          forgetAiVaultSessionResult(session.id)
+          onDeleted?.(session)
+          toast.success(
+            translate(
+              'auto.components.right.sidebar.AiVaultPanel.sessionDeleted',
+              'Session deleted'
+            )
           )
-        )
+          // Main already invalidated its caches; this is only for immediate UX.
+          void refresh({ force: true })
+        } catch {
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.AiVaultPanel.sessionDeleteFailed',
+              "Couldn't delete the session"
+            )
+          )
+        }
+      } finally {
+        pendingSessionIds.current.delete(session.id)
       }
     },
     [confirm, refresh, onDeleted]
   )
 
-  return useCallback(
-    async (session: AiVaultSession) => {
-      // One flow per row: repeated clicks during a slow host check must not stack dialogs.
-      if (pendingSessionIds.current.has(session.id)) {
-        return
-      }
-      pendingSessionIds.current.add(session.id)
-      try {
-        await runDelete(session)
-      } finally {
-        pendingSessionIds.current.delete(session.id)
-      }
-    },
-    [runDelete]
-  )
+  return runDelete
 }

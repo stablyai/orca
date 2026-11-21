@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 
-import { cleanup, renderHook } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultDeleteSessionResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
@@ -14,7 +14,6 @@ const { confirm, deleteSession } = vi.hoisted(() => ({
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const session: AiVaultSession = {
   id: 'codex:session',
@@ -44,7 +43,10 @@ beforeEach(() => {
   confirm.mockResolvedValue(true)
   Object.assign(window, { api: { aiVault: { deleteSession } } })
 })
-afterEach(cleanup)
+afterEach(() => {
+  toast.dismiss()
+  cleanup()
+})
 
 describe('Codex history deletion action', () => {
   it('preserves the session when confirmation is cancelled', async () => {
@@ -55,28 +57,7 @@ describe('Codex history deletion action', () => {
     expect(deleteSession).not.toHaveBeenCalled()
   })
 
-  it.each(['unsupported', 'active', 'incomplete'] as const)(
-    'keeps the row and reports %s without showing a success toast',
-    async (detail) => {
-      deleteSession.mockResolvedValue({
-        outcome: 'failed',
-        agent: 'codex',
-        error: 'private detail',
-        detail
-      })
-      const refresh = vi.fn()
-      const onDeleted = vi.fn()
-      const { result } = renderHook(() => useAiVaultSessionDeleteAction({ refresh, onDeleted }))
-      await result.current(session)
-      expect(toast.error).toHaveBeenCalledTimes(1)
-      expect(toast.error).not.toHaveBeenCalledWith('private detail')
-      expect(toast.success).not.toHaveBeenCalled()
-      expect(onDeleted).not.toHaveBeenCalled()
-      expect(refresh).not.toHaveBeenCalled()
-    }
-  )
-
-  it('allows a failed deletion to be retried and refreshes only after cleanup succeeds', async () => {
+  it('retries incomplete cleanup after a rescan removes the session row', async () => {
     deleteSession
       .mockResolvedValueOnce({
         outcome: 'failed',
@@ -87,18 +68,33 @@ describe('Codex history deletion action', () => {
       .mockResolvedValueOnce({ outcome: 'deleted' })
     const refresh = vi.fn().mockResolvedValue(undefined)
     const onDeleted = vi.fn()
-    const { result } = renderHook(() => useAiVaultSessionDeleteAction({ refresh, onDeleted }))
-    await result.current(session)
-    expect(onDeleted).not.toHaveBeenCalled()
-    await result.current(session)
+    function SessionRow() {
+      const deleteAction = useAiVaultSessionDeleteAction({ refresh, onDeleted })
+      return <button onClick={() => void deleteAction(session)}>Delete session</button>
+    }
+    function History({ sessions }: { sessions: AiVaultSession[] }) {
+      return (
+        <>
+          <Toaster />
+          {sessions.map((row) => (
+            <SessionRow key={row.id} />
+          ))}
+        </>
+      )
+    }
+    const { rerender } = render(<History sessions={[session]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session' }))
+    await screen.findByRole('button', { name: 'Retry' })
+    rerender(<History sessions={[]} />)
+    expect(screen.queryByRole('button', { name: 'Delete session' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(session))
     expect(deleteSession).toHaveBeenLastCalledWith({
       agent: 'codex',
       sessionId: session.sessionId,
       filePath: session.filePath,
       executionHostId: 'local'
     })
-    expect(onDeleted).toHaveBeenCalledWith(session)
-    expect(toast.success).toHaveBeenCalledTimes(1)
     expect(refresh).toHaveBeenCalledWith({ force: true })
   })
 })

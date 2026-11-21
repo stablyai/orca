@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { lock } from 'proper-lockfile'
+import { join } from 'node:path'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
@@ -209,20 +208,16 @@ export async function withCodexRolloutPublication<T>(
   if (await isCodexSessionDeletionRecorded(rollout.threadId)) {
     return skipped
   }
-  const path = recordPath(rollout.threadId)
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
-  let release: () => Promise<void>
   try {
-    release = await lock(path, { realpath: false, retries: 0 })
+    return await withFileTransactionLock(
+      recordPath(rollout.threadId),
+      async () => ((await isCodexSessionDeletionRecorded(rollout.threadId)) ? skipped : publish()),
+      { retries: 0 }
+    )
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ELOCKED') {
       return skipped
     }
     throw error
-  }
-  try {
-    return (await isCodexSessionDeletionRecorded(rollout.threadId)) ? skipped : await publish()
-  } finally {
-    await release()
   }
 }
