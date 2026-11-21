@@ -170,8 +170,6 @@ const CommentMarkdown = React.memo(
       () => (extension ? { ...baseComponents, ...extension.components } : baseComponents),
       [baseComponents, extension]
     )
-    // Where each finished block's fade stood when it stopped growing.
-    const finishedFadeFrom = React.useRef(new Map<number, number>())
     const fadingComponents = React.useMemo(
       () => ({ ...components, span: CommentMarkdownWords }),
       [components]
@@ -228,19 +226,10 @@ const CommentMarkdown = React.memo(
                 const held =
                   fadeHold !== undefined && fadeHold.from < blockEnd && fadeHold.to > block.start
                 // A held block the window has passed keeps one value, so its memo holds.
-                let blockFadeFrom =
+                const blockFadeFrom =
                   fadeFrom !== undefined && (fadeFrom < blockEnd || held)
                     ? Math.min(block.text.length, Math.max(0, fadeFrom - block.start))
                     : undefined
-                // A finished block keeps that point until the window passes it, so its memo
-                // holds instead of re-running its pipeline each step; its words fade on their own.
-                const finished = finishedFadeFrom.current
-                if (blockFadeFrom === undefined) {
-                  finished.delete(block.start)
-                } else if (!held && index < blocks.length - 1) {
-                  blockFadeFrom = finished.get(block.start) ?? blockFadeFrom
-                  finished.set(block.start, blockFadeFrom)
-                }
                 return (
                   <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                     <MemoizedMarkdown
@@ -249,6 +238,7 @@ const CommentMarkdown = React.memo(
                       rehypePlugins={activeRehypePlugins}
                       math={math}
                       fadeFrom={blockFadeFrom}
+                      fadeSettled={!held && index < blocks.length - 1}
                       fadeBase={block.start}
                       {...(held
                         ? {

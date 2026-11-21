@@ -15,26 +15,46 @@ import {
 type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
 type RehypePlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 
-/** One render of the pipeline; memoized so an unchanged block is not parsed again. */
-export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
-  math,
-  fadeFrom,
-  fadeHoldFrom,
-  fadeHoldTo,
-  fadeBase = 0,
-  block,
-  ...props
-}: React.ComponentProps<typeof Markdown> & {
+type MemoizedMarkdownProps = React.ComponentProps<typeof Markdown> & {
   math: boolean
   /** Source offset in this block where fading words start; none renders plain. */
   fadeFrom?: number
+  /** The block no longer grows: while it fades it keeps the fade point it first rendered with, so
+   *  steps don't re-run its pipeline. Its words finish fading on their own. */
+  fadeSettled?: boolean
   /** Block offsets of selected fading words, whose groups keep their word elements. */
   fadeHoldFrom?: number
   fadeHoldTo?: number
   /** Where this block starts in the whole content. */
   fadeBase?: number
   block?: MarkdownBlock
-}) {
+}
+
+/** Equal props, except that a settled block's moving fade point doesn't count until it renders plain. */
+function sameBlockRender(previous: MemoizedMarkdownProps, next: MemoizedMarkdownProps): boolean {
+  const { fadeFrom: before, ...previousRest } = previous
+  const { fadeFrom: after, ...nextRest } = next
+  const holdsFade = next.fadeSettled === true && before !== undefined && after !== undefined
+  if (before !== after && !holdsFade) {
+    return false
+  }
+  const keys = new Set([...Object.keys(previousRest), ...Object.keys(nextRest)])
+  return [...keys].every((key) =>
+    Object.is(Reflect.get(previousRest, key), Reflect.get(nextRest, key))
+  )
+}
+
+/** One render of the pipeline; memoized so an unchanged block is not parsed again. */
+export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
+  math,
+  fadeFrom,
+  fadeSettled: _settled,
+  fadeHoldFrom,
+  fadeHoldTo,
+  fadeBase = 0,
+  block,
+  ...props
+}: MemoizedMarkdownProps) {
   const renderMath = useChatMathRendering(math)
   const plugins = React.useMemo<RehypePlugins>(
     () => [
@@ -74,7 +94,7 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
     return [...(props.remarkPlugins ?? []), reuseParsedBlock]
   }, [block, props.remarkPlugins])
   return <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
-})
+}, sameBlockRender)
 
 /** The content as the blocks to render. Cut into blocks from the first time it is growing, and
  *  from then on, so the stream ending does not redraw what is already there. */

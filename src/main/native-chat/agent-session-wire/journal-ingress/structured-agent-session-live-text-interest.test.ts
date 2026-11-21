@@ -1,6 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import { createLiveTextPublication } from './structured-agent-session-dispatch'
-import type { StructuredAgentSessionEventTarget } from './structured-agent-session-event-sink'
+import type {
+  LiveTextReaders,
+  StructuredAgentSessionEventTarget
+} from './structured-agent-session-event-sink'
 
 it('admits no live operations while nobody views the stream, and resumes for a new viewer', () => {
   const submit = vi.fn(() => ({ accepted: true as const }))
@@ -49,7 +52,7 @@ it('admits no live operations while every streaming row is one its viewers no lo
   const submit = vi.fn(() => ({ accepted: true as const }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publication reads only this member of its target.
   const target = {
-    liveTextReaders: () => ({ appends: true, shown: true, takes: () => false })
+    liveTextReaders: (): LiveTextReaders => ({ appends: true, shown: true, takes: () => false })
   } as StructuredAgentSessionEventTarget
   const publish = createLiveTextPublication(
     submit,

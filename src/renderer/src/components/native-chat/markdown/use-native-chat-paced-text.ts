@@ -21,6 +21,9 @@ import {
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 
 const WORD_FADE_MS = 300
+/** A step that shows a long stretch at once (a slow-to-draw reply steps seconds apart) fades only
+ *  its last words; one element per word across thousands of words would make each step slower. */
+const FADE_MAX_CHARS = 1500
 
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
@@ -88,7 +91,8 @@ export function useNativeChatPacedText(
           selected?.from === previous.hold?.from && selected?.to === previous.hold?.to
             ? previous.hold
             : selected
-        return { length, fadeFrom: Math.min(history[0]!.length, length), ...(hold ? { hold } : {}) }
+        const fadeFrom = Math.max(Math.min(history[0]!.length, length), length - FADE_MAX_CHARS)
+        return { length, fadeFrom, ...(hold ? { hold } : {}) }
       })
     },
     [root]
