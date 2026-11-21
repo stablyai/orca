@@ -48,6 +48,11 @@ export function normalizeNotificationsMutedByWorktree(value: unknown): Record<st
   return normalizeBooleanByWorktree(value)
 }
 
+/** Normalizes the persisted per-tab notification mute map. */
+export function normalizeNotificationsMutedByTabId(value: unknown): Record<string, boolean> {
+  return normalizeBooleanByWorktree(value)
+}
+
 export function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   if (
     sortBy === 'smart' ||
