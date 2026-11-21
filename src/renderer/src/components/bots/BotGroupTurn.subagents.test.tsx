@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -45,6 +47,7 @@ const turn: Turn = {
 afterEach(() => {
   act(() => openNativeChatSubagent(`bot-group-turn:${turn.operationId}`, null))
   cleanup()
+  vi.unstubAllGlobals()
 })
 
 function renderTurn(shown: Turn) {
@@ -67,6 +70,12 @@ function renderTurn(shown: Turn) {
 }
 
 it("draws the member's outfit as it was when the turn ran", async () => {
+  // The outfit's art is a bundled file the page fetches; serve it from the checkout.
+  vi.stubGlobal('fetch', async (url: string) => {
+    const path = decodeURIComponent(new URL(url, 'http://test').pathname).replace(/^\/@fs/, '')
+    const file = path.startsWith(process.cwd()) ? path : join(process.cwd(), path)
+    return new Response(await readFile(file))
+  })
   const view = renderTurn({ ...turn, avatar: 'mascot:A1', avatarOutfit: 'tie' })
   await vi.waitFor(() =>
     expect(view.container.querySelector('img[src^="data:image/webp"]')).not.toBeNull()
