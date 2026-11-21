@@ -40,19 +40,17 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   /** Continues after startup restoration, whichever path ran it, and off the startup path. A failed
    *  restoration only lets waiters go on, so a retry that reconciles leases still continues. */
   protected continueAfterStartupRestoration(restoration: Promise<void>): Promise<void> {
-    const start = (restored: boolean) =>
-      this.structuredAgentSessionLaunchContinuation.start(
-        restored
-          ? structuredAgentSessionLaunchContinuationDeps(
-              getStructuredAgentSessionHost(),
-              () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
-            )
-          : undefined
-      )
+    const launch = this.structuredAgentSessionLaunchContinuation
     return restoration.then(
-      () => start(true),
+      () =>
+        launch.start(
+          structuredAgentSessionLaunchContinuationDeps(
+            getStructuredAgentSessionHost(),
+            () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
+          )
+        ),
       (error: unknown) => {
-        start(false)
+        launch.start(undefined, { retryable: true })
         throw error
       }
     )

@@ -1,3 +1,4 @@
+import { setConnectorClaimSource } from '../native-chat/agent-session-wire/recovery/structured-agent-session-connector-claims'
 import type { AgentTransitionDetector } from '../agent-hooks/observations/agent-transition-detector'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import { isRefOf } from '../../shared/connector-place-names'
@@ -173,7 +174,10 @@ export function installExternalConversations(
 /** The reply outbox's fill, boot recovery and watch (design item 125), for one enabled seam. */
 function connectorReplyOutbox(
   store: ExternalConversationLinkStore,
-  runtime: { getConnectorCloud?: () => { repliesFilled(): void } | null },
+  runtime: {
+    getConnectorCloud?: () => { repliesFilled(): void } | null
+    structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
+  },
   signal: AbortSignal
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
@@ -189,8 +193,13 @@ function connectorReplyOutbox(
     agentOf: (sessionId) =>
       [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)?.link.agent ?? '',
     fillTurn: fill,
-    filled
+    filled,
+    // This start's own continuations of restart cuts claim first; whatever they left closes then.
+    ...(runtime.structuredAgentSessionLaunchContinuation
+      ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.continued }
+      : {})
   })
+  setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))
   const boot = () => {
     recovery.dispose()
     if (getStructuredAgentSessionHost()) {
@@ -200,6 +209,7 @@ function connectorReplyOutbox(
   const stop = onStructuredAgentSessionHostChanged(boot)
   signal.addEventListener('abort', () => {
     stop()
+    setConnectorClaimSource(null)
     recovery.dispose()
   })
   boot()
