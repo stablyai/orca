@@ -80,7 +80,8 @@ export function NativeChatComposerWorkspace({
       toast.error(t('components.native-chat.composerWorkspace.copyFailed', 'Failed to copy'))
     }
   }
-  // Why: the folder icon already says "folder"; worktree and main checkout share that icon, so they keep a suffix.
+  // Why: for a plain folder the folder icon is literally the kind, so "· Folder" only repeats it.
+  // Worktrees and main checkouts reuse that icon, so they keep a suffix to tell them apart.
   const kindLabel =
     kind === 'folder'
       ? null

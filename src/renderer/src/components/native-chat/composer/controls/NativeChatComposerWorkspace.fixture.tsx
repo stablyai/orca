@@ -129,10 +129,10 @@ function workspaceFixture({
       const button =
         frame.querySelector<HTMLButtonElement>('[aria-label^="Switch branch:"]') ??
         Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).at(-1)
-      if (!button && !folder) {
+      if (!button) {
         throw new Error('The workspace identity control must be present')
       }
-      if (button && !folder) {
+      if (button) {
         const expectedAction = !branch
           ? 'Copy Commit a1b2c3d (not a branch)'
           : hostId.startsWith('ssh:')
