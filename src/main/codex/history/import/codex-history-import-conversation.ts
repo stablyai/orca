@@ -25,6 +25,8 @@ export type ConversationCopy = {
   /** The store folder holding the rollout's other place (dated or archived), if it has one. */
   otherFolder: string | null
   isHandled: () => boolean
+  /** Called once the copy is in the store; never throws. */
+  recordPublished: () => Promise<void>
 }
 
 /**
@@ -62,7 +64,8 @@ export async function copyConversationIntoStore(
         indexPendingDir: args.indexPendingDir,
         deletionEpoch,
         isCurrent: args.isCurrent,
-        isHandled: copy.isHandled
+        isHandled: copy.isHandled,
+        recordPublished: copy.recordPublished
       })
     )
   } catch (error) {

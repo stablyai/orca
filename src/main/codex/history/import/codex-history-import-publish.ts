@@ -22,6 +22,8 @@ export type StagedImport = {
   /** The import setting is unchanged and Orca isn't quitting. */
   isCurrent: () => boolean
   isHandled: () => boolean
+  /** Called as soon as the rollout is in the store, before anything else can fail or wait. */
+  recordPublished: () => Promise<void>
 }
 
 /**
@@ -50,18 +52,21 @@ async function linkUnlessDeleted(job: StagedImport): Promise<'copied' | 'existin
     // Recorded before the link, so the store's index learns every rollout that joins it.
     const marker = join(job.indexPendingDir, basename(job.final))
     await writeFile(marker, '')
+    let linked: 'copied' | 'existing'
     try {
       // Checked again with nothing awaited before the link, which is the publish.
       if (!stillWanted()) {
         await rm(marker, { force: true, maxRetries: 3 })
         return 'refused'
       }
-      return await linkStagedRollout(job.staged, job.final)
+      linked = await linkStagedRollout(job.staged, job.final)
     } catch (error) {
       // No heal runs during a publish, so the marker can't settle the thread as missing.
       await rm(marker, { force: true, maxRetries: 3 })
       throw error
     }
+    await job.recordPublished()
+    return linked
   })
   return outcome === 'held' ? 'refused' : outcome
 }
