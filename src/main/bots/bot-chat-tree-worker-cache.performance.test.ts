@@ -43,6 +43,8 @@ it('re-reads only the running and changed workers on a refresh, at N and 10N cha
     insert.run('ctx-running', 't-running', 'dispatched', 'side-chat-0')
     const requested: string[][] = []
     const cache = new BotChatTreeWorkerCache()
+    // As the runtime binds it: the database's own row-change notice drops a kept read.
+    host.db().workerStatusListener = (id, change) => cache.rowChanged(id, change)
     const tree = {
       ...host,
       workerCache: cache,
@@ -60,7 +62,10 @@ it('re-reads only the running and changed workers on a refresh, at N and 10N cha
     await readBotChatTree(tree, { botId: bot.id })
     expect(requested[1]).toEqual(['ctx-running'])
 
-    cache.drop('ctx-7-a')
+    host
+      .db()
+      .db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = 'ctx-7-a'")
+      .run()
     await readBotChatTree(tree, { botId: bot.id })
     expect(requested[2]?.sort()).toEqual(['ctx-7-a', 'ctx-running'])
     closeOwnChatHost()

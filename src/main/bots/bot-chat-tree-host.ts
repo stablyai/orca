@@ -62,6 +62,17 @@ function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatT
   }
 }
 
+/** The status row a worker's agent and host are read from, as a key that changes when that row does. */
+function workerStatusEvidence(
+  host: BotChatTreeHost
+): (worker: OrchestrationSessionWorker) => string {
+  const rows = new Map(host.statusRows().map((row) => [row.paneKey, row]))
+  return (worker) => {
+    const row = worker.paneKey ? rows.get(worker.paneKey) : undefined
+    return row ? `${row.agentType ?? ''}|${row.connectionId ?? ''}` : ''
+  }
+}
+
 async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
   const store = await host.sessionRecords()
   const inputs = readBotChatInputs(host, bot)
@@ -146,10 +157,16 @@ export async function readBotChatTreeParts(
   const workers: OrchestrationSessionWorker[] = await (
     host.workerCache
       ? host.workerCache.read(
-          dispatchIds,
-          new Set(placed.flatMap((entry) => (entry.dispatch.settled ? [entry.dispatch.id] : []))),
-          host.dispatchWorkers,
-          host.db()
+          {
+            botId: bot.id,
+            dispatchIds,
+            settled: new Set(
+              placed.flatMap((entry) => (entry.dispatch.settled ? [entry.dispatch.id] : []))
+            ),
+            evidenceOf: workerStatusEvidence(host),
+            source: host.db()
+          },
+          host.dispatchWorkers
         )
       : host.dispatchWorkers(dispatchIds)
   ).catch((error: unknown) => {
