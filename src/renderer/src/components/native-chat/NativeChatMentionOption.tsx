@@ -45,6 +45,10 @@ function Highlighted({
   return <>{parts}</>
 }
 
+// Stands in for the purpose inside the translated "For: {{detail}}" so a highlighted snippet can
+// take its place while the label keeps the translation's wording and order.
+const DETAIL_SLOT = '\uE000'
+
 function MemberDetail({
   detail,
   hits,
@@ -62,6 +66,27 @@ function MemberDetail({
     <>
       {snippet.clipped ? '…' : null}
       <Highlighted text={snippet.text} hits={snippet.hits} muted={muted} />
+    </>
+  )
+}
+
+/** A purpose snippet inside its "For: …" label, so every row reads the same way. */
+function ForDetail({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const slot = label.indexOf(DETAIL_SLOT)
+  if (slot === -1) {
+    return <>{children}</>
+  }
+  return (
+    <>
+      {label.slice(0, slot)}
+      {children}
+      {label.slice(slot + DETAIL_SLOT.length)}
     </>
   )
 }
@@ -110,7 +135,16 @@ export function NativeChatMentionOption({
           {purpose ? (
             <span title={purpose} className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {member.detail && detailHits.length > 0 ? (
-                <MemberDetail detail={member.detail} hits={detailHits} muted={paused} />
+                <ForDetail
+                  label={
+                    member.note ??
+                    t('components.native-chat.composer.botFor', 'For: {{detail}}', {
+                      detail: DETAIL_SLOT
+                    })
+                  }
+                >
+                  <MemberDetail detail={member.detail} hits={detailHits} muted={paused} />
+                </ForDetail>
               ) : (
                 purpose
               )}
