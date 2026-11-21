@@ -87,7 +87,7 @@ export async function startWorker(
   const db = runtime.getOrchestrationDb()
   const mode = decideWorkerStartMode({
     params,
-    settings: readWorkerStartModeSettings(runtime)
+    settings: readWorkerStartModeSettings(runtime, params.agent)
   })
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.

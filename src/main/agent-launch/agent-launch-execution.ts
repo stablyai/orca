@@ -5,7 +5,8 @@ import type {
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { readAgentLaunchModeSettings, AgentLaunchModeVocabulary } from './agent-launch-mode'
+import type { AgentLaunchModeVocabulary } from './agent-launch-mode'
+import type { readAgentLaunchModeSettings } from './agent-launch-mode-settings'
 
 import type {
   AgentLaunchSurfaceFactory,

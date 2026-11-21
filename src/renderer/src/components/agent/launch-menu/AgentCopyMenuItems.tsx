@@ -13,6 +13,7 @@ import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/pick
 import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { rowId, rowLabel, rowTitle } from './agent-menu-row-presentation'
 import { agentCopyMenuRows } from '../../../../../shared/agent-launch/picker/agent-copy-menu-rows'
+import type { NativeChatDefaultSettings } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 
 /** Saved agent copies of the agents listed here, each offered on the surfaces its agent is. */
 export function AgentCopyMenuItems({
@@ -29,7 +30,12 @@ export function AgentCopyMenuItems({
   runLaunch: React.ComponentProps<typeof SubscribedAgentLaunchPickerMenu>['runLaunch']
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const copyRows = agentCopyMenuRows(rows, useAgentCopiesForMenu(), detectedIds)
+  const copyRows = agentCopyMenuRows(
+    rows,
+    useAgentCopiesForMenu(),
+    detectedIds,
+    useAgentCopyMenuChatSettings()
+  )
   if (copyRows.length === 0) {
     return null
   }
@@ -66,11 +72,19 @@ export function AgentCopyMenuItems({
   )
 }
 
-/** This desktop's saved copies whose agent is turned on. */
+/** The Chat | CLI settings a copy's menu rows follow, read field by field so the menu re-renders
+ *  only when they change. */
+export function useAgentCopyMenuChatSettings(): NativeChatDefaultSettings {
+  const agentDefaultSurface = useAppStateValue((s) => s.settings?.agentDefaultSurface)
+  const nativeChatProviders = useAppStateValue((s) => s.settings?.nativeChatProviders)
+  return { agentDefaultSurface, nativeChatProviders }
+}
+
+/** This desktop's saved copies that are turned on, as their agent is. */
 export function useAgentCopiesForMenu(): AgentCopy[] {
   const savedCopies = useAppStateValue((s) => s.settings?.agentCopies)
   const disabledAgents = useAppStateValue((s) => s.settings?.disabledTuiAgents)
-  return normalizeAgentCopies(savedCopies).filter((copy) =>
-    isTuiAgentEnabled(copy.agent, disabledAgents)
+  return normalizeAgentCopies(savedCopies).filter(
+    (copy) => !copy.disabled && isTuiAgentEnabled(copy.agent, disabledAgents)
   )
 }

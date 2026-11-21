@@ -109,7 +109,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
+    ...(args.agentCopy ? { agentCopy: args.agentCopy } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',

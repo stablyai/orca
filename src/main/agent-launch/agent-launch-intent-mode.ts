@@ -5,10 +5,10 @@ import type {
 import { workspaceKindForLaunchTarget } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   decideAgentLaunchMode,
-  readAgentLaunchModeSettings,
   DEFAULT_LAUNCH_VOCABULARY,
   type AgentLaunchModeVocabulary
 } from './agent-launch-mode'
+import { readAgentLaunchModeSettings } from './agent-launch-mode-settings'
 
 /** The same preflight is used for admission and execution, before workspace creation. */
 export function decideAgentLaunchIntentMode(execution: {

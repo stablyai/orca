@@ -3,8 +3,6 @@ import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
-import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -12,20 +10,16 @@ import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
 } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
-import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
-  agentPermissionArgs,
-  agentPermissionEnv,
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
   type AgentPermissionSettings
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
-import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
-import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
+import { buildAgentPermissionChoiceRow } from '../permissions/agent-permission-choice-row-props'
 import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
 import {
   buildAgentRowPermissions,
@@ -71,7 +65,12 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { chatProgramInstalled } from '../../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { AgentCopiesSection, useAgentCopies } from './AgentCopiesSection'
+import { useAgentCopySettings } from './use-agent-copy-settings'
+import {
+  agentCopyCardRows,
+  type AgentCardScope,
+  type LocalAgentSettings
+} from './agent-copy-card-rows'
 import { saveAgentUserArgs } from './agent-user-args-save'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
@@ -99,11 +98,7 @@ export function AgentLaunchSettingsCatalog({
   choicesSupported?: boolean
   nativeChatPermissionsSupported?: boolean
   chatOwnSupported?: boolean
-  local?: {
-    settings: GlobalSettings
-    saveEnvironment: (agent: TuiAgent, value: Record<string, string>) => Promise<void>
-    updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-  }
+  local?: LocalAgentSettings
 }): React.JSX.Element {
   const t = useTranslate()
   const {
@@ -117,7 +112,10 @@ export function AgentLaunchSettingsCatalog({
   const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
-      ? { kind: 'git-worktree' as const, runtimeEnvironmentId: detectionTarget.environmentId }
+      ? {
+          kind: 'git-worktree' as const,
+          runtimeEnvironmentId: detectionTarget.environmentId
+        }
       : { kind: 'floating' as const }
   useChatProgramFacts(workspace, detectionTarget.kind !== 'ssh')
   const chosen = settings.defaultTuiAgent
@@ -168,170 +166,176 @@ export function AgentLaunchSettingsCatalog({
       : pickTuiAgent(chosen, detectedIds, settings.disabledTuiAgents, (agent) =>
           Boolean(defaultOpensAsChat && agent === chosen)
         )
-  const save = (mutation: AgentLaunchSettingsMutation): void => {
-    const scopedMutation =
-      mutation.type === 'permissions' && nativeChatPermissionsSupported
-        ? { ...mutation, syncNativeChat: true as const }
-        : mutation
-    void mutate(scopedMutation).catch(() => {})
-  }
-  const typed = settings.agentPermission
-  const copies = useAgentCopies(local, catalog, Boolean(typed))
-  const permissionSettings: AgentPermissionSettings | null = typed
-    ? { agentPermissionDefault: typed.default, agentPermissionOverrides: typed.overrides }
-    : null
-  const choiceRow = (agent: TuiAgent): AgentPermissionChoiceRow | undefined => {
-    const choices = agentPermissionChoices(agent)
-    if (!permissionSettings || choices.length < 2) {
-      return undefined
+  const copies = useAgentCopySettings(local)
+  const platform = window.api.platform.get().platform
+  // One card's props from its scope; the agent's own card and each copy's card are built alike.
+  const agentCard = ({ settings, mutate, local }: AgentCardScope) => {
+    const save = (mutation: AgentLaunchSettingsMutation): void => {
+      const scopedMutation =
+        mutation.type === 'permissions' && nativeChatPermissionsSupported
+          ? { ...mutation, syncNativeChat: true as const }
+          : mutation
+      void mutate(scopedMutation).catch(() => {})
     }
-    const resolved = resolveAgentPermission(agent, permissionSettings)
-    const chatSupport = agentChatPermissionModes(agent)
-    return {
-      choices,
-      chatOwnSupported,
-      ...resolved,
-      terminalChoice:
-        agentPermissionArgs(agent, resolved.choice) ||
-        Object.keys(agentPermissionEnv(agent, resolved.choice)).length
-          ? resolved.choice
-          : 'own',
-      chatChoice:
-        chatSupport && resolved.choice !== 'own'
-          ? savedChatPermissionMode(chatSupport, resolved.choice)
-          : null,
-      defaultChoice: resolveAgentPermission(agent, {
-        agentPermissionDefault: permissionSettings.agentPermissionDefault
-      }).choice,
-      onSelect: (choice) => save({ type: 'permission', agent, choice }),
-      flag: agentPermissionArgs(agent, resolved.choice),
-      argsSetPermission: agentArgsSetPermission(agent, typed?.userArgs[agent])
-    }
-  }
-  const saveUserArgs = (agent: TuiAgent, label: string, value: string) =>
-    saveAgentUserArgs({ mutate, t, nativeChatPermissionsSupported }, agent, label, value)
-  const permissions = buildAgentRowPermissions({
-    agents: catalog.map((agent) => agent.id),
-    settings,
-    localEnv: local ? (local.settings.agentDefaultEnv ?? {}) : null,
-    autoSupported,
-    save
-  })
-  const cliRowProps = (
-    agent: (typeof catalog)[number],
-    isDetected: boolean
-  ): AgentCatalogRowProps => ({
-    cliUpdate: isDetected ? (
-      <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
-    ) : undefined,
-    agentId: agent.id,
-    label: agent.label,
-    homepageUrl: agent.homepageUrl,
-    defaultCmd: agent.cmd,
-    defaultArgs: typed ? '' : getTuiAgentDefaultArgs(agent.id),
-    defaultEnv: typed ? {} : getTuiAgentDefaultEnv(agent.id),
-    isDetected,
-    isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
-    defaultMark: effectiveDefault !== agent.id ? null : chosen === agent.id ? 'chosen' : 'auto',
-    isSavedDefault: chosen === agent.id,
-    cmdOverride: settings.agentCmdOverrides[agent.id],
-    argsOverride:
-      choicesSupported && settings.agentChoices
-        ? (settings.agentChoices.userArgs[agent.id] ?? '')
-        : typed
-          ? (typed.userArgs[agent.id] ?? '')
-          : resolveTuiAgentLaunchArgs(agent.id, settings),
-    launchArgs: typed ? (settings.agentDefaultArgs[agent.id] ?? '') : undefined,
-    envOverride: !local
-      ? {}
-      : typed
-        ? resolveTuiAgentLaunchEnv(agent.id, local.settings, window.api.platform.get().platform)
-        : resolveTuiAgentLaunchEnv(agent.id, { agentDefaultEnv: local.settings.agentDefaultEnv }),
-    permission: typed ? undefined : permissions.rows.get(agent.id),
-    permissionChoice: choiceRow(agent.id),
-    launchChoiceEditor:
-      choicesSupported && settings.agentChoices && (isDetected || chatOnly.has(agent.id))
-        ? (permissionControlRef) => (
-            <AgentLaunchChoiceEditor
-              permissionControlRef={permissionControlRef}
-              showArguments={isDetected}
-              catalogTarget={
-                detectionTarget.kind === 'ssh'
-                  ? null
-                  : detectionTarget.kind === 'runtime'
-                    ? { kind: 'environment', environmentId: detectionTarget.environmentId }
-                    : { kind: 'local' }
-              }
-              agent={agent.id}
-              label={agent.label}
-              choices={settings.agentChoices?.defaults[agent.id]}
-              userArgs={settings.agentChoices?.userArgs[agent.id] ?? ''}
-              permission={choiceRow(agent.id)}
-              save={(patch, userArgs) =>
-                mutate({ type: 'launch-choices', agent: agent.id, patch, userArgs })
-              }
-            />
-          )
-        : undefined,
-    onSetDefault: (isDefault) => save({ type: 'default', agent: isDefault ? agent.id : null }),
-    onSetEnabled: (enabled) => save({ type: 'availability', agent: agent.id, enabled }),
-    onSaveOverride: async (value) => {
-      const changed = value !== (settings.agentCmdOverrides[agent.id] ?? '')
-      await mutate({ type: 'command', agent: agent.id, value })
-      // Detection probes the override; local inventories reset on the settings change, a host's need a refresh.
-      if (changed && !local) {
-        void refresh()
-      }
-    },
-    onSaveArgs: (value) =>
-      typed
-        ? saveUserArgs(agent.id, agent.label, value)
-        : mutate({ type: 'arguments', agent: agent.id, value }),
-    onSaveEnv: (value) => local?.saveEnvironment(agent.id, value),
-    ...(!local
+    const typed = settings.agentPermission
+    const permissionSettings: AgentPermissionSettings | null = typed
       ? {
-          environmentNames: settings.environmentNames[agent.id] ?? [],
-          environmentEditor: (
-            <HostAgentEnvironmentEditor
-              agent={agent.id}
-              names={settings.environmentNames[agent.id] ?? []}
-              mutate={mutate}
-            />
-          )
+          agentPermissionDefault: typed.default,
+          agentPermissionOverrides: typed.overrides
         }
-      : {}),
-    sessionSourceHome:
-      local && isDetected && agent.id === 'codex'
-        ? buildCodexSessionSourceHomeControl(local.settings, local.updateSettings)
-        : undefined,
-    onDuplicate: local && isDetected ? () => copies.duplicate(agent) : undefined
-  })
-  const rowProps = (
-    agent: (typeof catalog)[number],
-    listedInstalled: boolean
-  ): AgentCatalogRowProps => {
-    const isDetected = listedInstalled && detectedIds?.has(agent.id) === true
-    return {
-      ...cliRowProps(agent, isDetected),
-      opensAs: local
-        ? buildAgentOpensAs({
-            agent: agent.id,
-            cliDetected: installedHere === null ? null : installedHere.includes(agent.id),
-            chatProgramHere: chatOnly.has(agent.id),
-            settings: local.settings,
-            updateSettings: local.updateSettings,
-            includeDisabled: true
-          })
-        : undefined,
-      reserveOpensAsSlot: Boolean(local),
-      chatRuntime:
-        chatAgents.includes(agent.id) &&
-        (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
-        isTuiAgentEnabled(agent.id, settings.disabledTuiAgents) ? (
-          <AgentChatRuntimeArea agent={agent.id} label={agent.label} />
-        ) : undefined
+      : null
+    const choiceRow = (agent: TuiAgent) =>
+      buildAgentPermissionChoiceRow({
+        agent,
+        permissionSettings,
+        userArgs: typed?.userArgs[agent],
+        chatOwnSupported,
+        onSelect: (choice) => save({ type: 'permission', agent, choice })
+      })
+    const saveUserArgs = (agent: TuiAgent, label: string, value: string) =>
+      saveAgentUserArgs({ mutate, t, nativeChatPermissionsSupported }, agent, label, value)
+    const permissions = buildAgentRowPermissions({
+      agents: catalog.map((agent) => agent.id),
+      settings,
+      localEnv: local ? (local.settings.agentDefaultEnv ?? {}) : null,
+      autoSupported,
+      save
+    })
+    const cliRowProps = (
+      agent: (typeof catalog)[number],
+      isDetected: boolean
+    ): AgentCatalogRowProps => ({
+      cliUpdate: isDetected ? (
+        <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
+      ) : undefined,
+      agentId: agent.id,
+      label: agent.label,
+      homepageUrl: agent.homepageUrl,
+      defaultCmd: agent.cmd,
+      defaultArgs: typed ? '' : getTuiAgentDefaultArgs(agent.id),
+      defaultEnv: typed ? {} : getTuiAgentDefaultEnv(agent.id),
+      isDetected,
+      isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
+      defaultMark: effectiveDefault !== agent.id ? null : chosen === agent.id ? 'chosen' : 'auto',
+      isSavedDefault: chosen === agent.id,
+      cmdOverride: settings.agentCmdOverrides[agent.id],
+      argsOverride:
+        choicesSupported && settings.agentChoices
+          ? (settings.agentChoices.userArgs[agent.id] ?? '')
+          : typed
+            ? (typed.userArgs[agent.id] ?? '')
+            : resolveTuiAgentLaunchArgs(agent.id, settings),
+      launchArgs: typed ? (settings.agentDefaultArgs[agent.id] ?? '') : undefined,
+      envOverride: !local
+        ? {}
+        : typed
+          ? resolveTuiAgentLaunchEnv(agent.id, local.settings, window.api.platform.get().platform)
+          : resolveTuiAgentLaunchEnv(agent.id, {
+              agentDefaultEnv: local.settings.agentDefaultEnv
+            }),
+      permission: typed ? undefined : permissions.rows.get(agent.id),
+      permissionChoice: choiceRow(agent.id),
+      launchChoiceEditor:
+        choicesSupported && settings.agentChoices && (isDetected || chatOnly.has(agent.id))
+          ? (permissionControlRef) => (
+              <AgentLaunchChoiceEditor
+                permissionControlRef={permissionControlRef}
+                showArguments={isDetected}
+                catalogTarget={
+                  detectionTarget.kind === 'ssh'
+                    ? null
+                    : detectionTarget.kind === 'runtime'
+                      ? {
+                          kind: 'environment',
+                          environmentId: detectionTarget.environmentId
+                        }
+                      : { kind: 'local' }
+                }
+                agent={agent.id}
+                label={agent.label}
+                choices={settings.agentChoices?.defaults[agent.id]}
+                userArgs={settings.agentChoices?.userArgs[agent.id] ?? ''}
+                permission={choiceRow(agent.id)}
+                save={(patch, userArgs) =>
+                  mutate({
+                    type: 'launch-choices',
+                    agent: agent.id,
+                    patch,
+                    userArgs
+                  })
+                }
+              />
+            )
+          : undefined,
+      onSetDefault: (isDefault) => save({ type: 'default', agent: isDefault ? agent.id : null }),
+      onSetEnabled: (enabled) => save({ type: 'availability', agent: agent.id, enabled }),
+      onSaveOverride: async (value) => {
+        const changed = value !== (settings.agentCmdOverrides[agent.id] ?? '')
+        await mutate({ type: 'command', agent: agent.id, value })
+        // Detection probes the override; local inventories reset on the settings change, a host's need a refresh.
+        if (changed && !local) {
+          void refresh()
+        }
+      },
+      onSaveArgs: (value) =>
+        typed
+          ? saveUserArgs(agent.id, agent.label, value)
+          : mutate({ type: 'arguments', agent: agent.id, value }),
+      onSaveEnv: (value) => local?.saveEnvironment(agent.id, value),
+      ...(!local
+        ? {
+            environmentNames: settings.environmentNames[agent.id] ?? [],
+            environmentEditor: (
+              <HostAgentEnvironmentEditor
+                agent={agent.id}
+                names={settings.environmentNames[agent.id] ?? []}
+                mutate={mutate}
+              />
+            )
+          }
+        : {}),
+      sessionSourceHome:
+        local && isDetected && agent.id === 'codex'
+          ? buildCodexSessionSourceHomeControl(local.settings, local.updateSettings)
+          : undefined,
+      onDuplicate: local && isDetected ? () => copies.duplicate(agent) : undefined
+    })
+    const rowProps = (
+      agent: (typeof catalog)[number],
+      listedInstalled: boolean
+    ): AgentCatalogRowProps => {
+      const isDetected = listedInstalled && detectedIds?.has(agent.id) === true
+      return {
+        ...cliRowProps(agent, isDetected),
+        opensAs: local
+          ? buildAgentOpensAs({
+              agent: agent.id,
+              cliDetected: installedHere === null ? null : installedHere.includes(agent.id),
+              chatProgramHere: chatOnly.has(agent.id),
+              settings: local.settings,
+              updateSettings: local.updateSettings,
+              includeDisabled: true
+            })
+          : undefined,
+        reserveOpensAsSlot: Boolean(local),
+        chatRuntime:
+          chatAgents.includes(agent.id) &&
+          (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
+          isTuiAgentEnabled(agent.id, settings.disabledTuiAgents) ? (
+            <AgentChatRuntimeArea agent={agent.id} label={agent.label} />
+          ) : undefined
+      }
     }
+    return { rowProps, permissions, permissionSettings, save }
   }
+  const baseCard = agentCard({ settings, mutate, local })
+  const { permissions, permissionSettings, save } = baseCard
+  const copyRows = agentCopyCardRows({
+    local,
+    copies,
+    platform,
+    card: (scope) => agentCard(scope).rowProps
+  })
   return (
     <>
       <AgentLaunchDefaultsGroup
@@ -383,9 +387,9 @@ export function AgentLaunchSettingsCatalog({
           void refresh()
           refreshSettings?.()
         }}
-        getRowProps={rowProps}
+        getRowProps={baseCard.rowProps}
+        getCopyRows={copyRows}
       />
-      <AgentCopiesSection copies={copies.list} base={copies.base} onSave={copies.save} />
     </>
   )
 }

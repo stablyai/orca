@@ -8,7 +8,6 @@ import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { agentCatalogRowInitiallyExpanded } from './agent-catalog-row-expansion'
 import { AgentCatalogRowHost } from './AgentCatalogRowHost'
 import type { AgentCatalogRowHost as RowHost } from './agent-catalog-row-placement'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
@@ -22,7 +21,8 @@ export function AgentDetectionCatalog({
   activeServerEnvironmentId,
   activeServerName,
   onRefresh,
-  getRowProps
+  getRowProps,
+  getCopyRows
 }: {
   detectedAgents: AgentCatalogEntry[]
   undetectedAgents: AgentCatalogEntry[]
@@ -33,37 +33,48 @@ export function AgentDetectionCatalog({
   activeServerName: string | null
   onRefresh: () => void
   getRowProps: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps
+  /** The agent's copies, each a card of its own right after the agent's. */
+  getCopyRows?: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps[]
 }): React.JSX.Element {
   const t = useTranslate()
   const installedBody = useRef<HTMLDivElement>(null)
   const availableBody = useRef<HTMLDivElement>(null)
-  const [hosts] = useState(() => new Map<TuiAgent, RowHost>())
-  const [expandedByAgent, setExpandedByAgent] = useState<Partial<Record<TuiAgent, boolean>>>({})
+  const [hosts] = useState(() => new Map<string, RowHost>())
+  const [expandedByAgent, setExpandedByAgent] = useState<Partial<Record<string, boolean>>>({})
   const sections = [
     { agents: detectedAgents, installed: true },
     { agents: undetectedAgents, installed: false }
-  ]
-  const rows = sections.flatMap(({ agents, installed }) =>
-    agents.map((agent) => ({ agent, row: getRowProps(agent, installed) }))
-  )
-  const arriving = rows.filter(({ agent }) => !Object.hasOwn(expandedByAgent, agent.id))
+  ].map(({ agents, installed }) => ({
+    installed,
+    rows: agents.flatMap((agent) =>
+      [getRowProps(agent, installed), ...(getCopyRows?.(agent, installed) ?? [])].map((row) => ({
+        key: row.rowId ?? row.agentId,
+        row
+      }))
+    )
+  }))
+  const rows = sections.flatMap((section) => section.rows)
+  const arriving = rows.filter(({ key }) => !Object.hasOwn(expandedByAgent, key))
   if (arriving.length > 0) {
     setExpandedByAgent({
       ...expandedByAgent,
       ...Object.fromEntries(
-        arriving.map(({ agent, row }) => [agent.id, agentCatalogRowInitiallyExpanded(row)])
+        arriving.map(({ key, row }) => [
+          key,
+          row.initiallyExpanded === true || agentCatalogRowInitiallyExpanded(row)
+        ])
       )
     })
   }
   useLayoutEffect(() => {
-    for (const { agents, installed } of sections) {
+    for (const { rows: sectionRows, installed } of sections) {
       const parent = (installed ? installedBody : availableBody).current
       if (!parent) {
         continue
       }
       let before: HTMLElement | null = null
-      for (const agent of agents.toReversed()) {
-        const host = hosts.get(agent.id)
+      for (const { key } of sectionRows.toReversed()) {
+        const host = hosts.get(key)
         if (!host) {
           continue
         }
@@ -94,7 +105,10 @@ export function AgentDetectionCatalog({
         tabIndex={-1}
         className="space-y-8 scroll-mt-8 outline-none"
       >
-        {sections.map(({ agents, installed }) => (
+        {[
+          { agents: detectedAgents, installed: true },
+          { agents: undetectedAgents, installed: false }
+        ].map(({ agents, installed }) => (
           <SettingsGroup
             key={installed ? 'installed' : 'available'}
             bodyRef={installed ? installedBody : availableBody}
@@ -160,17 +174,17 @@ export function AgentDetectionCatalog({
           />
         ))}
         {/* A stable portal target preserves drafts and pending writes when a row changes cards. */}
-        {rows.map(({ agent, row }) => (
+        {rows.map(({ key, row }) => (
           <AgentCatalogRowHost
-            key={agent.id}
+            key={key}
             registry={hosts}
             row={{
               ...row,
-              expanded: expandedByAgent[agent.id] ?? false,
+              expanded: expandedByAgent[key] ?? false,
               onExpandedChange: (expanded) =>
                 setExpandedByAgent((previous) => ({
                   ...previous,
-                  [agent.id]: expanded
+                  [key]: expanded
                 }))
             }}
           />

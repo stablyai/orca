@@ -1,6 +1,8 @@
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { AgentCopy, TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'
+import { normalizeAgentModelOptionChoices } from '../choices/agent-launch-choices'
+import { isAgentPermissionChoice } from '../permissions/tui-agent-permission-choice'
 
 export type { AgentCopy }
 
@@ -12,7 +14,16 @@ const MAX_NAME_LENGTH = 80
 const COPY_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/
 
 export type AgentCopySettings = Partial<
-  Pick<GlobalSettings, 'agentCopies' | 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
+  Pick<
+    GlobalSettings,
+    | 'agentCopies'
+    | 'agentCmdOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentLaunchChoices'
+    | 'agentPermissionOverrides'
+    | 'nativeChatProviders'
+  >
 >
 
 /** The built-in agent a copy id names, or null for anything that is not a well-formed copy id. */
@@ -54,13 +65,20 @@ function normalizeAgentCopy(value: unknown): AgentCopy | null {
   const command = entries.get('command')
   const args = entries.get('args')
   const env = normalizeEnv(entries.get('env'))
+  const choices = normalizeAgentModelOptionChoices(entries.get('choices'))
+  const permission = entries.get('permission')
+  const chat = entries.get('chat')
   return {
     id,
     name,
     agent,
     ...(typeof command === 'string' && command.trim() ? { command: command.trim() } : {}),
     ...(typeof args === 'string' ? { args: args.trim() } : {}),
-    ...(env ? { env } : {})
+    ...(env ? { env } : {}),
+    ...(choices ? { choices } : {}),
+    ...(isAgentPermissionChoice(permission) ? { permission } : {}),
+    ...(typeof chat === 'boolean' ? { chat } : {}),
+    ...(entries.get('disabled') === true ? { disabled: true as const } : {})
   }
 }
 
@@ -140,22 +158,68 @@ export function withoutAgentCopyOption(
   return Object.keys(rest).length ? rest : undefined
 }
 
-/** Settings as a copy's launch reads them: the copy's command, arguments and environment fill its
- *  base agent's slots, so every launch path below this point starts the copy unchanged. */
+/** Settings as a copy's launch reads them: the copy's own values fill its base agent's slots, so
+ *  every launch path and every base-agent editor below this point works on the copy unchanged. */
 export function applyAgentCopy<T extends AgentCopySettings>(settings: T, copy: AgentCopy): T {
   return {
     ...settings,
     agentCmdOverrides: withSlot(settings.agentCmdOverrides, copy.agent, copy.command),
     agentDefaultArgs: withSlot(settings.agentDefaultArgs, copy.agent, copy.args),
-    agentDefaultEnv: withSlot(settings.agentDefaultEnv, copy.agent, copy.env && { ...copy.env })
+    agentDefaultEnv: withSlot(settings.agentDefaultEnv, copy.agent, copy.env && { ...copy.env }),
+    // Absent choices mark a profile that predates them; a copy keeps that reading.
+    ...(settings.agentLaunchChoices !== undefined || copy.choices
+      ? {
+          agentLaunchChoices: withSlot(settings.agentLaunchChoices, copy.agent, copy.choices)
+        }
+      : {}),
+    agentPermissionOverrides: withSlot(
+      settings.agentPermissionOverrides,
+      copy.agent,
+      copy.permission
+    ),
+    nativeChatProviders: withSlot(settings.nativeChatProviders, copy.agent, copy.chat)
   }
 }
 
-function withSlot<V>(
-  record: Partial<Record<TuiAgent, V>> | null | undefined,
-  agent: TuiAgent,
+/** Settings as the launch of copy `id` reads them; no id, or a copy this host no longer has,
+ *  leaves them as they are. */
+export function applyAgentCopyById<T extends AgentCopySettings>(settings: T, id?: string): T {
+  const copy = id ? findAgentCopy(settings, id) : undefined
+  return copy ? applyAgentCopy(settings, copy) : settings
+}
+
+/** The copy as `settings` hold it in its base agent's slots, the inverse of `applyAgentCopy`: an
+ *  edit made through the base agent's editors on the applied settings saves into the copy. */
+export function captureAgentCopy(
+  copy: Pick<AgentCopy, 'id' | 'name' | 'agent' | 'disabled'>,
+  settings: AgentCopySettings
+): AgentCopy {
+  const { agent } = copy
+  const command = settings.agentCmdOverrides?.[agent]?.trim()
+  const args = settings.agentDefaultArgs?.[agent]
+  const env = settings.agentDefaultEnv?.[agent]
+  const choices = normalizeAgentModelOptionChoices(settings.agentLaunchChoices?.[agent])
+  const permission = settings.agentPermissionOverrides?.[agent]
+  const chat = settings.nativeChatProviders?.[agent]
+  return {
+    id: copy.id,
+    name: copy.name,
+    agent,
+    ...(command ? { command } : {}),
+    ...(args !== undefined ? { args: args.trim() } : {}),
+    ...(env ? { env: { ...env } } : {}),
+    ...(choices ? { choices } : {}),
+    ...(permission ? { permission } : {}),
+    ...(typeof chat === 'boolean' ? { chat } : {}),
+    ...(copy.disabled ? { disabled: true as const } : {})
+  }
+}
+
+function withSlot<V, K extends string>(
+  record: Readonly<Partial<Record<K, V>>> | null | undefined,
+  agent: K,
   value: V | undefined
-): Partial<Record<TuiAgent, V>> {
+): Partial<Record<K, V>> {
   const { [agent]: _base, ...rest } = record ?? {}
   return value === undefined ? rest : { ...rest, [agent]: value }
 }
@@ -189,8 +253,8 @@ function slugify(name: string): string {
   return slug || 'copy'
 }
 
-/** A new copy of `agent` named `name`, starting from the agent's current command, arguments and
- *  environment; its id is unique among `existing`. */
+/** A new copy of `agent` named `name`, starting from the agent's current values; its id is unique
+ *  among the saved copies. */
 export function createAgentCopy(
   agent: TuiAgent,
   name: string,
@@ -202,15 +266,8 @@ export function createAgentCopy(
   for (let n = 2; taken.has(id); n++) {
     id = `${stem}-${n}`
   }
-  const command = settings.agentCmdOverrides?.[agent]?.trim()
-  const args = settings.agentDefaultArgs?.[agent]
-  const env = settings.agentDefaultEnv?.[agent]
-  return {
-    id,
-    name: name.trim().slice(0, MAX_NAME_LENGTH) || id,
-    agent,
-    ...(command ? { command } : {}),
-    ...(args !== undefined ? { args: args.trim() } : {}),
-    ...(env ? { env: { ...env } } : {})
-  }
+  return captureAgentCopy(
+    { id, name: name.trim().slice(0, MAX_NAME_LENGTH) || id, agent },
+    settings
+  )
 }
