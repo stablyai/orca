@@ -90,7 +90,7 @@ export function useAgentPickerSetup({
   const key = JSON.stringify([entry.draftTarget?.key, entry.agent, draftId])
   const launchKey = nativeChatLaunchPromptDraftScopeKey(
     entry.worktreeId ?? '',
-    entry.agent,
+    entry.copy?.id ?? entry.agent,
     entry.rows[0]?.executionHostId ?? 'local'
   )
   const originalPreset = useMemo(

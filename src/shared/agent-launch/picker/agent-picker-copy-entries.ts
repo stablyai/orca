@@ -18,13 +18,14 @@ export type AgentPickerCopySettings = AgentCopySettings &
 /** Each saved copy as its own picker entry, right after its base agent's: the same models,
  *  efforts and Chat | CLI surfaces as the base, seeded with the copy's own setup. */
 export function withAgentPickerCopyEntries(
-  entries: readonly AgentPickerEntry[],
+  entries: AgentPickerEntry[],
   copies: readonly AgentCopy[],
   detected: readonly TuiAgent[] | null,
   settings: AgentPickerCopySettings | null | undefined
 ): AgentPickerEntry[] {
+  // The same array when there is nothing to add, so memoized menus keep their rows.
   if (!copies.length) {
-    return [...entries]
+    return entries
   }
   return entries.flatMap((entry) => [
     entry,

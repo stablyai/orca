@@ -10,6 +10,7 @@ import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentPickerResultsScroller } from './AgentPickerResultsScroller'
+import { useAgentPickerEntriesWithCopies } from './launch-menu/AgentCopyMenuItems'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { choiceMatches, type AgentPickerChoice } from './agent-picker-search-rows'
@@ -24,10 +25,11 @@ import {
   filterAgentPickerEntries,
   searchAgentPickerSetups
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
-import type {
-  AgentPickerDraft,
-  AgentPickerDraftOwner,
-  AgentPickerEntry
+import {
+  agentPickerEntryKey,
+  type AgentPickerDraft,
+  type AgentPickerDraftOwner,
+  type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 /** Drops kept setups whose workspace, repo or host is gone. */
@@ -122,6 +124,8 @@ export function AgentLaunchPickerMenu({
   const [activeSetup, setActiveSetup] = useState<{
     id: string
     agent: AgentPickerEntry['agent']
+    /** `agentPickerEntryKey`: a copy shares its base agent's `agent`. */
+    entryKey: string
     preset?: AgentPickerSetupIdentity
     label: string
   } | null>(null)
@@ -131,13 +135,13 @@ export function AgentLaunchPickerMenu({
   const visible = filterAgentPickerEntries(entries, query)
   // Filtering changes presentation; an active owner survives its result row disappearing.
   if (activeSetup) {
-    const entry = entries.find((entry) => entry.agent === activeSetup.agent)
+    const entry = entries.find((entry) => agentPickerEntryKey(entry) === activeSetup.entryKey)
     if (
       entry &&
       activeSetup.preset &&
       !setups.some(
         (setup) =>
-          setup.entry.agent === entry.agent &&
+          setup.entry === entry &&
           setup.model.id === activeSetup.preset?.model &&
           setup.choices.options?.effort === activeSetup.preset.effort
       )
@@ -236,15 +240,17 @@ export function AgentLaunchPickerMenu({
           ) : null}
           {visible.map((entry) => {
             const source = draftForEntry?.(entry)
+            // A copy is launched, never picked as an agent or the default.
+            const base = !entry.copy
             return (
               <AgentPickerMenuRow
-                key={entry.agent}
+                key={agentPickerEntryKey(entry)}
                 draftScope={draftScope}
                 entry={entry}
                 mode={mode}
                 searchDefault={showSearchDefault && entry === firstEntry}
                 source={source}
-                selected={value?.agent === entry.agent ? value : undefined}
+                selected={base && value?.agent === entry.agent ? value : undefined}
                 setupDisabled={setupDisabled}
                 openSetup={openSetup}
                 onSetupOpenChange={setActiveSetup}
@@ -252,9 +258,9 @@ export function AgentLaunchPickerMenu({
                 terminalBlocked={terminalBlocked}
                 runLaunch={runLaunch}
                 onSelectAgent={onSelectAgent}
-                isDefault={defaultAgent === entry.agent}
-                onSetDefault={onSetDefault}
-                shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+                isDefault={base && defaultAgent === entry.agent}
+                onSetDefault={base ? onSetDefault : undefined}
+                shortcut={base && mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
               />
             )
           })}
@@ -262,9 +268,9 @@ export function AgentLaunchPickerMenu({
             const source = draftForEntry?.(setup.entry)
             return (
               <AgentPickerMenuRow
-                key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                key={`${agentPickerEntryKey(setup.entry)}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
                 draftScope={draftScope}
-                draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                draftId={`${setup.entry.copy ? `${setup.entry.copy.id}:` : ''}${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
                 initialModel={setup.model.id}
                 initialEffort={setup.choices.options?.effort}
                 entry={setup.entry}
@@ -275,7 +281,9 @@ export function AgentLaunchPickerMenu({
                 label={setup.label}
                 searchDefault={showSearchDefault && setup === firstSetup}
                 source={source}
-                selected={value?.agent === setup.entry.agent ? value : undefined}
+                selected={
+                  !setup.entry.copy && value?.agent === setup.entry.agent ? value : undefined
+                }
                 onSelectAgent={onSelectAgent}
                 disabled={disabled}
                 terminalBlocked={terminalBlocked}
@@ -307,6 +315,9 @@ export function SubscribedAgentLaunchPickerMenu({
 }: Omit<ComponentProps<typeof AgentLaunchPickerMenu>, 'entries'> & {
   inventory: AgentPickerInventorySource
 }) {
-  const entries = useAgentPickerInventoryEntries(inventory)
+  const entries = useAgentPickerEntriesWithCopies(
+    useAgentPickerInventoryEntries(inventory),
+    props.model?.state === 'settled' ? props.model.detection.detectedIds : null
+  )
   return <AgentLaunchPickerMenu {...props} entries={entries} />
 }

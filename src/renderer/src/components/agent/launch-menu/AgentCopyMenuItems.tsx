@@ -14,6 +14,12 @@ import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { rowId, rowLabel, rowTitle } from './agent-menu-row-presentation'
 import { agentCopyMenuRows } from '../../../../../shared/agent-launch/picker/agent-copy-menu-rows'
 import type { NativeChatDefaultSettings } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
+import { useShallow } from 'zustand/react/shallow'
+import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
+import {
+  withAgentPickerCopyEntries,
+  type AgentPickerCopySettings
+} from '../../../../../shared/agent-launch/picker/agent-picker-copy-entries'
 
 /** Saved agent copies of the agents listed here, each offered on the surfaces its agent is. */
 export function AgentCopyMenuItems({
@@ -87,4 +93,28 @@ export function useAgentCopiesForMenu(): AgentCopy[] {
   return normalizeAgentCopies(savedCopies).filter(
     (copy) => !copy.disabled && isTuiAgentEnabled(copy.agent, disabledAgents)
   )
+}
+
+/** Picker entries with each saved copy listed after its base agent, as its own submenu row. */
+export function useAgentPickerEntriesWithCopies(
+  entries: AgentPickerEntry[],
+  detectedIds: readonly TuiAgent[] | null
+): AgentPickerEntry[] {
+  const copies = useAgentCopiesForMenu()
+  const settings: AgentPickerCopySettings = useAppStateValue(
+    useShallow((s) => ({
+      agentCopies: s.settings?.agentCopies,
+      agentCmdOverrides: s.settings?.agentCmdOverrides,
+      agentDefaultArgs: s.settings?.agentDefaultArgs,
+      agentDefaultEnv: s.settings?.agentDefaultEnv,
+      agentLaunchChoices: s.settings?.agentLaunchChoices,
+      agentPermissionDefault: s.settings?.agentPermissionDefault,
+      agentPermissionOverrides: s.settings?.agentPermissionOverrides,
+      agentDefaultSurface: s.settings?.agentDefaultSurface,
+      nativeChatProviders: s.settings?.nativeChatProviders,
+      nativeChatSessionOptions: s.settings?.nativeChatSessionOptions,
+      nativeChatPermissionMode: s.settings?.nativeChatPermissionMode
+    }))
+  )
+  return withAgentPickerCopyEntries(entries, copies, detectedIds, settings)
 }

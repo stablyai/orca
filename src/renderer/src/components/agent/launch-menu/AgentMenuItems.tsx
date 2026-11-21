@@ -110,6 +110,16 @@ export function useTabAgentMenuLaunch({
       const entry = getCatalogEntry(agent)
       const { copy } = row
       const label = copy?.name ?? entry?.label ?? agent
+      const draftInputs = draft
+        ? agentPickerFreshLaunchInputs(
+            draft,
+            {
+              surface: row.kind === 'chat' ? 'chat' : 'terminal',
+              executionHostId: row.executionHostId
+            },
+            pickerEntry
+          )
+        : undefined
       const result = launchAgentInNewTabWithOutcome({
         requestId: createNonSecureContextUuid(),
         focusIntent: captureNativeChatComposerFocusIntent(),
@@ -119,22 +129,14 @@ export function useTabAgentMenuLaunch({
               selectedExecutionHostId: row.executionHostId
             }
           : {}),
+        agent,
+        ...draftInputs,
+        // After the panel's inputs: its model and effort options must not drop the copy.
         ...(copy
           ? {
               requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
-              sessionOptions: { [AGENT_COPY_OPTION_ID]: copy.id }
+              sessionOptions: { ...draftInputs?.sessionOptions, [AGENT_COPY_OPTION_ID]: copy.id }
             }
-          : {}),
-        agent,
-        ...(draft
-          ? agentPickerFreshLaunchInputs(
-              draft,
-              {
-                surface: row.kind === 'chat' ? 'chat' : 'terminal',
-                executionHostId: row.executionHostId
-              },
-              pickerEntry
-            )
           : {}),
         worktreeId,
         groupId,
@@ -352,13 +354,16 @@ export function ProjectedAgentMenuItems({
           )
         })
       )}
-      <AgentCopyMenuItems
-        rows={rows}
-        detectedIds={detectedIds}
-        disabled={disabled}
-        terminalPending={model.terminalPending}
-        runLaunch={runLaunch}
-      />
+      {/* The picker lists each copy as its own entry, with the base agent's submenu. */}
+      {pickerInventory ? null : (
+        <AgentCopyMenuItems
+          rows={rows}
+          detectedIds={detectedIds}
+          disabled={disabled}
+          terminalPending={model.terminalPending}
+          runLaunch={runLaunch}
+        />
+      )}
       <OpenAgentSettingsMenuItem />
     </>
   )
