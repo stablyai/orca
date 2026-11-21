@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { GET_PAGE_STATE } from '../../../browser/guest-lifecycle/manager/registration/browser-page-state-form-data.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserCommands } from './browser-commands'
@@ -35,7 +36,8 @@ vi.mock('electron', () => ({
 vi.mock(
   '../../../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection',
   () => ({
-    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
+    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' }),
+    noteBrowserGuestFormData: () => {}
   })
 )
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
@@ -161,8 +163,11 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
       reload: reloadNative,
       loadURL: () => load,
       navigationHistory: {
-        getAllEntries: () => [{ url: 'https://example.test/', title: 'Original' }],
+        getAllEntries: () => [
+          { url: 'https://example.test/', title: 'Original', pageState: GET_PAGE_STATE }
+        ],
         getActiveIndex: () => 0,
+        getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
         restore: vi.fn(() => load)
       },
       close: () => {
