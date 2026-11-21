@@ -242,6 +242,24 @@ it.each(KEY_CASES)('%s on %j at %s', (key, text, _caret, place, outcome) => {
   expect(input.value).toBe(outcome)
 })
 
+it.each([
+  // Lines: 0 'x' (caret places 1, 2), 1 the chip line (4 before the chip, 5 after it).
+  ['from the line above to the place before the chip', 'x\n> q\n\n', 2, 4],
+  // The browser moves the caret past the chip there, and ProseMirror moves it back.
+  ['at the end, after the chip: the caret stays', '> q\n\n', 2, 2]
+])('moves ArrowRight at a line end %s', (_name, text, from, to) => {
+  const { editor } = mount(text)
+  act(() => {
+    editor.commands.setTextSelection(from)
+  })
+  let browserHandles = true
+  act(() => {
+    browserHandles = press('ArrowRight')
+  })
+  expect(browserHandles).toBe(false)
+  expect(editor.state.selection.from).toBe(to)
+})
+
 it('moves the caret across a chip as across an image: one press steps over it', () => {
   const { input, editor } = mount('> q\n\nc')
   const key = (name: string) =>
