@@ -30,9 +30,11 @@ export function documentHeldDrawnCount(sessionId: string | undefined): number {
 
 /** A minimized or hidden window merges a chat's streaming text until it shows, then draws it once. */
 export function documentViewerVisibility(
-  sessionId: string
+  sessionId: string,
+  sendsShownTail?: () => boolean
 ): StructuredAgentSessionViewerVisibility {
   return {
+    ...(sendsShownTail ? { sendsShownTail } : {}),
     hidden: documentHidden,
     heldDrawn: () => {
       const count = documentHeldDrawnCount(sessionId) + 1

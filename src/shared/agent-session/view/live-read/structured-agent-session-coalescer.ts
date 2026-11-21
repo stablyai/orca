@@ -93,7 +93,13 @@ export type StructuredAgentSessionViewerVisibility = {
   subscribeShown: (shown: () => void) => () => void
   /** Called just before text held while hidden is drawn. */
   heldDrawn?: () => void
+  /** Whether the host sends this viewer its newest text when it says it is shown; the held text
+   *  then waits for it, so the first frame after showing has it. */
+  sendsShownTail?: () => boolean
 }
+
+/** How long a shown viewer's held text waits for the host's newest text before drawing alone. */
+const SHOWN_TAIL_WAIT_MS = 300
 
 export type StructuredAgentSessionCoalescing = {
   /** How long streamed text batches wait to merge. */
@@ -115,10 +121,15 @@ export function createStructuredAgentSessionEventCoalescer(
 } {
   let pending: Extract<AgentSessionSubscribeEvent, { type: 'batch' }> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let awaitingTail: ReturnType<typeof setTimeout> | null = null
   const flush = (): void => {
     if (timer) {
       clearTimeout(timer)
       timer = null
+    }
+    if (awaitingTail) {
+      clearTimeout(awaitingTail)
+      awaitingTail = null
     }
     if (pending) {
       const event = pending
@@ -126,7 +137,15 @@ export function createStructuredAgentSessionEventCoalescer(
       emit(event)
     }
   }
+  const drawHeld = (): void => {
+    visibility?.heldDrawn?.()
+    flush()
+  }
   const stopShownWatch = visibility?.subscribeShown(() => {
+    if (visibility.sendsShownTail?.() === true) {
+      awaitingTail ??= setTimeout(() => (pending ? drawHeld() : flush()), SHOWN_TAIL_WAIT_MS)
+      return
+    }
     if (pending) {
       visibility.heldDrawn?.()
     }
@@ -135,6 +154,9 @@ export function createStructuredAgentSessionEventCoalescer(
   return {
     push(event) {
       if (bypassCoalescing(event)) {
+        if (awaitingTail && pending) {
+          visibility?.heldDrawn?.()
+        }
         flush()
         emit(event)
         return
@@ -143,6 +165,11 @@ export function createStructuredAgentSessionEventCoalescer(
         return
       }
       pending = pending ? mergeBatch(pending, event) : event
+      // The host's newest text for a viewer that just showed: drawn at once, with what was held.
+      if (awaitingTail) {
+        drawHeld()
+        return
+      }
       timer ??= setTimeout(() => (visibility?.hidden() ? (timer = null) : flush()), delayMs)
     },
     flush,
@@ -151,7 +178,11 @@ export function createStructuredAgentSessionEventCoalescer(
       if (timer) {
         clearTimeout(timer)
       }
+      if (awaitingTail) {
+        clearTimeout(awaitingTail)
+      }
       timer = null
+      awaitingTail = null
       pending = null
     }
   }

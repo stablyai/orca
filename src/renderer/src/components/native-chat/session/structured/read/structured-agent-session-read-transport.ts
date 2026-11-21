@@ -50,15 +50,18 @@ export function startStructuredAgentSessionReadTransport(
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
   const { target, showsPromptSuggestions, ...read } = args
   const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
+  const viewer = asks?.liveTextViewer ?? true
+  let sendsShownTail = viewer === true
+  void Promise.resolve(viewer).then((supported) => (sendsShownTail = supported))
   return startStructuredAgentSessionLiveRead({
     ...read,
     // A streaming reply goes out as its new text every window. The local host ships with this
     // renderer, so it is asked without a check and the read still opens in the same turn.
     textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
-    coalesce: { visibility: documentViewerVisibility(read.sessionId) },
+    coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
     // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
-    liveTextViewer: documentLiveTextViewer(asks?.liveTextViewer ?? true, (viewerId, shown) =>
+    liveTextViewer: documentLiveTextViewer(viewer, (viewerId, shown) =>
       callStructuredAgentSession(target, 'agentSession.liveTextShown', {
         sessionId: read.sessionId,
         viewerId,

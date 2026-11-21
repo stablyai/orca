@@ -150,6 +150,9 @@ export function useMobileStructuredAgentState(args: {
     })
     let ended = false
     const advertised = hostCapabilities(client)
+    const viewer = advertised.then((list) => relaysViewer && hostLiveTextViewer(list))
+    let sendsShownTail = false
+    void viewer.then((supported) => (sendsShownTail = supported))
     const read = startStructuredAgentSessionLiveRead({
       applyRequests: apply,
       applyEvent: (event, options) => {
@@ -175,13 +178,14 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
-      coalesce: { ms: STREAMED_TEXT_COALESCE_MS, visibility: mobileAppViewerVisibility },
+      coalesce: {
+        ms: STREAMED_TEXT_COALESCE_MS,
+        visibility: { ...mobileAppViewerVisibility, sendsShownTail: () => sendsShownTail }
+      },
       textAppend: advertised.then(hostTextAppends),
       // Live text only while the app is in front; in the background, saves, then the newest on return.
-      liveTextViewer: mobileAppLiveTextViewer(
-        advertised.then((list) => relaysViewer && hostLiveTextViewer(list)),
-        (viewerId, shown) =>
-          callAgentSession(client, 'agentSession.liveTextShown', { sessionId, viewerId, shown })
+      liveTextViewer: mobileAppLiveTextViewer(viewer, (viewerId, shown) =>
+        callAgentSession(client, 'agentSession.liveTextShown', { sessionId, viewerId, shown })
       ),
       subscribeRetryNow: subscribeConnectionRevival
     })

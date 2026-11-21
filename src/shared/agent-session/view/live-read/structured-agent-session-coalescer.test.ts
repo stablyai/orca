@@ -164,4 +164,52 @@ describe('structured agent session event coalescer', () => {
     coalescer.dispose()
     vi.useRealTimers()
   })
+
+  it("draws a shown viewer's held text together with the host's newest text, at once", () => {
+    vi.useFakeTimers()
+    const events: AgentSessionSubscribeEvent[] = []
+    let hidden = true
+    let shown = (): void => {}
+    let drawn = 0
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event), {
+      ms: 50,
+      visibility: {
+        hidden: () => hidden,
+        heldDrawn: () => {
+          drawn += 1
+        },
+        sendsShownTail: () => true,
+        subscribeShown: (onShown) => {
+          shown = onShown
+          return () => {}
+        }
+      }
+    })
+    coalescer.push(batch(1))
+    vi.advanceTimersByTime(100)
+    hidden = false
+    shown()
+    // The save held while hidden waits for the newest text rather than drawing first.
+    expect(events).toEqual([])
+    vi.advanceTimersByTime(10)
+    coalescer.push(batch(2))
+    expect(events.map((event) => event.type === 'batch' && event.batch.cursor.sequence)).toEqual([
+      2
+    ])
+    expect(drawn).toBe(1)
+
+    // With no newest text coming in time, what was held draws alone.
+    hidden = true
+    coalescer.push(batch(3))
+    vi.advanceTimersByTime(100)
+    hidden = false
+    shown()
+    vi.advanceTimersByTime(299)
+    expect(events).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(events).toHaveLength(2)
+    expect(drawn).toBe(2)
+    coalescer.dispose()
+    vi.useRealTimers()
+  })
 })
