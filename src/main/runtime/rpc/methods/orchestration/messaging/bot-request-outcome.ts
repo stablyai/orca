@@ -15,7 +15,6 @@ import {
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
-import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
@@ -78,37 +77,25 @@ export function botAnswerOf(
   }
 }
 
-const GROUP_ANSWER_NOTE_TIMEOUT_MS = 5_000
-
-/** A group member's first answer to a request shows in the room on the turn that sends it;
- *  elsewhere it is only mail. Saved before the reply is, while that turn still runs, so the reply
- *  tells the asker whether the room shows it; a stalled read holds the reply back no longer than
- *  the bound, and never fails it. True once the room shows it. */
-export async function showGroupAnswer(
+/** The room turn a group member's answer to a request shows on, read before the reply is written;
+ *  null outside a group room, or where the room cannot show it. Never fails the reply. */
+export async function groupAnswerTurn(
   runtime: OrcaRuntimeService,
   original: MessageRow,
   callerSessionId: string | undefined,
   body: string
-): Promise<boolean> {
-  const db = runtime.getOrchestrationDb()
-  const record = botRequestRecord(db, original.id)
+): Promise<string | null> {
+  const record = botRequestRecord(runtime.getOrchestrationDb(), original.id)
   const group = record?.group
-  if (
-    !group ||
-    callerSessionId !== group.targetSessionId ||
-    !awaitsAnswer(record.purpose) ||
-    db.getBotRequestOutcome(original.id) === 'answered'
-  ) {
-    return false
+  if (!group || callerSessionId !== group.targetSessionId || !awaitsAnswer(record.purpose)) {
+    return null
   }
-  // Past the bound the asker is told to pass the answer on, so a save still pending must not land.
-  const noted = runtimeBotGroups(runtime)
-    .noteAnswer(callerSessionId, body, AbortSignal.timeout(GROUP_ANSWER_NOTE_TIMEOUT_MS))
+  return runtimeBotGroups(runtime)
+    .answerTurn(callerSessionId, body)
     .catch((error: unknown) => {
-      console.warn('[bot-groups] could not show an answer in the room', error)
-      return false
+      console.warn('[bot-groups] could not find the room turn for an answer', error)
+      return null
     })
-  return withTimeout(noted, GROUP_ANSWER_NOTE_TIMEOUT_MS, false)
 }
 
 /** True when a reply's payload is the answer to this request. */
