@@ -100,17 +100,18 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
   composeModelValue: (modelId, values) => {
-    if (modelId === 'auto') {
+    const options = CURSOR_SESSION_OPTION_CATALOG.models.find(({ id }) => id === modelId)?.options
+    if (!options?.length) {
       return modelId
     }
-    if (modelId.startsWith('claude-')) {
-      const thinking = values.thinking === true ? '-thinking' : ''
-      const effort = typeof values.effort === 'string' ? `-${values.effort}` : ''
-      return `${modelId}${thinking}${effort}`
-    }
-    const effort = typeof values.effort === 'string' ? `-${values.effort}` : ''
-    const fast = values.fastMode === true ? '-fast' : ''
-    return `${modelId}${effort}${fast}`
+    const thinking =
+      options.includes(CURSOR_THINKING) && values.thinking === true ? '-thinking' : ''
+    const effort =
+      options.includes(CURSOR_EFFORT) && typeof values.effort === 'string'
+        ? `-${values.effort}`
+        : ''
+    const fast = options.includes(CURSOR_FAST) && values.fastMode === true ? '-fast' : ''
+    return `${modelId}${thinking}${effort}${fast}`
   },
   listModels: { command: 'cursor-agent models', parse: parseCursorCatalogModels }
 }

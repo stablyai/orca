@@ -7,6 +7,13 @@ import {
 } from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 
 describe('agent session option catalog', () => {
+  it('launches Cursor Grok 4.6 without an unsupported effort suffix', () => {
+    const catalog = getAgentSessionOptionCatalog('cursor')!
+    const model = catalog.composeModelValue!('grok-4.6', { effort: 'high' })
+
+    expect(catalog.modelApply.launchArgs!(model)).toEqual(['--model', 'grok-4.6'])
+  })
+
   it('parses Claude list_models discovery into catalog models with options', () => {
     const stdout = JSON.stringify({
       type: 'control_response',
