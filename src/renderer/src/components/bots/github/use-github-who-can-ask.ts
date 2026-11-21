@@ -28,10 +28,13 @@ export function useGitHubWhoCanAsk(
     logins[0]
   const ownerId = shown?.userId ?? null
   const ownerName = shown?.login ?? null
-  const others = logins
-    .filter((entry) => entry.userId !== ownerId)
-    .map((entry) => entry.userId)
-    .join(' ')
+  const otherOwnerIds = useMemo(
+    () =>
+      (github ? gitHubLinkedAccounts(github) : [])
+        .filter((entry) => entry.userId !== ownerId)
+        .map((entry) => entry.userId),
+    [github, ownerId]
+  )
   return useMemo(
     (): BotWhoCanAskService => ({
       listed: (members) =>
@@ -58,7 +61,7 @@ export function useGitHubWhoCanAsk(
         detail: t('bots.github.whoCanAsk.exactOnly', 'GitHub finds people by their exact username.')
       },
       ownerId,
-      otherOwnerIds: others ? others.split(' ') : [],
+      otherOwnerIds,
       ownerName,
       kind: 'github',
       connector: 'GitHub',
@@ -74,6 +77,6 @@ export function useGitHubWhoCanAsk(
         'Finish setup to link your GitHub account, then pick people here.'
       )
     }),
-    [hostId, hostName, linked, installationId, ownerId, others, ownerName, t]
+    [hostId, hostName, linked, installationId, ownerId, otherOwnerIds, ownerName, t]
   )
 }

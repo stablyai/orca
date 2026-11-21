@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/bot-catalog', () => ({ useHostBots: () => [] }))
 
 import { refreshBotGitHub } from '@/lib/bot-github-state'
-import type { ConnectorGitHubState } from '../../../../../shared/connector-bot-github-contract'
+import { ConnectorGitHubState } from '../../../../../shared/connector-bot-github-contract'
 import { GitHubAccountSettings } from './GitHubAccountSettings'
 
 const STATE: ConnectorGitHubState = {
@@ -57,5 +57,21 @@ describe('GitHubAccountSettings', () => {
     expect(screen.getByText('Linked as dana-acme')).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
     await waitFor(() => expect(api.botGitHub.unlink).toHaveBeenCalledWith({}))
+  })
+
+  it('still unlinks one login when an entry of the list can’t be read', async () => {
+    // The cloud linked two; one entry has a login this build rejects.
+    await renderWith(
+      ConnectorGitHubState.parse({
+        ...STATE,
+        accounts: [
+          { userId: '42', login: 'dana-acme', installations: ['1'], defaultBotId: null },
+          { userId: '77', login: '', installations: ['2'], defaultBotId: null }
+        ]
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+    await waitFor(() => expect(api.botGitHub.unlink).toHaveBeenCalledWith({ userId: '42' }))
   })
 })

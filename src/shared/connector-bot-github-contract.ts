@@ -36,9 +36,18 @@ export const ConnectorGitHubState = z.object({
   installUrl: z.string().url(),
   /** The first linked user; null until the owner connects GitHub from Orca. */
   account: GitHubUser.nullable(),
-  /** Every linked user, oldest first. Missing from an older cloud, which links one (`account`);
-   *  a shape this build can't read is treated the same way. */
-  accounts: z.array(GitHubLinkedAccount).optional().catch(undefined),
+  /** Every linked user, oldest first; missing from an older cloud, which links one (`account`).
+   *  Read entry by entry: an entry this build can't read is left out, never the whole list, since a
+   *  present list is what scopes Unlink to one user. */
+  accounts: z
+    .unknown()
+    .transform((value): ConnectorGitHubLinkedAccount[] =>
+      (Array.isArray(value) ? value : []).flatMap((entry) => {
+        const parsed = GitHubLinkedAccount.safeParse(entry)
+        return parsed.success ? [parsed.data] : []
+      })
+    )
+    .optional(),
   installations: z.array(
     z.object({
       installationId: GitHubId,
@@ -65,9 +74,10 @@ export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersRe
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */
 export const BOT_GITHUB_OFF = 'github_off'
 
-/** Every linked GitHub user, as rows; an older cloud's one `account` is the only one. */
+/** Every linked GitHub user, as rows; an older cloud's one `account` (or the first, when no entry
+ *  of `accounts` could be read) is the only one. */
 export function gitHubLinkedAccounts(state: ConnectorGitHubState): ConnectorGitHubLinkedAccount[] {
-  if (state.accounts) {
+  if (state.accounts && state.accounts.length > 0) {
     return state.accounts
   }
   return state.account

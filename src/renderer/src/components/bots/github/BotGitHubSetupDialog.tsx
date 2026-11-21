@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { refreshBotGitHub, useBotGitHub, useGitHubAwait } from '@/lib/bot-github-state'
 import {
   addGitHubAccount,
@@ -119,12 +119,19 @@ function BotGitHubSetupFlow({
       {t('bots.github.setup.close', 'Close')}
     </Button>
   )
+  const intlLocale = useIntlLocale()
   const logins = view.status === 'ready' ? gitHubLinkedAccounts(view.github) : []
   // Only the login shown, on a cloud that links several; an older one unlinks its one link.
   const userId = view.status === 'ready' && view.github.accounts ? logins[0]?.userId : undefined
   const signedIn = (login: string): React.JSX.Element => (
     <SignedInAs
-      who={logins.length > 1 ? logins.map((entry) => `@${entry.login}`).join(', ') : `@${login}`}
+      who={
+        logins.length > 1
+          ? new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
+              logins.map((entry) => `@${entry.login}`)
+            )
+          : `@${login}`
+      }
       onNotYou={
         logins.length > 1
           ? null
