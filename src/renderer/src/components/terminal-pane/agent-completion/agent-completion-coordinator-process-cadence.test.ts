@@ -45,7 +45,11 @@ describe('agent completion coordinator', () => {
 
   it('reads nothing and arms no timer for a quiet agent or shell, and once after an output burst', async () => {
     for (const foregroundProcess of ['codex', null]) {
-      const inspectProcess = vi.fn(async () => processResult(foregroundProcess))
+      // The host reports this agent's exit as an event, so nothing needs re-checking at rest.
+      const inspectProcess = vi.fn(async () => ({
+        ...processResult(foregroundProcess),
+        ...(foregroundProcess ? { foregroundExitWatched: true as const } : {})
+      }))
       const coordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         getPtyId: () => 'pty-1',
@@ -69,6 +73,27 @@ describe('agent completion coordinator', () => {
       expect(vi.getTimerCount()).toBe(0)
       coordinator.dispose()
     }
+  })
+
+  it('keeps a slow re-check for an idle agent whose host cannot report its exit', async () => {
+    let result = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const inspectProcess = vi.fn(async () => result)
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // An older host or one that could not watch the pid: the agent exits silently and nothing prints.
+    result = processResult('zsh', false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    coordinator.dispose()
   })
 
   it('confirms an exit once a background child outlives the redraw and then ends silently', async () => {

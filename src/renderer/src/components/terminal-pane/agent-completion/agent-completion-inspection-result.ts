@@ -17,6 +17,7 @@ import type {
 } from './agent-completion-identity-store'
 import type { ProcessMonitorState } from './agent-completion-process-types'
 import type { CadenceFollowUp } from './agent-completion-poll-scheduler'
+import { isShellProcess } from '../../../../../shared/agent-status/process/shell-process-detection'
 import { POLL_TIER_INTERVAL_MS } from './agent-completion-poll-cadence'
 
 export type RemoteInspectionState = {
@@ -147,7 +148,11 @@ export function handleAgentCompletionInspectionResult(args: {
       state.lastForegroundAgent?.agent === recognized.agent && state.hasAgentRunEvidence
     handleRecognizedProcess(recognized)
     // A cached name the host's own child census contradicts may outlive the agent; read until they agree.
-    if (wasTracked && result.childProcessEvidence === 'no-children') {
+    // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
+    if (
+      (wasTracked && result.childProcessEvidence === 'no-children') ||
+      result.foregroundExitWatched !== true
+    ) {
       requestFollowUp('unresolved')
     }
     return true
@@ -207,6 +212,10 @@ export function handleAgentCompletionInspectionResult(args: {
   } else {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
+    // A shell with children may be starting an agent the host has not named yet (Windows resolves it later).
+    if (result.childProcessEvidence === 'children' && isShellProcess(result.foregroundProcess)) {
+      requestFollowUp('unresolved')
+    }
   }
   return false
 }

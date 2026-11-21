@@ -7,64 +7,85 @@ export type ForegroundAgentPidSource = {
   foregroundAgentPid(): number | null
 }
 
+// A read naming a stale agent can add a pid before the real one is reported; keep a few, never unbounded.
+const MAX_WATCHES_PER_PTY = 4
+
 /** An agent that exits without printing leaves no other event; the OS exit notice is that event, with no timer. */
 export class ForegroundAgentExitWatches {
-  private readonly watches = new Map<string, { pid: number; watch: ProcessExitWatch }>()
-  /** Reported once per pid, so a read that still names a dead pid (a group outliving its leader) cannot loop. */
+  private readonly watches = new Map<string, Map<number, ProcessExitWatch>>()
+  /** Reported once per pid until a read shows a non-agent, so a group outliving its leader cannot loop. */
   private readonly reportedPids = new Map<string, number>()
 
-  constructor(private readonly onAgentExit?: (sessionId: string) => void) {}
+  constructor(private readonly onAgentExit?: (ptyId: string) => void) {}
 
-  /** A read that names an agent watches its process; any other read releases the watch. */
+  /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it. */
   noteInspection(
-    sessionId: string,
+    ptyId: string,
     source: ForegroundAgentPidSource | undefined,
     foreground: string | null
-  ): void {
-    if (!source?.isAlive || !recognizeAgentProcess(foreground)) {
-      this.release(sessionId)
-      return
+  ): boolean {
+    if (!source?.isAlive) {
+      this.forget(ptyId)
+      return false
+    }
+    // An unverifiable read proves nothing; keep what is watched.
+    if (foreground === null) {
+      return this.isWatching(ptyId)
+    }
+    if (!recognizeAgentProcess(foreground)) {
+      this.forget(ptyId)
+      return false
     }
     const pid = source.foregroundAgentPid()
-    if (pid === null) {
-      this.release(sessionId)
-      return
+    if (pid === null || this.reportedPids.get(ptyId) === pid) {
+      return false
     }
-    if (this.watches.get(sessionId)?.pid === pid || this.reportedPids.get(sessionId) === pid) {
-      return
+    const watches = this.watches.get(ptyId) ?? new Map<number, ProcessExitWatch>()
+    if (watches.has(pid)) {
+      return true
     }
-    this.release(sessionId)
-    const watch = watchProcessExit(pid, () => this.report(sessionId, pid))
+    const watch = watchProcessExit(pid, () => this.report(ptyId, pid))
     if (watch === 'gone') {
-      this.report(sessionId, pid)
-    } else if (watch !== null) {
-      this.watches.set(sessionId, { pid, watch })
+      this.report(ptyId, pid)
+      return false
     }
-  }
-
-  private report(sessionId: string, pid: number): void {
-    if (this.watches.get(sessionId)?.pid === pid) {
-      this.watches.delete(sessionId)
+    if (watch === null) {
+      return false
     }
-    this.reportedPids.set(sessionId, pid)
-    this.onAgentExit?.(sessionId)
+    watches.set(pid, watch)
+    for (const [oldPid, oldWatch] of watches) {
+      if (watches.size <= MAX_WATCHES_PER_PTY) {
+        break
+      }
+      oldWatch.dispose()
+      watches.delete(oldPid)
+    }
+    this.watches.set(ptyId, watches)
+    return true
   }
 
-  private release(sessionId: string): void {
-    this.watches.get(sessionId)?.watch.dispose()
-    this.watches.delete(sessionId)
+  private isWatching(ptyId: string): boolean {
+    return (this.watches.get(ptyId)?.size ?? 0) > 0
   }
 
-  forget(sessionId: string): void {
-    this.release(sessionId)
-    this.reportedPids.delete(sessionId)
+  private report(ptyId: string, pid: number): void {
+    this.watches.get(ptyId)?.delete(pid)
+    this.reportedPids.set(ptyId, pid)
+    this.onAgentExit?.(ptyId)
+  }
+
+  forget(ptyId: string): void {
+    for (const watch of this.watches.get(ptyId)?.values() ?? []) {
+      watch.dispose()
+    }
+    this.watches.delete(ptyId)
+    this.reportedPids.delete(ptyId)
   }
 
   dispose(): void {
-    for (const { watch } of this.watches.values()) {
-      watch.dispose()
+    for (const ptyId of this.watches.keys()) {
+      this.forget(ptyId)
     }
-    this.watches.clear()
     this.reportedPids.clear()
   }
 }

@@ -91,41 +91,23 @@ export function createAgentCompletionPollScheduler(args: {
     return tier === 'active' || tier === 'idle' || tier === 'hidden'
   }
 
-  /** Throttle at the tier interval, waiting at most one snapshot TTL more so the read postdates the latest output. */
+  /** One trailing read per burst: the tier interval after the first unanswered event, plus one snapshot TTL so the
+   * read postdates output inside that window. Fixed when armed, so continuous output costs one wakeup per read. */
   function eventReadAt(tier: PollCadenceTier, dueSince: number): number {
-    const throttleAt = dueSince + POLL_TIER_INTERVAL_MS[tier]
-    const lastActivity = state.lastPaneActivityAt
-    if (lastActivity === null) {
-      return throttleAt
-    }
-    const freshAt = Math.min(
-      lastActivity + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
-      throttleAt + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
-    )
-    return Math.max(throttleAt, freshAt)
+    return dueSince + POLL_TIER_INTERVAL_MS[tier] + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
   }
 
-  function onPollTimer(tier: PollCadenceTier): void {
+  function onPollTimer(): void {
     state.pollTimer = null
     state.pollTimerTier = null
-    const dueSince = state.readDueSince
-    if (dueSince === null) {
-      return
+    if (state.readDueSince !== null) {
+      requestInspection('cadence')
     }
-    // Output after arming can move the read later, at most one snapshot TTL past the throttle.
-    if (state.consecutiveInspectionErrors === 0 && isEventTier(tier)) {
-      const remaining = eventReadAt(tier, dueSince) - Date.now()
-      if (remaining > 0) {
-        armPollTimer(tier, remaining)
-        return
-      }
-    }
-    requestInspection('cadence')
   }
 
   function armPollTimer(tier: PollCadenceTier, delayMs: number): void {
     state.pollTimerTier = tier
-    state.pollTimer = setTimeout(() => onPollTimer(tier), delayMs)
+    state.pollTimer = setTimeout(onPollTimer, delayMs)
   }
 
   function nextReadDelayMs(tier: PollCadenceTier, dueSince: number, now: number): number {

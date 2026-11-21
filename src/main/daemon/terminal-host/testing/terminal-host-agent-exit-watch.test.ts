@@ -42,7 +42,7 @@ function createFakeExitWatchNative() {
 describe('TerminalHost foreground agent exit watch', () => {
   let platformDescriptor: PropertyDescriptor | undefined
   let fake: ReturnType<typeof createFakeExitWatchNative>
-  let foreground: string
+  let foreground: string | null
   let agentPid: number
   let exitShell: (code: number) => void
   let host: TerminalHost
@@ -104,17 +104,37 @@ describe('TerminalHost foreground agent exit watch', () => {
 
   it('reports a silent agent exit once and keeps no watch afterwards', async () => {
     await createSession()
-    await host.inspectProcess('pane-1', { foregroundOnly: true })
+    const first = await host.inspectProcess('pane-1', { foregroundOnly: true })
+    expect(first.foregroundExitWatched).toBe(true)
     expect([...fake.live.values()].map((watch) => watch.pid)).toEqual([4242])
 
     fake.exit(4242)
     expect(agentExits).toEqual(['pane-1'])
     expect(fake.live.size).toBe(0)
 
-    // A read that still names the dead pid (its process group outlived it) neither re-arms nor re-reports.
-    await host.inspectProcess('pane-1', { foregroundOnly: true })
+    // A read that still names the dead pid (its process group outlived it) neither re-arms nor re-reports,
+    // and tells the pane no notice is coming.
+    const stale = await host.inspectProcess('pane-1', { foregroundOnly: true })
+    expect(stale.foregroundExitWatched).toBeUndefined()
     expect(agentExits).toEqual(['pane-1'])
     expect(fake.live.size).toBe(0)
+
+    // Once the shell is back, a new agent that reuses the pid is watched again.
+    foreground = 'zsh'
+    await host.inspectProcess('pane-1', { foregroundOnly: true })
+    foreground = 'codex'
+    await host.inspectProcess('pane-1', { foregroundOnly: true })
+    expect([...fake.live.values()].map((watch) => watch.pid)).toEqual([4242])
+  })
+
+  it('keeps the watch through a read that could not see the foreground', async () => {
+    await createSession()
+    await host.inspectProcess('pane-1', { foregroundOnly: true })
+    foreground = null
+    await host.inspectProcess('pane-1', { foregroundOnly: true })
+    expect(fake.live.size).toBe(1)
+    fake.exit(4242)
+    expect(agentExits).toEqual(['pane-1'])
   })
 
   it('reports an agent that exited before its watch was armed', async () => {

@@ -152,10 +152,10 @@ export class LocalPtyProvider implements IPtyProvider {
   ): Promise<PtyProcessInspection> {
     const proc = ptyProcesses.get(id)
     const result = await this.readProcessInspection(id, options)
-    if (proc) {
+    const watched =
+      proc !== undefined &&
       noteLocalPtyInspection(id, ptyProcesses.get(id) === proc, proc, result.foregroundProcess)
-    }
-    return result
+    return watched ? { ...result, foregroundExitWatched: true } : result
   }
 
   onBackgroundStreamEvent(callback: (event: PtyBackgroundStreamEvent) => void): () => void {

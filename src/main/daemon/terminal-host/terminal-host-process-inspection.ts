@@ -31,6 +31,7 @@ export type TerminalHostProcessInspection = {
   hasChildProcesses: boolean
   childProcessEvidence?: PtyChildProcessVerdict
   foregroundProcessEvidence?: RemoteForegroundEvidence
+  foregroundExitWatched?: true
 }
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
@@ -273,8 +274,9 @@ export function inspectTerminalHostSession(
     retiredIncarnation: retired.get(sessionId),
     authorityGeneration,
     nextObservationEpoch
-  }).then((result) => {
+  }).then((result) =>
     agentExitWatches?.noteInspection(sessionId, sessions.get(sessionId), result.foregroundProcess)
-    return result
-  })
+      ? { ...result, foregroundExitWatched: true as const }
+      : result
+  )
 }

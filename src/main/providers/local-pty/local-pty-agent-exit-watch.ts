@@ -1,6 +1,6 @@
 import type * as pty from 'node-pty'
 import { ForegroundAgentExitWatches } from '../../pty/process-retirement/foreground-agent-exit-watches'
-import { readPtyForegroundGroup } from '../../pty/process-retirement/pty-master-foreground-observation'
+import { foregroundJobLeaderPid } from '../../pty/process-retirement/pty-master-foreground-observation'
 import type { PtyBackgroundStreamEvent } from '../pty/events'
 
 const listeners = new Set<(event: PtyBackgroundStreamEvent) => void>()
@@ -16,14 +16,13 @@ export function noteLocalPtyInspection(
   isAlive: boolean,
   proc: pty.IPty,
   foreground: string | null
-): void {
-  watches.noteInspection(
+): boolean {
+  return watches.noteInspection(
     id,
     {
       isAlive,
       // ConPTY has no foreground group, and this provider caches no agent pid.
-      foregroundAgentPid: () =>
-        process.platform === 'win32' ? null : (readPtyForegroundGroup(proc) ?? null)
+      foregroundAgentPid: () => (process.platform === 'win32' ? null : foregroundJobLeaderPid(proc))
     },
     foreground
   )
