@@ -423,6 +423,44 @@ describe('phone file upload end to end', () => {
     expect(storeEntries()).toEqual(before)
   })
 
+  it('terminal: stops a cancelled upload after its first chunk and leaves nothing in the host store', async () => {
+    const path = join(root, 'cancel-terminal.bin')
+    writeFileSync(path, fileBytes('movie.mov'))
+    const storeEntries = () =>
+      existsSync(join(root, 'store'))
+        ? readdirSync(join(root, 'store'), { recursive: true }).map(String)
+        : []
+    const before = storeEntries()
+    let chunksSent = 0
+    for await (const file of pickMobileFiles({
+      launch: async () => ({
+        canceled: false,
+        assets: [
+          {
+            uri: path,
+            name: 'cancel-terminal.bin',
+            size: fileBytes('movie.mov').byteLength,
+            mimeType: 'application/octet-stream',
+            lastModified: 0
+          }
+        ]
+      }),
+      createFile: nodeFile
+    })) {
+      await expect(
+        uploadMobileTerminalFile(hostClient(), file, {
+          connectionId: null,
+          onProgress: () => {
+            chunksSent += 1
+          },
+          shouldCancel: () => chunksSent >= 1
+        }).finally(() => file.dispose?.())
+      ).rejects.toBeInstanceOf(MobileUploadCancelledError)
+    }
+    expect(chunksSent).toBe(1)
+    expect(storeEntries()).toEqual(before)
+  })
+
   it('reports a request that fails because the upload was cancelled as a cancel, not a failure', async () => {
     let cancelled = false
     const methods: string[] = []
