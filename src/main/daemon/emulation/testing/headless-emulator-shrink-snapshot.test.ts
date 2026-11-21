@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from '../headless-emulator'
-import { projectTerminalVisibleLines } from '../terminal-screen-projection'
+import {
+  projectTerminalTailLines,
+  projectTerminalVisibleLines
+} from '../terminal-screen-projection'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
 
 const WIDE = 135
@@ -48,13 +51,49 @@ async function paintShrinkRepaint(target: Writable, prefix: string): Promise<voi
 
 describe('snapshot after a column shrink', () => {
   it('projects only cells within the applied alternate-screen width', async () => {
-    const emu = new HeadlessEmulator({ cols: 10, rows: 3 })
+    const emu = new HeadlessEmulator({ cols: 10, rows: 4 })
     try {
       await emu.write('\x1b[?1049habcdefghij')
-      await emu.write('\x1b[2;1Habcdefgh中\x1b[3;1Habcdefg😀x')
+      await emu.write('\x1b[2;1Habcdefgh中abcdefg😀x\x1b[4;1Habc \x1b[4;10Hx')
+      emu.resize(9, 4)
+
+      expect(projectTerminalVisibleLines(emu)).toMatchObject({
+        lines: ['abcdefghi', 'abcdefgh', 'abcdefg😀', 'abc'],
+        tailRows: [
+          { wrapped: false, trailingSpaces: 0 },
+          { wrapped: false, trailingSpaces: 1 },
+          { wrapped: true, trailingSpaces: 0 },
+          { wrapped: false, trailingSpaces: 1 }
+        ]
+      })
+    } finally {
+      emu.dispose()
+    }
+  })
+
+  it('projects only the visible composer draft after a shrink', async () => {
+    const emu = new HeadlessEmulator({ cols: 10, rows: 4 })
+    try {
+      await emu.write('\x1b[?1049h──────────\r\n❯ abcdefgh\x1b[2;5H')
+      emu.resize(9, 4)
+
+      expect(projectTerminalVisibleLines(emu).draft).toBe('abcdefg')
+    } finally {
+      emu.dispose()
+    }
+  })
+
+  it('keeps historical tail text when the grid shrinks without reflow', async () => {
+    const emu = new HeadlessEmulator({
+      cols: 10,
+      rows: 3,
+      windowsPty: { backend: 'conpty', buildNumber: 19041 }
+    })
+    try {
+      await emu.write('0123456789\r\none\r\ntwo\r\nthree')
       emu.resize(9, 3)
 
-      expect(projectTerminalVisibleLines(emu).lines).toEqual(['abcdefghi', 'abcdefgh', 'abcdefg😀'])
+      expect(projectTerminalTailLines(emu, 4).lines).toEqual(['0123456789', 'one', 'two', 'three'])
     } finally {
       emu.dispose()
     }

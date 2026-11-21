@@ -91,6 +91,7 @@ describe('DaemonServer', () => {
       })
       await server.start()
       const c = await connectClient()
+      expect(c.supportsVisibleProjectionSnapshot()).toBe(true)
       const sessionId = 'visible-snapshot'
       await c.request('createOrAttach', {
         sessionId,

@@ -5,8 +5,7 @@ import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import {
   focusLossReportSupport,
-  REPAINT_REQUEST_PROTOCOL_VERSION,
-  VISIBLE_PROJECTION_SNAPSHOT_PROTOCOL_VERSION
+  REPAINT_REQUEST_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
@@ -23,7 +22,7 @@ const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   supportsVisibleProjectionSnapshot(): boolean {
-    return this.protocolVersion >= VISIBLE_PROJECTION_SNAPSHOT_PROTOCOL_VERSION
+    return this.client.supportsVisibleProjectionSnapshot()
   }
 
   async getBufferSnapshot(

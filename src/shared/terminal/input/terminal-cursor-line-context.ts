@@ -1,4 +1,9 @@
 import type { TerminalCursorContext } from './terminal-composer-draft'
+import {
+  getClippedTerminalLineColumns,
+  translateClippedTerminalLine,
+  type ClippedTerminalLineColumns
+} from '../viewport/terminal-line-applied-columns'
 
 type TerminalCursorCell = {
   getChars(): string
@@ -17,6 +22,7 @@ type TerminalCursorLine<Cell extends TerminalCursorCell> = {
 }
 
 export type TerminalCursorContextSource<Cell extends TerminalCursorCell = TerminalCursorCell> = {
+  readonly cols: number
   readonly rows: number
   readonly modes: { readonly showCursor: boolean }
   readonly buffer: {
@@ -34,23 +40,29 @@ export type TerminalCursorContextSource<Cell extends TerminalCursorCell = Termin
 
 function undimmedText<Cell extends TerminalCursorCell>(
   line: TerminalCursorLine<Cell>,
-  fromX = 0,
-  trimRight = true,
+  clipped: ClippedTerminalLineColumns | undefined,
+  fromX: number,
+  trimRight: boolean,
   reusableCell?: Cell
 ): string {
   let text = ''
-  for (let x = fromX; x < line.length; x += 1) {
+  const end = clipped?.textEnd ?? line.length
+  for (let x = fromX; x < end; x += 1) {
     const cell = line.getCell(x, reusableCell)
     if (!cell || cell.isDim() || cell.getWidth() === 0) {
       continue
     }
     text += cell.getChars() || ' '
   }
+  if (!trimRight && clipped?.splitWideCell && fromX <= end) {
+    text += ' '
+  }
   return trimRight ? text.trimEnd() : text
 }
 
 function readUndimmedTextAndFirstVisibleStyle<Cell extends TerminalCursorCell>(
   line: TerminalCursorLine<Cell>,
+  clipped: ClippedTerminalLineColumns | undefined,
   trimRight: boolean,
   style: 'bold' | 'customForeground',
   reusableCell?: Cell
@@ -58,7 +70,8 @@ function readUndimmedTextAndFirstVisibleStyle<Cell extends TerminalCursorCell>(
   let text = ''
   let firstVisibleStyle = false
   let foundVisibleCell = false
-  for (let x = 0; x < line.length; x += 1) {
+  const end = clipped?.textEnd ?? line.length
+  for (let x = 0; x < end; x += 1) {
     const cell = line.getCell(x, reusableCell)
     if (!cell || cell.getWidth() === 0) {
       continue
@@ -71,6 +84,9 @@ function readUndimmedTextAndFirstVisibleStyle<Cell extends TerminalCursorCell>(
     if (!cell.isDim()) {
       text += chars || ' '
     }
+  }
+  if (!trimRight && clipped?.splitWideCell) {
+    text += ' '
   }
   return { text: trimRight ? text.trimEnd() : text, firstVisibleStyle }
 }
@@ -86,12 +102,16 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     return null
   }
   const reusableCell = buffer.getNullCell?.()
+  const cols = terminal.cols
+  const cursorColumns = getClippedTerminalLineColumns(cursorLine, cols, reusableCell)
   const cursorHidden = !terminal.modes.showCursor
   // Why: a hidden native cursor needs screen evidence, read from the cursor cell alone and only then.
   const hiddenCursorEvidence = cursorHidden
     ? {
         activeBuffer: buffer.type,
-        cursorInverse: Boolean(cursorLine.getCell(buffer.cursorX, reusableCell)?.isInverse())
+        cursorInverse:
+          buffer.cursorX < (cursorColumns?.textEnd ?? cursorLine.length) &&
+          Boolean(cursorLine.getCell(buffer.cursorX, reusableCell)?.isInverse())
       }
     : {}
   const rows: string[] = []
@@ -103,10 +123,18 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
   const start = Math.max(buffer.baseY, cursorRow - rowRadius)
   for (let row = start; row <= cursorRow; row += 1) {
     const line = buffer.getLine(row)
-    const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
-    rows.push(line?.translateToString(!nextLineIsWrapped) ?? '')
+    const trimRight = !(buffer.getLine(row + 1)?.isWrapped ?? false)
+    const clipped =
+      row === cursorRow
+        ? cursorColumns
+        : line && getClippedTerminalLineColumns(line, cols, reusableCell)
+    rows.push(
+      line && clipped
+        ? translateClippedTerminalLine(line, clipped, trimRight, reusableCell)
+        : (line?.translateToString(trimRight) ?? '')
+    )
     const scan = line
-      ? readUndimmedTextAndFirstVisibleStyle(line, !nextLineIsWrapped, 'bold', reusableCell)
+      ? readUndimmedTextAndFirstVisibleStyle(line, clipped, trimRight, 'bold', reusableCell)
       : undefined
     typedRows.push(scan?.text ?? '')
     promptGlyphBoldRows.push(scan?.firstVisibleStyle ?? false)
@@ -119,12 +147,18 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
   const end = Math.min(buffer.baseY + terminal.rows - 1, cursorRow + rowRadius)
   for (let row = cursorRow + 1; row <= end; row += 1) {
     const line = buffer.getLine(row)
-    const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
-    rowsBelow.push(line?.translateToString(!nextLineIsWrapped) ?? '')
+    const trimRight = !(buffer.getLine(row + 1)?.isWrapped ?? false)
+    const clipped = line && getClippedTerminalLineColumns(line, cols, reusableCell)
+    rowsBelow.push(
+      line && clipped
+        ? translateClippedTerminalLine(line, clipped, trimRight, reusableCell)
+        : (line?.translateToString(trimRight) ?? '')
+    )
     const scan = line
       ? readUndimmedTextAndFirstVisibleStyle(
           line,
-          !nextLineIsWrapped,
+          clipped,
+          trimRight,
           'customForeground',
           reusableCell
         )
@@ -133,6 +167,7 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     rowsBelowWrapped.push(line?.isWrapped ?? false)
     rowsBelowCustomForeground.push(scan?.firstVisibleStyle ?? false)
   }
+  const trimAfterCursor = !(buffer.getLine(cursorRow + 1)?.isWrapped ?? false)
   return {
     rows,
     typedRows,
@@ -142,17 +177,32 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     typedRowsBelow,
     rowsBelowWrapped,
     rowsBelowCustomForeground,
-    beforeCursor: cursorLine.translateToString(true, 0, buffer.cursorX),
+    beforeCursor: cursorColumns
+      ? translateClippedTerminalLine(
+          cursorLine,
+          cursorColumns,
+          true,
+          reusableCell,
+          0,
+          buffer.cursorX
+        )
+      : cursorLine.translateToString(true, 0, buffer.cursorX),
     afterCursor: undimmedText(
       cursorLine,
+      cursorColumns,
       buffer.cursorX,
-      !(buffer.getLine(cursorRow + 1)?.isWrapped ?? false),
+      trimAfterCursor,
       reusableCell
     ),
-    rawAfterCursor: cursorLine.translateToString(
-      !(buffer.getLine(cursorRow + 1)?.isWrapped ?? false),
-      buffer.cursorX
-    ),
+    rawAfterCursor: cursorColumns
+      ? translateClippedTerminalLine(
+          cursorLine,
+          cursorColumns,
+          trimAfterCursor,
+          reusableCell,
+          buffer.cursorX
+        )
+      : cursorLine.translateToString(trimAfterCursor, buffer.cursorX),
     cursorHidden,
     cursorViewportRow: cursorRow - buffer.viewportY,
     ...hiddenCursorEvidence

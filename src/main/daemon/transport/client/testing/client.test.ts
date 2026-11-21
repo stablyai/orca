@@ -66,7 +66,8 @@ describe('DaemonClient', () => {
     closeOnConnect?: boolean
     closeOnHello?: boolean
     onControlMessage?: (msg: unknown) => string | null
-    onHello?: (msg: HelloMessage) => void
+    onHello?: (msg: HelloMessage, socket: Socket) => void
+    helloProjectionCapability?: () => unknown
     rejectVersion?: boolean
     suppressHelloResponse?: boolean
     omitHelloIdentity?: boolean
@@ -101,7 +102,7 @@ describe('DaemonClient', () => {
 
             if (msg.type === 'hello') {
               const hello = msg as HelloMessage
-              opts?.onHello?.(hello)
+              opts?.onHello?.(hello, socket)
               if (opts?.closeOnHello) {
                 socket.destroy()
                 return
@@ -117,6 +118,9 @@ describe('DaemonClient', () => {
                 encodeNdjson({
                   type: 'hello',
                   ok: true,
+                  ...(hello.role === 'control' && opts?.helloProjectionCapability
+                    ? { visibleProjectionSnapshots: opts.helloProjectionCapability() }
+                    : {}),
                   ...(!opts?.omitHelloIdentity
                     ? {
                         daemonIdentity: opts?.helloIdentity
@@ -141,6 +145,42 @@ describe('DaemonClient', () => {
   }
 
   describe('connect', () => {
+    it('uses the projection capability only for the connection that advertised it', async () => {
+      let capability: unknown = true
+      const firstControl = Promise.withResolvers<Socket>()
+      await startMockDaemon({
+        helloProjectionCapability: () => capability,
+        onHello: (hello, socket) => {
+          if (hello.role === 'control') {
+            firstControl.resolve(socket)
+          }
+        }
+      })
+      client = new DaemonClient({ socketPath, tokenPath })
+      expect(client.supportsVisibleProjectionSnapshot()).toBe(false)
+      await client.ensureConnected()
+      expect(client.supportsVisibleProjectionSnapshot()).toBe(true)
+
+      const disconnected = Promise.withResolvers<void>()
+      client.onDisconnected(disconnected.resolve)
+      const socket = await firstControl.promise
+      socket.destroy()
+      await disconnected.promise
+      expect(client.supportsVisibleProjectionSnapshot()).toBe(false)
+
+      for (const [advertised, supported] of [
+        [undefined, false],
+        ['true', false],
+        [true, true]
+      ] as const) {
+        capability = advertised
+        await client.ensureConnected()
+        expect(client.supportsVisibleProjectionSnapshot()).toBe(supported)
+        client.disconnect()
+        expect(client.supportsVisibleProjectionSnapshot()).toBe(false)
+      }
+    })
+
     it('allows a missing endpoint identity only on the legacy protocol', async () => {
       await startMockDaemon({ omitHelloIdentity: true })
       client = new DaemonClient({ socketPath, tokenPath, protocolVersion: 23 })

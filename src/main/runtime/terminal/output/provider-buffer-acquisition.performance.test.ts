@@ -1,5 +1,6 @@
 // Perf contract (#46516): delayed screen reads and overlapping replays duplicated provider requests.
 import { afterEach, expect, it, vi } from 'vitest'
+import type { HelloResponse } from '../../../daemon/protocol/daemon-hello-protocol'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
 import {
   serializeProviderBufferFromRuntimeController,
@@ -34,7 +35,7 @@ afterEach(() => {
 
 function startTerminals(
   count: number,
-  supportsVisibleProjection: boolean,
+  hello: Pick<HelloResponse, 'visibleProjectionSnapshots'>,
   getBufferSnapshot: (
     id: string,
     opts?: PtyProviderBufferSnapshotOptions
@@ -43,7 +44,7 @@ function startTerminals(
   setLocalPtyProvider(
     Object.assign(new LocalPtyProvider(), {
       getBufferSnapshot,
-      supportsVisibleProjectionSnapshot: () => supportsVisibleProjection
+      supportsVisibleProjectionSnapshot: () => hello.visibleProjectionSnapshots === true
     })
   )
   const runtime = new OrcaRuntimeService(null)
@@ -73,7 +74,11 @@ it.each([
   const getBufferSnapshot = vi.fn(async (_ptyId: string, opts?: PtyProviderBufferSnapshotOptions) =>
     opts?.visibleProjection ? frame.promise : ANSI_FRAME
   )
-  const { runtime, terminals } = startTerminals(count, true, getBufferSnapshot)
+  const { runtime, terminals } = startTerminals(
+    count,
+    { visibleProjectionSnapshots: true },
+    getBufferSnapshot
+  )
 
   const reads = terminals.map(({ handle }) => runtime.readTerminal(handle, { screen: true }))
   await vi.advanceTimersByTimeAsync(751)
@@ -100,7 +105,7 @@ it('joins a pending ANSI replay with scrollback on a provider that supports proj
   const {
     runtime,
     terminals: [{ ptyId, handle }]
-  } = startTerminals(1, true, getBufferSnapshot)
+  } = startTerminals(1, { visibleProjectionSnapshots: true }, getBufferSnapshot)
 
   const replay = runtime.serializeAuthoritativeTerminalBuffer(ptyId, { scrollbackRows: 50 })
   const visible = runtime.readTerminal(handle, { screen: true })
@@ -117,12 +122,12 @@ it.each([
   [2, 2],
   [20, 20]
 ])(
-  'shares %i first screen reads with zero-row replays in %i legacy provider requests',
+  'shares %i first screen reads with zero-row replays in %i requests after a daemon hello without the capability',
   async (count, requests) => {
     vi.useFakeTimers()
     const frame = Promise.withResolvers<PtyProviderBufferSnapshot>()
     const getBufferSnapshot = vi.fn(() => frame.promise)
-    const { runtime, terminals } = startTerminals(count, false, getBufferSnapshot)
+    const { runtime, terminals } = startTerminals(count, {}, getBufferSnapshot)
 
     const reads = terminals.map(({ handle }) => runtime.readTerminal(handle, { screen: true }))
     await vi.advanceTimersByTimeAsync(0)

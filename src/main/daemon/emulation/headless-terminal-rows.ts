@@ -1,4 +1,8 @@
 import type { Terminal } from '@xterm/headless'
+import {
+  getClippedTerminalLineColumns,
+  translateClippedTerminalLine
+} from '../../../shared/terminal/viewport/terminal-line-applied-columns'
 import type { RuntimeTerminalRowMetadata } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type HeadlessTerminalRow = { text: string; metadata: RuntimeTerminalRowMetadata }
@@ -30,23 +34,31 @@ export function readHeadlessTerminalRows(
 ): HeadlessTerminalRow[] {
   const { buffer, start, end } = terminalRowRange(terminal, limit)
   const rows: HeadlessTerminalRow[] = []
+  let reusableCell: ReturnType<typeof buffer.getNullCell> | undefined
   for (let row = start; row < end; row += 1) {
     const line = buffer.getLine(row)
-    const cols = Math.min(line?.length ?? 0, terminal.cols)
-    // Match snapshot serialization when a shrink leaves half of a wide glyph outside the grid.
-    const clippedWideCell =
-      line && line.length > cols && (line.getCell(cols - 1)?.getWidth() ?? 0) > 1
-    const textCols = clippedWideCell ? cols - 1 : cols
-    const text = line?.translateToString(true, 0, textCols) ?? ''
+    const clipped =
+      limit === undefined && line && line.length > terminal.cols
+        ? getClippedTerminalLineColumns(
+            line,
+            terminal.cols,
+            (reusableCell ??= buffer.getNullCell())
+          )
+        : undefined
+    const text =
+      line && clipped
+        ? translateClippedTerminalLine(line, clipped, true, reusableCell)
+        : (line?.translateToString(true) ?? '')
+    const trailingSpaces = buffer.getLine(row + 1)?.isWrapped
+      ? (line && clipped
+          ? translateClippedTerminalLine(line, clipped, false, reusableCell).length
+          : (line?.translateToString(false).length ?? text.length)) - text.length
+      : 0
     rows.push({
       text,
       metadata: {
         wrapped: line?.isWrapped ?? false,
-        trailingSpaces: buffer.getLine(row + 1)?.isWrapped
-          ? (line?.translateToString(false, 0, textCols).length ?? 0) +
-            (clippedWideCell ? 1 : 0) -
-            text.length
-          : 0
+        trailingSpaces
       }
     })
   }
