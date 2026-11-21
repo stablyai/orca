@@ -43,12 +43,9 @@ export const shownViewer = (subscriber: Subscriber): boolean => subscriber.liveT
 export function sessionLiveTextReaders(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): LiveTextReaders | null {
+  // Every reader counts, as in the fan-out: an older one beside a shown viewer still takes its rows.
   const all = [...(subscribers?.values() ?? [])]
-  const shown = all.filter(shownViewer)
-  if (shown.length > 0) {
-    return liveTextReadersOf(shown, true)
-  }
-  return all.length > 0 ? liveTextReadersOf(all, false) : null
+  return all.length > 0 ? liveTextReadersOf(all, all.some(shownViewer)) : null
 }
 
 /** What one subscriber reads of the session's live text. */
@@ -56,9 +53,14 @@ export const subscriberLiveTextReaders = (subscriber: Subscriber): LiveTextReade
   liveTextReadersOf([subscriber], shownViewer(subscriber))
 
 function liveTextReadersOf(subscribers: Iterable<Subscriber>, shown: boolean): LiveTextReaders {
-  const appenders = [...subscribers].filter((subscriber) => subscriber.holdsTextBase !== undefined)
-  return appenders.length === 0
-    ? { appends: false, shown }
+  const all = [...subscribers]
+  const appenders = all.filter((subscriber) => subscriber.holdsTextBase !== undefined)
+  if (appenders.length === 0) {
+    return { appends: false, shown }
+  }
+  // A reader that takes whole rows takes every row, so none can be skipped for it.
+  return appenders.length < all.length
+    ? { appends: true, shown }
     : {
         appends: true,
         shown,
