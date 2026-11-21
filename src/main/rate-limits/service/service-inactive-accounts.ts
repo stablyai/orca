@@ -1,4 +1,4 @@
-import { fetchInactiveClaudeMenuUsage } from '../providers/claude/claude-system-default-inactive-usage'
+import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
@@ -46,7 +46,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           continue
         }
         try {
-          const fresh = await fetchInactiveClaudeMenuUsage(account, {
+          const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal

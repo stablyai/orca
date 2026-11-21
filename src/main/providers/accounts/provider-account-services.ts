@@ -23,7 +23,7 @@ import {
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
-import { inactiveClaudeMenuAccounts } from '../../../shared/agent-accounts/claude/claude-system-default-inactive'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../shared/agent-accounts/claude/claude-system-default-usage'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -172,7 +172,7 @@ export function createProviderAccountServices(
     const settings = store.getSettings()
     const selection = normalizeClaudeRuntimeSelection(settings)
     const activeIds = new Set([selection.host, ...Object.values(selection.wsl)].filter(Boolean))
-    const inactiveSaved = settings.claudeManagedAccounts
+    const inactive = settings.claudeManagedAccounts
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
@@ -180,7 +180,8 @@ export function createProviderAccountServices(
         wslDistro: account.wslDistro,
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
-    return inactiveClaudeMenuAccounts(inactiveSaved, selection.host)
+    // System default has no saved id, so it is read under its own key while a saved host account is selected.
+    return selection.host ? [...inactive, { id: CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID }] : inactive
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
