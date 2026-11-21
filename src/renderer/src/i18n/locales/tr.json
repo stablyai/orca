@@ -471,11 +471,14 @@
       "tablet": "Tablet — 768 × 1024"
     },
     "cookieImport": {
+      "refreshChrome": "Chrome’dan yenile",
+      "refreshedChrome": "{{profile}} Chrome’dan yenilendi.",
       "errors": {
         "notAuthorized": "Yetki yok",
         "profileNotFound": "Oturum profili bulunamadı.",
         "invalidBrowserProfile": "Geçersiz tarayıcı profili adı.",
         "browserNotFound": "Bu sistemde tarayıcı bulunamadı.",
+        "savedChromeProfileUnavailable": "Kaydedilen Chrome profili kullanılamıyor. Çerezleri içe aktarma menüsünden yeniden bir profil seçin.",
         "browserProfileDatabaseMissing": "“{{profile}}” profili için çerez veritabanı bulunamadı.",
         "fileUnreadable": "Seçilen dosya okunamadı.",
         "fileInvalidJson": "Dosya geçerli bir JSON değil.",

@@ -19,6 +19,11 @@ const COPY: Record<BrowserCookieImportFailureCode, (values: Values) => string | 
     translate('browser.cookieImport.errors.invalidBrowserProfile', EN.invalidBrowserProfile),
   browserNotFound: () =>
     translate('browser.cookieImport.errors.browserNotFound', EN.browserNotFound),
+  savedChromeProfileUnavailable: () =>
+    translate(
+      'browser.cookieImport.errors.savedChromeProfileUnavailable',
+      EN.savedChromeProfileUnavailable
+    ),
   browserProfileDatabaseMissing: ({ text }) => {
     const profile = text('profile')
     return profile === null

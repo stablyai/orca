@@ -2,7 +2,8 @@ import type * as ClientHostRuntime from '../client-hosts/lifecycle/paired-runtim
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { z } from 'zod'
 import type { GoogleCookieClearTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import * as browserProfiles from './sources/browser-cookie-source-profiles'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -28,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   profiles: new Map<string, BrowserSessionProfile>(),
   sessions: new Map<string, ReturnType<typeof jar>>(),
   import: vi.fn(),
-  detect: vi.fn(),
   pick: vi.fn(),
   handlers: new Map<string, (event: { sender: unknown }, args: unknown) => unknown>()
 }))
@@ -58,10 +58,6 @@ vi.mock('./imports/import-cookie-file', () => ({
 }))
 vi.mock('./imports/cookie-file-picker', () => ({
   pickCookieFile: mocks.pick
-}))
-vi.mock('./sources/browser-cookie-detection', () => ({
-  detectInstalledBrowsers: mocks.detect,
-  selectBrowserProfile: vi.fn()
 }))
 vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { cancelGrabOp: vi.fn() }
@@ -180,7 +176,6 @@ beforeEach(() => {
   mocks.profiles.set(profile.id, { ...profile })
   mocks.sessions.clear()
   mocks.route.mockReturnValue(route)
-  mocks.detect.mockReturnValue([])
   mocks.import.mockResolvedValue({ ok: true, summary: {} })
   mocks.pick.mockResolvedValue('/fixture/cookies.json')
   vi.spyOn(browserSessionRegistry, 'getProfile').mockImplementation(
@@ -215,7 +210,10 @@ it('retains actual local/file/client import destinations, source-only replacemen
     profileDirectory: mocks.root
   })
   const selected = browserSessionRegistry.getDefaultProfile()
-  mocks.detect.mockReturnValue([{ family: 'chrome', selectedProfile: 'Default', profiles: [] }])
+  const chromeRoot = join(mocks.root, 'chrome')
+  vi.spyOn(browserProfiles, 'browserRootPath').mockReturnValue(chromeRoot)
+  mkdirSync(join(chromeRoot, 'Default'), { recursive: true })
+  writeFileSync(join(chromeRoot, 'Default', 'Cookies'), '')
   for (const channel of ['importCookies', 'importFromBrowser']) {
     expect(await call(channel, { profileId: 'default', browserFamily: 'chrome' })).toMatchObject({
       ok: true,

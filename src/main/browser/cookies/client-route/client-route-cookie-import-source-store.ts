@@ -7,7 +7,7 @@ import type { BrowserSessionProfileSource } from '../../../../shared/browser/wor
 const FILE_NAME = 'client-route-cookie-import-sources.json'
 const MAX_ENTRIES = 128
 
-type StoredSources = Record<string, BrowserSessionProfileSource>
+type StoredSources = Record<string, BrowserSessionProfileSource & { authority?: string }>
 
 let cached: StoredSources | null = null
 
@@ -57,11 +57,12 @@ function persist(sources: StoredSources): void {
 export function recordClientRouteCookieImportSource(args: {
   environmentId: string
   profileId: string
+  authority: string
   source: BrowserSessionProfileSource
 }): void {
   const next: StoredSources = {
     ...load(),
-    [entryKey(args.environmentId, args.profileId)]: args.source
+    [entryKey(args.environmentId, args.profileId)]: { ...args.source, authority: args.authority }
   }
   const keys = Object.keys(next)
   if (keys.length > MAX_ENTRIES) {
@@ -74,12 +75,13 @@ export function recordClientRouteCookieImportSource(args: {
 }
 
 export function clientRouteCookieImportSources(
-  environmentId: string
+  environmentId: string,
+  authority: string
 ): Record<string, BrowserSessionProfileSource> {
   const prefix = `${environmentId}\u0000`
   const result: Record<string, BrowserSessionProfileSource> = {}
-  for (const [key, source] of Object.entries(load())) {
-    if (key.startsWith(prefix)) {
+  for (const [key, { authority: recordedAuthority, ...source }] of Object.entries(load())) {
+    if (key.startsWith(prefix) && (!recordedAuthority || recordedAuthority === authority)) {
       result[key.slice(prefix.length)] = source
     }
   }

@@ -70,6 +70,7 @@ import type {
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
+  BrowserCookieImportSelection,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   BrowserViewportScrollState
@@ -244,22 +245,20 @@ export type BrowserApi = {
   sessionDetectBrowsersForClientHost: (args: {
     environmentId: string
   }) => Promise<DetectedBrowserInfo[] | null>
-  sessionImportFromBrowser: (args: {
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => Promise<BrowserCookieImportResult>
+  sessionImportFromBrowser: (
+    args: { profileId: string } & BrowserCookieImportSelection
+  ) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
-  sessionImportFromBrowserForClientHost: (args: {
-    environmentId: string
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => Promise<BrowserCookieImportResult | null>
-  /** Import sources keyed by browser profile ID. */
+  sessionImportFromBrowserForClientHost: (
+    args: {
+      environmentId: string
+      profileId: string
+    } & BrowserCookieImportSelection
+  ) => Promise<BrowserCookieImportResult | null>
+  /** Import sources for a client-hosted environment, or null when the server hosts its pages. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
-  }) => Promise<Record<string, BrowserSessionProfileSource>>
+  }) => Promise<Record<string, BrowserSessionProfileSource> | null>
   /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
   /** Null forgets the answer so the site is asked again. */

@@ -9,6 +9,7 @@ import {
   type BrowserAgentCursorEvent,
   type BrowserAgentViewportEvent
 } from '../../../shared/browser/automation/browser-agent-activity-contract'
+import type { BrowserCookieImportSelection } from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
@@ -198,14 +199,14 @@ export const browserPageInteractionAndSessionsApi = {
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
   sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
-  sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
+  sessionImportFromBrowser: (args: { profileId: string } & BrowserCookieImportSelection) =>
     ipcRenderer.invoke('browser:session:importFromBrowser', args),
-  sessionImportFromBrowserForClientHost: (args: {
-    environmentId: string
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+  sessionImportFromBrowserForClientHost: (
+    args: {
+      environmentId: string
+      profileId: string
+    } & BrowserCookieImportSelection
+  ) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
   sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
   sessionGoogleCookieClearTarget: (args: { profileId: string; environmentId: string | null }) =>

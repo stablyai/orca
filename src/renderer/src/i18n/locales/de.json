@@ -471,11 +471,14 @@
       "tablet": "Tablet — 768 × 1024"
     },
     "cookieImport": {
+      "refreshChrome": "Aus Chrome aktualisieren",
+      "refreshedChrome": "{{profile}} wurde aus Chrome aktualisiert.",
       "errors": {
         "notAuthorized": "Nicht autorisiert",
         "profileNotFound": "Sitzungsprofil nicht gefunden.",
         "invalidBrowserProfile": "Ungültiger Browser-Profilname.",
         "browserNotFound": "Auf diesem System wurde kein Browser gefunden.",
+        "savedChromeProfileUnavailable": "Das gespeicherte Chrome-Profil ist nicht verfügbar. Wähle unter „Cookies importieren“ erneut ein Profil aus.",
         "browserProfileDatabaseMissing": "Keine Cookie-Datenbank für Profil „{{profile}}“ gefunden.",
         "fileUnreadable": "Die ausgewählte Datei konnte nicht gelesen werden.",
         "fileInvalidJson": "Die Datei enthält kein gültiges JSON.",

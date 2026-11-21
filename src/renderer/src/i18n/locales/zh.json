@@ -22564,11 +22564,14 @@
       "desktop": "桌面电脑 — 1920 × 1080"
     },
     "cookieImport": {
+      "refreshChrome": "从 Chrome 刷新",
+      "refreshedChrome": "已从 Chrome 刷新“{{profile}}”的 Cookie。",
       "errors": {
         "notAuthorized": "未获授权",
         "profileNotFound": "未找到会话配置文件",
         "invalidBrowserProfile": "浏览器配置文件名称无效",
         "browserNotFound": "在此系统上未找到浏览器",
+        "savedChromeProfileUnavailable": "上次选择的 Chrome 配置不可用。请通过“导入 Cookie”重新选择配置。",
         "browserProfileDatabaseMissing": "未找到配置文件“{{profile}}”的 Cookie 数据库",
         "fileUnreadable": "无法读取所选文件",
         "fileInvalidJson": "文件不是有效的 JSON",

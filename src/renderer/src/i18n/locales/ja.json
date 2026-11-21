@@ -21983,11 +21983,14 @@
       "desktop": "デスクトップ — 1920 × 1080"
     },
     "cookieImport": {
+      "refreshChrome": "Chrome から更新",
+      "refreshedChrome": "Chrome から「{{profile}}」を更新しました。",
       "errors": {
         "notAuthorized": "権限がありません",
         "profileNotFound": "セッションプロファイルが見つかりません。",
         "invalidBrowserProfile": "ブラウザプロファイル名が無効です。",
         "browserNotFound": "このシステムにブラウザが見つかりません。",
+        "savedChromeProfileUnavailable": "保存された Chrome プロファイルを利用できません。「Cookie をインポート」からプロファイルを選び直してください。",
         "browserProfileDatabaseMissing": "プロファイル「{{profile}}」の Cookie データベースが見つかりません。",
         "fileUnreadable": "選択したファイルを読み取れませんでした。",
         "fileInvalidJson": "ファイルは有効な JSON ではありません。",

@@ -20597,11 +20597,14 @@
       "desktop": "데스크톱 — 1920 × 1080"
     },
     "cookieImport": {
+      "refreshChrome": "Chrome에서 새로고침",
+      "refreshedChrome": "Chrome에서 {{profile}} 프로필을 새로고쳤습니다.",
       "errors": {
         "notAuthorized": "권한 없음",
         "profileNotFound": "세션 프로필을 찾을 수 없습니다.",
         "invalidBrowserProfile": "브라우저 프로필 이름이 올바르지 않습니다.",
         "browserNotFound": "이 시스템에서 브라우저를 찾을 수 없습니다.",
+        "savedChromeProfileUnavailable": "저장된 Chrome 프로필을 사용할 수 없습니다. 쿠키 가져오기에서 프로필을 다시 선택하세요.",
         "browserProfileDatabaseMissing": "'{{profile}}' 프로필의 쿠키 데이터베이스를 찾을 수 없습니다.",
         "fileUnreadable": "선택한 파일을 읽을 수 없습니다.",
         "fileInvalidJson": "파일이 유효한 JSON이 아닙니다.",

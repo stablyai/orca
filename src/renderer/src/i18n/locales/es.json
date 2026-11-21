@@ -21185,11 +21185,14 @@
       "desktop": "Escritorio — 1920 × 1080"
     },
     "cookieImport": {
+      "refreshChrome": "Actualizar desde Chrome",
+      "refreshedChrome": "Se ha actualizado {{profile}} desde Chrome.",
       "errors": {
         "notAuthorized": "No autorizado",
         "profileNotFound": "No se encontró el perfil de sesión.",
         "invalidBrowserProfile": "Nombre de perfil del navegador no válido.",
         "browserNotFound": "No se encontró ningún navegador en este sistema.",
+        "savedChromeProfileUnavailable": "El perfil de Chrome guardado no está disponible. Usa «Importar cookies» para volver a elegir un perfil.",
         "browserProfileDatabaseMissing": "No se encontró ninguna base de datos de cookies para el perfil «{{profile}}».",
         "fileUnreadable": "No se pudo leer el archivo seleccionado.",
         "fileInvalidJson": "El archivo no contiene JSON válido.",

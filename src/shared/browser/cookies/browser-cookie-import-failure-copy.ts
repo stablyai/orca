@@ -3,6 +3,8 @@ export const BROWSER_COOKIE_IMPORT_FAILURE_COPY = {
   notAuthorized: 'Not authorized',
   profileNotFound: 'Session profile not found.',
   invalidBrowserProfile: 'Invalid browser profile name.',
+  savedChromeProfileUnavailable:
+    'The saved Chrome profile is unavailable. Use Import cookies to choose a profile again.',
   browserNotFound: 'Browser not found on this system.',
   browserProfileDatabaseMissing: 'No cookies database found for profile "{{profile}}".',
   fileUnreadable: 'Could not read the selected file.',

@@ -445,11 +445,14 @@
       "tablet": "平板電腦 — 768 × 1024"
     },
     "cookieImport": {
+      "refreshChrome": "從 Chrome 重新整理",
+      "refreshedChrome": "已從 Chrome 重新整理「{{profile}}」的 Cookie。",
       "errors": {
         "notAuthorized": "未獲授權",
         "profileNotFound": "找不到工作階段設定檔。",
         "invalidBrowserProfile": "瀏覽器設定檔名稱無效。",
         "browserNotFound": "此系統上找不到瀏覽器。",
+        "savedChromeProfileUnavailable": "先前選取的 Chrome 設定檔無法使用。請透過「匯入 Cookie」重新選取設定檔。",
         "browserProfileDatabaseMissing": "找不到設定檔「{{profile}}」的 Cookie 資料庫。",
         "fileUnreadable": "無法讀取所選檔案。",
         "fileInvalidJson": "檔案不是有效的 JSON。",
