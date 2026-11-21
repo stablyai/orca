@@ -98,6 +98,7 @@ describe('BotPictureButton, a run going on with the picker closed', () => {
     // Reopened on the Generate face, where the error is kept.
     togglePicker()
     expect(await screen.findByRole('textbox', { name: 'Picture description' })).toBeTruthy()
+    expect(screen.getByText(/took too long\. Try again\./)).toBeTruthy()
   })
 
   it('leaves the slot to a picture uploaded after Generate was asked for', async () => {
