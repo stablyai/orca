@@ -25,6 +25,9 @@ import { AutomationProjectHostMenu } from './AutomationProjectHostMenu'
 import { BotAvatar } from '@/components/bots/BotAvatar'
 import { AutomationBotTargetOptions } from './AutomationBotTargetOptions'
 import { botTargetLabel } from './automation-bot-target-label'
+import type { BotRef } from '@/lib/bot-hosts'
+
+type BotTargetOption = Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>
 
 type AutomationProjectComboboxProps = {
   repos: readonly Repo[]
@@ -36,12 +39,12 @@ type AutomationProjectComboboxProps = {
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   allowAddProject?: boolean
   /** Bots offered as targets beside projects; choosing one runs the automation as that bot. */
-  bots?: readonly Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>[]
-  selectedBotId?: string | null
-  onBotChange?: (botId: string) => void
+  bots?: readonly BotTargetOption[]
+  selectedBot?: BotTargetOption | null
+  onBotChange?: (bot: BotRef) => void
 }
 
-const NO_BOTS: readonly Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>[] = []
+const NO_BOTS: readonly BotTargetOption[] = []
 
 export default function AutomationProjectCombobox({
   repos,
@@ -53,7 +56,7 @@ export default function AutomationProjectCombobox({
   getRepoHostLabel,
   allowAddProject = true,
   bots = NO_BOTS,
-  selectedBotId = null,
+  selectedBot = null,
   onBotChange
 }: AutomationProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
@@ -83,7 +86,6 @@ export default function AutomationProjectCombobox({
     recordedProject && !repos.some((repo) => repo.id === recordedProject.id)
       ? recordedProject
       : null
-  const selectedBot = bots.find((bot) => bot.id === selectedBotId) ?? null
   const selectedRepo =
     !selectedBot && selectedGroup ? getAutomationProjectSelectedSource(selectedGroup, value) : null
   const showHostLabels = useMemo(() => hasMultipleAutomationProjectHosts(repos), [repos])
@@ -189,8 +191,8 @@ export default function AutomationProjectCombobox({
     [onValueChange, resetHostMenuHover]
   )
 
-  const handleSelectBot = (botId: string): void => {
-    onBotChange?.(botId)
+  const handleSelectBot = (bot: BotRef): void => {
+    onBotChange?.(bot)
     handleOpenChange(false)
   }
 
@@ -277,7 +279,7 @@ export default function AutomationProjectCombobox({
             {/* Bots first: a long project list would push them out of view. */}
             <AutomationBotTargetOptions
               bots={filteredBots}
-              selectedBotId={selectedBotId}
+              selectedBot={selectedBot}
               highlightedValue={commandValue}
               onHighlight={setCommandValue}
               onSelect={handleSelectBot}
