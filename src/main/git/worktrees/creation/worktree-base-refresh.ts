@@ -211,6 +211,9 @@ function localBaseBranchGit(
     readBranchUse: async (repoPath, fullRef, occupancyOnly = false) => {
       const commonDir = await commonDirOf(repoPath)
       const state = await readGitDirState(commonDir.path)
+      // Only a sole direct owner is located, and it stays owners[0].
+      let located: Promise<string | undefined> | undefined
+      const locate = (gitDir: string) => (located ??= ownerPathOf(repoPath, gitDir, commonDir.path))
       if (state.reserved.has(fullRef)) {
         return { reserved: true }
       }
@@ -219,7 +222,8 @@ function localBaseBranchGit(
         ? { kind: 'unknown' as const }
         : await resolveBranchCheckouts(state, commonDir.path, fullRef, {
             bareCommonDir: await bareDirOf(repoPath, commonDir),
-            firstOwnerSettles: occupancyOnly
+            firstOwnerSettles: occupancyOnly,
+            canLocate: async (gitDir) => (await locate(gitDir)) !== undefined
           })
       if (use.kind === 'free') {
         return { reserved: false }
@@ -229,10 +233,7 @@ function localBaseBranchGit(
         return { reserved: false, ownerPath: repoPath }
       }
       const [onlyOwner, ...others] = use.kind === 'owned' ? use.gitDirs : []
-      const ownerPath =
-        onlyOwner && others.length === 0
-          ? await ownerPathOf(repoPath, onlyOwner, commonDir.path)
-          : undefined
+      const ownerPath = onlyOwner && others.length === 0 ? await locate(onlyOwner) : undefined
       if (ownerPath !== undefined) {
         return { reserved: false, ownerPath }
       }

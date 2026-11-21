@@ -96,7 +96,7 @@ async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
 /** A regular file's content, opened without blocking on a FIFO; null for a directory, undefined when not regular or over `maxBytes`. */
 async function readBoundedFile(
   path: string,
-  maxBytes: number,
+  maxBytes?: number,
   extraFlags = 0
 ): Promise<string | null | undefined> {
   const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | extraFlags)
@@ -105,8 +105,12 @@ async function readBoundedFile(
     if (info.isDirectory()) {
       return null
     }
-    if (!info.isFile() || info.size > maxBytes) {
+    if (!info.isFile() || (maxBytes !== undefined && info.size > maxBytes)) {
       return undefined
+    }
+    if (maxBytes === undefined) {
+      // Chunked, with Node's own size ceiling.
+      return await handle.readFile('utf8')
     }
     // One spare byte shows a file that grew past its stat.
     const buffer = Buffer.allocUnsafe(info.size + 1)
@@ -170,11 +174,8 @@ export function normalizeHead(text: string): string {
 
 export const COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
-/** A metadata file's content, '' when missing; throws for anything but a regular file of at most `maxBytes`. */
-export async function readOptional(
-  path: string,
-  maxBytes = Number.MAX_SAFE_INTEGER
-): Promise<string> {
+/** A metadata file's content, '' when missing; throws for anything but a regular file (of at most `maxBytes`). */
+export async function readOptional(path: string, maxBytes?: number): Promise<string> {
   let text: string | null | undefined
   try {
     text = await readBoundedFile(path, maxBytes)

@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import type * as FsPromises from 'node:fs/promises'
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -13,6 +14,18 @@ import {
 // Perf contract (#46177): each workspace create listed every worktree two or three times to find who has local main.
 
 const roots: string[] = []
+const refOpens = vi.hoisted(() => ({ count: 0 }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  const open: typeof actual.open = (path, ...rest) => {
+    if (String(path).includes('/refs/heads/')) {
+      refOpens.count += 1
+    }
+    return actual.open(path, ...rest)
+  }
+  return { ...actual, open }
+})
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
@@ -179,5 +192,31 @@ it.each([3, 30])(
     await refreshAndFollowUp(repoPath, repoPath, remoteOid)
 
     expect(listings()).toBe(0)
+  }
+)
+
+it.each([3, 30])(
+  'goes straight to the listing for a deleted checkout of main among %i branch worktrees',
+  async (linked) => {
+    const { repoPath } = await createRepo(linked)
+    for (let index = 0; index < linked; index += 1) {
+      git(join(dirname(repoPath), `wt-${index}`), ['checkout', '--quiet', '-b', `topic-${index}`])
+    }
+    const owner = join(dirname(repoPath), 'wt-0')
+    git(owner, ['checkout', '--quiet', 'main'])
+    await rm(owner, { recursive: true, force: true })
+    const listings = countWorktreeListings()
+    refOpens.count = 0
+
+    fastForwardCheckedOutLocalBaseAfterCreate(
+      repoPath,
+      'origin/main',
+      'refs/remotes/origin/main',
+      {}
+    )
+
+    await vi.waitFor(() => expect(listings()).toBe(1), { timeout: 25_000, interval: 50 })
+    // Only main's own ref, never the other checkouts' branches.
+    expect(refOpens.count).toBe(1)
   }
 )

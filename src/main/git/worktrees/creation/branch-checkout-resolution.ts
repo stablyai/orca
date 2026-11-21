@@ -23,6 +23,8 @@ type ResolveOptions = {
   bareCommonDir?: string
   /** Only whether the branch is checked out matters, not where or how often. */
   firstOwnerSettles?: boolean
+  /** Whether the files can place a checkout; a sole direct owner they cannot place goes straight to Git's listing. */
+  canLocate?: (gitDir: string) => Promise<boolean>
 }
 
 const MAX_SYMREF_HOPS = 5
@@ -33,7 +35,7 @@ export async function resolveBranchCheckouts(
   state: GitDirState,
   commonDir: string,
   fullRef: string,
-  { bareCommonDir, firstOwnerSettles = false }: ResolveOptions
+  { bareCommonDir, firstOwnerSettles = false, canLocate }: ResolveOptions
 ): Promise<BranchCheckouts> {
   // A case-insensitive file system resolves `refs/heads/Main` to a loose `main`, which the write itself may create.
   const foldRef = (await pathExists(join(commonDir, 'head')))
@@ -83,6 +85,10 @@ export async function resolveBranchCheckouts(
   // Two direct checkouts, or one when only occupancy matters, already settle it.
   if (settled()) {
     return { kind: 'owned', gitDirs: owners }
+  }
+  // Aliases could only add owners, and the listing will be needed anyway.
+  if (owners.length === 1 && canLocate && !(await canLocate(owners[0]))) {
+    return { kind: 'unknown' }
   }
   let unresolvable = false
   const settle = (gitDir: string, link: string | undefined) => {
