@@ -16,15 +16,19 @@ export async function failureHeldChat(
   return chat && (await chatHoldsAgentMail(runtime, chat)) ? { chat, home } : null
 }
 
-/** The sender's next step, led by why its request waits when a failed turn holds the chat. */
+/** The sender's next step: when a failed turn holds the chat, that the request waits and who unblocks
+ *  it, instead of saying the bot has it. */
 export function heldChatSentNext(
   record: BotRequestRecord,
   held: HeldChat | null | undefined
 ): string {
-  const next = botRequestSentNext(record)
   if (!held) {
-    return next
+    return botRequestSentNext(record)
   }
+  const bot = record.toBotName
   const chat = held.home ? 'Home chat' : `chat ${held.chat}`
-  return `${record.toBotName}'s ${chat} is paused after a failed turn, so this is queued there and runs when that chat continues. ${next}`
+  const waits = `${bot}'s ${chat} is paused after a failed turn, so this is queued there and has not started. It runs when ${bot}'s owner resumes or sends in that chat, or at the usage-limit reset if automatic continue is on.`
+  return record.purpose === 'status'
+    ? `${waits} Nothing comes back.`
+    : `${waits} Its answer comes back as usual once it runs. Tell the asker in one line that it is waiting on that.`
 }

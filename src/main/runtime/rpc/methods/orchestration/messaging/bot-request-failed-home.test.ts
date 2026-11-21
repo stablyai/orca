@@ -65,8 +65,8 @@ describe("a request by a bot's name when its Home Chat's last turn failed", () =
     )
     expect(startBotSession).not.toHaveBeenCalled()
     expect(notes).toEqual([])
-    expect(receipt.next).toMatch(
-      /^Docs's Home chat is paused after a failed turn, so this is queued there and runs when that chat continues\. /
+    expect(receipt.next).toBe(
+      "Docs's Home chat is paused after a failed turn, so this is queued there and has not started. It runs when Docs's owner resumes or sends in that chat, or at the usage-limit reset if automatic continue is on. Its answer comes back as usual once it runs. Tell the asker in one line that it is waiting on that."
     )
     // The answer still finds its way back to the asker.
     await expect(
@@ -116,7 +116,7 @@ describe("a request by a bot's name when its Home Chat's last turn failed", () =
     const receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', chat: DOCS_CHAT })
     expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_CHAT}`)
     expect(receipt.next).toMatch(
-      /^Docs's Home chat is paused after a failed turn, so this is queued there and runs when that chat continues\. /
+      /^Docs's Home chat is paused after a failed turn, so this is queued there/
     )
     await expect(
       sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', chat: DOCS_CHAT })
@@ -137,6 +137,23 @@ describe("a request by a bot's name when its Home Chat's last turn failed", () =
       new RegExp(
         `^Docs's chat ${DOCS_THREAD} is paused after a failed turn, so this is queued there`
       )
+    )
+    expect(startBotSession).not.toHaveBeenCalled()
+    expect(notes).toEqual([])
+  })
+
+  it('queues in a held Home Chat reached by its session address, status included', async () => {
+    for (const bot of bots.filter((entry) => entry.id === 'docs')) {
+      bot.chatSessionId = DOCS_CHAT
+    }
+    failureHeldChats.add(DOCS_CHAT)
+    const receipt = await sent(RANGER_THREAD, {
+      to: `orca_session_id:${DOCS_CHAT}`,
+      type: 'status'
+    })
+    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_CHAT}`)
+    expect(receipt.next).toMatch(
+      /^Docs's Home chat is paused after a failed turn.* Nothing comes back\.$/
     )
     expect(startBotSession).not.toHaveBeenCalled()
     expect(notes).toEqual([])
