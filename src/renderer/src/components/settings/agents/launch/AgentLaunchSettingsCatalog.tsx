@@ -3,8 +3,10 @@ import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
-import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -17,7 +19,7 @@ import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permi
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentPermissionArgs,
-  agentPermissionEnv,
+  agentPermissionHasTerminalChoice,
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
@@ -190,11 +192,9 @@ export function AgentLaunchSettingsCatalog({
       choices,
       chatOwnSupported,
       ...resolved,
-      terminalChoice:
-        agentPermissionArgs(agent, resolved.choice) ||
-        Object.keys(agentPermissionEnv(agent, resolved.choice)).length
-          ? resolved.choice
-          : 'own',
+      terminalChoice: agentPermissionHasTerminalChoice(agent, resolved.choice)
+        ? resolved.choice
+        : 'own',
       chatChoice:
         chatSupport && resolved.choice !== 'own'
           ? savedChatPermissionMode(chatSupport, resolved.choice)
