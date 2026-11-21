@@ -2744,7 +2744,8 @@
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "ouro_label": "Ouro"
         },
         "skill": {
           "cli": {

@@ -332,7 +332,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   // prettier-ignore
   devin: { detectCmd: 'devin', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
+  // `ouro chat` may first ask which agent to talk to; its idle report means the chat's composer is up, and picking takes a person a while.
+  // prettier-ignore
+  ouro: { detectCmd: 'ouro', launchCmd: 'ouro chat', promptInjectionMode: 'stdin-after-start', draftPasteReadySignal: 'ouro-composer-prompt', draftPasteReadyTimeoutMs: 20_000 }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

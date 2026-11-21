@@ -50,5 +50,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   zcode: 'zcode',
   // DSH uses Cordis plugins rather than a skills --agent target.
   dsh: null,
-  jcode: null
+  jcode: null,
+  // Ouro agents keep their skills in their own bundle, not a skills --agent target.
+  ouro: null
 } satisfies Record<TuiAgent, string | null>
