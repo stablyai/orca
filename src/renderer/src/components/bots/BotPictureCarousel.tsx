@@ -1,5 +1,5 @@
 // The picture carousel: the current face large, its wrapped neighbours dimmed beside it.
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -104,26 +104,25 @@ export function BotPictureCarousel({
     const left = faces.filter((_, i) => Math.abs(faceOffset(i, seenIndex, count)) <= 1)
     setDressed((was) => (sliding ? new Set([...was, ...left.map((face) => face.key)]) : new Set()))
   }
-  const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (settle.current) {
-        clearTimeout(settle.current)
-      }
-    },
-    []
-  )
+  // The slide lasts a little past the 300 ms move from the latest change of face, however it moved.
+  useEffect(() => {
+    if (!sliding) {
+      return
+    }
+    const timer = setTimeout(() => setSlideOver(null), 400)
+    return () => clearTimeout(timer)
+  }, [sliding, index])
   const go = (next: number): void => {
+    const target = ((next % count) + count) % count
+    // The face already current: nothing moves, so nothing slides.
+    if (target === index) {
+      return
+    }
     setSlideOver(order)
     if (!sliding) {
       setDressed(new Set())
     }
-    if (settle.current) {
-      clearTimeout(settle.current)
-    }
-    // A little past the 300 ms slide.
-    settle.current = setTimeout(() => setSlideOver(null), 400)
-    onIndexChange(((next % count) + count) % count)
+    onIndexChange(target)
   }
   const faceClass = cn(FACE_CLASS, sliding ? 'will-change-[transform,opacity]' : 'transition-none')
   return (
