@@ -49,3 +49,15 @@ export const matchTerminal = defineFixture({
     />
   )
 })
+
+export const matchTerminalLight = defineFixture({
+  width: 640,
+  render: () => (
+    <Transcript
+      settings={{
+        nativeChatAppearance: resolveNativeChatAppearanceSettings({ matchTerminalInterface: true }),
+        terminalColorOverrides: { background: '#fdf6e3', foreground: '#657b83' }
+      }}
+    />
+  )
+})
