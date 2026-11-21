@@ -14,8 +14,6 @@ import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { focusActiveWorkspaceSurfaceFromSidebar, focusProjects } from './focus-workspace-surface'
-import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/context-menu/worktree-context-menu-delete-intent'
-import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
 import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 
@@ -36,7 +34,6 @@ export function useWorktreeListKeyboardNavigation(args: {
   onKeyboardSelect?: (worktree: Worktree) => void
   focusedWorktree?: Worktree | null
   focusedWorkspaceExecutionHostId?: ExecutionHostId | null
-  resolveDeleteIntent?: () => WorktreeContextMenuDeleteIntent | null
 }) {
   const {
     rows,
@@ -48,8 +45,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput,
     onKeyboardSelect,
     focusedWorktree,
-    focusedWorkspaceExecutionHostId,
-    resolveDeleteIntent
+    focusedWorkspaceExecutionHostId
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
   useWorkspaceNeighborPrewarm({
@@ -91,8 +87,6 @@ export function useWorktreeListKeyboardNavigation(args: {
       setKeyboardPreview(null)
     }
   }, [clearPreviewCommitTimer])
-  const { handleDeleteKeyDown, handleContainerKeyUp, resetDeleteGesture } =
-    useSidebarWorkspaceDeleteKeyboard({ keybindings, resolveDeleteIntent, dropPreview })
   const commitPreview = useCallback(() => {
     const preview = previewRef.current
     dropPreview()
@@ -230,18 +224,15 @@ export function useWorktreeListKeyboardNavigation(args: {
     // Why every press: a click on a row or agent row hands keys back to the workspace; modifier selection reclaims them on click.
     const handlePointerDown = () => {
       endListNavigation()
-      resetDeleteGesture()
       dropPreview()
     }
     const handleFocusOut = (event: FocusEvent) => {
       if (event.target === scrollRef.current) {
         endListNavigation()
-        resetDeleteGesture()
       }
     }
     const handleBlur = () => {
       endListNavigation()
-      resetDeleteGesture()
     }
 
     addAppKeyListener('keydown', handleKeyDown)
@@ -255,7 +246,6 @@ export function useWorktreeListKeyboardNavigation(args: {
       window.removeEventListener('pointerdown', handlePointerDown, { capture: true })
       window.removeEventListener('focusout', handleFocusOut, { capture: true })
       window.removeEventListener('blur', handleBlur)
-      resetDeleteGesture()
     }
   }, [
     activeModal,
@@ -264,14 +254,12 @@ export function useWorktreeListKeyboardNavigation(args: {
     keybindings,
     markDirectScrollInput,
     navigateWorktree,
-    scrollRef,
-    resetDeleteGesture
+    scrollRef
   ])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (textInputOwnsComposition(e.nativeEvent)) {
-        resetDeleteGesture()
         return
       }
       if (
@@ -280,9 +268,6 @@ export function useWorktreeListKeyboardNavigation(args: {
         activeModal !== 'none' ||
         hasVisibleOverlay()
       ) {
-        return
-      }
-      if (handleDeleteKeyDown(e)) {
         return
       }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -301,20 +286,11 @@ export function useWorktreeListKeyboardNavigation(args: {
         markDirectScrollInput()
       }
     },
-    [
-      activeModal,
-      commitPreview,
-      handleDeleteKeyDown,
-      resetDeleteGesture,
-      markDirectScrollInput,
-      navigateWorktree
-    ]
+    [activeModal, commitPreview, markDirectScrollInput, navigateWorktree]
   )
 
   return {
     handleContainerKeyDown,
-    handleContainerKeyUp,
-    handleContainerBlur: resetDeleteGesture,
     keyboardPreview: keyboardPreview?.fromWorktreeId === activeWorktreeId ? keyboardPreview : null
   }
 }

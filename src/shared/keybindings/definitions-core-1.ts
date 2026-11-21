@@ -85,25 +85,6 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     }
   },
   {
-    id: 'workspace.delete',
-    title: 'Delete Selected Workspace',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: [
-      'shortcut',
-      'global',
-      'workspace',
-      'selected workspace',
-      'sidebar',
-      'worktree',
-      'delete',
-      'remove',
-      'trash'
-    ],
-    // Why: Backspace avoids the terminal pane's D-based split shortcuts on every platform.
-    defaultBindings: platformBindings(['Mod+Shift+Backspace'])
-  },
-  {
     id: 'workspace.openBoard',
     title: 'Toggle Workspace Board',
     group: 'Global',

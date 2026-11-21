@@ -1,13 +1,11 @@
 import { Trash2 } from 'lucide-react'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
 export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
-  const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
   const {
     batchDeleteWorktrees,
     contextDeletePending,
@@ -77,12 +75,6 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       >
         <Trash2 className="size-3.5" />
         {label}
-        {!removesProject &&
-        !projectMissing &&
-        (!isMultiContext || batchDeleteWorktrees.length > 0) &&
-        deleteShortcut ? (
-          <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
-        ) : null}
       </DropdownMenuItem>
     </>
   )
