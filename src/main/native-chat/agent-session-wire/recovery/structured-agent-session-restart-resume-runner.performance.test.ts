@@ -37,3 +37,57 @@ it('starts at most six restart continuations at once on a many-core host', async
   await all
   expect(peak).toBe(6)
 })
+
+it('starts chats cut mid-turn first and at most two whose lead had finished', async () => {
+  const { StructuredAgentSessionResumeAdmission, resumeStructuredAgentSessionsFromRestart } =
+    await import('./structured-agent-session-restart-resume-runner')
+  const started: string[] = []
+  let finishedRunning = 0
+  let finishedPeak = 0
+  let open: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    open = resolve
+  })
+  const candidate = (sessionId: string, state: 'done' | 'working') => ({
+    sessionId,
+    workspaceId: 'repo::/repo',
+    agent: 'claude',
+    work: { kind: 'turn' as const, id: 'turn-1' },
+    trigger: 'update' as const,
+    recordedAt: 1,
+    latestPrompt: '',
+    executionHostId: 'local' as const,
+    workspaceKind: 'git-worktree' as const,
+    activity: { state, prompts: [], tasks: [{ kind: 'command' as const, label: 'watch' }] }
+  })
+  // One restart owing 20 chats whose lead had finished, listed before the 3 cut mid-turn.
+  const candidates = [
+    ...Array.from({ length: 20 }, (_, index) => candidate(`finished-${index}`, 'done')),
+    ...['mid-0', 'mid-1', 'mid-2'].map((id) => candidate(id, 'working'))
+  ]
+  const all = resumeStructuredAgentSessionsFromRestart(
+    {
+      admission: new StructuredAgentSessionResumeAdmission(),
+      consumeMarker: async () => true,
+      resume: async (sessionId) => {
+        started.push(sessionId)
+        const finished = sessionId.startsWith('finished')
+        finishedRunning += finished ? 1 : 0
+        finishedPeak = Math.max(finishedPeak, finishedRunning)
+        await gate
+        finishedRunning -= finished ? 1 : 0
+      }
+    },
+    candidates,
+    'launch'
+  )
+  for (let turn = 0; turn < 50 && started.length < 5; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+  expect(started.slice(0, 3)).toEqual(['mid-0', 'mid-1', 'mid-2'])
+  expect(started).toHaveLength(5)
+  open()
+  await all
+  expect(started).toHaveLength(23)
+  expect(finishedPeak).toBe(2)
+})

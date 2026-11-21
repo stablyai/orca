@@ -18,7 +18,6 @@ import {
 import { createStructuredAgentSessionRestartOperationQueue } from './structured-agent-session-restart-operation-queue'
 import { createStructuredAgentSessionRestartOfferRecords } from './structured-agent-session-restart-offer-records'
 import {
-  restartRowsAdmitted,
   restartRowsFor,
   type StructuredAgentSessionRestartAudience,
   type StructuredAgentSessionResumeCandidate
@@ -27,10 +26,7 @@ import {
   resumeStructuredAgentSessionsFromRestart,
   StructuredAgentSessionResumeAdmission
 } from './structured-agent-session-restart-resume-runner'
-import type {
-  RestartContinuationOptions,
-  StructuredAgentSessionRestartResume
-} from './structured-agent-session-restart-resume-contract'
+import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-contract'
 import {
   continuationDeps,
   startStructuredAgentSessionContinuation,
@@ -148,7 +144,8 @@ export function createStructuredAgentSessionRestartResume(
     audience: StructuredAgentSessionRestartAudience | undefined,
     continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
     progress: ReturnType<typeof createRestartResumeProgress>,
-    { automatic = false, ...admitted }: RestartContinuationOptions = {}
+    automatic = false,
+    recordedSince = Number.NEGATIVE_INFINITY
   ) => {
     // Supersede captured witnesses; the mutation lane drains any publication already in flight.
     witnesses.clear(audience)
@@ -157,7 +154,9 @@ export function createStructuredAgentSessionRestartResume(
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
     const derived = await derive(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
-    const eligible = restartRowsAdmitted(derived.candidates, audience, requested, admitted)
+    const eligible = restartRowsFor(derived.candidates, audience).filter(
+      (candidate) => requested.has(candidate.sessionId) && candidate.recordedAt >= recordedSince
+    )
     progress.skipExcluded(sessionIds ?? [], eligible)
     if (eligible.length === 0) {
       return null
@@ -261,7 +260,8 @@ export function createStructuredAgentSessionRestartResume(
           )
         },
         progress,
-        options
+        options?.automatic === true,
+        options?.recordedSince
       )
       await Promise.all(verdicts)
       const resumed = action?.outcomes ?? []

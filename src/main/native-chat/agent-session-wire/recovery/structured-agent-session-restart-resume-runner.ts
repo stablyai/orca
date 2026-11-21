@@ -12,6 +12,10 @@ export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = Math.max(
   Math.min(6, availableParallelism())
 )
 
+/** A chat whose lead had finished, with only its background work cut, starts behind every chat cut
+ *  mid-turn and at most this many at once: one restart can owe dozens of them. */
+export const STRUCTURED_AGENT_SESSION_FINISHED_RESUME_CONCURRENCY = 2
+
 export const STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS =
   'agent_session_resume_already_in_progress'
 
@@ -42,9 +46,14 @@ function resumeAdmissionOwner(error: unknown): string | null {
 export class StructuredAgentSessionResumeAdmission {
   private readonly owners = new Map<string, string>()
   private readonly starts: PrioritySemaphore
+  private readonly finishedStarts: PrioritySemaphore
 
-  constructor(startLimit: number = STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY) {
+  constructor(
+    startLimit: number = STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY,
+    finishedStartLimit: number = STRUCTURED_AGENT_SESSION_FINISHED_RESUME_CONCURRENCY
+  ) {
     this.starts = new PrioritySemaphore(startLimit)
+    this.finishedStarts = new PrioritySemaphore(Math.min(startLimit, finishedStartLimit))
   }
 
   liveOwner(sessionId: string): string | null {
@@ -56,8 +65,7 @@ export class StructuredAgentSessionResumeAdmission {
     owner: string,
     task: () => Promise<T>,
     onPhase?: (phase: 'queued' | 'starting') => void,
-    /** Lower starts first. */
-    priority = 0
+    leadFinished = false
   ): Promise<T> {
     const live = this.owners.get(sessionId)
     if (live !== undefined) {
@@ -67,12 +75,17 @@ export class StructuredAgentSessionResumeAdmission {
     this.owners.set(sessionId, owner)
     try {
       onPhase?.('queued')
-      const release = await this.starts.acquire(priority)
+      const releaseFinished = leadFinished ? await this.finishedStarts.acquire(0) : undefined
       try {
-        onPhase?.('starting')
-        return await task()
+        const release = await this.starts.acquire(leadFinished ? 1 : 0)
+        try {
+          onPhase?.('starting')
+          return await task()
+        } finally {
+          release()
+        }
       } finally {
-        release()
+        releaseFinished?.()
       }
     } finally {
       this.owners.delete(sessionId)
@@ -94,13 +107,14 @@ export async function resumeStructuredAgentSessionsFromRestart(
   candidates: readonly StructuredAgentSessionResumeCandidate[],
   owner: string
 ): Promise<StructuredAgentSessionResumeOutcome[]> {
-  // A chat cut mid-turn starts before one whose lead had finished and only its background work was cut.
-  const rank = (candidate: StructuredAgentSessionResumeCandidate) =>
-    candidate.activity?.state === 'done' ? 1 : 0
-  const ordered = [...candidates].sort((a, b) => rank(a) - rank(b))
   return Promise.all(
-    ordered.map(async (candidate) => {
-      const outcome = await resumeOne(deps, candidate.sessionId, owner, rank(candidate))
+    candidates.map(async (candidate) => {
+      const outcome = await resumeOne(
+        deps,
+        candidate.sessionId,
+        owner,
+        candidate.activity?.state === 'done'
+      )
       if (outcome.outcome === 'refused') {
         deps.onRefused?.(candidate.sessionId)
       }
@@ -113,7 +127,7 @@ async function resumeOne(
   deps: StructuredAgentSessionResumeRunnerDeps,
   sessionId: string,
   owner: string,
-  priority: number
+  leadFinished: boolean
 ): Promise<StructuredAgentSessionResumeOutcome> {
   try {
     return await deps.admission.run(
@@ -132,7 +146,7 @@ async function resumeOne(
         return { sessionId, outcome: 'resumed' as const }
       },
       (phase) => deps.onPhase?.(sessionId, phase),
-      priority
+      leadFinished
     )
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)

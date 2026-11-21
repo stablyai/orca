@@ -7,7 +7,6 @@ import { previousAgentSessionRuntimeStartedAt } from '../records/agent-session-r
 import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { restartActivityOnlyUnawaitedWorkCut } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 
 export const STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER =
   'trusted-local:launch-continuation'
@@ -39,9 +38,6 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   /** When the run that just ended started; unknown when no earlier run left a record. */
   previousRunStartedAt: () => Promise<number | undefined>
   resumeWorkOnRestart: () => boolean
-  /** A chat that is an orchestration worker with an open Dispatch: its task waits on it, so it is
-   *  continued like a chat cut mid-turn. */
-  openWorker: (sessionId: string) => boolean
 }
 
 export async function continueStructuredAgentSessionsAtLaunch(
@@ -94,16 +90,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
       undefined,
       // Only the run that just ended cut what this start may continue on its own; with that run
       // unknown, only what this start itself recorded from a crash.
-      {
-        automatic: true,
-        onReserved,
-        recordedSince: since ?? deps.startedAt,
-        // Nothing awaits a finished chat's cut commands or monitors; starting an agent for each of
-        // them at once is what spiked a restart with many chats, so the person continues those.
-        leaveToPerson: (candidate) =>
-          restartActivityOnlyUnawaitedWorkCut(candidate.activity) &&
-          !deps.openWorker(candidate.sessionId)
-      }
+      { automatic: true, onReserved, recordedSince: since ?? deps.startedAt }
     )
     const continued = new Set(
       answer.continued.flatMap((outcome) =>
@@ -129,8 +116,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
 /** What an installed host continues with; no host means nothing to continue this start. */
 export function structuredAgentSessionLaunchContinuationDeps(
   host: StructuredAgentSessionHost | null,
-  resumeWorkOnRestart: () => boolean,
-  openWorker: (sessionId: string) => boolean
+  resumeWorkOnRestart: () => boolean
 ): StructuredAgentSessionLaunchContinuationDeps | undefined {
   return host
     ? {
@@ -142,8 +128,7 @@ export function structuredAgentSessionLaunchContinuationDeps(
             host.deps.journalDatabase.stateDirectory,
             agentSessionRuntimeIncarnation()
           ),
-        resumeWorkOnRestart,
-        openWorker
+        resumeWorkOnRestart
       }
     : undefined
 }

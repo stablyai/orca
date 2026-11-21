@@ -14,7 +14,6 @@ import {
   reportWorkerStopsAcrossRestart
 } from '../workers/turn-stops/restart-worker-stop-report'
 import { reconsiderRestAfterWait } from '../workers/turn-stops/worker-presence-report'
-import { chatWorkerDispatches } from '../workers/turn-stops/chat-worker-error-escalation'
 import type { TerminalWorkerTurnStops } from '../workers/turn-stops/terminal-worker-turn-stops'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
@@ -47,8 +46,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         launch.start(
           structuredAgentSessionLaunchContinuationDeps(
             getStructuredAgentSessionHost(),
-            () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true,
-            (sessionId) => this.isOpenChatWorker(sessionId)
+            () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
           )
         ),
       (error: unknown) => {
@@ -56,20 +54,6 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         throw error
       }
     )
-  }
-
-  /** Unknown counts as a worker, so a database that cannot be read never leaves a task stalled. */
-  private isOpenChatWorker(sessionId: string): boolean {
-    try {
-      const db = this.getExistingOrchestrationDb()
-      const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
-      return db
-        ? chatWorkerDispatches(sessionId, db).length > 0 ||
-            chatWorkerDispatches(root, db).length > 0
-        : false
-    } catch {
-      return true
-    }
   }
 
   protected abstract readonly terminalWorkerTurnStops: Pick<

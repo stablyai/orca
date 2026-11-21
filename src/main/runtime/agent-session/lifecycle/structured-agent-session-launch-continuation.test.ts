@@ -7,11 +7,6 @@ import {
 } from './structured-agent-session-launch-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeCandidate } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
-import type { StructuredAgentSessionRestartResume } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
-
-type ContinueAfterRestartArgs = Parameters<
-  StructuredAgentSessionRestartResume['continueAfterRestart']
->
 
 const offer = (sessionId: string, recordedAt: number): StructuredAgentSessionResumeCandidate => ({
   sessionId,
@@ -45,7 +40,7 @@ function launch(resumeWorkOnRestart: boolean) {
       calls.push('adopt')
       return 2
     }),
-    continueAfterRestart: vi.fn(async (..._args: ContinueAfterRestartArgs) => {
+    continueAfterRestart: vi.fn(async () => {
       calls.push('continue')
       const continued: StructuredAgentSessionContinuationOutcome[] = [
         { sessionId: 'continued', outcome: 'continued' },
@@ -77,8 +72,7 @@ function launch(resumeWorkOnRestart: boolean) {
     },
     startedAt: 5,
     previousRunStartedAt: async () => 3,
-    resumeWorkOnRestart: () => resumeWorkOnRestart,
-    openWorker: (sessionId) => sessionId === 'worker'
+    resumeWorkOnRestart: () => resumeWorkOnRestart
   }
   return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
 }
@@ -106,37 +100,9 @@ describe('continuing interrupted chats at launch', () => {
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      {
-        automatic: true,
-        onReserved: expect.any(Function),
-        recordedSince: 3,
-        leaveToPerson: expect.any(Function)
-      }
+      { automatic: true, onReserved: expect.any(Function), recordedSince: 3 }
     )
     expect(calls).toEqual(['adopt', 'continue', 'pass over'])
-  })
-
-  it('leaves to the person only a finished chat whose cut work nothing awaited and no task waits on', async () => {
-    const { result, restartResume } = launch(true)
-    await result
-    const leaveToPerson = (candidate: StructuredAgentSessionResumeCandidate) =>
-      restartResume.continueAfterRestart.mock.calls[0]?.[3]?.leaveToPerson?.(candidate)
-    const finished = (sessionId: string, kinds: ('command' | 'monitor' | 'agent')[]) => ({
-      ...offer(sessionId, 4),
-      activity: {
-        state: 'done' as const,
-        prompts: [],
-        tasks: kinds.map((kind) => ({ kind, label: kind }))
-      }
-    })
-    expect(leaveToPerson(finished('chat', ['command', 'monitor']))).toBe(true)
-    // A worker's task waits on it, and a cut helper agent's result was awaited.
-    expect(leaveToPerson(finished('worker', ['command']))).toBe(false)
-    expect(leaveToPerson(finished('chat', ['command', 'agent']))).toBe(false)
-    const midTurn = finished('chat', ['command'])
-    expect(leaveToPerson({ ...midTurn, activity: { ...midTurn.activity, state: 'working' } })).toBe(
-      false
-    )
   })
 
   it('does not count as cut a chat whose continuation its provider has not confirmed yet', async () => {

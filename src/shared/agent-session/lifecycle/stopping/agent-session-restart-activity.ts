@@ -25,16 +25,3 @@ export function restartActivityWaitsOnPerson(
 ): boolean {
   return activity?.state === 'blocked' && activity.prompts.length > 0
 }
-
-/** The lead had finished and only commands or monitors were cut, none of whose results it awaited (a
- *  cut helper agent or workflow was). A full task list may have dropped one, so it does not count. */
-export function restartActivityOnlyUnawaitedWorkCut(
-  activity: AgentSessionRestartActivity | undefined
-): boolean {
-  return (
-    activity?.state === 'done' &&
-    activity.tasks.length > 0 &&
-    activity.tasks.length < AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS &&
-    activity.tasks.every((task) => task.kind === 'command' || task.kind === 'monitor')
-  )
-}
