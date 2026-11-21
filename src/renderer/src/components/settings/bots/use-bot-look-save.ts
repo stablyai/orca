@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../../shared/bots/bot-avatar-color'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
@@ -8,6 +10,8 @@ export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'av
 // hear when nothing is left to send; one that closes stops listening. While any are left, the host's re-read
 // of its bots is held back, so each save returns as it lands and a later pick never waits on a re-read.
 type LookSaves = {
+  /** The bot's look once the save on its way lands; a pick of it sends nothing. */
+  landing: BotLookUpdate
   waiting: BotLookUpdate | null
   update: (look: BotLookUpdate) => Promise<unknown>
   drained: Set<() => void>
@@ -43,25 +47,54 @@ function sendOnLeave(): void {
   }
 }
 
-/** Saves `look` after any save already on its way; `onDrained` runs once nothing for this bot is left. */
+const sameValue = {
+  avatarColor: (a: string | null | undefined, b: string | null | undefined) =>
+    (a ?? DEFAULT_BOT_AVATAR_COLOR) === (b ?? DEFAULT_BOT_AVATAR_COLOR),
+  avatarOutfit: (a: string | null | undefined, b: string | null | undefined) =>
+    (a ?? null) === (b ?? null)
+}
+
+// The fields of `look` that would change the bot from `landing`, or null when none would.
+function changes(look: BotLookUpdate, landing: BotLookUpdate): BotLookUpdate | null {
+  const color =
+    'avatarColor' in look && !sameValue.avatarColor(look.avatarColor, landing.avatarColor)
+  const outfit =
+    'avatarOutfit' in look && !sameValue.avatarOutfit(look.avatarOutfit, landing.avatarOutfit)
+  return color || outfit
+    ? {
+        ...(color ? { avatarColor: look.avatarColor } : {}),
+        ...(outfit ? { avatarOutfit: look.avatarOutfit } : {})
+      }
+    : null
+}
+
+/** Saves `look` after any save already on its way; `onDrained` runs once nothing for this bot is left.
+ *  `saved` is the bot's look as shown, so a look that changes nothing sends nothing. */
 export function saveBotLook(
   key: string,
   look: BotLookUpdate,
   update: (look: BotLookUpdate) => Promise<unknown>,
   onDrained?: () => void,
-  hold?: BotLookHold
+  hold?: BotLookHold,
+  saved: BotLookUpdate = {}
 ): void {
   const running = lookSaves.get(key)
   if (running) {
-    running.waiting = { ...running.waiting, ...look }
+    running.waiting = changes({ ...running.waiting, ...look }, running.landing)
     running.update = update
     if (onDrained) {
       running.drained.add(onDrained)
     }
     return
   }
+  const first = changes(look, saved)
+  if (!first) {
+    onDrained?.()
+    return
+  }
   const saves: LookSaves = {
-    waiting: look,
+    landing: { avatarColor: saved.avatarColor, avatarOutfit: saved.avatarOutfit },
+    waiting: first,
     update,
     drained: new Set(onDrained ? [onDrained] : [])
   }
@@ -72,6 +105,7 @@ export function saveBotLook(
     while (saves.waiting) {
       const next = saves.waiting
       saves.waiting = null
+      saves.landing = { ...saves.landing, ...next }
       // A failed save is reported by `update`; the picks after it still go.
       await saves.update(next).catch(() => undefined)
     }
@@ -92,7 +126,7 @@ export function useBotLookSave(
   update: (look: BotLookUpdate) => Promise<unknown>,
   delayMs: number,
   hold?: BotLookHold,
-  /** The bot's look as saved, so a pick of what it already shows sends nothing. */
+  /** The bot's look as shown, so a save that changes nothing sends nothing. */
   saved: BotLookUpdate = {}
 ): { picked: BotLookUpdate | null; pick: (change: BotLookUpdate) => void; flush: () => void } {
   const [picked, setPicked] = useState<BotLookUpdate | null>(null)
@@ -118,16 +152,9 @@ export function useBotLookSave(
       lookSaves.get(key)?.drained.delete(listener)
     }
   }, [key])
+  // Read when the pause ends, so it is the look shown then.
+  const savedLook = useLatestHandler(() => saved)
   const pick = (change: BotLookUpdate): void => {
-    const shown: BotLookUpdate = {
-      avatarColor: saved.avatarColor,
-      avatarOutfit: saved.avatarOutfit,
-      ...picked
-    }
-    const fields = (['avatarColor', 'avatarOutfit'] as const).filter((field) => field in change)
-    if (fields.every((field) => (change[field] ?? null) === (shown[field] ?? null))) {
-      return
-    }
     const look = { ...timer.current?.look, ...change }
     setPicked((shown) => ({ ...shown, ...change }))
     if (timer.current) {
@@ -140,7 +167,7 @@ export function useBotLookSave(
         timer.current = null
       }
       pausedPicks.delete(save)
-      saveBotLook(key, look, update, open.current ? drained.current : undefined, hold)
+      saveBotLook(key, look, update, open.current ? drained.current : undefined, hold, savedLook())
     }
     timer.current = { timer: setTimeout(save, delayMs), save, look }
     pausedPicks.add(save)

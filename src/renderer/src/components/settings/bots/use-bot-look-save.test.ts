@@ -79,23 +79,47 @@ describe('saveBotLook', () => {
   })
 })
 
-describe('useBotLookSave picks of the look already shown', () => {
-  it('sends nothing for the saved outfit or a pick already waiting', () => {
+describe('looks that change nothing', () => {
+  function recorder(slowFirst = false): {
+    sent: BotLookUpdate[]
+    update: (look: BotLookUpdate) => Promise<unknown>
+  } {
     const sent: BotLookUpdate[] = []
     const update = (look: BotLookUpdate): Promise<unknown> => {
       sent.push(look)
-      return Promise.resolve()
+      return slowFirst && sent.length === 1 ? new Promise(() => {}) : Promise.resolve()
     }
+    return { sent, update }
+  }
+
+  it('sends nothing for the saved outfit, or for another outfit and back within the pause', () => {
+    const { sent, update } = recorder()
     const { result } = renderHook(() =>
       useBotLookSave('local:b5', update, 500, undefined, { avatarOutfit: 'tie' })
     )
     act(() => result.current.pick({ avatarOutfit: 'tie' }))
-    window.dispatchEvent(new Event('pagehide'))
+    act(() => result.current.flush())
+    act(() => result.current.pick({ avatarOutfit: 'party' }))
+    act(() => result.current.pick({ avatarOutfit: 'tie' }))
+    act(() => result.current.flush())
     expect(sent).toEqual([])
+  })
 
-    act(() => result.current.pick({ avatarOutfit: 'party' }))
-    act(() => result.current.pick({ avatarOutfit: 'party' }))
+  it('sends nothing for the default color picked over the same color stored', () => {
+    const { sent, update } = recorder()
+    saveBotLook('local:b6', { avatarColor: null }, update, undefined, undefined, {
+      avatarColor: '#b3dbf4'
+    })
+    expect(sent).toEqual([])
+  })
+
+  it('lets a later pick of the saved outfit cancel one still waiting behind a slow save', () => {
+    const { sent, update } = recorder(true)
+    const saved = { avatarColor: null, avatarOutfit: 'tie' }
+    saveBotLook('local:b7', { avatarColor: '#f4c4cf' }, update, undefined, undefined, saved)
+    saveBotLook('local:b7', { avatarOutfit: 'party' }, update)
+    saveBotLook('local:b7', { avatarOutfit: 'tie' }, update)
     window.dispatchEvent(new Event('pagehide'))
-    expect(sent).toEqual([{ avatarOutfit: 'party' }])
+    expect(sent).toEqual([{ avatarColor: '#f4c4cf' }])
   })
 })
