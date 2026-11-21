@@ -3,6 +3,7 @@ import { useBotHostLive } from '@/lib/bot-host-views'
 import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
+import { isBotAvatarRead } from '../bot-avatar-image'
 import { BotItemFaceFailuresContext } from './bot-item-face-reads'
 
 /** The row's bot in a group's merged list, beside its status glyph: item numbers repeat across bots.
@@ -18,8 +19,13 @@ export function BotItemRowFace({
   windowed?: boolean
 }): React.JSX.Element {
   const failures = useContext(BotItemFaceFailuresContext)
-  // Only a face showing an upload reads anything, so only it hears its host and the window.
-  const live = useBotHostLive(bot.hostId, windowed && parseBotAvatar(bot.avatar)?.kind === 'upload')
+  // Only a face still to read an upload reads anything, so only it hears its host and the window.
+  const parsed = parseBotAvatar(bot.avatar)
+  const upload = parsed?.kind === 'upload' ? parsed.version : null
+  const live = useBotHostLive(
+    bot.hostId,
+    windowed && upload !== null && !isBotAvatarRead(bot, upload)
+  )
   const read = useMemo(() => ({ paused: !live, failures }), [live, failures])
   return (
     <span className="flex h-5 shrink-0 items-center" title={bot.name}>

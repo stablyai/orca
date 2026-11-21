@@ -1,7 +1,7 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
 import { useEffect, useState } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
-import { readBotHostState, readHostBots } from '@/lib/bot-catalog-snapshot'
+import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -26,8 +26,10 @@ const MAX_FAILURES = 64
  *  its bot isn't read again while the group is shown, a failed read is listed and a successful one
  *  unlisted. */
 export type BotAvatarRead = {
-  paused: boolean
-  failures: BotAvatarFailures | null
+  paused?: boolean
+  failures?: BotAvatarFailures | null
+  /** A chat turn's picture as it was when posted: the bot's current one, if read, shows instead. */
+  historical?: boolean
 }
 
 /** A group's failures leaving (it folded or closed): pending reads stop holding them. */
@@ -70,33 +72,15 @@ const uploads = new Map<string, Upload>()
 // Each group's reads in flight, which it lets go of as it leaves.
 const pendingByFailures = new WeakMap<BotAvatarFailures, Set<Upload>>()
 
-/** The bot's picture version in the catalog now; null for none or a bot not listed. */
-// Each host bot list's upload versions by bot id, built once per list (the catalog makes a new one as
-// it changes), so a turn asking costs one lookup.
-const versionsByList = new WeakMap<readonly Bot[], Map<string, string>>()
-
-function currentUploadVersion(bot: BotRef): string | null {
-  const listed = readHostBots(bot.hostId)
-  let versions = versionsByList.get(listed)
-  if (!versions) {
-    versions = new Map()
-    for (const each of listed) {
-      const parsed = parseBotAvatar(each.avatar)
-      if (parsed?.kind === 'upload') {
-        versions.set(each.id, parsed.version)
-      }
-    }
-    versionsByList.set(listed, versions)
-  }
-  return versions.get(bot.id) ?? null
-}
+// The version each bot's current faces (rows, badges, settings: all from the catalog) last asked for.
+const currentVersions = new Map<string, string>()
 
 /** A chat turn from before the picture changed asks for an old version, which the host can't give: it
  *  reads the bot's current picture. So the current one, already read, is what that turn shows, and the
  *  rows showing the current one keep it. */
-function currentFor(bot: BotRef, key: string): Upload | undefined {
+function currentFor(key: string): Upload | undefined {
   const cached = uploads.get(key)
-  return cached?.read !== undefined && currentUploadVersion(bot) === cached.version
+  return cached?.read !== undefined && currentVersions.get(key) === cached.version
     ? cached
     : undefined
 }
@@ -147,10 +131,17 @@ function readUpload(
   bot: BotRef,
   version: string,
   failures: BotAvatarFailures | null,
+  historical: boolean,
   onRead: (src: string | null, failed: boolean) => void
 ): () => void {
   const key = botRefKey(bot)
-  const entry = uploadOf(key, version) ?? currentFor(bot, key) ?? startUpload(bot, key, version)
+  if (!historical) {
+    currentVersions.set(key, version)
+  }
+  const entry =
+    uploadOf(key, version) ??
+    (historical ? currentFor(key) : undefined) ??
+    startUpload(bot, key, version)
   if (failures && entry.read === undefined) {
     entry.noted.add(failures)
     const reads = pendingByFailures.get(failures) ?? new Set<Upload>()
@@ -169,11 +160,19 @@ function readUpload(
 
 function finishedUpload(
   bot: BotRef,
-  version: string | null
+  version: string | null,
+  historical: boolean
 ): { key: string; src: string | null } | null {
   const key = botRefKey(bot)
-  const cached = version ? (uploadOf(key, version) ?? currentFor(bot, key)) : undefined
+  const cached = version
+    ? (uploadOf(key, version) ?? (historical ? currentFor(key) : undefined))
+    : undefined
   return version && cached?.read !== undefined ? { key: version, src: cached.read } : null
+}
+
+/** Whether the bot's picture at `version` is already read: a face showing it needs no host or window. */
+export function isBotAvatarRead(bot: BotRef, version: string | null): boolean {
+  return version !== null && uploadOf(botRefKey(bot), version)?.read !== undefined
 }
 
 /** The picture's URL; null shows the emoji or initial. */
@@ -183,22 +182,23 @@ export function useBotAvatarSrc(
 ): string | null {
   const paused = read?.paused === true
   const failures = read?.failures ?? null
+  const historical = read?.historical === true
   const parsed = parseBotAvatar(bot.avatar)
   const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
   const { hostId, id } = bot
-  const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey))
+  const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey, historical))
   useEffect(() => {
     const key = botRefKey({ hostId, id })
     if (!uploadKey || paused || failures?.get(key)?.version === uploadKey) {
       return
     }
-    return readUpload({ hostId, id }, uploadKey, failures, (src) => {
+    return readUpload({ hostId, id }, uploadKey, failures, historical, (src) => {
       setUpload((shown) =>
         shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
       )
     })
-  }, [hostId, id, uploadKey, paused, failures])
+  }, [hostId, id, uploadKey, paused, failures, historical])
   if (mascotSrc) {
     return mascotSrc
   }
