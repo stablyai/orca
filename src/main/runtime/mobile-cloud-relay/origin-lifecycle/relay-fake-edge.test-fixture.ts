@@ -60,6 +60,8 @@ export class FakeEdgePath {
   readonly acks: string[] = []
   // Tokens the host sent in auth-refresh frames on this path.
   readonly authRefreshes: string[] = []
+  // The bearer token each control connection dialled with.
+  readonly dialTokens: string[] = []
   pings = 0
   answersPings = true
   behaviour: PathBehaviour = 'resume'
@@ -75,7 +77,10 @@ export class FakeEdgePath {
     readonly url: string,
     private readonly session: FakeHostSession
   ) {
-    server.on('connection', (socket) => this.accept(socket))
+    server.on('connection', (socket, request) => {
+      this.dialTokens.push(String(request.headers.authorization ?? '').replace(/^Bearer /, ''))
+      this.accept(socket)
+    })
   }
 
   static async listen(session: FakeHostSession): Promise<FakeEdgePath> {

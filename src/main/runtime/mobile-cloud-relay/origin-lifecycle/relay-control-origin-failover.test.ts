@@ -215,6 +215,25 @@ describe('RelayControlOrigin two-path failover', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('dials a later alternate with a token renewed after the resume began', async () => {
+    const { primary, primaryControl, alternates, origin } = await setup({ alternates: 2 })
+    const [silent, alternate] = alternates
+    primary.answersPings = false
+    silent.behaviour = 'silent'
+
+    // The resume is under way on the first alternate when the renewal lands; that attempt times out.
+    const silentConnection = silent.nextConnection()
+    await vi.advanceTimersByTimeAsync(36_000)
+    await silentConnection
+    origin.refreshAuthorization('renewed-token')
+    await vi.advanceTimersByTimeAsync(20_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    expect(alternate.dialTokens).toEqual(['renewed-token'])
+    expect(alternate.authRefreshes).toEqual([])
+  })
+
   it('sends no extra auth-refresh when the token did not change while connecting', async () => {
     const { primary, primaryControl, alternates, origin } = await setup({ alternates: 1 })
     const [alternate] = alternates
