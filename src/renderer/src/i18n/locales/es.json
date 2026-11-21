@@ -21989,6 +21989,10 @@
       "existingTitle": "Añadir en el host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} ya se ejecuta como host, así que Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
       "existingAccept": "Añadir en el host"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} te necesitan",
+      "needsYou": "Te necesita"
     }
   },
   "rendererRecovery": {
@@ -24402,7 +24406,10 @@
       "title": "Actividad"
     },
     "connectors": {
-      "tab": "Conectores"
+      "tab": "Conectores",
+      "needYou_many": "{{count}} te necesitan",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_other": "{{count}} te necesitan"
     },
     "files": {
       "tab": "Archivos"

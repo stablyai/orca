@@ -673,6 +673,10 @@
       "existingTitle": "Adicionar no host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "existingAccept": "Adicionar no host"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} precisam de você",
+      "needsYou": "Precisa de você"
     }
   },
   "tray": {
@@ -24943,7 +24947,10 @@
       "title": "Atividade"
     },
     "connectors": {
-      "tab": "Conectores"
+      "tab": "Conectores",
+      "needYou_many": "{{count}} precisam de você",
+      "needYou_one": "{{count}} precisa de você",
+      "needYou_other": "{{count}} precisam de você"
     },
     "files": {
       "tab": "Arquivos"
