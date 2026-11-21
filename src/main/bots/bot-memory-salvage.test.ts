@@ -122,6 +122,7 @@ describe("a bot's salvage record", () => {
 
   it.each([
     ['holds no JSON', { read: async () => '{not json' }],
+    ['is empty', { read: async () => '' }],
     [
       'cannot be read',
       {
