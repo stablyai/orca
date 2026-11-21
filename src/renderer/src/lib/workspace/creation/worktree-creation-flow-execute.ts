@@ -4,7 +4,6 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import {
-  attachEphemeralVmRuntimeToWorkspace,
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
 } from '@/lib/workspace/creation/ephemeral-vm-worktree-creation'
@@ -31,6 +30,7 @@ import { completeWorktreeCreation } from '@/lib/workspace/creation/worktree-crea
 import { showWorktreeCreationReadyToast } from '@/lib/workspace/creation/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/workspace/creation/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
+import { attachCreatedWorkspaceState } from '@/lib/worktree-creation-created-attachments'
 import {
   isCreatedWorkspaceInView,
   showWorktreeCreationError
@@ -152,7 +152,7 @@ export async function executeWorktreeCreation(
   }
   // The VM's checkout is now this workspace (or its project), so the sidebar may list it.
   releaseVmCreateCheckout(creationId)
-  await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
+  await attachCreatedWorkspaceState(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true
   const windowStartup = windowStartupAfterCreate(creationId, preparedRequest, result)

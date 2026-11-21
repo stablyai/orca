@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildContainedLinkedContextBlock } from './linked-work-item-context'
+import {
+  appendAgentLaunchDraft,
+  buildContainedLinkedContextBlock
+} from './linked-work-item-context'
 
 describe('contained linked context block', () => {
   it('escapes terminal and unicode format controls from linked context source data', () => {
@@ -20,5 +23,21 @@ describe('contained linked context block', () => {
     expect(block).not.toContain('\u180E')
     expect(block).not.toContain('\uFFF9')
     expect(block).not.toContain(tagLatinSmallLetterA)
+  })
+})
+
+describe('appendAgentLaunchDraft', () => {
+  it('leaves the linked draft alone without an agent draft', () => {
+    expect(appendAgentLaunchDraft('note\n\nhttps://example.com/1', '   ')).toBe(
+      'note\n\nhttps://example.com/1'
+    )
+    expect(appendAgentLaunchDraft(null, undefined)).toBeNull()
+  })
+
+  it('drafts the agent prompt alone or after the linked draft', () => {
+    expect(appendAgentLaunchDraft(null, '  Implement the plan.  ')).toBe('Implement the plan.\n')
+    expect(appendAgentLaunchDraft('note\n\nhttps://example.com/1\n', 'Implement the plan.')).toBe(
+      'note\n\nhttps://example.com/1\n\nImplement the plan.\n'
+    )
   })
 })

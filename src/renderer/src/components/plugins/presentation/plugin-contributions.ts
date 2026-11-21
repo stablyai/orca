@@ -61,6 +61,7 @@ export type PluginContributionSource = {
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
   statusBarItems: readonly string[]
+  taskSources?: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -109,7 +110,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
-    statusBarItems: statusBarItemTitles(contributes.statusBarItems)
+    statusBarItems: statusBarItemTitles(contributes.statusBarItems),
+    taskSources: contributes.taskSources.map((source) => source.title)
   }
 }
 
@@ -149,7 +151,8 @@ export function summaryContributionSource(
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
-    statusBarItems: of('statusBarItems').map((item) => item.name)
+    statusBarItems: of('statusBarItems').map((item) => item.name),
+    taskSources: of('taskSources').map((item) => item.name)
   }
 }
 

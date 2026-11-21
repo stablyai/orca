@@ -349,7 +349,7 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 15,
+          "maxItems": 16,
           "type": "array",
           "items": {
             "type": "string",
@@ -368,7 +368,8 @@
               "workspace:create",
               "automation:read",
               "automation:write",
-              "history:read"
+              "history:read",
+              "tasks:provide"
             ]
           }
         },
@@ -574,7 +575,8 @@
             "customEditors",
             "newFiles",
             "settings",
-            "statusBarItems"
+            "statusBarItems",
+            "taskSources"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

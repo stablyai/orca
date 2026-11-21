@@ -6,6 +6,11 @@ import {
 } from '../manifest/plugin-manifest'
 import { PLUGIN_CAPABILITY_KINDS } from '../capabilities/plugin-capabilities'
 import { pluginEvent, type PluginEvent } from '../frames/plugin-protocol'
+import { pluginIdSchema } from '../manifest/plugin-manifest-fields'
+import {
+  PLUGIN_TASK_SOURCE_LIMIT,
+  PLUGIN_TASK_SOURCE_OPERATIONS
+} from '../tasks/plugin-task-source'
 import { pluginWorkerPanelPostSchema } from './plugin-panel-bridge-protocol'
 
 /**
@@ -17,7 +22,7 @@ import { pluginWorkerPanelPostSchema } from './plugin-panel-bridge-protocol'
 export const WORKER_EVENTS = {
   /** host → worker, {@link PluginWorkerInit}. */
   init: 'init',
-  /** worker → host, `{ commands }` registered on activate. */
+  /** worker → host, `{ commands, taskSources }` registered on activate. */
   ready: 'ready',
   log: 'log',
   fatal: 'fatal',
@@ -31,6 +36,7 @@ export const WORKER_EVENTS = {
 /** host → worker requests; the worker answers each with a `res`. */
 export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
+  invokeTaskSource: 'taskSource.invoke',
   deliverEvent: 'event.deliver',
   /** A panel's `plugin.request`, answered by the handler from `orca.panels.handle`. */
   panelRequest: 'panel.request',
@@ -54,6 +60,13 @@ export const pluginWorkerInvokeParamsSchema = z.object({
   args: z.unknown().optional()
 })
 
+/** Params are validated host-side before they are sent. */
+export const pluginWorkerInvokeTaskSourceParamsSchema = z.object({
+  sourceId: pluginIdSchema,
+  operation: z.enum(PLUGIN_TASK_SOURCE_OPERATIONS),
+  params: z.unknown().optional()
+})
+
 export const pluginWorkerDeliverParamsSchema = z.object({
   event: z.enum(PLUGIN_EVENT_NAMES),
   payload: z.unknown()
@@ -61,7 +74,9 @@ export const pluginWorkerDeliverParamsSchema = z.object({
 
 export const pluginWorkerReadySchema = z.object({
   /** Command ids the worker registered handlers for (⊆ manifest commands). */
-  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT)
+  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT),
+  /** Task source ids the worker registered (⊆ manifest taskSources). */
+  taskSources: z.array(pluginIdSchema).max(PLUGIN_TASK_SOURCE_LIMIT).default([])
 })
 
 export const pluginWorkerLogSchema = z.object({
@@ -72,6 +87,7 @@ export const pluginWorkerLogSchema = z.object({
 export const pluginWorkerFatalSchema = z.object({ error: z.string().max(8192) })
 
 export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
+export type PluginWorkerReady = z.infer<typeof pluginWorkerReadySchema>
 
 const pluginWorkerChildEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),

@@ -28,7 +28,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:create',
   'automation:read',
   'automation:write',
-  'history:read'
+  'history:read',
+  'tasks:provide'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -49,7 +50,8 @@ export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'workspace:create': PLUGIN_HOST_API_1_8_SINCE,
   'automation:read': PLUGIN_HOST_API_1_8_SINCE,
   'automation:write': PLUGIN_HOST_API_1_8_SINCE,
-  'history:read': PLUGIN_HOST_API_1_9_SINCE
+  'history:read': PLUGIN_HOST_API_1_9_SINCE,
+  'tasks:provide': PLUGIN_MANIFEST_V2_SINCE
 }
 
 /** Format 1 capability names and what each now grants. `events:subscribe` split by event domain. */
@@ -97,7 +99,9 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'automation:write':
     'Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)',
   'history:read':
-    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
+    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself",
+  'tasks:provide':
+    "Add task lists to the Tasks page; starting a task opens Create workspace with the plugin's suggested name, base and agent prompt for you to review"
 }
 
 /** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */

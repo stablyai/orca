@@ -34,6 +34,7 @@ type ContributionValidationManifest = {
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
+    taskSources: IdentifiedContribution[]
   }
   capabilities: { kind: string }[]
 }
@@ -71,7 +72,8 @@ export function validatePluginManifestContributions(
     'iconThemes',
     'syntaxes',
     'customEditors',
-    'newFiles'
+    'newFiles',
+    'taskSources'
   ] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
@@ -237,6 +239,24 @@ export function validatePluginManifestContributions(
         code: 'custom',
         path: ['contributes', 'events', index, 'on'],
         message: `${subscription.on} requires the ${required} capability`
+      })
+    }
+  }
+  if (manifest.contributes.taskSources.length > 0) {
+    if (!manifest.main) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['main'],
+        message: 'required when contributes.taskSources is non-empty'
+      })
+    }
+    // Why: a task source's start recipe pre-fills agent prompts, so the
+    // consent dialog must name it rather than letting it ride in silently.
+    if (!manifest.capabilities.some((capability) => capability.kind === 'tasks:provide')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['capabilities'],
+        message: 'tasks:provide capability required when contributes.taskSources is non-empty'
       })
     }
   }

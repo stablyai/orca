@@ -6,7 +6,8 @@ import {
   PLUGIN_WORKER_READY_TIMEOUT_MS,
   readPluginWorkerEvent,
   WORKER_EVENTS,
-  WORKER_METHODS
+  WORKER_METHODS,
+  type PluginWorkerReady
 } from '../../../../shared/plugins/workers/plugin-host-protocol'
 import {
   pluginEvent,
@@ -26,6 +27,7 @@ import {
 import { buildPluginWorkerEnv } from './plugin-worker-env'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
 import { PluginWorkerHostCalls } from './plugin-worker-host-calls'
+import { pluginWorkerTaskSourceRequests } from './plugin-host-task-source-requests'
 
 const PLUGIN_WORKER_SHUTDOWN_GRACE_MS = 2_000
 const PLUGIN_WORKER_EVENT_TIMEOUT_MS = 5 * 60_000
@@ -106,7 +108,7 @@ export async function startPluginWorker(
     }
   })
 
-  const commands = await new Promise<string[]>((resolve, reject) => {
+  const ready = await new Promise<PluginWorkerReady>((resolve, reject) => {
     let settled = false
     const timer = setTimeout(() => {
       fail(new Error(`${tag} worker did not become ready within ${readyTimeoutMs}ms`))
@@ -182,7 +184,7 @@ export async function startPluginWorker(
         settled = true
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', onAbort)
-        resolve(event.payload.commands)
+        resolve(event.payload)
       } else if (event?.event === WORKER_EVENTS.panelPost) {
         lastActivityAt = Date.now()
         options.onPanelPost?.(event.payload)
@@ -217,7 +219,8 @@ export async function startPluginWorker(
   }
 
   return {
-    commands,
+    commands: ready.commands,
+    ...pluginWorkerTaskSourceRequests(requests, ready.taskSources, options.taskSourceTimeoutMs),
     invokeCommand(commandId, args) {
       return sendPluginWorkerRequest(
         requests,

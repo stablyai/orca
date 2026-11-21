@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isQualifiedPluginKey } from '../../plugins/frames/plugin-tab-key'
+import { pluginTaskSourceRequestSchema } from '../../plugins/tasks/plugin-task-source'
 import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema,
@@ -42,6 +43,8 @@ export const PluginInvokeCommandParams = z.object({
 })
 
 export const PluginsPanelActionParams = z.unknown()
+
+export const PluginInvokeTaskSourceParams = pluginTaskSourceRequestSchema
 
 // Why 32 KiB: the same bound settings keep for each development folder entry.
 const devFolderPathParam = z

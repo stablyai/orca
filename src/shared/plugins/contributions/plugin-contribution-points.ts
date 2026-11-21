@@ -39,6 +39,10 @@ import {
 } from './plugin-new-file-contribution'
 import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-panel-contribution'
 import {
+  PLUGIN_TASK_SOURCE_LIMIT,
+  pluginTaskSourceContributionSchema
+} from '../tasks/plugin-task-source'
+import {
   pluginFieldDoc,
   PLUGIN_HOOKS_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
@@ -72,7 +76,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'customEditors',
   'newFiles',
   'settings',
-  'statusBarItems'
+  'statusBarItems',
+  'taskSources'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -85,7 +90,6 @@ export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   agentHarnesses: 'coding-agent harness definitions',
   skills: 'agent skills',
   mcpServers: 'MCP server definitions',
-  taskSources: 'task sources',
   connections: 'account connections',
   sidebarCards: 'sidebar cards'
 } as const
@@ -96,8 +100,6 @@ export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTR
 export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
   Record<PluginReservedContributionPoint, string>
 > = {
-  taskSources:
-    'Issue and task providers such as Asana, Linear or Jira, declared as data that a worker fills with tasks.',
   connections:
     'Account providers with a host-run sign-in, so a plugin never handles credentials itself.',
   agentHarnesses:
@@ -234,6 +236,12 @@ export const pluginContributesFields = {
     PLUGIN_STATUS_BAR_ITEM_LIMIT,
     'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
+  ),
+  taskSources: contributionList(
+    pluginTaskSourceContributionSchema,
+    PLUGIN_TASK_SOURCE_LIMIT,
+    'Task lists shown on the Tasks page, filled by the plugin worker.',
+    NEXT
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -241,7 +249,6 @@ export const pluginReservedContributesFields = {
   agentHarnesses: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.agentHarnesses),
   skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
   mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
-  taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
   sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
@@ -283,5 +290,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
   settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
   // Why declarative: a static item only names its own command; updating it needs a worker.
-  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false }
+  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
+  // Why no catalog type: a task source needs a worker, which `main` already declares.
+  taskSources: { execution: 'trusted-worker', catalogType: null, bindsContent: false }
 }

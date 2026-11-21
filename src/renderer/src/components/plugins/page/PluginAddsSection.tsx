@@ -7,6 +7,7 @@ import {
   FilePlus,
   Highlighter,
   Languages,
+  ListTodo,
   Palette,
   PanelBottom,
   PanelRight,
@@ -45,8 +46,8 @@ import {
 } from './plugin-contribution-action-availability'
 import { shadowedKeybindingTitles } from '../presentation/plugin-keybinding-conflicts'
 import type { PluginContributionSummaryItem } from '../../../../../shared/plugins/contributions/plugin-contribution-summary'
+import { describePluginContributionsWithTaskSources } from '../presentation/plugin-task-source-contribution-rows'
 import {
-  describePluginContributions,
   summaryContributionSource,
   EMPTY_CONTRIBUTION_SOURCE,
   manifestContributionSource,
@@ -96,7 +97,8 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   customEditors: <PenTool />,
   vmRecipes: <Server />,
   newFiles: <FilePlus />,
-  statusBarItems: <PanelBottom />
+  statusBarItems: <PanelBottom />,
+  taskSources: <ListTodo />
 }
 
 type AddsCommand = {
@@ -248,6 +250,7 @@ function useContributionRowActions(
       case 'customEditors':
       case 'vmRecipes':
       case 'statusBarItems':
+      case 'taskSources':
         // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
     }
@@ -316,7 +319,7 @@ export function PluginAddsSection({
           )
       : previewCommands) ??
     []
-  const rows = describePluginContributions(source, t, intlLocale)
+  const rows = describePluginContributionsWithTaskSources(source, t, intlLocale)
   // Why: a fetched manifest or a catalog summary is exact, so its types add nothing.
   const fallbackTypes =
     (preview || summary) && !plugin ? [] : uncoveredCatalogTypes(types, rows, commands.length > 0)

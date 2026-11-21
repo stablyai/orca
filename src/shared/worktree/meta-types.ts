@@ -13,6 +13,7 @@ import type {
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { OrcaWorkspaceLayout } from './paths/orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
+import type { LinkedPluginTask } from '../plugins/tasks/plugin-task-link'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
 import type { ExternalConversationLink } from '../connectors/external-conversation-link'
 
@@ -59,6 +60,8 @@ export type WorktreeMeta = {
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedItems?: WorkspaceAttachment[]
+  /** See Worktree.linkedPluginTask. */
+  linkedPluginTask?: LinkedPluginTask | null
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   /** Set while archived with the checkout removed from disk; restore recreates it from this branch. */
