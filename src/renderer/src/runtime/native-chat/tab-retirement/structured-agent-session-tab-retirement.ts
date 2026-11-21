@@ -1,6 +1,8 @@
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { hasStructuredAgentLaunchCancellationTombstonePersisted } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { retireStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { isReopenedChatTabId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import { forgetUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
@@ -116,13 +118,20 @@ export function suppressCancelledStructuredSessionTabs(
   onError?: (error: unknown) => void
 ): RuntimeMobileSessionTabsResult {
   const cancelledSessionIds = new Set<string>()
+  const executionHostId = executionHostIdForStructuredTarget(target)
   for (const tab of snapshot.tabs) {
     if (
-      tab.type === 'agent-session' &&
-      hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+      tab.type !== 'agent-session' ||
+      !hasStructuredAgentLaunchCancellationTombstonePersisted(tab.sessionId, executionHostId)
     ) {
-      cancelledSessionIds.add(tab.sessionId)
+      continue
     }
+    if (isReopenedChatTabId(tab.id)) {
+      // The host committed a new tab lifetime. Cancellation only owns the original launch.
+      retireStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+      continue
+    }
+    cancelledSessionIds.add(tab.sessionId)
   }
   if (cancelledSessionIds.size === 0) {
     return snapshot
