@@ -51,10 +51,18 @@ async function recordSlack(
   change: Parameters<typeof nextSlackApps>[1],
   expected?: readonly BotSlackApp[]
 ): Promise<boolean> {
+  let keptReplacement = false
   try {
     await runtime.bots.update(botId, (bot) => {
       if ('remove' in change) {
         const apps = botSlackApps(bot)
+        keptReplacement =
+          expected !== undefined &&
+          apps.some(
+            (app) =>
+              (change.remove === undefined || app.teamId === change.remove) &&
+              !expected.some((saved) => saved.teamId === app.teamId && saved.appId === app.appId)
+          )
         const next = apps.filter(
           (app) =>
             (change.remove !== undefined && app.teamId !== change.remove) ||
@@ -65,7 +73,7 @@ async function recordSlack(
       }
       return { slackApps: nextSlackApps(bot, change) }
     })
-    return true
+    return !keptReplacement
   } catch (error) {
     if (error instanceof Error && error.message === 'bot_not_found') {
       return true
@@ -166,7 +174,7 @@ export const BOT_SLACK_METHODS = [
       const bot = context.runtime.bots.list().find((saved) => saved.id === botId)
       const expected = bot ? botSlackApps(bot) : []
       const removed = await withHostCloudClient(context, async (client) => {
-        if (teamId !== undefined) {
+        if (teamId !== undefined && cloud?.cloudFeatures()?.has('slack.teams') !== true) {
           const state = await client.slackState(botId, teamId)
           if (!state.ok) {
             return state
