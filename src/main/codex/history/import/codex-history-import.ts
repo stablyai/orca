@@ -17,8 +17,7 @@ import {
   stagingRecordPath
 } from './codex-history-import-staging-record'
 import {
-  appendImportProgress,
-  importLedgerNeedsWrite,
+  hasUnsavedImportLedger,
   readImportLedger,
   writeImportLedger,
   type ImportedFolder,
@@ -26,6 +25,8 @@ import {
 } from './codex-history-import-ledger'
 
 const ARCHIVED = 'archived_sessions'
+// Each save rewrites every handled name: saved by time, so a pass's writes don't grow with its folders.
+const LEDGER_SAVE_INTERVAL_MS = 10_000
 
 export type CodexHistoryImportArgs = {
   importHome: string
@@ -48,55 +49,6 @@ function rolloutKey(name: string): string {
     : name
 }
 
-type HandledRecord = { handled?: string[]; released?: string[] }
-
-/** A source's names never copied again; each one added is journaled by the next `flush`. */
-class HandledNames {
-  private readonly names: Set<string>
-  private pending: string[] = []
-  // Journaled before their copy was published: no need to journal them again.
-  private readonly recorded = new Set<string>()
-
-  constructor(
-    private readonly source: ImportedSource,
-    private readonly record: (change: HandledRecord) => Promise<void>
-  ) {
-    this.names = new Set(source.handled)
-  }
-
-  recordIntent(name: string): Promise<void> {
-    this.recorded.add(name)
-    return this.record({ handled: [name] })
-  }
-
-  releaseIntent(name: string): Promise<void> {
-    this.recorded.delete(name)
-    return this.record({ released: [name] })
-  }
-
-  has(name: string): boolean {
-    return this.names.has(name)
-  }
-
-  add(name: string): void {
-    if (!this.names.has(name)) {
-      this.names.add(name)
-      this.source.handled.push(name)
-      if (!this.recorded.delete(name)) {
-        this.pending.push(name)
-      }
-    }
-  }
-
-  async flush(): Promise<void> {
-    if (this.pending.length > 0) {
-      const names = this.pending
-      this.pending = []
-      await this.record({ handled: names })
-    }
-  }
-}
-
 type FolderResult = ImportedFolder & {
   copied: number
   stopped: boolean
@@ -108,7 +60,7 @@ async function importFolder(
   args: CodexHistoryImportArgs,
   folder: string,
   source: ImportedSource,
-  handled: HandledNames,
+  handled: Set<string>,
   store: StoreNames,
   seedOnly: boolean
 ): Promise<FolderResult | null> {
@@ -182,9 +134,7 @@ async function importFolder(
       targetDir,
       name,
       otherFolder: otherFolder ? join(args.storeHome, otherFolder) : null,
-      isHandled: () => handled.has(key),
-      recordIntent: () => handled.recordIntent(key),
-      releaseIntent: () => handled.releaseIntent(key)
+      isHandled: () => handled.has(key)
     })
     if (published === 'failed') {
       return { copied, stopped: false, halt: 'failed' }
@@ -241,19 +191,22 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true
-  const handled = new HandledNames(source, (change) =>
-    appendImportProgress(args.ledgerPath, { source: sourceKey, identity, ...change })
-  )
   const listing = await listDayFolders(args.importHome)
-  // A pass that skipped an unreadable folder hasn't read everything yet.
+  // Days under an unreadable year or month wait for a later pass.
   let unread = !listing.complete
+  const handled = new Set(source.handled)
   const folders = [ARCHIVED, ...listing.days]
   const store = new StoreNames(args.storeHome, args.runId)
   let copied = 0
+  let unsaved = 0
+  let savedAt = performance.now()
   let stopped = false
-  let finished = false
-  // Folders whose entry this pass changed, journaled once at its end.
-  const changedFolders: Record<string, ImportedFolder> = {}
+  const save = async (): Promise<void> => {
+    source.handled = [...handled]
+    await writeImportLedger(args.ledgerPath, ledger)
+    unsaved = 0
+    savedAt = performance.now()
+  }
   try {
     for (const folder of folders) {
       if (!args.isCurrent()) {
@@ -261,23 +214,29 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         break
       }
       let result: FolderResult | null
+      const handledBefore = handled.size
       try {
         result = await importFolder(args, folder, source, handled, store, seedOnly)
       } catch (error) {
         unread = true
+        // Names this folder copied before failing are kept: they must stay handled.
+        unsaved += 1
         // One unreadable folder must not hold back the rest; the next pass reads it again.
         console.warn(
           `[codex-history-import] Could not read ${join(args.importHome, folder)}:`,
           error
         )
         continue
-      } finally {
-        await handled.flush()
       }
       if (result) {
         const entry: ImportedFolder = result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}
-        if (entry.mtimeNs !== source.folders[folder]?.mtimeNs) {
-          changedFolders[folder] = entry
+        // A stop that changed nothing writes nothing, so the waiting launch isn't held by a save.
+        if (
+          result.copied > 0 ||
+          handled.size !== handledBefore ||
+          JSON.stringify(entry) !== JSON.stringify(source.folders[folder] ?? {})
+        ) {
+          unsaved += 1
         }
         source.folders[folder] = entry
         copied += result.copied
@@ -288,25 +247,19 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         if (result.halt) {
           break
         }
+        if (unsaved > 0 && performance.now() - savedAt >= LEDGER_SAVE_INTERVAL_MS) {
+          await save()
+        }
       }
     }
-    finished = true
   } finally {
-    // A stop that changed nothing writes nothing, so the waiting launch isn't held by a write.
-    if (Object.keys(changedFolders).length > 0) {
-      await appendImportProgress(args.ledgerPath, {
-        source: sourceKey,
-        identity,
-        folders: changedFolders
-      })
+    if (unsaved > 0 || !known || hasUnsavedImportLedger(args.ledgerPath)) {
+      await save()
     }
-    if (seedOnly && finished && !stopped && !unread) {
-      delete source.seeding
-    }
-    // Seeding ends only in the ledger itself, which the journal can't change.
-    if ((seedOnly && !source.seeding) || importLedgerNeedsWrite(args.ledgerPath)) {
-      await writeImportLedger(args.ledgerPath, ledger)
-    }
+  }
+  if (seedOnly && !stopped && !unread) {
+    delete source.seeding
+    await save()
   }
   if (copied > 0) {
     console.info(`[codex-history-import] Imported ${copied} conversations from ${args.importHome}`)

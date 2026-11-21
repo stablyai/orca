@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { constants, type BigIntStats } from 'node:fs'
-import { access, chmod, link, rm, stat, writeFile } from 'node:fs/promises'
+import type { BigIntStats } from 'node:fs'
+import { chmod, link, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { COMPRESSED_ROLLOUT_SUFFIX, plainWins } from '../rollouts/codex-rollout-compressed-twin'
@@ -75,27 +75,21 @@ export async function canHardLinkIn(folder: string, runId: string): Promise<bool
 const OWNER_READ_WRITE = 0o600n
 
 /**
- * Codex appends to the conversation it resumes, but a copy keeps a read-only source's mode and, on
- * macOS, its Finder lock: the copy gets owner read/write and loses the lock.
+ * Codex appends to the conversation it resumes, but a copy keeps a read-only source's mode: the
+ * copy gets owner read/write. A macOS Finder lock the clone kept refuses the chmod until cleared
+ * (the link clears it anyway).
  */
 async function makeStagedCopyWritable(staged: string, mode: bigint): Promise<void> {
-  const needsMode = (mode & OWNER_READ_WRITE) !== OWNER_READ_WRITE
+  if ((mode & OWNER_READ_WRITE) === OWNER_READ_WRITE) {
+    return
+  }
   const writableMode = Number((mode & 0o777n) | OWNER_READ_WRITE)
   try {
-    if (needsMode) {
-      await chmod(staged, writableMode)
-    }
-    if (process.platform === 'darwin') {
-      // A locked file refuses writes (and chmod) whatever its mode.
-      await access(staged, constants.W_OK)
-    }
-    return
+    await chmod(staged, writableMode)
   } catch (error) {
     if (process.platform !== 'darwin' || !(await clearDarwinFileFlags(staged))) {
       throw error
     }
-  }
-  if (needsMode) {
     await chmod(staged, writableMode)
   }
 }
