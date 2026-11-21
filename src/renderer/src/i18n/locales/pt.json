@@ -2348,7 +2348,8 @@
         "thisComputer": "este computador"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Para concluir uma mesclagem, é necessária uma versão mais recente do Orca neste host. Atualize o Orca nesse host."
+        "completeMergeNeedsNewerHost": "Para concluir uma mesclagem, é necessária uma versão mais recente do Orca neste host. Atualize o Orca nesse host.",
+        "continueRebaseNeedsNewerHost": "Continuar um rebase requer um Orca mais recente neste host. Atualize o Orca nesse host."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Para resolver conflitos, é necessária uma versão mais recente do Orca neste host. Atualize o Orca nesse host."
@@ -10541,7 +10542,25 @@
             "keepFile": "Manter arquivo",
             "keepDeletion": "Manter exclusão",
             "refreshAll": "Atualizar tudo",
-            "statusReadFailed": "O Git não conseguiu ler este espaço de trabalho. As alterações mostradas podem estar desatualizadas."
+            "statusReadFailed": "O Git não conseguiu ler este espaço de trabalho. As alterações mostradas podem estar desatualizadas.",
+            "baseUpToDate": "Atualizado",
+            "rebaseOperationInProgress": "Aguarde a operação Git atual terminar",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} conflito",
+            "rebaseConflictCount_other": "{{count}} conflitos",
+            "rebaseConflictCount_many": "{{count}} conflitos",
+            "rebasePaused": "Rebase pausado",
+            "rebaseResolveConflictsFirst": "Resolva os conflitos primeiro",
+            "rebaseAbort": "Abortar",
+            "rebaseContinue": "Continuar",
+            "continueRebasePausedAgain": "Rebase pausado no próximo conflito",
+            "continueRebaseFailed": "Falha ao continuar o rebase",
+            "rebaseAutostashConflict": "Rebase concluído. Suas alterações sem commit não puderam ser reaplicadas de forma limpa; estão salvas no stash.",
+            "rebaseStoppedByGit": "O Git pausou o rebase",
+            "continueRebaseUnconfirmed": "Não foi possível confirmar o resultado. O controle de código foi atualizado para mostrar o estado atual.",
+            "noRebaseInProgress": "Nenhum rebase em andamento",
+            "rebaseStopMovedOn": "O rebase já avançou. Verifique o painel e tente novamente.",
+            "rebaseEmptyStep": "Nada para fazer commit nesta etapa. Aborte o rebase ou conclua-o em um terminal."
           },
           "checks": {
             "panel": {
@@ -10866,7 +10885,6 @@
                   "titleCommitAndPush": "Fazer commit das alterações staged e push",
                   "commitForcePush": "Commit e Force Push",
                   "commitPush": "Commit e Push",
-                  "titleOperationInProgress": "Operação em andamento…",
                   "titleAbortRebaseInProgress": "Abortar o rebase em andamento",
                   "titleAbortMergeInProgress": "Abortar o merge em andamento",
                   "titleNothingToPushTo": "Nada para fazer push para {{upstreamName}}",
@@ -10932,10 +10950,8 @@
                   "titlePublishBranchFirst": "Publique a branch primeiro para sincronizar commits",
                   "titleUseForcePush": "Use Commit e Force Push — o remoto só tem cópias antigas de commits locais",
                   "titleCommitThenPullPush": "Faça commit e depois pull e push",
-                  "rebaseFromNamedBase": "Rebase a partir de {{baseRef}}",
                   "rebaseFromBase": "Rebase a partir da base",
                   "rebaseChooseRemoteBase": "Escolha uma branch base remota para fazer rebase",
-                  "rebaseDirtyHint": "Tente fazer rebase; o git pode exigir commit ou stash das alterações locais primeiro",
                   "rebaseWithLatestFrom": "Fazer rebase da branch atual com os commits mais recentes de {{baseRef}}",
                   "blockedCommitFirst": "Faça commit das alterações primeiro",
                   "blockedCheckOutBranchFirst": "Faça checkout de uma branch primeiro",
@@ -10948,7 +10964,13 @@
                   "blockedExistingReview": "Já existe um(a) {{reviewLabel}}",
                   "blockedForkHeadUnsupported": "Head de fork não compatível",
                   "blockedBaseNotOnRemote": "A branch base não está no remoto",
-                  "blockedBranchNotReady": "A branch não está pronta"
+                  "blockedBranchNotReady": "A branch não está pronta",
+                  "rebaseOntoNamedBase": "Fazer rebase em {{base}}",
+                  "rebaseCommitOrStashFirst": "Faça commit ou stash das alterações primeiro",
+                  "continueRebase": "Continuar rebase",
+                  "titleContinueRebase": "Continuar o rebase pausado",
+                  "rebaseFromNamedBase": "Rebase a partir de {{baseRef}}",
+                  "rebaseDirtyHint": "Tente fazer rebase; o git pode exigir commit ou stash das alterações locais primeiro"
                 }
               },
               "primary": {
@@ -10991,7 +11013,8 @@
                   "e9b5d1f470": "Faça checkout de uma branch antes de criar um(a) {{value0}}.",
                   "f0c6e2a581": "Esta branch ainda não está pronta para um(a) {{value0}}.",
                   "8f9a0b1c2d": "Nada para fazer commit. A branch está atualizada.",
-                  "h3i4j5k607": "Verificando se esta branch pode criar um(a) {{value0}}…"
+                  "h3i4j5k607": "Verificando se esta branch pode criar um(a) {{value0}}…",
+                  "nothingToCommit": "Nada para fazer commit"
                 }
               },
               "branch": {

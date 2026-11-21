@@ -10,7 +10,8 @@ import type {
   GitConflictOperation,
   GitStatusEntry,
   GitStatusResult,
-  GitUpstreamStatus
+  GitUpstreamStatus,
+  RebaseFromBaseResult
 } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
@@ -85,7 +86,7 @@ export type EditorGitSlice = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: GitRuntimeOperationOptions
-  ) => Promise<void>
+  ) => Promise<RebaseFromBaseResult>
   fetchBranch: (
     worktreeId: string,
     worktreePath: string,

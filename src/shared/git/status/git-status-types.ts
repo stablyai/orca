@@ -12,6 +12,50 @@ export type GitConflictKind =
 export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
 export type GitConflictStatusSource = 'git' | 'session'
 export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'unknown'
+/**
+ * autostashConflict: the rebase landed but Git kept the reapplied local edits in the stash.
+ * integratedUpstreamOid: the upstream tip, present only when it was already in the rebased branch
+ * (so the remote now holds just old copies); older hosts omit it.
+ */
+export type RebaseFromBaseResult = { autostashConflict?: boolean; integratedUpstreamOid?: string }
+/** inspect: read the current stop only; continue: run git rebase --continue at that stop. */
+export type ContinueRebaseAction = 'continue' | 'inspect'
+/** One stop of one rebase run (incarnation = onto + orig-head). Continue refuses any other. */
+export type RebaseStopToken = {
+  head: string | null
+  step: string | null
+  incarnation: string | null
+}
+/**
+ * conflicted: stopped on a later commit's conflict. empty: Git says this step has nothing to
+ * commit. stopped: Git paused for another reason (e.g. an interactive edit). stale: the rebase
+ * is no longer at the stop the caller saw, so nothing ran.
+ */
+export type ContinueRebaseOutcome =
+  | 'inspected'
+  | 'completed'
+  | 'completed_autostash_conflict'
+  | 'conflicted'
+  | 'empty'
+  | 'stopped'
+  | 'failed'
+  | 'not_rebasing'
+  | 'stale'
+/** expected binds Continue to the stop the user was shown. */
+export type ContinueRebaseRequest = {
+  expected?: RebaseStopToken
+}
+export type ContinueRebaseResult = {
+  outcome: ContinueRebaseOutcome
+  // Git's own output, kept for diagnostics.
+  message?: string
+  // The stop the rebase is at after this call, when it is still paused.
+  stop?: RebaseStopToken
+  // Branch the rebase updates (head-name); null when detached.
+  branch?: string | null
+  // Set when this Continue finished a rebase Orca started over an integrated upstream tip.
+  integratedUpstreamOid?: string
+}
 export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean
@@ -86,6 +130,8 @@ export type GitUpstreamStatus = {
   hasConfiguredPushTarget?: boolean
   // Rebases can leave older patch-equivalent upstream commits; pulling restores stale history, requiring lease-protected force push instead.
   behindCommitsArePatchEquivalent?: boolean
+  // Upstream tip, read only for diverged branches by the same probe as patch equivalence.
+  upstreamOid?: string
 }
 
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'
