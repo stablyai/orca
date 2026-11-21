@@ -196,6 +196,8 @@ export class ElectronSidecarTabRegistry {
     return {
       ...tab,
       browserPageId: this.publicPageId(tab.browserPageId),
+      // The isolated sidecar has no workspaces; ownership belongs to this server.
+      worktreeId: this.pagesBySidecarId.get(tab.browserPageId)?.worktreeId ?? null,
       ...(tab.openerBrowserPageId
         ? { openerBrowserPageId: this.publicPageId(tab.openerBrowserPageId) }
         : {}),
