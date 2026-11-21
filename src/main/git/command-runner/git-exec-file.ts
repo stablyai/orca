@@ -4,10 +4,11 @@ import {
   runWithGitFetchHeadLock
 } from '../../../shared/git/fetch/git-fetch-head-lock'
 import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-race'
+import { retryStrictBareRepository } from '../../../shared/git/commands/strict-bare-repository'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitBufferExecOptions, GitExecOptions } from './git-exec-options'
+import type { GitBufferExecOptions, GitExecOptions, GitStdio } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
@@ -30,7 +31,11 @@ import {
   findGitSubcommandIndex
 } from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './process-capture/abort-error'
-import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
+import {
+  readCapturedGitBuffer,
+  readCapturedGitString,
+  withCapturedErrorStdout
+} from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { trackGitRefMutation } from './git-ref-mutation-state'
@@ -204,35 +209,29 @@ async function gitExecFileAsyncUnlocked(
   )
 }
 
-/** Callers parse stdout of non-zero exits (check-ignore exit 1), so strip the fence there too. */
-function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unknown {
-  if (command.captured && error && typeof error === 'object' && 'stdout' in error) {
-    if (typeof error.stdout === 'string') {
-      error.stdout = readCapturedGitString(error.stdout, command)
-    }
-  }
-  return error
-}
-
-export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) {
+export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions): Promise<GitStdio> {
   const options = routeLocalGitOptions(callerOptions)
   const releaseMutation = trackGitWorktreeMutation(args, options)
   const releaseRefMutation = trackGitRefMutation(args)
   const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
   // Missing folders start no child and must not record a git.exec span.
-  const result = runAdmittedWslGit(options, () =>
-    runUnlessGitCwdKnownMissing(options, () =>
-      command.needsLock
-        ? runWithGitFetchHeadLock(
-            command.cwd,
-            options.signal,
-            () => gitExecFileAsyncUnlocked(args, options, terminationState),
-            command.gitDir,
-            process.platform === 'win32' ? () => terminationState.current : undefined
-          )
-        : gitExecFileAsyncUnlocked(args, options, terminationState)
-    )
+  const result = retryStrictBareRepository(
+    args,
+    runAdmittedWslGit(options, () =>
+      runUnlessGitCwdKnownMissing(options, () =>
+        command.needsLock
+          ? runWithGitFetchHeadLock(
+              command.cwd,
+              options.signal,
+              () => gitExecFileAsyncUnlocked(args, options, terminationState),
+              command.gitDir,
+              process.platform === 'win32' ? () => terminationState.current : undefined
+            )
+          : gitExecFileAsyncUnlocked(args, options, terminationState)
+      )
+    ),
+    (retryArgs) => gitExecFileAsync(retryArgs, callerOptions)
   )
   return result.finally(() => {
     // A timed-out caller can settle before its child exits.
