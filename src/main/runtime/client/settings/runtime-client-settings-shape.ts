@@ -60,6 +60,9 @@ export type RuntimeClientSettings = Pick<
   voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
   /** Not `notifications`: older paired browsers merge that key over their own switches. */
   hostNotifications: HostNotificationSettings
+  /** Where a phone's Linear account setup goes (the "New projects open on" host); the phone reads it once
+   *  when setup starts so a later change cannot move the key. Absent on older hosts. */
+  trackerAccountHost: ExecutionHostId
 } & HostOwnedSettings
 
 /** The Source Control AI switch and saved per-action launch recipes (agent, prompt template, agent args), already migrated. */

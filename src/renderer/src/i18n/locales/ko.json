@@ -18690,6 +18690,7 @@
         "optionUpdateFailed": "옵션을 업데이트하지 못했습니다",
         "optionValue": {
           "none": "없음",
+          "off": "꺼짐",
           "fast": "빠름",
           "minimal": "최소",
           "low": "낮음",
@@ -22623,6 +22624,9 @@
     "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다.",
     "math": {
       "scrollDisplayEquation": "수식 블록 스크롤"
+    },
+    "messageTime": {
+      "yesterday": "어제 {{time}}"
     }
   },
   "runtime": {

@@ -14,6 +14,8 @@ import { useAppStore } from '@/store'
 import { ORCA_SIGNED_OUT, orcaSignIn } from '@/components/bots/orca-sign-in.test-fixture'
 import { botConnectorRowKey, openBotConnectorPage } from '@/components/bots/bot-connector-page'
 import { refreshGoogle } from '@/components/bots/google/google-connect-client'
+import BotConnectorsPanel from '@/components/bots/BotConnectorsPanel'
+import { publishBots, readHostBots } from '@/lib/bot-catalog-snapshot'
 import { BotConnectorsSection } from './BotConnectorsSection'
 
 function bot(overrides: Partial<Bot> = {}): Bot {
@@ -86,12 +88,10 @@ const gitHubOn = {
 // The Slack state read, for counting reads; renderWith answers it.
 const slackState = vi.fn()
 
-function sectionFor(subject: Bot): ReactElement {
+function withProviders(content: ReactElement): ReactElement {
   return (
     <ConfirmationDialogContext.Provider value={confirm}>
-      <TooltipProvider>
-        <BotConnectorsSection bot={subject} />
-      </TooltipProvider>
+      <TooltipProvider>{content}</TooltipProvider>
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -118,8 +118,8 @@ function renderWith(
       botGitHub: { state: vi.fn().mockResolvedValue(github) }
     })
   })
-  const { rerender } = render(sectionFor(subject))
-  return (next) => rerender(sectionFor(next))
+  const { rerender } = render(withProviders(<BotConnectorsSection bot={subject} />))
+  return (next) => rerender(withProviders(<BotConnectorsSection bot={next} />))
 }
 
 afterEach(() => {
@@ -326,6 +326,50 @@ const installedSlack: ConnectorBotSlackStateResponse = {
 }
 
 describe('BotConnectorsSection pages', () => {
+  it('opens the requested app when switching from a bot with different tools', async () => {
+    const first = bot({ id: 'first', folderWorkspaceId: 'first-home' })
+    const second = bot({ id: 'second', folderWorkspaceId: 'second-home' })
+    const previousBots = readHostBots('local')
+    const previousWorkspace = useAppStore.getState().activeWorktreeId
+    publishBots([first, second])
+    useAppStore.setState({ activeWorktreeId: 'folder:first-home' })
+    Object.assign(window, {
+      api: {
+        runtime: {
+          call: ({ method, params }: { method: string; params?: { botId: string } }) => {
+            if (method === 'bots.list') {
+              return { ok: true, result: { bots: [first, second] } }
+            }
+            if (method === 'bots.tools.list') {
+              const name = params?.botId === second.id ? 'docs' : 'reports'
+              return {
+                ok: true,
+                result: {
+                  own: [{ name, remote: true, detail: 'https://example.test/mcp' }],
+                  inherited: []
+                }
+              }
+            }
+            return { ok: false, error: { code: 'unavailable', message: method } }
+          }
+        }
+      }
+    })
+    try {
+      render(withProviders(<BotConnectorsPanel />))
+      await screen.findByRole('button', { name: 'Reports' })
+      act(() => {
+        openBotConnectorPage(botConnectorRowKey(second, 'app:docs'))
+        useAppStore.setState({ activeWorktreeId: 'folder:second-home' })
+      })
+      expect(await screen.findByRole('heading', { name: 'Docs' })).toBeVisible()
+    } finally {
+      cleanup()
+      publishBots(previousBots)
+      useAppStore.setState({ activeWorktreeId: previousWorkspace })
+    }
+  })
+
   it('focuses a deep-linked page and forgets it when its connector is removed', async () => {
     const first = bot({ linear: { workspaceId: 'org-1', workspaceName: 'Acme' } })
     openBotConnectorPage(botConnectorRowKey(first, 'linear:org-1'))

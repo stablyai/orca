@@ -54,6 +54,44 @@ it('posts a typed answer held for one line with the next answer that carries an 
 
   expect(send).toHaveBeenCalledExactlyOnceWith(
     'Fix Datadog with a site picker? → what do other products do\nVercel: test it or hide it? → [Image #1] vercel sign in works',
-    ['/shot.png']
+    ['/shot.png'],
+    'e1'
   )
+})
+
+it('sends a comment whose reply mark was closed as plain, and a named one as the answer', () => {
+  const send = vi.fn()
+  const item = makeTestBotItem(7, {
+    uid: 'uid-closed-mark',
+    status: 'needs_you',
+    question: { eventId: 'e1', text: 'Audit done.' }
+  })
+  const { result } = renderHook(() => useBotItemQuestionSteps(BOT, item, events, send, []))
+
+  act(() => result.current.fromBox('which one is the paired server?', [], null))
+  expect(send).toHaveBeenCalledExactlyOnceWith(
+    'which one is the paired server?',
+    [],
+    undefined,
+    true
+  )
+
+  const single: BotItemEvent[] = [
+    { id: 'q1', kind: 'commented', actor: asker, data: { text: 'Ship it today?' }, at: 1 },
+    { id: 'q2', kind: 'status', actor: asker, data: { from: 'working', to: 'needs_you' }, at: 1 }
+  ]
+  const one = makeTestBotItem(8, {
+    uid: 'uid-one-question',
+    status: 'needs_you',
+    question: { eventId: 'q1', text: 'Ship it today?' }
+  })
+  const { result: oneResult } = renderHook(() =>
+    useBotItemQuestionSteps(BOT, one, single, send, [])
+  )
+  send.mockClear()
+  act(() => oneResult.current.fromBox('yes', [], 'q1'))
+  expect(send).toHaveBeenCalledExactlyOnceWith('yes', [], undefined, false)
+  send.mockClear()
+  act(() => oneResult.current.fromBox('a note', [], null))
+  expect(send).toHaveBeenCalledExactlyOnceWith('a note', [], undefined, true)
 })

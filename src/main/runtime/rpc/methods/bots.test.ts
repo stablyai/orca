@@ -319,7 +319,7 @@ describe('bots.session.start', () => {
       { id: 'b1', agent: 'claude' }
     ])
     expect(
-      await dispatcher.dispatch(request('bots.session.start', { botId: 'b1', agent: 'gemini' }))
+      await dispatcher.dispatch(request('bots.session.start', { botId: 'b1', agent: 'aider' }))
     ).toMatchObject({ ok: false })
   })
 })

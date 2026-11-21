@@ -8,20 +8,22 @@ import { pairedHostStatuses } from '@/lib/bot-host-capability.test-fixture'
 
 const sidebar = vi.hoisted(() => ({ setRightSidebarTab: vi.fn(), setRightSidebarOpen: vi.fn() }))
 const owner = vi.hoisted(() => ({ hostId: 'local' }))
-const state = vi.hoisted(() => ({
-  workspaceSessionReady: true,
-  unifiedTabsByWorktree: {
-    'folder:bot-home': [
-      {
-        id: 'tab-home',
-        entityId: 'home',
-        worktreeId: 'folder:bot-home',
-        contentType: 'agent-session',
-        executionHostId: 'local'
-      }
-    ]
+const state = vi.hoisted(() => {
+  const tab = {
+    worktreeId: 'folder:bot-home',
+    contentType: 'agent-session',
+    executionHostId: 'local'
   }
-}))
+  return {
+    workspaceSessionReady: true,
+    unifiedTabsByWorktree: {
+      'folder:bot-home': [
+        { ...tab, id: 'tab-home', entityId: 'home' },
+        { ...tab, id: 'tab-side', entityId: 'side' }
+      ]
+    }
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
@@ -79,26 +81,33 @@ const servers = pairedHostStatuses({ new: ['bots.home-pin.v1'], old: [] })
 
 function hostHome(hostId: string): void {
   owner.hostId = hostId
-  state.unifiedTabsByWorktree['folder:bot-home'][0].executionHostId = hostId
+  for (const tab of state.unifiedTabsByWorktree['folder:bot-home']) {
+    tab.executionHostId = hostId
+  }
 }
 
 beforeEach(() => hostHome('local'))
 
-describe("a bot's Home Chat banner", () => {
-  it('offers the banner only on the Home tab of an agent whose host keeps the Home rule', () => {
-    renderHeader('folder:bot-home', 'home')
-    expect(screen.queryByRole('button', { name: OPEN_PAGE })).not.toBeNull()
-    cleanup()
-    renderHeader('folder:bot-home', 'side')
+describe('a bot chat banner', () => {
+  it('offers the bot page only in its own Home and side chats on supported hosts', () => {
+    for (const [host, visible] of [
+      ['local', true],
+      ['runtime:new', true],
+      ['runtime:old', false]
+    ] as const) {
+      hostHome(host)
+      for (const sessionId of ['home', 'side']) {
+        renderHeader('folder:bot-home', sessionId)
+        expect(screen.queryByRole('button', { name: OPEN_PAGE }) !== null).toBe(visible)
+        cleanup()
+      }
+    }
+    hostHome('local')
     renderHeader('folder:project', 'home')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
     cleanup()
-    hostHome('runtime:new')
-    renderHeader('folder:bot-home', 'home')
-    expect(screen.queryByRole('button', { name: OPEN_PAGE })).not.toBeNull()
-    cleanup()
-    hostHome('runtime:old')
-    renderHeader('folder:bot-home', 'home')
+    owner.hostId = 'runtime:new'
+    renderHeader('folder:bot-home', 'side')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
   })
 })

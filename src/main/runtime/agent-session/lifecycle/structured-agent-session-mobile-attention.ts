@@ -54,6 +54,8 @@ export type StructuredAttentionMobileDeliveryDeps = {
   readOrchestration: (paneKey: string) => AgentStatusOrchestrationContext | undefined
   /** The group room a member session talks in; null for any other session. */
   readBotGroupRoom?: (sessionId: string) => BotGroupRoomOfSession | null
+  /** Whether the session answers a Slack thread; its replies are written in Slack's markup. */
+  repliesInSlack?: (sessionId: string) => boolean
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
@@ -172,7 +174,8 @@ export function createStructuredAttentionMobileDelivery(
         ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
         ...(summary?.lastAssistantMessage
           ? { agentLastAssistantMessage: summary.lastAssistantMessage }
-          : {})
+          : {}),
+        ...(deps.repliesInSlack?.(sessionId) ? { agentRepliesInSlack: true as const } : {})
       }
       const { title, body } = buildNotificationOptions(
         request,

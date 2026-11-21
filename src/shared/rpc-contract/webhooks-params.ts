@@ -102,6 +102,8 @@ export type WebhookSummary = {
   /** Where the hook's execution host stands, in the wording other connectors use. */
   host: 'online' | 'offline'
   automationName: string
+  /** Deleting the webhook deletes its automation too, since nothing else starts it. Older hosts omit it. */
+  deletesAutomation?: boolean
   /** The automation's own destination, so the card and row never assume Chat. */
   resultsTo: AutomationBotResultsTo
   /** The rule’s filters, for the card and row. */

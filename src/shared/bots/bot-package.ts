@@ -188,10 +188,15 @@ export function botPackageResults(
   return 'channel' in resultsTo ? 'slack-channel' : 'linear-issue'
 }
 
-/** Where a recipient's agent loads a bot's own skills from, in its home. */
-export function skillsFolderFor(agent: BotAgent): string {
-  return agent === 'claude' ? '.claude/skills' : '.agents/skills'
-}
+/** A bot's own skills, in its home, for every agent: Orca links each into the agents' skills folders. */
+export const BOT_OWN_SKILLS_FOLDER = 'skills'
+
+/** Where each agent loads skills from in a bot's home: Claude, then the folder every other agent reads. */
+export const BOT_AGENT_SKILLS_FOLDERS = {
+  claude: '.claude/skills',
+  agents: '.agents/skills'
+} as const
+export type BotAgentSkillsFolder = keyof typeof BOT_AGENT_SKILLS_FOLDERS
 
 export type BotPackagePlan = {
   create: { name: string; agent: BotAgent; avatar?: string }
@@ -226,7 +231,7 @@ export function planBotFromPackage(
         : part.role === 'memory'
           ? `memory/${part.topic}.md`
           : part.role === 'skill'
-            ? `${skillsFolderFor(choice.agent)}/${part.name}/${part.path}`
+            ? `${BOT_OWN_SKILLS_FOLDER}/${part.name}/${part.path}`
             : null
     return to === null ? [] : [{ from: file.path, to, executable: file.executable }]
   })
@@ -253,6 +258,8 @@ export type BotShareLeftOut = {
   kind: 'skill' | 'tool' | 'automation' | 'memory' | 'avatar'
   name: string
   why: string
+  /** Where in the home it is, when another part shares its name (a skill in two folders). */
+  from?: string
 }
 
 export type BotShareFlag = {

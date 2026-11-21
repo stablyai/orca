@@ -19220,6 +19220,7 @@
         "optionUpdateFailed": "無法更新選項",
         "optionValue": {
           "none": "無",
+          "off": "關閉",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -22287,6 +22288,9 @@
     "linkedMessageMissing": "找不到該訊息。",
     "math": {
       "scrollDisplayEquation": "捲動獨立公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {

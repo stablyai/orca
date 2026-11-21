@@ -726,6 +726,9 @@
     "selectionQuote": {
       "action": "Citer",
       "hint": "Ajoute le texte sélectionné au message sous forme de citation"
+    },
+    "messageTime": {
+      "yesterday": "Hier {{time}}"
     }
   },
   "common": {

@@ -1,4 +1,5 @@
 import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
+import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +9,9 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { BOT_GROUP_ROOM_CARD_REFUSAL } from '../../../bots/bot-group-session-access'
 import { GoogleSetupRuns } from '../../../google/google-setup-runs'
+import { registerGoogleCardRenderer } from '../../../google/google-card-reach'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
 
 const dir = mkdtempSync(join(tmpdir(), 'orca-google-setup-rpc-'))
@@ -22,7 +25,7 @@ vi.mock('../../../bots/bot-chat-status-line', () => ({
 const store = vi.hoisted((): { runs: GoogleSetupRuns | null } => ({ runs: null }))
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
-    sessionId === 'ivy-chat' ? bots.list()[0] : null
+    ['ivy-chat', 'bot-group-member-m1'].includes(sessionId) ? bots.list()[0] : null
 }))
 vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
   botToolRelay: { botOf: (token: string) => (token === 'ivy-token' ? 'ivy' : null) }
@@ -93,6 +96,7 @@ const request = (method: string, params: unknown): RpcRequest => ({
 let dispatcher: RpcDispatcher
 let bot: Bot
 let headless = false
+let service: OrcaRuntimeService
 beforeEach(() => {
   headless = false
   offers.length = 0
@@ -112,7 +116,7 @@ beforeEach(() => {
     lookAround: { botOfLook: () => null, botOfTidyUp: () => null }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, runtime.lookAround, servesWithoutWindow and the runtime id, which the stub provides.
-  const service = runtime as unknown as OrcaRuntimeService
+  service = runtime as unknown as OrcaRuntimeService
   dispatcher = new RpcDispatcher({ runtime: service, methods: GOOGLE_SETUP_METHODS })
 })
 
@@ -373,11 +377,11 @@ describe('bots.googleSetup', () => {
 
 describe("a bot's Google setup start when Google's app is already here", () => {
   const signedIn = { email: 'owner@acme.dev', connectedAt: 1, services: [] }
-  const start = () =>
+  const start = (callerSessionId = 'ivy-chat') =>
     dispatcher.dispatch(
       request('bots.googleSetup.write', {
         botToken: 'ivy-token',
-        callerSessionId: 'ivy-chat',
+        callerSessionId,
         change: { action: 'start' }
       })
     )
@@ -391,11 +395,24 @@ describe("a bot's Google setup start when Google's app is already here", () => {
     expect(store.runs?.get('ivy')).toBeNull()
   })
 
+  it('refuses the Connect card from a group room, which shows no card, and writes none', async () => {
+    google.client = { clientId: 'c1' }
+    google.accounts = [{ ...signedIn, status: 'connected' }]
+    expect(await start('bot-group-member-m1')).toMatchObject({
+      ok: false,
+      error: { message: BOT_GROUP_ROOM_CARD_REFUSAL }
+    })
+    expect(offered()).toEqual([])
+    expect(store.runs?.get('ivy')).toBeNull()
+  })
+
   it('says Google is already on, with no card and no run, once it is on and signed in', async () => {
     bot.google = true
     google.client = { clientId: 'c1' }
     google.accounts = [{ ...signedIn, status: 'connected' }]
-    expect(await start()).toMatchObject({ ok: true, result: { routed: 'on' } })
+    for (const callerSessionId of ['ivy-chat', 'bot-group-member-m1']) {
+      expect(await start(callerSessionId)).toMatchObject({ ok: true, result: { routed: 'on' } })
+    }
     expect(offers).toEqual([])
     expect(store.runs?.get('ivy')).toBeNull()
   })
@@ -423,5 +440,28 @@ describe("a bot's Google setup start when Google's app is already here", () => {
     google.accounts = [{ ...signedIn, status: 'connected' }]
     expect(await start()).toMatchObject({ ok: true, result: { routed: 'server' } })
     expect(offers).toEqual([])
+  })
+
+  it('on a server with a paired desktop that can open the sign-in page and draws the card, posts it', async () => {
+    headless = true
+    getBrowserHostRequestRegistry(service).register({ pairedDeviceId: 'desk', emit: () => {} })
+    const unregister = registerGoogleCardRenderer()
+    try {
+      google.client = { clientId: 'c1' }
+      google.accounts = [{ ...signedIn, status: 'reconnect' }]
+      expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
+      expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
+    } finally {
+      unregister()
+    }
+  })
+
+  it('on a server whose paired desktop can open the page but not draw the card, posts none', async () => {
+    headless = true
+    getBrowserHostRequestRegistry(service).register({ pairedDeviceId: 'desk', emit: () => {} })
+    google.client = { clientId: 'c1' }
+    google.accounts = [{ ...signedIn, status: 'reconnect' }]
+    await start()
+    expect(offered()).toEqual([])
   })
 })

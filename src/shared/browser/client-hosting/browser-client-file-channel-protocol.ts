@@ -79,6 +79,19 @@ export type BrowserClientFileChannelWriteResult = z.infer<
   typeof BrowserClientFileChannelWriteResult
 >
 
+/** Sent as a download starts, so this host binds it to what started it before any byte arrives.
+ *  Servers without it answer method_not_found and the download takes the ordinary path. */
+export const BrowserClientFileChannelBeginParams = FileChannelPageAuthority.extend({
+  transferId: Identity,
+  filename: z.string().min(1).max(255),
+  /** The address of the page that started the download, as the desktop's browser has it. */
+  documentUrl: z.string().max(8192)
+})
+
+export type BrowserClientFileChannelBeginParams = z.infer<
+  typeof BrowserClientFileChannelBeginParams
+>
+
 export const BrowserClientFileChannelAbortParams = FileChannelPageAuthority.extend({
   transferId: Identity
 })
