@@ -1,6 +1,7 @@
 import { isGlobalAiTextAction } from './recipes/source-control-ai-actions'
 import {
   CUSTOM_AGENT_ID,
+  enabledDefaultLaunchAgent,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId,
@@ -57,9 +58,12 @@ export type ResolvedSourceControlAiOperation = {
   prCreationDefaults: Required<SourceControlAiPrCreationDefaults>
 }
 
+/** True when the failing agent was inherited from the default launch agent, not chosen for the action. */
+export type SourceControlAiAgentFailure = { inheritedAgent?: true }
+
 export type ResolveSourceControlAiResult =
   | { ok: true; value: ResolvedSourceControlAiOperation }
-  | ({ ok: false } & TextGenerationFailureFields)
+  | ({ ok: false } & TextGenerationFailureFields & SourceControlAiAgentFailure)
 
 export type SourceControlAiSettingsInput = Partial<
   Pick<
@@ -120,6 +124,22 @@ const CUSTOM_COMMAND_EMPTY = {
   dictationCleanup: 'sourceControlCustomCommandEmpty'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
+const AGENT_FAILURE_CODES: ReadonlySet<string> = new Set([
+  ...Object.values(AGENT_UNSUPPORTED),
+  ...Object.values(AGENT_CANNOT_GENERATE)
+])
+
+/** The inherited default agent can't run the action; automatic naming skips instead of reporting. */
+export function isInheritedAgentUnavailable(
+  failure: { errorCode?: string } & SourceControlAiAgentFailure
+): boolean {
+  return (
+    failure.inheritedAgent === true &&
+    failure.errorCode !== undefined &&
+    AGENT_FAILURE_CODES.has(failure.errorCode)
+  )
+}
+
 function supportedAgentLabels(operation: AiTextOperation): string {
   return listCommitMessageAgentCapabilities(operation)
     .map((capability) => capability.label)
@@ -140,8 +160,13 @@ export function resolveSourceControlAiForOperation(
   const repoOverrides = isGlobalAiTextAction(input.operation)
     ? null
     : normalizeRepoOverrides(input.repo?.sourceControlAi)
-  const agentUnsupported = (): { ok: false } & TextGenerationFailureFields =>
-    resolveFailure(
+  let inheritedAgent = false
+  const agentFailure = (failure: TextGenerationFailureFields): ResolveSourceControlAiResult => ({
+    ...resolveFailure(failure),
+    ...(inheritedAgent ? { inheritedAgent: true } : {})
+  })
+  const agentUnsupported = (): ResolveSourceControlAiResult =>
+    agentFailure(
       textGenerationFailure(AGENT_UNSUPPORTED[input.operation], {
         agents: supportedAgentLabels(input.operation)
       })
@@ -156,6 +181,10 @@ export function resolveSourceControlAiForOperation(
     return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
   }
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
+  // A blank or disabled default falls back to Claude; when that is unusable the error stays actionable.
+  inheritedAgent =
+    !preferredAgent &&
+    !!enabledDefaultLaunchAgent(input.settings.defaultTuiAgent, input.settings.disabledTuiAgents)
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
@@ -210,7 +239,7 @@ export function resolveSourceControlAiForOperation(
   }
   const spec = getCommitMessageAgentSpec(resolvedAgent)
   if (!spec || (input.operation !== 'conversationName' && isNamingOnlyTextAgent(resolvedAgent))) {
-    return resolveFailure(
+    return agentFailure(
       textGenerationFailure(AGENT_CANNOT_GENERATE[input.operation], {
         agent: spec?.label ?? resolvedAgent,
         agents: supportedAgentLabels(input.operation)

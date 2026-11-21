@@ -30,6 +30,8 @@ export type FirstWorkAttempt = {
   /** Throws when the workspace was deleted and recreated since admission. */
   assertIncarnation: () => void
   isIncarnationCurrent: () => boolean
+  /** A manual Try again joined this attempt, so it reports a settings problem instead of skipping. */
+  wasJoined: () => boolean
 }
 
 export type FirstWorkAttemptDeps = {
@@ -50,6 +52,7 @@ type AttemptEntry = {
   incarnation: string
   attemptId: number
   lookupExpired: boolean
+  joined: boolean
   promise: Promise<FirstWorkAttemptResult>
 }
 
@@ -89,6 +92,19 @@ export function runningFirstWorkAttempt(
   return entry && entry.incarnation === incarnation && !entry.lookupExpired ? entry : null
 }
 
+/** Joins a click to the running attempt, which then reports rather than skips quietly. */
+export function joinRunningFirstWorkAttempt(
+  worktreeId: string,
+  incarnation: string
+): Promise<FirstWorkAttemptResult> | null {
+  const entry = inFlight.get(worktreeId)
+  if (!entry || entry.incarnation !== incarnation || entry.lookupExpired) {
+    return null
+  }
+  entry.joined = true
+  return entry.promise
+}
+
 function rememberSettled(worktreeId: string, incarnation: string): void {
   // Bound long-lived deduplication at the cost of occasional re-probes.
   settled.delete(worktreeId)
@@ -115,6 +131,7 @@ export function startFirstWorkAttempt(
     incarnation,
     attemptId,
     lookupExpired: false,
+    joined: false,
     promise: Promise.resolve({ attemptId, outcome: { kind: 'failed' }, finishedAt: 0 })
   }
   const attempt: FirstWorkAttempt = {
@@ -125,6 +142,7 @@ export function startFirstWorkAttempt(
       entry.lookupExpired = true
     },
     isIncarnationCurrent: incarnationCurrent,
+    wasJoined: () => entry.joined,
     assertIncarnation: () => {
       if (!incarnationCurrent()) {
         throw new FirstWorkWorkspaceReplacedError()

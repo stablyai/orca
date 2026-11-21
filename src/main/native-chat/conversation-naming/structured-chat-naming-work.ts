@@ -1,6 +1,12 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
-export type NamingRequest = { record: AgentSessionRecord; automatic: boolean; firstPrompt?: string }
+export type NamingRequest = {
+  record: AgentSessionRecord
+  automatic: boolean
+  firstPrompt?: string
+  /** A Regenerate joined this automatic request, so a deliberate skip reports its reason. */
+  joinedByUser?: true
+}
 type NamingJob = { desired?: NamingRequest; executing?: NamingRequest; preparing: boolean }
 
 export function createStructuredChatNamingWork(deps: {
@@ -42,6 +48,9 @@ export function createStructuredChatNamingWork(deps: {
           record.providerContextBoundary?.operationId &&
         !(automatic && !pending.automatic && pending.firstPrompt === undefined)
       ) {
+        if (!automatic) {
+          pending.joinedByUser = true
+        }
         return
       }
       job.desired = { record, automatic }

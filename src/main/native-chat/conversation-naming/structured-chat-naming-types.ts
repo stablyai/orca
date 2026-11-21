@@ -7,7 +7,13 @@ import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/st
 /** null means unavailable/canceled: no failure to display or retry. */
 export type StructuredChatNameGeneration =
   | { name: string }
-  | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
+  | {
+      error: string
+      errorCode?: string
+      failureOutput?: AgentGenerationFailureOutput
+      /** No agent can name this chat; automatic naming keeps the seed instead of failing. */
+      skipAutomatic?: true
+    }
   | null
 
 export type StructuredChatNamingDeps = {

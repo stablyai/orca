@@ -11,7 +11,8 @@ import type {
 import type { Repo } from '../../shared/repository/repo-types'
 import {
   resolveSourceControlAiForOperation,
-  type ResolvedSourceControlAiGenerationParams
+  type ResolvedSourceControlAiGenerationParams,
+  type SourceControlAiAgentFailure
 } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { AiTextOperation } from '../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
@@ -43,7 +44,7 @@ export type GeneratePullRequestFieldsResult =
 
 type ResolveCommitMessageSettingsResult =
   | { ok: true; params: ResolvedSourceControlAiGenerationParams }
-  | ({ ok: false } & TextGenerationFailureFields)
+  | ({ ok: false } & TextGenerationFailureFields & SourceControlAiAgentFailure)
 
 export function resolveCommitMessageSettings(
   settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
