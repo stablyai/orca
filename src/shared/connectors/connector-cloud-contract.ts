@@ -5,6 +5,8 @@ import type { ConnectorTurnActivity } from './connector-turn-activity-contract'
 import * as z from 'zod'
 import type { ConnectorPrompt } from '../connector-prompt-contract'
 export * from '../connector-prompt-contract'
+export * from './connector-failure-contract'
+import type { ConnectorFailure } from './connector-failure-contract'
 import {
   ConnectorTriggerEvent,
   ConnectorTurnAutomation,
@@ -302,30 +304,6 @@ export type ConnectorBotWorkspace = {
   members: string[]
 }
 
-/** Why the agent couldn't do what was asked, from its own typed signals; a cloud that predates it
- *  drops it, and one that doesn't know the category reads it as agent_error. */
-export const CONNECTOR_FAILURE_CATEGORIES = [
-  'signed_out',
-  'usage_limit',
-  'not_set_up',
-  'folder_missing',
-  'agent_error'
-] as const
-export type ConnectorFailureCategory = (typeof CONNECTOR_FAILURE_CATEGORIES)[number]
-
-export const ConnectorFailure = z.object({
-  category: z.enum(CONNECTOR_FAILURE_CATEGORIES),
-  /** The agent's display name, e.g. "Codex". */
-  agentName: z.string().optional(),
-  /** Only what the agent said: which limit, and when it resets (epoch ms). */
-  usageLimit: z
-    .object({ window: z.string().optional(), resetsAt: z.number().optional() })
-    .optional(),
-  /** This machine's IANA time zone, for sources that can't show a time in each reader's clock. */
-  timeZone: z.string().optional()
-})
-export type ConnectorFailure = z.infer<typeof ConnectorFailure>
-
 export type ConnectorDeliveryResult =
   | { outcome: 'accepted'; reopened?: true; inTurn?: true }
   | { outcome: 'refused'; reason: string; failure?: ConnectorFailure }
@@ -374,6 +352,8 @@ export type ConnectorEvent =
       turnFor?: ConnectorTurnFor
       /** The thread's turn state only; its answer goes through the reply outbox. */
       stateOnly?: true
+      /** With a usage-limit reset this machine resumes at; only to a cloud listing `replies.paused`. */
+      resumes?: true
     })
   /** Only to a cloud that lists `replies.outbox`: the outcome of the admitted deliveries one turn
    *  answered in one conversation, keyed by answerDeliveryId (one of deliveryIds). */

@@ -30,6 +30,8 @@ const selfUpdate = (...args: string[]): (() => AgentCliUpdatePlan) => {
 
 // `codex update` arrived in 0.126.0; older builds are updated by hand.
 const CODEX_UPDATE_COMMAND_SINCE = '0.126.0'
+// Earlier releases read `qwen update` as a prompt and run it.
+const QWEN_UPDATE_COMMAND_SINCE = '0.20.0'
 // Below 2.0.0 is the archived Python CLI, which Kimi Code replaces rather than updates.
 const KIMI_CODE_SINCE = '2.0.0'
 
@@ -102,6 +104,29 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   goose: {
     latest: () => ({ kind: 'github', repo: 'aaif-goose/goose', tagPrefix: 'v' }),
     plan: selfUpdate('update')
+  },
+  // `auggie upgrade` installs its prerelease channel, so the user installs npm's stable release.
+  aug: {
+    latest: () => npm('@augmentcode/auggie'),
+    plan: () => ({ runnable: false, command: 'npm install -g @augmentcode/auggie@latest' })
+  },
+  // Both upgrade the way they were installed, as OpenCode 1.x does.
+  kilo: { latest: () => npm('@kilocode/cli'), plan: selfUpdate('upgrade') },
+  'mimo-code': { latest: () => npm('@mimo-ai/cli'), plan: selfUpdate('upgrade') },
+  // On an npm or Homebrew build `qwen update` prints the command to run, which the failed update shows.
+  // The standalone launcher runs the newest copy in its own folder.
+  'qwen-code': {
+    updatesOutsideLauncher: true,
+    latest: () => npm('@qwen-code/qwen-code'),
+    plan: (installed) =>
+      compareAppVersions(installed, QWEN_UPDATE_COMMAND_SINCE) >= 0
+        ? { runnable: true, args: ['update'] }
+        : {
+            runnable: false,
+            command:
+              agentSessionInstallCommand('qwen-code', process.platform) ??
+              'npm install -g @qwen-code/qwen-code@latest'
+          }
   }
 }
 

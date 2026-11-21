@@ -35,8 +35,9 @@ export function connectorReplyTurnOutcome(turn: {
   }
 }
 
-/** The deliveries a turn answered, by the provider's own evidence: its opener's stamp, and each send
- *  the provider proved it steered into the turn. A message's turn scope alone is not evidence: the
+/** The deliveries a turn answered, by the provider's own evidence: its opener's stamp (a
+ *  continuation's: the cut's deliveries it claimed), and each send the provider proved it steered
+ *  into the turn. A message's turn scope alone is not evidence: the
  *  host assigns it at handover, before the provider takes the input. Each joined conversation gets
  *  the turn's whole answer (#850). `turnItemId`: the turn row's journal item key. */
 export function connectorReplyTurnStamps(
@@ -49,12 +50,17 @@ export function connectorReplyTurnStamps(
 ): AgentJournalConnectorDelivery[] {
   const stamps: AgentJournalConnectorDelivery[] = []
   const seen = new Set<string>()
-  const add = (item: AgentJournalRenderItem | null | undefined) => {
-    const stamp = item?.body.kind === 'message' ? item.body.connectorDelivery : undefined
+  const addStamp = (stamp: AgentJournalConnectorDelivery | undefined) => {
     if (stamp && !seen.has(`${stamp.account}\0${stamp.deliveryId}`)) {
       seen.add(`${stamp.account}\0${stamp.deliveryId}`)
       stamps.push(stamp)
     }
+  }
+  const add = (item: AgentJournalRenderItem | null | undefined) =>
+    addStamp(item?.body.kind === 'message' ? item.body.connectorDelivery : undefined)
+  // A continuation answers the deliveries of the cut it claimed, ahead of anything steered in.
+  if (opener?.body.kind === 'message') {
+    opener.body.connectorClaim?.origin.forEach(addStamp)
   }
   add(opener)
   for (const submission of journal.submissions) {

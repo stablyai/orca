@@ -4,13 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), decide: vi.fn(), listed: new Array<unknown>() }))
 vi.mock('./bot-access-request-operations', () => ({
-  botAccessRequestsRead: { request: mocks.read, interpret: () => ({ accepted: false }) },
+  readHostAccessRequests: async () => (await mocks.read(), mocks.listed),
   decideBotAccessRequest: mocks.decide
 }))
 vi.mock('./bot-access-request-copy', () => ({ accessDecideFailureLine: () => '' }))
-vi.mock('../host-screen/sidebar-feed/host-sidebar-feed-operations', () => ({
-  readHostMethodReply: () => ({ kind: 'answered', value: { ok: true, value: mocks.listed } })
-}))
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { makeAccessRequest } from '../../../src/shared/bots/bot-access-request.test-fixture'

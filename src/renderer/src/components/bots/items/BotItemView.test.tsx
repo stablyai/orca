@@ -187,7 +187,15 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String), undefined)
+  expect(sent).toHaveBeenCalledWith(
+    BOT,
+    'uid-6',
+    'Ship it',
+    [],
+    expect.any(String),
+    undefined,
+    false
+  )
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
@@ -211,7 +219,8 @@ it('focuses the comment box from its card and preserves focus outside it when su
     'Use the proposed flow',
     [],
     expect.any(String),
-    undefined
+    undefined,
+    false
   )
   expect(box.contains(document.activeElement)).toBe(false)
 })
@@ -309,7 +318,8 @@ it("keeps the comment box while the question waits, and posts a quick reply as t
     'Go ahead',
     [],
     expect.any(String),
-    undefined
+    undefined,
+    false
   )
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
 })
@@ -347,7 +357,8 @@ it('holds the answers to an ask of several questions and posts them as one comme
     'Ship it? → Yes\nTell the team? → Yes',
     [],
     expect.any(String),
-    'e1'
+    'e1',
+    false
   )
 })
 

@@ -691,6 +691,9 @@
     "selectionQuote": {
       "action": "Alıntıla",
       "hint": "Seçili metni mesaja alıntı olarak ekler"
+    },
+    "messageTime": {
+      "yesterday": "Dün {{time}}"
     }
   },
   "common": {

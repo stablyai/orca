@@ -23315,6 +23315,9 @@
     "linkedMessageMissing": "No se pudo encontrar ese mensaje.",
     "math": {
       "scrollDisplayEquation": "Desplazar ecuación en bloque"
+    },
+    "messageTime": {
+      "yesterday": "Ayer {{time}}"
     }
   },
   "runtime": {
