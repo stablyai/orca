@@ -10,6 +10,7 @@ import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } fro
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
+import { focusFellToNothing } from '../use-needs-you-focus'
 
 /** A one-line row and its 2 px gap; a row that names its chat adds a 16 px line. */
 export const BOT_ITEM_ROW_PX = 30
@@ -220,12 +221,16 @@ export function BotItemRowsWindow({
     )
   })
   useLayoutEffect(() => {
-    if (all) {
-      drawAll()
-    } else if (!document.hidden) {
+    if (!all && !document.hidden) {
       measure()
     }
-  }, [all, count, geometry, measure, drawAll])
+  }, [all, count, geometry, measure])
+  // A short group's band follows its rows (at most 50, no layout read), so crossing 50 carries them.
+  useLayoutEffect(() => {
+    if (all) {
+      drawAll()
+    }
+  }, [all, items, drawAll])
   // Once the browser has laid out the carried rows (and kept its place by them), measure to let them go.
   // Rows that moved within the range need no measure: the range is re-based onto them, so later updates
   // find them where they are.
@@ -248,8 +253,8 @@ export function BotItemRowsWindow({
   const [focused, setFocused] = useState<RowPick | null>(null)
   // Until a row is focused, the Tab stop is the group's first row, whichever that is now.
   const [stop, setStop] = useState<RowPick | null>(null)
-  // The row an arrow moved to: drawn, then focused as it mounts.
-  const [target, setTarget] = useState<RowPick | null>(null)
+  // The row an arrow moved to: drawn, then focused as it mounts (scrolled to, unless `quiet`).
+  const [target, setTarget] = useState<(RowPick & { quiet?: boolean }) | null>(null)
   const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])
   const stopIndex = useMemo(() => indexOf(stop), [indexOf, stop])
   const focusedIndex = useMemo(() => indexOf(focused), [indexOf, focused])
@@ -258,12 +263,14 @@ export function BotItemRowsWindow({
   // A row that moved is found at its new place from now on, and one that left is let go, so later
   // updates find each pick at once. A pick set since this render (focus as a row mounts) is kept.
   // The row holding focus leaving (marked Done, say) drops focus to the page: the row now in its place
-  // takes it, so the owner carries on from there.
+  // takes it, without scrolling, so the owner carries on from there. Only focus this commit dropped is
+  // handed on; focus the owner had already taken elsewhere stays there.
+  const focusedAtRender = typeof document === 'undefined' ? null : document.activeElement
   const refocus = useLatestHandler((at: number): void => {
-    const next = items[Math.min(at, count - 1)]
-    const active = document.activeElement
-    if (next && (active === null || active === document.body)) {
-      setTarget({ uid: next.uid, at: Math.min(at, count - 1) })
+    const index = Math.min(at, count - 1)
+    const next = items[index]
+    if (next && focusedAtRender !== null && !focusedAtRender.isConnected && focusFellToNothing()) {
+      setTarget({ uid: next.uid, at: index, quiet: true })
     }
   })
   useLayoutEffect(() => {
@@ -290,12 +297,16 @@ export function BotItemRowsWindow({
     return [...indexes].sort((a, b) => a - b)
   }, [pinned, carried, range, count])
 
-  const focusTarget = useCallback((node: HTMLElement | null) => {
-    if (node) {
-      node.querySelector<HTMLElement>('[data-bot-item-open]')?.focus()
-      setTarget(null)
-    }
-  }, [])
+  const quiet = target?.quiet === true
+  const focusTarget = useCallback(
+    (node: HTMLElement | null) => {
+      if (node) {
+        node.querySelector<HTMLElement>('[data-bot-item-open]')?.focus({ preventScroll: quiet })
+        setTarget(null)
+      }
+    },
+    [quiet]
+  )
   const focusBack = useCallback(
     (node: HTMLElement | null) => {
       if (node) {

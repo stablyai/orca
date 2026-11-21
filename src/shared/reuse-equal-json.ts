@@ -45,6 +45,53 @@ function indexByUid(previous: readonly unknown[]): Map<string, unknown> | null {
   return byUid
 }
 
+type UidPairing = {
+  /** A record whose `uid` moved has been met: pair every record from here by `uid`. */
+  moved: boolean
+  pair: (item: unknown, index: number) => unknown
+  /** `item` differs from the record in its place (`kept` is their merge): moved, or changed there. */
+  differs: (item: unknown, index: number, kept: unknown) => unknown
+}
+
+function uidPairing(previous: readonly unknown[], next: readonly unknown[]): UidPairing {
+  let byUid: Map<string, unknown> | null | undefined
+  let unplaced = 0
+  const keyed = uidOf(next[0]) !== null
+  const find = (index: number, uid: string): unknown => {
+    // A record moved a few places (others added, removed or swapped near it) is found close by. One found
+    // nowhere near is usually new, or moved to the front for new activity and so changed anyway: it's
+    // taken as new. Past one such, every previous record is indexed once.
+    const near = byUid === undefined ? nearbyByUid(previous, index, uid) : undefined
+    if (near !== undefined) {
+      return near
+    }
+    if (byUid === undefined && unplaced++ === 0) {
+      return undefined
+    }
+    byUid = byUid === undefined ? indexByUid(previous) : byUid
+    return byUid ? byUid.get(uid) : previous[index]
+  }
+  const state: UidPairing = {
+    moved: false,
+    pair: (item, index) => {
+      const atIndex = previous[index]
+      const uid = uidOf(item)
+      const match = uid === null || uidOf(atIndex) === uid ? atIndex : find(index, uid)
+      return match === undefined ? item : reuseEqualJson(match, item)
+    },
+    differs: (item, index, kept) => {
+      const uid = keyed ? uidOf(item) : null
+      if (uid === null || uidOf(previous[index]) === uid) {
+        return kept
+      }
+      state.moved = true
+      const match = find(index, uid)
+      return match === undefined ? item : reuseEqualJson(match, item)
+    }
+  }
+  return state
+}
+
 /** `next`, with every part equal to `previous`'s part at the same place replaced by that part; `previous`
  *  itself when the two are equal. Arrays match by index, except that a record whose `uid` moved pairs
  *  with the previous record carrying it; objects match by key. */
@@ -54,46 +101,19 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
   }
   if (Array.isArray(previous) && Array.isArray(next)) {
     let same = previous.length === next.length
-    let byUid: Map<string, unknown> | null | undefined
-    // Only a list of records led by one with a `uid` (items) pairs by it, checked at its first difference,
-    // so an equal array (an item's links) checks nothing.
-    let keyed: boolean | undefined
-    // Records pair by place until one is found whose `uid` moved; from there each pairs with the previous
-    // record carrying its `uid`, so it keeps its identity and is compared once, with itself. An answer in
-    // the same order reads no `uid` past the records that changed.
-    let moved = false
-    let unplaced = 0
-    const pairByUid = (item: unknown, index: number, uid: string): unknown => {
-      // A record moved a few places (others added, removed or swapped near it) is found close by. One
-      // found nowhere near is new, or moved to the front for new activity, so changed anyway: it's taken
-      // as new. Past one such, every previous record is indexed once.
-      const near = byUid === undefined ? nearbyByUid(previous, index, uid) : undefined
-      if (near !== undefined) {
-        return near
-      }
-      if (byUid === undefined && unplaced++ === 0) {
-        return undefined
-      }
-      byUid = byUid === undefined ? indexByUid(previous) : byUid
-      return byUid ? byUid.get(uid) : previous[index]
-    }
+    // Records pair by place, as in base, until one differs whose `uid` moved (a list of records with a
+    // `uid`, items); from there each pairs with the previous record carrying its `uid`, so it keeps its
+    // identity and is compared once, with itself. An equal array, or one in the same order, pays nothing.
+    let pairing: UidPairing | undefined
     const merged = next.map((item: unknown, index) => {
-      const atIndex = index < previous.length ? previous[index] : undefined
       let kept: unknown
-      if (moved) {
-        const uid = uidOf(item)
-        const match = uid === null || uidOf(atIndex) === uid ? atIndex : pairByUid(item, index, uid)
-        kept = match === undefined ? item : reuseEqualJson(match, item)
+      if (pairing?.moved) {
+        kept = pairing.pair(item, index)
       } else {
-        // Past the previous end, in the same order, a record is new.
-        kept = atIndex === undefined ? item : reuseEqualJson(atIndex, item)
-        const differs = kept !== atIndex && atIndex !== undefined
-        keyed ??= differs ? uidOf(next[0]) !== null : undefined
-        const uid = differs && keyed ? uidOf(item) : null
-        if (uid !== null && uidOf(atIndex) !== uid) {
-          moved = true
-          const match = pairByUid(item, index, uid)
-          kept = match === undefined ? item : reuseEqualJson(match, item)
+        kept = index < previous.length ? reuseEqualJson(previous[index], item) : item
+        if (kept !== previous[index] && index < previous.length) {
+          pairing ??= uidPairing(previous, next)
+          kept = pairing.differs(item, index, kept)
         }
       }
       same &&= kept === previous[index]
