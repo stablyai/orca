@@ -13,8 +13,9 @@ import {
 import { BotItemMarkdown } from './BotItemMarkdown'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
+// Half the single-line height: one line reads as a pill, a wrapped label as a rounded rectangle.
 export const BOT_ITEM_CHIP =
-  'min-h-8 w-fit max-w-full rounded-2xl border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px]'
+  'min-h-8 w-fit max-w-full rounded-[16px] border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px]'
 
 const CHIP_ACTION =
   'outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
