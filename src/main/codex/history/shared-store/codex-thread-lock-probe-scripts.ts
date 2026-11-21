@@ -73,9 +73,17 @@ for dir in "$@"; do
     case $lock in
       free) rm -f -- "$path" ;;
       held)
+        # Expansions only: no process per held lock while coordination is locked.
         if [ "$i" -eq 0 ]; then
-          stem=$(printf '%s' "\${path##*/}" | sed 's/\\..*//' | tr 'A-F' 'a-f')
-          case ",\${ORCA_CODEX_THREAD_IDS:-$stem}," in *",$stem,"*) held=1 ;; esac
+          case \${ORCA_CODEX_THREAD_IDS:-} in
+            '') held=1 ;;
+            -) ;;
+            *)
+              stem=\${path##*/}
+              stem=\${stem%%.*}
+              case $stem in *[A-F]*) stem=$(printf '%s' "$stem" | tr 'A-F' 'a-f') ;; esac
+              case ",$ORCA_CODEX_THREAD_IDS," in *",$stem,"*) held=1 ;; esac ;;
+          esac
         fi ;;
       *) [ -e "$path" ] && answer unknown ;;
     esac
