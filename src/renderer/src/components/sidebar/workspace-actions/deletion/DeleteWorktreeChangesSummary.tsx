@@ -70,7 +70,8 @@ export function DeleteWorktreeChangesSummary({
   worktree,
   dirtyChanges,
   unsavedFiles,
-  atRiskLocalFilesByIdentity
+  atRiskLocalFilesByIdentity,
+  showChecking
 }: {
   worktree: Worktree
   dirtyChanges: {
@@ -80,6 +81,7 @@ export function DeleteWorktreeChangesSummary({
   }
   unsavedFiles: readonly UnsavedFile[]
   atRiskLocalFilesByIdentity: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
+  showChecking: boolean
 }): JSX.Element | null {
   const t = useTranslate()
   const key = worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
@@ -97,7 +99,7 @@ export function DeleteWorktreeChangesSummary({
   )
   const changesChecking = changeCount === undefined && checkState === 'checking'
   const status =
-    changesChecking || localFilesState?.status === 'checking'
+    showChecking && (changesChecking || localFilesState?.status === 'checking')
       ? t('components.workspace.delete.changes.checking', 'Checking for changes…')
       : changeCount === undefined && checkState === 'unavailable'
         ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')

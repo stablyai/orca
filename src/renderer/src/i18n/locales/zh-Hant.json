@@ -5937,7 +5937,7 @@
           "removeWithChildrenMixed_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
           "removeWithChildrenGit_other": "從 git 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>，並刪除其工作區資料夾。",
           "removeSingleFolderFromOrca": "將其從 Orca 中移除。磁碟上的資料夾會保留。",
-          "deleteSingleWorktreeAndBranch": "刪除工作樹及其分支（未合併的分支會保留）。"
+          "deleteSingleWorktreeAndBranch": "刪除工作樹和本機變更。如果分支已合併，也會一併刪除。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "顯示已載入的路徑",
