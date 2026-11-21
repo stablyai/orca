@@ -24,7 +24,8 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: vi.fn()
 }))
 vi.mock('../../../identity/browser-process-user-agent', () => ({
-  getBrowserProcessUserAgentIdentity: () => ({ userAgent: 'Chrome/140.0.0.0' })
+  getBrowserProcessUserAgentIdentity: () => ({ userAgent: 'Chrome/140.0.0.0' }),
+  isBrowserProcessUserAgentInitialized: () => true
 }))
 
 import { createEligibilityFleet } from './browser-guest-eligibility-test-fixture'

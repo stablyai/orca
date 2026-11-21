@@ -43,6 +43,7 @@ export const BOT_ITEM_LIMITS = {
   text: 8_000,
   links: 50,
   listPage: 50,
+  /** Also the most items one list read names by uid. */
   listPageMax: 100,
   eventsPage: 50
 } as const

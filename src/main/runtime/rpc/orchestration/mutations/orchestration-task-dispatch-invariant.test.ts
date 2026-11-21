@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import Database from '../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -14,12 +15,20 @@ import type { RpcRequest, RpcResponse } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../methods/orchestration/orchestration'
 import { reattachDispatchConsumer } from '../../../orchestration/db/root-dispatch-test-fixture'
+import {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey,
+  structuredWorkerIdentities
+} from '../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerProcessIncarnation } from '../../../orchestration/terminal-authority/structured-sessions/structured-worker-incarnation'
 
 const COORDINATOR_HANDLE = 'term_invariant_coordinator'
 const COORDINATOR_PANE = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const WORKER_HANDLE = 'term_invariant_worker'
 const WORKER_PANE = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const WORKER_PROCESS = 'pty-worker:incarnation-1'
+const INSPECTING_SESSION = 'orca_session_id:9a1aa2b0-1e76-49ff-8e5a-30a0ca29fb92'
+const STRUCTURED_CREATOR_SESSION_ID = 'c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f'
 
 type Harness = {
   db: OrchestrationDb
@@ -33,12 +42,82 @@ const tempDirs: string[] = []
 let requestSequence = 0
 
 afterEach(() => {
+  structuredWorkerIdentities.clear()
   for (const harness of harnesses.splice(0)) {
     harness.db.close()
   }
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+describe('dispatch-show preamble coordinator', () => {
+  it.each([
+    {
+      creator: { kind: 'terminal' as const, handle: COORDINATOR_HANDLE },
+      expected: 'Your coordinator receives mail you send with no recipient.'
+    },
+    {
+      creator: {
+        kind: 'session' as const,
+        orcaSessionId: createOrcaSessionId(() => '88e499ec-8430-4b5d-99dc-f8ceca5314a0')
+      },
+      expected:
+        "Your coordinator's Orca session ID is: orca_session_id:88e499ec-8430-4b5d-99dc-f8ceca5314a0"
+    }
+  ])(
+    'uses the recorded $creator.kind coordinator instead of the inspecting session',
+    async ({ creator, expected }) => {
+      const harness = createHarness()
+      const task = harness.db.createTask({ spec: 'existing assignment', runId: harness.runId })
+      harness.db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: WORKER_HANDLE,
+        creator,
+        maxDepth: 3
+      })
+
+      await expectShownPreambleToContain(harness, task.id, expected)
+    }
+  )
+
+  it('names a structured-worker terminal creator by its Orca session ID', async () => {
+    const harness = createHarness()
+    const creatorHandle = mintStructuredWorkerHandle()
+    structuredWorkerIdentities.register({
+      handle: creatorHandle,
+      sessionId: STRUCTURED_CREATOR_SESSION_ID,
+      agent: 'claude',
+      paneKey: mintStructuredWorkerPaneKey(STRUCTURED_CREATOR_SESSION_ID),
+      processIncarnation: structuredWorkerProcessIncarnation(STRUCTURED_CREATOR_SESSION_ID),
+      worktreeId: 'repo::coordinator',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    const task = harness.db.createTask({ spec: 'existing assignment', runId: harness.runId })
+    harness.db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: WORKER_HANDLE,
+      creator: { kind: 'terminal', handle: creatorHandle },
+      maxDepth: 3
+    })
+
+    await expectShownPreambleToContain(
+      harness,
+      task.id,
+      `Your coordinator's Orca session ID is: orca_session_id:${STRUCTURED_CREATOR_SESSION_ID}`
+    )
+  })
+
+  it('names the --from caller in a preview before any Dispatch exists', async () => {
+    const harness = createHarness()
+    const task = harness.db.createTask({ spec: 'unassigned work', runId: harness.runId })
+
+    await expectShownPreambleToContain(
+      harness,
+      task.id,
+      `Your coordinator's Orca session ID is: ${INSPECTING_SESSION}`
+    )
+  })
 })
 
 describe('Task/Dispatch state invariant', () => {
@@ -65,6 +144,24 @@ describe('Task/Dispatch state invariant', () => {
     })
   })
 })
+
+async function expectShownPreambleToContain(
+  harness: Harness,
+  taskId: string,
+  expected: string
+): Promise<void> {
+  const response = await harness.dispatcher.dispatch(
+    request('orchestration.dispatchShow', {
+      task: taskId,
+      preamble: true,
+      from: INSPECTING_SESSION
+    })
+  )
+  expect(response).toMatchObject({
+    ok: true,
+    result: { preamble: expect.stringContaining(expected) }
+  })
+}
 
 function createHarness(): Harness {
   const dir = mkdtempSync(join(tmpdir(), 'orca-task-dispatch-invariant-'))

@@ -11,7 +11,13 @@ export type MobileComposio = {
   status: { key: string; added: boolean } | null
   /** Null until read and while no key is saved; a failed read keeps the last. */
   connections: {
-    connections: { app: string; status: string; label: string | null }[]
+    connections: {
+      app: string
+      name?: string
+      status: string
+      label: string | null
+      id?: string
+    }[]
     pending: { app: string; url: string }[]
   } | null
 }

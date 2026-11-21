@@ -722,9 +722,7 @@
           "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL."
         },
         "ReleaseChannelSection": {
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+          "devChannelPlatforms": "macOS and Windows"
         },
         "RepositoryRemoveProjectSection": {
           "checkoutCount_one": "{{count}} checkout",
@@ -2960,6 +2958,26 @@
       "connectorRequests": "{{count}} requests",
       "connectorRequests_one": "{{count}} request",
       "connectorRequests_other": "{{count}} requests",
+      "memoryHistory": {
+        "aChat": "A chat",
+        "added": "Added: {{fact}}",
+        "addedMany": "Added {{count}} lines",
+        "bot": "Forget, from {{chat}}",
+        "changedMany": "Changed {{count}} lines",
+        "chat": "Chat \"{{title}}\"",
+        "chatFrom": "{{chat}} · from {{source}}",
+        "edited": "Edited: {{fact}}",
+        "forgot": "Forgot: {{fact}}",
+        "forgotMany": "Forgot {{count}} lines",
+        "kept": "Orca · {{chat}} wrote over it",
+        "keptMany": "Kept {{count}} lines other chats wrote over",
+        "keptOne": "Kept a line another chat wrote over",
+        "owner": "You, in Settings",
+        "secret": "{{author}} · Can’t be undone: it held a secret",
+        "tidied": "Tidied {{count}} lines",
+        "tidyUp": "Tidy-up · Undo puts back all of its MEMORY.md changes",
+        "undo": "Undo"
+      },
       "skills": {
         "count_one": "{{count}} skill",
         "count_other": "{{count}} skills"

@@ -13,9 +13,10 @@ import {
 import { StructuredAgentRegistry } from '../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import { acpStructuredAgentDefinition } from './acp-structured-agent-definitions'
-import type {
-  AcpScriptedAgent,
-  FakeFrame
+import {
+  deferred,
+  type AcpScriptedAgent,
+  type FakeFrame
 } from '../process/testing/acp-scripted-agent.test-support'
 import {
   openAcpAdapterRig,
@@ -23,6 +24,13 @@ import {
   sendHello,
   waitFor
 } from './testing/acp-structured-adapter.test-support'
+import { openHostRig, send } from './testing/acp-structured-host.test-support'
+import { CALLER } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import {
+  HOST_TEST_SESSION as HOST_SESSION,
+  hostTestAttachParams
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 
 const HERMES = acpLaunchSpecFor('hermes')!
 afterEach(closeProviderTimelineRigs)
@@ -221,4 +229,48 @@ it("starts Hermes without the chat's caller identity", async () => {
   expect(env).not.toHaveProperty('ORCA_AGENT_SESSION_ID')
   expect(env).toHaveProperty('ORCA_STRUCTURED_SESSION', '1')
   expect(envToDelete).toContain('ORCA_AGENT_SESSION_ID')
+})
+
+it('delivers the commands an agent reports while its chat is still starting', async () => {
+  const paneOpen = deferred<void>()
+  const { host, rig } = await openHostRig({
+    spec: HERMES,
+    script: (agent) => {
+      // Hermes sends its list just after session/new, before Orca has set the permission mode.
+      agent.on('session/new', (frame) => {
+        void paneOpen.promise.then(() => {
+          agent.reply(frame, { sessionId: PROVIDER_SESSION })
+          agent.notify('session/update', {
+            sessionId: PROVIDER_SESSION,
+            update: {
+              sessionUpdate: 'available_commands_update',
+              availableCommands: [{ name: 'app-build', description: 'Build the app' }]
+            }
+          })
+        })
+      })
+      // Keep the chat starting so only the startup publish can carry the list.
+      agent.on('session/set_config_option', () => {})
+    }
+  })
+  const attached = await host.attach(
+    CALLER,
+    hostTestAttachParams(null, {
+      provider: 'hermes',
+      agent: 'hermes',
+      accountHome: { variable: 'HERMES_HOME', path: '/hermes' },
+      providerHandle: undefined
+    })
+  )
+  expect(attached).toMatchObject({ ok: true })
+  void send(host, 'hello')
+  await rig.frame('session/new')
+  const frames: AgentSessionSubscribeEvent[] = []
+  await host.subscribe({ id: 'pane', sessionId: HOST_SESSION, emit: (frame) => frames.push(frame) })
+  paneOpen.resolve()
+  await waitFor(() =>
+    expect(frames).toContainEqual(
+      expect.objectContaining({ commands: [expect.objectContaining({ name: 'app-build' })] })
+    )
+  )
 })

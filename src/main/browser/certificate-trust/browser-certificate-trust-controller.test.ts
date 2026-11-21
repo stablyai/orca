@@ -4,30 +4,12 @@ import { BrowserCertificateTrustController } from './browser-certificate-trust-c
 import { resetSessionProxyApplicationForTests } from '../../network/proxy-settings'
 
 const FIRST_CERTIFICATE = certificate('first certificate')
-let beforeRequestListener:
-  | ((
-      details: Electron.OnBeforeRequestListenerDetails,
-      callback: (response: Electron.CallbackResponse) => void
-    ) => void)
-  | null = null
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub with every Session member the controller and proxy readiness read.
 const browserSession = {
   resolveProxy: vi.fn(async () => 'DIRECT'),
   setProxy: vi.fn(async () => {}),
   closeAllConnections: vi.fn(async () => {}),
-  webRequest: {
-    onBeforeRequest: vi.fn(
-      (
-        listener:
-          | ((
-              details: Electron.OnBeforeRequestListenerDetails,
-              callback: (response: Electron.CallbackResponse) => void
-            ) => void)
-          | null
-      ) => {
-        beforeRequestListener = listener
-      }
-    )
-  }
+  webRequest: { onBeforeRequest: vi.fn() }
 } as unknown as Electron.Session
 
 function certificate(contents: string): Electron.Certificate {
@@ -36,35 +18,14 @@ function certificate(contents: string): Electron.Certificate {
   } as Electron.Certificate
 }
 
-function createGuest(id: number): Electron.WebContents {
+function createGuest(id: number, session: Electron.Session = browserSession): Electron.WebContents {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub with every WebContents member the controller reads.
   return {
     id,
-    session: browserSession,
+    session,
     isDestroyed: vi.fn(() => false),
     loadURL: vi.fn(() => Promise.resolve())
   } as unknown as Electron.WebContents
-}
-
-function beforeRequest(args: {
-  url?: string
-  webContentsId?: number
-  resourceType?: Electron.OnBeforeRequestListenerDetails['resourceType']
-}) {
-  const callback = vi.fn()
-  beforeRequestListener?.(
-    {
-      id: 1,
-      url: args.url ?? 'https://localhost:3443/app',
-      method: 'GET',
-      webContentsId: args.webContentsId,
-      resourceType: args.resourceType ?? 'mainFrame',
-      referrer: '',
-      timestamp: 1,
-      uploadData: []
-    },
-    callback
-  )
-  return callback
 }
 
 function certificateEvent(args: {
@@ -142,30 +103,48 @@ describe('BrowserCertificateTrustController', () => {
     controller.installSessionRequestGuard(browserSession)
   })
 
-  it('blocks a session-cached certificate for sibling requests until that guest approves it', () => {
+  it('trusts an approved certificate for every tab in the profile, and nothing else', () => {
+    expect(certificateEvent({ controller, guest }).callback).toHaveBeenCalledWith(false)
+    expect(controller.getFailure('page-1')).toMatchObject({ challengeId: 'challenge-1' })
+    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })
+    expect(guest.loadURL).toHaveBeenCalledWith('https://localhost:3443/app')
+
+    const approved = certificateEvent({ controller, guest })
+    expect(approved.preventDefault).toHaveBeenCalled()
+    expect(approved.callback).toHaveBeenCalledWith(true)
+    // A sibling tab in the same profile, and a redirect or subresource there, share the decision.
+    expect(certificateEvent({ controller, guest: otherGuest }).callback).toHaveBeenCalledWith(true)
+    expect(
+      certificateEvent({ controller, guest: otherGuest, isMainFrame: false }).callback
+    ).toHaveBeenCalledWith(true)
+    // Another certificate on the approved endpoint is neither trusted nor offered.
+    const replaced = certificateEvent({
+      controller,
+      guest: otherGuest,
+      certificate: certificate('second certificate')
+    })
+    expect(replaced.callback).toHaveBeenCalledWith(false)
+    expect(controller.getFailure('page-2')).toBeNull()
+  })
+
+  it('keeps another profile untrusted until it approves the certificate itself', () => {
+    const otherProfile: Electron.Session = Object.create(browserSession)
+    const guestInOtherProfile = createGuest(9, otherProfile)
+    pageByGuestId.set(9, 'page-3')
+    guestByPageId.set('page-3', 9)
+    guestById.set(9, guestInOtherProfile)
+    controller.installSessionRequestGuard(otherProfile)
     certificateEvent({ controller, guest })
     expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })
-    expect(certificateEvent({ controller, guest }).callback).toHaveBeenCalledWith(true)
 
-    const siblingMainFrame = beforeRequest({ webContentsId: otherGuest.id })
-    expect(siblingMainFrame).toHaveBeenCalledWith({ cancel: true })
-    expect(controller.getFailure('page-2')).toMatchObject({
-      challengeId: 'challenge-2',
-      browserPageId: 'page-2',
-      origin: 'https://localhost:3443',
-      canProceed: true
-    })
-
+    // A redirect or subresource reaching the endpoint from the other profile is refused.
     expect(
-      beforeRequest({ webContentsId: otherGuest.id, resourceType: 'webSocket' })
-    ).toHaveBeenCalledWith({ cancel: true })
-    expect(beforeRequest({ resourceType: 'webSocket' })).toHaveBeenCalledWith({ cancel: true })
+      certificateEvent({ controller, guest: guestInOtherProfile, isMainFrame: false }).callback
+    ).toHaveBeenCalledWith(false)
+    expect(controller.getFailure('page-3')).toBeNull()
     expect(
-      beforeRequest({ url: 'https://localhost:3444/app', webContentsId: otherGuest.id })
-    ).toHaveBeenCalledWith({})
-    expect(beforeRequest({ webContentsId: guest.id })).toHaveBeenCalledWith({})
-
-    expect(controller.proceed('page-2', 'challenge-2')).toEqual({ ok: true })
-    expect(beforeRequest({ webContentsId: otherGuest.id })).toHaveBeenCalledWith({})
+      certificateEvent({ controller, guest: guestInOtherProfile }).callback
+    ).toHaveBeenCalledWith(false)
+    expect(controller.getFailure('page-3')).toMatchObject({ challengeId: 'challenge-2' })
   })
 })

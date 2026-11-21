@@ -50,6 +50,12 @@ export const TIDY_UP_FAILURES = {
   asleep: 'The last tidy-up was missed because this computer was asleep.',
   unreadChats: "The last tidy-up couldn't read its chats, so it didn't run.",
   noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
+  noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
+  allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
+  notListLines:
+    "The last tidy-up didn't run: MEMORY.md has more than a few lines that aren't list lines, and ops Tidy-up reads only list lines.",
+  movedOnly:
+    'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
   badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
   tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
   tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
@@ -71,6 +77,8 @@ export type TidyUpMemoryFile = { name: string; text: string }
 export type BotTidyUpState = BackgroundRuns & {
   /** Its chats are read from here on: when the last tidy-up that applied started. */
   through?: number
+  /** Before any tidy-up applied: where the first one that failed read its chats from. */
+  firstFrom?: number
   /** When it last found nothing new to tidy, so it waits for the next night. */
   checkedAt?: number
   /** The last tidy-up that changed something, for its summary. */
@@ -135,7 +143,7 @@ export function tidyUpOwed(
 
 export type TidyUpApplied = Pick<
   BotTidyUpSummary,
-  'learned' | 'replaced' | 'filed' | 'moved' | 'merged'
+  'learned' | 'replaced' | 'filed' | 'moved' | 'merged' | 'skipped'
 >
 
 /** A run that changed something, as its summary shows it, with the History row it wrote; null
@@ -273,7 +281,10 @@ function chatsText(chats: readonly TidyUpChat[]): string {
 }
 
 /** Each topic file's start, then the archive's latest lines. */
-function memoryFilesText(files: readonly TidyUpMemoryFile[]): { topics: string; archive: string } {
+export function memoryFilesText(files: readonly TidyUpMemoryFile[]): {
+  topics: string
+  archive: string
+} {
   let left: number = TIDY_UP_MEMORY_FILES.topics
   const topics: string[] = []
   for (const { name, text } of files) {
