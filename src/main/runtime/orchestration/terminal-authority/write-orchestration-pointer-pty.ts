@@ -20,12 +20,17 @@ import type { OrchestrationMailboxPointerSubmitTarget } from '../mailbox/termina
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
+import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../../terminal/query/pty-terminal-summary'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
   protected abstract issueHandle(
     leaf: RuntimeLeafRecord,
     context?: TerminalIdentityReadContext
   ): string
+
+  protected abstract getPtyManualTitle(
+    ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
+  ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
 
   protected writeOrchestrationPointerPty(
     ptyId: string,
@@ -98,7 +103,9 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const tab = this.tabs.get(leaf.tabId) ?? null
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-    const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    const processTitle = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    // An idle pane never re-reports its title, so a rename must win here, not by timestamp (#24914).
+    const title = (pty && this.getPtyManualTitle(pty, false)) || processTitle
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
     // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
     const provenAbsent =
@@ -136,7 +143,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ...this.resolvePaneAgentIdentityField(
         pty?.launchAgent ?? pty?.launchCommandAgent,
         pty?.foregroundAgent,
-        title,
+        processTitle,
         isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null
       ),
       ...(ORCA_LAYOUT_OWNER_IS_MAIN && mainPane
