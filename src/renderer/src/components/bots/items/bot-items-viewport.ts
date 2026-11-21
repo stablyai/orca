@@ -34,6 +34,13 @@ function listenTo(
     })
   }
   scroller.addEventListener('scroll', notify, { passive: true })
+  // A hidden window measures nothing, so showing it again measures what changed meanwhile.
+  const shown = (): void => {
+    if (!document.hidden) {
+      notify()
+    }
+  }
+  document.addEventListener('visibilitychange', shown)
   // The list's height moves a group below one that folds, grows or shrinks.
   const resized = new ResizeObserver(notify)
   resized.observe(scroller)
@@ -42,6 +49,7 @@ function listenTo(
   }
   return () => {
     scroller.removeEventListener('scroll', notify)
+    document.removeEventListener('visibilitychange', shown)
     resized.disconnect()
     if (frame !== null) {
       cancelAnimationFrame(frame)

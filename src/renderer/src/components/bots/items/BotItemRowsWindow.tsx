@@ -5,7 +5,6 @@
 // group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
 // and leaves Tab and the keys to the panel, as a plain list does.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { cn } from '@/lib/class-names'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
@@ -88,26 +87,28 @@ function indexOfPicks(items: readonly BotItem[]): IndexOf {
 const relocated = (pick: RowPick | null, at: number): RowPick | null =>
   pick === null || pick.at === at ? pick : at < 0 ? null : { uid: pick.uid, at }
 
-/** The rows at the top of the view and just below it, where each was, and the scroll offset then. */
-type Anchor = {
-  top: RowPick
-  topAt: number
-  below: RowPick | null
-  belowAt: number
-  scrollTop: number
-}
+/** The rows a group drew at its last commit, and their positions. */
+type Layout = { items: readonly BotItem[]; geometry: Geometry }
 
-/** How far what the owner was reading moved. Of the two rows, the one that moved least kept its place
- *  among its neighbours: a row an update sorts to the front doesn't take the view with it. */
-function anchorShift(held: Anchor, indexOf: IndexOf, geometry: Geometry): number {
-  const top = indexOf(held.top)
-  const below = indexOf(held.below)
-  const topShift = top < 0 ? null : geometry.offset(top) - held.topAt
-  const belowShift = below < 0 ? null : geometry.offset(below) - held.belowAt
-  if (topShift === null || belowShift === null) {
-    return topShift ?? belowShift ?? 0
+/** How far what the owner was reading (the rows in view, `from`..`to` px into the previous layout)
+ *  moved: the median of the rows' own moves. Rows added or removed above move every row in view alike;
+ *  a row an update sorts to the front moves alone, and the rows that kept their order outvote it. */
+function readingShift(
+  prev: Layout,
+  from: number,
+  to: number,
+  indexOf: IndexOf,
+  next: Geometry
+): number {
+  const shifts: number[] = []
+  for (let at = prev.geometry.indexAt(from); at <= prev.geometry.indexAt(to); at++) {
+    const index = indexOf({ uid: prev.items[at]!.uid, at })
+    if (index >= 0) {
+      shifts.push(next.offset(index) - prev.geometry.offset(at))
+    }
   }
-  return Math.abs(belowShift) < Math.abs(topShift) ? belowShift : topShift
+  shifts.sort((a, b) => a - b)
+  return shifts[(shifts.length - 1) >> 1] ?? 0
 }
 
 const samePick = (a: RowPick | null, b: RowPick | null): boolean =>
@@ -171,55 +172,54 @@ export function BotItemRowsWindow({
     () => (all ? { start: 0, end: count } : windowRange),
     [all, count, windowRange]
   )
-  // Where the owner is reading, when this group spans the top of the panel's view: rows added or
-  // removed above it move the view with them, so what the owner is reading stays put.
-  const anchor = useRef<Anchor | null>(null)
   const measure = useLatestHandler((): void => {
     const box = viewport.read()
     const element = container.current
     const top = box && element ? element.getBoundingClientRect().top : null
-    anchor.current = null
-    const first = { start: 0, end: Math.min(count, FIRST_ROWS) }
-    if (!box || top === null) {
-      setRange((prev) => (prev.start === first.start && prev.end === first.end ? prev : first))
-      return
+    let next = { start: 0, end: Math.min(count, FIRST_ROWS) }
+    if (box && top !== null) {
+      const from = box.top - top - OVERSCAN_PX
+      const to = box.bottom - top + OVERSCAN_PX
+      next =
+        count === 0 || to <= 0 || from >= geometry.total
+          ? { start: 0, end: 0 }
+          : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
-    const viewTop = box.top - top
-    if (box.scrollTop > 0 && viewTop > 0 && viewTop < geometry.total) {
-      const at = geometry.indexAt(viewTop)
-      const below = items[at + 1]
-      anchor.current = {
-        top: { uid: items[at]!.uid, at },
-        topAt: geometry.offset(at),
-        below: below ? { uid: below.uid, at: at + 1 } : null,
-        belowAt: geometry.offset(at + 1),
-        scrollTop: box.scrollTop
-      }
-    }
-    const from = box.top - top - OVERSCAN_PX
-    const to = box.bottom - top + OVERSCAN_PX
-    const next =
-      count === 0 || to <= 0 || from >= geometry.total
-        ? { start: 0, end: 0 }
-        : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     setRange((prev) => (prev.start === next.start && prev.end === next.end ? prev : next))
   })
-  // A short group draws every row and needs no view: the browser keeps its reading position, as for
-  // any list. A long one listens once for as long as it windows.
+  // A short group draws every row and needs no view. A long one listens once for as long as it windows.
   useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])
-  // After every render: an update can move this group (another group regrouped above it) or its rows
-  // without the list changing height, which no scroll or resize would report. The kept offset is set
-  // outright, so a browser clamp at the bottom of the panel isn't counted twice.
+  const layout = useRef<Layout | null>(null)
+  // When the rows change. Rows sit at set offsets, which keeps the browser from holding the reading
+  // position, so the view moves with the rows it shows, read where the view is now. Then the drawn range
+  // follows: an update can move this group's rows without the panel scrolling or the list changing
+  // height, which no notice would report. A short group's range is every row, kept current so it
+  // starts from there if it grows long.
   useLayoutEffect(() => {
-    if (all) {
+    const prev = layout.current
+    // A hidden window reads no layout; it measures as it shows again, from the layout last seen.
+    if ((prev?.items === items && prev.geometry === geometry) || document.hidden) {
       return
     }
-    const held = anchor.current
-    const moved = held ? anchorShift(held, indexOf, geometry) : 0
-    if (held && moved !== 0) {
-      viewport.scrollTo(held.scrollTop + moved)
+    layout.current = { items, geometry }
+    const box = prev ? viewport.read() : null
+    const element = container.current
+    if (prev && box && element && box.scrollTop > 0) {
+      const top = element.getBoundingClientRect().top
+      const from = box.top - top
+      if (from > 0 && from < prev.geometry.total) {
+        const to = Math.min(box.bottom - top, prev.geometry.total - 1)
+        const moved = readingShift(prev, from, to, indexOf, geometry)
+        if (moved !== 0) {
+          viewport.scrollTo(box.scrollTop + moved)
+        }
+      }
     }
-    measure()
+    if (all) {
+      setRange((was) => (was.start === 0 && was.end === count ? was : { start: 0, end: count }))
+    } else {
+      measure()
+    }
   })
 
   // Focus inside a row keeps it drawn; the last row focused stays the group's Tab stop. A window losing
@@ -332,8 +332,8 @@ export function BotItemRowsWindow({
             role={all ? 'listitem' : 'row'}
             aria-rowindex={all ? undefined : index + 1}
             data-bot-item-index={index}
-            // A window keeps the reading position itself, so the browser mustn't anchor on its rows.
-            className={cn('absolute inset-x-0', !all && '[overflow-anchor:none]')}
+            // The window keeps the reading position for its rows, so the browser mustn't anchor on them.
+            className="absolute inset-x-0 [overflow-anchor:none]"
             style={{ top: geometry.offset(index), height: geometry.height(index) }}
             ref={index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined}
             onFocus={() => {
