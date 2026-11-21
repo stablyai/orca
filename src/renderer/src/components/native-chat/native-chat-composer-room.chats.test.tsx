@@ -295,9 +295,11 @@ it('keeps `@` open past spaces while the words still name a bot, so a later one 
     '[Bot: Official](bot:off@air)'
   )
 
+  // A finished name followed by more words, an `@` inside a word, and a bare punctuation query
+  // are text, so the real detector closes the list for each.
   for (const draft of ['notify @eng - reviewer please', 'a@eng - rev', '@- x']) {
     rerender({ draft })
-    expect(result.current.autocomplete).toEqual(triggerOf(draft))
+    expect(result.current.autocomplete).toEqual({ mode: 'none' })
   }
   // An unfinished name keeps the list across its first space; a finished one plus space is text.
   rerender({ draft: 'notify @eng ' })

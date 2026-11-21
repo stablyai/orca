@@ -215,6 +215,12 @@ describe('room @ queries with spaces', () => {
   it('stays closed once the words stop matching a name, or match only a paused bot', () => {
     expect(derive('@neil please').mode).toBe('none')
     expect(derive('@marketing x').mode).toBe('none')
+    expect(derive('notify @eng - neil please').mode).toBe('none')
+  })
+
+  it('needs whitespace before the @ and a word after it', () => {
+    expect(derive('a@eng - n').mode).toBe('none')
+    expect(derive('@- x').mode).toBe('none')
   })
 
   it('stops at a space outside a room', () => {
