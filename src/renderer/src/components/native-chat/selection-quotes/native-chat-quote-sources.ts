@@ -120,7 +120,8 @@ export type NativeChatQuoteJumpDeps = {
   /**
    * Shows the message in this transcript and highlights the quote; false when the source is in
    * another chat. It pages older history in when the message is not loaded. Calls
-   * `notifyMissing` when no page has the message, or when the message is not drawn after the jump. Each later step does nothing once `isCurrent` is false.
+   * `notifyMissing` when no page has the message, or when the message is not drawn after the
+   * jump. Each later step does nothing once `isCurrent` is false.
    */
   jumpToMessage:
     | ((
