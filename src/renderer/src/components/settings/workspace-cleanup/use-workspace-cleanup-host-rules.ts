@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { subscribeHostSettingsChanged } from '@/runtime/rpc/subscriptions/host-settings-changed'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -80,6 +81,28 @@ export function useWorkspaceCleanupHostRules(
       current = false
     }
   }, [environmentId, attempt])
+
+  useEffect(() => {
+    if (!environmentId) {
+      return
+    }
+    let current = true
+    const stop = subscribeHostSettingsChanged((changedId, keys) => {
+      if (changedId !== environmentId || !keys.includes('workspaceCleanupPolicy')) {
+        return
+      }
+      void readEnvironmentRules(environmentId).then((hostRules) => {
+        // A failed refresh keeps the last answer rather than replacing the pane with an error.
+        if (current && hostRules.state === 'ready') {
+          setRemote({ environmentId, hostRules })
+        }
+      })
+    })
+    return () => {
+      current = false
+      stop()
+    }
+  }, [environmentId])
 
   const reportFailure = (error: unknown): void => {
     toast.error(

@@ -1,8 +1,9 @@
 import { cleanupPolicyOwnerKey } from './workspace-cleanup-write-journal'
 import { readCleanupPolicy } from './workspace-cleanup-policy-client'
 import { waitForCleanupWrite } from './workspace-cleanup-pending-write'
-import { useLayoutEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useEffectEvent, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { subscribeHostSettingsChanged } from '@/runtime/rpc/subscriptions/host-settings-changed'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { WorkspaceCleanupPolicyRead } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
@@ -60,6 +61,29 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
     }
   }
   const reloadEffect = useEffectEvent(() => reload())
+  // Another client may change this host's rules while the pane is open; writes still re-read first.
+  const refreshEffect = useEffectEvent(async () => {
+    const token = generation.current
+    try {
+      const value = await readLatest()
+      if (token === generation.current) {
+        adopt(value)
+      }
+    } catch {
+      // Keep the last read; the next write or retry reads the host again.
+    }
+  })
+  const environmentId = owner.kind === 'environment' ? owner.environmentId : null
+  useEffect(() => {
+    if (!environmentId) {
+      return
+    }
+    return subscribeHostSettingsChanged((changedId, keys) => {
+      if (changedId === environmentId && keys.includes('workspaceCleanupPolicy')) {
+        void refreshEffect()
+      }
+    })
+  }, [environmentId])
   useLayoutEffect(() => {
     const token = generation.current + 1
     generation.current = token
