@@ -206,8 +206,8 @@ async function continuesAfterUsageLimit(sessionId: string): Promise<boolean> {
 export async function dropUnreadBotRequests(
   runtime: OrcaRuntimeService,
   botId: string,
-  why: 'paused' | 'deleted' | 'new-chat',
-  /** Only those mailed to this conversation (the Chat a new one replaced). */
+  why: 'paused' | 'deleted' | 'new-chat' | 'chat-deleted',
+  /** Only those mailed to this conversation (the Chat a new one replaced, or a deleted chat). */
   onlyTo?: string
 ): Promise<void> {
   try {

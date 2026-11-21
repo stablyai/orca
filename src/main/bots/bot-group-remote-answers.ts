@@ -8,23 +8,33 @@ import { isRemoteAskInFlight } from './bot-group-remote'
 
 /** A remote answer kept on its post; the whole answer stays in this computer's mail. */
 const SAVED_ANSWER_MAX = 64_000
-/** A room page's remote answer text, so a page of long answers stays far under the reply limit. */
+/** A room page's answer text, so a page of long answers stays far under the reply limit. */
 const PAGE_ANSWER_BUDGET = 1_000_000
 const PAGE_ANSWER_MAX = 16_000
 
 /** Asks as a reader sees them: a `sending` ask whose handover is no longer running may or may not
- *  have reached its computer; its answer still lands if one comes. Long answers are shortened to
- *  the page's budget, newest posts first, so a page stays readable. */
-export function presentRemoteAsks(messages: readonly BotGroupMessage[]): BotGroupMessage[] {
+ *  have reached its computer; its answer still lands if one comes. Long answers, remote ones and
+ *  members' mailed answers alike, are shortened to the page's budget, newest posts first, so a
+ *  page stays readable; the whole answer stays in mail. */
+export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGroupMessage[] {
   let budget = PAGE_ANSWER_BUDGET
+  const take = (text: string) => {
+    const kept = text.slice(0, Math.max(0, Math.min(PAGE_ANSWER_MAX, budget)))
+    budget -= kept.length
+    return kept
+  }
   const shown = new Map<string, BotGroupMessage>()
   for (const message of messages.toReversed()) {
+    const turns = message.turns.some((turn) => turn.answer)
+      ? message.turns.map((turn) => (turn.answer ? { ...turn, answer: take(turn.answer) } : turn))
+      : message.turns
     if (!message.remoteAsks?.length) {
-      shown.set(message.id, message)
+      shown.set(message.id, { ...message, turns })
       continue
     }
     shown.set(message.id, {
       ...message,
+      turns,
       remoteAsks: message.remoteAsks.map((ask) => {
         const state =
           ask.state === 'sending' && !isRemoteAskInFlight(ask.requestId)
@@ -33,8 +43,7 @@ export function presentRemoteAsks(messages: readonly BotGroupMessage[]): BotGrou
         if (ask.reply?.kind !== 'answer') {
           return { ...ask, state }
         }
-        const answer = ask.reply.text.slice(0, Math.max(0, Math.min(PAGE_ANSWER_MAX, budget)))
-        budget -= answer.length
+        const answer = take(ask.reply.text)
         return {
           ...ask,
           state,
