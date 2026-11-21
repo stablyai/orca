@@ -90,7 +90,17 @@ export async function downloadAndOpenRemoteTerminalFile(
     }
   }
   try {
-    await openRuntimeFileWithDefaultApp(linkFileReadSource(fileContext, filePath, grant))
+    const opened = await openRuntimeFileWithDefaultApp(
+      linkFileReadSource(fileContext, filePath, grant)
+    )
+    if (!opened && isCurrent()) {
+      toast.error(
+        translate(
+          'auto.components.editor.BinaryFileDefaultAppButton.openFailed',
+          'No app on this computer opened this file.'
+        )
+      )
+    }
   } catch (error) {
     showDownloadFailedToast(error, linkName(filePath))
   }

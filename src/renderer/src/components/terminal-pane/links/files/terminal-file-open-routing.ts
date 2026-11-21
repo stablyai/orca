@@ -41,6 +41,7 @@ import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-li
 import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import type { FileOpenFailure } from './terminal-file-open-failure'
+import { prefersProjectFileDefaultApp } from './project-file-default-app'
 import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
@@ -142,10 +143,13 @@ export function openDetectedFilePath(
       }
     }
 
+    const useDefaultAppForFile =
+      openWithSystemDefault ||
+      (!explicitGroupRequest && prefersProjectFileDefaultApp(mappedFilePath))
     try {
       const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, {
         ...deps,
-        openWithSystemDefault
+        openWithSystemDefault: useDefaultAppForFile
       })
       if (linkOwner?.kind === 'grant') {
         hostGrant = hostGrantedEditorFields(linkOwner)
@@ -207,7 +211,7 @@ export function openDetectedFilePath(
         : null
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
-      : openWithSystemDefault
+      : useDefaultAppForFile
     // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
     if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
@@ -239,7 +243,7 @@ export function openDetectedFilePath(
     }
 
     // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
-    if (openWithSystemDefault && !canOpenWithSystemDefault) {
+    if (useDefaultAppForFile && !canOpenWithSystemDefault) {
       const download = { grant: hostGrant, isCurrent: isCurrentRequest }
       if (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, download)) {
         return
