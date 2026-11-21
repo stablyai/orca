@@ -7,6 +7,7 @@ import { noteQuestionEdge } from '../../db/messages/question-edges'
 import type { MailTaker } from '../../db/messages/mail-taker'
 import { QuestionReconciler } from './question-reconciler'
 import type { QuestionPartyReads } from './question-party-facts'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const BOT = '22222222-2222-4222-8222-222222222222'
 const MAILBOX = `orca_session_id:${BOT}`
@@ -35,6 +36,7 @@ describe('telling an agent question asker its taker stopped', () => {
     running = false
     handingOver = false
     reads.chatRunning = async () => running
+    reads.chatReceiving = (mailbox) => (mailbox === MAILBOX ? BOT : null)
     reconciler = new QuestionReconciler(db, {
       reads,
       notices: async () => (notice) => {
@@ -187,6 +189,31 @@ describe('telling an agent question asker its taker stopped', () => {
     expect(told).toEqual([])
     reads.chatRunning = async () => false
     reconciler.chatObserved(BOT, false)
+    await settle()
+    expect(told).toEqual([id])
+  })
+
+  it('tells the coordinator a Run held once that Run is unbound from it', async () => {
+    const run = db.createRun({
+      objective: 'o',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: testOrcaSessionId(BOT)
+    })
+    let bound = true
+    reads.chatReceiving = (mailbox) =>
+      mailbox === MAILBOX || (bound && mailbox === `run:${run.id}`) ? BOT : null
+    const id = ask('a')
+    db.markAsRead([id], TAKER)
+    // A report waits in the Run's mail: it would wake the coordinator.
+    db.insertMessage({ from: 'term_w', to: `run:${run.id}`, subject: 'done', runId: run.id })
+    await settle()
+    expect(told).toEqual([])
+    bound = false
+    db.unbindOtherRunsForCoordinator(
+      { terminalHandle: null, paneKey: null, orcaSessionId: testOrcaSessionId(BOT) },
+      'run_other'
+    )
     await settle()
     expect(told).toEqual([id])
   })
