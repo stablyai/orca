@@ -1,4 +1,4 @@
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -15,12 +15,12 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { isSamePath, readGitDirState, type GitDirState } from './git-dir-branch-state'
 import {
-  isSamePath,
-  readGitDirState,
-  readLinkedCheckoutDir,
-  resolveBranchCheckouts
-} from './git-dir-branch-state'
+  readOwnerCheckoutPath,
+  resolveBranchCheckouts,
+  sameHeads
+} from './branch-checkout-resolution'
 import {
   translateWslOutputPath,
   translateWslOutputPaths
@@ -204,33 +204,35 @@ function localBaseBranchGit(
     bareRepos.set(commonDir.path, known)
     return known
   }
+  // Each git dir's HEAD when the inspection found the branch free, per common dir and branch.
+  const freeSnapshots = new Map<string, GitDirState['heads']>()
   const bareDirOf = async (repoPath: string, commonDir: { raw: string; path: string }) =>
     (await isBareRepo(repoPath, commonDir)) ? commonDir.path : undefined
-  const ownerPathOf = async (repoPath: string, gitDir: string, commonDir: string) => {
-    if (gitDir !== commonDir) {
-      return readLinkedCheckoutDir(gitDir, (path) =>
-        translateWslOutputPath(path, repoPath, routed(repoPath))
-      )
-    }
-    if (await isSamePath(join(repoPath, '.git'), commonDir)) {
-      return repoPath
-    }
-    // From a linked repo path: the primary checkout holds the common dir as its `.git`.
-    return basename(commonDir) === '.git' ? dirname(commonDir) : undefined
-  }
+  const ownerPathOf = (repoPath: string, gitDir: string, commonDir: string) =>
+    readOwnerCheckoutPath(repoPath, gitDir, commonDir, (path) =>
+      translateWslOutputPath(path, repoPath, routed(repoPath))
+    )
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     // HEAD files answer the common cases; listing every worktree costs seconds at thousands of them.
-    readBranchUse: async (repoPath, fullRef) => {
+    readBranchUse: async (repoPath, fullRef, occupancyOnly = false) => {
       const commonDir = await commonDirOf(repoPath)
       const state = await readGitDirState(commonDir.path, fullRef)
       if (state.reserved.has(fullRef)) {
         return { reserved: true }
       }
-      const bareDir = await bareDirOf(repoPath, commonDir)
-      const use = await resolveBranchCheckouts(state, commonDir.path, fullRef, bareDir)
+      const bareCommonDir = await bareDirOf(repoPath, commonDir)
+      const use = await resolveBranchCheckouts(state, commonDir.path, fullRef, {
+        bareCommonDir,
+        firstOwnerSettles: occupancyOnly
+      })
       if (use.kind === 'free') {
+        freeSnapshots.set(`${commonDir.path}\0${fullRef}`, state.heads)
         return { reserved: false }
+      }
+      // Skipping callers never read the path.
+      if (occupancyOnly && use.kind === 'owned') {
+        return { reserved: false, ownerPath: repoPath }
       }
       const [onlyOwner, ...others] = use.kind === 'owned' ? use.gitDirs : []
       const ownerPath =
@@ -252,7 +254,8 @@ function localBaseBranchGit(
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
       // Resolve before admission: the recheck below must not run Git while it holds the slot.
-      const bareDir = await bareDirOf(repoPath, commonDir)
+      const bareCommonDir = await bareDirOf(repoPath, commonDir)
+      const freeHeads = freeSnapshots.get(`${commonDir.path}\0${fullRef}`)
       let inUse = false
       try {
         await gitExecFileAsync(args, {
@@ -260,10 +263,12 @@ function localBaseBranchGit(
           // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
             const state = await readGitDirState(commonDir.path, fullRef)
+            // HEADs unchanged since the inspection found it free: skip re-resolving aliases while holding the slot.
             inUse =
               state.reserved.has(fullRef) ||
-              (await resolveBranchCheckouts(state, commonDir.path, fullRef, bareDir)).kind !==
-                'free'
+              (!(freeHeads && sameHeads(freeHeads, state.heads)) &&
+                (await resolveBranchCheckouts(state, commonDir.path, fullRef, { bareCommonDir }))
+                  .kind !== 'free')
             return !inUse
           }
         })

@@ -4,13 +4,13 @@ import { parseGitRevListAheadBehindCounts } from '../../git/refs/git-rev-list-ou
 import { isShowRefNoMatchError } from '../../git/refs/git-show-ref-no-match'
 import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 
-type LocalBaseBranchUse = { reserved: boolean; ownerPath?: string; sharedCheckout?: true }
+type BranchUse = { reserved: boolean; ownerPath?: string; sharedCheckout?: true }
 
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
-  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when more than one does. */
-  readBranchUse: (repoPath: string, fullRef: string) => Promise<LocalBaseBranchUse>
+  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when more than one does. `occupancyOnly` callers only need to know it is checked out. */
+  readBranchUse: (repo: string, ref: string, occupancyOnly?: boolean) => Promise<BranchUse>
   /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
   updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>
 }
@@ -71,14 +71,13 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
+type InspectOptions = { skipCheckedOut?: boolean; skipShared?: boolean }
+
 /** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` (or `skipShared`, for a branch several checkouts share) stops before walking its history. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs,
-  {
-    skipCheckedOut = false,
-    skipShared = false
-  }: { skipCheckedOut?: boolean; skipShared?: boolean } = {}
+  { skipCheckedOut = false, skipShared = false }: InspectOptions = {}
 ): Promise<LocalBaseBranchInspection> {
   const { repoPath, fullRef, remoteTrackingRef } = refs
   let localOid: string
@@ -96,10 +95,10 @@ export async function inspectLocalBaseBranch(
       : { status: 'skipped_not_fast_forward' }
   }
 
-  let use: LocalBaseBranchUse
+  let use: BranchUse
   try {
     // Git's in-use rule also counts a branch a rebase or bisect has reserved.
-    use = await git.readBranchUse(repoPath, fullRef)
+    use = await git.readBranchUse(repoPath, fullRef, skipCheckedOut)
   } catch {
     return { status: 'skipped_error' }
   }
@@ -176,7 +175,6 @@ export async function fastForwardCheckedOutLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
 ): Promise<void> {
-  // A shared checkout can't move, so skip walking its history.
   const inspection = await inspectLocalBaseBranch(git, refs, { skipShared: true })
   if (inspection.status !== 'behind' || !inspection.ownerWorktreePath) {
     return

@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
+import { readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { dirname, isAbsolute, join } from 'node:path'
 
@@ -73,7 +73,7 @@ export async function readGitDirState(commonDir: string, fullRef: string): Promi
 }
 
 // Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs).
-async function readRefLink(path: string): Promise<string | undefined> {
+export async function readRefLink(path: string): Promise<string | undefined> {
   let target: string
   try {
     target = await readlink(path)
@@ -91,7 +91,7 @@ async function readRefLink(path: string): Promise<string | undefined> {
 const READ_CONCURRENCY = 16
 
 /** Runs at most `READ_CONCURRENCY` at once and starts nothing after a failure. */
-async function forEachBounded<T>(
+export async function forEachBounded<T>(
   items: readonly T[],
   run: (item: T) => Promise<void>
 ): Promise<void> {
@@ -113,15 +113,15 @@ async function forEachBounded<T>(
 }
 
 // Git reads `ref:` followed by any whitespace; spell it one way.
-function normalizeHead(text: string): string {
+export function normalizeHead(text: string): string {
   const trimmed = text.trim()
   const symref = /^ref:\s*(\S+)$/.exec(trimmed)
   return symref ? `ref: ${symref[1]}` : trimmed
 }
 
-const COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+export const COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
-async function readOptional(path: string): Promise<string> {
+export async function readOptional(path: string): Promise<string> {
   try {
     return await readFile(path, 'utf8')
   } catch (error) {
@@ -134,7 +134,7 @@ function errorCode(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
 
-function rethrowUnlessMissing(error: unknown): void {
+export function rethrowUnlessMissing(error: unknown): void {
   const code = errorCode(error)
   if (code !== 'ENOENT' && code !== 'ENOTDIR') {
     throw error
@@ -156,112 +156,6 @@ export async function isSamePath(left: string, right: string): Promise<boolean> 
     const [a, b] = await Promise.all([realpath(left), realpath(right)])
     return normalizeRuntimePathForComparison(a) === normalizeRuntimePathForComparison(b)
   } catch {
-    return false
-  }
-}
-
-export type BranchCheckouts =
-  | { kind: 'free' }
-  /** Git dirs whose HEAD names the branch, directly or through branch symrefs. */
-  | { kind: 'owned'; gitDirs: string[] }
-  /** The files cannot tell (reftable, odd refs or symlinks); only Git's own listing can. */
-  | { kind: 'unknown' }
-
-const MAX_SYMREF_HOPS = 5
-const PER_WORKTREE_REF = /^refs\/(?:worktree|bisect|rewritten)\//
-
-/** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
-export async function resolveBranchCheckouts(
-  { heads }: GitDirState,
-  commonDir: string,
-  fullRef: string,
-  bareCommonDir: string | undefined
-): Promise<BranchCheckouts> {
-  // A case-insensitive file system resolves a loose `Main` to `main`.
-  const foldRef = (await pathExists(join(commonDir, 'head')))
-    ? (ref: string) => ref.toLowerCase()
-    : (ref: string) => ref
-  const target = foldRef(fullRef)
-  const looseRefs = new Map<string, Promise<string>>()
-  // Per-worktree refs (refs/worktree/, refs/bisect/, refs/rewritten/) live in their own git dir.
-  const readLooseRef = (ref: string, gitDir: string) => {
-    const path = join(PER_WORKTREE_REF.test(ref) ? gitDir : commonDir, ref)
-    const known = looseRefs.get(path) ?? readLooseRefFile(path)
-    looseRefs.set(path, known)
-    return known
-  }
-  // update-ref follows a symref, which would move some other branch.
-  if ((await readLooseRef(fullRef, commonDir)).startsWith('ref: ')) {
-    return { kind: 'unknown' }
-  }
-  const owners: string[] = []
-  const branches: [gitDir: string, ref: string][] = []
-  for (const [gitDir, head] of heads) {
-    if (gitDir === bareCommonDir || head === '' || COMMIT_ID.test(head)) {
-      continue
-    }
-    const ref = head.slice('ref: '.length)
-    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/')) {
-      return { kind: 'unknown' }
-    }
-    if (foldRef(ref) === target) {
-      owners.push(gitDir)
-    } else {
-      branches.push([gitDir, ref])
-    }
-  }
-  // Two direct checkouts already settle it: nothing may move.
-  if (owners.length > 1) {
-    return { kind: 'owned', gitDirs: owners }
-  }
-  let unknown = false
-  const resolve = async ([gitDir, start]: [string, string]) => {
-    let ref = start
-    for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown; hop += 1) {
-      // Packed and missing refs are never symrefs.
-      const loose = await readLooseRef(ref, gitDir)
-      if (!loose.startsWith('ref: ')) {
-        return
-      }
-      ref = loose.slice('ref: '.length)
-      if (!ref.startsWith('refs/') || loose === UNRESOLVED_HEAD) {
-        break
-      }
-      if (foldRef(ref) === target) {
-        owners.push(gitDir)
-        return
-      }
-    }
-    unknown = true
-  }
-  await forEachBounded(branches, resolve).catch((error: unknown) => {
-    unknown = true
-    throw error
-  })
-  if (unknown) {
-    return { kind: 'unknown' }
-  }
-  return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
-}
-
-async function readLooseRefFile(path: string): Promise<string> {
-  try {
-    if ((await lstat(path)).isSymbolicLink()) {
-      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
-    }
-  } catch (error) {
-    rethrowUnlessMissing(error)
-    return ''
-  }
-  return normalizeHead(await readOptional(path))
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path)
-    return true
-  } catch (error) {
-    rethrowUnlessMissing(error)
     return false
   }
 }

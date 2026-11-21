@@ -353,6 +353,22 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
   })
 
+  it('still moves main past an unborn branch named like a ref directory', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'unborn')
+    git(repoPath, ['branch', 'feature/foo'])
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    await writeFile(
+      join(repoPath, '.git', 'worktrees', 'unborn', 'HEAD'),
+      'ref: refs/heads/feature\n'
+    )
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
+
   it('still moves main past a per-worktree alias of another branch', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     await rm(lockPath, { force: true })
