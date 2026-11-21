@@ -76,11 +76,6 @@ export type WorkerTurnStopReportDeps = {
   coordinatorApprovals?: () => boolean
 }
 
-/** An observed rest proves its turn ran, unless it is a start or mail nobody saw the worker take. */
-export function restProvesTurnRan(reason: WorkerTurnStopReason): boolean {
-  return reason !== 'start-unconfirmed' && reason !== 'mail-held'
-}
-
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
 }

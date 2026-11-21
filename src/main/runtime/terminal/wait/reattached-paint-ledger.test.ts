@@ -130,4 +130,8 @@ it("records Claude only once its own composer painted, for hosts that can't repa
   expect(
     retainedFrameIsProven(entry, { ...current, reattachedSequence: 31 }, { anyRecordedAgent: true })
   ).toBe(false)
+  // An agent not identified yet: the same process with no output since is still its frame.
+  expect(
+    retainedFrameIsProven(entry, { ...current, agent: null }, { anyRecordedAgent: true })
+  ).toBe(true)
 })

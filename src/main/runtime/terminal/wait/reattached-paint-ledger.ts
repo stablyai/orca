@@ -125,7 +125,12 @@ export class ReattachedPaintLedger {
  *  restore reads before any repaint is asked for. */
 export function retainedFrameIsProven(
   entry: ReattachedPaintEntry | null,
-  current: { incarnationId: string | null; reattachedSequence: number | undefined; agent: string },
+  current: {
+    incarnationId: string | null
+    reattachedSequence: number | undefined
+    /** Null when not yet identified: the same process with no output since is still its frame. */
+    agent: string | null
+  },
   options: { anyRecordedAgent?: boolean } = {}
 ): boolean {
   return (
@@ -137,7 +142,7 @@ export function retainedFrameIsProven(
     entry.incarnationId === current.incarnationId &&
     current.reattachedSequence !== undefined &&
     entry.sequence === current.reattachedSequence &&
-    (entry.agent === undefined || entry.agent === current.agent)
+    (entry.agent === undefined || current.agent === null || entry.agent === current.agent)
   )
 }
 

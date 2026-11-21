@@ -159,7 +159,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   /** Whether the quit ledger proves the reattached frame is this agent's own last paint. */
   protected async isRetainedFrameProven(
     ptyId: string,
-    agent: string,
+    agent: string | null,
     options?: { anyRecordedAgent?: boolean }
   ): Promise<boolean> {
     const entry = await reattachedPaintLedger().read(ptyId)
@@ -201,9 +201,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     ptyId: string,
     paint: TerminalCommandPaint
   ): Promise<void> {
-    const agent = this.getPaneTerminalAgent(ptyId)
-    const proven =
-      agent !== null && (await this.isRetainedFrameProven(ptyId, agent, { anyRecordedAgent: true }))
+    const proven = await this.isRetainedFrameProven(ptyId, this.getPaneTerminalAgent(ptyId), {
+      anyRecordedAgent: true
+    })
     if (this.ptysById.get(ptyId)?.commandPaint !== paint || !paint.awaitsPaintNoHostCanRequest()) {
       return
     }

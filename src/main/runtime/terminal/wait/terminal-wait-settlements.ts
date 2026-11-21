@@ -22,7 +22,7 @@ import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-compo
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
-import { observeMailHeldWithoutPaint } from '../../orchestration/workers/turn-stops/held-mail-unconfirmed-prompt'
+import { reportMailHeldWithoutPaint } from '../../orchestration/workers/turn-stops/held-mail-unconfirmed-prompt'
 import type { OrchestrationMailboxTerminal } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 
@@ -158,9 +158,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       const dispatchId = mailbox.startsWith('dispatch:') ? mailbox.slice('dispatch:'.length) : null
       if (dispatchId && !reported.has(dispatchId)) {
         reported.add(dispatchId)
-        // Per process: a hold that outlives another restart without a turn is the same news.
-        const fence = `mail-held:${pty?.incarnationId ?? ptyId}`
-        observeMailHeldWithoutPaint(db, dispatchId, fence, this.workerTurnStopReportDeps)
+        // The process and the output count it reattached at name this hold: a later restart with no
+        // output since is the same hold, one after output (a delivery) is a new one.
+        const holdKey = `mail-held:${pty?.incarnationId ?? ptyId}:${this.reattachedProviderSequenceByPtyId.get(ptyId) ?? ''}`
+        reportMailHeldWithoutPaint(db, dispatchId, holdKey, this.workerTurnStopReportDeps)
       }
     }
   }

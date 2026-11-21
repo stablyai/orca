@@ -52,6 +52,14 @@ describe('terminal command paint after a reattach', () => {
     expect(conpty.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
     expect(conpty.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
 
+    // Output lost while a request is out re-arms it: the answer must not spend the new one.
+    const gap: TerminalCommandPaintRecord = {}
+    awaitReattachedTerminalPaint(gap, 1_000)
+    gap.commandPaint?.beginReattachedRepaintRequest()
+    gap.commandPaint?.noteGap()
+    gap.commandPaint?.settleReattachedRepaintRequest('nudged')
+    expect(gap.commandPaint?.beginReattachedRepaintRequest()).toBe(true)
+
     const painted: TerminalCommandPaintRecord = {}
     awaitReattachedTerminalPaint(painted, 1_000)
     observeTerminalCommandPaint(painted, 'ready', 'ready', 2_000)

@@ -34,8 +34,6 @@ export class TerminalCommandPaint {
   // Output lost before this process was proven could hide a boundary, so its retained frame can't be vouched.
   private gapSinceReattach = false
   private repaintOffered = false
-  /** A repaint request whose host has not answered yet. */
-  private repaintPending = false
   /** This reattach's host answered that it cannot ask the program to redraw. */
   private repaintUnavailable = false
   /** The quit ledger did not prove the retained frame, so nothing but a paint lifts this fence. */
@@ -224,21 +222,18 @@ export class TerminalCommandPaint {
     }
   }
 
-  /** True once per reattach while nothing has painted: the one repaint request it allows. Spent
-   *  only once a host asks the program (`settleReattachedRepaintRequest`), so a request no host sent
-   *  is made again. */
+  /** True once per reattach while nothing has painted: the one repaint request it allows. One the
+   *  host did not send (`not-sent`, a phone drives the grid) is due again. */
   beginReattachedRepaintRequest(): boolean {
-    const begin = this.repaintRequestable && !this.repaintPending && !this.repaintUnavailable
-    this.repaintPending ||= begin
+    const begin = this.repaintRequestable && !this.repaintUnavailable
+    this.repaintRequestable = false
     return begin
   }
 
   settleReattachedRepaintRequest(result: RuntimeRepaintResult): void {
-    this.repaintPending = false
-    if (result !== 'not-sent') {
-      this.repaintRequestable = false
-      this.repaintUnavailable ||= result === 'unavailable'
-    }
+    // Nobody was asked: due again while the fence still waits for this command's paint.
+    this.repaintRequestable ||= result === 'not-sent' && this.awaitingPaint && !this.startSeen
+    this.repaintUnavailable ||= result === 'unavailable'
   }
 
   /** The reattach fence still waits for a paint its host cannot ask for. */
