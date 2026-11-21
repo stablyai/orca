@@ -10,10 +10,10 @@ import {
 import { nextCadenceInspectionDelayMs } from './agent-completion-poll-interval'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../../shared/process-observation/tables/process-table-snapshot'
 
-/** Inconclusive reads (children, a discarded read) retry this many times per event, then wait for the next event. */
+/** With no tracked agent, inconclusive reads retry this many times per event, then wait for the next event. */
 const MAX_UNRESOLVED_FOLLOW_UPS = 3
 
-/** 'error' retries with backoff until a read succeeds; 'unresolved' is capped per event. */
+/** 'error' retries with backoff until a read succeeds; 'unresolved' is capped per event unless an agent is tracked. */
 export type CadenceFollowUp = 'pending' | 'unresolved' | 'error'
 
 /** Reads are event-driven: output, input echo, title, hook or a new PTY bind arm one trailing read. A
@@ -87,20 +87,34 @@ export function createAgentCompletionPollScheduler(args: {
     return 'idle'
   }
 
+  function isEventTier(tier: PollCadenceTier): boolean {
+    return tier === 'active' || tier === 'idle' || tier === 'hidden'
+  }
+
+  /** Throttle at the tier interval, waiting at most one snapshot TTL more so the read postdates the latest output. */
+  function eventReadAt(tier: PollCadenceTier, dueSince: number): number {
+    const throttleAt = dueSince + POLL_TIER_INTERVAL_MS[tier]
+    const lastActivity = state.lastPaneActivityAt
+    if (lastActivity === null) {
+      return throttleAt
+    }
+    const freshAt = Math.min(
+      lastActivity + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
+      throttleAt + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+    )
+    return Math.max(throttleAt, freshAt)
+  }
+
   function onPollTimer(tier: PollCadenceTier): void {
     state.pollTimer = null
     state.pollTimerTier = null
-    const now = Date.now()
     const dueSince = state.readDueSince
-    const settleMs = POLL_TIER_INTERVAL_MS[tier]
-    // Throttle at the tier interval, waiting at most one snapshot TTL more so the read postdates the latest output.
-    if (dueSince !== null && state.lastPaneActivityAt !== null) {
-      const throttleAt = dueSince + settleMs
-      const freshAt = Math.min(
-        state.lastPaneActivityAt + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
-        throttleAt + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
-      )
-      const remaining = Math.max(throttleAt, freshAt) - now
+    if (dueSince === null) {
+      return
+    }
+    // Output after arming can move the read later, at most one snapshot TTL past the throttle.
+    if (state.consecutiveInspectionErrors === 0 && isEventTier(tier)) {
+      const remaining = eventReadAt(tier, dueSince) - Date.now()
       if (remaining > 0) {
         armPollTimer(tier, remaining)
         return
@@ -114,11 +128,34 @@ export function createAgentCompletionPollScheduler(args: {
     state.pollTimer = setTimeout(() => onPollTimer(tier), delayMs)
   }
 
+  function nextReadDelayMs(tier: PollCadenceTier, dueSince: number, now: number): number {
+    const base = POLL_TIER_INTERVAL_MS[tier]
+    if (state.consecutiveInspectionErrors > 0) {
+      return nextCadenceInspectionDelayMs({
+        baseMs: Math.min(Math.max(10_000, base), base * 2 ** state.consecutiveInspectionErrors),
+        hasConsecutiveErrors: true,
+        alignToSharedGrid: false,
+        now
+      })
+    }
+    if (isEventTier(tier)) {
+      return Math.max(0, eventReadAt(tier, dueSince) - now)
+    }
+    // Slow follow-ups on quiet panes share one host capture tick.
+    return nextCadenceInspectionDelayMs({
+      baseMs: base,
+      hasConsecutiveErrors: false,
+      alignToSharedGrid: true,
+      now
+    })
+  }
+
   function scheduleNextPoll(): void {
     if (state.disposed || !state.pollTrackingStarted || !options.isLive() || pendingTitle.get()) {
       return
     }
-    if (state.readDueSince === null) {
+    const dueSince = state.readDueSince
+    if (dueSince === null) {
       return
     }
     const tier = currentPollTier()
@@ -135,24 +172,7 @@ export function createAgentCompletionPollScheduler(args: {
     if (!shouldRunCadenceInspection() || !options.getPtyId()) {
       return
     }
-    const base = POLL_TIER_INTERVAL_MS[tier]
-    const backoff =
-      state.consecutiveInspectionErrors > 0
-        ? Math.min(Math.max(10_000, base), base * 2 ** state.consecutiveInspectionErrors)
-        : base
-    const now = Date.now()
-    // Align only genuinely idle panes; agent activity retains the exact interval and phase.
-    const isIdlePane =
-      tier === 'quiet-agent' || (state.lastForegroundAgent === null && isPaneQuiet(now))
-    armPollTimer(
-      tier,
-      nextCadenceInspectionDelayMs({
-        baseMs: backoff,
-        hasConsecutiveErrors: state.consecutiveInspectionErrors > 0,
-        alignToSharedGrid: isIdlePane,
-        now
-      })
-    )
+    armPollTimer(tier, nextReadDelayMs(tier, dueSince, Date.now()))
   }
 
   /** Something that can change the foreground happened; read once after it settles. */
@@ -162,9 +182,10 @@ export function createAgentCompletionPollScheduler(args: {
     scheduleNextPoll()
   }
 
-  /** A read left a bounded question open: an exit to confirm, a hook done in flight, a failed or inconclusive read. */
+  /** A read left a question open: an exit to confirm, a hook done in flight, a failed or inconclusive read. */
   function requestFollowUp(kind: CadenceFollowUp): void {
-    if (kind === 'unresolved') {
+    // A tracked agent's open question persists until a read settles it; the quiet tier paces it.
+    if (kind === 'unresolved' && !(state.lastForegroundAgent && state.hasAgentRunEvidence)) {
       if (state.unresolvedFollowUps >= MAX_UNRESOLVED_FOLLOW_UPS) {
         return
       }

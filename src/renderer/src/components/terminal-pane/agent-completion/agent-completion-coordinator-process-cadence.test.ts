@@ -71,6 +71,63 @@ describe('agent completion coordinator', () => {
     }
   })
 
+  it('confirms an exit once a background child outlives the redraw and then ends silently', async () => {
+    let result = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    result = processResult('zsh', true)
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    result = processResult('zsh', false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    coordinator.dispose()
+  })
+
+  it('keeps reading while a cached agent name contradicts the host child census', async () => {
+    let result: RuntimeTerminalProcessInspection = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    // The agent exits; the prompt redraw's read still names it from a cache.
+    result = {
+      foregroundProcess: 'codex',
+      hasChildProcesses: false,
+      childProcessEvidence: 'no-children'
+    }
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    result = {
+      foregroundProcess: 'pwsh.exe',
+      hasChildProcesses: false,
+      childProcessEvidence: 'no-children'
+    }
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    coordinator.dispose()
+  })
+
   it('does not dispatch process-exit while an agent terminal still has child processes', async () => {
     let result = processResult('codex')
     const dispatchCompletion = vi.fn()

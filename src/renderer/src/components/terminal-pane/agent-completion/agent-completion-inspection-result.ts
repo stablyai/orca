@@ -143,7 +143,13 @@ export function handleAgentCompletionInspectionResult(args: {
   state.consecutiveInspectionErrors = 0
   const recognized = recognizeAgentProcess(result.foregroundProcess)
   if (recognized) {
+    const wasTracked =
+      state.lastForegroundAgent?.agent === recognized.agent && state.hasAgentRunEvidence
     handleRecognizedProcess(recognized)
+    // A cached name the host's own child census contradicts may outlive the agent; read until they agree.
+    if (wasTracked && result.childProcessEvidence === 'no-children') {
+      requestFollowUp('unresolved')
+    }
     return true
   }
   if (hasPendingHookDone()) {
@@ -153,7 +159,7 @@ export function handleAgentCompletionInspectionResult(args: {
   if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
     if (result.hasChildProcesses) {
       state.pendingProcessExit = null
-      // A foreground child ends with output (the agent resumes or the prompt redraws), so retry only briefly.
+      // A background child can outlive the agent silently, so keep reading until it settles.
       requestFollowUp('unresolved')
       return false
     }
