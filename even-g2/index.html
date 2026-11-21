@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orca</title>
+  </head>
+  <body>
+    <!--
+      Phone-side shell (Even App WebView / plain browser). The G2 HUD itself renders to
+      firmware containers via GlassesBridge, not this DOM — this page is only the
+      pairing/settings surface a human touches on their phone (spec S6).
+    -->
+    <div id="app">
+      <!-- Unit 7 mounts the pairing/settings page here via createPhoneSettingsPage(...).mount(el) -->
+      <div id="phone-settings-root"></div>
+    </div>
+    <!-- Unit 8 mounts app shell: bridge detect -> connect -> first render -> phone page wiring. -->
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
