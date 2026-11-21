@@ -9,6 +9,9 @@ const BASELINE_PATH = 'config/unjustified-lint-disable-baseline.txt'
 const SCAN_PATHSPECS = ['src/*.ts', 'src/*.tsx', 'src/*.mts', 'src/*.cts']
 const DISABLE_DIRECTIVE = /(?:eslint|oxlint)-disable(?:-next-line|-line)?\b([^\n]*)/g
 
+// Cheap pre-filter: most files never mention a directive, so skip the parse.
+const DIRECTIVE_WORD = /(?:eslint|oxlint)-disable/
+
 export function isScannedPath(rel) {
   return !/\.(?:test|spec)\.[cm]?tsx?$/.test(rel)
 }
@@ -45,6 +48,9 @@ function commentTexts(sourceText) {
 
 // A directive is justified when ` -- <reason>` follows the rule list.
 export function countUnjustifiedDisables(sourceText) {
+  if (!DIRECTIVE_WORD.test(sourceText)) {
+    return 0
+  }
   let count = 0
   for (const comment of commentTexts(sourceText)) {
     for (const [, rest] of comment.matchAll(DISABLE_DIRECTIVE)) {
