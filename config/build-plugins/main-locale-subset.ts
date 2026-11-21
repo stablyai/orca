@@ -8,6 +8,10 @@ const LOCALES_DIR = resolve('src/renderer/src/i18n/locales')
 const KEY_SOURCE_ROOTS = ['src/main', 'src/shared']
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const PLURAL_SUFFIX_RE = /_(?:zero|one|two|few|many|other)$/
+// Why a separate module: every locales/*.json import in this bundle is cut down to keys
+// main names. Language-pack coverage has to see the whole English catalog.
+const FULL_ENGLISH_CATALOG_ID = '\0orca-full-english-catalog'
+const FULL_ENGLISH_CATALOG_SUFFIX = 'locales/en.json?full'
 
 type KeyEvidence = { literals: Set<string>; dynamicPrefixes: Set<string> }
 type Catalog = { [key: string]: string | Catalog }
@@ -20,7 +24,14 @@ function scriptUrl(name: string): string {
   return pathToFileURL(resolve('config/scripts', name)).href
 }
 
+function isFullEnglishCatalog(id: string): boolean {
+  return id === FULL_ENGLISH_CATALOG_ID || id.endsWith(FULL_ENGLISH_CATALOG_SUFFIX)
+}
+
 function isLocaleCatalog(id: string): boolean {
+  if (isFullEnglishCatalog(id)) {
+    return false
+  }
   const relativePath = relative(LOCALES_DIR, id)
   return !relativePath.startsWith('..') && !relativePath.includes(sep) && id.endsWith('.json')
 }
@@ -89,7 +100,16 @@ export function createMainLocaleSubsetPlugin(): Plugin {
       }
       evidence = stripPluralLiterals(collected)
     },
+    resolveId(source) {
+      if (source.endsWith(FULL_ENGLISH_CATALOG_SUFFIX)) {
+        return FULL_ENGLISH_CATALOG_ID
+      }
+      return null
+    },
     async load(id) {
+      if (isFullEnglishCatalog(id)) {
+        return `export default ${await readFile(join(LOCALES_DIR, 'en.json'), 'utf8')}`
+      }
       if (!evidence || !isLocaleCatalog(id)) {
         return null
       }
