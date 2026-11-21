@@ -15,6 +15,7 @@ import { botGroupOwnerMessageBlocks, type BotGroup } from '../../../src/shared/b
 import { botGroupReplyDraft } from '../../../src/shared/bots/bot-group-mentions'
 import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
 import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
+import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
 import { MobileBotGroupPeerRequestLine } from './MobileBotGroupPeerRequestLine'
 import { groupSend, groupStop, groupUpdate } from './bot-group-operations'
 import { useMobileBotGroupTranscript } from './use-mobile-bot-group-transcript'
@@ -185,7 +186,7 @@ export function MobileBotGroupRoom({
             </Text>
           </Pressable>
         ) : null}
-        {data?.messages.map((message) => (
+        {botGroupRoomOrder(data?.messages ?? []).map((message) => (
           <View key={message.id}>
             {message.author.kind === 'owner' ? (
               <MobileNativeChatMessage

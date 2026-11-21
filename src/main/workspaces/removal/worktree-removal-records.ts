@@ -23,6 +23,8 @@ export type WorktreeRemovalRecord = {
   branch: string
   /** Branch head when the removal was accepted; empty when unknown. */
   head: string
+  /** Admin entry the checkout's `.git` file named when accepted; a leftover naming another is not this checkout. */
+  gitdir?: string
   deleteBranch: boolean
   force: boolean
   requestedAt: number
@@ -92,6 +94,7 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
     ...(value.expectedCheckoutIdentity
       ? { expectedCheckoutIdentity: parseWorktreeCheckoutIdentity(value.expectedCheckoutIdentity)! }
       : {}),
+    ...(typeof value.gitdir === 'string' && value.gitdir ? { gitdir: value.gitdir } : {}),
     ...(failure ? { failure } : {})
   }
 }

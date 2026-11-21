@@ -54,6 +54,7 @@ it('posts a typed answer held for one line with the next answer that carries an 
 
   expect(send).toHaveBeenCalledExactlyOnceWith(
     'Fix Datadog with a site picker? → what do other products do\nVercel: test it or hide it? → [Image #1] vercel sign in works',
-    ['/shot.png']
+    ['/shot.png'],
+    'e1'
   )
 })

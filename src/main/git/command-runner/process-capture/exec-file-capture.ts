@@ -10,10 +10,14 @@ import { createAbortError } from './abort-error'
 import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 
-import { observeCapturedStderr, spawnedExecFile, workerExecFile } from './worker-exec-file'
+import {
+  capturesOnWorker,
+  observeCapturedStderr,
+  spawnedExecFile,
+  workerExecFile
+} from './worker-exec-file'
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
 import {
-  canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
   isWorkerChildStdinWriteError,
   type WorkerThreadChildProcess
@@ -42,18 +46,9 @@ export function execFileCapture(
     let child: ChildProcess | WorkerThreadChildProcess | null = null
     let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
     const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
-    // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
-    const useWorker =
-      process.platform === 'win32'
-        ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
-        : options.spawnOnWorkerThread === true
-    const callerOwnsDeadline = useWorker && process.platform === 'win32'
-    // Only the worker checks the checkout's identity right before Git starts; without it, keep it.
-    if (options.worktreeCheckoutGuard && !useWorker) {
-      options.onChildTerminated?.()
-      reject(new WorktreeRemovalIdentityUnverifiableError())
-      return
-    }
+    let useWorker = false
+    // A busy Windows spawn worker must not hold the caller's deadline; decided once the launch picks its host.
+    const callerOwnsDeadline = (): boolean => useWorker && process.platform === 'win32'
     const deadline =
       options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
@@ -95,7 +90,7 @@ export function execFileCapture(
         return
       }
       if (terminating) {
-        if (settleBeforeCleanup && callerOwnsDeadline) {
+        if (settleBeforeCleanup && callerOwnsDeadline()) {
           finish(error)
         }
         return
@@ -107,12 +102,14 @@ export function execFileCapture(
         return
       }
       if (ownedPosixGroup) {
+        const output = isExecFileResultObject(error) ? error : readCapture?.()
         if ('stopOwnedGroup' in child) {
           child.stopOwnedGroup()
+          // The caller settles now; output during group cleanup stays on the worker.
+          child.discardOutput()
         } else {
           void groupTermination?.stop()
         }
-        const output = isExecFileResultObject(error) ? error : readCapture?.()
         finish(error, output?.stdout, output?.stderr)
         return
       }
@@ -121,14 +118,14 @@ export function execFileCapture(
         finish(error)
       })
       // A busy spawn worker must not hold the caller's deadline; close still owns termination proof.
-      if (settleBeforeCleanup && callerOwnsDeadline) {
+      if (settleBeforeCleanup && callerOwnsDeadline()) {
         finish(error)
       }
     }
 
     const onAbort = (): void => stop(createAbortError(), true)
     const onDeadline = (): void => {
-      if (!settled && (!terminating || callerOwnsDeadline)) {
+      if (!settled && (!terminating || callerOwnsDeadline())) {
         options.onDeadlineKill?.()
         stop(options.createTimeoutError?.() ?? new Error(`${command} timed out.`), true)
       }
@@ -144,7 +141,14 @@ export function execFileCapture(
 
     const launch = async (): Promise<void> => {
       try {
+        useWorker = await capturesOnWorker(command, options)
         if (settled) {
+          return
+        }
+        // Only the worker checks the checkout's identity right before Git starts; without it, keep it.
+        if (options.worktreeCheckoutGuard && !useWorker) {
+          reportChildTerminated()
+          finish(new WorktreeRemovalIdentityUnverifiableError())
           return
         }
         const spawnStartedAt = performance.now()
@@ -217,11 +221,14 @@ export function execFileCapture(
             finish(createAbortError())
             return
           }
-          // execFile's error text; overflow ends the whole tree, or a hook holding the pipe blocks close.
-          const workerOptions =
-            process.platform === 'win32'
-              ? { ...captureOptions, errorCommand: [command, ...args].join(' '), onOverflow: stop }
-              : captureOptions
+          // Main's error text per platform; a Windows overflow ends the whole tree, or a hook holding the pipe blocks close.
+          const workerOptions = {
+            ...captureOptions,
+            ...(process.platform !== 'darwin'
+              ? { errorCommand: [command, ...args].join(' ') }
+              : {}),
+            ...(process.platform === 'win32' ? { onOverflow: stop } : {})
+          }
           child = useWorker
             ? workerExecFile(
                 command,
@@ -256,12 +263,13 @@ export function execFileCapture(
         }
         if (!useWorker && !child?.pid) {
           reportChildTerminated()
-        } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
+        } else if (child && isAbandonedWorkerChildError(error)) {
           endAbandonedWorkerChild(
             child,
             options.onWorkerLost,
             reportChildTerminated,
-            options.workerLossEndsLifetime === true || !options.onChildTerminated
+            options.workerLossEndsLifetime === true || !options.onChildTerminated,
+            ownedPosixGroup
           )
         }
         if (!terminating) {

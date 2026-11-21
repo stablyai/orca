@@ -116,6 +116,8 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
+    // Inside the slot: a checkout swapped in while this request queued must still be refused.
+    await options.beforeCheckoutDelete?.()
     options.checkoutDeleteGuard?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       // Its last Git step needs the worker's identity check: without a worker, delete nothing.

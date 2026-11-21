@@ -4,6 +4,7 @@ export {
   type RuntimeLocalWorktreeRemovalFinishArgs
 } from './runtime-local-worktree-removal-finish'
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
+import { readCheckoutMarkerIdentity } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   authorizeWindowsCheckout,
@@ -227,6 +228,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(
         repoId: repo.id,
         repoPath: repo.path,
         worktree: refreshed,
+        gitdir: await readCheckoutMarkerIdentity(refreshed.path),
         deleteBranch: args.deleteBranch,
         force: args.force,
         ...(args.expectation

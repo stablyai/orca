@@ -57,6 +57,8 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   checkoutDeleteGuard?: () => void
   checkoutDeleteIdentity?: WorktreeCheckoutIdentity
   onCheckoutDeleteStart?: () => void
+  /** Runs inside the acquired deletion slot, immediately before the checkout is deleted. */
+  beforeCheckoutDelete?: () => Promise<void>
 }
 
 // Bound stalled checkouts; this default also sets the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS.

@@ -3,6 +3,7 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
+import { CheckoutIdentityRefusal } from '../../../workspaces/removal/worktree-removal-leftover'
 import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/removal/local-orphaned-worktree-cleanup'
 import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
@@ -32,10 +33,12 @@ export async function finishRuntimeLocalWorktreeRemoval(
   args: RuntimeLocalWorktreeRemovalFinishArgs,
   refreshed: GitWorktreeInfo,
   gate: { finish: (removed: boolean) => Promise<void> },
-  checkoutDeleteSignal?: AbortSignal
+  checkoutDeleteSignal?: AbortSignal,
+  beforeCheckoutDelete?: () => Promise<void>
 ): Promise<RemoveWorktreeResult> {
   const { repo, localOptions } = args
   const canonicalPath = refreshed.path
+  const native = usesNativeWindowsRemoval(canonicalPath, localOptions)
   let removalResult: RemoveWorktreeResult | undefined
   let completed = false
   try {
@@ -46,6 +49,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
           knownRemovedWorktree: refreshed,
           ...localOptions,
           ...(checkoutDeleteSignal ? { checkoutDeleteSignal } : {}),
+          ...(beforeCheckoutDelete ? { beforeCheckoutDelete } : {}),
           ...(args.expectation
             ? {
                 checkoutDeleteIdentity: args.expectation.checkoutIdentity,
@@ -57,10 +61,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         refreshed.head
       )
     } catch (error) {
-      if (args.expectation) {
-        throw error
-      }
-      if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
+      // A refused identity check deleted nothing; recovery must not delete someone else's folder.
+      if (args.expectation || error instanceof CheckoutIdentityRefusal || native) {
         throw error
       }
       const recovered = await recoverPartialLocalWorktreeRemoval({
@@ -72,12 +74,14 @@ export async function finishRuntimeLocalWorktreeRemoval(
         registeredWorktree: refreshed,
         deleteBranch: args.deleteBranch,
         closeWatcher: args.closeWatchers,
-        signal: checkoutDeleteSignal
+        signal: checkoutDeleteSignal,
+        ...(beforeCheckoutDelete ? { beforeLeftoverDelete: beforeCheckoutDelete } : {})
       })
       if (recovered) {
         removalResult = recovered
         completed = true
       } else if (isOrphanedWorktreeError(error)) {
+        await beforeCheckoutDelete?.()
         await cleanupLocalOrphanedWorktreeDirectory(
           repo.path,
           canonicalPath,

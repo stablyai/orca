@@ -30,6 +30,28 @@ export const BOT_AGENTS = [
   'opencode2'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
+/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
+const BOT_AGENTS_OLDER_BUILDS_READ: readonly string[] = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity'
+]
+
+/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
+export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
+  readable: Bot[]
+  newer: Bot[]
+} {
+  return {
+    readable: bots.filter((bot) => BOT_AGENTS_OLDER_BUILDS_READ.includes(bot.agent)),
+    newer: bots.filter((bot) => !BOT_AGENTS_OLDER_BUILDS_READ.includes(bot.agent))
+  }
+}
+
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
 }

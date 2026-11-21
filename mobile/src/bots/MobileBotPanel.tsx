@@ -229,6 +229,7 @@ export function MobileBotPanel(props: {
           client={props.client}
           bot={bot}
           rows={props.routeBot.activity.automations ?? null}
+          waits={props.routeBot.activity.waits}
           showToast={showToast}
           onNewAutomation={props.onNewAutomation}
           online={props.online}
@@ -354,6 +355,7 @@ export function MobileBotPanel(props: {
             online={props.online}
             hostName={props.hostName}
             accessRequests={props.accessRequests}
+            onAskInChat={props.onStartSuggestion}
             lookAround={
               lookAroundSupported(bot.agent)
                 ? { onLookNow: upNext.lookNow, busy: upNext.busy }
