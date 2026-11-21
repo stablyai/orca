@@ -51,8 +51,15 @@ function onCatalog(): void {
   }
 }
 
+// Rows read nothing while the window is hidden, so showing or hiding reaches each of them once.
+let wasHidden = false
 const onVisibility = (): void => {
-  if (!hidden()) {
+  const now = hidden()
+  if (now !== wasHidden) {
+    wasHidden = now
+    hostListeners.forEach((listeners) => listeners.forEach((listener) => listener()))
+  }
+  if (!now) {
     onCatalog()
   }
 }
@@ -60,6 +67,7 @@ const onVisibility = (): void => {
 function listen(): () => void {
   currentLive()
   if (!stopCatalog) {
+    wasHidden = hidden()
     const stopBots = subscribeToBotChanges(onCatalog)
     document.addEventListener('visibilitychange', onVisibility)
     // After display wake the window can stay wrongly `hidden`; input proving it shown catches up too.
@@ -106,16 +114,22 @@ export function isBotHostLive(hostId: ExecutionHostId): boolean {
   return currentLive().has(hostId)
 }
 
+/** Live, and the window shown: a row's picture can be read now. */
+function isBotHostReadable(hostId: ExecutionHostId): boolean {
+  return !hidden() && isBotHostLive(hostId)
+}
+
 const subscribeToNothing = (): (() => void) => () => {}
 const alwaysLive = (): boolean => true
 
-/** Whether the host can be called now, heard only when that host changes; true when not `enabled`. */
+/** Whether a row on the host can read now (the host live and the window shown), heard only when that
+ *  host or the window changes; true when not `enabled`. */
 export function useBotHostLive(hostId: ExecutionHostId, enabled: boolean): boolean {
   const subscribe = useCallback(
     (listener: () => void) => subscribeToHostLive(hostId, listener),
     [hostId]
   )
-  const read = useCallback(() => isBotHostLive(hostId), [hostId])
+  const read = useCallback(() => isBotHostReadable(hostId), [hostId])
   return useSyncExternalStore(
     enabled ? subscribe : subscribeToNothing,
     enabled ? read : alwaysLive,

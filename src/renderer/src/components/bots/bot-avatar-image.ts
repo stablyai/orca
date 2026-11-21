@@ -13,7 +13,7 @@ type Upload = {
   read?: string | null
   /** Faces waiting on the read in flight; each leaves as it unmounts. `failed`: the read failed. */
   waiting: Set<(src: string | null, failed: boolean) => void>
-  /** The long groups whose rows asked for this read: a failure is noted there even after the rows
+  /** The groups whose row faces asked for this read: a failure is noted there even after the rows
    *  scrolled away, so the next row scrolled in doesn't read it again. Let go as the read settles. */
   noted: Set<BotAvatarFailures>
 }
@@ -32,7 +32,8 @@ export type BotAvatarRead = {
 
 /** A group's failures leaving (it folded or closed): pending reads stop holding them. */
 export function forgetBotAvatarFailures(failures: BotAvatarFailures): void {
-  pending.forEach((upload) => upload.noted.delete(failures))
+  pendingByFailures.get(failures)?.forEach((upload) => upload.noted.delete(failures))
+  pendingByFailures.delete(failures)
 }
 
 function noteFailure(failures: BotAvatarFailures, bot: BotRef, key: string, version: string): void {
@@ -50,8 +51,8 @@ function noteFailure(failures: BotAvatarFailures, bot: BotRef, key: string, vers
 // kept, so a face drawn again (a row scrolled back into view) shows it at once; a failed read is
 // dropped, so the next face reads again.
 const uploads = new Map<string, Upload>()
-// The reads in flight, which a group leaving lets its failures go from.
-const pending = new Set<Upload>()
+// Each group's reads in flight, which it lets go of as it leaves.
+const pendingByFailures = new WeakMap<BotAvatarFailures, Set<Upload>>()
 
 function uploadOf(key: string, version: string): Upload | undefined {
   const cached = uploads.get(key)
@@ -61,7 +62,6 @@ function uploadOf(key: string, version: string): Upload | undefined {
 function startUpload(bot: BotRef, key: string, version: string): Upload {
   const started: Upload = { version, waiting: new Set(), noted: new Set() }
   uploads.set(key, started)
-  pending.add(started)
   void readBotAvatarPng(bot).then(
     (png) => {
       started.read = png ? `data:image/png;base64,${png}` : null
@@ -70,8 +70,8 @@ function startUpload(bot: BotRef, key: string, version: string): Upload {
           failures.delete(key)
         }
       })
+      started.noted.forEach((failures) => pendingByFailures.get(failures)?.delete(started))
       started.noted.clear()
-      pending.delete(started)
       settle(started, started.read, false)
     },
     () => {
@@ -82,8 +82,8 @@ function startUpload(bot: BotRef, key: string, version: string): Upload {
       if (readBotHostState(bot.hostId) === 'live') {
         started.noted.forEach((failures) => noteFailure(failures, bot, key, version))
       }
+      started.noted.forEach((failures) => pendingByFailures.get(failures)?.delete(started))
       started.noted.clear()
-      pending.delete(started)
       settle(started, null, true)
     }
   )
@@ -106,9 +106,11 @@ function readUpload(
   const entry = uploadOf(key, version) ?? startUpload(bot, key, version)
   if (failures && entry.read === undefined) {
     entry.noted.add(failures)
+    const reads = pendingByFailures.get(failures) ?? new Set<Upload>()
+    pendingByFailures.set(failures, reads.add(entry))
   }
   if (entry.read !== undefined) {
-    // Already read: given at once, which a face that started from it ignores without a render.
+    // Already read: given at once, which a face mounting from it ignores without a render.
     onRead(entry.read, false)
     return () => {}
   }
