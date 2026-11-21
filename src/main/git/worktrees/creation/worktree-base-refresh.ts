@@ -17,6 +17,7 @@ import {
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {
   countBranchCheckouts,
+  isBranchInUse,
   locateRepoOwnHead,
   parseWorktreePathOfRef,
   readGitDirState,
@@ -189,15 +190,38 @@ function localBaseBranchGit(
       ? translateWslOutputPath(commonDir, repoPath, routed(repoPath))
       : join(repoPath, commonDir)
   }
+  // Once per refresh; the main's config.worktree applies only in the common dir, which safe.bareRepository may refuse.
+  const bareRepos = new Map<string, Promise<boolean>>()
+  const isBareRepo = (repoPath: string, commonDir: string) => {
+    const known =
+      bareRepos.get(commonDir) ??
+      Promise.all([readCoreBare(commonDir), readCoreBare(repoPath)]).then((bare) =>
+        bare.includes(true)
+      )
+    bareRepos.set(commonDir, known)
+    return known
+  }
   const readCoreBare = (cwd: string) =>
     gitExecFileAsync(['config', '--bool', '--get', 'core.bare'], execOptions(cwd)).then(
       ({ stdout }) => stdout.trim() === 'true',
       () => false
     )
-  const listedOwner = async (repoPath: string, fullRef: string): Promise<BranchOwner> => {
-    const worktrees = await listWorktrees(repoPath)
-    const owner = worktrees.find((wt) => wt.branch === fullRef)
-    return { ...(owner ? { ownerPath: owner.path } : {}), bare: worktrees[0]?.isBare === true }
+  const hasListedOwner = async (repoPath: string, fullRef: string) =>
+    (await listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
+  // Git's one checkout for the branch; undefined when Git is too old (before 2.23) to say.
+  const queryGitOwner = async (repoPath: string, fullRef: string, commonDir: string) => {
+    const listed = await gitExecFileAsync(
+      ['for-each-ref', '--format=%(refname)%00%(worktreepath)%00', fullRef],
+      execOptions(repoPath)
+    ).catch(() => undefined)
+    if (!listed) {
+      return undefined
+    }
+    const path = parseWorktreePathOfRef(listed.stdout, fullRef)
+    const ownerPath = isAbsolute(path)
+      ? translateWslOutputPath(path, repoPath, routed(repoPath))
+      : path
+    return { ownerPath, ...(await locateRepoOwnHead(ownerPath, commonDir)) }
   }
   // Git names one checkout per branch: trust it only when HEAD files agree, else the (slow) full listing decides.
   const readBranchOwner = async (
@@ -205,34 +229,18 @@ function localBaseBranchGit(
     fullRef: string,
     commonDir: string,
     heads: GitDirState['heads']
-  ): Promise<BranchOwner> => {
-    const [listed, ...bareConfig] = await Promise.all([
-      gitExecFileAsync(
-        ['for-each-ref', '--format=%(refname)%00%(worktreepath)%00', fullRef],
-        execOptions(repoPath)
-      ).catch(() => undefined),
-      // The main's config.worktree applies only in the common dir; safe.bareRepository may refuse that.
-      readCoreBare(commonDir),
-      readCoreBare(repoPath)
-    ])
-    // Git before 2.23 has no worktreepath.
-    if (!listed || [...heads.values()].includes(UNRESOLVED_HEAD)) {
-      return listedOwner(repoPath, fullRef)
-    }
-    const bare = bareConfig.includes(true)
-    const path = parseWorktreePathOfRef(listed.stdout, fullRef)
-    let ownerPath = isAbsolute(path)
-      ? translateWslOutputPath(path, repoPath, routed(repoPath))
-      : path
-    const { isCommonDir, isRepoItself } = await locateRepoOwnHead(ownerPath, commonDir)
-    if (bare && isRepoItself) {
-      ownerPath = ''
-    }
+  ): Promise<string | undefined> => {
+    const bare = await isBareRepo(repoPath, commonDir)
     const checkouts = countBranchCheckouts(heads, fullRef, bare ? commonDir : undefined)
-    if ((isCommonDir && !bare) || checkouts !== (ownerPath ? 1 : 0)) {
-      return listedOwner(repoPath, fullRef)
+    const git =
+      checkouts > 1 || [...heads.values()].includes(UNRESOLVED_HEAD)
+        ? undefined
+        : await queryGitOwner(repoPath, fullRef, commonDir)
+    const ownerPath = git && !(bare && git.isRepoItself) ? git.ownerPath : ''
+    if (!git || (git.isCommonDir && !bare) || checkouts !== (ownerPath ? 1 : 0)) {
+      return (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)?.path
     }
-    return { ...(ownerPath ? { ownerPath } : {}), bare }
+    return ownerPath || undefined
   }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
@@ -242,14 +250,17 @@ function localBaseBranchGit(
       if (reserved.has(fullRef)) {
         return { reserved: true }
       }
-      const { ownerPath } = await readBranchOwner(repoPath, fullRef, commonDir, heads)
+      const ownerPath = await readBranchOwner(repoPath, fullRef, commonDir, heads)
       return { reserved: false, ...(ownerPath === undefined ? {} : { ownerPath }) }
     },
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
-      const { heads } = await readGitDirState(commonDir)
-      const { ownerPath, bare } = await readBranchOwner(repoPath, fullRef, commonDir, heads)
-      if (ownerPath !== undefined) {
+      const bare = await isBareRepo(repoPath, commonDir)
+      // Any checkout Git reports blocks the write; the admitted file recheck below covers the rest.
+      const git = await queryGitOwner(repoPath, fullRef, commonDir)
+      if (
+        git ? git.ownerPath && !(bare && git.isRepoItself) : await hasListedOwner(repoPath, fullRef)
+      ) {
         return false
       }
       let inUse = false
@@ -258,15 +269,11 @@ function localBaseBranchGit(
           ...execOptions(repoPath),
           // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
-            const { heads, reserved } = await readGitDirState(commonDir)
-            inUse =
-              reserved.has(fullRef) ||
-              [...heads].some(
-                ([gitDir, head]) =>
-                  !(bare && gitDir === commonDir) &&
-                  // Fail closed on a HEAD the files cannot resolve (reftable, odd symlinks).
-                  (head === `ref: ${fullRef}` || head === UNRESOLVED_HEAD)
-              )
+            inUse = isBranchInUse(
+              await readGitDirState(commonDir),
+              fullRef,
+              bare ? commonDir : undefined
+            )
             return !inUse
           }
         })
@@ -279,13 +286,6 @@ function localBaseBranchGit(
       return true
     }
   }
-}
-
-type BranchOwner = {
-  /** The checkout that has the branch, as this host reports it. */
-  ownerPath?: string
-  /** The common dir is a bare repo, so its own HEAD checks nothing out. */
-  bare: boolean
 }
 
 function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {

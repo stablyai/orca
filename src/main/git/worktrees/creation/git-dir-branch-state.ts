@@ -60,6 +60,10 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
 async function readHead(gitDir: string): Promise<string> {
   const path = join(gitDir, 'HEAD')
   const content = (await readOptional(path)).trim()
+  // Only a HEAD without a `ref:` line can be a symlink that names a branch.
+  if (content.startsWith('ref: ')) {
+    return content
+  }
   let target: string
   try {
     target = await readlink(path)
@@ -70,9 +74,6 @@ async function readHead(gitDir: string): Promise<string> {
     }
     rethrowUnlessMissing(error)
     return ''
-  }
-  if (content.startsWith('ref: ')) {
-    return content
   }
   return target.startsWith('refs/') ? `ref: ${target}` : UNRESOLVED_HEAD
 }
@@ -144,4 +145,19 @@ export function parseWorktreePathOfRef(stdout: string, fullRef: string): string 
   }
   const from = at + fullRef.length + 2
   return text.slice(from, text.indexOf('\0', from))
+}
+
+/** Git's in-use rule from files: a rebase/bisect reservation or a HEAD naming the branch; fails closed on a HEAD the files cannot resolve. */
+export function isBranchInUse(
+  { heads, reserved }: GitDirState,
+  fullRef: string,
+  bareCommonDir: string | undefined
+): boolean {
+  return (
+    reserved.has(fullRef) ||
+    [...heads].some(
+      ([gitDir, head]) =>
+        gitDir !== bareCommonDir && (head === `ref: ${fullRef}` || head === UNRESOLVED_HEAD)
+    )
+  )
 }
