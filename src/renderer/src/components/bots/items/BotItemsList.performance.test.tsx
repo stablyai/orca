@@ -81,15 +81,20 @@ function hostAnswer(
     const item = items[changed.number - 1]!
     items[changed.number - 1] = { ...item, title: changed.title, lastActivityAt: NOW }
   }
+  // The host lists newest activity first, so the changed item moves to the top of the answer.
+  items.sort((a, b) => b.lastActivityAt - a.lastActivityAt)
   return JSON.parse(JSON.stringify(items)) as BotItem[]
 }
 
 beforeEach(() => {
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(PANEL_PX)
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
-    new DOMRect(0, 0, 320, ROW_PX)
-  )
+  // The panel's scroller shows 400 px from the top of the list.
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.dataset.testid === 'scroller'
+      ? new DOMRect(0, 0, 320, PANEL_PX)
+      : new DOMRect(0, 0, 320, ROW_PX)
+  })
 })
 
 afterEach(() => {

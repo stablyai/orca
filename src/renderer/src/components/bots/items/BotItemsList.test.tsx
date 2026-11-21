@@ -92,3 +92,28 @@ it('folds Closed by default, and keeps it open with five rows once the owner ope
   expect(closedRows()).toEqual(['1', '2', '3', '4', '5'])
   expect(screen.getByRole('button', { name: 'Show 7 more' })).toBeTruthy()
 })
+
+it('End moves focus to the last shown row of a long group, drawing it first', async () => {
+  const planned = Array.from({ length: 300 }, (_, index) =>
+    makeTestBotItem(index + 1, { status: 'planned', lastActivityAt: NOW - index })
+  )
+  render(
+    <BotItemsList
+      bot={BOT}
+      groups={{ needs_you: [], working: [], planned, snoozed: [], stale: [], closed: [] }}
+      seenEventId="e0"
+      closedTotal={0}
+      onMoreClosed={null}
+      staleDays={null}
+      now={NOW}
+      focusUid="uid-1"
+      onOpen={() => {}}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await waitFor(() => expect(document.activeElement?.getAttribute('title')).toBe('Item 1'))
+  fireEvent.click(screen.getByRole('button', { name: 'Show 295 more' }))
+  expect(document.querySelector('[data-bot-item="300"]')).toBeNull()
+  fireEvent.keyDown(document.activeElement!, { key: 'End' })
+  await waitFor(() => expect(document.activeElement?.getAttribute('title')).toBe('Item 300'))
+})

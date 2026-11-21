@@ -9,8 +9,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null
 }
 
+/** A record's `uid`: one property read, so pairing costs nothing next to the comparison it picks. */
 function uidOf(value: unknown): string | null {
-  return isPlainObject(value) && typeof value.uid === 'string' ? value.uid : null
+  if (typeof value !== 'object' || value === null || !('uid' in value)) {
+    return null
+  }
+  return typeof value.uid === 'string' ? value.uid : null
 }
 
 /** Previous records by `uid`, built only once a record has moved; null when some previous one has none. */
@@ -35,20 +39,17 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
   }
   if (Array.isArray(previous) && Array.isArray(next)) {
     let same = previous.length === next.length
-    // A record with a `uid` pairs with the previous one carrying it, so one that moved keeps its identity.
     let byUid: Map<string, unknown> | null | undefined
     const merged = next.map((item: unknown, index) => {
       const atIndex = index < previous.length ? previous[index] : undefined
-      let kept = atIndex === undefined ? item : reuseEqualJson(atIndex, item)
-      // Changed at this place: a record whose `uid` moved pairs with the previous one carrying it.
-      if (kept !== atIndex) {
-        const uid = uidOf(item)
-        if (uid !== null && uidOf(atIndex) !== uid) {
-          byUid = byUid === undefined ? indexByUid(previous) : byUid
-          const match = byUid?.get(uid)
-          kept = match === undefined ? item : reuseEqualJson(match, item)
-        }
+      // A record whose `uid` moved pairs with the previous one carrying it, so it keeps its identity.
+      let match = atIndex
+      const uid = uidOf(item)
+      if (uid !== null && uidOf(atIndex) !== uid) {
+        byUid = byUid === undefined ? indexByUid(previous) : byUid
+        match = byUid ? byUid.get(uid) : atIndex
       }
+      const kept = match === undefined ? item : reuseEqualJson(match, item)
       same &&= kept === previous[index]
       return kept
     })

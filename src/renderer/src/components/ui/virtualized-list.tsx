@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 
 // Small lists stay in natural flow; windowing pays off only at larger sizes.
@@ -18,9 +18,7 @@ export function measureVirtualizedListScrollMargin(
   )
 }
 
-/** Observe layout shifts that move the list: its own size, and the children of every element between it
- *  and the scroller (a section above it folding moves it without resizing the scroller). Subtree mutations
- *  below the list are excluded because windowed row churn cannot move the list's origin. */
+/** Observe list/sibling layout shifts, excluding subtree mutations because windowed row churn cannot move the list’s origin. */
 export function observeVirtualizedListScrollMargin(
   container: HTMLElement,
   scrollElement: HTMLElement,
@@ -29,20 +27,10 @@ export function observeVirtualizedListScrollMargin(
   const resizeObserver = new ResizeObserver(onLayout)
   resizeObserver.observe(container)
   resizeObserver.observe(scrollElement)
-  // The scroller and the list's ancestors below it: a `display: contents` wrapper has no box, so its
-  // children are watched rather than it.
-  const parents: HTMLElement[] = [scrollElement]
-  for (
-    let node = container.parentElement;
-    node && node !== scrollElement && scrollElement.contains(node);
-    node = node.parentElement
-  ) {
-    parents.push(node)
-  }
   let observedChildren = new Set<Element>()
 
-  const observeParentChildren = (): void => {
-    const currentChildren = new Set(parents.flatMap((parent) => [...parent.children]))
+  const observeScrollerChildren = (): void => {
+    const currentChildren = new Set(scrollElement.children)
     // Prune detached sibling targets so long-lived lists do not retain stale DOM.
     for (const child of observedChildren) {
       if (!currentChildren.has(child) && child !== container) {
@@ -50,22 +38,18 @@ export function observeVirtualizedListScrollMargin(
       }
     }
     for (const child of currentChildren) {
-      if (!observedChildren.has(child)) {
-        resizeObserver.observe(child)
-      }
+      resizeObserver.observe(child)
     }
     observedChildren = currentChildren
   }
-  observeParentChildren()
+  observeScrollerChildren()
 
-  // Re-observe when siblings at any of those levels come or go, so later resizes update this list's offset.
+  // Re-observe direct scroller children when siblings change so later resizes update this list’s offset.
   const mutationObserver = new MutationObserver(() => {
-    observeParentChildren()
+    observeScrollerChildren()
     onLayout()
   })
-  for (const parent of parents) {
-    mutationObserver.observe(parent, { childList: true })
-  }
+  mutationObserver.observe(scrollElement, { childList: true })
 
   return () => {
     resizeObserver.disconnect()
@@ -80,7 +64,6 @@ export function VirtualizedList<TRow>({
   scrollElement,
   estimateRowHeightPx = VIRTUALIZED_LIST_ROW_HEIGHT_PX,
   activeRowKey,
-  keptRowKey,
   minimumRows = VIRTUALIZED_LIST_MIN_ROWS,
   announceListPosition = false,
   hasUnloadedRows
@@ -91,12 +74,9 @@ export function VirtualizedList<TRow>({
   // State tracks scroller attachment; ancestor refs arrive after mount effects and alone would leave the virtualizer unobserved.
   scrollElement: HTMLDivElement | null
   // Callers supply different row padding; wrong initial estimates jump the scrollbar before measurement corrects them.
-  // A function estimates per row, for lists whose rows have known heights of their own.
-  estimateRowHeightPx?: number | ((row: TRow) => number)
+  estimateRowHeightPx?: number
   // Why: keyboard-driven lists must mount and reveal selections outside the current window.
   activeRowKey?: string
-  // Mounted wherever it scrolls, without scrolling to it: a row holding keyboard focus keeps it.
-  keptRowKey?: string
   minimumRows?: number
   // Expose list semantics only by opt-in on the windowed path; small fragments have no role container, and other surfaces own their a11y roles.
   announceListPosition?: boolean
@@ -106,27 +86,18 @@ export function VirtualizedList<TRow>({
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const virtualize = rows.length >= minimumRows
-  // Looked up once per rows and key, not on every scroll-driven render.
-  const activeIndex = useMemo(
-    () =>
-      activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey),
-    [rows, getRowKey, activeRowKey]
-  )
-  const keptIndex = useMemo(
-    () => (keptRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === keptRowKey)),
-    [rows, getRowKey, keptRowKey]
-  )
+  const activeIndex =
+    activeRowKey === undefined ? -1 : rows.findIndex((row) => getRowKey(row) === activeRowKey)
   const rangeExtractor = useCallback(
     (range: Parameters<typeof defaultRangeExtractor>[0]) => {
       const indexes = defaultRangeExtractor(range)
-      for (const pinned of [activeIndex, keptIndex]) {
-        if (pinned >= 0 && !indexes.includes(pinned)) {
-          indexes.push(pinned)
-        }
+      if (activeIndex >= 0 && !indexes.includes(activeIndex)) {
+        indexes.push(activeIndex)
+        indexes.sort((a, b) => a - b)
       }
-      return indexes.sort((a, b) => a - b)
+      return indexes
     },
-    [activeIndex, keptIndex]
+    [activeIndex]
   )
 
   // Shared scrollers need this list’s offset; measure on attachment/layout shifts, never ordinary renders.
@@ -148,50 +119,23 @@ export function VirtualizedList<TRow>({
     return observeVirtualizedListScrollMargin(container, scrollElement, updateMargin)
   }, [scrollElement, virtualize])
 
-  // Stable while the rows are: the virtualizer recomputes every row's position when the key callback
-  // changes, and its own scroll-driven renders pass the same rows.
-  const getItemKey = useCallback(
-    (index: number) => {
-      const row = rows[index]
-      return row === undefined ? index : getRowKey(row)
-    },
-    [rows, getRowKey]
-  )
   const virtualizer = useVirtualizer({
     count: rows.length,
     // Why the null half: disabled nulls scrollOffset, so initialOffset() cannot latch 0 pre-attach.
     enabled: virtualize && scrollElement !== null,
     getScrollElement: () => scrollElement,
-    estimateSize: (index) => {
-      if (typeof estimateRowHeightPx === 'number') {
-        return estimateRowHeightPx
-      }
-      const row = rows[index]
-      return row === undefined ? VIRTUALIZED_LIST_ROW_HEIGHT_PX : estimateRowHeightPx(row)
-    },
+    estimateSize: () => estimateRowHeightPx,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
     rangeExtractor,
     scrollMargin,
     // Threshold crossing first attaches the virtualizer; preserve current scroll position instead of its initial zero.
     initialOffset: () => scrollElement?.scrollTop ?? 0,
     // Stable keys preserve item identity across status polls instead of remounting rows.
-    getItemKey
+    getItemKey: (index) => {
+      const row = rows[index]
+      return row === undefined ? index : getRowKey(row)
+    }
   })
-
-  // Measured sizes are kept by key; drop departed rows' once they outnumber the rows, so a long-lived list
-  // whose rows come and go holds sizes for at most about twice its current rows.
-  useLayoutEffect(() => {
-    const sizes = virtualizer.itemSizeCache
-    if (sizes.size <= rows.length) {
-      return
-    }
-    const live = new Set<unknown>(rows.map(getRowKey))
-    for (const key of sizes.keys()) {
-      if (!live.has(key)) {
-        sizes.delete(key)
-      }
-    }
-  }, [rows, getRowKey, virtualizer])
 
   useLayoutEffect(() => {
     if (virtualize && scrollElement && activeIndex >= 0) {

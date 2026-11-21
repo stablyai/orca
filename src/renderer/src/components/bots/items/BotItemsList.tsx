@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { VirtualizedList } from '@/components/ui/virtualized-list'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -33,6 +32,8 @@ import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-nam
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
+import { BotItemRowsWindow } from './BotItemRowsWindow'
+import { useBotItemsViewport, type BotItemsViewport } from './bot-items-viewport'
 
 const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
 
@@ -44,11 +45,6 @@ function focusBackRow(row: HTMLElement | null | undefined): void {
     ?.focus({ preventScroll: true, focusVisible: false })
   row?.scrollIntoView({ block: 'nearest' })
 }
-const rowKey = (item: BotItem): string => item.uid
-/** A one-line row with its gap, and one that names its chat on a second line; rows measure themselves
- *  once shown, and a close estimate keeps that from moving the rows below. */
-const BOT_ITEM_ROW_HEIGHT_PX = 30
-const BOT_ITEM_PLACED_ROW_HEIGHT_PX = 46
 
 /** A group's members' items in one list: each row acts on its own bot and shows its face. */
 export type BotItemsListMembers = {
@@ -131,6 +127,8 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   }
   const selectedItems = ordered.filter((item) => selected.has(item.uid))
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const viewport = useBotItemsViewport(props.scroller ?? null, listRef)
 
   const select = useLatestHandler((item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
@@ -181,7 +179,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: props.staleDays })
   return (
     <div
-      role="list"
+      ref={listRef}
       className="flex flex-col gap-2"
       style={numberColumn}
       onKeyDown={(event) => event.key === 'Escape' && setSelected(new Set())}
@@ -196,6 +194,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
           onSelect={select}
           onAction={act}
           snoozing={snoozing}
+          viewport={viewport}
           onCancelAll={id === 'stale' ? () => move(groups.stale, 'canceled', staleReason) : null}
           staleReason={staleReason}
         />
@@ -241,9 +240,10 @@ function BotItemGroup({
   asks = NO_ASKS,
   offline = false,
   focusFallback,
-  scroller = null
+  viewport
 }: BotItemsListProps & {
   id: BotItemGroupId
+  viewport: BotItemsViewport
   owner: ListOwner
   selected: ReadonlySet<string>
   onSelect: (item: BotItem, on: boolean, range: boolean) => void
@@ -264,13 +264,13 @@ function BotItemGroup({
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
   const shownItems = useMemo(() => items.slice(0, shown), [items, shown])
-  // The row holding keyboard focus stays mounted when scrolled out of a windowed group's view.
-  const [focusedUid, setFocusedUid] = useState<string | null>(null)
+  const { placeOf } = owner
+  const placedOf = useCallback((item: BotItem) => placeOf(item) !== null, [placeOf])
   const section = useRef<HTMLElement | null>(null)
-  // Kept mounted in a windowed group until it has focus.
+  // Back's row is pending until it has focus.
   const [focusing, setFocusing] = useState(focusIndex >= 0)
   const unfold = useLatestHandler(() => setOpen(true))
-  // Needs you's rows are all mounted; other groups' rows focus themselves as they mount (`focusRow`).
+  // Needs you's rows are all mounted; other groups' windows focus Back's row as they draw it.
   useEffect(() => {
     if (!focusing) {
       return
@@ -292,20 +292,7 @@ function BotItemGroup({
       section.current?.querySelector<HTMLElement>(`[data-bot-item="${items[focusIndex]?.number}"]`)
     )
   }, [focusing, open, unfold, id, items, focusIndex])
-  const focusRow = useCallback((node: HTMLElement | null) => {
-    if (node) {
-      focusBackRow(node)
-      setFocusing(false)
-    }
-  }, [])
-  // The focused row remounts when the group crosses the windowing threshold (an update adds or removes
-  // a row): the new row takes back the focus the old one lost.
-  const keepFocus = useCallback((node: HTMLElement | null) => {
-    const active = document.activeElement
-    if (node && (active === null || active === document.body)) {
-      node.querySelector<HTMLElement>('[data-bot-item-open]')?.focus({ preventScroll: true })
-    }
-  }, [])
+  const backFocused = useCallback(() => setFocusing(false), [])
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
@@ -317,7 +304,7 @@ function BotItemGroup({
   if (count === 0 && outside === 0) {
     return null
   }
-  const row = (item: BotItem): React.JSX.Element => (
+  const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
     <BotItemRow
       key={item.uid}
       item={item}
@@ -332,6 +319,9 @@ function BotItemGroup({
       onAction={onAction}
       face={owner.faces ? owner.botOf(item) : null}
       place={owner.placeOf(item)}
+      // In a window, the window's slot is the list item and the Tab stop is chosen there.
+      tabbable={tabbable}
+      listItem={tabbable === undefined}
     />
   )
   const fresh =
@@ -406,52 +396,28 @@ function BotItemGroup({
         </div>
       ) : null}
       {open && needsYou ? (
-        <BotNeedsYouSection
-          bot={owner.needBot}
-          asks={asks}
-          items={items}
-          renderItem={row}
-          revealUid={focusUid}
-          offline={offline}
-          focusFallback={focusFallback}
-        />
+        <div role="list" aria-label={botItemGroupName(id, t)} className="flex flex-col gap-0.5">
+          <BotNeedsYouSection
+            bot={owner.needBot}
+            asks={asks}
+            items={items}
+            renderItem={row}
+            revealUid={focusUid}
+            offline={offline}
+            focusFallback={focusFallback}
+          />
+        </div>
       ) : open ? (
         <>
-          <div className="-mb-0.5 flex flex-col">
-            {/* Windowed past a few dozen rows: Show more reveals the group, mounting what's in view. */}
-            <VirtualizedList
-              rows={shownItems}
-              getRowKey={rowKey}
-              renderRow={(item) => (
-                <div
-                  // Short groups render unwindowed, where this key keeps each row on its item.
-                  key={item.uid}
-                  className="pb-0.5"
-                  ref={
-                    focusing && item.uid === items[focusIndex]?.uid
-                      ? focusRow
-                      : item.uid === focusedUid
-                        ? keepFocus
-                        : undefined
-                  }
-                  onFocus={() => setFocusedUid(item.uid)}
-                  onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget)) {
-                      setFocusedUid(null)
-                    }
-                  }}
-                >
-                  {row(item)}
-                </div>
-              )}
-              scrollElement={scroller}
-              estimateRowHeightPx={(item) =>
-                owner.placeOf(item) ? BOT_ITEM_PLACED_ROW_HEIGHT_PX : BOT_ITEM_ROW_HEIGHT_PX
-              }
-              activeRowKey={focusing ? items[focusIndex]?.uid : undefined}
-              keptRowKey={focusedUid ?? undefined}
-            />
-          </div>
+          <BotItemRowsWindow
+            items={shownItems}
+            placed={owner.faces ? placedOf : null}
+            viewport={viewport}
+            label={botItemGroupName(id, t)}
+            renderRow={(item, tabbable) => row(item, tabbable)}
+            backUid={focusing && open ? (items[focusIndex]?.uid ?? null) : null}
+            onBackFocused={backFocused}
+          />
           {more > 0 ? (
             <button
               type="button"

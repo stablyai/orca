@@ -45,7 +45,9 @@ export const BotItemRow = memo(function BotItemRow({
   onSelect,
   onAction,
   face = null,
-  place = null
+  place = null,
+  tabbable = true,
+  listItem = true
 }: {
   item: BotItem
   stale: boolean
@@ -63,6 +65,10 @@ export const BotItemRow = memo(function BotItemRow({
   face?: Bot | null
   /** Its chat's name, when the list shows chats beyond the one it is about. */
   place?: string | null
+  /** In the Tab order: a long group keeps one row there and moves between rows with arrows. */
+  tabbable?: boolean
+  /** Announced as a list item itself; false when its window's slot is the item. */
+  listItem?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const closed = item.status === 'done' || item.status === 'canceled'
@@ -79,7 +85,7 @@ export const BotItemRow = memo(function BotItemRow({
   return (
     <div
       ref={rowRef}
-      role="listitem"
+      role={listItem ? 'listitem' : undefined}
       data-bot-item={item.number}
       className={cn(
         'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[aria-expanded=true]]:bg-accent has-[[data-state=open]]:bg-accent',
@@ -95,6 +101,7 @@ export const BotItemRow = memo(function BotItemRow({
           />
         </span>
         <Checkbox
+          tabIndex={tabbable ? undefined : -1}
           aria-label={t('bots.items.row.select', 'Select {{title}}', { title: item.title })}
           checked={selected}
           className={cn('size-3.5', !checkbox && 'hidden group-hover/check:flex')}
@@ -111,6 +118,7 @@ export const BotItemRow = memo(function BotItemRow({
         <button
           type="button"
           data-bot-item-open=""
+          tabIndex={tabbable ? undefined : -1}
           title={question ? undefined : item.title}
           aria-describedby={question ? questionId : undefined}
           className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -181,6 +189,7 @@ export const BotItemRow = memo(function BotItemRow({
                 variant="ghost-on-accent"
                 size="icon-xs"
                 aria-label={doneLabel}
+                tabIndex={tabbable ? undefined : -1}
                 onClick={() => onAction(item, { kind: 'done' })}
               >
                 <Check className="size-3.5" />
@@ -194,7 +203,12 @@ export const BotItemRow = memo(function BotItemRow({
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost-on-accent" size="icon-xs" aria-label={snoozeLabel}>
+                  <Button
+                    variant="ghost-on-accent"
+                    size="icon-xs"
+                    aria-label={snoozeLabel}
+                    tabIndex={tabbable ? undefined : -1}
+                  >
                     <Clock className="size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -213,6 +227,7 @@ export const BotItemRow = memo(function BotItemRow({
                 variant="ghost-on-accent"
                 size="icon-xs"
                 aria-label={t('bots.items.row.more', 'More')}
+                tabIndex={tabbable ? undefined : -1}
               >
                 <MoreHorizontal className="size-3.5" />
               </Button>
