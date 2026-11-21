@@ -15,7 +15,7 @@ async function sentPrompt(operationId: string): Promise<string> {
 
 /** A room of Scout and Forge whose members' chats answer with the replies `reply` records. */
 async function room() {
-  const { groups, runtime } = fixture()
+  const { groups, runtime, startWorker, orchestration } = fixture()
   const created = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
   groups.store.put({ ...created, replyMode: { kind: 'mentions' } })
   const replies = new Map<string, { operationId: string; text: string; at: number }[]>()
@@ -50,7 +50,19 @@ async function room() {
   }
   const lines = () => groups.store.messages(created.id, 100)
   const newest = () => lines().at(-1)!
-  return { groups, runtime, group: created, post, finish, ended, reply, lines, newest }
+  return {
+    groups,
+    runtime,
+    startWorker,
+    orchestration,
+    group: created,
+    post,
+    finish,
+    ended,
+    reply,
+    lines,
+    newest
+  }
 }
 
 describe('group @Name hand-offs', () => {
@@ -89,25 +101,23 @@ describe('group @Name hand-offs', () => {
     expect(await sentPrompt(newest().turns[0]!.operationId)).toContain('Plan X is ready.')
   })
 
-  it('ignores names in code and pauses once after six hand-offs until a person posts', async () => {
+  it('ignores names in code and keeps a long chain going without a pause', async () => {
     const { post, reply, lines, newest } = await room()
     await reply(await post('@Scout start'), 'Run `@Forge` first.')
     expect(lines()).toHaveLength(1)
-    await reply(await post('@Scout go'), '@Forge your turn')
-    for (let hop = 0; hop < 6; hop++) {
+    const asked = await post('@Scout go')
+    await reply(asked, '@Forge your turn')
+    for (let hop = 0; hop < 9; hop++) {
       await reply(newest(), hop % 2 === 0 ? '@Scout yours' : '@Forge yours')
     }
     const after = lines().slice(2)
-    expect(after.filter((line) => line.mentioned)).toHaveLength(6)
-    expect(after.at(-1)).toMatchObject({ pausedAfter: 6, turns: [] })
-
-    const fresh = await post('@Forge continue')
-    await reply(fresh, '@Scout over to you')
-    expect(newest()).toMatchObject({ mentioned: true, rootRequestId: fresh.id })
+    expect(after).toHaveLength(10)
+    expect(after.every((line) => line.mentioned && line.rootRequestId === asked.id)).toBe(true)
+    expect(after.some((line) => line.pausedAfter !== undefined)).toBe(false)
   })
 
-  it("leaves an explicit peer request's reply and a stopped room unwoken", async () => {
-    const { groups, group, post, reply, lines } = await room()
+  it("follows a peer reply's mention, and a stopped room wakes no one", async () => {
+    const { groups, group, post, reply, lines, newest } = await room()
     const asked = await post('@Scout look')
     await groups.stop(group.id)
     await reply(asked, '@Forge check this')
@@ -115,20 +125,71 @@ describe('group @Name hand-offs', () => {
 
     const next = await post('@Scout again')
     const [scout] = groups.store.get(group.id).members
-    groups.store.append({
-      id: 'mail-line',
-      groupId: group.id,
-      author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
-      text: 'Forge asked Scout',
-      createdAt: next.createdAt,
-      rootRequestId: next.id,
-      rootSequence: next.sequence,
-      turns: [
-        { ...next.turns[0]!, operationId: 'mail-op', sessionId: scout!.sessionId, mailbox: true }
-      ]
+    const mailLine = (id: string) =>
+      groups.store.append({
+        id,
+        groupId: group.id,
+        author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
+        text: 'Forge asked Scout',
+        createdAt: next.createdAt,
+        rootRequestId: next.id,
+        rootSequence: next.sequence,
+        requester: { id: 'bot-1', name: 'Forge' },
+        turns: [
+          { ...next.turns[0]!, operationId: `${id}-op`, sessionId: scout!.sessionId, mailbox: true }
+        ]
+      })
+    await reply(mailLine('mail-line'), '@Forge answered')
+    expect(newest()).toMatchObject({
+      mentioned: true,
+      requester: { id: 'bot-0' },
+      rootRequestId: next.id
     })
-    await reply(groups.store.message('mail-line')!, '@Forge answered')
-    expect(lines().map((line) => line.id)).toEqual([asked.id, next.id, 'mail-line'])
+    expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
+
+    await groups.stop(group.id)
+    const count = lines().length
+    await reply(mailLine('late-mail'), '@Forge one more')
+    expect(lines()).toHaveLength(count + 1)
+    expect(newest().id).toBe('late-mail')
+  })
+
+  it("wakes the member a worker report's turn names", async () => {
+    const { groups, post, reply, newest, startWorker, orchestration } = await room()
+    const asked = await post('@Scout build it')
+    const scout = asked.turns[0]!
+    const worker = startWorker('term_worker')
+    groups.store.bindWorker(worker.dispatchId, scout.operationId)
+    await reply(asked, 'Started a worker.')
+    const done = worker.send(scout.sessionId, 'worker_done')
+    orchestration.completeDispatch(worker.dispatchId)
+    groups.reserveMailTurn({
+      sessionId: scout.sessionId,
+      dispatchId: null,
+      operationId: 'report-op',
+      expectedRuntimeFence: 1,
+      stillOwed: () => true,
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: scout.sessionId,
+            dispatchId: null,
+            messages: [{ messageId: done.id, runId: 'run', from: 'term_worker' }]
+          }
+        }
+      }
+    })
+    const report = newest()
+    expect(report.turns[0]).toMatchObject({ operationId: 'report-op', mailbox: true })
+    await reply(report, 'Build done. @Forge please test')
+    expect(newest()).toMatchObject({ mentioned: true, rootRequestId: asked.id })
+    expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
   })
 
   it('reads the turn the end names, though a later turn of the same member ended first', async () => {
@@ -205,7 +266,6 @@ describe('group @Name hand-offs', () => {
     })
     await expect(reply(asked, '@Forge review')).rejects.toThrow()
     const saved = groups.store.message(asked.id)
-    expect(saved?.handoffs).toBeUndefined()
     expect(saved?.turns[0]?.handedOff).toBeUndefined()
     expect(groups.store.pending()).toEqual([])
     expect(lines()).toHaveLength(1)

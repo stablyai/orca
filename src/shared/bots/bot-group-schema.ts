@@ -162,11 +162,11 @@ export const BotGroupMessageSchema = z.object({
     .optional(),
   /** The member whose reply this follow-up turn reads, on the asker's own mail turn. */
   answeredBy: z.object({ id: z.string(), name: z.string() }).optional(),
-  /** On a person's post: the turns its members' `@Name` replies have woken so far. */
+  /** Legacy, read only: the hand-off count older builds saved on a person's post. */
   handoffs: z.number().int().nonnegative().optional(),
-  /** Woken by an `@Name` in the requester's reply; counts toward its post's hand-off limit. */
+  /** Woken by an `@Name` in the requester's reply. */
   mentioned: z.literal(true).optional(),
-  /** The quiet line held where the post's hand-offs reached this limit; it starts no turn. */
+  /** Legacy: the paused line older builds saved after a hand-off cap; it starts no turn. */
   pausedAfter: z.number().int().positive().optional(),
   turns: z.array(BotGroupTurnSchema),
   /** The post's questions to remote members; older or unreadable ones are dropped, never the post. */

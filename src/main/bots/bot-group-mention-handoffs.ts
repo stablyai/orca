@@ -11,7 +11,7 @@ import {
 } from '../../shared/bots/bot-group'
 import { botGroupReplyMentions } from '../../shared/bots/bot-group-mentions'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
-import { BOT_GROUP_HANDOFF_LIMIT, deliverTurn } from './bot-group-delivery'
+import { deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
@@ -57,18 +57,14 @@ export function blankMarkdownCode(reply: string): string {
 /** A finished member turn's reply: whole, as mentions read it, and as saved for room history. */
 export type GroupMemberReply = { full: string; saved: string }
 
-/** Wakes each member `reply` names, on a line of its own under the post `message` serves, up to
- *  that post's hand-off limit; past it the room shows one paused line, and a person's next post
- *  starts a fresh count. Explicit peer requests (mail turns) neither count nor follow mentions. */
+/** Wakes each member `reply` names, on a line of its own under the post `message` serves; mail
+ *  turns (peer replies, worker reports) follow mentions too, and a person's Stop ends the chain. */
 export async function handOffGroupMentions(
   groups: BotGroupRuntime,
   message: BotGroupMessage,
   turn: BotGroupTurn,
   reply: GroupMemberReply
 ): Promise<void> {
-  if (turn.mailbox) {
-    return
-  }
   const rootRequestId = message.rootRequestId ?? message.id
   const rootSequence = message.rootSequence ?? message.sequence
   const { groupId, threadId } = message
@@ -102,9 +98,7 @@ export async function handOffGroupMentions(
       markHandedOff(groups, message.id, turn.operationId, [])
       return []
     }
-    const used = root.handoffs ?? 0
-    const waking = targets.slice(0, Math.max(0, BOT_GROUP_HANDOFF_LIMIT - used))
-    const { turns, contexts } = await reserveGroupTurns(groups, room, threadId, bots, waking)
+    const { turns, contexts } = await reserveGroupTurns(groups, room, threadId, bots, targets)
     // Each woken member sees the part of the reply that named it, however long the reply or late
     // its history was taken.
     for (const woken of turns) {
@@ -116,16 +110,10 @@ export async function handOffGroupMentions(
     }
     const place = { groupId, ...(threadId ? { threadId } : {}), rootRequestId, rootSequence }
     const speaker = { kind: 'bot' as const, id: turn.botId, name: turn.botName }
-    const pausedId = `handoffs-paused:${rootRequestId}`
     const stored: BotGroupMessage[] = []
-    // The marker, the count, each woken line with its owed delivery and the paused line commit
-    // together; each record is read as it stands now, after the reservation's reads.
+    // The marker and each woken line with its owed delivery commit together.
     groups.store.transaction(() => {
       markHandedOff(groups, message.id, turn.operationId, targets)
-      const post = groups.store.message(rootRequestId)
-      if (post) {
-        groups.store.update({ ...post, handoffs: used + turns.length })
-      }
       for (const woken of turns) {
         stored.push(
           groups.store.append(
@@ -143,17 +131,6 @@ export async function handOffGroupMentions(
             contexts
           )
         )
-      }
-      if (waking.length < targets.length && !groups.store.message(pausedId)) {
-        groups.store.append({
-          ...place,
-          id: pausedId,
-          author: speaker,
-          text: `Paused after ${BOT_GROUP_HANDOFF_LIMIT} hand-offs. Reply to continue.`,
-          createdAt: Date.now(),
-          pausedAfter: BOT_GROUP_HANDOFF_LIMIT,
-          turns: []
-        })
       }
     })
     groups.changed()
