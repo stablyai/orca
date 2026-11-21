@@ -95,6 +95,35 @@ export function noteStreamedTextProjection<P extends readonly object[]>(
   return projected
 }
 
+const lastDerivation = new WeakMap<
+  object,
+  { base: readonly object[]; inputs: readonly unknown[]; derived: readonly object[] }
+>()
+
+/** Links `derived`, which `owner` built from `source` and `inputs`, to what `owner` last built
+ *  when `source` revised that one's source only in streamed text, so the link survives each stage. */
+export function noteStreamedTextDerivation<P extends readonly object[]>(
+  owner: object,
+  source: readonly object[],
+  inputs: readonly unknown[],
+  derived: P
+): P {
+  const base = projectionBesideStreamedText(source)
+  const prior = lastDerivation.get(owner)
+  if (
+    prior &&
+    prior.derived !== derived &&
+    prior.base === base &&
+    prior.derived.length === derived.length &&
+    prior.inputs.length === inputs.length &&
+    prior.inputs.every((input, index) => input === inputs[index])
+  ) {
+    textOnlyProjections.set(derived, textOnlyProjections.get(prior.derived) ?? prior.derived)
+  }
+  lastDerivation.set(owner, { base, inputs, derived })
+  return derived
+}
+
 /** A projection to give a consumer that never reads streamed text: the same list across a stream's
  *  text revisions, so its memo holds while a reply streams. */
 export function projectionBesideStreamedText<T extends object>(
