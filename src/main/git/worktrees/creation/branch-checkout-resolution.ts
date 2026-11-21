@@ -1,7 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
-  COMMIT_ID,
   errorCode,
   forEachBounded,
   readRefFile,
@@ -11,6 +10,7 @@ import {
   UNRESOLVED_HEAD,
   type GitDirState
 } from './git-dir-branch-state'
+import { COMMIT_ID } from './git-ref-text'
 
 export type BranchCheckouts =
   | { kind: 'free' }
@@ -134,7 +134,7 @@ async function resolveFromFiles(
       return
     }
     let ref = start
-    for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown; hop += 1) {
+    for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown && !stop(); hop += 1) {
       // Packed and missing refs are never symrefs.
       const loose = await readLooseRef(ref, gitDir)
       if (!loose.startsWith('ref: ')) {
@@ -192,9 +192,14 @@ function rememberUnresolved(commonDir: string, gitDir: string, ref: string): voi
 }
 
 /** The branch `update-ref` moves for `fullRef`, following loose symrefs as Git does; undefined when the chain leaves `refs/heads/` or does not end. */
-async function followBranchAlias(commonDir: string, fullRef: string): Promise<string | undefined> {
+async function followBranchAlias(
+  commonDir: string,
+  fullRef: string,
+  stop: () => boolean
+): Promise<string | undefined> {
   let ref = fullRef
   for (let hop = 0; hop <= MAX_SYMREF_HOPS; hop += 1) {
+    throwIfStopped(stop)
     const loose = await readRefFile(join(commonDir, ref)).catch(unlessUnreadable)
     if (!loose.startsWith('ref: ')) {
       return ref
@@ -211,9 +216,10 @@ async function followBranchAlias(commonDir: string, fullRef: string): Promise<st
 export async function resolveAliasedBranch(
   state: GitDirState,
   commonDir: string,
-  fullRef: string
+  fullRef: string,
+  stop: () => boolean = () => false
 ): Promise<{ branch?: string; reserved: boolean }> {
-  const branch = await followBranchAlias(commonDir, fullRef)
+  const branch = await followBranchAlias(commonDir, fullRef, stop)
   const reserved =
     state.reserved.has(fullRef) || (branch !== undefined && state.reserved.has(branch))
   return { branch, reserved }

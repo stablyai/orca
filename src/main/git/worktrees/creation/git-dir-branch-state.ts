@@ -4,6 +4,7 @@ import { StringDecoder } from 'node:string_decoder'
 import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { join } from 'node:path'
+import { normalizeHead, trimGitSpace } from './git-ref-text'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
 export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
@@ -71,10 +72,10 @@ export async function readGitDirState(
         text.split('\n')
       )) {
         if (line.startsWith('refs/heads/')) {
-          reserved.add(line.trim())
+          reserved.add(trimGitSpace(line))
         }
       }
-      const bisected = bisectStart.trim()
+      const bisected = trimGitSpace(bisectStart)
       if (bisected) {
         reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
       }
@@ -203,15 +204,6 @@ export async function forEachBounded<T>(
     })
   )
 }
-
-// Git reads `ref:` followed by any whitespace; spell it one way.
-export function normalizeHead(text: string): string {
-  const trimmed = text.trim()
-  const symref = /^ref:\s*(\S+)$/.exec(trimmed)
-  return symref ? `ref: ${symref[1]}` : trimmed
-}
-
-export const COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
 /** A metadata file's content, '' when missing; throws for anything but a regular file (of at most `maxBytes`). */
 export async function readOptional(path: string, maxBytes?: number): Promise<string> {

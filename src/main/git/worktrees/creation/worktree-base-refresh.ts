@@ -18,6 +18,7 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { hasLinkedPlaceholderHead, isSamePath, readGitDirState } from './git-dir-branch-state'
 import { resolveAliasedBranch, resolveBranchCheckouts } from './branch-checkout-resolution'
 import { readOwnerCheckoutPath } from './checkout-dir-from-files'
+import { checkWithDeadline, waitAtMost } from './file-check-deadline'
 import { parseRemoteTrackingLocalBaseRef } from './remote-tracking-local-base-ref'
 import {
   translateWslOutputPath,
@@ -112,14 +113,14 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     return undefined
   }
   const refs = { repoPath, fullRef: parsed.fullRef, remoteTrackingRef }
-  let abandoned = false
-  const git = localBaseBranchGit(options, {}, () => abandoned)
   // Advisory: a stalled file read must not hold the create; an abandoned inspection stops reading and runs no Git.
-  const inspection = await waitAtMost(
-    inspectLocalBaseBranch(git, refs, { occupancyOnly: true }),
-    LOCAL_BASE_REF_REFRESH_WAIT_MS
+  const inspection = await checkWithDeadline(
+    `${options.wslDistro ?? ''}\0${normalizeRuntimePathForComparison(repoPath)}`,
+    LOCAL_BASE_REF_REFRESH_WAIT_MS,
+    undefined,
+    (stop) =>
+      inspectLocalBaseBranch(localBaseBranchGit(options, {}, stop), refs, { occupancyOnly: true })
   )
-  abandoned = true
   return inspection?.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
     : undefined
@@ -139,7 +140,9 @@ function localBaseBranchGit(
   })
   // An abandoned inspection starts no more Git.
   const runGit: typeof gitExecFileAsync = (args, opts) =>
-    abandoned() ? Promise.reject(new Error('Inspection abandoned')) : gitExecFileAsync(args, opts)
+    abandoned()
+      ? Promise.reject(new Error('Inspection abandoned'))
+      : gitExecFileAsync(args, { ...opts, canStart: () => !abandoned() })
   // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
   const routed = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
   const listWorktrees = async (repoPath: string) => {
@@ -190,7 +193,12 @@ function localBaseBranchGit(
       // Only a sole direct owner is located, and it stays owners[0].
       let located: Promise<string | undefined> | undefined
       const locate = (gitDir: string) => (located ??= ownerPathOf(repoPath, gitDir, commonDir.path))
-      const { branch, reserved } = await resolveAliasedBranch(state, commonDir.path, fullRef)
+      const { branch, reserved } = await resolveAliasedBranch(
+        state,
+        commonDir.path,
+        fullRef,
+        abandoned
+      )
       if (reserved) {
         return { reserved: true }
       }
@@ -241,30 +249,30 @@ function localBaseBranchGit(
           ...execOptions(repoPath),
           // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
-            let expired = false
-            const stop = () => expired
-            const check = (async () => {
-              const state = await readGitDirState(commonDir.path, stop)
-              const { branch, reserved } = await resolveAliasedBranch(
-                state,
-                commonDir.path,
-                fullRef
-              )
-              if (reserved || branch === undefined) {
-                return true
-              }
-              const use = await resolveBranchCheckouts(state, commonDir.path, branch, {
-                bareCommonDir,
-                firstOwnerSettles: true,
-                stop
-              })
-              return use.kind !== 'free'
-            })()
             // Fail closed and give back the slot if the files stall; a late answer never starts the write.
-            const answer = await waitAtMost(check, PRE_WRITE_CHECK_TIMEOUT_MS)
-            expired = true
-            check.catch(() => {})
-            inUse = answer ?? true
+            inUse = await checkWithDeadline(
+              commonDir.path,
+              PRE_WRITE_CHECK_TIMEOUT_MS,
+              true,
+              async (stop) => {
+                const state = await readGitDirState(commonDir.path, stop)
+                const { branch, reserved } = await resolveAliasedBranch(
+                  state,
+                  commonDir.path,
+                  fullRef,
+                  stop
+                )
+                if (reserved || branch === undefined) {
+                  return true
+                }
+                const use = await resolveBranchCheckouts(state, commonDir.path, branch, {
+                  bareCommonDir,
+                  firstOwnerSettles: true,
+                  stop
+                })
+                return use.kind !== 'free'
+              }
+            )
             return !inUse
           }
         })
@@ -284,13 +292,4 @@ function isConfigUnset(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 1
 }
 
-function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  return Promise.race([
-    promise,
-    new Promise<undefined>((resolve) => {
-      timer = setTimeout(() => resolve(undefined), timeoutMs)
-    })
-  ]).finally(() => clearTimeout(timer))
-}
 import { withRepositoryGitCause } from '../../repository-git-cause'

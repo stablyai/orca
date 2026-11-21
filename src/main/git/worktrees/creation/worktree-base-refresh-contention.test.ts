@@ -8,12 +8,15 @@ type ExecOpts = { cwd: string; beforeStart?: () => Promise<boolean> }
 const { gitExecFileAsyncMock, stall } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn<(args: string[], opts: ExecOpts) => Promise<{ stdout: string }>>(),
   // Holds the read of a file ending in `path` once `skip` earlier reads have passed.
-  stall: { path: '', skip: 0, started: () => {}, release: () => {} }
+  stall: { path: '', skip: 0, opens: 0, started: () => {}, release: () => {} }
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   const open: typeof actual.open = (path, ...rest) => {
+    if (String(path).replaceAll('\\', '/').includes('/refs/')) {
+      stall.opens += 1
+    }
     if (
       stall.path &&
       String(path).replaceAll('\\', '/').endsWith(stall.path) &&
@@ -135,10 +138,17 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
     await started
     await vi.advanceTimersByTimeAsync(PRE_WRITE_CHECK_TIMEOUT_MS)
     await result
+    // A later write check for the stalled repo declines at once, without reading.
+    const opensWhileStalled = stall.opens
+    await refresh()
+    const opensBeforeRelease = stall.opens
     stall.release()
     await vi.runAllTimersAsync()
 
     expect(mutate).not.toHaveBeenCalled()
+    // Only the second refresh's own inspection read main's ref; the released check reads nothing more.
+    expect(opensBeforeRelease - opensWhileStalled).toBe(1)
+    expect(stall.opens).toBe(opensBeforeRelease)
   })
 
   it('does not retry a failure that is not lock contention', async () => {
@@ -300,8 +310,9 @@ it('stops an abandoned update suggestion before it runs any more Git', async () 
   })
   Object.assign(stall, { path: 'refs/heads/main', skip: 0 })
 
+  // Its own repo: the stalled suggestion above still holds `/repo`.
   const suggestion = getLocalBaseRefUpdateSuggestionForWorktreeCreate(
-    '/repo',
+    '/repo-abandoned',
     'origin/main',
     'refs/remotes/origin/main'
   )

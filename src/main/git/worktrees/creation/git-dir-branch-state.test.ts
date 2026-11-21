@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { readGitDirState, readOptional, readRefFile, UNRESOLVED_HEAD } from './git-dir-branch-state'
+import { normalizeHead } from './git-ref-text'
 
 let root: string | undefined
 
@@ -42,4 +43,8 @@ it('reads rebase state larger than a gitfile may be', async () => {
 
   expect(state.reserved.has('refs/heads/topic-10999')).toBe(true)
   expect(state.reserved.has('refs/heads/main')).toBe(false)
+})
+
+it('keeps a branch name ending in a no-break space, which Git allows', () => {
+  expect(normalizeHead('ref:\trefs/heads/main\u00a0\r\n')).toBe('ref: refs/heads/main\u00a0')
 })
