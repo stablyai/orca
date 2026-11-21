@@ -9,51 +9,21 @@ import {
   type ChatMailPlace,
   type ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../shared/execution-host/execution-host'
 import { NATIVE_CHAT_AGENTS } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
-import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import {
   readWorkspaceRecord,
-  writeWorkspaceRecord,
-  type WorkspaceRecordStore
+  writeWorkspaceRecord
 } from '../runtime/workspaces/metadata/workspace-activity-records'
-import {
-  savedWorkspaceCatalog,
-  WORKTREE_METADATA_DOMAINS
-} from '../persistence/profile-save-domains'
 import type { ConversationKey } from './external-conversation-types'
 import { revokeAgentSessionPublicationFences } from '../runtime/agent-session/agent-session-publication-fence'
+import {
+  createExternalConversationLinkIndex,
+  type ExternalConversationLinkStore,
+  type LinkedConversation
+} from './external-conversation-link-index'
 
-type LinkRecord = { externalConversations?: unknown }
-
-export type ExternalConversationLinkStore = WorkspaceRecordStore<
-  LinkRecord,
-  { externalConversations: ExternalConversationLink[] }
-> & {
-  getAllWorktreeMeta: () => Record<string, LinkRecord & { hostId?: ExecutionHostId }>
-  getAllWorktreeMetaForHost?: (
-    hostId: ExecutionHostId
-  ) => Record<string, LinkRecord & { hostId?: ExecutionHostId }>
-  getFolderWorkspaces?: () => readonly (LinkRecord & { id: string })[]
-  /** Real stores report every mutation's domains, which lets lookups reuse one link index. */
-  onStateWritten?: (
-    listener: (
-      dirtyDomains: readonly string[] | undefined,
-      options?: { preservesExternalConversationLinks?: boolean }
-    ) => void
-  ) => unknown
-}
-
-export type LinkedConversation<L extends ExternalConversationLink = ExternalConversationLink> = {
-  workspace: AgentPaneWorkspace
-  link: L
-}
+export type { ExternalConversationLinkStore, LinkedConversation }
 
 // A terminal pane's link from an older Orca has no session and is skipped.
 const ExternalConversationLinkSchema = z.object({
@@ -170,40 +140,14 @@ export function removeLink(
   return linked
 }
 
-function* scanAllLinks(store: ExternalConversationLinkStore): Generator<LinkedConversation> {
-  const hosts = new Set<ExecutionHostId>([
-    LOCAL_EXECUTION_HOST_ID,
-    ...store.getRepos().map(getRepoExecutionHostId)
-  ])
-  for (const hostId of hosts) {
-    for (const [worktreeId, meta] of Object.entries(readAllWorktreeMetaForHost(store, hostId))) {
-      if (!Array.isArray(meta.externalConversations) || meta.externalConversations.length === 0) {
-        continue
-      }
-      const sshHostId = hostId === LOCAL_EXECUTION_HOST_ID ? null : hostId
-      for (const link of linksOf(meta.externalConversations)) {
-        yield { workspace: { worktreeId, sshHostId }, link }
-      }
-    }
-  }
-  for (const folder of store.getFolderWorkspaces?.() ?? []) {
-    if (!Array.isArray(folder.externalConversations) || folder.externalConversations.length === 0) {
-      continue
-    }
-    for (const link of linksOf(folder.externalConversations)) {
-      yield { workspace: { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }, link }
-    }
-  }
-}
+const index = createExternalConversationLinkIndex(linksOf)
 
 /** Read canonical rows on every host; the locator map can hide same-path workspaces on other hosts. */
-export function* allLinks(store: ExternalConversationLinkStore): Generator<LinkedConversation> {
-  if (hasStateWrites(store)) {
-    yield* linkIndex(store).all
-    return
-  }
-  yield* scanAllLinks(store)
-}
+export const allLinks = index.allLinks
+export const findLink = index.findLink
+export const findLinkForPane = index.findLinkForPane
+export const findLinksForSession = index.findLinksForSession
+export const findLinkForSession = index.findLinkForSession
 
 /** Whether the chat answers a Slack thread, so its replies are written in Slack's markup. */
 export function sessionRepliesInSlack(
@@ -226,123 +170,6 @@ export function chatMailPlace(
   }
   const mail = { kind: 'message' as const, role: 'user' as const, blocks: [], from }
   return { place: conversationPlaceText(linked.link), answersThere: isConversationReport(mail) }
-}
-
-const EMPTY_LINKED: readonly LinkedConversation[] = []
-
-type LinkIndex = {
-  all: readonly LinkedConversation[]
-  byPane: Map<string, LinkedConversation>
-  byConversation: Map<string, LinkedConversation>
-  bySession: Map<string, LinkedConversation[]>
-}
-
-type LinkIndexSlot = { current: LinkIndex | null }
-
-const linkIndexes = new WeakMap<ExternalConversationLinkStore, LinkIndexSlot>()
-
-const LINK_DOMAINS: readonly string[] = WORKTREE_METADATA_DOMAINS
-
-function conversationIndexKey(key: ConversationKey): string {
-  return `${key.source}\0${key.externalId}`
-}
-
-function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
-  const all: LinkedConversation[] = []
-  const index: LinkIndex = {
-    all,
-    byPane: new Map(),
-    byConversation: new Map(),
-    bySession: new Map()
-  }
-  // First in scan order wins, as the scans this replaces returned.
-  for (const linked of scanAllLinks(store)) {
-    all.push(linked)
-    if (!index.byPane.has(linked.link.paneKey)) {
-      index.byPane.set(linked.link.paneKey, linked)
-    }
-    const conversation = conversationIndexKey(linked.link)
-    if (!index.byConversation.has(conversation)) {
-      index.byConversation.set(conversation, linked)
-    }
-    const forSession = index.bySession.get(linked.link.sessionId)
-    if (forSession) {
-      forSession.push(linked)
-    } else {
-      index.bySession.set(linked.link.sessionId, [linked])
-    }
-  }
-  return index
-}
-
-function hasStateWrites(
-  store: ExternalConversationLinkStore
-): store is ExternalConversationLinkStore &
-  Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>> {
-  return typeof store.onStateWritten === 'function'
-}
-
-function watchLinkWrites(
-  store: ExternalConversationLinkStore &
-    Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>>
-): LinkIndexSlot {
-  const slot: LinkIndexSlot = { current: null }
-  // Synchronous with the write, so no lookup can see a removed or moved link. Only non-migrating
-  // single-identity updates that leave externalConversations untouched keep the index.
-  store.onStateWritten((dirtyDomains, options) => {
-    if (options?.preservesExternalConversationLinks) {
-      return
-    }
-    if (
-      savedWorkspaceCatalog(dirtyDomains) ||
-      dirtyDomains?.some((domain) => LINK_DOMAINS.includes(domain))
-    ) {
-      slot.current = null
-    }
-  })
-  return slot
-}
-
-/** Status events look links up far more often than links, metadata or the catalog change. */
-function linkIndex(store: ExternalConversationLinkStore): LinkIndex {
-  if (!hasStateWrites(store)) {
-    return buildLinkIndex(store)
-  }
-  let slot = linkIndexes.get(store)
-  if (!slot) {
-    slot = watchLinkWrites(store)
-    linkIndexes.set(store, slot)
-  }
-  slot.current ??= buildLinkIndex(store)
-  return slot.current
-}
-
-export function findLink(
-  store: ExternalConversationLinkStore,
-  key: ConversationKey
-): LinkedConversation | null {
-  return linkIndex(store).byConversation.get(conversationIndexKey(key)) ?? null
-}
-
-export function findLinkForPane(
-  store: ExternalConversationLinkStore,
-  paneKey: string
-): LinkedConversation | null {
-  return linkIndex(store).byPane.get(paneKey) ?? null
-}
-
-export function findLinksForSession(
-  store: ExternalConversationLinkStore,
-  sessionId: string
-): readonly LinkedConversation[] {
-  return linkIndex(store).bySession.get(sessionId) ?? EMPTY_LINKED
-}
-
-export function findLinkForSession(
-  store: ExternalConversationLinkStore,
-  sessionId: string
-): LinkedConversation | null {
-  return findLinksForSession(store, sessionId)[0] ?? null
 }
 
 export function findConversationChat(

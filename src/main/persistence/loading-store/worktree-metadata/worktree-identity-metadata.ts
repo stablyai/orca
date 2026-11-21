@@ -270,6 +270,7 @@ export function setWorktreeMetaForHost(
   const preservesExternalConversationLinks =
     !migrated &&
     identityKeys.length <= 1 &&
+    (!existing?.hostId || existing.hostId === executionHostId) &&
     !('externalConversations' in meta) &&
     existing?.externalConversations === updated.externalConversations
   scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS, undefined, undefined, {

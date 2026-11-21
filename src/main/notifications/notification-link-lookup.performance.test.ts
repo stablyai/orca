@@ -4,8 +4,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/view/agent-session-attention'
 import { getDefaultNotificationSettings } from '../../shared/notifications/notification-settings-defaults'
 import type { NotificationDispatchRequest } from '../../shared/notifications/notification-settings-types'
 import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
@@ -25,9 +26,15 @@ import {
 import { createStructuredAttentionMobileDelivery } from '../runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { createNotificationDeliveryService } from './notification-delivery-service'
 
+const windowFocus = vi.hoisted(() => ({ focused: false }))
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
-  safeStorage: { isEncryptionAvailable: () => false }
+  safeStorage: { isEncryptionAvailable: () => false },
+  BrowserWindow: class {
+    isFocused(): boolean {
+      return windowFocus.focused
+    }
+  }
 }))
 
 const SLACK_SESSION = 'session-slack'
@@ -35,8 +42,27 @@ const LOCAL_SESSION = 'session-local'
 const SLACK_REPLY = 'Pinged <!here> and <@U12345ABC|sam>.'
 const CODE_REPLY = 'Updated Array<string> and <div> layout.'
 
+function originFor(
+  worktreeId: string,
+  sessionId: string,
+  sequence: number
+): StructuredAttentionOrigin {
+  return {
+    scope: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: worktreeId,
+      workspaceKind: 'git-worktree'
+    },
+    sessionId,
+    cause: { kind: 'completion', requestId: `turn-${sequence}` },
+    journalCursor: { epoch: 'epoch-1', sequence }
+  }
+}
+
 const dirs: string[] = []
 afterEach(async () => {
+  windowFocus.focused = false
   vi.useRealTimers()
   vi.restoreAllMocks()
   await closeTestStores()
@@ -88,11 +114,10 @@ function buildFleet(worktreesPerHost: number) {
     })
   }
 
-  let focused = false
   let now = 10_000
   const desktopBodies: string[] = []
   const mobileBodies: string[] = []
-  const focusedWindow = { isFocused: () => focused } as unknown as BrowserWindow
+  const focusedWindow = new BrowserWindow()
   const settings = {
     ...getDefaultNotificationSettings(),
     suppressWhenFocused: true,
@@ -134,16 +159,12 @@ function buildFleet(worktreesPerHost: number) {
   ) => {
     now += 60_000
     const worktreeId = `repo-local::/fleet/local/wt-${turn % worktreesPerHost}`
+    const origin = originFor(worktreeId, sessionId, turn)
     mobile.deliver(
       {
         type: 'completion',
         completion: {
-          scope: {
-            executionHostId: 'local',
-            wslDistro: null,
-            workspaceId: worktreeId,
-            workspaceKind: 'git-worktree'
-          },
+          scope: origin.scope,
           sessionId,
           turnId: `turn-${turn}`,
           outcome: 'success',
@@ -154,7 +175,8 @@ function buildFleet(worktreesPerHost: number) {
         sessionId,
         workspaceId: worktreeId,
         agent: 'claude',
-        status: 'idle',
+        status: 'attention',
+        latestPrompt: 'Ship it',
         lastAssistantMessage: message,
         updatedAt: now
       }
@@ -168,7 +190,7 @@ function buildFleet(worktreesPerHost: number) {
       agentTurnOutcome: 'success',
       agentLastAssistantMessage: message,
       attentionKey: `edge:${sessionId}:${turn}`,
-      structuredOrigin: { kind: 'turn', sessionId, turnId: `turn-${turn}` },
+      structuredOrigin: origin,
       mobileDeliveredByHost: true,
       ...overrides
     })
@@ -182,7 +204,7 @@ function buildFleet(worktreesPerHost: number) {
     desktopBodies,
     mobileBodies,
     setFocused: (value: boolean) => {
-      focused = value
+      windowFocus.focused = value
     }
   }
 }
@@ -211,7 +233,7 @@ describe('structured chat notification link lookups', () => {
           agentState: 'done',
           agentTurnOutcome: 'success',
           agentLastAssistantMessage: SLACK_REPLY,
-          structuredOrigin: { kind: 'turn', sessionId: SLACK_SESSION, turnId: 'suppressed' },
+          structuredOrigin: originFor('repo-local::/fleet/local/wt-0', SLACK_SESSION, 100),
           mobileDeliveredByHost: true
         })
       ).toEqual({ delivered: false, reason: 'suppressed-focus' })
@@ -226,7 +248,7 @@ describe('structured chat notification link lookups', () => {
           agentState: 'done',
           agentTurnOutcome: 'success',
           agentLastAssistantMessage: SLACK_REPLY,
-          structuredOrigin: { kind: 'turn', sessionId: SLACK_SESSION, turnId: 'muted' },
+          structuredOrigin: originFor('repo-local::/fleet/local/wt-0', SLACK_SESSION, 101),
           mobileDeliveredByHost: true
         })
       ).toEqual({ delivered: false, reason: 'host-muted' })

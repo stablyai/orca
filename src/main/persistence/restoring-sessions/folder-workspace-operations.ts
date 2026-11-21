@@ -270,9 +270,11 @@ export class FolderWorkspacePersistenceOperations {
       workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
-    this.scheduleSave(['folderWorkspaces'], {
-      preservesExternalConversationLinks: !('externalConversations' in updates)
-    })
+    const preservesExternalConversationLinks =
+      !('externalConversations' in updates) &&
+      ((updates.sortOrder === undefined && updates.name === undefined) ||
+        !workspace.externalConversations?.length)
+    this.scheduleSave(['folderWorkspaces'], { preservesExternalConversationLinks })
     return workspace
   }
 

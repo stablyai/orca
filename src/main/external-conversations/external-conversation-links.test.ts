@@ -142,12 +142,9 @@ describe('external conversation link lookups', () => {
     expect(findLinkForPane(store, FIRST_PANE)?.link.paneKey).toBe(FIRST_PANE)
     expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(true)
 
+    writeLink(store, workspace, link(SECOND_PANE))
     writeLink(store, workspace, {
-      ...link(SECOND_PANE),
-      source: 'linear'
-    })
-    writeLink(store, workspace, {
-      source: 'slack',
+      source: 'linear',
       externalId: 'thread-2',
       paneKey: THIRD_PANE,
       sessionId: `session-${SECOND_PANE}`,
@@ -155,6 +152,7 @@ describe('external conversation link lookups', () => {
       createdAt: 2
     })
     expect(findLinkForPane(store, FIRST_PANE)).toBeNull()
+    expect(findLink(store, KEY)?.link.paneKey).toBe(SECOND_PANE)
     expect(sessionRepliesInSlack(store, `session-${FIRST_PANE}`)).toBe(false)
     expect(findLinksForSession(store, `session-${SECOND_PANE}`)).toHaveLength(2)
     expect(sessionRepliesInSlack(store, `session-${SECOND_PANE}`)).toBe(true)
