@@ -7,7 +7,7 @@ import {
 } from '../../shared/bots/bot-group'
 import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
 import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
-import { itemMailRoot } from './bot-group-item-mail'
+import { groupMailLineId, groupMailMayEnd, itemMailRoot } from './bot-group-item-mail'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
@@ -94,7 +94,6 @@ export function assertGroupPeerScope(groups: BotGroupRuntime, scope: GroupPeerSc
  *  a worker one of this member's turns started. */
 function mailRoot(
   groups: BotGroupRuntime,
-  groupId: string,
   member: BotGroupMember,
   mail: Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>
 ): BotGroupPeerScope | null {
@@ -108,9 +107,9 @@ function mailRoot(
     )
     return scope.success ? scope.data : null
   }
-  // Orca's own item mail: callers can't send as its sender (callerMailProvenance refuses it).
+  // Orca's own item mail (callerMailProvenance refuses any caller its sender) has its own line.
   if (mail.from_handle === BOT_ITEM_MAIL_SENDER) {
-    return itemMailRoot(groups, groupId, member)
+    return itemMailRoot(groups, member, mail.id)
   }
   // A worker's final report settles its Dispatch as it lands, so its recorded sender comes first.
   const dispatch =
@@ -152,10 +151,10 @@ export function narrowGroupMailBatch<
   const live: { mail: T; root: BotGroupPeerScope }[] = []
   const ended: string[] = []
   for (const mail of messages) {
-    const root = mailRoot(groups, found.group.id, found.member, mail)
+    const root = mailRoot(groups, found.member, mail)
     if (root && rootActive(found.group, found.member, root)) {
       live.push({ mail, root })
-    } else if (root) {
+    } else if (root && groupMailMayEnd(groups, found.member, mail)) {
       ended.push(mail.id)
     }
   }
@@ -202,7 +201,7 @@ export function reserveGroupMailTurn(
   const mails = notice.messages
     .map(({ messageId }) => db.getMessageById(messageId))
     .filter((mail) => mail !== undefined)
-  const roots = mails.flatMap((mail) => mailRoot(groups, group.id, member, mail) ?? [])
+  const roots = mails.flatMap((mail) => mailRoot(groups, member, mail) ?? [])
   const [first] = roots
   if (
     !first ||
@@ -224,7 +223,10 @@ export function reserveGroupMailTurn(
   // One room line per mail and member, whatever id carries it: the lane mints a new id when an
   // attempt is refused, withdrawn or too old to reuse, and the line follows to the attempt that
   // runs. Mail that comes back after its turn ran gets the next line of its own.
-  const mailKey = `mail:${member.sessionId}:${notice.messages.map(({ messageId }) => messageId).join(',')}`
+  const mailKey = groupMailLineId(
+    member.sessionId,
+    notice.messages.map(({ messageId }) => messageId)
+  )
   let id = mailKey
   let line = groups.store.message(id)
   for (let index = 2; line && mailTurnRan(line.turns[0]); index += 1) {

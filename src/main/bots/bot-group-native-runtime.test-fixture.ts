@@ -85,6 +85,8 @@ export function fixture() {
     getOrchestrationDb: () => ({
       db,
       getMessageById: (id: string) => mails.get(id) ?? orchestration.getMessageById(id),
+      insertMessage: (message: Parameters<OrchestrationDb['insertMessage']>[0]) =>
+        orchestration.insertMessage(message),
       getBotRequest: (id: string) => requests.get(id),
       getActiveDispatchForIdentity: (handle: string) =>
         orchestration.getActiveDispatchForIdentity(handle),
@@ -101,7 +103,8 @@ export function fixture() {
     deleteFolderWorkspace: homes.remove,
     updateFolderWorkspace: homes.update,
     ensureStructuredAgentSessionHost: vi.fn(async () => {}),
-    notifyBotGroupsChanged: vi.fn()
+    notifyBotGroupsChanged: vi.fn(),
+    notifyMessageArrived: vi.fn()
   }
   /** A worker on its own terminal, as `worker-start` records it; mail it sends is from that terminal. */
   const startWorker = (handle: string) => {

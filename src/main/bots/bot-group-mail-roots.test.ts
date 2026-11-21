@@ -6,6 +6,8 @@ import { OrchestrationStructuredMailboxPointerDelivery } from '../runtime/orches
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { BOT_GROUP_MAIL_NEVER_STARTED } from './bot-group-dead-mail-turns'
 import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { anchorGroupItemMail } from './bot-group-item-mail'
 
 /** Two members, a peer request mailed from Scout to Forge for each human post given. */
 async function room(posts: number) {
@@ -238,35 +240,74 @@ describe('group mail roots', () => {
     expect(lines.map((line) => line.id)).toEqual([template.id, 'mail:legacy'])
   })
 
-  it("wakes an idle member with its owner's item answer, as a follow-up to its latest request", async () => {
-    const { groups, group, mails, source, roots, notice } = await room(2)
-    const answer = { id: 'item-mail-1', thread_id: null, from_handle: BOT_ITEM_MAIL_SENDER }
-    mails.set(answer.id, { ...answer, type: 'status' })
+  /** Orca's item mail to a member's room session, stored as bots-items-mail stores it. */
+  const itemMail = (orchestration: OrchestrationDb, sessionId: string, id = 'item-mail-1') => {
+    orchestration.insertMessage({
+      id,
+      from: BOT_ITEM_MAIL_SENDER,
+      to: `orca_session_id:${sessionId}`,
+      subject: 'Your owner updated item 3',
+      type: 'status',
+      orcaAuthored: 'item-mail'
+    })
+    return { id, thread_id: null, from_handle: BOT_ITEM_MAIL_SENDER }
+  }
+
+  it("wakes an idle member with its owner's item answer, on a room line of its own", async () => {
+    const { groups, group, orchestration, source, notice } = await room(1)
+    expect(anchorGroupItemMail(groups, source.sessionId, 'item-mail-1')).toBe(true)
+    const answer = itemMail(orchestration, source.sessionId)
     expect(groups.narrowMailBatch(source.sessionId, [answer])).toEqual({
       messages: [answer],
       ended: []
     })
-    groups.reserveMailTurn({ ...notice('item-answer', [answer.id]), sessionId: source.sessionId })
-    const line = groups.store.operationMessage('item-answer')
-    expect(line).toMatchObject({
+    // A post between narrowing and reserving moves nothing: the mail's root is its own line.
+    await groups.send({
       groupId: group.id,
-      rootRequestId: roots[1].id,
-      text: 'Scout followed up',
-      turns: [{ sessionId: source.sessionId, mailbox: true }]
+      revision: groups.store.get(group.id).revision,
+      messageId: randomUUID(),
+      text: '@Forge something else'
     })
+    groups.reserveMailTurn({ ...notice('item-answer', [answer.id]), sessionId: source.sessionId })
+    expect(groups.store.operationMessage('item-answer')).toMatchObject({
+      id: `mail:${source.sessionId}:item-mail-1`,
+      text: 'Scout followed up',
+      turns: [{ operationId: 'item-answer', sessionId: source.sessionId, mailbox: true }]
+    })
+    expect(groups.store.operationMessage('item-answer')?.rootRequestId).toBeUndefined()
   })
 
-  it('leaves item mail to a member with no turn in the room, and ends it once the member is stopped', async () => {
-    const { groups, group, mails, source, target } = await room(1)
-    const answer = { id: 'item-mail-1', thread_id: null, from_handle: BOT_ITEM_MAIL_SENDER }
-    mails.set(answer.id, { ...answer, type: 'status' })
-    // Forge never took a turn here, so no request of its own continues.
-    expect(groups.narrowMailBatch(target.sessionId, [answer])).toEqual({ messages: [], ended: [] })
+  it('wakes a member with an answer given after a Stop, or before it ever took a turn', async () => {
+    const { groups, group, orchestration, source, target } = await room(1)
+    await groups.stop(group.id)
+    for (const member of [source, target]) {
+      anchorGroupItemMail(groups, member.sessionId, `item-${member.botId}`)
+      const answer = itemMail(orchestration, member.sessionId, `item-${member.botId}`)
+      expect(ids(groups.narrowMailBatch(member.sessionId, [answer]))).toEqual([answer.id])
+    }
+  })
+
+  it('sends an answer a Stop ended on to Home, and keeps it owed until Home exists', async () => {
+    const { groups, group, orchestration, bots, source } = await room(1)
+    anchorGroupItemMail(groups, source.sessionId, 'item-mail-1')
+    const answer = itemMail(orchestration, source.sessionId)
     await groups.stop(group.id, 'bot-0')
+    expect(groups.narrowMailBatch(source.sessionId, [answer])).toEqual({ messages: [], ended: [] })
+    bots[0].chatSessionId = 'home-0'
     expect(groups.narrowMailBatch(source.sessionId, [answer])).toEqual({
       messages: [],
       ended: [answer.id]
     })
+    expect(orchestration.getMessageById('item-mail-1:home')).toMatchObject({
+      from_handle: BOT_ITEM_MAIL_SENDER,
+      to_handle: 'orca_session_id:home-0',
+      subject: 'Your owner updated item 3'
+    })
+  })
+
+  it('leaves item mail for a session no room has to the Home chat', async () => {
+    const { groups } = await room(1)
+    expect(anchorGroupItemMail(groups, 'bot-group-member-gone', 'item-mail-1')).toBe(false)
   })
 
   it('holds a worker report that arrives before its worker is recorded', async () => {

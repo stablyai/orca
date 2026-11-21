@@ -8,6 +8,9 @@ import {
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { anchorGroupItemMail } from '../../../bots/bot-group-item-mail'
+import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
+import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
 import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
@@ -60,7 +63,14 @@ export async function sendBotItemMail(
     return true
   }
   const chat = await botChatTakingMail(runtime, bot, owed.chatId)
-  const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
+  let sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
+  // A room session takes it on a room line of its own; one no room has any more, the Home chat does.
+  if (
+    isBotGroupMemberSession(sessionId) &&
+    !anchorGroupItemMail(runtimeBotGroups(runtime), sessionId, id)
+  ) {
+    sessionId = await runtimeBotChats(runtime).ensure(bot.id)
+  }
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
   const payload = JSON.stringify({

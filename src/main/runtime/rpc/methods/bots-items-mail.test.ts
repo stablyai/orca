@@ -21,6 +21,15 @@ vi.mock('./bots-chats', () => ({
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({ ensure: async () => 'home-chat' })
 }))
+// Room sessions still in a room take the mail on a line of their own.
+const rooms = vi.hoisted(() => ({ anchored: new Set<string>(), anchor: vi.fn() }))
+vi.mock('../../../bots/bot-group-runtime', () => ({ runtimeBotGroups: () => ({}) }))
+vi.mock('../../../bots/bot-group-item-mail', () => ({
+  anchorGroupItemMail: (_groups: unknown, sessionId: string, mailId: string) => {
+    rooms.anchor(sessionId, mailId)
+    return rooms.anchored.has(sessionId)
+  }
+}))
 
 const CHAT = '0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e'
 const dbs: OrchestrationDb[] = []
@@ -124,6 +133,32 @@ describe("the item chat's note for another chat's write", () => {
     await sendBotItemMail(runtimeOf(db, { 'home-chat': null }), owed(byChat('home-chat')))
     expect(db.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
     expect(notes.append).not.toHaveBeenCalled()
+  })
+})
+
+describe('item mail for a group room session', () => {
+  const ROOM = 'bot-group-member-room-1'
+  const inRoom = (): BotItemMail => ({
+    ...owed(),
+    chatId: ROOM,
+    changes: owed().changes.map((change) => ({ ...change, item: { ...item, chatId: ROOM } }))
+  })
+
+  it('goes to the room session on a room line of its own', async () => {
+    rooms.anchored.add(ROOM)
+    const db = new OrchestrationDb(':memory:')
+    dbs.push(db)
+    await sendBotItemMail(runtimeOf(db, {}), inRoom())
+    expect(rooms.anchor).toHaveBeenCalledWith(ROOM, 'msg_item_e11')
+    expect(db.getMessageById('msg_item_e11')?.to_handle).toBe(`orca_session_id:${ROOM}`)
+    rooms.anchored.clear()
+  })
+
+  it('goes to the Home chat once no room has that session', async () => {
+    const db = new OrchestrationDb(':memory:')
+    dbs.push(db)
+    await sendBotItemMail(runtimeOf(db, {}), inRoom())
+    expect(db.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
   })
 })
 
