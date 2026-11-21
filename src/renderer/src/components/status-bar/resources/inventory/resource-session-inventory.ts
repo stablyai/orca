@@ -1,4 +1,7 @@
-import type { PtyListedSession as DaemonSession } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import {
+  ptySessionIdentity,
+  type PtyListedSession as DaemonSession
+} from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 /** Last-known daemon terminal inventory for the Resource Manager badge. */
 export type DaemonSessionInventory = {
@@ -42,7 +45,7 @@ export function removeSessionFromInventory(
   return removeSessionsFromInventory(inventory, new Set([sessionId]))
 }
 
-export function sameListedSession(before: DaemonSession, after: DaemonSession): boolean {
+function sameListedSession(before: DaemonSession, after: DaemonSession): boolean {
   return (
     before === after ||
     (before.id === after.id &&
@@ -60,4 +63,72 @@ export function sameListedSession(before: DaemonSession, after: DaemonSession): 
       before.agentOwnership === after.agentOwnership &&
       before.exiting === after.exiting)
   )
+}
+
+export function reconcileResourceSessionListing(
+  sessions: readonly DaemonSession[],
+  previous: ReadonlyMap<string, DaemonSession>,
+  tombstones: ReadonlySet<string>,
+  { compareExisting, trackRemovals }: { compareExisting: boolean; trackRemovals: boolean }
+) {
+  const deduped = new Map<string, DaemonSession>()
+  const identitiesByIncarnation = new Map<string, Set<string>>()
+  const previousEntries = previous.entries()
+  let nextPrevious = previousEntries.next()
+  let unchanged = compareExisting && sessions.length === previous.size
+  let pendingRefresh = false
+  let retained = 0
+  for (const session of sessions) {
+    const identity = ptySessionIdentity(session)
+    const incarnation = ptySessionIdentity({
+      id: session.id,
+      incarnationId: session.incarnationId
+    })
+    const priorSize = deduped.size
+    deduped.set(identity, session)
+    if (deduped.size === priorSize) {
+      unchanged = false
+    } else if (trackRemovals || unchanged) {
+      if (!nextPrevious.done && nextPrevious.value[0] === identity) {
+        retained += 1
+        unchanged &&= sameListedSession(nextPrevious.value[1], session)
+        nextPrevious = previousEntries.next()
+      } else {
+        unchanged = false
+        // An append needs no lookup once the previous order has been consumed.
+        if (trackRemovals && !nextPrevious.done && previous.has(identity)) {
+          retained += 1
+        }
+      }
+    }
+    const identities = identitiesByIncarnation.get(incarnation) ?? new Set<string>()
+    identities.add(identity)
+    identitiesByIncarnation.set(incarnation, identities)
+  }
+  for (const [incarnation, identities] of identitiesByIncarnation) {
+    if (!tombstones.has(incarnation)) {
+      continue
+    }
+    if (identities.size > 1) {
+      pendingRefresh = true
+      continue
+    }
+    for (const identity of identities) {
+      deduped.delete(identity)
+      if (trackRemovals && previous.has(identity)) {
+        retained -= 1
+      }
+    }
+    identitiesByIncarnation.delete(incarnation)
+  }
+  if (
+    compareExisting &&
+    !unchanged &&
+    sessions.length !== deduped.size &&
+    deduped.size === previous.size
+  ) {
+    const old = previous.values()
+    unchanged = deduped.values().every((session) => sameListedSession(old.next().value!, session))
+  }
+  return { deduped, identitiesByIncarnation, unchanged, retained, pendingRefresh }
 }

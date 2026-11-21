@@ -20,6 +20,7 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
     null
   getLastRefusal = () => this.lastRefusal
   getKeys = (): ReadonlySet<string> => this.ending
+  hasRefusals = (): boolean => this.errors.size > 0
   isSelectable = (identity: string): boolean => !this.ending.has(identity)
   private selectionCheck = this.isSelectable
   getSelectionCheck = (): ((identity: string) => boolean) => this.selectionCheck

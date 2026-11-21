@@ -9,7 +9,7 @@ import {
   type DaemonSessionInventory,
   EMPTY_DAEMON_SESSION_INVENTORY,
   inventoryFromSessions,
-  sameListedSession
+  reconcileResourceSessionListing
 } from './resource-session-inventory'
 
 const COOLDOWN_MS = 100
@@ -29,7 +29,7 @@ export class ResourceSessionInventoryCache {
     loading: false
   }
   private listeners = new Set<() => void>()
-  private removalListeners = new Set<(identity: string) => void>()
+  private removalListeners = new Map<(identity: string) => void, () => boolean>()
   private known = new Map<string, PtyListedSession>()
   private identitiesByIncarnation = new Map<string, Set<string>>()
   // Suppression belongs only to the current listing, never to later authoritative results.
@@ -54,8 +54,11 @@ export class ResourceSessionInventoryCache {
     return () => this.listeners.delete(listener)
   }
   hasSession = (identity: string): boolean => this.known.has(identity)
-  subscribeRemoval = (listener: (identity: string) => void): (() => void) => {
-    this.removalListeners.add(listener)
+  subscribeRemoval = (
+    listener: (identity: string) => void,
+    hasTrackedIdentities: () => boolean
+  ): (() => void) => {
+    this.removalListeners.set(listener, hasTrackedIdentities)
     return () => this.removalListeners.delete(listener)
   }
 
@@ -153,56 +156,23 @@ export class ResourceSessionInventoryCache {
         if (!sessions || !this.active || epoch !== this.epoch) {
           return
         }
-        const deduped = new Map<string, PtyListedSession>()
-        const identitiesByIncarnation = new Map<string, Set<string>>()
         const previous = this.known
-        const trackRemovals = this.removalListeners.size > 0 && previous.size > 0
-        let retained = 0
-        for (const session of sessions) {
-          const identity = ptySessionIdentity(session)
-          const incarnation = ptySessionIdentity({
-            id: session.id,
-            incarnationId: session.incarnationId
+        const trackRemovals =
+          previous.size > 0 &&
+          this.removalListeners.values().some((hasTrackedIdentities) => hasTrackedIdentities())
+        const { deduped, identitiesByIncarnation, unchanged, retained, pendingRefresh } =
+          reconcileResourceSessionListing(sessions, previous, this.tombstones, {
+            compareExisting: !this.inventoryChanged,
+            trackRemovals
           })
-          const priorSize = deduped.size
-          deduped.set(identity, session)
-          if (trackRemovals && deduped.size !== priorSize && previous.has(identity)) {
-            retained += 1
-          }
-          const identities = identitiesByIncarnation.get(incarnation) ?? new Set<string>()
-          identities.add(identity)
-          identitiesByIncarnation.set(incarnation, identities)
-        }
-        for (const [incarnation, identities] of identitiesByIncarnation) {
-          if (!this.tombstones.has(incarnation)) {
-            continue
-          }
-          if (identities.size > 1) {
-            this.pendingRefresh = true
-            continue
-          }
-          for (const identity of identities) {
-            deduped.delete(identity)
-            if (trackRemovals && previous.has(identity)) {
-              retained -= 1
-            }
-          }
-          identitiesByIncarnation.delete(incarnation)
-        }
+        this.pendingRefresh ||= pendingRefresh
         const patch = {
           sessionsError: false,
           observedAt: Date.now()
         }
-        if (!this.inventoryChanged && deduped.size === this.known.size) {
-          const previousValues = previous.values()
-          if (
-            deduped
-              .values()
-              .every((session) => sameListedSession(previousValues.next().value!, session))
-          ) {
-            this.publish(patch)
-            return
-          }
+        if (unchanged && deduped.size === previous.size) {
+          this.publish(patch)
+          return
         }
         this.known = deduped
         this.identitiesByIncarnation = identitiesByIncarnation
@@ -210,7 +180,7 @@ export class ResourceSessionInventoryCache {
         if (trackRemovals && retained < previous.size) {
           for (const identity of previous.keys()) {
             if (!deduped.has(identity)) {
-              this.removalListeners.forEach((listener) => listener(identity))
+              this.publishRemoval(identity)
             }
           }
         }
@@ -293,9 +263,15 @@ export class ResourceSessionInventoryCache {
     }
     const removed = this.known.delete(identity)
     if (removed) {
-      this.removalListeners.forEach((listener) => listener(identity))
+      this.publishRemoval(identity)
     }
     return removed
+  }
+
+  private publishRemoval(identity: string): void {
+    for (const listener of this.removalListeners.keys()) {
+      listener(identity)
+    }
   }
 
   remove(id: string, incarnationId?: string): void {
