@@ -19940,10 +19940,6 @@
       },
       "turnDiff": {
         "partial": "Показана часть изменений",
-        "changedFiles_one": "Изменён {{count}} файл",
-        "changedFiles_few": "Изменено {{count}} файла",
-        "changedFiles_many": "Изменено {{count}} файлов",
-        "changedFiles_other": "Изменено {{count}} файла",
         "hide": "Скрыть",
         "hidden": "Orca больше не будет показывать изменения за ход"
       },

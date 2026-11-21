@@ -21085,11 +21085,18 @@
       },
       "turnDiff": {
         "partial": "Partial diff",
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files",
         "showMoreFiles": "Show {{count}} more",
         "hide": "Hide",
-        "hidden": "Orca won't show turn diffs anymore"
+        "hidden": "Orca won't show turn diffs anymore",
+        "fileUncommitted": "uncommitted",
+        "fileDiverged": "uncommitted · changed",
+        "pushed": "pushed",
+        "unpushed": "committed · unpushed",
+        "committed": "committed",
+        "filesEdited_one": "{{count}} file edited",
+        "filesEdited_other": "{{count}} files edited",
+        "uncommitted_one": "{{count}} uncommitted",
+        "uncommitted_other": "{{count}} uncommitted"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",

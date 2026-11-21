@@ -1,5 +1,4 @@
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
-import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
 import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,
@@ -16,7 +15,6 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import {
   beginAutomaticUpstreamRefresh,
-  beginStrictUpstreamRefresh,
   claimAutomaticUpstreamRefreshApply,
   clearGitStatusRefreshOrderingStateForTests,
   finishAutomaticUpstreamRefresh,
@@ -52,6 +50,7 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   pushTarget,
   deps,
   order,
+  head,
   shouldApply
 }: {
   /** The worktree owner's transport. */
@@ -62,6 +61,8 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   pushTarget?: GitPushTarget
   deps: GitStatusRefreshDeps
   order: AutomaticRefreshOrder
+  /** HEAD the status read observed; tags the comparison so stale pushes are not claimed for a moved HEAD. */
+  head?: string
   shouldApply?: () => boolean
 }): Promise<GitUpstreamStatus | null> {
   if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, order, shouldApply)) {
@@ -93,13 +94,22 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   if (!claimAutomaticUpstreamRefreshApply(worktreeId, order, shouldApply)) {
     return null
   }
-  deps.setUpstreamStatus(worktreeId, upstreamStatus)
-  return upstreamStatus
+  const tagged = head ? { ...upstreamStatus, head } : upstreamStatus
+  deps.setUpstreamStatus(worktreeId, tagged)
+  return tagged
 }
 
 export function clearGitStatusRefreshOrderingForTests(): void {
   clearGitStatusRefreshOrderingStateForTests()
   clearAutomaticPushTargetUpstreamStatusCache()
+}
+
+// Stored comparisons carry the HEAD they were computed for so consumers can reject stale pushes.
+export function tagUpstreamWithStatusHead(
+  status: GitStatusResult,
+  upstreamStatus: GitUpstreamStatus
+): GitUpstreamStatus {
+  return status.head ? { ...upstreamStatus, head: status.head } : upstreamStatus
 }
 
 export async function refreshGitStatusForWorktree({
@@ -183,6 +193,7 @@ export async function refreshGitStatusForWorktree({
         pushTarget,
         deps,
         order: refreshOrder,
+        head: status.head,
         shouldApply: request?.shouldApply
       })
       if (upstreamStatus) {
@@ -215,12 +226,13 @@ export async function refreshGitStatusForWorktree({
           connectionId,
           deps,
           order: refreshOrder,
+          head: status.head,
           shouldApply: request?.shouldApply
         })
         return
       }
       if (claimAutomaticUpstreamRefreshApply(worktreeId, refreshOrder, request?.shouldApply)) {
-        deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
+        deps.setUpstreamStatus(worktreeId, tagUpstreamWithStatusHead(status, status.upstreamStatus))
       }
       return
     }
@@ -232,6 +244,7 @@ export async function refreshGitStatusForWorktree({
       pushTarget,
       deps,
       order: refreshOrder,
+      head: status.head,
       shouldApply: request?.shouldApply
     })
   } finally {
@@ -239,89 +252,6 @@ export async function refreshGitStatusForWorktree({
   }
 }
 
-export async function refreshGitStatusForWorktreeStrict({
-  target,
-  ownerHostId,
-  worktreeId,
-  worktreePath,
-  connectionId,
-  pushTarget,
-  deps
-}: {
-  /** The worktree owner's transport. */
-  target: RuntimeClientTarget
-  /** The copy `target` answers for, read when the request starts. */
-  ownerHostId: ExecutionHostId | null
-  worktreeId: string
-  worktreePath: string
-  connectionId?: string
-  pushTarget?: GitPushTarget
-  deps: Omit<GitStatusRefreshDeps, 'fetchUpstreamStatus'> & {
-    fetchUpstreamStatus?: GitStatusRefreshDeps['fetchUpstreamStatus']
-  }
-}): Promise<{ status: GitStatusResult; upstreamStatus: GitUpstreamStatus }> {
-  beginStrictUpstreamRefresh(worktreeId)
-  clearAutomaticPushTargetUpstreamStatusCache()
-  const strictBranchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
-  const status = await getRuntimeGitStatus(
-    {
-      target,
-      worktreeId,
-      worktreePath,
-      connectionId
-    },
-    {
-      admissionTier: 'interactive',
-      // User-triggered reconciliation bypasses automatic polling's no-upstream backoff.
-      bypassEffectiveUpstreamNegativeCache: true,
-      // Keep the total gate after commit/push so missing totals cannot blank the updated chip.
-      ...(strictBranchLineTotalMergeBase
-        ? { branchLineTotalMergeBase: strictBranchLineTotalMergeBase }
-        : {})
-    }
-  )
-
-  deps.setGitStatus(worktreeId, status)
-  // Read shell-driven branch changes from git status --branch without another worktree-list poll.
-  deps.updateWorktreeGitIdentity(
-    worktreeId,
-    {
-      head: status.head,
-      // Detached HEAD needs explicit null to clear any stale branch name.
-      branch: status.branch ?? (status.head ? null : undefined)
-    },
-    ownerHostId
-  )
-  if (pushTarget) {
-    // Use Orca's explicit publish target for PR-created worktrees rather than Git's configured upstream.
-    const upstreamStatus = await getRuntimeGitUpstreamStatus(
-      { target, worktreeId, worktreePath, connectionId },
-      pushTarget
-    )
-    deps.setUpstreamStatus(worktreeId, upstreamStatus)
-    return { status, upstreamStatus }
-  }
-  if (status.upstreamStatus) {
-    if (
-      status.upstreamStatus.ahead > 0 &&
-      status.upstreamStatus.behind > 0 &&
-      status.upstreamStatus.behindCommitsArePatchEquivalent === undefined
-    ) {
-      // Porcelain counts cannot identify stale post-rebase commits; compare first to avoid Sync/Force Push flicker.
-      const upstreamStatus = await getRuntimeGitUpstreamStatus(
-        { target, worktreeId, worktreePath, connectionId },
-        undefined
-      )
-      deps.setUpstreamStatus(worktreeId, upstreamStatus)
-      return { status, upstreamStatus }
-    }
-    deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
-    return { status, upstreamStatus: status.upstreamStatus }
-  }
-  const upstreamStatus = await getRuntimeGitUpstreamStatus(
-    { target, worktreeId, worktreePath, connectionId },
-    undefined
-  )
-  deps.setUpstreamStatus(worktreeId, upstreamStatus)
-  return { status, upstreamStatus }
+export type RefreshGitStatusStrictDeps = Omit<GitStatusRefreshDeps, 'fetchUpstreamStatus'> & {
+  fetchUpstreamStatus?: GitStatusRefreshDeps['fetchUpstreamStatus']
 }

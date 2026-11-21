@@ -19103,7 +19103,6 @@
       },
       "turnDiff": {
         "partial": "部分差異",
-        "changedFiles_other": "{{count}} 個已變更的檔案",
         "hide": "隱藏",
         "hidden": "Orca 將不再顯示各回合的差異"
       },

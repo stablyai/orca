@@ -18940,7 +18940,6 @@
       },
       "turnDiff": {
         "partial": "부분적인 차이점",
-        "changedFiles_other": "변경된 파일 {{count}}개",
         "hide": "숨기기",
         "hidden": "Orca에서 더 이상 턴 변경 사항을 표시하지 않습니다"
       },
