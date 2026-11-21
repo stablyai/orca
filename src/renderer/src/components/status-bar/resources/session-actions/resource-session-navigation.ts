@@ -1,5 +1,5 @@
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 
 type TabLookup = Record<string, { id: string }[]>
 
@@ -41,10 +41,9 @@ export function navigateResourceSessionToTab(
   })
 }
 
-/** Opens a chat row's conversation; a background chat with no tab is revealed by its host first. */
+/** Opens a chat row the way a history click does: a background chat is revealed, a group member opens its room. */
 export function openResourceChat(worktreeId: string, agentSessionId: string): void {
-  void openDesktopStructuredSession({
-    kind: 'history',
+  void activateAiVaultStructuredSession({
     structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId }
   }).catch(() => {})
 }

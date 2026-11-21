@@ -60,6 +60,12 @@ export function installPtySessionListingIpcHandler(deps: {
       }
       try {
         return await listForCaller(event, isWanted, scope, viewAdmission)
+      } catch (error) {
+        // A listing the view gave up on reports that, so the view never shows it as a failure.
+        if (!isWanted()) {
+          throw new Error('view_not_visible')
+        }
+        throw error
       } finally {
         if (key && listings.get(key) === listing) {
           listings.delete(key)

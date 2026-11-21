@@ -162,7 +162,8 @@ export function mergeSnapshotAndSessions(
         isRemote: true,
         hostLabel: host.hostLabel,
         readOnly: true,
-        unplaced: owned ? undefined : true
+        // A repo placed on this host isn't enough: a worktree the catalog hasn't listed yet can't be selected.
+        unplaced: owned && ctx.worktreeById?.has(wt.worktreeId) ? undefined : true
       })
     }
   }
