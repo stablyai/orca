@@ -7,6 +7,7 @@ export const WORKER_THREAD_ENTRY_NAMES = [
   'bots-db-worker-entry',
   'orchestration-reader-entry',
   'session-search-worker-entry',
+  'native-chat-transcript-find-worker-entry',
   'journal-sql-worker-entry',
   'journal-sql-reader-entry',
   'main-thread-hang-watchdog-entry',

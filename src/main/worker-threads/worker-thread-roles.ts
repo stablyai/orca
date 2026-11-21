@@ -16,6 +16,7 @@ export type WorkerThreadRole =
   | 'orca-journal-sql-reader'
   | 'orca-journal-sql-writer'
   | 'orca-main-thread-hang-watchdog'
+  | 'orca-native-chat-find'
   | 'orca-opencode-sqlite-reader'
   | 'orca-orchestration-checkpoint'
   | 'orca-orchestration-reader'

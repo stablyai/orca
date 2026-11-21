@@ -6,6 +6,10 @@ import type {
   NativeChatSubscriptionFrame
 } from './native-chat-api'
 import type { PreloadApi } from '../../api-types'
+import type {
+  NativeChatFindArgs,
+  NativeChatFindOutcome
+} from '../../../shared/native-chat/find/native-chat-session-find'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH,
@@ -32,6 +36,8 @@ export const nativeChatApi = {
       wakeWslDistro: options?.wakeWslDistro,
       beforeOffset: options?.beforeOffset
     }),
+  find: (args: NativeChatFindArgs): Promise<NativeChatFindOutcome> =>
+    ipcRenderer.invoke('nativeChat:find', args),
   subscribe: (
     args: {
       subscriptionId: string

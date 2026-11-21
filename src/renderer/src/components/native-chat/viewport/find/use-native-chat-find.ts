@@ -15,6 +15,7 @@ import type { NativeChatComposerHandle } from '../../composer/native-chat-compos
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 import { focusNativeChatPromptCard } from '../../prompts/use-native-chat-prompt-card-focus'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import type { NativeChatFindSearch } from './use-native-chat-host-find'
 
 // Keep open state/query with the retained chat so reopen preserves its last search.
 export type NativeChatFind = {
@@ -31,6 +32,10 @@ export type NativeChatFind = {
   inputRef: RefObject<HTMLInputElement | null>
   /** Brings a match into the transcript's view, clear of the bar, as a reader step would. */
   revealMatch: (match: Range) => void
+  /** Draws a host match's message, reading older history when it is not loaded. */
+  revealEntry: (entryId: string) => void
+  /** Searches the whole chat on its host; absent where only drawn rows can be searched. */
+  search: NativeChatFindSearch | undefined
 }
 
 function ownsEscape(target: EventTarget | null): boolean {
@@ -50,7 +55,12 @@ export function useNativeChatFind(
   enabled: boolean,
   rootRef: RefObject<HTMLDivElement | null>,
   composerRef: RefObject<Pick<NativeChatComposerHandle, 'focus'> | null>,
-  messageListRef: RefObject<Pick<NativeChatMessageListHandle, 'revealFindMatch'> | null>
+  messageListRef: RefObject<
+    | (Pick<NativeChatMessageListHandle, 'revealFindMatch'> &
+        Partial<Pick<NativeChatMessageListHandle, 'revealFindEntry'>>)
+    | null
+  >,
+  search?: NativeChatFindSearch
 ): NativeChatFind {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -153,6 +163,11 @@ export function useNativeChatFind(
     [messageListRef]
   )
 
+  const revealEntry = useCallback(
+    (entryId: string) => messageListRef.current?.revealFindEntry?.(entryId),
+    [messageListRef]
+  )
+
   return {
     isOpen,
     query,
@@ -163,6 +178,8 @@ export function useNativeChatFind(
     rootRef,
     barRef,
     inputRef,
-    revealMatch
+    revealMatch,
+    revealEntry,
+    search
   }
 }

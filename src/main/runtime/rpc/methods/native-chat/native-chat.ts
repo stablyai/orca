@@ -7,6 +7,7 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import { subscribeNativeChatTranscript } from '../../../../native-chat/transcript-watch'
 import { readNativeChatTranscriptTail } from '../../../../native-chat/transcript-tail-reader'
+import { nativeChatTranscriptFind } from '../../../../native-chat/transcript-find/native-chat-transcript-find'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
@@ -20,6 +21,7 @@ import {
 } from './native-chat-rpc-page-bounds'
 import {
   MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  NativeChatFind,
   NativeChatSession,
   NativeChatUnsubscribe,
   type NativeChatResumePoint
@@ -90,6 +92,23 @@ function resumeIndex(
 }
 
 export const NATIVE_CHAT_METHODS = [
+  defineMethod({
+    name: 'nativeChat.find',
+    permission: 'workspace',
+    params: NativeChatFind,
+    handler: (params, { runtime, signal }) =>
+      nativeChatTranscriptFind().find(
+        {
+          ...params,
+          transcriptPath: nativeChatTranscriptPathOnExecutionHost(
+            runtime.getAgentProviderSessionRows(),
+            params.sessionId,
+            params.transcriptPath
+          )
+        },
+        signal
+      )
+  }),
   defineMethod({
     name: 'nativeChat.readSession',
     permission: 'workspace',

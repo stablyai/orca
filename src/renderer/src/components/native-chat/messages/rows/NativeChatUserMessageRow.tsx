@@ -111,6 +111,7 @@ export function NativeChatUserMessageRow({
       ref={rowRef}
       // Read by the context menu: only rows showing the hover copy or rewind offer them there.
       data-native-chat-message-id={markdown ? message.id : undefined}
+      data-native-chat-find-entry={message.id}
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       data-native-chat-slack-posted={slackPost?.state === 'posted' ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
