@@ -1874,6 +1874,16 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* Why: opaque mix over the sidebar fill so a pinned sticky header hides rows
+   scrolling beneath it while matching the band behind the project. */
+.worktree-project-highlight {
+  background: color-mix(in srgb, var(--project-highlight-color) 9%, var(--worktree-sidebar));
+}
+
+.dark .worktree-project-highlight {
+  background: color-mix(in srgb, var(--project-highlight-color) 14%, var(--worktree-sidebar));
+}
+
 /* Why: one multi-selected look for every list on the card surface (workspaces and
    agents); after the hover rules so it wins, and never on the active/open row. */
 [data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active]) {

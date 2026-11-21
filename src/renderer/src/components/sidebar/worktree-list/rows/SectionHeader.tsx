@@ -23,6 +23,7 @@ import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspa
 import { translateWorkspaceStatusHeaderLabel } from '../../workspace-status/presentation/workspace-board-status-label'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
+import { getProjectHighlightHeaderStyle } from '../viewport/project-highlight-bands'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import {
@@ -146,6 +147,7 @@ export function renderWorktreeSectionHeaderRow(
     headerKey: row.key,
     badgeColor: row.repo?.badgeColor
   })
+  const bandStyle = getProjectHighlightHeaderStyle(row, ctx.groupBy)
   const folderBackedProjectGroup =
     isProjectGroupHeader &&
     !row.repo &&
@@ -185,13 +187,14 @@ export function renderWorktreeSectionHeaderRow(
         args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
         isActiveStickyHeader
           ? cn(
-              'sticky z-20 bg-worktree-sidebar',
+              'sticky z-20',
+              bandStyle ? 'worktree-project-highlight' : 'bg-worktree-sidebar',
               // Why: when a host card is pinned, the group tier pins flush beneath it, not at the viewport top.
               args.hasStickyHost ? 'top-[35px]' : '-top-px'
             )
           : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
+      style={isActiveStickyHeader ? bandStyle : { transform: getVirtualRowTransform(vItem.start) }}
     >
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
