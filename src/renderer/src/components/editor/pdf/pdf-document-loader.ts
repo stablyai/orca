@@ -107,7 +107,8 @@ export function createPdfDocumentLoader({
         }
         const shown = displayed?.task === task ? displayed : null
         try {
-          shown?.detach()
+          // Why: the failed read also fails the detach's flush; nothing awaits that rejection.
+          void Promise.resolve(shown?.detach()).catch(() => {})
         } finally {
           if (shown) {
             displayed = null
