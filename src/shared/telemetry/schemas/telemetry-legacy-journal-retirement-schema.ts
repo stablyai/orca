@@ -130,6 +130,7 @@ export const legacyJournalRetirementSchema = z
     originals_bucket: count,
     copies_bucket: count,
     source_bytes_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS),
+    // The check's own reading and comparing, without conversions or pauses for activity.
     active_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS),
     // From this launch's first attempt to this outcome, pauses for activity included.
     elapsed_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS)

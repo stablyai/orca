@@ -94,7 +94,8 @@ export class JournalLegacyRetirement {
     this.proof = new JournalLegacyProof(
       writer,
       readers,
-      conversions,
+      // A conversion can wait for idle inside, so active time leaves conversions out entirely.
+      { ensure: this.waits.timed((id, foreground) => conversions.ensure(id, foreground)) },
       this.waits.timed(boundary),
       this.stopped.signal,
       this.waits.timed(rest)
