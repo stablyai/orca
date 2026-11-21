@@ -18,8 +18,6 @@ import { providerExecFailure, reportProviderLaunchFailure } from './provider-lau
 import { ProviderFaultOwnership } from './provider-fault-ownership'
 import * as group from './direct-provider-group-reap'
 
-type Ownership = Awaited<ReturnType<typeof publishProviderOwnership>>
-
 export class DirectProviderChild extends EventEmitter implements ProviderChild {
   readonly ready: Promise<void>
   readonly stdin = new PassThrough()
@@ -32,8 +30,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   groupVerdict: 'exited' | 'live' | 'unverifiable' = 'unverifiable'
   writerPid?: number
   pid?: number
-  private publication?: Promise<Ownership>
-  private ownership?: Ownership
+  private publication?: Promise<Awaited<ReturnType<typeof publishProviderOwnership>>>
+  private ownership?: Awaited<ReturnType<typeof publishProviderOwnership>>
   private control?: Duplex
   private gate?: Writable
   private readonly releaseRaw: () => void
