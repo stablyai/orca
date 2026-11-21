@@ -214,6 +214,50 @@ it('lists a same-named skill that is left out with the folder it is in', async (
   ).toBeDefined()
 })
 
+it('lists a skill linked into a project from outside it unticked, with the project', async () => {
+  calls.skills = [
+    { name: 'deploy', description: 'Ship it', homePath: null },
+    {
+      name: 'electron',
+      description: 'Drive the app',
+      homePath: null,
+      optInFrom: 'team-skills',
+      optInKey: 'devex-electron'
+    }
+  ]
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  const row = await screen.findByRole('button', { name: /Skills/ })
+  expect(row.textContent).toContain('1 of 2')
+  fireEvent.click(row)
+  expect(await screen.findByText('From outside team-skills · Drive the app')).toBeDefined()
+  const electron = screen.getByRole('checkbox', { name: 'electron' })
+  expect(electron.getAttribute('aria-checked')).toBe('false')
+  expect(screen.getByRole('checkbox', { name: 'deploy' }).getAttribute('aria-checked')).toBe('true')
+
+  // Ticking it sends the owner's tick for the folder it is shown from.
+  fireEvent.click(electron)
+  await waitFor(() =>
+    expect(
+      calls.rpc.findLast(({ method }) => method === 'bots.share.prepare')?.params
+    ).toMatchObject({
+      skills: ['deploy', 'electron'],
+      outsideSkills: [{ name: 'electron', key: 'devex-electron' }]
+    })
+  )
+  expect(electron.getAttribute('aria-checked')).toBe('true')
+})
+
+it('lists a skill with a symlink as not shared, and the Skills row still opens to it', async () => {
+  calls.skills = []
+  calls.leftOut = [{ kind: 'skill', name: 'deploy', why: 'link' }]
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  // Nothing shareable reads None, yet the row opens to show why.
+  const row = await screen.findByRole('button', { name: /Skills/ })
+  expect(row.textContent).toContain('None')
+  fireEvent.click(row)
+  expect(await screen.findByText('Has a symlink or hard link · not shared')).toBeDefined()
+})
+
 it('picks every memory file with Include memory, and All clears or picks them all', async () => {
   render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
   fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))

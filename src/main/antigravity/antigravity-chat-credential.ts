@@ -29,7 +29,11 @@ export function envValue(
     return env[name]
   }
   const upper = name.toUpperCase()
-  return Object.entries(env).find(([key]) => key.toUpperCase() === upper)?.[1]
+  // Duplicates differing only in case: a set value wins over an empty one.
+  const values = Object.entries(env)
+    .filter(([key]) => key.toUpperCase() === upper)
+    .map(([, value]) => value)
+  return values.find((value) => value.trim()) ?? values[0]
 }
 
 async function hasSavedGoogleLogin(home: string): Promise<boolean> {

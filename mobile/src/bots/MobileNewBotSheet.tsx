@@ -20,9 +20,13 @@ import {
 } from '../../../src/shared/bot-avatar'
 import { proposalCreateParams, type BotProposal } from '../../../src/shared/bots/bot-proposal'
 import { MobileBotTemplatesSheet } from './MobileBotTemplatesSheet'
+import { MobileBotImportSheet, type BotImportFrom } from './MobileBotImportSheet'
+import { MobileBotShareReceiveSheet } from './sharing/MobileBotShareReceiveSheet'
+import { useBotImportSources } from './bot-import-host-reads'
+import { botImportNudge } from '../../../src/shared/bots/bot-import'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../src/shared/bot-types'
 import { botCreate } from './bot-sheet-operations'
-import type { PhoneBot } from './host-bots-operations'
+import type { ListedBot, PhoneBot } from './host-bots-operations'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
 import {
@@ -40,8 +44,11 @@ type NewBotSheetProps = {
   computerId: string | null
   /** Runs on's choices: this computer, then each server. */
   computers: readonly NewBotComputer[]
-  /** The bots on a computer now, so a template's name is free there ("Pull request review 2"). */
-  botNamesOn: (computerId: string) => readonly string[]
+  /** The bots on a computer now, so a template's name is free there ("Pull request review 2"), and a
+   *  link one was made from offers that bot. */
+  botsOn: (computerId: string) => readonly ListedBot[]
+  /** Opens a bot already made from a pasted link; absent, From a link doesn't show. */
+  onOpenBot?: (bot: ListedBot, computer: NewBotComputer) => void
   /** The route to a computer's bots.create; null once it can't be reached. */
   clientFor: (computerId: string) => RpcClient | null
   /** The route to the paired computer that reaches it, whose Orca account a server's is compared with. */
@@ -101,6 +108,10 @@ function NewBotForm(props: NewBotSheetProps) {
       setPicking(next)
     }
   }
+  // Import from another app stays under the computer and agent pickers it opens.
+  const [importing, setImporting] = useState(false)
+  // From a link stays under the computer and agent pickers it opens.
+  const [receiving, setReceiving] = useState(false)
   const listed = props.computers.find((entry) => entry.id === computerId)
   // A chosen computer that drops out keeps its name, unreachable, so Runs on can move the draft.
   const [lastChosen, setLastChosen] = useState(listed)
@@ -110,6 +121,8 @@ function NewBotForm(props: NewBotSheetProps) {
   const computer = listed ?? (computerId === lastChosen?.id ? lastChosen : undefined)
   const client = listed && listed.refusal === undefined ? props.clientFor(listed.id) : null
   const choices = useNewBotAgentChoices(client)
+  const importRead = useBotImportSources(seed ? null : client)
+  const nudge = importRead.status === 'ready' ? botImportNudge(importRead.sources) : null
   // The kept agent moves to the computer's first when it lacks it; until it answers, the kept one shows.
   const agent = choices?.length && !choices.includes(picked) ? choices[0] : picked
   const otherAccount = useOtherOrcaAccount(
@@ -121,28 +134,34 @@ function NewBotForm(props: NewBotSheetProps) {
   const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
-  const ready = trimmed.length > 0 && client !== null && choices !== null && choices.length > 0
-  const canCreate = ready && !creating
+  const agentsReady = client !== null && choices !== null && choices.length > 0
+  const ready = trimmed.length > 0 && agentsReady
 
-  const create = async () => {
-    if (!canCreate || !client || !computer) {
+  // An import names its bot on its own page.
+  const create = async (imported?: { name: string; importFrom: BotImportFrom }) => {
+    if (!(imported ? agentsReady : ready) || creating || !client || !computer) {
       return
     }
     setCreating(true)
     setError(null)
     try {
       const { bot } = botCreate.interpret(
-        await botCreate.request(client, {
-          // A workspace with no note or branch words seeds no purpose: a plain bot, as on the desktop.
-          ...(proposal?.value.purpose.trim()
-            ? proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
-                templatePackages: computer?.templatePackages === true,
-                ...(seed?.fromOffer ? { fromOffer: seed.fromOffer } : {})
-              })
-            : { name: trimmed, agent }),
-          avatar,
-          ...(seed?.takingOver ? { takingOver: true as const } : {})
-        })
+        await botCreate.request(
+          client,
+          imported
+            ? { name: imported.name, agent, avatar, importFrom: imported.importFrom }
+            : {
+                // A workspace with no note or branch words seeds no purpose: a plain bot, as on the desktop.
+                ...(proposal?.value.purpose.trim()
+                  ? proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
+                      templatePackages: computer?.templatePackages === true,
+                      ...(seed?.fromOffer ? { fromOffer: seed.fromOffer } : {})
+                    })
+                  : { name: trimmed, agent }),
+                avatar,
+                ...(seed?.takingOver ? { takingOver: true as const } : {})
+              }
+        )
       )
       setName('')
       setProposal(null)
@@ -158,12 +177,51 @@ function NewBotForm(props: NewBotSheetProps) {
     }
   }
 
+  const leaveImport = () => {
+    setError(null)
+    setImporting(false)
+  }
+  const pictureView = (
+    <View>
+      {picture?.kind === 'mascot' ? (
+        <MobileBotAvatar avatar={{ kind: 'mascot', id: picture.id }} size={72} />
+      ) : null}
+      <Pressable
+        style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
+        onPress={() => setAvatar(randomMascotAvatar(avatar))}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('bots.new.shuffle', 'Another picture')}
+      >
+        <Shuffle size={14} color={colors.textSecondary} />
+      </Pressable>
+    </View>
+  )
+  const runsOn = choosesComputer ? (
+    <NewBotRunsOn
+      computer={computer}
+      locked={seed !== undefined || Boolean(proposal?.value.worktrees?.length)}
+      reachable={client !== null}
+      otherAccount={otherAccount}
+      onPick={() => pick('computer')}
+    />
+  ) : null
+  const agentRow = (
+    <NewBotAgentRow
+      agent={agent}
+      loading={client !== null && choices === null}
+      onPick={() => pick('agent')}
+    />
+  )
+
   return (
     // iOS cannot present over a closing sibling Modal; the form and its pickers share one.
     <BottomDrawerModalHost>
       <MobileBotTemplatesSheet
         visible={props.visible && picking === 'template'}
-        botNames={picking === 'template' && computer ? props.botNamesOn(computer.id) : []}
+        botNames={
+          picking === 'template' && computer ? props.botsOn(computer.id).map((bot) => bot.name) : []
+        }
         onClose={() => setPicking(null)}
         onPick={(pick) => {
           setPicking(null)
@@ -193,8 +251,50 @@ function NewBotForm(props: NewBotSheetProps) {
         onPick={setPicked}
         onClose={() => setPicking(null)}
       />
+      <MobileBotImportSheet
+        // A folder or pick from one computer never goes to another.
+        key={computerId ?? ''}
+        visible={props.visible && importing && picking === null}
+        hostLabel={computer?.label ?? ''}
+        client={client}
+        read={importRead}
+        picture={pictureView}
+        runsOn={
+          <>
+            {runsOn}
+            {agentRow}
+          </>
+        }
+        ready={agentsReady}
+        creating={creating}
+        error={error}
+        onBack={leaveImport}
+        onClose={leaveImport}
+        onAfterClose={props.onAfterClose}
+        onCreate={(importName, importFrom) => void create({ name: importName, importFrom })}
+      />
+      {props.onOpenBot ? (
+        <MobileBotShareReceiveSheet
+          visible={props.visible && receiving && picking === null}
+          client={client}
+          bots={computer ? props.botsOn(computer.id) : []}
+          agent={agent}
+          runsOn={
+            <>
+              {runsOn}
+              {agentRow}
+            </>
+          }
+          ready={agentsReady}
+          onBack={() => setReceiving(false)}
+          onClose={props.onClose}
+          onAfterClose={props.onAfterClose}
+          onCreated={(bot) => computer && props.onCreated(bot, computer)}
+          onOpenBot={(bot) => computer && props.onOpenBot?.(bot, computer)}
+        />
+      ) : null}
       <BottomDrawer
-        visible={props.visible && picking === null}
+        visible={props.visible && !importing && !receiving && picking === null}
         dismissible={!creating}
         onClose={props.onClose}
         onAfterClose={props.onAfterClose}
@@ -224,35 +324,55 @@ function NewBotForm(props: NewBotSheetProps) {
         {proposal ? null : (
           <ListGroup style={styles.templateGroup}>
             <ListRow
+              key="template"
               title={t('bots.new.fromTemplate', 'Use template')}
               navigates
               onPress={() => pick('template')}
             />
+            {/* Only a computer that lists other apps' bots takes `importFrom`; an older one drops it. */}
+            {importRead.status !== 'ready' ? null : (
+              <ListRow
+                key="import"
+                title={t('bots.import.title', 'Import from another app')}
+                {...(nudge
+                  ? {
+                      subtitle:
+                        nudge.count === 1
+                          ? t('bots.import.nudgeOne', 'We found a bot in {{app}}.', {
+                              app: nudge.label
+                            })
+                          : t('bots.import.nudgeMany', 'We found {{count}} bots in {{app}}.', {
+                              count: nudge.count,
+                              app: nudge.label
+                            })
+                    }
+                  : {})}
+                navigates
+                onPress={() => {
+                  if (!creating) {
+                    setError(null)
+                    setImporting(true)
+                  }
+                }}
+              />
+            )}
+            {props.onOpenBot && !seed ? (
+              <ListRow
+                key="link"
+                title={t('bots.share.receive.fromLink', 'From a link')}
+                subtitle={t('bots.share.receive.pasteDescription', 'Paste a link someone shared.')}
+                navigates
+                onPress={() => {
+                  if (!creating) {
+                    setReceiving(true)
+                  }
+                }}
+              />
+            ) : null}
           </ListGroup>
         )}
-        {choosesComputer ? (
-          <NewBotRunsOn
-            computer={computer}
-            locked={seed !== undefined || Boolean(proposal?.value.worktrees?.length)}
-            reachable={client !== null}
-            otherAccount={otherAccount}
-            onPick={() => pick('computer')}
-          />
-        ) : null}
-        <View style={styles.picture}>
-          {picture?.kind === 'mascot' ? (
-            <MobileBotAvatar avatar={{ kind: 'mascot', id: picture.id }} size={72} />
-          ) : null}
-          <Pressable
-            style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
-            onPress={() => setAvatar(randomMascotAvatar(avatar))}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('bots.new.shuffle', 'Another picture')}
-          >
-            <Shuffle size={14} color={colors.textSecondary} />
-          </Pressable>
-        </View>
+        {runsOn}
+        <View style={styles.picture}>{pictureView}</View>
         <TextField
           value={name}
           onChangeText={setName}
@@ -271,11 +391,7 @@ function NewBotForm(props: NewBotSheetProps) {
           </Text>
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <NewBotAgentRow
-          agent={agent}
-          loading={client !== null && choices === null}
-          onPick={() => pick('agent')}
-        />
+        {agentRow}
       </BottomDrawer>
     </BottomDrawerModalHost>
   )

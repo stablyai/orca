@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Worktree } from '../../shared/worktree/types'
@@ -15,19 +16,25 @@ import {
   lookAroundFileIo,
   lookAroundStoreFile
 } from '../bots/bot-look-around-store'
-import { botHomeFolder, botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
-import { botHomeWorktreeOnBranch, runtimeBotWork, workerGitHubRepo } from '../bots/bot-work-runtime'
-import type { BotHomeLineage, BotWorkRuntime } from '../bots/bot-work-runtime'
+import {
+  botHomeWorktreeOnBranch,
+  runtimeBotWork,
+  workerGitHubRepo,
+  type BotHomeLineage,
+  type BotWorkRuntime
+} from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type { OwnPullRequest } from '../connector-cloud/own-pr-trigger-guard'
-import { botWorkHasPrBranch } from '../bots/bot-work-pr-branch'
+import { botWorkHasPrBranch, botWorkRowsForRuntime } from '../bots/bot-work-pr-branch'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
@@ -144,8 +151,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       readShareable: (bot) =>
         readBotShareable({
           bot,
-          home: botHomeFolder(bot),
-          automations: this.store?.listAutomations?.() ?? []
+          automations: this.store?.listAutomations?.() ?? [],
+          repos: this.listRepos()
         })
     })
     return this.botShareService
@@ -157,15 +164,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     operation
   ) => operation()
 
-  private botSessionHooks: BotSessionHooks = {
-    turnEnded: () => {},
-    requestFailed: () => {},
-    groupRoomOf: () => null,
-    recentChats: async () => null,
-    unansweredQuestionNote: async () => null,
-    chatsOf: async () => [],
-    sendItemMail: async () => false
-  }
+  private botSessionHooks: BotSessionHooks = UNSET_BOT_SESSION_HOOKS
 
   /** Set by the runtime: a bot turn ended (bot-request-outcome.ts); a member session's group room;
    *  a bot's other chats lately; an owner item change's mail. */
@@ -194,8 +193,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return this.agentOrchestrationProjection.buildByPaneKey()
   }
 
-  /** The paired servers' bots as an `@` pick of one last read them. */
-  private readonly pairedBotRosters = pairedBotRosterCache(this)
+  /** The paired servers' rosters as last read, for an `@` pick and a send that misses here. */
+  readonly pairedBotRosters = pairedBotRosterCache(this)
 
   /** What the work record reads: orchestration, worktrees and the conversation store. */
   private readonly botWorkRuntime: BotWorkRuntime & BotHomeLineage = {
@@ -229,25 +228,14 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Whether a bot's work on this host opened this pull request as its owner: a live worker's, or a
    *  workspace under a bot's home with its head branch checked out. */
   async isBotWorkPullRequest(pr: OwnPullRequest): Promise<boolean> {
+    const rows = botWorkRowsForRuntime(
+      this.botWork,
+      (botId) => this.listedBotLookup.hasId(botId),
+      (worker, branch) => workerGitHubRepo(this.botWorkRuntime, worker, branch)
+    )
     return (
-      (await botWorkHasPrBranch(
-        {
-          rows: () =>
-            this.botWork
-              .store()
-              .liveRows()
-              .filter((row) => this.bots.list().some((bot) => bot.id === row.botId)),
-          workspace: async (row) => {
-            const checked = await this.botWork.check(row)
-            const worker = checked?.worker
-            const branch = checked?.workspace?.branch
-            return worker && branch
-              ? { branch, githubRepo: () => workerGitHubRepo(this.botWorkRuntime, worker, branch) }
-              : null
-          }
-        },
-        pr
-      )) || (await botHomeWorktreeOnBranch(this.botWorkRuntime, pr.head, pr.headRef))
+      (await botWorkHasPrBranch(rows, pr)) ||
+      (await botHomeWorktreeOnBranch(this.botWorkRuntime, pr.head, pr.headRef))
     )
   }
 
@@ -258,6 +246,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** A bot session's gate on a queued message; the runtime overrides it. */
   protected assertStructuredQueuedMessageAllowed(_sessionId: string, _messageId: string): void {}
+
+  private readonly listedBotLookup = createBotLookupIndex(() => this.bots.list())
+  private readonly wiredBotLookup = createBotLookupIndex(() => this.wiredBots())
 
   /** The bots on this host's store, read per call. */
   protected wiredBots(): readonly WiredBot[] {
@@ -280,7 +271,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
-        pairedBotRosters: this.pairedBotRosters,
+        pairedBotRosters: this.pairedBotRosters.read,
         scrubToolSecrets: (bot) => this.scrubBotToolSecrets(bot)
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>
@@ -295,14 +286,15 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** A chat's phone attention: muted by its workspace's filters or its bot's switches, with its group room. */
   protected botAttentionDeliveryDeps() {
-    const muteDeps = {
-      isWorkspaceMuted: (id: string) => this.isWorkspaceNotificationMuted(id),
-      bots: () => this.wiredBots()
-    }
+    const isWorkspaceMuted = (id: string) => this.isWorkspaceNotificationMuted(id)
     type Muted = Parameters<typeof isStructuredAttentionMuted>
     return {
       isMuted: (scope: Muted[1], news: Muted[2]) =>
-        isStructuredAttentionMuted(muteDeps, scope, news),
+        isStructuredAttentionMuted(
+          { isWorkspaceMuted, bots: () => this.wiredBotLookup.byHomeList(scope.workspaceId) },
+          scope,
+          news
+        ),
       readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId),
       repliesInSlack: (id: string) => !!this.store && sessionRepliesInSlack(this.store, id)
     }

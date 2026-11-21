@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -32,6 +32,10 @@ type StoreState = {
 }
 
 const mocks = vi.hoisted(() => {
+  const listeners: {
+    relayStatus: ((detail: { status: string }) => void) | null
+    devicesChanged: (() => void) | null
+  } = { relayStatus: null, devicesChanged: null }
   const holder: { state: StoreState } = { state: {} as StoreState }
   const useAppStore = Object.assign(
     (selector: (state: StoreState) => unknown) => selector(holder.state),
@@ -47,7 +51,8 @@ const mocks = vi.hoisted(() => {
     revokeDevice: vi.fn(),
     toastError: vi.fn(),
     toastSuccess: vi.fn(),
-    updateSettings: vi.fn()
+    updateSettings: vi.fn(),
+    listeners
   }
 })
 
@@ -169,6 +174,8 @@ describe('MobilePane pairing connection mode', () => {
     vi.clearAllMocks()
     _resetPairedMobileDevicesCacheForTests()
     mocks.latestPairedDevicesProps = null
+    mocks.listeners.relayStatus = null
+    mocks.listeners.devicesChanged = null
     getPairingQR.mockReset().mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,qr',
@@ -195,7 +202,16 @@ describe('MobilePane pairing connection mode', () => {
           getPairingQR,
           listDevices: mocks.listDevices,
           listNetworkInterfaces: mocks.listNetworkInterfaces,
-          revokeDevice: mocks.revokeDevice
+          revokeDevice: mocks.revokeDevice,
+          getRelayStatus: vi.fn().mockResolvedValue({ status: 'offline' }),
+          onRelayStatusChanged: (listener: (detail: { status: string }) => void) => {
+            mocks.listeners.relayStatus = listener
+            return () => {}
+          },
+          onDevicesChanged: (listener: () => void) => {
+            mocks.listeners.devicesChanged = listener
+            return () => {}
+          }
         },
         ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
       }
@@ -237,5 +253,67 @@ describe('MobilePane pairing connection mode', () => {
 
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     expect(screen.getByTestId('qr')).toHaveTextContent('none')
+  })
+
+  it('shows a phone that paired in main while the pane was open', async () => {
+    render(<MobilePane />)
+    await waitFor(() => expect(mocks.listDevices).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.listeners.devicesChanged).not.toBeNull())
+    expect(screen.getByTestId('paired-devices')).toHaveTextContent('')
+
+    mocks.listDevices.mockResolvedValue({
+      devices: [{ deviceId: 'phone-1', name: 'Pixel', pairedAt: 1, lastSeenAt: 2 }]
+    })
+    mocks.listeners.devicesChanged!()
+
+    await waitFor(() => expect(screen.getByTestId('paired-devices')).toHaveTextContent('phone-1'))
+  })
+
+  it('mints a new Relay code once the relay recovers from the outage that failed the mint', async () => {
+    const user = userEvent.setup()
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_assignment_failed_502',
+        stage: 'create_pairing_relay',
+        message: 'Relay assignment failed'
+      }
+    })
+    render(<MobilePane />)
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await screen.findByText('Couldn’t create a Relay pairing code.')
+    await waitFor(() => expect(mocks.listeners.relayStatus).not.toBeNull())
+
+    mocks.listeners.relayStatus!({ status: 'registered' })
+
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
+    expect(screen.queryByText('Couldn’t create a Relay pairing code.')).toBeNull()
+  })
+
+  it('does not retry the mint when the relay only drops to standby after the failure', async () => {
+    const user = userEvent.setup()
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_assignment_failed_502',
+        stage: 'create_pairing_relay',
+        message: 'Relay assignment failed'
+      }
+    })
+    render(<MobilePane />)
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await screen.findByText('Couldn’t create a Relay pairing code.')
+    await waitFor(() => expect(mocks.listeners.relayStatus).not.toBeNull())
+
+    // Main publishes standby once the failed mint releases its demand; no relay connection happened.
+    act(() => {
+      mocks.listeners.relayStatus!({ status: 'connecting' })
+      mocks.listeners.relayStatus!({ status: 'standby' })
+    })
+
+    expect(getPairingQR).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Couldn’t create a Relay pairing code.')).not.toBeNull()
   })
 })

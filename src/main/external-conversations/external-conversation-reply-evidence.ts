@@ -233,18 +233,25 @@ export function rowVerdict(
     cut: readonly AgentJournalConnectorDelivery[]
     unresolved: readonly AgentJournalConnectorDelivery[]
     settled: boolean
+    /** Usage-limit cuts whose scheduler will send no continue (disposition ended). */
+    endedCuts: ReadonlySet<string>
     idle: boolean
     lastEnded: number
     rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
   }
 ): ReplyRecoveryVerdict | null {
-  const { view, cut, unresolved, settled, idle, lastEnded, rejectionOf } = facts
+  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, rejectionOf } = facts
   if (row.claimMessageId !== undefined) {
     return settled ? view.claimVerdict(row.claimMessageId) : null
   }
+  if (row.cut?.kind === 'usage_limit') {
+    // Its scheduler's to close: once no continue will come, it fails with the limit it hit.
+    return endedCuts.has(row.cut.turnId)
+      ? { outcome: 'failed', ...(row.cutFailure ? { failure: row.cutFailure } : {}) }
+      : null
+  }
   if (row.cut) {
-    // A usage-limit cut is its scheduler's to close.
-    return settled && row.cut.kind === 'restart' ? { outcome: 'interrupted' } : null
+    return settled ? { outcome: 'interrupted' } : null
   }
   if (names(cut)(row)) {
     return settled ? { outcome: 'interrupted' } : null

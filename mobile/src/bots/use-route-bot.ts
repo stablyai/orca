@@ -41,6 +41,8 @@ export type RouteBot = {
   /** Counts the reads that may have moved its items (an items or workers notice, reconnect,
    *  foreground), so its item list and page re-read with these only, not with each pane's phase. */
   itemReads: number
+  /** The store key for the route's execution host (`hostBotsKey`). */
+  hostKey: string
 }
 
 /** The notices that can change what an item list or page shows: its items, and their linked workers. */
@@ -216,7 +218,8 @@ export function useRouteBot({
     applyBot,
     refresh,
     reads,
-    itemReads
+    itemReads,
+    hostKey
   }
 }
 
