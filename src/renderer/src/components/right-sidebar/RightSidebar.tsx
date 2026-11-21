@@ -214,13 +214,13 @@ function RightSidebarInner(): React.JSX.Element {
     <div
       ref={containerRef}
       className={cn(
-        'relative flex-shrink-0 flex flex-row',
+        'right-sidebar-surface relative flex-shrink-0 flex flex-row bg-sidebar',
         // Allow the open resize handle to overflow; at width zero, clip mounted content and icons.
         rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
     >
       <div
-        className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
+        className="flex flex-col flex-1 min-w-0 overflow-hidden"
         style={{
           borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}
@@ -264,7 +264,7 @@ function RightSidebarInner(): React.JSX.Element {
             onContextMenu={contextPlugin.onContextMenu}
             onPointerDown={contextPlugin.onPointerDown}
           >
-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
+            <div className="flex flex-col items-center w-10 min-w-[40px] border-l border-border side-activity-bar-windows-inset">
               <TooltipProvider>{sideActivityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>

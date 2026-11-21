@@ -98,6 +98,7 @@ const SidebarNav = React.memo(function SidebarNav() {
     >
       <button
         type="button"
+        data-sidebar-search-trigger=""
         onClick={() => openModal('worktree-palette')}
         aria-label={
           botsEnabled

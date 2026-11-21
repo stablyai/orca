@@ -1762,7 +1762,9 @@
         "acrylic": "acrylic"
       },
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later.",
-      "fc2ba9b528": "Window material"
+      "fc2ba9b528": "Window material",
+      "frosted": "Frosted Glass",
+      "frostedDescription": "Softens the desktop behind the window with a neutral blur. Requires restart."
     },
     "updateDelay": {
       "description": "Wait this many days after a release is published before Orca offers it.",
