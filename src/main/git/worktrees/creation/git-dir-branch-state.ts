@@ -1,4 +1,5 @@
-import { readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { dirname, isAbsolute, join } from 'node:path'
 
@@ -10,6 +11,8 @@ export type GitDirState = {
   heads: ReadonlyMap<string, string>
   /** Branches a rebase (head-name, --update-refs) or bisect reserves: Git's own in-use rule. */
   reserved: ReadonlySet<string>
+  /** HEADs were read without following symlinks, so a symlinked HEAD already names its ref. */
+  linksRead: boolean
 }
 
 // Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
@@ -43,7 +46,9 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   // Bounded: thousands of worktrees must not flood the main process's file system pool.
   await forEachBounded(gitDirs, async (gitDir) => {
     const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-      readOptional(join(gitDir, 'HEAD')),
+      NO_FOLLOW === undefined
+        ? readOptional(join(gitDir, 'HEAD'))
+        : readRefFile(join(gitDir, 'HEAD')),
       readOptional(join(gitDir, 'rebase-merge', 'head-name')),
       readOptional(join(gitDir, 'rebase-apply', 'head-name')),
       readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
@@ -60,7 +65,7 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
       reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
     }
   })
-  return { heads, reserved }
+  return { heads, reserved, linksRead: NO_FOLLOW !== undefined }
 }
 
 // Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs).
@@ -180,4 +185,46 @@ async function readVerifiedCheckoutDir(
   }
   const pointed = isAbsolute(pointer) ? toHostPath(pointer) : join(dirname(dotGit), pointer)
   return (await isSamePath(pointed, gitDir)) ? dirname(dotGit) : undefined
+}
+
+// One no-follow read per ref where the platform has O_NOFOLLOW (not Windows).
+const NO_FOLLOW = constants.O_NOFOLLOW
+
+/** A ref file's content, or `ref: <target>` for a symlinked one; '' when missing or a directory. */
+export async function readRefFile(path: string): Promise<string> {
+  if (NO_FOLLOW === undefined) {
+    return readRefFileByLstat(path)
+  }
+  try {
+    return normalizeHead(
+      await readFile(path, { encoding: 'utf8', flag: constants.O_RDONLY | NO_FOLLOW })
+    )
+  } catch (error) {
+    const code = errorCode(error)
+    if (code === 'ELOOP' || code === 'EMLINK') {
+      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
+    }
+    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
+    if (code === 'EISDIR') {
+      return ''
+    }
+    rethrowUnlessMissing(error)
+    return ''
+  }
+}
+
+async function readRefFileByLstat(path: string): Promise<string> {
+  try {
+    const entry = await lstat(path)
+    if (entry.isSymbolicLink()) {
+      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
+    }
+    if (entry.isDirectory()) {
+      return ''
+    }
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+  return normalizeHead(await readOptional(path))
 }

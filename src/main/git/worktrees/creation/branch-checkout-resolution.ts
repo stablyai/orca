@@ -1,14 +1,11 @@
-import { constants } from 'node:fs'
-import { lstat, readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   COMMIT_ID,
-  errorCode,
   forEachBounded,
   isSamePath,
-  normalizeHead,
   readLinkedCheckoutDir,
-  readOptional,
+  readRefFile,
   readRefLink,
   rethrowUnlessMissing,
   UNRESOLVED_HEAD,
@@ -48,7 +45,7 @@ export async function resolveBranchCheckouts(
   // Per-worktree refs (refs/worktree/, refs/bisect/, refs/rewritten/) live in their own git dir.
   const readLooseRef = (ref: string, gitDir: string) => {
     const path = join(PER_WORKTREE_REF.test(ref) ? gitDir : commonDir, ref)
-    const known = looseRefs.get(path) ?? readLooseRefFile(path)
+    const known = looseRefs.get(path) ?? readRefFile(path)
     looseRefs.set(path, known)
     return known
   }
@@ -90,7 +87,7 @@ export async function resolveBranchCheckouts(
   }
   let unresolvable = false
   await forEachBounded(unnamed, async (gitDir) => {
-    const link = settled() ? undefined : await readRefLink(join(gitDir, 'HEAD'))
+    const link = settled() || state.linksRead ? undefined : await readRefLink(join(gitDir, 'HEAD'))
     if (link !== undefined) {
       unresolvable ||= !classify(gitDir, link)
     } else {
@@ -131,51 +128,14 @@ export async function resolveBranchCheckouts(
     unknown = true
     throw error
   })
+  // An owner already found settles it even if another chain could not be followed.
+  if (settled()) {
+    return { kind: 'owned', gitDirs: owners }
+  }
   if (unknown) {
     return { kind: 'unknown' }
   }
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
-}
-
-// One no-follow read per ref where the platform has O_NOFOLLOW (not Windows).
-const NO_FOLLOW = constants.O_NOFOLLOW
-
-async function readLooseRefFile(path: string): Promise<string> {
-  if (NO_FOLLOW === undefined) {
-    return readLooseRefFileByLstat(path)
-  }
-  try {
-    return normalizeHead(
-      await readFile(path, { encoding: 'utf8', flag: constants.O_RDONLY | NO_FOLLOW })
-    )
-  } catch (error) {
-    const code = errorCode(error)
-    if (code === 'ELOOP' || code === 'EMLINK') {
-      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
-    }
-    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
-    if (code === 'EISDIR') {
-      return ''
-    }
-    rethrowUnlessMissing(error)
-    return ''
-  }
-}
-
-async function readLooseRefFileByLstat(path: string): Promise<string> {
-  try {
-    const entry = await lstat(path)
-    if (entry.isSymbolicLink()) {
-      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
-    }
-    if (entry.isDirectory()) {
-      return ''
-    }
-  } catch (error) {
-    rethrowUnlessMissing(error)
-    return ''
-  }
-  return normalizeHead(await readOptional(path))
 }
 
 async function pathExists(path: string): Promise<boolean> {
