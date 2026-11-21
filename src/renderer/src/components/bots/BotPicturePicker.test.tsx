@@ -99,6 +99,7 @@ describe('BotPicturePicker on a retired mascot', () => {
     expect(document.querySelector('[data-position="current"]')?.getAttribute('data-face')).toBe(
       'custom'
     )
+    expect(document.querySelector('[data-face="generate"] img')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Outfit' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Tie' }))
 

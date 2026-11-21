@@ -91,6 +91,8 @@ export function BotPictureCarousel({
   const order = faces.map((face) => face.key).join(' ')
   const [slideOver, setSlideOver] = useState<string | null>(null)
   const sliding = slideOver === order
+  // Where the slide started, so faces leaving view keep their outfit until it ends.
+  const [slideFrom, setSlideFrom] = useState(index)
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -102,6 +104,7 @@ export function BotPictureCarousel({
   )
   const go = (next: number): void => {
     setSlideOver(order)
+    setSlideFrom(index)
     if (settle.current) {
       clearTimeout(settle.current)
     }
@@ -135,8 +138,9 @@ export function BotPictureCarousel({
         // Faces past the neighbours wait further out, so they slide in rather than appear.
         const x = Math.sign(offset) * NEIGHBOUR_OFFSET_PX * (distance > 1 ? 1.4 : 1)
         const position = distance === 0 ? 'current' : distance === 1 ? 'neighbour' : 'hidden'
-        // Hidden faces wear nothing, so only the three in view read and decode outfit art.
-        const shown = position !== 'hidden'
+        // Hidden faces wear nothing, so only the faces in view read and decode outfit art.
+        const shown =
+          position !== 'hidden' || (sliding && Math.abs(faceOffset(i, slideFrom, count)) <= 1)
         const style = {
           transform: `translate(calc(-50% + ${x}px), -50%) scale(${distance === 0 ? 1 : NEIGHBOUR_SCALE})`
         }

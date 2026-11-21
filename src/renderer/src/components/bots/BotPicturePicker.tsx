@@ -170,7 +170,8 @@ export function BotPicturePicker({
       }
       return ownTurn
     },
-    custom?.src ? { src: custom.src, description: custom.description } : null,
+    // A retired mascot keeps its own tile, so Generate never holds it.
+    custom?.src && !custom.mascot ? { src: custom.src, description: custom.description } : null,
     () => {
       generateTurn.current = intake.claim()
     }
