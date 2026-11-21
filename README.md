@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, Codex, and any other coding agent in parallel. Now with bots inside: ask from Slack, Linear, or GitHub, and step in when they need you.
+  <strong>The open-source agent IDE — now with bots inside.</strong><br/>
+  Most bots end in a chat thread. An Orca bot hands you the worktree.
 </p>
 
 <h3 align="center"><a href="https://orca.dev/download"><ins>Download Orca</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Explore bots →</ins></a></h3>
