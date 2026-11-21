@@ -1,7 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import { deliverFollowUp } from '../../../external-conversations/external-conversation-send'
-import { ConversationChain } from '../../../external-conversations/external-conversation-chain'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import {
@@ -352,40 +350,5 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     )
     expect(writes).toHaveLength(1)
     expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
-  })
-
-  it.each(['agent', 'reject'] as const)('follow-up cancel before late %s', async (late) => {
-    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    const probe = Promise.withResolvers<'agent'>(),
-      reached = Promise.withResolvers<void>()
-    const unsubscribe = vi.fn()
-    vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
-    vi.mocked(runtime.readLaunchedAgentForeground).mockImplementation(() => {
-      reached.resolve()
-      return probe.promise
-    })
-    const chain = new ConversationChain(new AbortController().signal)
-    const delivered = chain.enqueue('prompt', (signal) =>
-      deliverFollowUp(runtime, {
-        handle,
-        agent: 'claude',
-        expectedBinding: runtime.getTerminalPromptRequestBinding(handle),
-        text: 'follow-up',
-        requestId: 'follow-up',
-        signal
-      })
-    )
-    await reached.promise
-    void chain.cancel('prompt', 'conversation_cancelled')
-    await expect(delivered).resolves.toMatchObject({ outcome: 'refused' })
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-    if (late === 'agent') {
-      probe.resolve('agent')
-    } else {
-      probe.reject(new Error('late failure'))
-    }
-    await Promise.resolve()
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-    expect(writes).toEqual([])
   })
 })

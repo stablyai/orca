@@ -145,6 +145,7 @@ export function installPtyInspectIpcHandlers(deps: {
         expectedIncarnationId?: string
         scanChildProcesses?: boolean
         steadyState?: boolean
+        jobMembershipOnly?: boolean
       }
     ) => {
       // Another host's PTY remains unverifiable here.
@@ -161,7 +162,8 @@ export function installPtyInspectIpcHandlers(deps: {
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
         ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
-        ...(args.steadyState === true ? { steadyState: true } : {})
+        ...(args.steadyState === true ? { steadyState: true } : {}),
+        ...(args.jobMembershipOnly === true ? { jobMembershipOnly: true } : {})
       }
       return Object.keys(options).length > 0
         ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)

@@ -1,4 +1,4 @@
-import { markFullResync } from '@/store/keyed-record-transitions'
+import { markFullResync } from '@/store/record-transitions/keyed-record-transitions'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   type WorkspaceKey,

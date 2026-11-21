@@ -31,7 +31,8 @@ import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-
 
 import { structuredMailSource } from '../structured-mail/structured-mail-source'
 
-import '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import '../../../rpc/methods/orchestration/worker/follow-up/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
@@ -52,6 +53,7 @@ type Session = NonNullable<
 >
 type SenderNamingDeps = ConstructorParameters<typeof RuntimeOrchestrationSenderNames>[0]
 type HookRow = NonNullable<ReturnType<SenderNamingDeps['getAgentStatusSnapshotForPane']>>[number]
+type BotName = { name: string; folderWorkspaceId: string }
 
 let db: OrchestrationDb
 let session: Session
@@ -61,7 +63,8 @@ let hookRows: HookRow[]
 let pty: NonNullable<ReturnType<SenderNamingDeps['getPtyAgents']>>
 let trackedTitle: string | null
 
-function names() {
+function names(bot?: BotName) {
+  const worktree = bot ? folderWorkspaceKey(bot.folderWorkspaceId) : WORKTREE
   return new RuntimeOrchestrationSenderNames({
     getDb: () => db,
     getHandleRecord: (handle) => {
@@ -71,8 +74,11 @@ function names() {
     },
     getPtyAgents: () => pty,
     getTerminalPaneKey: (handle) => `tab_${handle}:leaf`,
-    getWorkspaceSession: (worktreeId) => (worktreeId === WORKTREE ? session : undefined),
-    getGeneratedTitlesEnabled: () => generatedTitles,
+    getWorkspaceSession: (worktreeId) => (worktreeId === worktree ? session : undefined),
+    getStore: () => ({
+      getSettings: () => ({ tabAutoGenerateTitle: generatedTitles, botsEnabled: true }),
+      getBots: () => (bot ? [bot] : [])
+    }),
     getAgentStatusSnapshotForPane: (paneKey) => hookRows.filter((row) => row.paneKey === paneKey),
     getTrackedTitle: () => trackedTitle
   })
@@ -235,12 +241,13 @@ it("names a run's mail by its coordinator chat only under the binding it was sen
     coordinatorOrcaSessionId: CHAT
   })
   db.db.prepare('UPDATE runs SET updated_at = ? WHERE id = ?').run('2026-11-16 18:00:00', run.id)
+  let naming = names()
   const deliver = (...sentAt: string[]) =>
     structuredMailSource({
       db,
       mailboxHandle: 'run:run_other',
       dispatchId: null,
-      senderSnapshot: (party) => names().snapshotOf(party),
+      senderSnapshot: (party) => naming.snapshotOf(party),
       batch: sentAt.map((created_at, index) => ({
         id: `note_${index}`,
         from_handle: `run:${run.id}`,
@@ -256,8 +263,209 @@ it("names a run's mail by its coordinator chat only under the binding it was sen
     agent: 'claude',
     party: { address: `run:${run.id}`, orcaSessionId: CHAT, terminalHandle: null }
   })
+  const bot = { name: 'Triage bot', folderWorkspaceId: 'triage-home' }
+  const home = folderWorkspaceKey(bot.folderWorkspaceId)
+  const chat = records.get(CHAT)!
+  records.set(CHAT, {
+    ...chat,
+    conversationName: 'Home',
+    location: { ...chat.location, workspaceId: home }
+  })
+  naming = names(bot)
+  expect(deliver('2026-11-16 18:21:01')).toMatchObject({
+    name: 'Triage bot',
+    bot: true
+  })
+  const tabId = structuredAgentSessionTabId(CHAT)
+  expect(
+    naming.agentRowNamer()({ paneKey: `${tabId}:x`, tabId, worktreeId: home, agentType: 'claude' })
+  ).toBe('Triage bot')
   expect(deliver('2026-11-16 18:21:01', '2026-11-16 17:59:59')).toMatchObject({
     name: null,
     party: { orcaSessionId: null, terminalHandle: null }
   })
+})
+
+it("never names a sender unknown here by another Run's server task its report claims", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const other = db.createRun({
+    objective: 'other',
+    coordinatorHandle: 'term_other',
+    coordinatorPaneKey: null
+  })
+  const task = db.createTask({ runId: other.id, spec: 'Verify on Windows' })
+  db.db
+    .prepare(
+      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
+       VALUES ('ctx_remote', 'peerconv_1', ?, 'env_windows', ?, 'claude')`
+    )
+    .run(other.id, task.id)
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported) => names().snapshotOf(party, reported),
+    batch: [
+      {
+        id: 'msg_claim',
+        from_handle: 'term_unknown_here',
+        run_id: run.id,
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: 'ctx_remote' }),
+        answer_sender_snapshot: null,
+        created_at: '2026-11-18 08:40:15'
+      }
+    ]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: null })
+  expect(sender).not.toHaveProperty('agent')
+})
+
+it("names this Orca's own mail about a server's Dispatch by its task and agent", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Verify on Windows' })
+  db.db
+    .prepare(
+      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
+       VALUES ('ctx_remote', 'peerconv_1', ?, 'env_windows', ?, 'claude')`
+    )
+    .run(run.id, task.id)
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported) => names().snapshotOf(party, reported),
+    batch: [
+      {
+        id: 'msg_lost',
+        from_handle: 'dispatch:ctx_remote',
+        run_id: run.id,
+        type: 'escalation',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: 'ctx_remote', stopReason: 'lost' }),
+        answer_sender_snapshot: null,
+        created_at: '2026-11-18 08:40:15'
+      }
+    ]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Verify on Windows', agent: 'claude' })
+})
+
+it("names a worker's mail by its task and agent once its terminal tab is gone", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Fix the login page' })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: started.dispatch.id,
+    handle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:1',
+    worktreeId: WORKTREE,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  db.markWorkerDispatchReady(started.dispatch.id)
+  const status = db.insertMessage({
+    from: 'term_worker',
+    to: `run:${run.id}`,
+    subject: 'halfway',
+    runId: run.id,
+    senderDispatchId: started.dispatch.id
+  })
+  db.completeDispatch(started.dispatch.id)
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
+    batch: [status]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Fix the login page', agent: 'codex' })
+  expect(sender).not.toHaveProperty('host')
+  const next = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: db.createTask({ runId: run.id, spec: 'Add a logout button' }).id,
+    startOptions: { agent: 'claude' }
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: next.dispatch.id,
+    handle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:2',
+    worktreeId: WORKTREE,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  db.markWorkerDispatchReady(next.dispatch.id)
+  const crewName = names().captureCrewInputs()(
+    { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+    { dispatchId: started.dispatch.id, taskTitle: 'Fix the login page' },
+    null
+  )
+  expect(crewName).toBe('Fix the login page')
+})
+
+it("names a legacy paired server's relayed mail by its task, agent and server", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Port the build' })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: task.id,
+    startOptions: { agent: 'codex' },
+    federation: {
+      environmentId: 'environment-win',
+      environmentName: 'winbox',
+      peerFingerprint: 'peer-win',
+      protocolVersion: 3
+    }
+  })
+  const { message } = db.importFederatedRelayItem({
+    dispatchId: started.dispatch.id,
+    sequence: 1,
+    message: {
+      id: 'msg_relayed_status',
+      runId: run.id,
+      from: 'term_on_server',
+      to: `run:${run.id}`,
+      subject: 'halfway',
+      body: '',
+      type: 'status',
+      priority: 'normal'
+    },
+    lifecycle: { kind: 'none' }
+  })
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
+    batch: [message]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Port the build', agent: 'codex', host: 'winbox' })
 })

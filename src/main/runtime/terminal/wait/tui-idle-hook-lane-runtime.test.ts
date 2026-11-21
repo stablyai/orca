@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { createTranscriptPane } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane } from './agent-transcript-pane-test-harness'
 
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

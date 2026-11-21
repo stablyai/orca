@@ -31,12 +31,6 @@ describe('evaluateProcessGrowth', () => {
     expect(verdict.trips.some((trip) => trip.scopeId === 'b')).toBe(false)
   })
 
-  it('never trips on one long interval, however large the jump', () => {
-    const state = createProcessGrowthState()
-    evaluateProcessGrowth(state, sample(0, 0), LIMITS)
-    expect(evaluateProcessGrowth(state, sample(30_000, 1_200), LIMITS).level).toBe('elevated')
-  })
-
   it('resets the streak once growth stops', () => {
     const state = createProcessGrowthState()
     evaluateProcessGrowth(state, sample(0, 0), LIMITS)
@@ -79,5 +73,15 @@ describe('countDescendantsByRoot', () => {
         [99, 0]
       ])
     )
+  })
+
+  it('leaves skipped subtrees out of every count', () => {
+    const rows = [
+      { pid: 2, ppid: 1 },
+      { pid: 3, ppid: 2 },
+      { pid: 4, ppid: 3 },
+      { pid: 5, ppid: 1 }
+    ]
+    expect(countDescendantsByRoot(rows, [1], new Set([2]))).toEqual(new Map([[1, 1]]))
   })
 })

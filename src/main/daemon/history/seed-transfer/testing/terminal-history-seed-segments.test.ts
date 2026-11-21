@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from '../../../emulation/headless-emulator'
 import { buildRehydrateSequences } from '../../../emulation/terminal-mode-rehydrate-sequences'
 import { getRecoveredHistorySeedSegments } from '../terminal-history-seed-segments'
@@ -28,6 +28,14 @@ function restoreInfo(overrides: Partial<ColdRestoreInfo> = {}): ColdRestoreInfo 
   }
 }
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+afterEach(() => {
+  if (originalPlatform) {
+    Object.defineProperty(process, 'platform', originalPlatform)
+  }
+})
+
 describe('getRecoveredHistorySeedSegments', () => {
   it('leaves the revived emulator unarmed while preserving scrollback (#12101)', () => {
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
@@ -42,6 +50,38 @@ describe('getRecoveredHistorySeedSegments', () => {
       expect(snapshot.rehydrateSequences).toBe('')
       expect(snapshot.snapshotAnsi).not.toContain('\x1b[?1003h')
       expect(snapshot.snapshotAnsi).toContain('user@host ~ $')
+    } finally {
+      emulator.dispose()
+    }
+  })
+
+  it('starts a POSIX shell below history whose cursor was parked above it', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const emulator = new HeadlessEmulator({ cols: 20, rows: 4 })
+    try {
+      const segments = getRecoveredHistorySeedSegments(
+        restoreInfo({
+          // An agent leaves its cursor in its input box, above the footer rows.
+          snapshotAnsi: 'ONE\r\nTWO\r\nBOX\r\nFOOTER\x1b[3;3H',
+          rehydrateSequences: '',
+          rows: 4,
+          modes: {
+            ...ARMED_MODES,
+            mouseTracking: false,
+            mouseTrackingMode: 'none',
+            sgrMouseMode: false
+          }
+        })
+      )
+      for (const segment of [...segments, '$ ']) {
+        expect(emulator.writeSync(segment)).toBe(true)
+      }
+      expect(emulator.getVisibleLines().map((line) => line.trimEnd())).toEqual([
+        'TWO',
+        'BOX',
+        'FOOTER',
+        '$'
+      ])
     } finally {
       emulator.dispose()
     }

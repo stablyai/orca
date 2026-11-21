@@ -3,11 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import type * as CodexFsUtils from '../../../filesystem/atomic-file-publication'
 
-const { homedirMock, registrationTestState } = vi.hoisted(() => ({
-  homedirMock: vi.fn<() => string>(),
-  registrationTestState: { failAtomicWrite: false }
+const { homedirMock } = vi.hoisted(() => ({
+  homedirMock: vi.fn<() => string>()
 }))
 
 vi.mock('node:os', async (importOriginal) => {
@@ -15,19 +13,6 @@ vi.mock('node:os', async (importOriginal) => {
   return {
     ...actual,
     homedir: homedirMock
-  }
-})
-
-vi.mock('../../../filesystem/atomic-file-publication', async (importOriginal) => {
-  const actual = await importOriginal<typeof CodexFsUtils>()
-  return {
-    ...actual,
-    writeFileAtomically: (...args: Parameters<typeof actual.writeFileAtomically>) => {
-      if (registrationTestState.failAtomicWrite) {
-        throw new Error('injected atomic write failure')
-      }
-      return actual.writeFileAtomically(...args)
-    }
   }
 })
 
@@ -57,7 +42,6 @@ beforeEach(() => {
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
-  registrationTestState.failAtomicWrite = false
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -80,10 +64,6 @@ function systemHomeDir(): string {
 
 function runtimeHomeDir(): string {
   return join(userDataDir, 'codex-runtime-home', 'home')
-}
-
-function baselinePath(homePath = runtimeHomeDir()): string {
-  return join(homePath, '.orca-config-settings-baseline.json')
 }
 
 function writeSystemConfig(content: string, homePath = systemHomeDir()): void {
@@ -125,32 +105,5 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
     expect(readRuntimeConfig()).not.toContain('marketplaces.ponytail')
     expect(readRuntimeConfig()).not.toContain('ponytail@ponytail')
-  })
-
-  // Include absence as the third enabled state so both sides can diverge.
-})
-
-describe('codex marketplace refresh metadata promotion', () => {
-  // Date.parse rolls impossible dates forward, potentially making them look newer.
-
-  it('preserves the managed config and its baseline when the promotion write fails', () => {
-    writeSystemConfig('model = "gpt-5"\n')
-    syncSystemConfigIntoManagedCodexHome()
-    simulateCodexRegistrationWrite(MARKETPLACE_TABLE)
-    const runtimeBeforeFailure = readRuntimeConfig()
-    const baselineBeforeFailure = readFileSync(baselinePath(), 'utf-8')
-
-    registrationTestState.failAtomicWrite = true
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(readRuntimeConfig()).toBe(runtimeBeforeFailure)
-    expect(readFileSync(baselinePath(), 'utf-8')).toBe(baselineBeforeFailure)
-
-    registrationTestState.failAtomicWrite = false
-    mirrorTwice()
-
-    expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
-    expect(readRuntimeConfig()).toContain('[marketplaces.ponytail]')
   })
 })

@@ -63,12 +63,11 @@ on:
       - 'src/shared/shell/launch/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
       - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
-      - 'tests/e2e/helpers/orcad-convert-host.ts'
-      - 'tests/e2e/helpers/orcad-convert-flow.ts'
-      - 'tests/e2e/helpers/orcad-upgrade-profile.ts'
-      - 'tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts'
-      - 'tests/e2e/helpers/compiled-orca-cli.ts'
-      - 'tests/e2e/helpers/windows-host-orcad-processes.ts'
+      - 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-convert-host.ts'
+      - 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-convert-flow.ts'
+      - 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-upgrade-profile.ts'
+      - 'tests/e2e/desktop/cli-invocation/compiled-orca-cli.ts'
+      - 'tests/e2e/remote/managed-ssh/host-lifecycle/windows-host-orcad-processes.ts'
       - 'config/ci/windows-ssh-provider/**'
       - 'config/ci/windows-lifecycle-receipt.ps1'
       - '.github/workflows/ssh-windows-hosts.yml'
@@ -78,7 +77,7 @@ on:
   workflow_dispatch:
     inputs:
       cells:
-        description: Comma-separated cells orcad-cmd, orcad-powershell, or orcad-cli-managed; empty runs the two shell cells.
+        description: Comma-separated cells orcad-cmd or orcad-powershell; empty runs both retained shell cells.
         required: false
         default: ''
       preparation_mode:
@@ -132,9 +131,7 @@ jobs:
           '[{"arch":"arm64","runner":"windows-11-arm","server":"inbox"}]' ||
           '[{"arch":"x64","runner":"windows-2022","server":"inbox"},{"arch":"x64","runner":"windows-2022","server":"preview","archive":"OpenSSH-Win64.zip"},{"arch":"arm64","runner":"windows-11-arm","server":"inbox"},{"arch":"arm64","runner":"windows-11-arm","server":"preview","archive":"OpenSSH-ARM64.zip"}]') }}
     runs-on: ${{ matrix.runner }}
-    # Installing the inbox capability alone can take several minutes on a fresh image; the CLI matrix
-    # cells launch the e2e app several times each.
-    timeout-minutes: ${{ contains(github.event.inputs.cells || '', 'orcad-cli') && 160 || 75 }}
+    timeout-minutes: 75
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_ISOLATED_SSH_CI: '1'
@@ -144,7 +141,6 @@ jobs:
         with:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
-          # All of src: the managed CLI cell builds the full e2e app and bundled CLI.
           # mobile: the template ships the mobile web page, which builds from mobile/.
           # cloud: config/tsconfig.vitest-transform.json references the cloud projects, so vitest needs them.
           sparse-checkout: |
@@ -231,7 +227,7 @@ jobs:
           Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json') -PreparationMode $env:INBOX_PREPARATION_MODE
       - name: Run the Windows host cells against a private ${{ matrix.server }} sshd
         shell: pwsh
-        timeout-minutes: ${{ contains(github.event.inputs.cells || '', 'orcad-cli') && 130 || 50 }}
+        timeout-minutes: 50
         env:
           CELLS: ${{ github.event.inputs.cells || '' }}
         run: |
@@ -241,10 +237,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path $receipts | Out-Null
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
           if(-not $cells.Count){$cells=@('orcad-cmd','orcad-powershell')}
-          # App cells reach the managed server through an SSH local forward, which provisioning grants to the last accounts only.
-          $appCellIds=@('orcad-cli-managed')
-          $cells=@($cells | Where-Object {$appCellIds -notcontains $_})+@($cells | Where-Object {$appCellIds -contains $_})
-          $forwarding=@($cells | Where-Object {$appCellIds -contains $_}).Count
           $archive=''
           $preparation=''
           if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){$preparation=Join-Path $receipts 'inbox-capability-preparation.json'}
@@ -257,7 +249,7 @@ jobs:
           $callback={param($context)
             & (Join-Path $tools 'invoke-windows-host-cells.ps1') -SourceRoot $sourceRoot -Context $context -Target 'win32-${{ matrix.arch }}' -ReceiptRoot $receipts -Cells $cells
           }.GetNewClosure()
-          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -ForwardingAccounts $forwarding -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
+          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -ForwardingAccounts 0 -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
       - uses: actions/upload-artifact@v7
         if: always()
         with:

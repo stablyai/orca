@@ -78,6 +78,8 @@ export type JournalWriterCommand = {
   facts?: JournalWriterHostFacts
   /** The host's clock at admission, so host-staged receipts agree with the row's time. */
   savedAt?: number
+  /** Scheduling only: the chat has a send in flight, so this write goes ahead of bulk work. */
+  urgent?: true
 }
 
 export type JournalWriterInputOperation =
@@ -112,6 +114,7 @@ export type JournalWriterInputOperation =
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[] }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
+  | { kind: 'queue-steer'; messageId: string }
   | { kind: 'queue-reopen-mark'; fence: number; since?: number }
   | { kind: 'pending-unknown'; fence: number; reason?: string }
   | { kind: 'pending-reject'; fence: number; rejection: AgentJournalDispatchRejection }

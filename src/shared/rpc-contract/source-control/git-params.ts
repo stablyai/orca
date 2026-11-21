@@ -187,6 +187,7 @@ export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customProm
 export const ResolvedSourceControlAiGenerationParams = z.object({
   agentId: z.string(),
   model: z.string(),
+  usesOrcaDefaultModel: z.boolean().optional(),
   thinkingLevel: z.string().optional(),
   customPrompt: z.string().optional(),
   commandInputTemplate: z.string().optional(),
@@ -200,7 +201,11 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
-  defaultTuiAgent: OptionalTuiAgent.nullable(),
+  // Why: 'blank' (Blank terminal) picks the same fallback agent as null.
+  defaultTuiAgent: z.preprocess(
+    (value) => (value === 'blank' ? null : value),
+    OptionalTuiAgent.nullable()
+  ),
   commitMessageDiscoveryHostKey: z.string().optional()
 })
 

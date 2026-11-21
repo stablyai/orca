@@ -1,7 +1,13 @@
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 // Stream init carries name arrays; control initialization and reloads carry descriptors.
-const MAX_COMMANDS = 512
+// Plugins can export hundreds of skills each; the count bounds parsing and per-keystroke picker work.
+const MAX_COMMANDS = 1024
+// The old count bound; these rows are always kept so no catalog shows fewer rows than before.
+const ALWAYS_KEPT_COMMANDS = 512
+// Subscribe snapshots and frames carry the list beside a history page and queue, so rows past
+// ALWAYS_KEPT_COMMANDS stop once serialized rows pass the room a desktop or phone frame leaves.
+const MAX_COMMANDS_JSON_BYTES = 512 * 1024
 const MAX_NAME_LENGTH = 200
 const MAX_DESCRIPTION_LENGTH = 200
 const MAX_ARGUMENT_HINT_LENGTH = 100
@@ -20,6 +26,7 @@ function names(value: unknown): string[] {
   const seen = new Set<string>()
   for (const entry of value) {
     if (seen.size >= MAX_COMMANDS) {
+      logCatalogCut('names', seen.size, value.length)
       break
     }
     const name = commandName(entry)
@@ -28,6 +35,10 @@ function names(value: unknown): string[] {
     }
   }
   return [...seen]
+}
+
+function logCatalogCut(path: string, kept: number, reported: number): void {
+  console.debug('[claude-commands] command catalog cut short', { path, kept, reported })
 }
 
 function rowText(value: unknown, maxLength: number): string | undefined {
@@ -51,6 +62,7 @@ function descriptorCatalog(value: unknown): {
   }
   for (const entry of value) {
     if (seen.size >= MAX_COMMANDS) {
+      logCatalogCut('descriptors', seen.size, value.length)
       break
     }
     if (entry === null || typeof entry !== 'object') {
@@ -159,10 +171,23 @@ export class ClaudeSlashCommandCatalog {
 
   // Name-only frames do not repeat descriptor text; a name reclassified as a skill is no longer built-in.
   private describe(entries: AgentSessionSlashCommand[]): AgentSessionSlashCommand[] {
-    return entries.map((entry) => {
+    const described: AgentSessionSlashCommand[] = []
+    let bytes = 2
+    for (const entry of entries) {
       const { builtin, ...detail }: CommandDetail = this.details.get(entry.name) ?? {}
-      return { ...entry, ...detail, ...(builtin && entry.kind === 'command' ? { builtin } : {}) }
-    })
+      const row = {
+        ...entry,
+        ...detail,
+        ...(builtin && entry.kind === 'command' ? { builtin } : {})
+      }
+      bytes += Buffer.byteLength(JSON.stringify(row), 'utf8') + 1
+      if (described.length >= ALWAYS_KEPT_COMMANDS && bytes > MAX_COMMANDS_JSON_BYTES) {
+        logCatalogCut('bytes', described.length, entries.length)
+        break
+      }
+      described.push(row)
+    }
+    return described
   }
 
   observe(message: Record<string, unknown>): boolean {

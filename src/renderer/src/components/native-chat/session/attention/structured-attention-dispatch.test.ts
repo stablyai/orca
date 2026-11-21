@@ -1,7 +1,8 @@
 // Use real unread/acknowledgment reducers so broken wiring cannot pass on mocked sink call counts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
+import { setPresenceGated } from '@/attention/agent-auto-ack-presence'
+import type { Bot, BotNotifications } from '../../../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
@@ -14,6 +15,11 @@ import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { NotificationDispatchRequest } from '../../../../../../shared/notifications/notification-settings-types'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import type * as BotBackgroundSessionsModule from '../../../bots/bot-background-sessions'
+import { botBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
+import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import type { BotGroup } from '../../../../../../shared/bots/bot-group'
+import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
 
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
@@ -24,6 +30,19 @@ vi.mock('@/lib/notifications/desktop-notification-sound', () => ({
 }))
 vi.mock('@/lib/notifications/blocked-notification-fallback', () => ({
   showBlockedNotificationFallbackToast: vi.fn()
+}))
+const testBots = vi.hoisted(() => {
+  const current: { id?: string; folderWorkspaceId: string; notifications: BotNotifications }[] = []
+  return { current }
+})
+vi.mock('@/lib/bot-catalog', () => ({ readBots: () => testBots.current }))
+const standIns = vi.hoisted(() => {
+  const current: StructuredTab[] = []
+  return { current }
+})
+vi.mock('../../../bots/bot-background-sessions', async (importOriginal) => ({
+  ...(await importOriginal<typeof BotBackgroundSessionsModule>()),
+  readBotBackgroundSessionTabs: () => standIns.current
 }))
 
 const store = createTestStore()
@@ -120,6 +139,11 @@ function seed(overrides?: {
   })
 }
 
+function onlyDispatch(): NotificationDispatchRequest {
+  expect(dispatched).toHaveLength(1)
+  return dispatched[0]!
+}
+
 function structuredTab(workspaceId = WORKSPACE): StructuredTab {
   const found = (store.getState().unifiedTabsByWorktree[workspaceId] ?? []).find(isStructuredTab)
   if (!found) {
@@ -213,6 +237,132 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     })
   })
 
+  it('follows its bot’s notification switches for the bot’s home', () => {
+    const folderWorkspaceId = 'folder:fw-1'
+    seed({
+      workspaceId: folderWorkspaceId,
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'bots-group',
+          name: 'Reviewer',
+          folderPath: '/home/me/.orca/bots/reviewer',
+          connectionId: null,
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 0,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+    testBots.current = [
+      {
+        folderWorkspaceId: 'fw-1',
+        notifications: { needsPermission: true, taskComplete: false, couldNotFinish: true }
+      }
+    ]
+    try {
+      dispatchStructuredTurnCompletionAttention(structuredTab(folderWorkspaceId), completion())
+      expect(indicators(folderWorkspaceId)).toEqual(NOTHING_LIT)
+      expect(dispatched).toEqual([])
+
+      dispatchStructuredTurnCompletionAttention(
+        structuredTab(folderWorkspaceId),
+        completion({ turnId: 'turn-2', outcome: 'failure' })
+      )
+      expect(indicators(folderWorkspaceId).workspaceBold).toBe(true)
+      expect(onlyDispatch().agentTurnOutcome).toBe('failure')
+    } finally {
+      testBots.current = []
+    }
+  })
+
+  it("reads a group member's reply in its room on screen, never on the bot's own home", () => {
+    const folder = (id: string): FolderWorkspace => ({
+      id,
+      projectGroupId: 'bots-group',
+      name: id,
+      folderPath: `/home/me/.orca/bots/${id}`,
+      connectionId: null,
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 1,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    })
+    const member = 'bot-group-member-1'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only rooms and home are read.
+    const group = {
+      id: 'group-1',
+      folderWorkspaceId: 'group-home',
+      members: [{ botId: 'scout', sessionId: member }]
+    } as BotGroup
+    const scout = {
+      id: 'scout',
+      folderWorkspaceId: 'scout-home',
+      notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true }
+    }
+    seed({ workspaceId: 'folder:group-home', tabs: false, activeTabId: 'room-tab' })
+    store.setState({
+      folderWorkspaces: [folder('scout-home'), folder('group-home')],
+      activeWorktreeId: 'folder:group-home',
+      unifiedTabsByWorktree: {
+        'folder:group-home': [
+          makeUnifiedTab({
+            id: 'room-tab',
+            worktreeId: 'folder:group-home',
+            groupId: GROUP,
+            contentType: 'room',
+            entityId: 'group-1'
+          })
+        ]
+      }
+    })
+    testBots.current = [scout]
+    publishBotGroups([group])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only sessionId, workspaceId and agent.
+    const summary = {
+      sessionId: member,
+      workspaceId: 'folder:scout-home',
+      agent: 'claude'
+    } as AgentSessionStatusSummary
+    standIns.current = [
+      ...botBackgroundSessionTabs(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only folderWorkspaceId is read.
+        [scout as unknown as Bot],
+        [group],
+        new Map([[member, summary]]),
+        store.getState().unifiedTabsByWorktree
+      )
+    ]
+    try {
+      dispatchStructuredTurnCompletionAttention(
+        standIns.current[0]!,
+        completion({ sessionId: member })
+      )
+      const state = store.getState()
+      expect(state.folderWorkspaces.map((workspace) => workspace.isUnread)).toEqual([false, false])
+      expect(state.unreadAgentCompletionPanes).toEqual({})
+      expect(onlyDispatch()).toMatchObject({
+        worktreeId: 'folder:group-home',
+        isActiveWorktree: true
+      })
+    } finally {
+      testBots.current = []
+      standIns.current = []
+      publishBotGroups([])
+    }
+  })
+
   it('keeps unread state but sends no notification for a worktree the user muted', () => {
     store.setState({ notificationsMutedByWorktree: { [WORKSPACE]: true } })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
@@ -223,13 +373,5 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       surfaceDot: 'agent-completion'
     })
     expect(dispatched).toEqual([])
-  })
-
-  it('still notifies for worktrees that are not muted', () => {
-    store.setState({
-      notificationsMutedByWorktree: { 'repo1::/tmp/other': true }
-    })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(dispatched).toHaveLength(1)
   })
 })

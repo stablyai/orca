@@ -53,6 +53,7 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     kind: 'approval',
     title: prompt.title ?? (planSubject ? 'Review proposed plan' : `Allow ${prompt.toolName}?`),
     ...(prompt.displayName ? { displayName: prompt.displayName } : {}),
+    ...(planSubject || !prompt.toolName ? {} : { toolName: prompt.toolName }),
     ...(prompt.description ? { description: prompt.description } : {}),
     ...(prompt.decisionReason ? { decisionReason: prompt.decisionReason } : {}),
     ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),

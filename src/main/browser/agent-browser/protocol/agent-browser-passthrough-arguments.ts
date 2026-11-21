@@ -1,32 +1,5 @@
 import { BrowserError } from '../../browser-error'
 
-export function parseShellArgs(input: string): string[] {
-  const args: string[] = []
-  let current = ''
-  let inDouble = false
-  let inSingle = false
-
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i]
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble
-    } else if (ch === "'" && !inDouble) {
-      inSingle = !inSingle
-    } else if (ch === ' ' && !inDouble && !inSingle) {
-      if (current) {
-        args.push(current)
-        current = ''
-      }
-    } else {
-      current += ch
-    }
-  }
-  if (current) {
-    args.push(current)
-  }
-  return args
-}
-
 /** Splits a command line the way agent-browser splits each `batch` command (backslash escapes, quotes). */
 export function splitAgentBrowserCommandLine(input: string): string[] {
   const args: string[] = []

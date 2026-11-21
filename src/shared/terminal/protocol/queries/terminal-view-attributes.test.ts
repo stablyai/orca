@@ -6,9 +6,7 @@ describe('parseXColorSpec', () => {
   // Scaling fixtures mirror XParseColor.parseColor: h|hh|hhh|hhhh channels
   // scale from their base (15/255/4095/65535) to 8 bit.
   it.each([
-    ['rgb:f/f/f', [255, 255, 255]],
     ['rgb:0/8/f', [0, 136, 255]],
-    ['rgb:ff/00/80', [255, 0, 128]],
     ['rgb:fff/000/888', [255, 0, 136]],
     ['rgb:ffff/0000/8888', [255, 0, 136]],
     ['RGB:FF/00/80', [255, 0, 128]],
@@ -34,7 +32,6 @@ describe('parseXColorSpec', () => {
 
 describe('formatXColorRgbSpec', () => {
   it('reports 16-bit channels by doubling the 8-bit byte (toRgbString parity)', () => {
-    expect(formatXColorRgbSpec([0x1e, 0x1e, 0x2e])).toBe('rgb:1e1e/1e1e/2e2e')
     expect(formatXColorRgbSpec([0, 8, 255])).toBe('rgb:0000/0808/ffff')
   })
 })

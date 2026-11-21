@@ -22,6 +22,8 @@ import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tu
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { readInstalledManagedAgents } from './managed-agent-detection'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
@@ -114,6 +116,15 @@ export async function detectInstalledAgents(
   ]
   const found = await detectAgentCommandsOnHost(probeCommands, { context })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
+  // Orca's own copies live on this host, not in a WSL guest; terminals get their folders on PATH.
+  if (runtime !== 'wsl') {
+    const enabled = new Set(commands.map((command) => command.id))
+    for (const id of await readInstalledManagedAgents()) {
+      if (isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
+        detected.push(id)
+      }
+    }
+  }
   for (const [id, probe] of overrides) {
     if (
       !detected.includes(id) &&

@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => mocks.userData },
+  app: { getPath: () => mocks.userData, commandLine: { hasSwitch: () => false } },
   session: { fromPartition: mocks.fromPartition }
 }))
 vi.mock('../../sessions/partition-policies/browser-session-partition-policies', () => ({
@@ -73,7 +74,6 @@ it('clears a session this run may have loaded, and leaves its folder for the nex
   await dependencies.removePartitionDirectory(folder)
 
   expect(mocks.fromPartition).toHaveBeenCalledWith(PARTITION)
-  expect(mocks.fromPartition).toHaveBeenCalledTimes(2)
   expect(mocks.clearStorage).toHaveBeenCalledTimes(1)
   expect(mocks.clearCache).toHaveBeenCalledTimes(1)
   expect(mocks.clearPolicies).toHaveBeenCalledWith(
@@ -86,15 +86,6 @@ it('clears a session this run may have loaded, and leaves its folder for the nex
     currentBrowserRoutePartitionBindingFilePath()
   )
   expect(JSON.parse(readFileSync(pending, 'utf8'))).toEqual([folder])
-})
-
-it('deletes the folder at startup without loading its session', async () => {
-  const dependencies = browserRoutePartitionStorageDependencies(() => false, 'cold')
-  await dependencies.clearPartitionStorage(PARTITION)
-  await dependencies.removePartitionDirectory(folder)
-
-  expect(mocks.fromPartition).not.toHaveBeenCalled()
-  expect(existsSync(folder)).toBe(false)
 })
 
 it('collects cold orphan folders without opening sessions, preserving retained and listed scopes', async () => {

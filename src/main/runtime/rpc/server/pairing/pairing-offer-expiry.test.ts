@@ -24,23 +24,28 @@ afterEach(() => {
 describe('DeviceRegistry pairing offer TTL', () => {
   it('reuses an offer with time left and mints a fresh one inside the last minute', () => {
     const registry = new DeviceRegistry(dir)
-    const first = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    const first = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], {
+      offerTtlMs: TTL
+    })
     expect(first.offerExpiresAt).toBe(1_000_000 + TTL)
 
     vi.setSystemTime(1_000_000 + TTL - 61_000)
-    expect(registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL).deviceId).toBe(
-      first.deviceId
-    )
+    expect(
+      registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], { offerTtlMs: TTL })
+        .deviceId
+    ).toBe(first.deviceId)
 
     vi.setSystemTime(1_000_000 + TTL - 60_000)
-    const fresh = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    const fresh = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], {
+      offerTtlMs: TTL
+    })
     expect(fresh.deviceId).not.toBe(first.deviceId)
     // A phone mid-scan of the old code still pairs until that code's own expiry.
     expect(registry.validateToken(first.token)?.deviceId).toBe(first.deviceId)
 
     vi.setSystemTime(1_000_000 + TTL)
     expect(registry.validateToken(first.token)).toBeNull()
-    registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], { offerTtlMs: TTL })
     expect(registry.getDevice(first.deviceId)).toBeNull()
     expect(registry.getDevice(fresh.deviceId)).not.toBeNull()
   })
@@ -49,7 +54,9 @@ describe('DeviceRegistry pairing offer TTL', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     vi.setSystemTime(1_000_000)
     const registry = new DeviceRegistry(dir)
-    const offer = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    const offer = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], {
+      offerTtlMs: TTL
+    })
     const save = registry['save'].bind(registry)
     registry['save'] = vi.fn(() => {
       throw new Error('EPERM')
@@ -64,13 +71,15 @@ describe('DeviceRegistry pairing offer TTL', () => {
     vi.setSystemTime(1_000_000 + TTL + 1)
     const restarted = new DeviceRegistry(dir)
     expect(restarted.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
-    restarted.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    restarted.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], { offerTtlMs: TTL })
     expect(restarted.getDevice(offer.deviceId)).not.toBeNull()
   })
 
   it('keeps a paired row paired when a stale writer saves its older copy', () => {
     const owner = new DeviceRegistry(dir)
-    const offer = owner.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    const offer = owner.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], {
+      offerTtlMs: TTL
+    })
     // Loaded while the offer was still unscanned.
     const stale = new DeviceRegistry(dir)
     vi.setSystemTime(1_000_000 + 1_000)

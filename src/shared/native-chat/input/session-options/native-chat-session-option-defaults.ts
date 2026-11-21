@@ -152,6 +152,21 @@ export function structuredLaunchSeedOptions(
     : selection
 }
 
+/** The owner's explicit new-chat choice for `agent` (Settings > Agents), without the selection
+ *  remembered from their last chat pick or the permission default. Unattended work starts on this, so
+ *  a model the owner happened to pick in some chat never decides what a background run uses. */
+export function explicitStructuredLaunchSeedOptions(
+  settings: Parameters<typeof structuredLaunchSeedOptions>[0],
+  agent: AgentType
+): Record<string, string> | undefined {
+  const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: _permission, ...seed } =
+    structuredLaunchSeedOptions(
+      settings ? { ...settings, nativeChatSessionOptions: undefined } : settings,
+      agent
+    ) ?? {}
+  return Object.keys(seed).length > 0 ? seed : undefined
+}
+
 /** Apply settled picks in one pass for surfaces replacing the whole record, so later picks cannot drop earlier ones. */
 export function applyNativeChatSessionOptionPicks(args: {
   persisted: PersistedNativeChatSessionOptions | null | undefined

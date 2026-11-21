@@ -11,13 +11,15 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from '../strip/drop-indicator'
-import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
+import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
   activeVisibleTabId: string | null
+  /** The active item's unified tab id; resolved here so strip re-renders don't search every tab. */
+  activeUnifiedTabId: string | null
   tabStripLayoutKey: string
 }
 
@@ -76,6 +78,13 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const roomTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'room')
+        .map((tab) => tab.id),
+    [unifiedTabs, resolvedGroupId]
+  )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
@@ -88,6 +97,7 @@ export function useTabBarItemProjection({
         editorFileIds,
         browserTabIds,
         simulatorTabIds,
+        roomTabIds,
         agentSessionTabIds,
         terminalMap,
         editorMap,
@@ -101,6 +111,7 @@ export function useTabBarItemProjection({
       editorFileIds,
       browserTabIds,
       simulatorTabIds,
+      roomTabIds,
       agentSessionTabIds,
       terminalMap,
       editorMap,
@@ -112,8 +123,13 @@ export function useTabBarItemProjection({
   const orderedIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
   // Why: dnd-kit re-renders every tab when this array's identity changes, and the items rebuild on any tab write.
   const [sortableIds, setSortableIds] = useState(orderedIds)
-  if (!sameStringArray(sortableIds, orderedIds)) {
-    setSortableIds(orderedIds)
+  // Compare once per rebuilt id list: a windowed strip re-renders on scroll without any tab change.
+  const [comparedIds, setComparedIds] = useState(orderedIds)
+  if (comparedIds !== orderedIds) {
+    setComparedIds(orderedIds)
+    if (!sameStringArray(sortableIds, orderedIds)) {
+      setSortableIds(orderedIds)
+    }
   }
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
@@ -139,6 +155,10 @@ export function useTabBarItemProjection({
       orderedItems
     ]
   )
+  const activeUnifiedTabId = useMemo(
+    () => orderedItems.find((item) => item.id === activeVisibleTabId)?.unifiedTabId ?? null,
+    [activeVisibleTabId, orderedItems]
+  )
   const chatNames = useStructuredChatTabNames()
   const tabStripLayoutKey = useMemo(
     () =>
@@ -157,6 +177,7 @@ export function useTabBarItemProjection({
     sortableIds,
     dropIndicatorByVisibleId,
     activeVisibleTabId,
+    activeUnifiedTabId,
     tabStripLayoutKey
   }
 }

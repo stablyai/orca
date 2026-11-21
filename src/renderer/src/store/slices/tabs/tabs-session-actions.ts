@@ -15,8 +15,8 @@ import {
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
-import { markFullResync } from '../../keyed-record-transitions'
-import { markPatchFullResync } from '../../seam-record-fields'
+import { markFullResync } from '../../record-transitions/keyed-record-transitions'
+import { markPatchFullResync } from '../../workspace-layout/seam-record-fields'
 
 // Cold path: scoped hydration rebuilds the selected workspaces' entries from the session snapshot.
 function replaceWorkspaceRecordKeys<V>(

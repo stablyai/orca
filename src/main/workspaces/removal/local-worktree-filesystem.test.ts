@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
+import { getLocalWorktreePathAccess, removeLocalWorktreePath } from './local-worktree-filesystem'
 import '../../filesystem/host-tree-removal'
 import { isWorktreePathMissing } from './worktree-removal-safety'
 
@@ -70,11 +70,12 @@ describe('local worktree filesystem runtime access', () => {
 
   // Captured verbatim from live hosts: GNU coreutils 9.4 (Ubuntu 24.04) and BusyBox v1.36.1.
   it.each([
-    ['GNU', "stat: cannot statx '/mnt/c/repo/missing/.git': No such file or directory\n"],
-    ['GNU', "stat: cannot statx '/mnt/c/repo/missing/.git': Not a directory\n"],
-    ['BusyBox', "stat: can't stat '/mnt/c/repo/missing/.git': No such file or directory\n"],
-    ['BusyBox', "stat: can't stat '/mnt/c/repo/missing/.git': Not a directory\n"]
-  ])('reports a missing WSL stat target as ENOENT on %s userland', async (_userland, stderr) => {
+    [
+      'No such file or directory',
+      "stat: cannot statx '/mnt/c/repo/missing/.git': No such file or directory\n"
+    ],
+    ['Not a directory', "stat: can't stat '/mnt/c/repo/missing/.git': Not a directory\n"]
+  ])('reports WSL stat %s as ENOENT', async (_reason, stderr) => {
     await withPlatform('win32', async () => {
       failExecFile(1, stderr)
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
@@ -88,23 +89,53 @@ describe('local worktree filesystem runtime access', () => {
     })
   })
 
-  it.each([
-    ['GNU', "stat: cannot statx '/mnt/c/repo/locked': Permission denied\n"],
-    ['BusyBox', "stat: can't stat '/mnt/c/repo/locked': Permission denied\n"]
-  ])(
-    'does not treat an unreadable WSL stat target as missing on %s userland',
-    async (_userland, stderr) => {
-      await withPlatform('win32', async () => {
-        failExecFile(1, stderr)
-        const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+  it('does not report a WSL checkout removed when only its marker vanished mid-delete', async () => {
+    await withPlatform('win32', async () => {
+      const results = [
+        {
+          code: 1,
+          stdout: '',
+          stderr: "find: '/mnt/c/repo/checkout/.git': No such file or directory\n"
+        },
+        { code: 0, stdout: 'directory\n', stderr: '' }
+      ]
+      runProcessMock.mockImplementation(async () => ({
+        signal: null,
+        timedOut: false,
+        ...results.shift()
+      }))
 
-        for (const inspect of [access.statPath, access.layoutStatPath, access.realPath]) {
-          await expect(inspect('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')
-        }
-        await expect(isWorktreePathMissing('/mnt/c/repo/locked', access.statPath)).resolves.toBe(
-          false
-        )
-      })
-    }
-  )
+      await expect(
+        removeLocalWorktreePath('/mnt/c/repo/checkout', { wslDistro: 'Ubuntu' }, undefined, {
+          markerLast: true
+        })
+      ).rejects.toThrow('No such file or directory')
+    })
+  })
+
+  it('reports a WSL checkout removed when its root is gone', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(1, "rmdir: failed to remove '/mnt/c/repo/checkout': No such file or directory\n")
+
+      await expect(
+        removeLocalWorktreePath('/mnt/c/repo/checkout', { wslDistro: 'Ubuntu' }, undefined, {
+          markerLast: true
+        })
+      ).resolves.toBeUndefined()
+    })
+  })
+
+  it('does not treat an unreadable WSL stat target as missing', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(1, "stat: can't stat '/mnt/c/repo/locked': Permission denied\n")
+      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+
+      for (const inspect of [access.statPath, access.layoutStatPath, access.realPath]) {
+        await expect(inspect('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')
+      }
+      await expect(isWorktreePathMissing('/mnt/c/repo/locked', access.statPath)).resolves.toBe(
+        false
+      )
+    })
+  })
 })

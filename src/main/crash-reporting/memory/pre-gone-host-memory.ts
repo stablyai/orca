@@ -1,6 +1,10 @@
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
 import {
+  notePreGoneHostMemorySample,
+  resetPreGonePtyTreeMemoryForTest
+} from './pre-gone-pty-tree-memory'
+import {
   getSystemMemoryDetails,
   SYSTEM_MEMORY_KEY_PREFIX,
   withSwapVolumeFreeSpace
@@ -53,6 +57,7 @@ function commitHostMemorySample(nowMs: number): boolean {
       return false
     }
     preGoneSample = withCarriedSwapVolume({ details, sampledAtMs: nowMs })
+    notePreGoneHostMemorySample(details, nowMs)
     return true
   } catch {
     // Preserve the last good sample on read failure.
@@ -112,6 +117,7 @@ export function resetPreGoneSystemMemorySamplingForTest(): void {
   preGoneTimer = null
   preGoneSample = null
   swapVolumeReadInFlight = false
+  resetPreGonePtyTreeMemoryForTest()
   // Invalidate pending volume reads so they cannot repopulate a reset sample.
   samplingGeneration += 1
 }

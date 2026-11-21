@@ -6,6 +6,7 @@ import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/bro
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
+import type { BrowserExtensionSidePanelApi } from './browser-extension-side-panel-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
 import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
 import type {
@@ -301,6 +302,7 @@ export type BrowserApi = {
   onExtensionsChanged: (callback: () => void) => () => void
 } & BrowserGuestDiscardApi &
   BrowserExtensionToolbarApi &
+  BrowserExtensionSidePanelApi &
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
   BrowserSessionCookieApi &

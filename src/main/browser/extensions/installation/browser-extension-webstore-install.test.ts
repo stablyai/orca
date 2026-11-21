@@ -51,7 +51,9 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
   loadBrowserExtensionIntoProfile: (profileId: string, extension: InstalledBrowserExtension) =>
     state.load(profileId, extension),
   unloadBrowserExtensionEverywhere: vi.fn(),
-  unloadBrowserExtensionFromProfile: vi.fn()
+  unloadBrowserExtensionFromProfile: vi.fn(),
+  getBrowserExtensionProfile: () => null,
+  whenBrowserExtensionProfileUnloaded: () => Promise.resolve()
 }))
 
 let key: CrxTestKey

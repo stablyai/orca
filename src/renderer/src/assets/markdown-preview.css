@@ -758,7 +758,8 @@
 }
 
 /* Use themed checkbox rendering for contrast in both schemes, matching the rich editor. */
-.markdown-body li > input[type='checkbox'] {
+.markdown-body li > input[type='checkbox'],
+.markdown-body .markdown-annotation-list-content > input[type='checkbox'] {
   appearance: none;
   width: 16px;
   height: 16px;
@@ -771,12 +772,14 @@
   vertical-align: -2px;
 }
 
-.markdown-body li > input[type='checkbox']:checked {
+.markdown-body li > input[type='checkbox']:checked,
+.markdown-body .markdown-annotation-list-content > input[type='checkbox']:checked {
   background: var(--primary);
   border-color: var(--primary);
 }
 
-.markdown-body li > input[type='checkbox']:checked::after {
+.markdown-body li > input[type='checkbox']:checked::after,
+.markdown-body .markdown-annotation-list-content > input[type='checkbox']:checked::after {
   content: '';
   position: absolute;
   left: 4px;

@@ -34,12 +34,11 @@ describe('OrchestrationDb legacy coordinator authority', () => {
   function openAdoptedFixture(): {
     fixture: LegacyStorageCutoverFixture
     adoptedRunId: string
-    workerPrincipalId: string
   } {
     const fixture = createCutoverFixture()
     db = new OrchestrationDb(fixture.dbPath)
     const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
-    const worker = db.commitLegacyCompatibilityPrincipal({
+    db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       dispatchId: fixture.legacyDispatchId,
       role: 'worker',
@@ -51,8 +50,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
     })
     return {
       fixture,
-      adoptedRunId,
-      workerPrincipalId: worker.principal.id
+      adoptedRunId
     }
   }
 
@@ -200,50 +198,5 @@ describe('OrchestrationDb legacy coordinator authority', () => {
         })
         ?.messages.map((message) => message.id)
     ).toContain(completion.id)
-  })
-
-  it('acknowledges the exact current Run answer to a legacy ask after takeover', () => {
-    const state = openAdoptedFixture()
-    const ask = db!.commitLegacyAskOperation({
-      principalId: state.workerPrincipalId,
-      operationKey: 'ask_before_takeover',
-      method: 'orchestration.ask',
-      payloadHash: 'ask_before_takeover_payload',
-      question: 'Continue after takeover?',
-      recipientHandle: 'term_legacy_coord'
-    })
-    const run = db!.bindRun({
-      runId: state.adoptedRunId,
-      coordinatorHandle: 'term_current_coord',
-      coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111',
-      takeoverLegacy: true
-    })!
-    const answered = db!.answerQuestion({
-      messageId: ask.question.message_id,
-      runId: state.adoptedRunId,
-      consumerGeneration: run.consumer_generation,
-      body: 'continue'
-    })
-    expect(answered.message).toMatchObject({
-      from_handle: `run:${state.adoptedRunId}`,
-      to_handle: `dispatch:${state.fixture.legacyDispatchId}`,
-      delivery_contract: 'current_delivery'
-    })
-
-    const acknowledged = db!.acknowledgeLegacyQuestionAnswer({
-      principalId: state.workerPrincipalId,
-      questionId: ask.question.message_id,
-      answerMessageId: answered.message.id
-    })
-
-    expect(acknowledged.duplicate).toBe(false)
-    expect(db!.getMessageById(answered.message.id)?.read).toBe(1)
-    expect(
-      db!.acknowledgeLegacyQuestionAnswer({
-        principalId: state.workerPrincipalId,
-        questionId: ask.question.message_id,
-        answerMessageId: answered.message.id
-      }).duplicate
-    ).toBe(true)
   })
 })

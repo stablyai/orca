@@ -6,10 +6,9 @@ import { afterEach, expect, it } from 'vitest'
 import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { insertJournalRow, publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { journalSqlRetryRows } from '../journal-sql-retry-rows.test-fixture'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'

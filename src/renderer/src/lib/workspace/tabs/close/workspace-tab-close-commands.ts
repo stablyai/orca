@@ -5,7 +5,7 @@ import { useAppStore } from '../../../../store/index'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { requestEditorFileClose } from '../../../../components/editor/autosave/editor-autosave'
 import { runAfterEditorFramesFlush } from '../../../../components/editor/save/flush/editor-pending-flush'
-import { closeTerminalTab } from '../../../../components/terminal/terminal-tab-actions'
+import { closeTerminalTab } from '../../../../components/terminal/tab-lifecycle/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
@@ -106,7 +106,7 @@ export function createWorkspaceTabCloseCommands({
       if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
         return
       }
-    } else if (item.contentType === 'simulator') {
+    } else if (item.contentType === 'simulator' || item.contentType === 'room') {
       closeUnifiedTab(item.id)
     } else {
       // Why: a custom editor frame may still hold edits the dirty check must see.

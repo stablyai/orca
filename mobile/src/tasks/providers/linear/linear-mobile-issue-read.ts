@@ -6,6 +6,8 @@ export type LinearMobileIssue = {
   title: string
   description?: string
   url: string
+  /** Linear's suggested Git branch; older hosts omit it. */
+  branchName?: string
   state: { name: string; type: string; color: string }
   team: { id: string; name: string; key: string }
   project?: { id: string; name: string; url?: string; color?: string }

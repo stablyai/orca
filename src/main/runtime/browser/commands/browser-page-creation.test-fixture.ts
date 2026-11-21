@@ -13,6 +13,11 @@ import {
   closeBrowserMemoryRenderer
 } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 import type { BrowserTabCreateRequest } from '../../../../shared/browser/workspaces/browser-tab-create-request'
 
 const { ipc, guests, registration } = await vi.hoisted(async () => {
@@ -79,6 +84,7 @@ export async function attach(pageId: string, rendererId = 99) {
     getType: () => 'webview',
     isDestroyed: () => destroyed,
     isLoading: () => false,
+    isLoadingMainFrame: () => false,
     isDevToolsOpened: () => false,
     debugger: { isAttached: () => false },
     loadURL: async () => {},
@@ -137,10 +143,11 @@ export function rig() {
   const host = {
     getAgentBrowserBridge: () => bridge,
     getRuntimeBrowserPageRegistry: () => ({ getPage: () => undefined }),
-    getAvailableAuthoritativeWindow: () => (available ? { webContents: renderer } : null),
-    getAuthoritativeWindow: () => ({ webContents: renderer }),
+    getAvailableAuthoritativeWindowId: () => (available ? TEST_RENDERER_WINDOW_ID : null),
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
     getOffscreenBrowserBackend: () => offscreen
   } as unknown as RuntimeBrowserCommandHost
+  setRuntimeDesktopSurface(rendererWindowSurfaceForTest(renderer, ipc))
   const commands = new RuntimeBrowserCommands(host)
   const create = (pageId: string, url = 'https://example.test/') => {
     ids.add(pageId)

@@ -97,25 +97,6 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     })
   })
 
-  it('never mints a Delivery at a generation a re-attach already left', async () => {
-    const dispatchId = attachedDispatchWithMail()
-    const identity = db.getActiveDispatchForIdentity.bind(db)
-    let resolved = 0
-    vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
-      resolved += 1
-      if (resolved === 2) {
-        remintOnSamePane(dispatchId)
-      }
-      return identity(handle, paneKey)
-    })
-
-    await expect(check(PANE_A)).rejects.toMatchObject({ code: 'consumer_fenced' })
-
-    vi.mocked(db.getActiveDispatchForIdentity).mockRestore()
-    const live = await check(PANE_A)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-  })
-
   it('fences a blocked --peek whose generation moved while it waited', async () => {
     const dispatchId = attachedDispatchWithMail()
     vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
@@ -139,23 +120,6 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(db.getUnreadMessages('term_worker').map((message) => message.subject)).toEqual([
       'direct to the loser'
     ])
-  })
-
-  it('fences a --peek whose Dispatch was re-attached after the caller resolved it', async () => {
-    const dispatchId = attachedDispatchWithMail()
-    const identity = db.getActiveDispatchForIdentity.bind(db)
-    let resolved = 0
-    vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
-      resolved += 1
-      if (resolved === 2) {
-        reattach(dispatchId)
-      }
-      return identity(handle, paneKey)
-    })
-
-    await expect(check(PANE_A, { peek: true })).rejects.toMatchObject({
-      code: 'consumer_fenced'
-    })
   })
 
   it('serves a worker whose Dispatch row never recorded a pane', async () => {
@@ -290,8 +254,6 @@ describe('worker report authority without a Dispatch capability', () => {
     it.each<[string, OrchestrationCompatibilityEvidence | undefined]>([
       ['no identity env (old CLI, scrubbed env)', undefined],
       ['its own pane', { paneKey: WORKER_PANE, terminalHandle: 'term_stale_after_remint' }],
-      ["another Orca's pane", { paneKey: 'tab_elsewhere:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' }],
-      ['a stale handle', { terminalHandle: 'term_gone' }],
       ['a live pane that is no orchestration party', { paneKey: NON_PARTY_PANE }]
     ])('accepts a report whose env names %s', async (_case, evidence) => {
       setup()

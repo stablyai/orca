@@ -6,7 +6,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
-import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
 
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from './runtime-legacy-worker-terminal-recovery-persistence'
 

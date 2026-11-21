@@ -32,7 +32,7 @@ import {
 } from './agent-dashboard-filter-options'
 import { AgentDashboardFilterChips } from './AgentDashboardFilterChips'
 import { FilterOptionCount } from './FilterOptionCount'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 
 type AgentDashboardToolbarProps = {
   cards: DashboardCard[]

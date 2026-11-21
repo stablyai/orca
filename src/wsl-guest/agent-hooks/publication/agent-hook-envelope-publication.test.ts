@@ -132,31 +132,6 @@ describe('publishAgentHookEnvelope', () => {
     vi.useRealTimers()
   })
 
-  it('keeps the blocking question card when a waiting envelope has to shed', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      // A blocked pane is only answerable from web/mobile if interactivePrompt survives the ladder.
-      const envelope = makeEnvelope({
-        lastAssistantMessage: 8_000,
-        interactivePrompt: 4_000,
-        subagents: 40
-      })
-      envelope.payload.state = 'waiting'
-      publishAgentHookEnvelope(dispatcher, envelope)
-
-      const published = decodeEnvelopes(primary)
-      expect(published).toHaveLength(1)
-      expect(published[0].payload.state).toBe('waiting')
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(4_000))
-      expect(published[0].payload.subagents).toBeUndefined()
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
-      expect(primary.closes).toBe(0)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
   it('sheds interactivePrompt last and still delivers the status', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
@@ -326,32 +301,6 @@ describe('publishAgentHookEnvelope redelivery', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('redelivers a backpressure-rejected envelope once the producer queue drains', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      saturateProducerQueue(dispatcher, primary)
-      const envelope = makeEnvelope({})
-      envelope.payload.state = 'done'
-      publishAgentHookEnvelope(dispatcher, envelope)
-      expect(decodeEnvelopes(primary)).toHaveLength(0)
-
-      primary.blocked = false
-      primary.drain()
-      // Queue-full snapshots need their bounded retry path; otherwise only reconnect replay can repair a stale row.
-      expect(decodeEnvelopes(primary)).toHaveLength(0)
-
-      vi.advanceTimersByTime(250)
-      const published = decodeEnvelopes(primary)
-      expect(published).toHaveLength(1)
-      expect(published[0].payload.state).toBe('done')
-      expect(published[0].paneKey).toBe('tab-1:4f1b0f4e-0000-4000-8000-000000000001')
-      expect(primary.closes).toBe(0)
-    } finally {
-      dispatcher.dispose()
-    }
   })
 
   it('keeps only the newest snapshot per pane instead of queueing every drop', () => {

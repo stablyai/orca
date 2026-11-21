@@ -15,7 +15,8 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
+import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
@@ -67,7 +68,9 @@ export function visibleOrchestrationWorkForTest(): {
 const aliasKey = (host: string, key: string) => `${host}\0${key}`
 
 function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
-  const inputs = [state.unifiedTabsByWorktree, ...structuredAgentSessionOwnerInputs(state)]
+  // The chat list keeps its identity across terminal-only writes, so a title leaves rows cached.
+  const structuredTabs = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree ?? EMPTY)
+  const inputs = [structuredTabs, ...structuredAgentSessionOwnerInputs(state)]
   if (rowCache && inputs.every((value, index) => value === rowCache?.inputs[index])) {
     return rowCache
   }
@@ -75,7 +78,7 @@ function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
   const aliases = new Map<string, string>()
   const worktrees = new Map<string, string>()
   const canonical = new Map<string, { key: string; host: string | null }>()
-  for (const tab of getStructuredAgentSessionTabs(state.unifiedTabsByWorktree ?? EMPTY)) {
+  for (const tab of structuredTabs) {
     visits++
     if (!tab.entityId) {
       continue
@@ -96,12 +99,48 @@ function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
   return rowCache
 }
 
+type TerminalInputs = Pick<
+  VisibleOrchestrationState,
+  'unifiedTabsByWorktree' | 'tabsByWorktree' | 'ptyIdsByTabId'
+>
 let terminalCache:
-  | { inputs: unknown[]; hosts: Map<string, string | null>; ptys: Map<string, string | null> }
+  | {
+      inputs: TerminalInputs
+      hosts: Map<string, string | null>
+      ptys: Map<string, string | null>
+    }
   | undefined
+
+// Why: only rows whose identity, host or pty changed can move provenance; title writes never do.
+function terminalProvenanceInputsMatch(state: TerminalInputs, previous: TerminalInputs): boolean {
+  return (
+    keyedListsMatch(state.ptyIdsByTabId, previous.ptyIdsByTabId, (a, b) => a === b) &&
+    keyedListsMatch(
+      state.unifiedTabsByWorktree,
+      previous.unifiedTabsByWorktree,
+      (a, b) =>
+        a.contentType === b.contentType &&
+        a.worktreeId === b.worktreeId &&
+        a.entityId === b.entityId &&
+        a.executionHostId === b.executionHostId
+    ) &&
+    keyedListsMatch(
+      state.tabsByWorktree,
+      previous.tabsByWorktree,
+      (a, b) => a.id === b.id && a.ptyId === b.ptyId
+    )
+  )
+}
+
 function terminalProvenance(state: VisibleOrchestrationState) {
-  const inputs = [state.unifiedTabsByWorktree, state.tabsByWorktree, state.ptyIdsByTabId]
-  if (terminalCache && inputs.every((value, index) => value === terminalCache?.inputs[index])) {
+  const inputs: TerminalInputs = {
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    tabsByWorktree: state.tabsByWorktree,
+    ptyIdsByTabId: state.ptyIdsByTabId
+  }
+  if (terminalCache && terminalProvenanceInputsMatch(inputs, terminalCache.inputs)) {
+    // The same object keeps the orchestration projection cached across title-only writes.
+    terminalCache.inputs = inputs
     return terminalCache
   }
   const hosts = new Map<string, string | null>()

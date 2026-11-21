@@ -9,6 +9,7 @@ import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import { readCursorModelCatalog } from '../acp-dialects/cursor-model-catalog'
 import type { SessionConfigOption } from '../generated/acp-protocol.generated'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
 import {
   openAcpAdapterRig,
@@ -183,6 +184,81 @@ it("shows Cursor's plan and accepts it, which ends the turn without building", a
   )
 })
 
+it("uses Cursor's legacy model setter for Auto and preserves inherited object names as model IDs", () => {
+  const options = new AcpStructuredOptions(CURSOR.dialect)
+  options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
+  const legacy = new AcpStructuredOptions(CURSOR.dialect)
+  legacy.adoptSession(
+    {
+      models: {
+        currentModelId: 'grok-4.7',
+        availableModels: [{ modelId: 'default', name: 'Auto' }]
+      }
+    },
+    'new'
+  )
+  expect(legacy.write('model', 'auto')).toEqual({ method: 'model', modelId: 'default' })
+  // Only Cursor's own aliases map; a name an object inherits is a model id like any other.
+  for (const id of ['constructor', '__proto__', 'toString']) {
+    expect(options.write('model', id)).toMatchObject({ value: id })
+  }
+})
+
+/** Cursor's model option, set to `value`. */
+const modelOn = (value: string): SessionConfigOption[] =>
+  OPUS_OPTIONS.slice(0, 1).map((option) =>
+    option.type === 'select' ? { ...option, currentValue: value } : option
+  )
+
+/** A Cursor chat that sends one message with `model`, its session opened on `current`. */
+async function sendOnModel(model: string | undefined, current: string, reopened: boolean) {
+  const configOptions = modelOn(current)
+  const rig = await openAcpAdapterRig({
+    spec: CURSOR,
+    launch: reopened
+      ? {
+          resume: {
+            sessionId: PROVIDER_SESSION,
+            key: 'acp:cursor:saved',
+            mayBeUnsaved: async () => false,
+            lossKeys: []
+          }
+        }
+      : {},
+    script: (agent) => {
+      for (const method of ['session/new', 'session/load']) {
+        agent.on(method, (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
+        )
+      }
+      agent.on('session/set_config_option', (frame) => {
+        const { value } = CONFIG_WRITE.parse(frame.params)
+        agent.reply(frame, { configOptions: modelOn(value) })
+      })
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+    }
+  })
+  await rig.acquire()
+  await rig.adapter.dispatch({
+    sessionId: SESSION,
+    clientMessageId: 'send-1',
+    fence: 1,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+    ...(model ? { executionOptions: { model } } : {})
+  })
+  await waitFor(() => expect(rig.sent('session/prompt')).toHaveLength(1))
+  return rig.sent('session/set_config_option').map(({ params }) => CONFIG_WRITE.parse(params).value)
+}
+
+it('sends a message on an explicit Auto, writing it as `default`; no pick writes nothing', async () => {
+  expect(await sendOnModel('auto', 'claude-opus-4-8', false)).toEqual(['default'])
+  expect(await sendOnModel(undefined, 'claude-opus-4-8', false)).toEqual([])
+})
+
+it('reopens a chat saved on Auto without writing its model again', async () => {
+  expect(await sendOnModel('auto', 'default', true)).toEqual([])
+})
+
 it('writes effort to the effort levels, not the thinking switch, and Fast to its own option', () => {
   const options = new AcpStructuredOptions(CURSOR.dialect)
   options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
@@ -252,6 +328,136 @@ it("writes the person's Fast choice again after a model switch resets it", async
       return `${configId}=${value}`
     })
   ).toEqual(['model=grok-4.7', 'fast=false', 'model=composer-2.5', 'fast=false'])
+})
+
+it('runs a Settings default saved as a Cursor CLI model id on the chat model it names (#46163)', async () => {
+  // Shaped as cursor-agent 2026.11.19's chat server lists them; the CLI's ids carry thinking,
+  // effort and Fast.
+  const efforts: Record<string, string[]> = {
+    'grok-4.6': ['low', 'medium', 'high', 'xhigh'],
+    'claude-opus-4-8': ['low', 'medium', 'high', 'xhigh', 'max'],
+    'gpt-5.4': ['none', 'low', 'medium', 'high', 'extra-high'],
+    'claude-opus-4-6': ['low', 'medium', 'high', 'max']
+  }
+  const withFast = new Set(['grok-4.6', 'claude-opus-4-8', 'gpt-5.4'])
+  const listed = ['default', ...Object.keys(efforts), 'claude-sonnet-4-5']
+  const select = (id: string, category: string, value: string, values: string[]) => ({
+    id,
+    name: id,
+    category,
+    type: 'select' as const,
+    currentValue: value,
+    options: values.map((entry) => ({ value: entry, name: entry }))
+  })
+  const optionsFor = (
+    model: string,
+    { effort = 'high', fast = 'true', thinking = 'true' } = {}
+  ): SessionConfigOption[] => [
+    select('model', 'model', model, listed),
+    ...(model.startsWith('claude-')
+      ? [select('thinking', 'thought_level', thinking, ['false', 'true'])]
+      : []),
+    ...(efforts[model] ? [select('effort', 'thought_level', effort, efforts[model])] : []),
+    ...(withFast.has(model) ? [select('fast', 'model_config', fast, ['false', 'true'])] : [])
+  ]
+  const writesFor = async (model: string, picked: AgentSessionExecutionOptions = {}) => {
+    const rig = await openAcpAdapterRig({
+      spec: CURSOR,
+      script: (agent) => {
+        let state: Record<string, string> = { model: 'default' }
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: optionsFor('default') })
+        )
+        agent.on('session/set_config_option', (frame) => {
+          const { configId, value } = CONFIG_WRITE.parse(frame.params)
+          if (configId === 'model' && !listed.includes(value)) {
+            agent.fail(frame, -32602, 'Invalid params', {
+              message: `Invalid model value: ${value}`
+            })
+            return
+          }
+          state = configId === 'model' ? { model: value } : { ...state, [configId]: value }
+          agent.reply(frame, { configOptions: optionsFor(state.model, state) })
+        })
+        agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+      }
+    })
+    await rig.acquire()
+    const sent = rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'send-1',
+      fence: 1,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
+      executionOptions: { model, ...picked }
+    })
+    const refusal = await sent.then(
+      async () => void (await waitFor(() => expect(rig.sent('session/prompt')).toHaveLength(1))),
+      (error: unknown) => error
+    )
+    const writes = rig.sent('session/set_config_option').map(({ params }) => {
+      const { configId, value } = CONFIG_WRITE.parse(params)
+      return `${configId}=${value}`
+    })
+    return refusal ? { writes, refusal } : writes
+  }
+  expect(await writesFor('cursor-grok-4.6-high')).toEqual([
+    'model=grok-4.6',
+    'effort=high',
+    'fast=false'
+  ])
+  expect(await writesFor('cursor-grok-4.6-low-fast')).toEqual([
+    'model=grok-4.6',
+    'effort=low',
+    'fast=true'
+  ])
+  expect(await writesFor('grok-4.6')).toEqual(['model=grok-4.6'])
+  expect(await writesFor('claude-opus-4-8-thinking-max-fast')).toEqual([
+    'model=claude-opus-4-8',
+    'thinking=true',
+    'effort=max',
+    'fast=true'
+  ])
+  // Claude Opus 4.8 1M, which the chat would otherwise run with thinking on.
+  expect(await writesFor('claude-opus-4-8-high')).toEqual([
+    'model=claude-opus-4-8',
+    'thinking=false',
+    'effort=high',
+    'fast=false'
+  ])
+  expect(await writesFor('claude-opus-4-8-high', { effort: 'low', fastMode: 'true' })).toEqual([
+    'model=claude-opus-4-8',
+    'thinking=false',
+    'effort=low',
+    'fast=true'
+  ])
+  expect(await writesFor('gpt-5.4-xhigh')).toEqual([
+    'model=gpt-5.4',
+    'effort=extra-high',
+    'fast=false'
+  ])
+  // Older Claude ids lead with the version and end with `-thinking`.
+  expect(await writesFor('claude-4.6-opus-high-thinking')).toEqual([
+    'model=claude-opus-4-6',
+    'thinking=true',
+    'effort=high'
+  ])
+  expect(await writesFor('claude-4.5-sonnet')).toEqual([
+    'model=claude-sonnet-4-5',
+    'thinking=false'
+  ])
+  // An id naming no listed model is still refused, never swapped for the session's own model.
+  expect(await writesFor('not-a-model')).toEqual({
+    writes: ['model=not-a-model'],
+    refusal: expect.objectContaining({ message: expect.stringContaining('Invalid params') })
+  })
+})
+
+it('reads a CLI model id as the longest listed chat id it starts with', () => {
+  expect(CURSOR.dialect.unlistedChatModel?.('model-max-fast', ['model', 'model-max'])).toEqual({
+    model: 'model-max',
+    fastMode: 'true',
+    thinking: 'false'
+  })
 })
 
 it("lists each model's own effort levels and Fast default before a chat exists", async () => {

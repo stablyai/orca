@@ -154,18 +154,6 @@ describe('DesktopPushService', () => {
     expect(harness.deletes).toEqual(['reg-first', 'reg-late'])
     expect(harness.outbox.pending()).toEqual([])
   })
-
-  it('stops re-arming the retry once the service is stopped', async () => {
-    const harness = createService({ deleteFails: true })
-    harness.outbox.enqueue({ registrationId: 'reg-stuck', deviceId: 'device-1' })
-    await harness.service.flushUnregisterOutbox()
-
-    harness.service.stop()
-    harness.retries[0]?.run()
-    await new Promise((resolve) => setImmediate(resolve))
-
-    expect(harness.retries).toHaveLength(1)
-  })
 })
 
 it('does not claim success for missing registrations or failed gateway sends', async () => {

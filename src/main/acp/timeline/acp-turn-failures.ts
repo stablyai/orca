@@ -11,6 +11,8 @@ import type {
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 
 import type { AcpDialect, AcpDialectNotification, AcpTurnEnding } from '../acp-dialects/acp-dialect'
+import type { SessionUpdate } from '../generated/acp-protocol.generated'
+import { ACP_SUBSTANTIVE_UPDATES } from './acp-session-update'
 
 import {
   acpStopReasonFailed,
@@ -24,6 +26,8 @@ export class AcpTurnFailures {
   private readonly rows = new BoundedMap<string, AcpTurnFailureEvidence>({
     maxEntries: 128
   })
+  private retryRun?: { item: string; turn: string | undefined; attempt: number }
+  private retryRuns = 0
 
   constructor(
     private readonly sessionId: string,
@@ -48,6 +52,57 @@ export class AcpTurnFailures {
           failureDetail: extension.failureDetail ?? extension.failure?.failureDetail
         })
       : []
+  }
+
+  /** Revise one retrying row per run of retry notices; any other turn content ends the run. */
+  retry(
+    update: SessionUpdate,
+    turn: string | undefined,
+    at: number,
+    join: ProviderTimelineJoin
+  ): ProviderTimelineEvent[] | undefined {
+    const cause =
+      update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
+        ? this.dialect.providerRetry?.(update.content.text)
+        : undefined
+    if (cause === undefined) {
+      if (this.retryRun && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) {
+        this.retryRun = undefined
+      }
+      return undefined
+    }
+    if (!this.retryRun || this.retryRun.turn !== turn) {
+      // History gives each turn a fresh translator, often at one time, so the turn keeps keys apart.
+      this.retryRuns += 1
+      this.retryRun = {
+        item: `provider-retry:${JSON.stringify([turn ?? null, at, this.retryRuns])}`,
+        turn,
+        attempt: 0
+      }
+    }
+    this.retryRun.attempt += 1
+    const failure = agentSessionFailureFact('providerRetrying', {
+      retry: { cause, attempt: this.retryRun.attempt }
+    })
+    return [
+      {
+        type: 'item.update',
+        item: this.retryRun.item,
+        body: {
+          kind: 'status',
+          tone: 'warning',
+          ...agentSessionFailureWords(failure, { agentName: this.agentName, surface: 'row' })
+        },
+        join
+      }
+    ]
+  }
+
+  /** A failure reported mid-turn still fails a turn the agent closes with end_turn. */
+  ending(turn: string, reported: AcpTurnEnding): AcpTurnEnding {
+    return reported.stopReason === 'end_turn' && this.rows.has(turn)
+      ? { ...reported, stopReason: 'error' }
+      : reported
   }
 
   ended(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {

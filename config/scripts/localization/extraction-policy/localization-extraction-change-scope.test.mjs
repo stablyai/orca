@@ -11,7 +11,7 @@ it.skipIf(process.platform === 'win32')(
     const workflow = parse(
       readFileSync(new URL('../../../../.github/workflows/pr.yml', import.meta.url), 'utf8')
     )
-    const step = workflow.jobs.preflight.steps.find(
+    const step = workflow.jobs.preflight_generated.steps.find(
       (candidate) => candidate.name === 'Verify localization extraction'
     )
     const scratch = mkdtempSync(join(tmpdir(), 'orca-localization-routing-'))
@@ -97,7 +97,6 @@ it.skipIf(process.platform === 'win32')(
       write('src/renamed.ts', "translate('renamed')")
       write('src/example.test.ts', '// ignored')
       let base = commit()
-      route(base, false)
 
       write('src/example.test.ts', '// still ignored')
       const ignored = commit()

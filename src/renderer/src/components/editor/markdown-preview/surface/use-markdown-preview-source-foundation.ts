@@ -15,7 +15,7 @@ import {
   getMarkdownPreviewSourceRelativePath,
   resolveMarkdownPreviewSourceWorktree
 } from '../links/markdown-preview-source-routing'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from '../viewport/usePreserveSectionDuringExternalEdit'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 

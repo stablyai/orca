@@ -8,15 +8,15 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const {
   createFolderWorkspaceRuntimeStore,
   makeFolderProjectGroup,
   makeFolderWorkspace,
   TEST_FOLDER_WORKSPACE_KEY
-} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 const { blockedWslDistroForPath } = await import('../../../wsl/filesystem/wsl-unc-access-gate')
 const { isWslUserActFor } = await import('../../../wsl/discovery/wsl-user-act-scope')
 const { wslDistroHoldMessage } =

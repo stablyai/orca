@@ -15,7 +15,7 @@ import {
   browserExternalAppPermissionLabel,
   browserSitePermissionLabel,
   browserSitePermissionSiteName
-} from '../../browser-pane/browser-site-permission-copy'
+} from '../../browser-pane/page-prompts/browser-site-permission-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'

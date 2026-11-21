@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../../store/index'
 import { selectFloatingWorkspaceHasUnread } from '../../../store/workspaces/floating/floating-workspace-unread-selector'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -13,7 +13,6 @@ import {
 } from '../usage/usage-provider-settings-target'
 import { useStatusBarMenuFocusHandoff } from '../usage/ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { useStatusBarDensity } from './status-bar-density'
 import {
   getUsageOwnerHostScope,
   useOwnerUsageRateLimits
@@ -26,7 +25,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
-  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const ownerUsage = useOwnerUsageRateLimits(localRateLimits)
+  const { rateLimits, remoteOwner, refreshRemote } = ownerUsage
   const remoteOwned = remoteOwner !== null
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
@@ -60,15 +60,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const {
-    density: { compact, usageTightestOnly, segmentsIconOnly, collapseUsage },
-    overflowing,
-    collapsedUsageProviders,
-    barRef,
-    usageRef,
-    segmentsRef
-  } = useStatusBarDensity()
-
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -201,10 +192,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
-    usageSettings
-  )
+  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
@@ -240,7 +228,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse ? visibleMuse : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
-    // Why: the bar collapses chips from the end, so placeholders give way first.
+    // Why: the usage row clips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
   // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
@@ -284,11 +272,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     antigravityAccounts: rateLimits.antigravityAccounts,
     anyFetching,
     anyVisible,
-    barRef,
     canSignInFromUsageRow,
-    collapseUsage,
-    collapsedUsageProviders,
-    compact,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
@@ -302,13 +286,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     isRefreshing,
     menuOpen,
     menuPoint,
-    overflowing,
+    ownerUsage,
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,
     rosterProviders,
-    segmentsIconOnly,
-    segmentsRef,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -324,9 +306,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,
-    usagePercentageDisplay,
-    usageRef,
-    usageTightestOnly
+    usagePercentageDisplay
   }
 }
 

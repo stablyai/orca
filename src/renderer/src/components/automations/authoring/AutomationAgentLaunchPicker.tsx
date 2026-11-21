@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ComponentProps } from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/agent-launch-picker-drafts'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
@@ -18,7 +18,7 @@ import type { AutomationAuthorityRef } from '../../../../../shared/automations/o
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import { useAutomationAgentPickerEntries } from './use-automation-agent-picker-entries'
@@ -62,7 +62,7 @@ export function AutomationAgentLaunchPicker({
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }) {
   const t = useTranslate()
-  const state = useAppStore(selectAgentLaunchRouteView)
+  const state = useAppStoreWithHostStatuses(selectAgentLaunchRouteView)
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
   const route = buildAgentLaunchRouteInput(state, { agent: draft.agentId, workspace })

@@ -160,3 +160,19 @@ it('preserves a different missing-checkout registration with copied ownership te
   expect(await readFile(replacementLock, 'utf8')).toBe(`${reason}\n`)
   expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
 })
+
+it('reclaims an owned checkout whose .git file was deleted', async () => {
+  const { repo, prepared, lock, reason } = await fixture()
+  await writeFile(join(prepared, 'partial.txt'), 'partial checkout\n')
+  await rm(join(prepared, '.git'))
+
+  await expect(performDiscardPreparedWorktree(repo, prepared, {}, reason)).resolves.toBe('removed')
+
+  await expect(readFile(lock, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(readFile(join(prepared, 'partial.txt'), 'utf8')).rejects.toMatchObject({
+    code: 'ENOENT'
+  })
+  expect(
+    (await runner.gitExecFileAsync(['worktree', 'list', '--porcelain'], { cwd: repo })).stdout
+  ).not.toContain(prepared)
+})

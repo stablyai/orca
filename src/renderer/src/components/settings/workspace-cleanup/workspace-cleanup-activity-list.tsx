@@ -136,16 +136,18 @@ function ActivityRun({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex w-full items-center gap-2 text-left"
+        className="flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 text-left"
       >
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
           <Chevron className="size-3.5" />
         </span>
-        <span className="text-sm font-medium tabular-nums">{when}</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="whitespace-nowrap text-sm font-medium tabular-nums">{when}</span>
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
           {formatCleanupRunTrigger(run.trigger, t)}
         </span>
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+        {/* Fills the first line, so a result that does not fit wraps under the date. */}
+        <span aria-hidden="true" className="grow" />
+        <span className="pl-6 text-xs tabular-nums text-muted-foreground">
           {run.error ? (
             <span className="text-destructive">
               {t('components.settings.workspaceCleanup.activity.unfinished', "Couldn't finish")}

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import {
   useVirtualizedScrollAnchor,
   type VirtualizedScrollAnchor
-} from '@/hooks/useVirtualizedScrollAnchor'
+} from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import {
   getActiveStickyIndexesForScroll,
   getVirtualRowKey,

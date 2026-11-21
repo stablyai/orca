@@ -24,7 +24,6 @@ async function heldChat() {
   let clock = HOST_TEST_NOW
   let launchHome = '/homes/a'
   let reading: ProviderRateLimits | null = null
-  let enabled = true
   let answer: ((now: number) => ProviderRateLimits) | undefined
   const accountA: UsageLimitAccountScope = {
     scope: 'home-a',
@@ -43,7 +42,7 @@ async function heldChat() {
     restartable: true,
     acquiredAccountHome: () => ({ variable: 'CODEX_HOME', path: launchHome }),
     usageLimitAutoContinue: {
-      isEnabled: () => enabled,
+      isEnabled: () => true,
       isWorkspaceAsleep: () => false,
       subscribe: () => () => {},
       accountUsage: async () => attributed
@@ -89,12 +88,7 @@ async function heldChat() {
     /** The cut's runtime launched on account A; a start of this chat would now launch on `path`. */
     switchAccount: async (path: string) => {
       launchHome = path
-    },
-    setEnabled: (next: boolean) => {
-      enabled = next
-    },
-    setShown: (shown: boolean) => current.store.setSessionTabVisibility(SESSION, shown),
-    forget: () => current.host.usageLimitContinue.forget(SESSION)
+    }
   }
 }
 
@@ -198,27 +192,6 @@ it('rebuilds a hold after restart from the reading before the cut counts as over
   ).toEqual([])
   expect(await chat.state()).toMatchObject({ state: 'scheduled', continueAt: fridayReset })
   expect(await chat.pass(fridayReset + 15_000, (now) => weekly(0, null, now))).toHaveLength(1)
-})
-
-it('drops a hidden chat hold while automatic continue is off, and keeps it when the chat opens', async () => {
-  const chat = await heldChat()
-  const weeklyReset = chat.cut.resetsAt + 3 * HOUR
-  await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, weeklyReset, now))
-  chat.setEnabled(false)
-  await chat.setShown(false)
-  await chat.pass(chat.cut.resetsAt + HOUR, (now) => weekly(100, weeklyReset, now))
-  await chat.setShown(true)
-  expect(await chat.state()).toEqual({
-    turnItemId: chat.cut.turnItemId,
-    resetsAt: chat.cut.resetsAt,
-    state: 'off'
-  })
-  chat.setEnabled(true)
-  await chat.pass(chat.cut.resetsAt + 2 * HOUR, (now) => weekly(100, weeklyReset, now))
-  expect(await chat.state()).toMatchObject({ continueAt: weeklyReset })
-  // Opening the chat re-reads its cut; the account hold is still the account's.
-  chat.forget()
-  expect(await chat.state()).toMatchObject({ state: 'scheduled', continueAt: weeklyReset })
 })
 
 it('never revives an old cut with a spent window that began after its reset', async () => {

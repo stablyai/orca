@@ -3,6 +3,7 @@ import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight, File, Folder } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { hasWorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { DeleteWorktreeRelativePath, isDirectoryDisplayPath } from './delete-worktree-relative-path'
 import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
@@ -58,11 +59,6 @@ export function DeleteWorktreeLocalFilesHint({
         { count: files.count }
       )
   const inlinePreview = files.samplePaths.join(', ')
-  const remainingPathCount = Math.max(0, files.count - listedPaths.length)
-  const listLabel = t(
-    'components.workspace.delete.ignoredFiles.listLabel',
-    'Ignored local files that will be lost'
-  )
 
   return (
     <Collapsible className="mt-0.5 min-w-0">
@@ -88,52 +84,69 @@ export function DeleteWorktreeLocalFilesHint({
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent animation="height">
-        <div className="pt-1.5">
-          <div
-            role="region"
-            aria-label={listLabel}
-            tabIndex={0}
-            className="scrollbar-sleek max-h-40 min-w-0 overflow-y-auto rounded-sm border border-border/60 bg-background/60 px-2.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <ul className="min-w-0 space-y-1 font-mono text-xs">
-              {listedPaths.map((relativePath) => {
-                const EntryIcon = isDirectoryDisplayPath(relativePath) ? Folder : File
-                return (
-                  <li key={relativePath} className="flex min-w-0 items-start gap-2">
-                    <EntryIcon
-                      aria-hidden="true"
-                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                    />
-                    <span className="min-w-0 flex-1 wrap-anywhere text-foreground">
-                      <DeleteWorktreeRelativePath path={relativePath} />
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-            {remainingPathCount > 0 ? (
-              <p className="mt-1.5 border-t border-border/50 pt-1 text-2xs text-muted-foreground">
-                {t(
-                  'components.workspace.delete.ignoredFiles.morePaths',
-                  'and {{count}} more ignored paths',
-                  {
-                    count: remainingPathCount,
-                    defaultValue_one: 'and {{count}} more ignored path'
-                  }
-                )}
-              </p>
-            ) : null}
-            {!files.complete ? (
-              <p className="mt-1.5 border-t border-border/50 pt-1 text-2xs text-muted-foreground">
-                {t(
-                  'components.workspace.delete.ignoredFiles.incompleteNotice',
-                  'Check stopped early; more ignored files in this worktree may also be deleted.'
-                )}
-              </p>
-            ) : null}
-          </div>
-        </div>
+        <DeleteWorktreeLocalFilesDetails files={files} />
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+export function DeleteWorktreeLocalFilesDetails({
+  files
+}: {
+  files: WorktreeAtRiskLocalFiles
+}): JSX.Element {
+  const t = useTranslate()
+  const listedPaths = files.paths ?? files.samplePaths
+  const remainingPathCount = Math.max(0, files.count - listedPaths.length)
+  const listLabel = t(
+    'components.workspace.delete.ignoredFiles.listLabel',
+    'Ignored local files that will be lost'
+  )
+  return (
+    <div className="pt-1.5">
+      <div
+        role="region"
+        aria-label={listLabel}
+        tabIndex={0}
+        className="scrollbar-sleek max-h-40 min-w-0 overflow-y-auto rounded-sm border border-border/60 bg-background/60 px-2.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <ul className="min-w-0 space-y-1 font-mono text-xs">
+          {listedPaths.map((relativePath) => {
+            const EntryIcon = isDirectoryDisplayPath(relativePath) ? Folder : File
+            return (
+              <li key={relativePath} className="flex min-w-0 items-start gap-2">
+                <EntryIcon
+                  aria-hidden="true"
+                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                />
+                <span className="min-w-0 flex-1 wrap-anywhere text-foreground">
+                  <DeleteWorktreeRelativePath path={relativePath} />
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+        {remainingPathCount > 0 ? (
+          <p className="mt-1.5 border-t border-border/50 pt-1 text-2xs text-muted-foreground">
+            {t(
+              'components.workspace.delete.ignoredFiles.morePaths',
+              'and {{count}} more ignored paths',
+              {
+                count: remainingPathCount,
+                defaultValue_one: 'and {{count}} more ignored path'
+              }
+            )}
+          </p>
+        ) : null}
+        {!files.complete ? (
+          <p className="mt-1.5 border-t border-border/50 pt-1 text-2xs text-muted-foreground">
+            {t(
+              'components.workspace.delete.ignoredFiles.incompleteNotice',
+              'Check stopped early; more ignored files in this worktree may also be deleted.'
+            )}
+          </p>
+        ) : null}
+      </div>
+    </div>
   )
 }

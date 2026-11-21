@@ -5,6 +5,7 @@ import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../../../ipc/filesystem/access/filesystem-auth'
 
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
+import { PATH_ACCESS_DENIED_MESSAGE } from '../../../ipc/filesystem/access/filesystem-auth'
 
 const {
   resolveAuthorizedPathMock,
@@ -208,6 +209,22 @@ describe('RuntimeFileWatches', () => {
     await expect(commands.closeFileExplorerWatchersForPath('C:\\repo')).resolves.toBeUndefined()
     expect(watcher.close).toHaveBeenCalledTimes(1)
   })
+
+  posixWatcherProcessIt(
+    'closes removal watchers after Git already dropped the path from allowed directories',
+    async () => {
+      resolveAuthorizedPathMock.mockRejectedValue(new Error(PATH_ACCESS_DENIED_MESSAGE))
+      const { commands } = createRuntimeFileWatches('/projects/repo-feature')
+
+      await expect(
+        commands.closeFileExplorerWatchersForPath('/projects/repo-feature')
+      ).resolves.toBeUndefined()
+
+      expect(closeWatcherInWatcherProcessMock).toHaveBeenCalledExactlyOnceWith(
+        '/projects/repo-feature'
+      )
+    }
+  )
 
   posixWatcherProcessIt('tracks watcher unsubscribe work so shutdown can await it', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')

@@ -143,13 +143,14 @@ export function operationId(): string {
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function attachParams(sessionId: string, fixtureRoot: string) {
+/** `folder` attaches it in a folder workspace instead of the git worktree. */
+export function attachParams(sessionId: string, fixtureRoot: string, folder?: string) {
   const params = {
     location: {
       executionHostId: 'local' as const,
       wslDistro: null,
-      workspaceId: WORKSPACE,
-      workspaceKind: 'git-worktree' as const
+      workspaceId: folder ? `folder:${folder}` : WORKSPACE,
+      workspaceKind: folder ? ('folder' as const) : ('git-worktree' as const)
     },
     provider: 'codex' as const,
     agent: 'codex' as const,
@@ -186,16 +187,9 @@ export function resetProviderFaults(): void {
   providerFaults.turnStarts = 0
 }
 
-/** A chat card holds the whole orchestration message: its subject and its reply command. */
+/** A chat got the whole orchestration message: its subject and its reply command. */
 export function isWholeMail(text: string): boolean {
   return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
-}
-
-/** What the agent itself is sent for that card: only Orca's pointer at `check`. */
-export function isMailPointer(text: string): boolean {
-  return /^You have 1 orchestration message\. Run `orca(-dev)? orchestration check( --run \S+)?`\.$/.test(
-    text
-  )
 }
 
 export function turnText(turn: { text: string }): string {

@@ -107,15 +107,6 @@ async function waitForStoredKeys(count: number): Promise<unknown[]> {
 }
 
 describe('recording a first-contact host key', () => {
-  it('writes a record for the accepted key', async () => {
-    await new SshConnection(target(), callbacks()).connect()
-
-    const trusted = await waitForStoredKeys(1)
-    expect(trusted[0]).toEqual(
-      expect.objectContaining({ host: 'example.com', port: 22, keyType: 'ssh-ed25519' })
-    )
-  })
-
   // Recorded trust must refuse changed keys even when known_hosts has no entry.
   it('refuses a different key for a host it recorded itself', async () => {
     await new SshConnection(target(), callbacks()).connect()

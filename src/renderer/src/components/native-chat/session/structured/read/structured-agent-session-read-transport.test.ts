@@ -82,6 +82,47 @@ describe('structured agent-session read transport generations', () => {
     })
   }
 
+  it('asks for prompt suggestions locally and from a host that takes them, never an older one', async () => {
+    const read = (
+      target: Parameters<typeof startStructuredAgentSessionReadTransport>[0]['target']
+    ) =>
+      startStructuredAgentSessionReadTransport({
+        subscribeRetryNow: () => () => {},
+        applyEvent: vi.fn(),
+        applyError: vi.fn(),
+        getCursor: () => null,
+        onContactLost: vi.fn(),
+        onHistoryReadInvalidated: () => undefined,
+        sessionId: 'session-a',
+        target,
+        showsPromptSuggestions: true
+      })
+    mocks.supports.mockImplementation(async (environmentId: string, capabilities: string[]) =>
+      capabilities.map(
+        (capability) =>
+          environmentId === 'env-new' && capability === 'agent-session.prompt-suggestions.v1'
+      )
+    )
+    const reads = [
+      read({ kind: 'local' }),
+      read({ kind: 'environment', environmentId: 'env-new' }),
+      read({ kind: 'environment', environmentId: 'env-old' })
+    ]
+    await vi.waitFor(() => expect(attempts).toHaveLength(3))
+    const asked = Object.fromEntries(
+      mocks.subscribe.mock.calls.map(([target, params]) => [
+        target.environmentId ?? 'local',
+        params
+      ])
+    )
+    expect(asked).toEqual({
+      local: { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },
+      'env-new': { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },
+      'env-old': { sessionId: 'session-a' }
+    })
+    reads.forEach((transport) => transport.dispose())
+  })
+
   it("applies each subscription's first batch alone and marked, and coalesces the rest", async () => {
     vi.useFakeTimers()
     try {

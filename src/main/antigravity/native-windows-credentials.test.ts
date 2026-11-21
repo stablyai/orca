@@ -58,7 +58,7 @@ describe('Windows native Antigravity credentials', () => {
     fake.writeGenericCredential('gemini:antigravity', 'antigravity', Buffer.from(raw))
     const path = privateFile(raw)
     expect(await readAntigravityWindowsCredentialContents()).toBe(raw)
-    expect(readAntigravityCredentialFile(path)).toBe(raw)
+    expect(await readAntigravityCredentialFile(path)).toBe(raw)
     const writes = vi.spyOn(fake, 'writeGenericCredential')
     const backend = createAntigravityHostCredentialBackend('/ignored-HOME')
     await expect(backend.write(credential('b'), credential('a'))).rejects.toThrow()
@@ -69,7 +69,7 @@ describe('Windows native Antigravity credentials', () => {
     fake.writeGenericCredential('gemini:antigravity', 'antigravity', Buffer.from([255]))
     await expect(readAntigravityWindowsCredentialContents()).rejects.toThrow('could not be read')
     writeFileSync(path, Buffer.from([255]))
-    expect(() => readAntigravityCredentialFile(path)).toThrow('read safely')
+    await expect(readAntigravityCredentialFile(path)).rejects.toThrow('read safely')
   })
 
   it.each([

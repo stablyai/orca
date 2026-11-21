@@ -1,10 +1,10 @@
 import type * as ReactModule from 'react'
-import type { LinearEditState } from '../../../linear-item-drawer-types'
+import type { LinearEditState } from '../item-drawer/linear-item-drawer-types'
 
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
-import { LinearIssueTextEditor } from '../../../LinearIssueTextEditor'
-import { useLinearIssueEditController } from '../../../linear-item-drawer-edit-controller'
+import { LinearIssueTextEditor } from '../issue-workspace/LinearIssueTextEditor'
+import { useLinearIssueEditController } from '../item-drawer/linear-item-drawer-edit-controller'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import { useStore } from 'zustand'
 
@@ -119,7 +119,7 @@ vi.mock('@/runtime/linear/runtime-linear-issue-client', async (original) => ({
   linearCreateIssue: reads.create
 }))
 
-vi.mock('@/hooks/useIssueMetadata', async (original) => ({
+vi.mock('@/lib/work-items/linear/useIssueMetadata', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   useTeamLabels: () => ({ data: [{ id: 'bug', name: 'Bug' }], loading: false }),
   useTeamMembers: () => ({ data: [], loading: false }),
@@ -140,11 +140,14 @@ vi.mock('@/store/workspaces/catalog/workspace-record-fields', async (original) =
   return { ...(await original<Record<string, unknown>>()), selectFolderWorkspaces: () => empty }
 })
 
-vi.mock('@/components/LinearIssueMarkdownDescriptionEditor', () => ({
-  LinearIssueMarkdownDescriptionEditor: () => null
-}))
+vi.mock(
+  '@/components/task-page/linear/issue-workspace/LinearIssueMarkdownDescriptionEditor',
+  () => ({
+    LinearIssueMarkdownDescriptionEditor: () => null
+  })
+)
 
-vi.mock('@/components/linear-item-drawer-sheet', () => ({
+vi.mock('@/components/task-page/linear/item-drawer/linear-item-drawer-sheet', () => ({
   renderLinearItemDrawerSheet: (props: {
     displayed: LinearIssue | null
     editState: LinearEditState | null

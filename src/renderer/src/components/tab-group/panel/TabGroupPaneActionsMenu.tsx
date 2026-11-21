@@ -21,7 +21,9 @@ type TabGroupPaneActionsMenuProps = {
 }
 
 function isSlotHidden(slot: HTMLElement | null): boolean {
-  return Boolean(slot && slot.childElementCount > 0 && getComputedStyle(slot).display === 'none')
+  return Boolean(
+    slot && slot.childElementCount > 0 && getComputedStyle(slot).visibility === 'hidden'
+  )
 }
 
 export function TabGroupPaneActionsMenu({

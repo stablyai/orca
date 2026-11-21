@@ -26,7 +26,8 @@ export const DiffCommentSchema = z.object({
   source: z.enum(['diff', 'markdown']).optional(),
   selectedText: z.string().optional(),
   startLine: z.number().int().positive().optional(),
-  lineNumber: z.number().int().positive(),
+  // 0 is a whole-file note (the phone's File Note; formatDiffComment prints "Scope: file").
+  lineNumber: z.number().int().nonnegative(),
   body: z.string(),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite().optional(),

@@ -1,10 +1,11 @@
 /** Plain-language copy for the WSL move dialog: no "manifest", "orcad" or "UNC". */
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type {
-  WslMoveBlockerKind,
-  WslMoveProgressStep,
-  WslMoveRefusal
+import {
+  WSL_MOVE_MAPPED_DRIVE_UNVERIFIABLE_DETAIL,
+  type WslMoveBlockerKind,
+  type WslMoveProgressStep,
+  type WslMoveRefusal
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 
 /** Decision C, verbatim from the design. */
@@ -39,6 +40,12 @@ export function wslMoveRefusalMessage(
     case 'wsl_move_unavailable':
       if (refusal.detail === 'preview-failed') {
         return t('wslMove.refusal.previewFailed', 'Orca could not check these projects. Try again.')
+      }
+      if (refusal.detail === WSL_MOVE_MAPPED_DRIVE_UNVERIFIABLE_DETAIL) {
+        return t(
+          'wslMove.refusal.mappedDriveUnverifiable',
+          'Orca could not check a drive letter some projects are saved on. Make sure the drive is connected, then try again.'
+        )
       }
       if (refusal.detail === 'start-failed') {
         return t(
@@ -75,6 +82,13 @@ export function wslMoveRefusalMessage(
             { distro }
           )
     case 'wsl_move_nothing_new':
+      if (refusal.refused?.length) {
+        return t(
+          'wslMove.refusal.nothingMovable',
+          'None of these projects can move to the {{distro}} host yet. Each one says why.',
+          { distro }
+        )
+      }
       return t('wslMove.refusal.nothingNew', 'These projects are already on the {{distro}} host.', {
         distro
       })
@@ -250,25 +264,6 @@ export function wslMoveBlockerHint(kind: WslMoveBlockerKind, t: Translate = tran
         'wslMove.blockerHint.scrollbackTooLarge',
         'Clear the terminal output in those terminals, then check again.'
       )
-  }
-}
-
-export function wslMoveScopeRefusalReason(reason: string, t: Translate = translate): string {
-  switch (reason) {
-    case 'windows-drive':
-      return t(
-        'wslMove.scopeRefused.windowsDrive',
-        'Its folder is on a Windows drive, so it stays on this computer.'
-      )
-    case 'mixed-locations':
-      return t(
-        'wslMove.scopeRefused.mixedLocations',
-        'Some of its folders are outside this distro, so it stays on this computer.'
-      )
-    case 'not-local':
-      return t('wslMove.scopeRefused.notLocal', 'It already runs on another host.')
-    default:
-      return t('wslMove.scopeRefused.other', 'It cannot move.')
   }
 }
 

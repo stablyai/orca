@@ -9,7 +9,7 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name] ?? ''))
 }))
-vi.mock('@/components/confirmation-dialog-context', () => ({
+vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn()
 }))
 vi.mock('../../section-layout/SearchableSetting', () => ({

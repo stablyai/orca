@@ -2,7 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createProjectGroup } from '../../../../../shared/project/groups/project-groups'
-import { getDefaultRepoHookSettings } from '../../../../../shared/orca-profiles/constants'
+import { getDefaultRepoHookSettings } from '../../../../../shared/workspace-setup/repo-hook-settings-defaults'
 import '../../../components/settings/__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store/index'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'

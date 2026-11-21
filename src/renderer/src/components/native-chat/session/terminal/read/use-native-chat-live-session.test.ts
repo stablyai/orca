@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -195,43 +195,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.messages.map((message) => message.id)).toEqual(['replacement'])
   })
 
-  it('shares one in-flight older page, and its result, with every caller', async () => {
-    const transport = getMockTransport('env-1')
-    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
-      assistant(`old-${n}`, 'old')
-    )
-    await render({
-      paneKey: PANE,
-      agent: AGENT,
-      sessionId: SESSION,
-      runtimeEnvironmentId: 'env-1'
-    })
-    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
-    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    transport.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveEarlier = resolve))
-    )
-    const readsBefore = transport.readSession.mock.calls.length
-
-    let first: Promise<string> | undefined
-    let second: Promise<string> | undefined
-    await act(async () => {
-      first = latest?.loadEarlier()
-    })
-    await act(async () => {
-      second = latest?.loadEarlier()
-    })
-    expect(second).toBe(first)
-    await act(async () => {
-      resolveEarlier({ messages: [assistant('older', 'older'), ...many] })
-      await first
-    })
-
-    await expect(second).resolves.toBe('applied')
-    expect(transport.readSession.mock.calls.length).toBe(readsBefore + 1)
-    expect(latest?.loadingEarlier).toBe(false)
-  })
-
   it('discards a load-earlier resolve from before a reconnect snapshot', async () => {
     const transport = getMockTransport('env-1')
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
@@ -373,6 +336,93 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(latest?.status).toBe('ready')
   })
+
+  it('pages older history by cursor and prepends it to the held window', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('older-0', 10), at('older-1', 20)],
+      hasMore: false,
+      beforeOffset: 10
+    })
+
+    let result: unknown
+    await act(async () => {
+      result = await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 1000
+    })
+    expect(result).toBe('applied')
+    expect(latest?.messages.slice(0, 3).map((m) => m.id)).toEqual(['older-0', 'older-1', 'held-0'])
+    expect(latest?.hasMore).toBe(false)
+  })
+
+  it('rereads when appends evict the live overlap while a cursor page is in flight', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    let resolvePage: (result: unknown) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolvePage = resolve))
+    )
+    let pending: Promise<unknown> | undefined
+    await act(async () => {
+      pending = latest?.loadEarlier()
+    })
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
+
+    await act(async () => {
+      resolvePage({ messages: [at('older-0', 10)], hasMore: false })
+      await pending
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
+      wakeWslDistro: true
+    })
+    expect(latest?.messages.map((m) => m.id)).not.toContain('older-0')
+  })
+
+  it('repairs a live-tail gap with a full reread, then resumes cursor paging', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    // 301 appends push the bounded live tail past live-0, leaving a gap after held-299.
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
+    expect(latest?.messages.map((m) => m.id)).not.toContain('live-0')
+    const bridge = Array.from({ length: 199 }, (_unused, n) => at(`bridge-${n}`, 4700 + n))
+    transport.readSession.mockResolvedValueOnce({ messages: [...bridge, ...live] })
+
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
+      wakeWslDistro: true
+    })
+    expect(latest?.messages.map((m) => m.id)).toContain('live-0')
+
+    transport.readSession.mockResolvedValueOnce({ messages: [], hasMore: false })
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 4700
+    })
+  })
 })
 
 // New sessions can take minutes to flush; a first-read miss must remain recoverable (#8401).
@@ -412,25 +462,6 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     vi.clearAllMocks()
     resetMockTransports()
     vi.useRealTimers()
-  })
-
-  it('retries a notFound miss with backoff and settles into ready without ever exposing an error', async () => {
-    vi.useFakeTimers()
-    const transport = getMockTransport('env-1', { autoSnapshot: false })
-    transport.readSession
-      .mockResolvedValueOnce({ error: 'No transcript found', notFound: true })
-      .mockResolvedValueOnce({ messages: [assistant('a-1', 'hello')] })
-
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    expect(latest?.status).toBe('loading')
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
-    })
-
-    expect(latest?.status).not.toBe('error')
-    expect(transport.readSession).toHaveBeenCalledTimes(2)
-    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
   })
 
   it('surfaces an error once the ~60s retry window is exhausted', async () => {

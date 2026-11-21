@@ -4,6 +4,7 @@ import {
   observeFilePublication
 } from '../../../filesystem/file-content-observation'
 import { writeFileSync } from 'node:fs'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
@@ -101,6 +102,8 @@ export function snapshotCodexRuntimeHookTrustProvenance(
     return false
   }
   try {
+    // Why: a snapshot of another writer's edit would later pass for Orca's own output.
+    assertGuardedFileCurrent(join(runtimeHomePath, 'config.toml'))
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
     const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
     const entries: Record<string, HookTrustProvenanceEntry> = {}
@@ -116,6 +119,7 @@ export function snapshotCodexRuntimeHookTrustProvenance(
     }
     const file: HookTrustProvenanceFile = { version: 1, entries }
     const serialized = `${JSON.stringify(file, null, 2)}\n`
+    assertGuardedFileCurrent(getProvenancePath(runtimeHomePath))
     writeFileSync(getProvenancePath(runtimeHomePath), serialized, {
       encoding: 'utf-8',
       mode: 0o600

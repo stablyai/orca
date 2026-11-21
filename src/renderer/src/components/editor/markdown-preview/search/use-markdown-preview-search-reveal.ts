@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { Components } from 'react-markdown'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { listenMarkdownPreviewScrollInput } from '../viewport/markdown-preview-scroll-input'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import {
   scrollMarkdownPreviewTo,
   getMarkdownPreviewAnchorScrollTop

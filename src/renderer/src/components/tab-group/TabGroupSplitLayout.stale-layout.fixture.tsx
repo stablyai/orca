@@ -3,7 +3,7 @@
 // Before the fix the layout still named the vanished group, so the strip and pane were empty.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store/index'
-import { ConfirmationDialogProvider } from '../confirmation-dialog'
+import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
 const WT = 'preview-repo::/preview/repo/feature'

@@ -21,6 +21,7 @@ export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
   'config/scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts',
   'config/scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts',
+  'config/scripts/test-runtime/environment/vitest-process-worker-setup.ts',
   'config/scripts/test-runtime/environment/vitest-orcad-feature-readiness-reset.ts'
 ]
 
@@ -38,11 +39,9 @@ export const UNIT_EXCLUDE = [
   'src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts',
-  'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts',
   'src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',
-  'tests/e2e/relay-region-correction.unit.test.ts',
   'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.
   'src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts',

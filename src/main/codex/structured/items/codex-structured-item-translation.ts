@@ -123,6 +123,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'diff',
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
+      ...(changes.length > 1 ? { paths: changes.map((change) => change.path) } : {}),
       patch: journalPayload(patch)
     },
     handled: true

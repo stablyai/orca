@@ -1,5 +1,5 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
-import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../launch/claude-structured-launch-resolution'
+import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../launch/claude-discovery-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeAuthDiagnostic } from '../lifecycle/claude-structured-session-event'
 import { AgentSessionAcquisitionRefusal } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -80,6 +80,13 @@ export function observeClaudeReportedPermissionMode(
   }
   reports.reportedPermissionMode = mode
   return true
+}
+
+/** Initialize answers before Orca's first message can switch the mode; older CLIs omit it. */
+export function readClaudeOpenedPermissionMode(initialization: unknown): string | null {
+  return isRecord(initialization)
+    ? readClaudeFrameString(initialization, 'current_permission_mode')
+    : null
 }
 
 export function readClaudeModels(initialization: unknown): unknown[] {

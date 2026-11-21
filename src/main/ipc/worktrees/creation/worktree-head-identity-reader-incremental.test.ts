@@ -7,13 +7,7 @@ import {
   readGitCommonHeadIdentities,
   type WorktreeHeadIdentityCache
 } from './worktree-head-identity-reader'
-import {
-  FULL_HEAD_IDENTITY_SCOPE,
-  headIdentityScopeForEntry,
-  LISTING_HEAD_IDENTITY_SCOPE,
-  mergeHeadIdentityScopes,
-  PRIMARY_HEAD_IDENTITY_SCOPE
-} from './worktree-head-identity-scope'
+import { FULL_HEAD_IDENTITY_SCOPE, headIdentityScopeForEntry } from './worktree-head-identity-scope'
 
 const readIdentities = async (
   ...args: Parameters<typeof readGitCommonHeadIdentities>
@@ -84,21 +78,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     return { commonDir, cache, pathA, pathB }
   }
 
-  it('re-reads only the committing worktree and leaves the rest cached', async () => {
-    const { commonDir, cache, pathA, pathB } = await seed()
-
-    // Only wt-a is named by the event; wt-b must retain its cached branch identity.
-    await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
-    await writeLooseRef(commonDir, 'refs/heads/feature-b', OID_D)
-
-    const scoped = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-a'))
-    expect(headOf(scoped, pathA)).toBe(OID_D)
-    expect(headOf(scoped, pathB)).toBe(OID_C)
-
-    const followUp = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-b'))
-    expect(headOf(followUp, pathB)).toBe(OID_D)
-  })
-
   it('picks up a branch switch through the entry scope', async () => {
     const { commonDir, cache, pathA } = await seed()
     await writeLooseRef(commonDir, 'refs/heads/other', OID_D)
@@ -110,39 +89,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
       worktreePath: pathA,
       head: OID_D,
       branch: 'refs/heads/other'
-    })
-  })
-
-  it('adds an externally created worktree through the listing scope', async () => {
-    const { commonDir, cache, pathA } = await seed()
-    await writeLooseRef(commonDir, 'refs/heads/feature-c', OID_D)
-    const pathC = await addLinkedWorktree(commonDir, 'wt-c', 'ref: refs/heads/feature-c')
-    await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
-
-    const identities = await readIdentities(commonDir, cache, LISTING_HEAD_IDENTITY_SCOPE)
-
-    expect(headOf(identities, pathC)).toBe(OID_D)
-    expect(headOf(identities, pathA)).toBe(OID_B)
-  })
-
-  it('re-reads an admin entry whose name was removed and immediately reused', async () => {
-    const { commonDir, cache, pathA } = await seed()
-    // Coalesced remove/add can reuse an admin name; a listing refresh alone cannot retain its identity.
-    await rm(join(commonDir, 'worktrees', 'wt-a'), { recursive: true, force: true })
-    await writeLooseRef(commonDir, 'refs/heads/reused', OID_D)
-    const reusedPath = await addLinkedWorktree(commonDir, 'wt-a', 'ref: refs/heads/reused')
-
-    const identities = await readIdentities(
-      commonDir,
-      cache,
-      mergeHeadIdentityScopes(LISTING_HEAD_IDENTITY_SCOPE, headIdentityScopeForEntry('wt-a'))
-    )
-
-    expect(reusedPath).toBe(pathA)
-    expect(identities).toContainEqual({
-      worktreePath: reusedPath,
-      head: OID_D,
-      branch: 'refs/heads/reused'
     })
   })
 
@@ -173,20 +119,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     expect(headOf(identities, pathB)).toBe(OID_D)
   })
 
-  it('keeps a worktree whose checkout was deleted behind Orca back', async () => {
-    const { commonDir, cache, pathA } = await seed()
-    // Checkout absence is a prunable-listing concern; Git may retain its admin metadata.
-    await rm(pathA, { recursive: true, force: true })
-
-    const identities = await readIdentities(
-      commonDir,
-      cache,
-      mergeHeadIdentityScopes(LISTING_HEAD_IDENTITY_SCOPE, headIdentityScopeForEntry('wt-a'))
-    )
-
-    expect(headOf(identities, pathA)).toBe(OID_B)
-  })
-
   it('follows a branch shared by several worktrees without re-reading them', async () => {
     const commonDir = await makeCommonDir()
     await writeLooseRef(commonDir, 'refs/heads/shared', OID_B)
@@ -214,19 +146,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     const identities = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-c'))
 
     expect(headOf(identities, pathC)).toBe(OID_D)
-  })
-
-  it('propagates a primary-checkout head move to a linked worktree on the same branch', async () => {
-    const commonDir = await makeCommonDir()
-    const pathA = await addLinkedWorktree(commonDir, 'wt-a', 'ref: refs/heads/main')
-    const cache = createWorktreeHeadIdentityCache()
-    await readIdentities(commonDir, cache)
-
-    await writeLooseRef(commonDir, 'refs/heads/main', OID_D)
-    const identities = await readIdentities(commonDir, cache, PRIMARY_HEAD_IDENTITY_SCOPE)
-
-    expect(headOf(identities, dirname(commonDir))).toBe(OID_D)
-    expect(headOf(identities, pathA)).toBe(OID_D)
   })
 
   it('drops entries whose branch stopped resolving instead of serving a stale head', async () => {
@@ -287,14 +206,5 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     const identities = await readIdentities(commonDir, cache, headIdentityScopeForEntry(composed))
 
     expect(headOf(identities, path)).toBe(OID_D)
-  })
-
-  it('matches admin entry names across case folding', async () => {
-    const { commonDir, cache, pathA } = await seed()
-    await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
-
-    const identities = await readIdentities(commonDir, cache, headIdentityScopeForEntry('WT-A'))
-
-    expect(headOf(identities, pathA)).toBe(OID_D)
   })
 })

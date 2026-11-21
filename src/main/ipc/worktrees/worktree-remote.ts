@@ -81,6 +81,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import {
   sanitizeWorktreeName,
+  sanitizeWorktreeBranchName,
   computeWorktreePath,
   computeWorkspaceRootAsync,
   ensurePathWithinWorkspace,
@@ -1075,6 +1076,7 @@ async function performLocalWorktreeCreate(
 
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
+  const branchSafeName = sanitizeWorktreeBranchName(args.name)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,
@@ -1239,7 +1241,7 @@ async function performLocalWorktreeCreate(
         (await resolveCreateBranchName(
           repo.path,
           undefined,
-          sanitizedName,
+          branchSafeName,
           settings,
           username,
           localWorktreeGitOptions
@@ -1255,7 +1257,7 @@ async function performLocalWorktreeCreate(
     branchName = await resolveCreateBranchName(
       repo.path,
       args.branchNameOverride,
-      sanitizedName,
+      branchSafeName,
       settings,
       username,
       localWorktreeGitOptions
@@ -1279,7 +1281,7 @@ async function performLocalWorktreeCreate(
     branchName = await resolveCreateBranchName(
       repo.path,
       args.branchNameOverride,
-      sanitizedName,
+      branchSafeName,
       settings,
       username,
       localWorktreeGitOptions
@@ -1367,7 +1369,9 @@ async function performLocalWorktreeCreate(
         selectedExistingLocalBranchName
           ? selectedExistingLocalBranchName
           : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        effectiveSanitizedName,
+        shouldRetireGeneratedName
+          ? effectiveSanitizedName
+          : getWorktreeCreateCandidate(branchSafeName, suffix),
         settings,
         username,
         localWorktreeGitOptions

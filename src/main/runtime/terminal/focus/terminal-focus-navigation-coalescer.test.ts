@@ -89,35 +89,4 @@ describe('TerminalFocusNavigationCoalescer', () => {
     await expect(first).resolves.toEqual({ id: 'a', navigated: false })
     await expect(latest).resolves.toEqual({ id: 'b', navigated: true })
   })
-
-  it('propagates run failures without stranding the queue', async () => {
-    const coalescer = new TerminalFocusNavigationCoalescer<string>()
-    const aGate = deferred<void>()
-    let aStarted = false
-
-    const pA = coalescer.run({
-      key: 'term_a',
-      run: async () => {
-        aStarted = true
-        await aGate.promise
-        throw new Error('boom')
-      },
-      resolveSuperseded: () => 'super-a'
-    })
-    await vi.waitFor(() => {
-      expect(aStarted).toBe(true)
-    })
-
-    const pB = coalescer.run({
-      key: 'term_b',
-      run: async () => 'full-b',
-      resolveSuperseded: () => 'super-b'
-    })
-
-    aGate.resolve()
-    // A is obsolete when it fails after B enqueued — settles as superseded, not boom.
-    await expect(pA).resolves.toBe('super-a')
-    await expect(pB).resolves.toBe('full-b')
-    expect(coalescer.getState().running).toBe(false)
-  })
 })

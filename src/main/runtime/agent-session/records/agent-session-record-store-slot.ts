@@ -2,8 +2,10 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 
 import { existsSync } from 'node:fs'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import { journalDomainDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import {
+  journalDatabasePath,
+  journalDomainDatabasePath
+} from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'

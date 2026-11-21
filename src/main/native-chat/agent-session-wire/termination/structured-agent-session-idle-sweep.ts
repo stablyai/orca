@@ -42,6 +42,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   intervalMs?: number
   /** Read every tick so a settings change applies without a restart; null never stops a chat. */
   idleMs?: () => number | null
+  /** A client is subscribed to the chat; an early release leaves it to the window. */
+  viewed?: (sessionId: string) => boolean
 }
 
 export type StructuredAgentSessionChildWorkReads = {
@@ -112,14 +114,31 @@ export class StructuredAgentSessionIdleSweep {
     }
   }
 
+  /** Stop now what a sweep past the window would, for a finished run nobody watches; Never keeps
+   *  it. `anyway` also stops a viewed or Never chat's idle agent, e.g. after an account switch. */
+  async release(sessionId: string, anyway = false): Promise<void> {
+    const window = (): 0 | null => (anyway ? 0 : this.releaseWindow(sessionId))
+    if (!this.deps.isDisposed() && window() === 0) {
+      await this.sweepSession(sessionId, 0, window)
+    }
+  }
+
   private idleWindow(): number | null {
     return this.deps.idleMs ? this.deps.idleMs() : STRUCTURED_AGENT_SESSION_IDLE_MS
   }
 
+  private releaseWindow(sessionId: string): 0 | null {
+    return this.idleWindow() === null || this.deps.viewed?.(sessionId) ? null : 0
+  }
+
   /** Ask outside serialization so a slow provider never delays user actions; recheck before stopping. */
-  private async sweepSession(sessionId: string, agentIdleMs: number | null): Promise<void> {
+  private async sweepSession(
+    sessionId: string,
+    agentIdleMs: number | null,
+    release?: () => 0 | null
+  ): Promise<void> {
     const unconfirmed = await this.deps.serialize(sessionId, () =>
-      this.tickUnderSerialize(sessionId, agentIdleMs, null)
+      this.tickUnderSerialize(sessionId, release ? release() : agentIdleMs, null, !!release)
     )
     if (!unconfirmed) {
       return
@@ -131,7 +150,12 @@ export class StructuredAgentSessionIdleSweep {
     await this.deps.serialize(sessionId, async () => {
       if (answer === 'idle') {
         // The answer can take seconds; a window changed meanwhile (to Never, say) still applies.
-        await this.tickUnderSerialize(sessionId, this.idleWindow(), unconfirmed)
+        await this.tickUnderSerialize(
+          sessionId,
+          release ? release() : this.idleWindow(),
+          unconfirmed,
+          !!release
+        )
       } else if (this.deps.sessions.get(sessionId)?.child === unconfirmed) {
         this.deps.sessions.touch(sessionId)
       }
@@ -142,7 +166,8 @@ export class StructuredAgentSessionIdleSweep {
   private async tickUnderSerialize(
     sessionId: string,
     agentIdleMs: number | null,
-    confirmed: RunningChild | null
+    confirmed: RunningChild | null,
+    releasing = false
   ): Promise<RunningChild | null> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
@@ -172,6 +197,10 @@ export class StructuredAgentSessionIdleSweep {
     }
     if (session.child) {
       if (session.child.phase === 'starting') {
+        // A start after the run ended is someone's new send.
+        if (releasing) {
+          return null
+        }
         await this.deps.stopStartingAgent(sessionId)
         return null
       }

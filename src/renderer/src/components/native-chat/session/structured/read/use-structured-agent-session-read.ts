@@ -6,6 +6,7 @@ import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-ac
 import { structuredAttentionReadObservation } from '../../attention/structured-attention-read-observation'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
 
 function useReadOwnerSnapshot(
@@ -36,6 +37,10 @@ export function useStructuredAgentSessionRead(args: {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observationKey = structuredAttentionReadObservation(snapshot.state)
   const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
+  // Read at start; a change re-runs the read so the host learns whether this reader shows them.
+  const showsPromptSuggestions = useAppStore((state) =>
+    nativeChatShowsPromptSuggestions(state.settings)
+  )
 
   useEffect(() => {
     if (isVisible) {
@@ -46,7 +51,7 @@ export function useStructuredAgentSessionRead(args: {
       })
     }
     return undefined
-  }, [isVisible, owner, environmentId])
+  }, [isVisible, owner, environmentId, showsPromptSuggestions])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {

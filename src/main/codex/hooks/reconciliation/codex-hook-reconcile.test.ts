@@ -87,7 +87,10 @@ import {
 } from '../definitions/codex-hook-definition'
 import type { CodexHookHashes } from '../../trust/hooks/codex-hook-trust-derivation'
 import { readHookTrustEntries, upsertHookTrustEntries } from '../../trust/toml/config-toml-trust'
-import { computeCodexTrustKey as computeTrustKey } from '../../trust/identity/codex-trust-identity'
+import {
+  computeCodexTrustKey as computeTrustKey,
+  normalizeCodexHookTrustLookupKey
+} from '../../trust/identity/codex-trust-identity'
 
 let root: string
 let home: string
@@ -310,8 +313,8 @@ describe('reconcileCodexHooks', () => {
     await start()
     rmSync(hooksPath())
     const old = mocks.codexPath
-    // New bytes make the lookup ask this binary again.
-    writeFileSync(old, 'codex 0.161.0')
+    // A new size makes the lookup ask this binary again; same-size bytes can keep a coarse filesystem clock's mtime.
+    writeFileSync(old, 'codex 0.161.0 upgraded')
     const probe = Promise.withResolvers<string | null>()
     mocks.probeCodexVersion.mockReturnValueOnce(probe.promise)
     const probesBefore = mocks.probeCodexVersion.mock.calls.length
@@ -468,7 +471,7 @@ describe('an app start whose lookup has not answered within its wait', () => {
     writeCodexTrustGrantLedgerHome(codexHome(), {
       binary: null,
       entries: {
-        [computeTrustKey(stop)]: {
+        [normalizeCodexHookTrustLookupKey(computeTrustKey(stop))]: {
           signature: getCodexHookTrustSignature(stop),
           trustedHash: 'sha256:main-granted'
         }

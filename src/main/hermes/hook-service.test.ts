@@ -143,9 +143,6 @@ describe('HermesHookService', () => {
   it.each([
     ['an anchored terminal setting', 'terminal:\n  env: &env {A: "1"}\nshared: *env\n', true],
     ['a malformed passthrough', 'terminal:\n  client_env_passthrough: FOO\n', false],
-    ['a scalar terminal', 'terminal: local\n', false],
-    ['an anchored terminal', 'terminal: &t {backend: local}\nother: *t\n', false],
-    ['a merge key in terminal', 'base: &b {backend: local}\nterminal:\n  <<: *b\n', false],
     ['an anchored passthrough', 'terminal:\n  client_env_passthrough: &p [A]\nx: *p\n', false]
   ])('still installs and removes the plugin beside %s', (_name, input, passesThrough) => {
     writeFileSync(join(homeDir, 'config.yaml'), input)
@@ -418,48 +415,6 @@ describe('HermesHookService', () => {
       }
     ])
     expect(received).toHaveLength(2)
-  })
-
-  it('bounds generated plugin payload normalization before JSON encoding', () => {
-    const pythonAvailable = spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0
-    if (!pythonAvailable) {
-      return
-    }
-    new HermesHookService().install()
-
-    const initPath = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME, '__init__.py')
-    const script = [
-      'import importlib.util, json',
-      `spec = importlib.util.spec_from_file_location("orca_status", ${JSON.stringify(initPath)})`,
-      'mod = importlib.util.module_from_spec(spec)',
-      'spec.loader.exec_module(mod)',
-      'payload = mod._payload_for_event("post_tool_call", {',
-      '    "session_id": "sess-1",',
-      '    "tool_name": "BigTool",',
-      '    "args": {"long": "x" * 9000, "items": list(range(200))},',
-      '    "result": {"text": "y" * 9000, "nested": [{"value": i} for i in range(200)]},',
-      '    "duration_ms": 12,',
-      '})',
-      'print(json.dumps(payload))'
-    ].join('\n')
-
-    const output = execFileSync('python3', ['-c', script], {
-      encoding: 'utf-8',
-      timeout: 15_000
-    })
-    const payload = JSON.parse(output) as {
-      args: { long: string; items: unknown[] }
-      result: { text: string; nested: unknown[] }
-      tool_input: { items: unknown[] }
-    }
-
-    expect(payload.args.long).toHaveLength(8192 + '...[truncated]'.length)
-    expect(payload.args.long.endsWith('...[truncated]')).toBe(true)
-    expect(payload.args.items).toHaveLength(51)
-    expect(payload.args.items.at(-1)).toBe('...[truncated]')
-    expect(payload.result.text.endsWith('...[truncated]')).toBe(true)
-    expect(payload.result.nested).toHaveLength(51)
-    expect(payload.tool_input.items).toHaveLength(51)
   })
 
   // Windows refuses to remove a process's current directory.

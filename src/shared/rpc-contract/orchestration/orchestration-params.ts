@@ -121,6 +121,11 @@ export const PartyLocationParams = z.object({
   messageIds: z.array(z.string().min(1).max(256)).max(50).optional()
 })
 
+/** A worker by any Dispatch it ran; follow-ups continue the same conversation. */
+export const WorkerTranscriptParams = z.object({
+  dispatch: requiredString('Missing dispatch')
+})
+
 export const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,

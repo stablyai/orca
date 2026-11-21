@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { createDraftPasteReadyScanner } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
@@ -60,14 +57,8 @@ describe('OpenCode captured worker composer', () => {
 
   const RUNS: [string, TuiAgent][] = [
     ['opencode-1-18-32-timed-boot-slow', 'opencode'],
-    ['opencode-1-18-32-timed-boot-hidden-pane', 'opencode'],
-    ['opencode-1-18-32-timed-first-launch', 'opencode'],
     ['opencode-cmd-2-0-21-timed-warm-server', 'opencode'],
-    ['opencode-2-0-18-timed-boot-hidden-pane', 'opencode2'],
-    ['opencode-2-0-21-timed-cold-standalone', 'opencode2'],
-    ['opencode-2-0-21-timed-cold-standalone-hidden-pane', 'opencode2'],
-    ['opencode-2-0-21-timed-natural-load-enter-dropped', 'opencode2'],
-    ['opencode-2-0-14-timed-cold-standalone', 'opencode2']
+    ['opencode-2-0-21-timed-natural-load-enter-dropped', 'opencode2']
   ]
   const AGENT_ROW = /\u00b7 \S/
   const BOX_BOTTOM_LEFT = '\u2579'

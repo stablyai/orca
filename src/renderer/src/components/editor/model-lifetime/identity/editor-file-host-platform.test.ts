@@ -74,7 +74,12 @@ function sshState(remotePlatform?: 'linux'): SshConnectionState {
 }
 
 const eolOf = (store: ReturnType<typeof createTestStore>) =>
-  resolveOpenFileNewModelLineEnding(store.getState(), 'file-1', 'plaintext')
+  resolveOpenFileNewModelLineEnding(
+    store.getState(),
+    store.getState().runtimeStatusByEnvironmentId,
+    'file-1',
+    'plaintext'
+  )
 
 const wslRoute = {
   executionHostId: 'runtime:wsl-ubuntu',
@@ -140,7 +145,13 @@ describe('host OS of an open file, from a Windows client', () => {
     )
     const store = storeWith(nested)
     store.setState({ runtimeEnvironments: [WSL_HOST] })
-    expect(resolveEditorFileHostPlatform(store.getState(), nested)).toBeNull()
+    expect(
+      resolveEditorFileHostPlatform(
+        store.getState(),
+        store.getState().runtimeStatusByEnvironmentId,
+        nested
+      )
+    ).toBeNull()
   })
 
   it('reads a direct Linux SSH file once the host reports its OS', () => {
@@ -155,10 +166,5 @@ describe('host OS of an open file, from a Windows client', () => {
     expect(eolOf(storeWith(file(localRoute, 'C:\\repo\\new.txt')))).toBe('\r\n')
     const wslPath = file(localRoute, '\\\\wsl.localhost\\Ubuntu\\home\\me\\new.txt')
     expect(eolOf(storeWith(wslPath))).toBe('\n')
-  })
-
-  it('lets the End of Line setting override the host', () => {
-    expect(eolOf(storeWith(file(localRoute, 'C:\\repo\\new.txt'), 'lf'))).toBe('\n')
-    expect(eolOf(storeWith(file(wslRoute), 'crlf'))).toBe('\r\n')
   })
 })

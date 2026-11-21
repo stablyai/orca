@@ -221,7 +221,8 @@ export function editReplacesTriggerToken(
 export function applyMentionSuggestion(
   draft: string,
   caret: number,
-  path: string
+  path: string,
+  token = formatNativeChatFileReference(path)
 ): { draft: string; caret: number } {
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)
@@ -230,6 +231,6 @@ export function applyMentionSuggestion(
     return { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}${formatNativeChatFileReference(path)} `
+  const nextBefore = `${before.slice(0, tokenStart)}${token} `
   return { draft: nextBefore + after.replace(/^ /, ''), caret: nextBefore.length }
 }

@@ -119,20 +119,6 @@ function patchRemoval(workspaceId: string) {
   )
 }
 
-it('mobile close removes the requested folder placement and retains the child view', async () => {
-  openDiff()
-  openDiff(CHILD)
-  await main.settle()
-  const folderTab = tabs(FOLDER)[0]!
-  const childTab = tabs(CHILD)[0]!
-  useAppStore.setState({ activeWorktreeId: CHILD, activeWorkspaceKey: worktreeWorkspaceKey(CHILD) })
-  expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, folderTab.id)).toBe(true)
-  await main.settle()
-  expect(tabs(FOLDER)).toEqual([])
-  expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
-  expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
-})
-
 it('shares child-owned diff content across folder and child views, with independent close and reopen', async () => {
   openDiff()
   await main.settle()
@@ -157,8 +143,17 @@ it('shares child-owned diff content across folder and child views, with independ
   expect(useAppStore.getState().openFiles).toHaveLength(1)
   expect(useAppStore.getState().reopenClosedEditorTab(FOLDER)).toBe(true)
   await main.settle()
-  expect(tabs(FOLDER)[0]?.entityId).toBe(folderTab.entityId)
+  const reopenedTab = tabs(FOLDER)[0]!
+  expect(reopenedTab.entityId).toBe(folderTab.entityId)
   expect(useAppStore.getState().openFiles).toHaveLength(1)
+
+  const childTab = tabs(CHILD)[0]!
+  useAppStore.setState({ activeWorktreeId: CHILD, activeWorkspaceKey: worktreeWorkspaceKey(CHILD) })
+  expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, reopenedTab.id)).toBe(true)
+  await main.settle()
+  expect(tabs(FOLDER)).toEqual([])
+  expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
+  expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
 })
 
 it('replaces only the folder preview and preserves a child placement and split', async () => {

@@ -1,3 +1,4 @@
+import type { RemoteTerminalViewer } from '../../../terminal/layout/terminal-view-presence'
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
 import type {
@@ -23,7 +24,7 @@ export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
   connectionId: string
   // The authenticated device, whose departure ends this connection's views.
-  viewerDeviceId: string | undefined
+  viewer: RemoteTerminalViewer
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']

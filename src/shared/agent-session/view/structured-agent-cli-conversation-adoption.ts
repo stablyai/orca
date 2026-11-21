@@ -1,9 +1,12 @@
 /** Adoption order by Session History row agent; registration tests require a transcript importer for every target.
  * Conversations stay on their recording host, which validates importer availability before adoption. */
 export const CLI_CONVERSATION_ADOPTING_AGENTS = {
+  // Only agy's own terminal conversations; chats then run the host's `agy acp`.
+  antigravity: ['antigravity'],
   claude: ['claude'],
   codex: ['codex'],
   grok: ['grok'],
+  hermes: ['hermes'],
   omp: ['omp'],
   zcode: ['zcode'],
   opencode: ['opencode'],

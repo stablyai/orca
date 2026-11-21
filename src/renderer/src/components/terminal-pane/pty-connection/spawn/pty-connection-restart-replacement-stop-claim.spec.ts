@@ -55,7 +55,7 @@ export function registerPtyConnectionRestartReplacementDisposeTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('stops the replaced PTY itself when the pane is disposed before a spawn carried the stop', async () => {
+    it('stops the replaced PTY as a replacement when the pane is disposed before a spawn carried the stop', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
         '@/lib/agent-status/aggregation/worktree-agent-status'
@@ -73,7 +73,7 @@ export function registerPtyConnectionRestartReplacementDisposeTests(): void {
       connectPanePty(...args).dispose()
       await flushAsyncTicks()
 
-      expect(window.api.pty.kill).toHaveBeenCalledWith('pty-replaced')
+      expect(window.api.pty.kill).toHaveBeenCalledWith('pty-replaced', { replaced: true })
     })
   })
 }

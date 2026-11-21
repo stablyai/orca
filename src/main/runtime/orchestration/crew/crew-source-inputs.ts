@@ -233,8 +233,17 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
       }
     }
   }
+  /** A patched assignment row replaces the copy read as some party's creator. */
+  const replaceAssignments = (rows: Iterable<CrewAssignmentRow>) => {
+    for (const row of rows) {
+      if (creatorAssignments.has(row.id)) {
+        creatorAssignments.set(row.id, Object.freeze(row))
+      }
+    }
+  }
   return {
     parentInputs,
+    replaceAssignments,
     provenance,
     runInputs,
     activeRemoteAttachmentForPane,

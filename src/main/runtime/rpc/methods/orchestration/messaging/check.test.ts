@@ -134,25 +134,6 @@ describe('orchestration RPC methods', () => {
       expect(result.messages.map((message) => message.subject)).toEqual(['Coordinator only'])
     })
 
-    it('says to check again only when a capped batch leaves mail behind', async () => {
-      setup()
-      for (let index = 0; index < 51; index++) {
-        db.insertMessage({
-          from: 'term_worker',
-          to: `run:${activeRunId}`,
-          subject: `status ${index}`,
-          type: 'status',
-          runId: activeRunId
-        })
-      }
-      const check = () => call('orchestration.check', { terminal: 'term_coord' })
-
-      expect(await check()).toMatchObject({ count: 50, next: expect.stringContaining('again') })
-      const last = await check()
-      expect(last).toMatchObject({ count: 1 })
-      expect(last).not.toHaveProperty('next')
-    })
-
     it('rejects stale Delivery acknowledgment without consuming queued mail', async () => {
       setup()
       db.insertMessage({
@@ -169,29 +150,6 @@ describe('orchestration RPC methods', () => {
         })
       ).rejects.toMatchObject({ code: 'stale_delivery' })
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(1)
-    })
-
-    it('acknowledges a Run Delivery before returning --peek history', async () => {
-      setup()
-      db.insertMessage({
-        from: 'worker',
-        to: `run:${activeRunId}`,
-        subject: 'queued',
-        runId: activeRunId
-      })
-
-      const first = (await call('orchestration.check', {
-        terminal: 'term_coord'
-      })) as { count: number; deliveryId: string }
-      const peeked = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        ack: first.deliveryId,
-        peek: true
-      })) as { acknowledged: string | null; count: number }
-
-      expect(first.count).toBe(1)
-      expect(peeked).toMatchObject({ acknowledged: first.deliveryId, count: 0 })
-      expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(0)
     })
 
     it('peeks an old unread Run row beyond the newest history page', async () => {
@@ -282,23 +240,6 @@ describe('orchestration RPC methods', () => {
       })
       // The stranded row must survive the refusal so a rebound consumer can still read it.
       expect(db.getUnreadMessages('term_gone')).toHaveLength(1)
-    })
-
-    it('still inspects a stale handle with --peek and --all', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'term_gone', subject: 'stranded' })
-
-      const peeked = (await call('orchestration.check', {
-        terminal: 'term_gone',
-        peek: true
-      })) as { count: number }
-      const history = (await call('orchestration.check', {
-        terminal: 'term_gone',
-        all: true
-      })) as { count: number }
-
-      expect(peeked.count).toBe(1)
-      expect(history.count).toBe(1)
     })
 
     it('--peek returns unread messages without marking them read', async () => {

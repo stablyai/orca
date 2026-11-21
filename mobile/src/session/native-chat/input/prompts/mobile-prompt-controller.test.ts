@@ -139,6 +139,45 @@ describe('async occurrences through the phone controller and rendered card actio
     expect(titles()).toEqual(['Q2?'])
   })
 
+  it('shows the question the host waits on when its row is older than the loaded messages', async () => {
+    const notice: NativeChatMessage = {
+      id: 'notice',
+      role: 'user',
+      from: { kind: 'agent', senders: [], orchestration: null },
+      timestamp: 4,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Update from worker' }]
+    }
+    Object.assign(structuredSession, {
+      asyncQuestionSkip: {
+        skippedThrough: undefined,
+        awaiting: { itemId: 'old-ask', text: 'File the follow-up?' },
+        save: vi.fn(async () => undefined)
+      }
+    })
+    try {
+      session.messages = [notice]
+      await render({ tab: structuredTab })
+      expect(titles()).toEqual(['File the follow-up?'])
+      expect(getController().nativeChatAsk?.replyAsMessage).toBe(true)
+
+      session.messages = [
+        notice,
+        {
+          id: 'reply',
+          role: 'user',
+          timestamp: 5,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'No' }]
+        }
+      ]
+      await render({ tab: structuredTab })
+      expect(getController().nativeChatAsk).toBe(null)
+    } finally {
+      Object.assign(structuredSession, { asyncQuestionSkip: null })
+    }
+  })
+
   it('keeps structured answer controls after a thrown send', async () => {
     structuredSession.sendWithOutcome.mockRejectedValue(new Error('send failed'))
     session.messages = [row('one')]

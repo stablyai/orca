@@ -4,21 +4,21 @@ import { Suspense, useMemo, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
-import WebConnect from './WebConnect'
+import WebConnect from './pairing/WebConnect'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   clearPairingInputFromAddressBar,
   decideWebPairingStartup,
   readPairingInputFromLocation
-} from './web-pairing'
+} from './pairing/web-pairing'
 import {
   createStoredWebRuntimeEnvironment,
   readStoredWebRuntimeEnvironment,
   saveStoredWebRuntimeEnvironment
-} from './web-runtime-environment'
+} from './pairing/web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
-import { initWebDeviceKeySupport } from './web-device-key-support'
-import { WebPairingSecurityNotice } from './WebPairingSecurityNotice'
+import { initWebDeviceKeySupport } from './runtime/security/web-device-key-support'
+import { WebPairingSecurityNotice } from './pairing/WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { useTranslate } from '@/i18n/use-translate'
 import { installOsFileDropCancellationGuard } from '../lib/files/drop/os-file-drop-cancellation-guard'

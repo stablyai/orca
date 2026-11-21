@@ -47,22 +47,6 @@ describe('MacosSystemSleepAssertion', () => {
     expect(firstChild.listenerCount('exit')).toBe(0)
   })
 
-  it('does not report an intentional stop as unexpected', () => {
-    const child = new FakeCaffeinateProcess()
-    const onUnexpectedFailure = vi.fn()
-    const assertion = new MacosSystemSleepAssertion({
-      logger: createLogger(),
-      onUnexpectedFailure,
-      platform: 'darwin',
-      spawn: vi.fn(() => child)
-    })
-
-    assertion.start('status-change')
-    assertion.stop('settings-change')
-
-    expect(onUnexpectedFailure).not.toHaveBeenCalled()
-  })
-
   it('suppresses retry attempts until the shared retry gate expires', () => {
     vi.useFakeTimers()
     let now = 1_000

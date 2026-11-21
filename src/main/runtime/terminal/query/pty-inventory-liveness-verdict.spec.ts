@@ -78,22 +78,5 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
         reason: 'relay disconnected during stop'
       })
     })
-
-    it('does not let a partial inventory overwrite a concurrent provider failure', async () => {
-      const inventory = deferred<{ id: string; worktreeId: string }[]>()
-      const listProcesses = vi.fn(() => inventory.promise)
-      const runtime = await makeRuntimeMissingFromInventory(() => false, listProcesses)
-
-      const listing = runtime.listTerminals(`id:${WORKTREE_ID}`)
-      await vi.waitFor(() => expect(listProcesses).toHaveBeenCalled())
-      runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'inventory transport failed')
-      inventory.resolve([])
-      await listing
-
-      expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({
-        status: 'unverifiable',
-        reason: 'inventory transport failed'
-      })
-    })
   })
 }

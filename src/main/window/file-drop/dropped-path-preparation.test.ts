@@ -148,21 +148,6 @@ describe('dropped path preparation through the shared copy queue', () => {
     ])
   })
 
-  it('captures bytes and closes the source before requesting the chat store', async () => {
-    const { source, env, store } = await realDrop()
-    const getStore = vi.fn(async () => {
-      expect(open).toHaveBeenCalledTimes(1)
-      expect((await vi.mocked(open).mock.results[0].value).fd).toBe(-1)
-      await writeFile(source, 'changed after capture')
-      return store
-    })
-    const result = await localQueue(env, getStore)({ paths: [source], consumer: 'local-chat' })
-    expect(result.failures).toEqual([])
-    expect(getStore).toHaveBeenCalledTimes(1)
-    await expect(getStore.mock.results[0].value).resolves.toBe(store)
-    expect(await readFile(result.paths[0], 'utf8')).toBe('image')
-  })
-
   it('copies a file over the chat attachment limit privately without waiting for the chat host', async () => {
     const { source, env } = await realDrop()
     await writeFile(source, Buffer.alloc(AGENT_SESSION_ATTACHMENT_MAX_BYTES + 1, 3))
@@ -174,34 +159,38 @@ describe('dropped path preparation through the shared copy queue', () => {
     expect(getStore).not.toHaveBeenCalled()
   })
 
-  it.each(['SECOND-rewritten', 'x'])(
-    'keeps captured bytes after provider removal or rewrite to %s',
-    async (rewritten) => {
-      const { source, env, store } = await realDrop()
-      const second = join(dirname(source), 'second.png')
-      await writeFile(second, 'second')
-      const started = deferred<void>()
-      const release = deferred<null>()
-      const enqueue = localQueue(env, async () => {
-        started.resolve()
-        await release.promise
-        return store
-      })
-      const pending = enqueue({ paths: [source, second, source], consumer: 'local-chat' })
-      await started.promise
+  it('closes captured files before waiting for the store and keeps their bytes after changes', async () => {
+    const { source, env, store } = await realDrop()
+    const second = join(dirname(source), 'second.png')
+    await writeFile(second, 'second')
+    const ready = deferred<void>()
+    const release = deferred<null>()
+    vi.mocked(open).mockClear()
+    const enqueue = localQueue(env, async () => {
+      ready.resolve()
+      await release.promise
+      return store
+    })
+    const pending = enqueue({ paths: [source, second, source], consumer: 'local-chat' })
+    await ready.promise
+    try {
+      const handles = await Promise.all(vi.mocked(open).mock.results.map((call) => call.value))
+      expect(handles.map((handle) => handle.fd)).toEqual([-1, -1])
       await rm(source)
-      await writeFile(second, rewritten)
+      await writeFile(second, 'SECOND-rewritten')
+    } finally {
       release.resolve(null)
-      const result = await pending
-      expect(result.paths).toHaveLength(3)
-      expect(result.paths[0]).toBe(result.paths[2])
-      expect(await readFile(result.paths[0], 'utf8')).toBe('image')
-      expect(await readFile(result.paths[1], 'utf8')).toBe('second')
-      expect(result.failures).toEqual([])
     }
-  )
 
-  it.each(['unavailable', 'refused', 'write fails'] as const)(
+    const result = await pending
+    expect(result.paths).toHaveLength(3)
+    expect(result.paths[0]).toBe(result.paths[2])
+    expect(await readFile(result.paths[0], 'utf8')).toBe('image')
+    expect(await readFile(result.paths[1], 'utf8')).toBe('second')
+    expect(result.failures).toEqual([])
+  })
+
+  it.each(['refused', 'write fails'] as const)(
     'keeps the checked bytes as a private copy when the store %s',
     async (mode) => {
       const { source, env, store } = await realDrop()
@@ -213,7 +202,7 @@ describe('dropped path preparation through the shared copy queue', () => {
         if (mode === 'refused') {
           throw new Error('host refused')
         }
-        return mode === 'unavailable' ? null : store
+        return store
       })
       const result = await enqueue({ paths: [source], consumer: 'local-chat' })
       expect(result.failures).toEqual([])

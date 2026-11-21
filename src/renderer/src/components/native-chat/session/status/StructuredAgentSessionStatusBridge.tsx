@@ -6,18 +6,22 @@ import { subscribeStructuredAgentLaunchStatus } from '@/lib/agent-session/launch
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-chat-companion-writes'
+import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
   structuredAgentSessionStatusFeedKey
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
-  getStructuredAgentSessionTabs,
   getStructuredAgentSessionTabsInWorkspace,
   type StructuredTab
 } from './structured-agent-session-tabs'
-import { readTabMapChanges } from '@/store/keyed-record-change-reads'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import {
+  readBotBackgroundSessionTabs,
+  subscribeBotBackgroundSessionTabs,
+  withBotSessions
+} from '../../../bots/bot-background-sessions'
 import {
   createTabOwnerCache,
   ownerInputChanged,
@@ -32,6 +36,10 @@ import {
   sameCapturedInput,
   sameStatusInput
 } from './structured-agent-session-status-membership'
+import {
+  sessionMembers,
+  subscribeHostGroupStatus
+} from './structured-agent-session-preview-coalescing'
 
 function installStatusProjection(): () => void {
   const membership = createStructuredSessionMembership()
@@ -39,6 +47,8 @@ function installStatusProjection(): () => void {
   const retired = new Set<Member>()
   let tabs: readonly StructuredTab[] | null = null
   let tabsSource: AppState['unifiedTabsByWorktree'] | null = null
+  // A bot's tabless sessions stand in for tabs; a change to them reconciles from the whole list.
+  let botTabsSource: readonly StructuredTab[] | null = null
   const groups = new Map<string, HostGroup>()
   const queue: (() => void)[] = []
   const ownerForTab = createTabOwnerCache()
@@ -259,23 +269,10 @@ function installStatusProjection(): () => void {
       unsubscribe: () => {}
     }
     groups.set(hostKey, created)
-    created.unsubscribe = feed.subscribe((change) =>
-      boundary(() => {
-        if (disposed) {
-          return
-        }
-        if (change === null) {
-          capture(created.members)
-          return
-        }
-        const selected = new Set<Member>()
-        for (const sessionId of change) {
-          created.membersBySession.get(sessionId)?.forEach((member) => selected.add(member))
-        }
-        // Membership changes prune superseded members, so the debt holds only current tabs.
-        created.owed.forEach((member) => selected.add(member))
-        capture(selected)
-      })
+    created.unsubscribe = subscribeHostGroupStatus(
+      created,
+      (due) => boundary(() => !disposed && groups.get(hostKey) === created && capture(due)),
+      (selected) => boundary(() => !disposed && capture(selected ?? created.members))
     )
     return { hostKey, group: created }
   }
@@ -295,7 +292,7 @@ function installStatusProjection(): () => void {
     source: AppState['unifiedTabsByWorktree'],
     placeTab: (tab: StructuredTab, paneKey: string) => void
   ): Member[] => {
-    const nextTabs = getStructuredAgentSessionTabs(source)
+    const nextTabs = withBotSessions(source)
     if (nextTabs === tabs) {
       return []
     }
@@ -309,8 +306,10 @@ function installStatusProjection(): () => void {
     const changed = new Set<Member>()
     const retiring: Member[] = []
     const placeTab = (tab: StructuredTab, paneKey: string) => place(state, tab, paneKey, changed)
-    if (source !== tabsSource) {
-      const changes = tabsSource ? readTabMapChanges(source, tabsSource) : null
+    const botTabs = readBotBackgroundSessionTabs()
+    if (source !== tabsSource || botTabs !== botTabsSource) {
+      const changes =
+        tabsSource && botTabs === botTabsSource ? readTabMapChanges(source, tabsSource) : null
       if (changes?.kind === 'addressed') {
         const listed = [...changes.workspaceIds].flatMap((workspaceId) => [
           ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
@@ -328,6 +327,7 @@ function installStatusProjection(): () => void {
     }
     // Advanced only after a normal return, so a throwing pass is retried by the next tab write.
     tabsSource = source
+    botTabsSource = botTabs
     if (ownersChanged) {
       for (const member of legacy) {
         place(state, member.tab, member.paneKey, changed)
@@ -348,6 +348,10 @@ function installStatusProjection(): () => void {
       })
     }
   }
+  // Subscribed first so a closed chat's stand-in exists before the tab write retires its pane.
+  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
+    boundary(() => !disposed && reconcile(false))
+  )
   const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
     if (disposed) {
       return
@@ -367,13 +371,9 @@ function installStatusProjection(): () => void {
         capture(members.values())
         return
       }
-      const selected = new Set<Member>()
-      for (const group of groups.values()) {
-        for (const sessionId of sessionIds) {
-          group.membersBySession.get(sessionId)?.forEach((member) => selected.add(member))
-        }
-      }
-      capture(withOwed(selected))
+      capture(
+        withOwed([...groups.values()].flatMap((group) => [...sessionMembers(group, sessionIds)]))
+      )
     })
   )
   boundary(() => reconcile(false))
@@ -382,6 +382,7 @@ function installStatusProjection(): () => void {
     burst.dispose()
     unsubscribeApp()
     unsubscribeLaunch()
+    unsubscribeBackground()
     for (const group of groups.values()) {
       group.members.clear()
       group.unsubscribe()

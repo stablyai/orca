@@ -94,6 +94,7 @@ function relayWithPhone(
     ],
     allocateStreamId: () => 1,
     nativeChatDefault: () => desktop.nativeChatDefault,
+    sourceControlAiSettings: () => ({}),
     prepareBrowserHost
   })
   const replies: string[] = []

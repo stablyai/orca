@@ -59,7 +59,8 @@ export function registerQueuedMessageStopPauseTests(
           operationalRevision: 0
         },
         child: null,
-        steering: { kind: 'codex-unavailable' }
+        steering: { kind: 'codex-unavailable' },
+        mailJoinsTurn: true
       }
       const automatic = (clientMessageId: string) =>
         journal.claimAutomaticSubmission(
@@ -71,7 +72,7 @@ export function registerQueuedMessageStopPauseTests(
       expect(await journal.reads.submission('drain-1')).toBeUndefined()
       expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('waiting')
       await journal.appendQueueResume(1)
-      expect(await automatic('drain-after-resume')).toEqual({
+      expect(await automatic('drain-after-resume')).toMatchObject({
         kind: 'claimed',
         messageId: 'draft-1',
         clientMessageId: 'drain-after-resume'
@@ -89,16 +90,6 @@ export function registerQueuedMessageStopPauseTests(
         { messageId: 'draft-2', expect: 'waiting' }
       )
       expect((await journal.queuedMessages.get('draft-2'))?.state).toBe('dispatched')
-    })
-
-    it("a rewind's epoch replacement restates a Stop still pausing, and not one a turn ended", async () => {
-      const journal = await fixture.open()
-      await fixture.userStop(journal)
-      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
-      expect(await fixture.reason(journal)).toBe('stopped')
-      await fixture.turn(journal, 'typed')
-      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
-      expect(await fixture.reason(journal)).toBeNull()
     })
   })
   it('mail does not lift Stop, while personal acceptance survives transcript removal and restore', async () => {

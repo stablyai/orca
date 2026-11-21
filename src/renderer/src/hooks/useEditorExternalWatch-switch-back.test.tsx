@@ -30,16 +30,19 @@ vi.mock('@/store', () => ({
     { getState: () => harness.holder.store?.getState() }
   )
 }))
-vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  selectEditorExternalWatchTargets: () => ({
-    targets: [...harness.targets],
-    targetsKey: harness.targets.map(harness.keyOf).join('|'),
-    unwatchedTargetKeys: new Set(harness.unwatched.map(harness.keyOf)),
-    unwatchedTargetsKey: harness.unwatched.map(harness.keyOf).join('|')
-  }),
-  getEditorExternalWatchTargetKey: harness.keyOf
-}))
+vi.mock(
+  '../components/editor/external-changes/watching/editor-external-watch-targets',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    selectEditorExternalWatchTargets: () => ({
+      targets: [...harness.targets],
+      targetsKey: harness.targets.map(harness.keyOf).join('|'),
+      unwatchedTargetKeys: new Set(harness.unwatched.map(harness.keyOf)),
+      unwatchedTargetsKey: harness.unwatched.map(harness.keyOf).join('|')
+    }),
+    getEditorExternalWatchTargetKey: harness.keyOf
+  })
+)
 vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
@@ -52,7 +55,7 @@ import { useEditorExternalWatch } from './useEditorExternalWatch'
 import { attachRestoredTabConflictScan } from '@/components/editor/external-changes/editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from '@/components/editor/autosave/editor-autosave'
-import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from './worktree-file-change-event'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '../runtime/files/watching/worktree-file-change-event'
 import {
   claimCombinedDiffView,
   clearCombinedDiffViewMemory,

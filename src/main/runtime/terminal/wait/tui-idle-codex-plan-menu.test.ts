@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -78,23 +75,7 @@ afterEach(() => {
 })
 
 describe('Codex plan menu painted after its Stop hook', () => {
-  it('blocks on the menu over the earlier done, and settles once it is answered', async () => {
-    let rows: AgentStatusIpcPayload[] = []
-    const { runtime, handle } = await codexPane(() => rows)
-    paint(runtime, FIXTURE.slice(0, MENU_START))
-    await vi.advanceTimersByTimeAsync(1000)
-    rows = [doneRow(Date.now())]
-    await vi.advanceTimersByTimeAsync(100)
-    paint(runtime, FIXTURE.slice(MENU_START, MENU_END))
-
-    expect(await waitOutcome(runtime, handle, 150)).toBe('blocked:agent-interactive-prompt')
-
-    runtime.terminalRunFacts.recordInput(TRANSCRIPT_PANE_PTY_ID, 'driving', '3', Date.now())
-    paint(runtime, FIXTURE.slice(MENU_END))
-    expect(await waitOutcome(runtime, handle, QUIESCENCE_MS * 3)).toBe('ready')
-  })
-
-  it('blocks a wait issued between the done and the menu it paints', async () => {
+  it('blocks waits started before and after the menu appears, then settles after the answer', async () => {
     let rows: AgentStatusIpcPayload[] = []
     const { runtime, handle } = await codexPane(() => rows)
     paint(runtime, FIXTURE.slice(0, MENU_START))
@@ -105,6 +86,14 @@ describe('Codex plan menu painted after its Stop hook', () => {
     paint(runtime, FIXTURE.slice(MENU_START, MENU_END))
     await vi.advanceTimersByTimeAsync(900)
 
-    expect((await waiting).blockedReason).toBe('agent-interactive-prompt')
+    expect(await waiting).toMatchObject({
+      satisfied: false,
+      blockedReason: 'agent-interactive-prompt'
+    })
+    expect(await waitOutcome(runtime, handle, 150)).toBe('blocked:agent-interactive-prompt')
+
+    runtime.terminalRunFacts.recordInput(TRANSCRIPT_PANE_PTY_ID, 'driving', '3', Date.now())
+    paint(runtime, FIXTURE.slice(MENU_END))
+    expect(await waitOutcome(runtime, handle, QUIESCENCE_MS * 3)).toBe('ready')
   })
 })

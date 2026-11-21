@@ -5,11 +5,15 @@ import { formatAgentTypeLabel } from '../../../../../shared/agent-status/present
 import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../../shared/native-chat/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../../shared/native-chat/native-chat-types'
 
+/** Who an empty chat introduces in the agent's place, e.g. a bot. */
+export type NativeChatPersona = { icon: React.ReactNode; name: string; subtitle: string }
+
 export function NativeChatEmptyState({
   kind,
   message,
   headline,
   agent,
+  persona,
   retrying = false
 }: {
   kind: 'loading' | 'empty' | 'error' | 'not-agent'
@@ -17,26 +21,43 @@ export function NativeChatEmptyState({
   /** The chat's own sentence for the failure, said once: it takes the generic title's place. */
   headline?: string
   agent?: NativeChatSession['agent']
+  persona?: NativeChatPersona | null
   /** Structured reads retry automatically; show a loading failure without directing users back to a terminal. */
   retrying?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const copy = emptyStateCopy(kind, { message, headline }, agent, retrying, t)
+  const shownPersona = kind === 'empty' ? persona : null
+  const copy = shownPersona
+    ? {
+        title: t(
+          'components.native-chat.state.empty.title',
+          NATIVE_CHAT_EMPTY_STATE_COPY.empty.title,
+          {
+            value0: shownPersona.name
+          }
+        ),
+        subtitle: shownPersona.subtitle
+      }
+    : emptyStateCopy(kind, { message, headline }, agent, retrying, t)
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <div
-        className={
-          kind === 'error'
-            ? 'flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive'
-            : 'flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground'
-        }
-      >
-        {kind === 'error' ? (
-          <TriangleAlert className="size-6" />
-        ) : (
-          <MessageSquare className="size-6" />
-        )}
-      </div>
+      {shownPersona ? (
+        shownPersona.icon
+      ) : (
+        <div
+          className={
+            kind === 'error'
+              ? 'flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive'
+              : 'flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground'
+          }
+        >
+          {kind === 'error' ? (
+            <TriangleAlert className="size-6" />
+          ) : (
+            <MessageSquare className="size-6" />
+          )}
+        </div>
+      )}
       <p className="text-sm font-medium text-chat-foreground-strong">{copy.title}</p>
       {copy.subtitle ? (
         <p className="max-w-sm text-balance text-xs text-chat-foreground-faint">{copy.subtitle}</p>

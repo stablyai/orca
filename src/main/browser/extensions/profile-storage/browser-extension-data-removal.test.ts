@@ -117,7 +117,7 @@ describe('uninstall while another Orca profile is inactive', () => {
       grantedPermissions: ['nativeMessaging']
     }))
     personal.sync.write('default', ID, { token: 'old secret' })
-    personal.states.flush()
+    await personal.states.close()
     await personal.sync.flush()
     personal.installed.save(record)
 

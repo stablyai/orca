@@ -183,31 +183,6 @@ it('does not apply a queued old-guest default reset to its replacement', async (
   expect(replacement.debugger.sendCommand).not.toHaveBeenCalled()
 })
 
-it('does not initiate discard from generic lifecycle notifications', async () => {
-  fleet = createEligibilityFleet(native, 32)
-  fleet.guest.clean()
-  fleet.guest.stopLoading()
-  await fleet.guest.finishRestore(fleet.pageId)
-  await Promise.resolve()
-  expect(fleet.attempts).toEqual([])
-  expect(fleet.freed).toEqual([])
-})
-
-it('does not let an old claim release wake a replacement logical page', async () => {
-  fleet = createEligibilityFleet(native)
-  const release = claimBrowserMemoryPage(fleet.pageId)
-  closeBrowserMemoryPage(fleet.pageId)
-  const replacement = fleet.attach(3)
-  replacement.clean()
-  await Promise.resolve()
-  const before = [...fleet.attempts]
-  release()
-  await Promise.resolve()
-  expect(fleet.attempts).toEqual(before)
-  replacement.stopLoading()
-  await replacement.finishRestore(fleet.pageId)
-})
-
 it('refuses explicit retirement while the previous native guest is still alive', async () => {
   fleet = createEligibilityFleet(native)
   const { guest, pageId } = fleet

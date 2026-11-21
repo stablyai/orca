@@ -8,7 +8,7 @@ import { JournalSqlOwner } from '../../../../native-chat/agent-session-journal/j
 import { JournalSqlReaderPool } from '../../../../native-chat/agent-session-journal/journal-sql-reader-pool'
 import { journalSqlReads } from '../../../../native-chat/agent-session-journal/journal-sql-reads'
 import { resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
-import { isMailPointer, operationId } from './structured-chat-coordinator-fake-codex-fixture'
+import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
   PEER_CHAT,
@@ -47,7 +47,7 @@ function holdMailRead(sessionId: string, hold: () => Promise<void>): void {
 }
 
 describe('mail checks reconcile the currently owned source attempts', () => {
-  it('leaves accepted direct mail for the check when its live lease renews during the source read', async ({
+  it('keeps accepted whole direct mail consumed when its live lease renews during the source read', async ({
     onTestFinished
   }) => {
     await openChat(COORDINATOR)
@@ -101,11 +101,8 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       })
       expect(host.deps.store.getConversation(PEER_CHAT)!.ownerObservation.lastRenewedAt).toBe(now)
       releaseCheck.resolve()
-      expect(await checking).toMatchObject({
-        count: 1,
-        messages: [{ subject: 'already accepted', body: 'the complete mail' }]
-      })
-      expect(isMailPointer(turnText(chat.turns[0]!))).toBe(true)
+      expect(await checking).toMatchObject({ count: 0, messages: [] })
+      expect(chat.turns.map(turnText).join('\n')).toContain('the complete mail')
     } finally {
       releaseCheck.resolve()
       releaseAutomatic.resolve()
@@ -168,8 +165,8 @@ describe('mail checks reconcile the currently owned source attempts', () => {
       await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
       await settleTurn(COORDINATOR, 1)
       accepted.resolve()
-      expect(await checking).toMatchObject({ count: 1, messages: [{ from_handle: 'term_worker' }] })
-      expect(isMailPointer(turnText(chat.turns[1]!))).toBe(true)
+      expect(await checking).toMatchObject({ count: 0, messages: [] })
+      expect(chat.turns.map(turnText).join('\n')).toContain('(worker_done)')
     } finally {
       release.resolve()
       accepted.resolve()

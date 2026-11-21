@@ -84,7 +84,7 @@ export default function PendingNativeChatCreation({
   const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
-  // Like t3code, progress shows only in the steps card after a send, never above the composer.
+  // Progress shows only in the steps card after a send, never above the composer.
   const now = useWorktreeCreationClock(status === 'creating' && held)
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
 

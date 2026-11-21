@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, GitGraph, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { activateCyclableTab } from '../../../hooks/ipc-tab-switch'
+import { activateCyclableTab } from '../../../lib/workspace/tabs/ipc-tab-switch'
 import { getShortcutPlatform } from '../../../lib/keyboard/shortcut-platform'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {

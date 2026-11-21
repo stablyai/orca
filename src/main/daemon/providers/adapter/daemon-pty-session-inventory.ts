@@ -1,3 +1,4 @@
+import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { basename } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -135,7 +136,10 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   }
 
   // Daemon shutdown suppresses exit fanout; notify panes before teardown so they stop writing to dead PTYs.
-  fanoutSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
+  fanoutSyntheticExits(
+    code: number,
+    exit: { replacedByRestart?: true; cause?: TerminalExitCause } = {}
+  ): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.ptyInventory.reset()

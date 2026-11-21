@@ -5,7 +5,7 @@ import type {
 import type { CodexEventLabel, CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import { normalizeCodexHookTimeoutSec } from '../../trust/identity/codex-trust-identity'
 
-// Trust keys use snake_case (codex-rs/hooks/src/lib.rs::hook_event_key_label); hooks.json uses PascalCase.
+// Codex trust keys use snake_case event labels; hooks.json uses PascalCase.
 export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   SessionStart: 'session_start',
   UserPromptSubmit: 'user_prompt_submit',

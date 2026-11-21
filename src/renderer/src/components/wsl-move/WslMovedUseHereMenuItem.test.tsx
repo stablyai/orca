@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'

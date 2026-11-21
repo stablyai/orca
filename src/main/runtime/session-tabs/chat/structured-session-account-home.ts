@@ -12,7 +12,7 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
   protected structuredAgentAccountHomeResolver(
     agent: StructuredAgentId,
     worktree: string,
-    purpose: 'launch' | 'read' | 'identity',
+    purpose: 'launch' | 'read' | 'identity' | 'catalog',
     hostLaunchDirectory?: string
   ) {
     const registration = structuredAgentRuntimeMetadata(agent)

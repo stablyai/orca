@@ -4,7 +4,7 @@ import { clientLayoutCommand } from './client-views/workspace-layout-client-comm
 import {
   closeBrowserPage,
   openBrowserPage,
-  replaceBrowserPage,
+  replaceTabContent,
   setBrowserTabProfile
 } from './commands/workspace-layout-browser-commands'
 import { applied, refuse, type Applied } from './commands/workspace-layout-command-steps'
@@ -16,6 +16,7 @@ import type {
 } from './workspace-layout-command-types'
 import {
   openAgentSessionTab,
+  openRoomTab,
   openBrowserTab,
   openEditorTab
 } from './commands/workspace-layout-content-commands'
@@ -58,7 +59,8 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'openEditorTab',
   'openBrowserTab',
   'openAgentSessionTab',
-  'openSimulatorTab'
+  'openSimulatorTab',
+  'openRoomTab'
 ])
 
 export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
@@ -165,12 +167,14 @@ function applyCommand(
       return openBrowserPage(model, command)
     case 'closeBrowserPage':
       return closeBrowserPage(model, command)
-    case 'replaceBrowserPage':
-      return replaceBrowserPage(model, command)
+    case 'replaceTabContent':
+      return replaceTabContent(model, command)
     case 'setBrowserTabProfile':
       return setBrowserTabProfile(model, command)
     case 'openAgentSessionTab':
       return openInNewGroup(model, command, (next) => openAgentSessionTab(next, command, context))
+    case 'openRoomTab':
+      return openInNewGroup(model, command, (next) => openRoomTab(next, command, context))
     case 'startPane':
       return startPane(model, command, context)
     case 'restartPane':

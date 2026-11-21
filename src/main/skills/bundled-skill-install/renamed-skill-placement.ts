@@ -44,12 +44,15 @@ export async function planFormerSkillPlacements(
       continue
     }
     let owned = classified.folderClass === 'released' || classified.folderClass === 'current'
+    const linkedRealPath = observed.kind === 'link' ? await filesystem.realpath(path) : null
+    const canonical = bundledSkillPathKey(join(root.realPath, source.name))
+    // Junctions store an absolute spelling (linked home, subst drive), so also compare realpaths.
     const forwarding =
       observed.kind === 'link' &&
-      bundledSkillPathKey(resolve(root.realPath, observed.target)) ===
-        bundledSkillPathKey(join(root.realPath, source.name))
+      (bundledSkillPathKey(resolve(root.realPath, observed.target)) === canonical ||
+        (linkedRealPath !== null && bundledSkillPathKey(linkedRealPath) === canonical))
     if (observed.kind === 'link' && sharedRoot) {
-      const target = (await filesystem.realpath(path)) ?? resolve(root.realPath, observed.target)
+      const target = linkedRealPath ?? resolve(root.realPath, observed.target)
       const formerShared = join(sharedRoot.realPath, name)
       const sharedTarget = (await filesystem.realpath(join(sharedRoot.path, name))) ?? formerShared
       if (bundledSkillPathKey(target) === bundledSkillPathKey(sharedTarget)) {

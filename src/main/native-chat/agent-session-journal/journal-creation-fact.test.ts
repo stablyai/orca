@@ -13,6 +13,7 @@ import {
   journalSqlWorkerPath
 } from './journal-sql-worker-bundle.test-fixture'
 import type { JournalStepsResult, JournalWriterStep } from './writing/journal-writer-step'
+import type { AgentJournalAgentStartItem } from '../../../shared/agent-session/journal/agent-journal-creation-facts'
 
 const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
@@ -56,24 +57,25 @@ it('records creation once at its destination on the SQL writer, including remove
   const root = await mkdtemp(join(tmpdir(), 'journal-creation-fact-'))
   roots.push(root)
   const journal = await sql(root)
+  const body: AgentJournalAgentStartItem = {
+    kind: 'agent-start',
+    dispatchId: 'dispatch',
+    worker: {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: null
+    },
+    task: 'Build it'
+  }
   const step: Extract<JournalWriterStep, { kind: 'creation-fact' }> = {
     kind: 'creation-fact',
     epoch: (await journal.reads.physicalCursor()).epoch,
     identity: { provider: 'orca', clientMessageId: 'agent-start:dispatch' },
-    body: {
-      kind: 'agent-start',
-      dispatchId: 'dispatch',
-      worker: {
-        party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
-        name: null
-      },
-      task: 'Build it'
-    },
+    body,
     options: { fence: 1, turnScope: { kind: 'thread' }, observedAt: 100 },
     reservedBytes: 4096
   }
   expect(
-    await journal.appendSteps([step, { ...step, body: { ...step.body, task: 'Retry' } }])
+    await journal.appendSteps([step, { ...step, body: { ...body, task: 'Retry' } }])
   ).toMatchObject({
     outcomes: [{ kind: 'committed', wrote: true }, { kind: 'dropped' }]
   })

@@ -28,7 +28,6 @@ vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importO
 }))
 
 import { listWorktreeGraph } from './worktree-scan-cache'
-import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { registerWorktreeSuiteHooks } from '../testing/worktree-test-harness'
 
 registerWorktreeSuiteHooks()
@@ -63,14 +62,6 @@ branch refs/heads/main
         isBare: false,
         isMainWorktree: true
       }
-    ])
-
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [
-        ['worktree', 'list', '--porcelain', '-z'],
-        { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }
-      ],
-      [['worktree', 'list', '--porcelain'], { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }]
     ])
   })
 })

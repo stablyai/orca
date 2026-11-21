@@ -96,6 +96,21 @@ describe('Store', () => {
     ])
   })
 
+  it('reads after an in-place repo write see the write', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/local/repo' }))
+    expect(store.getRepos()[0]).toMatchObject({ displayName: 'test', gitUsername: '' })
+    expect(store.getRepo('r1')?.displayName).toBe('test')
+    expect(store.getRepoForHost('r1', 'local')?.displayName).toBe('test')
+
+    store.updateRepo({ id: 'r1' }, { displayName: 'renamed' })
+    store.setResolvedRepoGitUsername({ id: 'r1' }, 'octocat')
+
+    expect(store.getRepos()[0]).toMatchObject({ displayName: 'renamed', gitUsername: 'octocat' })
+    expect(store.getRepo('r1')).toMatchObject({ displayName: 'renamed', gitUsername: 'octocat' })
+    expect(store.getRepoForHost('r1', 'local')?.gitUsername).toBe('octocat')
+  })
+
   it('repo mutations preserve independent project host setup records', async () => {
     const independentProject = makeProject({
       id: 'cloud-project',

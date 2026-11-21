@@ -8,16 +8,25 @@ const RENDERER = 'src/renderer/src/'
 const WATCHERS = `${RENDERER}components/terminal-pane/parking/output-watchers/`
 const ROOTS = new Map([
   [
-    `${RENDERER}components/terminal/terminal-provider-snapshot-bound-pty-ids.ts`,
+    `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts`,
     ['createTerminalProviderSnapshotBoundPtyIdsSelector']
   ],
-  [`${RENDERER}components/use-terminal-watcher-effects.ts`, ['useTerminalWatcherEffects']],
-  [`${RENDERER}components/use-terminal-parking-pass.ts`, ['useTerminalParkingPass']],
   [
-    `${RENDERER}components/terminal-parking-pass-candidates.ts`,
+    `${RENDERER}components/terminal/workbench/use-terminal-watcher-effects.ts`,
+    ['useTerminalWatcherEffects']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/use-terminal-parking-pass.ts`,
+    ['useTerminalParkingPass']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/terminal-parking-pass-candidates.ts`,
     ['collectTerminalParkingPassCandidates']
   ],
-  [`${RENDERER}components/terminal/split-group-mount.ts`, ['anyMountedWorktreeHasLayout']],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/split-group-mount.ts`,
+    ['anyMountedWorktreeHasLayout']
+  ],
   [
     `${RENDERER}components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.ts`,
     ['useParkedTerminalWatcherSynchronization']
@@ -124,8 +133,8 @@ function isColdResyncCall(node, source) {
 const STORE_BOUNDARIES = new Set([`${RENDERER}store/index.ts`, `${RENDERER}store.ts`])
 // Resource delivery and startup recovery are separate entry points, not parking input discovery.
 const EFFECT_BOUNDARIES = new Set([
-  `${RENDERER}components/terminal/terminal-provider-snapshot-bound-pty-ids.ts#resyncUnknownSnapshot`,
-  `${RENDERER}components/terminal/use-terminal-startup-activation.ts#useTerminalStartupActivation`,
+  `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts#resyncUnknownSnapshot`,
+  `${RENDERER}components/terminal/workspace-mounting/use-terminal-startup-activation.ts#useTerminalStartupActivation`,
   `${WATCHERS}terminal-parked-pty-watcher.ts#startParkedPtyWatcher`,
   `${RENDERER}components/terminal-pane/parking/capture/parked-terminal-buffer-capture.ts#captureParkedTerminalBuffers`,
   `${RENDERER}lib/agent-session/resume/sleeping-agent-session-launch.ts#launchSleepingAgentSession`,
@@ -152,11 +161,11 @@ const ORDINARY_WRITERS = [
   'store/terminals/tabs/presentation/terminal-tab-presentation.ts',
   'store/terminals/sleep/terminal-shutdown-state.ts',
   'store/terminals/tabs/creation/window-tab-start-in-main.ts',
-  'store/slices/agent-status/agent-status-live-reducer.ts',
-  'store/slices/agent-status/agent-status-launch-actions.ts',
-  'store/slices/agent-status/agent-status-provider-session-actions.ts',
-  'store/slices/agent-status/agent-status-recovery-actions.ts',
-  'store/slices/agent-status/agent-status-authority-actions.ts'
+  'store/slices/agent-status/live-status/agent-status-live-reducer.ts',
+  'store/slices/agent-status/launch-config/agent-status-launch-actions.ts',
+  'store/slices/agent-status/live-status/agent-status-provider-session-actions.ts',
+  'store/slices/agent-status/sleep-recovery/agent-status-recovery-actions.ts',
+  'store/slices/agent-status/pane-authority/agent-status-authority-actions.ts'
 ].map((rel) => RENDERER + rel)
 const RECORD_TRANSITIONS = new Set([
   'replaceRecordEntries',

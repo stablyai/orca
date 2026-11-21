@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SshConnectionState } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { PtyOwnerMachineState } from '../../pty-transport/host-ownership/pty-owner-machine-platform'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   createPaneWindowsPtyModel,
   type PaneWindowsPtyModelContext
@@ -34,7 +35,9 @@ function serverStatus(platform: NodeJS.Platform) {
   return { status: { hostPlatform: platform } as RuntimeStatus, checkedAt: 1 }
 }
 
-function fakeStore(initial: PtyOwnerMachineState) {
+type FakeOwnerState = PtyOwnerMachineState & { runtimeStatusByEnvironmentId: RuntimeStatuses }
+
+function fakeStore(initial: FakeOwnerState) {
   let state = initial
   const listeners = new Set<() => void>()
   return {
@@ -43,7 +46,7 @@ function fakeStore(initial: PtyOwnerMachineState) {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    set(next: Partial<PtyOwnerMachineState>) {
+    set(next: Partial<FakeOwnerState>) {
       state = { ...state, ...next }
       listeners.forEach((listener) => listener())
     },
@@ -51,7 +54,7 @@ function fakeStore(initial: PtyOwnerMachineState) {
   }
 }
 
-const EMPTY: PtyOwnerMachineState = {
+const EMPTY: FakeOwnerState = {
   sshConnectionStates: new Map(),
   sshStateByEnvironment: new Map(),
   runtimeStatusByEnvironmentId: new Map()
@@ -139,5 +142,50 @@ describe('pane resize model on a Mac client', () => {
     }
     createPaneWindowsPtyModel(paneContext(terminal, 'ssh:target-1', transport), store).apply()
     expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeGreaterThan(0)
+  })
+
+  // A one-time restore write must not trust the previous owner's answer while the new owner's OS is unknown.
+  it('reports an unknown backend after the transport re-names a host whose OS has not arrived', () => {
+    const terminal = newTerminal()
+    const store = fakeStore({
+      ...EMPTY,
+      runtimeStatusByEnvironmentId: new Map([['env-1', serverStatus('linux')]])
+    })
+    let host: ExecutionHostId | null = null
+    let onHostChange: () => void = () => {}
+    const transport = {
+      getRuntimeEnvironmentId: () => 'env-1',
+      getExecutionHostId: () => host,
+      onExecutionHostChange: (listener: () => void) => {
+        onHostChange = listener
+        return () => {}
+      }
+    }
+    const model = createPaneWindowsPtyModel(
+      paneContext(terminal, 'runtime:env-1', transport),
+      store
+    )
+    model.apply()
+    expect(model.ownerUsesConpty()).toBe(false)
+
+    host = 'ssh:target-1'
+    onHostChange()
+    expect(model.ownerUsesConpty()).toBe(null)
+
+    store.set({
+      sshStateByEnvironment: new Map([
+        [
+          'env-1',
+          {
+            connectionStates: new Map([['target-1', sshState('win32')]]),
+            targetLabels: new Map(),
+            targetGenerations: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    })
+    expect(model.ownerUsesConpty()).toBe(true)
   })
 })

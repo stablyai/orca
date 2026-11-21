@@ -14,7 +14,7 @@ import {
   sessionIdFromFileName,
   updateTimeline
 } from '../../parsing/session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { asRecord } from '../../parsing/session-record-fields'
 import {
   extractMessageText,
@@ -22,7 +22,6 @@ import {
 } from '../../parsing/session-scanner-text-normalization'
 import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
-import { tokenTotal } from '../../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -57,24 +56,13 @@ function consumeDroidRecordLine(accumulator: SessionAccumulator, line: string): 
     accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
     return
   }
-  if (record.type === 'system') {
-    accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-    accumulator.model = extractString(record.model) ?? accumulator.model
-  }
   const streamSessionId = extractString(record.session_id) ?? extractString(record.sessionId)
   if (streamSessionId) {
     accumulator.sessionId = streamSessionId
   }
+  // Model and token usage come from the settings sidecar (session-scanner-droid-settings.ts).
   if (record.type === 'message') {
     consumeDroidMessage(accumulator, record)
-  } else if (record.type === 'completion') {
-    accumulator.messageCount++
-    accumulator.totalTokens += tokenTotal(record.usage)
-    addSessionText(accumulator, {
-      role: 'assistant',
-      text: extractString(record.finalText),
-      timestamp: record.timestamp
-    })
   }
 }
 

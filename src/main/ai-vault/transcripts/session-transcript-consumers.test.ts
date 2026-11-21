@@ -96,7 +96,7 @@ async function writeClaudeFixture(): Promise<{
   return { root, roots, transcript }
 }
 
-it('replays only the appended lines on a resumed read', async () => {
+it('resumes at the last complete line and publishes new lines once', async () => {
   const { roots, transcript } = await writeClaudeFixture()
   const consumer = recordingConsumer()
   await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
@@ -105,9 +105,18 @@ it('replays only the appended lines on a resumed read', async () => {
   expect(firstRead?.start.previousByteOffset).toBe(0)
   expect(firstRead?.outcome?.incomplete).toBe(false)
 
-  await appendFile(transcript, `${jsonLines(claudeTurns(5, 5))}\n`)
-  const changedAt = new Date(firstRead!.start.candidate.file.mtimeMs + 2000)
-  await utimes(transcript, changedAt, changedAt)
+  const [partial, ...rest] = claudeTurns(5, 5)
+  const initialMtime = firstRead!.start.candidate.file.mtimeMs
+  await appendFile(transcript, JSON.stringify(partial))
+  const partialMtime = new Date(initialMtime + 2000)
+  await utimes(transcript, partialMtime, partialMtime)
+  consumer.reads.length = 0
+  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+  expect(textsFor(consumer.reads, 'claude')).toEqual([])
+
+  await appendFile(transcript, `\n${jsonLines(rest)}\n`)
+  const completedMtime = new Date(initialMtime + 4000)
+  await utimes(transcript, completedMtime, completedMtime)
   consumer.reads.length = 0
   await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
@@ -119,23 +128,6 @@ it('replays only the appended lines on a resumed read', async () => {
     'assistant:reply 5',
     'tool:Bash: ls 5'
   ])
-})
-
-it('publishes a trailing unterminated line once, when it is complete', async () => {
-  const { roots, transcript } = await writeClaudeFixture()
-  const consumer = recordingConsumer()
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  const [partial] = claudeTurns(5, 5)
-  await appendFile(transcript, JSON.stringify(partial))
-  consumer.reads.length = 0
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-  expect(textsFor(consumer.reads, 'claude')).toEqual([])
-
-  await appendFile(transcript, '\n')
-  consumer.reads.length = 0
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-  expect(textsFor(consumer.reads, 'claude')).toEqual(['user:ask 5'])
 })
 
 async function claudeCandidate(transcript: string): Promise<SessionFileCandidate> {

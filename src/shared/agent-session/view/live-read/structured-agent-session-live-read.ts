@@ -8,7 +8,6 @@ import {
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   agentSessionReadFailureText,
-  agentSessionReadInvalidArgument,
   isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
 } from '../../failures/structured-agent-session-read-refusal'
@@ -21,13 +20,15 @@ import type {
 } from '../../requests/agent-session-current-requests-wire'
 import type { StructuredAgentSessionAction } from './structured-agent-session-reducer'
 import { createReconnectScheduler } from './structured-agent-session-reconnect'
+import { createStructuredAgentSessionSubscribeAsks } from './structured-agent-session-subscribe-asks'
+import type { StructuredAgentSessionSubscribeCapabilities } from './structured-agent-session-subscribe-asks'
 
 /** One `agentSession.subscribe` stream, opened by whichever transport the client has. */
 export type StructuredAgentSessionLiveSubscribe = (
   params: {
     sessionId: string
     cursor?: AgentJournalCursor
-    capabilities?: AgentSessionTextAppendCapabilities
+    capabilities?: StructuredAgentSessionSubscribeCapabilities
   },
   onEvent: (event: AgentSessionSubscribeEvent) => void,
   onError: (error: unknown) => void,
@@ -51,6 +52,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   coalesceMs?: number
   /** The appends the host advertises; opens wait for it, and null or a rejection means none. */
   textAppend?: Promise<AgentSessionTextAppendCapabilities | null>
+  /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
+  promptSuggestions?: Promise<boolean> | boolean
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
@@ -74,8 +77,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   let readTextAppends: ReturnType<typeof createAgentSessionTextAppendReader> | null = null
   /** An open whose stream must not be applied further; the next open replaces it. */
   let replacedOpenGeneration = 0
-  // A refused append means the two sides disagree; later streams take whole items so it cannot loop.
-  let appendsRefused = false
+  const asks = createStructuredAgentSessionSubscribeAsks(args)
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
@@ -139,7 +141,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   /** Resume from the last applied cursor on a new stream, which starts with whole items. */
   const replaceStream = (eventOpenGeneration: number): void => {
     replacedOpenGeneration = eventOpenGeneration
-    appendsRefused = true
+    asks.refuseAppends()
     if (!connected) {
       // Still opening: retry later; the open drops its handle when it lands.
       loseContact()
@@ -220,16 +222,10 @@ export function startStructuredAgentSessionLiveRead(args: {
     args.onHistoryReadInvalidated()
     unsubscribe()
     unsubscribe = (): void => {}
-    let textAppend: AgentSessionTextAppendCapabilities | null = null
-    // A host replaced by an older build refuses the capabilities param; reopen without it.
-    const refuseAppendsOn = (error: unknown): void => {
-      appendsRefused ||= textAppend !== null && agentSessionReadInvalidArgument(error)
-    }
     try {
-      // Local desktop reads pass none, so their subscribe still goes out in the same turn.
-      // A failed support check means no appends; it must not keep the transcript closed.
-      textAppend =
-        args.textAppend && !appendsRefused ? await args.textAppend.catch(() => null) : null
+      // Local desktop reads ask for no appends, so their subscribe still goes out in the same turn.
+      const asked = asks.read()
+      const { textAppend, capabilities } = asked instanceof Promise ? await asked : asked
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
@@ -240,7 +236,7 @@ export function startStructuredAgentSessionLiveRead(args: {
         {
           sessionId: args.sessionId,
           ...(cursor ? { cursor } : {}),
-          ...(textAppend ? { capabilities: textAppend } : {})
+          ...(capabilities ? { capabilities } : {})
         },
         (event) => handleEvent(event, currentOpenGeneration),
         (error) => {
@@ -248,7 +244,7 @@ export function startStructuredAgentSessionLiveRead(args: {
             return
           }
           closedDuringOpen = true
-          refuseAppendsOn(error)
+          asks.refuseOn(error)
           reportReadFailure(error)
           loseContact()
         },
@@ -277,7 +273,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
-      refuseAppendsOn(error)
+      asks.refuseOn(error)
       reportReadFailure(error)
       loseContact()
     } finally {

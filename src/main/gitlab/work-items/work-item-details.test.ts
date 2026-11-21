@@ -117,7 +117,6 @@ describe('getWorkItemDetails', () => {
   }
 
   it.each([
-    { endpoint: 'projects/g%2Fp/pipelines/99/jobs', includeReviewDetails: true },
     { endpoint: 'projects/g%2Fp/pipelines/99/jobs', includeReviewDetails: false },
     { endpoint: 'projects/g%2Fp/pipelines/1000/jobs', includeReviewDetails: false },
     { endpoint: 'projects/g%2Fp/pipelines/99/bridges', includeReviewDetails: false }

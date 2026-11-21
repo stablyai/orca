@@ -14,12 +14,12 @@ import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-hos
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
 } from '../../../sidebar/host-admission/ssh/AddRemoteHostDialog'
-import { HostRemoveDialog } from '../../../sidebar/HostRemoveDialog'
+import { HostRemoveDialog } from '../../../sidebar/host-lifecycle/HostRemoveDialog'
 import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
@@ -27,15 +27,15 @@ import {
   useWslHostsEnabled,
   useWslHostServerFilesMissing,
   wslHostsAvailable
-} from '../../../sidebar/use-wsl-hosts-enabled'
+} from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   getWslHostRowDetail,
   getWslHostStatusLabel,
   getWslHostServerFilesMissingLabel,
   getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
-} from '../../../sidebar/wsl-host-row-status'
-import { wslHostStatusDetailMessage } from '../../../sidebar/wsl-host-failure-text'
+} from '../../../sidebar/host-admission/wsl/wsl-host-row-status'
+import { wslHostStatusDetailMessage } from '../../../sidebar/host-admission/wsl/wsl-host-failure-text'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
@@ -168,7 +168,7 @@ export function WslHostsSection({
             size="sm"
             onClick={openWslHostsExperimentalSetting}
           >
-            {t('auto.components.settings.wslHosts.turnOn', 'Turn on in Experimental')}
+            {t('auto.components.settings.wslHosts.turnOn', 'Open Experimental')}
           </Button>
         )}
       </div>

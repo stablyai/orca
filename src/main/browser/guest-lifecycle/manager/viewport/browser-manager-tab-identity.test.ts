@@ -29,7 +29,8 @@ vi.mock('electron', () => ({
 vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: mocks.openPopupWithOriginBarMock
 }))
-vi.mock('../../../identity/browser-process-user-agent', () => ({
+vi.mock('../../../identity/browser-process-user-agent', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getBrowserProcessUserAgentIdentity: () => ({
     mode: mocks.processUserAgentMode,
     userAgent: mocks.processUserAgent,
@@ -41,7 +42,7 @@ vi.mock('../../../identity/browser-process-user-agent', () => ({
 }))
 
 import { browserManager } from '../browser-manager'
-import { googleAuthUserAgent } from '../../../identity/browser-google-auth-ua'
+import { googleAuthUserAgent } from '../../../identity/browser-site-user-agent'
 import { resetBrowserManagerMocks, resetBrowserManagerState } from '../browser-manager-test-harness'
 import {
   createViewportGuestFactory,

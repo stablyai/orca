@@ -1,13 +1,14 @@
 // Share/cache this host's agent health independently of readers. Probe each registration in server home; launches recheck in their workspace.
 
 import { homedir } from 'node:os'
-import { delimiter, isAbsolute } from 'node:path'
+import { posix, win32 } from 'node:path'
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
+import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,
@@ -22,6 +23,7 @@ import type { StructuredAgentRuntimeMetadata } from '../installation/structured-
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
+import { normalizePathEntry } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]
@@ -37,6 +39,9 @@ const HEALTH_SETTINGS = [
   'nativeChatShellEnvironmentVariables',
   // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
   'antigravityChatAuth',
+  'antigravityManagedAgyEnabled',
+  // Why: choosing Orca's Google sign-in moves new chats off a signed-in agy (hostAlternative).
+  'antigravityGoogleSignIn',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
@@ -95,6 +100,7 @@ async function observeChatProgram(
     settings = runtime.requireStore().getSettings()
     shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const { command, env } = await chatProgram.resolve(shellEnv, settings)
+    const { delimiter, isAbsolute } = process.platform === 'win32' ? win32 : posix
     if (isAbsolute(command)) {
       return 'available'
     }
@@ -104,7 +110,7 @@ async function observeChatProgram(
     if (
       /[\\/]/.test(command) ||
       path.some((rawEntry) => {
-        const entry = rawEntry.trim()
+        const entry = normalizePathEntry(process.platform, rawEntry.trim())
         return entry && !isAbsolute(entry) && !/^~(?:[\\/]|$)/.test(entry)
       })
     ) {
@@ -172,6 +178,8 @@ export function installStructuredAgentAvailability(
   })
   onAgentsRefreshedOnHost(() => derive(false))
   onManagedRuntimeReleasesChanged(() => derive(false))
+  // A host program's new answer (e.g. agy found incompatible at a chat start) changes its chat program.
+  ACP_LAUNCH_SPECS.forEach((spec) => spec.hostBackend?.onSelectionChanged?.(() => derive(false)))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

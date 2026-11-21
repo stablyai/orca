@@ -21,6 +21,8 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'
+import { BotAvatar } from '../../bots/BotAvatar'
+import type { Bot } from '../../../../../shared/bot-types'
 import {
   rankSettingsSearchResults,
   SETTINGS_SEARCH_RESULT_LIMIT,
@@ -34,6 +36,7 @@ type NavSection = {
   icon: SettingsNavIcon
   badge?: string
   installStatus?: SettingsNavInstallStatus
+  bot?: Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>
 }
 
 type NavGroup = {
@@ -230,7 +233,7 @@ export function SettingsSidebar({
       style={leftSidebarStyle}
     >
       {/* Same 48px height as SettingsHeader so both bottom borders meet in one line. */}
-      <div className="box-border flex h-12 shrink-0 items-center border-b border-worktree-sidebar-border px-3">
+      <div className="box-border flex h-12 shrink-0 items-center border-b border-worktree-sidebar-divider px-3">
         <Button
           variant="ghost"
           size="sm"
@@ -270,7 +273,7 @@ export function SettingsSidebar({
       ) : null}
 
       {!isSearching && showSetupGuideTopRow ? (
-        <div className="border-b border-worktree-sidebar-border px-3 py-3">
+        <div className="border-b border-worktree-sidebar-divider px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
             setupActive={setupActive}
@@ -303,7 +306,14 @@ export function SettingsSidebar({
                           onClick={() => onSelectSection(section.id)}
                           className={navItemClassName(isActive)}
                         >
-                          <Icon className="size-4 shrink-0" />
+                          {section.bot ? (
+                            <BotAvatar
+                              bot={section.bot}
+                              className="size-4 rounded-[4px] text-3xs"
+                            />
+                          ) : (
+                            <Icon className="size-4 shrink-0" />
+                          )}
                           <span className="truncate">{section.title}</span>
                           {isVisibleInstallStatus(section.installStatus) ? (
                             <span className={installStatusClassName}>

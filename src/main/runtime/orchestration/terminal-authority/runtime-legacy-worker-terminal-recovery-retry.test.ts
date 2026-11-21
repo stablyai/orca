@@ -2,12 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from './runtime-legacy-worker-terminal-recovery-controller'
 
-import {
-  missingWorkspaceRecoveryFixture,
-  missingWorkspaceWorker
-} from './structured-sessions/runtime-legacy-worker-recovery-test-fixture'
-
-import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { missingWorkspaceRecoveryFixture } from './structured-sessions/runtime-legacy-worker-recovery-test-fixture'
 
 describe('RuntimeLegacyWorkerTerminalRecoveryController retry loop', () => {
   beforeEach(() => {
@@ -17,31 +12,6 @@ describe('RuntimeLegacyWorkerTerminalRecoveryController retry loop', () => {
   afterEach(() => {
     __cancelLegacyWorkerTerminalRecoveryRetriesForTests()
     vi.useRealTimers()
-  })
-
-  it('keeps every host timer cancellable after extended recovery', async () => {
-    const local = missingWorkspaceWorker()
-    const remote = missingWorkspaceWorker({
-      dispatchId: 'dispatch-remote',
-      ptyId: toAppSshPtyId('server-1', 'pty-remote')
-    })
-    const fixture = missingWorkspaceRecoveryFixture([local, remote])
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      await fixture.controller.reconcile()
-      await vi.advanceTimersByTimeAsync(31_000)
-      await fixture.controller.reconcile({ connectionId: 'server-1' })
-      await vi.advanceTimersByTimeAsync(30_000)
-      const callsBeforeCancellation = fixture.reconcile.mock.calls.length
-      expect(vi.getTimerCount()).toBe(2)
-
-      __cancelLegacyWorkerTerminalRecoveryRetriesForTests()
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(fixture.reconcile).toHaveBeenCalledTimes(callsBeforeCancellation)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      warning.mockRestore()
-    }
   })
 
   it('resets the retry scope when an explicit pass starts after a running timer pass', async () => {

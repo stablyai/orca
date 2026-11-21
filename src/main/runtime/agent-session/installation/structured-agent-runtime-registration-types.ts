@@ -46,8 +46,9 @@ export type StructuredAgentAccountHomeRequest = {
   /** Where the chat runs; null for a read with no workspace (the model catalog). */
   location: AgentSessionExecutionLocation | null
   /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection.
-   *  `identity` is a read that names the selected account before its folder exists. */
-  purpose: 'launch' | 'read' | 'identity'
+   *  `identity` is a read that names the selected account before its folder exists. `catalog`
+   *  is a read of the account a new chat would launch on, so its models match that chat's. */
+  purpose: 'launch' | 'read' | 'identity' | 'catalog'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */
@@ -110,6 +111,8 @@ export type StructuredAgentLaunchCheck = {
       }>
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
+  /** Arguments before `--version`. */
+  versionArgs?: readonly string[]
 }
 
 export type StructuredAgentChatProgram = {

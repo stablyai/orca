@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan, buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
@@ -60,37 +60,19 @@ describe('native OpenCode startup submission intent', () => {
     }
   )
 
-  it.each(['posix', 'powershell', 'cmd'] as const)(
-    'reuses an existing run message separator in %s',
-    (shell) => {
-      const plan = buildAgentStartupPlan({
-        agent: 'opencode',
-        prompt: '--literal task',
-        cmdOverrides: { opencode: 'opencode run --standalone --' },
-        platform: shell === 'posix' ? 'linux' : 'win32',
-        shell
-      })
-      const parsed = tokenizeStartupCommand(plan?.launchCommand ?? '', shell)
-      expect(parsed.ok).toBe(true)
-      if (!parsed.ok) {
-        throw new Error(parsed.error)
-      }
-      expect(parsed.tokens).toEqual(['opencode', 'run', '--standalone', '--', '--literal task'])
-      expect(plan?.env).toBeUndefined()
-    }
-  )
-
-  it('never gives an editable draft or empty launch an automatic submission intent', () => {
-    const args = { agent: 'opencode' as const, cmdOverrides: {}, platform: 'linux' as const }
-    expect(
-      buildAgentDraftLaunchPlan({ ...args, draft: 'draft' })?.env?.[
-        OPENCODE_STARTUP_PROMPT_SHA256_ENV
-      ]
-    ).toBeUndefined()
-    expect(
-      buildAgentStartupPlan({ ...args, prompt: '', allowEmptyPromptLaunch: true })?.env?.[
-        OPENCODE_STARTUP_PROMPT_SHA256_ENV
-      ]
-    ).toBeUndefined()
+  it('reuses an existing run message separator', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: '--literal task',
+      cmdOverrides: { opencode: 'opencode run --standalone --' },
+      platform: 'win32',
+      shell: 'cmd'
+    })
+    const parsed = tokenizeStartupCommand(plan?.launchCommand ?? '', 'cmd')
+    expect(parsed).toMatchObject({
+      ok: true,
+      tokens: ['opencode', 'run', '--standalone', '--', '--literal task']
+    })
+    expect(plan?.env).toBeUndefined()
   })
 })

@@ -22,7 +22,6 @@ export const SHELL_PREFIXES = [
   'src/main/startup/shell-environment/hydrate-shell-path',
   'src/main/startup/shell-environment/login-shell-environment',
   'src/main/startup/shell-environment/shell-path-probe',
-  'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme',
   'src/shared/shell/wsl/fish-wsl-cwd-report',
   'src/shared/shell/testing/fish-binary-requirement',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',

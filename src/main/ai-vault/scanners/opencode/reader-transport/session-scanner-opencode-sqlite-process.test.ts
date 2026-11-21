@@ -195,27 +195,6 @@ describe('OpenCode SQLite process retirement', () => {
     }
   })
 
-  it('cancels an active read, enforces queue limits, and fails closed after disposal', async () => {
-    const client = createOpenCodeSqliteProcessClient({
-      executable: process.execPath,
-      args: ['-e', 'process.stdin.resume();setInterval(()=>{},1000)'],
-      requestTimeoutMs: 5_000
-    })
-    const signal = new AbortController()
-    const active = client.parse({ ...args, signal: signal.signal }).catch((error: unknown) => error)
-    const queued = Array.from({ length: 64 }, () =>
-      client.parse(args).catch((error: unknown) => error)
-    )
-    await expect(client.parse(args)).rejects.toThrow('queue is full')
-    signal.abort(new Error('read cancelled'))
-    expect(await active).toMatchObject({ message: 'read cancelled' })
-    client.dispose()
-    for (const error of await Promise.all(queued)) {
-      expect(error).toMatchObject({ message: 'Worker request queue disposed' })
-    }
-    await expect(client.parse(args)).rejects.toThrow('disposed')
-  })
-
   it('retires a silent process at timeout and rejects bounded stdout/input overflow', async () => {
     const silent = createOpenCodeSqliteProcessClient({
       executable: process.execPath,

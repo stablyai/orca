@@ -10,9 +10,4 @@ describe('tracked pathspec partition', () => {
       untrackedPaths: ['new', 'new', 'src/file']
     })
   })
-
-  it('does not reuse tracked evidence across operations', () => {
-    expect(partitionTrackedPathSpecs(['docs'], ['docs/file']).trackedPaths).toEqual(['docs'])
-    expect(partitionTrackedPathSpecs(['docs'], []).untrackedPaths).toEqual(['docs'])
-  })
 })

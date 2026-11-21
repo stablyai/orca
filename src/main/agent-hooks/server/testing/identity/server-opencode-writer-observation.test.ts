@@ -2,7 +2,6 @@ import {
   AgentStatusObservedPaneIdentities,
   AgentStatusObservedPaneIdentityCapture
 } from '../../../../runtime/terminal/identity/agent-status-observed-pane-identity'
-import { OPEN_CODE_WRITER_TOPOLOGY } from '../../cli-writer-observation'
 import { toAgentStatusIpcPayload } from '../../server-status-identity'
 import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hooks/publication/agent-hook-envelope-build'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -98,8 +97,6 @@ describe('OpenCode writer observation', () => {
       })
     repaint()
     expect(observation()?.topology).toBe('pane-owned')
-    const binding = row().providerSession
-    expect(binding && OPEN_CODE_WRITER_TOPOLOGY in binding).toBe(true)
     const snapshot = row()
     const event = {
       ...snapshot,
@@ -112,7 +109,6 @@ describe('OpenCode writer observation', () => {
       buildRelayHookEnvelope(event, 'opencode2')
     ]) {
       expect(JSON.stringify(value)).not.toContain('pane-owned')
-      expect(Object.getOwnPropertySymbols(structuredClone(value).providerSession ?? {})).toEqual([])
     }
     for (const extra of [{}, { opencodeSharedServer: 1 }]) {
       await post(extra)

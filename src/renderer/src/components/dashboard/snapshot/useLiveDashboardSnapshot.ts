@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { DashboardSnapshot } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
+import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -37,7 +39,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const restoredRuntimeHostIdByWorkspaceSessionKey = useAppStore(
     (s) => s.restoredRuntimeHostIdByWorkspaceSessionKey
   )
@@ -50,6 +52,9 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const chatNames = useStructuredChatTabNames()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+
+  const reuse = useRef<ReturnType<typeof createDashboardSnapshotReuse>>(undefined!)
+  reuse.current ??= createDashboardSnapshotReuse()
 
   return useMemo(
     // Read the clock when the freshness epoch invalidates this memo, matching row derivation.
@@ -89,7 +94,8 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           // Read launch identity non-reactively because Shift+Enter routing does not depend on it; match the bridge gate.
           agentLaunchConfigByPaneKey: useAppStore.getState().agentLaunchConfigByPaneKey
         },
-        Date.now()
+        Date.now(),
+        { reuse: reuse.current }
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [

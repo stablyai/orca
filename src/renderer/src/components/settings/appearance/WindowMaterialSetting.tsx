@@ -13,7 +13,7 @@ import { Button } from '../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { readPrefersReducedTransparency } from '@/hooks/use-reduce-visual-effects'
+import { readPrefersReducedTransparency } from '@/hooks/theme/use-reduce-visual-effects'
 import {
   activeWindowMaterial,
   rendererWindowMaterialHost

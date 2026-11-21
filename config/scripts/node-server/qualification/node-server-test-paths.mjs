@@ -36,7 +36,6 @@ export function nodeServerTestPaths({
     'src/main/daemon/pty-subprocess/subprocess-handle.ts',
     ...(artifact
       ? [
-          'tests/e2e/daemon-running-work-probe.unit.test.ts',
           'src/shared/terminal/pty/lifecycle/pty-running-work-probe.test.ts',
           'src/main/orcad/native-runtime/orcad-packaged-node-pty.integration.test.ts',
           'src/main/daemon/pty-subprocess/testing/agent-foreground-process-git-bash.win32.test.ts',

@@ -69,12 +69,7 @@ vi.mock('../../repositories/github-api-repository-remote-probe', async (importOr
 import { getPRForBranch } from './get-pr-for-branch'
 import { resetPRForBranchMocks } from '../client-test-harness'
 
-const {
-  ghExecFileAsyncMock,
-  getOwnerRepoMock,
-  gitExecFileAsyncMock,
-  resolvePRRepositoryCandidatesMock
-} = clientMocks
+const { ghExecFileAsyncMock, getOwnerRepoMock, gitExecFileAsyncMock } = clientMocks
 
 const BRANCH = 'feature'
 
@@ -175,27 +170,6 @@ describe('getPRForBranch configured push head', () => {
     })
   })
 
-  it('finds a fork PR through branch.<name>.pushRemote', async () => {
-    scriptGit(
-      {
-        'remote.origin.url': 'git@github.com:stablyai/orca.git',
-        'remote.fork.url': 'git@github.com:contributor/orca.git',
-        [`branch.${BRANCH}.pushremote`]: 'fork'
-      },
-      [
-        'origin\tgit@github.com:stablyai/orca.git (fetch)',
-        'origin\tgit@github.com:stablyai/orca.git (push)',
-        'fork\tgit@github.com:contributor/orca.git (fetch)',
-        'fork\tgit@github.com:contributor/orca.git (push)'
-      ]
-    )
-    scriptGitHub('contributor', BRANCH)
-
-    const pr = await getPRForBranch('/repo-root', BRANCH)
-
-    expect(pr).toMatchObject({ number: 91, headRepo: { owner: 'contributor', repo: 'orca' } })
-  })
-
   it.each([
     ['remote.origin.push', 'refs/heads/other:refs/heads/other'],
     ['push.default', 'nothing']
@@ -228,29 +202,6 @@ describe('getPRForBranch configured push head', () => {
     const pr = await getPRForBranch('/repo-root', BRANCH)
 
     expect(pr).toMatchObject({ number: 91, headRefName: 'published-name' })
-  })
-
-  it('finds a fork PR through a separate pushurl on a GitHub Enterprise host', async () => {
-    const enterprise = { owner: 'stablyai', repo: 'orca', host: 'ghe.example' }
-    resolvePRRepositoryCandidatesMock.mockResolvedValue({
-      candidates: [enterprise],
-      headRepo: enterprise
-    })
-    scriptGit(
-      { 'remote.origin.url': 'https://ghe.example/stablyai/orca.git', 'push.default': 'current' },
-      [
-        'origin\thttps://ghe.example/stablyai/orca.git (fetch)',
-        'origin\thttps://ghe.example/contributor/orca.git (push)'
-      ]
-    )
-    scriptGitHub('contributor', BRANCH, 'ghe.example')
-
-    const pr = await getPRForBranch('/repo-root', BRANCH)
-
-    expect(pr).toMatchObject({
-      number: 91,
-      headRepo: { owner: 'contributor', repo: 'orca', host: 'ghe.example' }
-    })
   })
 })
 

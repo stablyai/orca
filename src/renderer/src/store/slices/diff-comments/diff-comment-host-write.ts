@@ -7,10 +7,11 @@ import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
-/** Writes a workspace's whole review-note list to the host that owns it. */
+/** Writes a workspace's whole review-note list to the host that owns it; the base is the list it was edited from. */
 export async function writeDiffCommentsToHost(
   owner: DiffCommentOwner,
-  diffComments: DiffComment[]
+  diffComments: DiffComment[],
+  diffCommentsBase: DiffComment[] | undefined
 ): Promise<void> {
   const worktreeId = owner.worktreeId
   const scope = parseWorkspaceKey(worktreeId)
@@ -47,7 +48,8 @@ export async function writeDiffCommentsToHost(
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
       executionHostId: at,
-      updates: { diffComments }
+      // Why base: the host applies only this edit, so notes another device added meanwhile survive.
+      updates: { diffComments, ...(diffCommentsBase ? { diffCommentsBase } : {}) }
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
     if (!meta) {
@@ -58,7 +60,36 @@ export async function writeDiffCommentsToHost(
   await callRuntimeRpc(
     { kind: 'environment', environmentId: endpoint.environmentId },
     'worktree.set',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      diffComments,
+      ...(diffCommentsBase ? { diffCommentsBase } : {})
+    },
     { timeoutMs: 15_000 }
   )
+}
+
+/** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */
+export async function readDiffCommentsFromHost(
+  owner: Extract<DiffCommentOwner, { kind: 'worktree' }>
+): Promise<DiffComment[]> {
+  const { endpoint, at } = owner.authority
+  if (endpoint.kind === 'self') {
+    const meta = await window.api.worktrees.updateMeta({
+      worktreeId: owner.worktreeId,
+      executionHostId: at,
+      updates: {}
+    })
+    if (!meta) {
+      throw new Error('This computer did not answer with the review notes.')
+    }
+    return meta.diffComments ?? []
+  }
+  const { worktree } = await callRuntimeRpc<{ worktree?: { diffComments?: DiffComment[] } }>(
+    { kind: 'environment', environmentId: endpoint.environmentId },
+    'worktree.show',
+    { worktree: toRuntimeWorktreeSelector(owner.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
+  return worktree?.diffComments ?? []
 }

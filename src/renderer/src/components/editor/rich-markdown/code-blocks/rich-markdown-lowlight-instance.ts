@@ -1,6 +1,5 @@
-import { createLowlight, common } from 'lowlight'
-import powershell from 'highlight.js/lib/languages/powershell'
+import { createLowlight } from 'lowlight'
+import { MARKDOWN_CODE_LANGUAGES } from '@/lib/markdown/markdown-code-languages'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 
-// The picker offers PowerShell, which lowlight's common set omits.
-export const richMarkdownLowlight = createCachedLowlight(createLowlight({ ...common, powershell }))
+export const richMarkdownLowlight = createCachedLowlight(createLowlight(MARKDOWN_CODE_LANGUAGES))

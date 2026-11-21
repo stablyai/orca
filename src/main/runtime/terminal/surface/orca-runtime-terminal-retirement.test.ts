@@ -1,4 +1,4 @@
-import '../../orca-runtime-tests/runtime-durable-store-fixture'
+import '../../construction/test-context/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
@@ -192,6 +192,14 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
     const afterStaleFrame = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(afterStaleFrame.tabs.map((tab) => tab.id)).toEqual(['tab::right'])
+
+    const listed = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    expect(listed.visualLayouts).toMatchObject([{ worktreeId: WORKTREE_ID }])
+    const withoutLayouts = await runtime.listTerminals(`id:${WORKTREE_ID}`, undefined, {
+      includeVisualLayouts: false
+    })
+    expect(withoutLayouts).not.toHaveProperty('visualLayouts')
+    expect(withoutLayouts.terminals.map((terminal) => terminal.ptyId)).toEqual(['pty-right'])
   })
 
   it('ignores a delayed exit from an older incarnation of a reused PTY id', async () => {

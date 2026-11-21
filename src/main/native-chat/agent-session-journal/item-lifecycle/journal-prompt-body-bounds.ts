@@ -49,6 +49,7 @@ export function boundJournalPromptBody(
       ...body,
       title: boundPromptText(body.title),
       ...(body.displayName === undefined ? {} : { displayName: boundPromptText(body.displayName) }),
+      ...(body.toolName === undefined ? {} : { toolName: boundPromptText(body.toolName) }),
       ...(body.description === undefined ? {} : { description: boundPromptText(body.description) }),
       ...(body.decisionReason === undefined
         ? {}

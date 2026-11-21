@@ -17,6 +17,7 @@ import {
   journalDomainMessageEditHeld
 } from './journal-domain-edit-leases'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
+import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
 import {
   applyJournalDomainQueueCommand,
   type JournalDomainQueueOperation
@@ -298,4 +299,21 @@ it('holds waiting cards and withdraws unsettled ones, ending only invalidated ed
     [12, ['c']]
   ])
   expect(queue.card('b')?.card).toMatchObject({ state: 'dispatched', position: 2, body: text('b') })
+})
+
+it('says a connector request was withdrawn in the transaction that withdrew its card', () => {
+  const queue = fixture()
+  const stamped: AgentJournalMessageItem = {
+    ...text('review'),
+    connectorDelivery: {
+      account: 'account-a',
+      conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' },
+      deliveryId: 'd1'
+    }
+  }
+  queue.run({ kind: 'queue-insert', input: { messageId: 'card', body: stamped } })
+  queue.run({ kind: 'queue-withdraw', messageIds: ['card'] })
+  expect(
+    readJournalConnectorReplies(queue.db).map((row) => [row.deliveryId, row.fill?.outcome])
+  ).toEqual([['d1', 'withdrawn']])
 })

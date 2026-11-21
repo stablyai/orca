@@ -36,7 +36,7 @@ export type AgentCompletionCoordinatorOptions = {
   getExpectedIncarnationId?: () => string | null
   inspectProcess: (
     ptyId: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean; jobMembershipOnly?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
   /** Rechecks a local exit candidate without trusting the inspection's cached process name. */
   confirmForegroundProcess?: (ptyId: string) => Promise<string | null>

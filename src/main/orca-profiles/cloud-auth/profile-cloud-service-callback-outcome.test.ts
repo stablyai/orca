@@ -83,12 +83,13 @@ describe('Orca sign-in browser page', () => {
     )
     const browser = browserReturnsCode()
 
-    const result = await connectCurrentOrcaProfile(userDataPath)
+    const result = await connectCurrentOrcaProfile(userDataPath, openExternalMock)
     const page = await browser
 
     expect(result.status).toBe('failed')
     expect(result.auth.state).toBe('local')
-    expect(page.statusCode).toBe(500)
+    // The tab got its first part before the exchange, so a failure is in the page, not the status.
+    expect(page.statusCode).toBe(200)
     expect(page.body).not.toContain('Signed in to Orca')
     expect(page.body).toContain('orca_cloud_request_failed_503')
   })
@@ -100,7 +101,7 @@ describe('Orca sign-in browser page', () => {
     )
     const browser = browserReturnsCode()
 
-    const result = await connectCurrentOrcaProfile(userDataPath)
+    const result = await connectCurrentOrcaProfile(userDataPath, openExternalMock)
     const page = await browser
 
     expect(result.status).toBe('connected')
@@ -119,7 +120,7 @@ describe('Orca sign-in browser page', () => {
     )
     const browser = browserReturnsCode()
 
-    const result = await connectCurrentOrcaProfile(userDataPath)
+    const result = await connectCurrentOrcaProfile(userDataPath, openExternalMock)
     const page = await browser
     await signOut
 
@@ -147,11 +148,11 @@ describe('Orca sign-in browser page', () => {
       })
     )
     const firstTab = browserReturnsCode()
-    const firstConnect = connectCurrentOrcaProfile(userDataPath)
+    const firstConnect = connectCurrentOrcaProfile(userDataPath, openExternalMock)
     await vi.waitFor(() => expect(exchangeCount).toBe(1))
 
     const secondTab = browserReturnsCode()
-    const secondResult = await connectCurrentOrcaProfile(userDataPath)
+    const secondResult = await connectCurrentOrcaProfile(userDataPath, openExternalMock)
     const secondPage = await secondTab
     releaseFirstExchange()
     const firstResult = await firstConnect

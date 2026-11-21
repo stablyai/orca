@@ -9,7 +9,7 @@ import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rp
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { readStoredWebRuntimeEnvironment } from '@/web/web-runtime-environment'
+import { readStoredWebRuntimeEnvironment } from '@/web/pairing/web-runtime-environment'
 import { callAbortableGitHubImageUpload } from './github-image-upload-local-call'
 import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
 

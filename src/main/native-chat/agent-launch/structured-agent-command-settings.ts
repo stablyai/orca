@@ -2,5 +2,5 @@ import type { GlobalSettings } from '../../../shared/settings/global-settings-ty
 
 /** Kept out of command resolution so CLI-side detection can name it without the structured stack. */
 export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'>
 >

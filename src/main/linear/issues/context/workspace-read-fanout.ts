@@ -15,20 +15,20 @@ export type WorkspaceReadFailure = {
   error: LinearAgentAccessError
 }
 
-export function getFanoutClientEntries(signal?: AbortSignal): {
+export async function getFanoutClientEntries(signal?: AbortSignal): Promise<{
   entries: LinearClientForWorkspace[]
   failures: WorkspaceReadFailure[]
-} {
-  const workspaces = getStatus().workspaces ?? []
+}> {
+  const workspaces = (await getStatus()).workspaces ?? []
   if (workspaces.length === 0) {
-    return { entries: getClients('all', signal), failures: [] }
+    return { entries: await getClients('all', signal), failures: [] }
   }
 
   const entries: LinearClientForWorkspace[] = []
   const failures: WorkspaceReadFailure[] = []
   for (const workspace of workspaces) {
     try {
-      const entry = getClients(workspace.id, signal)[0]
+      const entry = (await getClients(workspace.id, signal))[0]
       if (entry) {
         entries.push(entry)
       }

@@ -11,8 +11,7 @@ import {
   type NativeChatLeafRoute
 } from '../../native-chat/pane/routing/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from '../titles/use-terminal-pane-title-state'
-import { readTerminalCursorLineContext } from '../../../../../shared/terminal/input/terminal-cursor-line-context'
-import { readTerminalComposerTypedText } from '../../../../../shared/terminal/input/terminal-composer-draft'
+import { readTerminalComposerDraft } from './terminal-composer-draft-read'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -237,11 +236,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const readNativeChatTerminalDraft = useCallback((): string | null => {
     const pane = findNativeChatPane()
-    return pane
-      ? readTerminalComposerTypedText(
-          readTerminalCursorLineContext(pane.terminal, pane.terminal.rows)
-        )
-      : null
+    return pane ? readTerminalComposerDraft(pane.terminal) : null
   }, [findNativeChatPane])
 
   return {

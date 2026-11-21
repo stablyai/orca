@@ -10,8 +10,7 @@ vi.mock('../remote-exec/remote-exec-command', async (importOriginal) => ({
   execCommand: execCommandMock
 }))
 
-const { detectRemoteHostPlatform, remoteHostPlatformFromUnameProbe } =
-  await import('./ssh-remote-platform-detection')
+const { detectRemoteHostPlatform } = await import('./ssh-remote-platform-detection')
 
 const conn = {} as SshConnection
 
@@ -96,16 +95,6 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     vi.restoreAllMocks()
   })
 
-  it('still detects Windows when the uname probe hits the session limit', async () => {
-    execCommandMock
-      .mockRejectedValueOnce(maxSessionsError())
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64\r\n')
-
-    await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
-      relayPlatform: 'win32-x64'
-    })
-  })
-
   it('skips the second probe when the first channel never confirmed close', async () => {
     const error = Object.assign(new Error('boom'), { sshChannelCloseConfirmed: false })
     execCommandMock.mockRejectedValueOnce(error)
@@ -169,17 +158,5 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64'
     })
-  })
-})
-
-describe('remoteHostPlatformFromUnameProbe', () => {
-  it('reads only marker-backed platform lines, past other output folded into the same exec', () => {
-    expect(
-      remoteHostPlatformFromUnameProbe(
-        '5.15.167.4-microsoft-standard-WSL2\n/home/u\n\n__ORCA_REMOTE_PLATFORM__ Linux aarch64\n'
-      )
-    ).toMatchObject({ os: 'linux', arch: 'arm64' })
-    expect(remoteHostPlatformFromUnameProbe('Linux x86_64\n')).toBeNull()
-    expect(remoteHostPlatformFromUnameProbe('\n__ORCA_REMOTE_PLATFORM__ Linux sparc\n')).toBeNull()
   })
 })

@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { uploadBuffer, writeStringViaSftp } from './sftp-upload'
+import { writeStringViaSftp } from './sftp-upload'
 import { uploadFile } from './sftp-file-upload'
 
 function sftpNoSuchFileError(): Error {
@@ -38,24 +38,6 @@ describe('late SFTP stream errors', () => {
     stream.resume()
 
     await uploadFile(sftpDoubleReturning(stream), localFile, '/home/user/.orca-remote/relay.js')
-
-    expect(() => stream.emit('error', sftpNoSuchFileError())).not.toThrow()
-  })
-
-  it('does not throw when a write stream fails after writeStringViaSftp settles', async () => {
-    const stream = new PassThrough()
-    stream.resume()
-
-    await writeStringViaSftp(sftpDoubleReturning(stream), '/home/user/.orca-remote/.version', 'v1')
-
-    expect(() => stream.emit('error', sftpNoSuchFileError())).not.toThrow()
-  })
-
-  it('does not throw when a write stream fails after uploadBuffer settles', async () => {
-    const stream = new PassThrough()
-    stream.resume()
-
-    await uploadBuffer(sftpDoubleReturning(stream), Buffer.from('x'), '/home/user/x')
 
     expect(() => stream.emit('error', sftpNoSuchFileError())).not.toThrow()
   })

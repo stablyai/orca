@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -156,7 +156,7 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
     return loading ? (
       <span aria-busy="true">
         {SEPARATOR}
-        <LoadingSpinner className="mr-1 inline size-3 align-[-0.125em]" />
+        <LoadingSpinner className="mr-1 inline-block size-3 align-[-0.125em]" />
         {t('components.native-chat.mcp.loading', 'Loading…')}
       </span>
     ) : null

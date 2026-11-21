@@ -309,14 +309,14 @@ export async function prepareHostAgentTerminalLaunch(
   resolvedLaunch: TerminalCreateOptions,
   accounts: Pick<RuntimeAccountController, 'prepareHostAgentLaunch' | 'hostLaunchEnvFor'>
 ): Promise<TerminalCreateOptions> {
-  const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
   if (workspace.connectionId) {
-    return launch
+    return applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   }
-  if (launch.launchAgent) {
-    await accounts.prepareHostAgentLaunch(launch.launchAgent)
+  if (resolvedLaunch.launchAgent) {
+    await accounts.prepareHostAgentLaunch(resolvedLaunch.launchAgent)
   }
-  const hostLaunchEnv = accounts.hostLaunchEnvFor(launch.launchAgent)
-  return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
+  const hostLaunchEnv = accounts.hostLaunchEnvFor(resolvedLaunch.launchAgent)
+  const launch = withHostAccountLaunchEnv(opts, resolvedLaunch, hostLaunchEnv)
+  return applyRemoteViewerLaunchEnv(launch, opts.terminalImageViewerSupported)
 }

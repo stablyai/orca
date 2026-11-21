@@ -7,7 +7,7 @@ import {
   acknowledgedOnlyReceipt,
   deliveryReceipt,
   exposeMessages,
-  withReportFollowUps
+  withReplyFollowUps
 } from './mailbox-message-receipt'
 import { routeAllMailboxPages, createDirectMailSnapshotRouter } from './mailbox-page-routing'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
@@ -183,7 +183,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
       acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
       format: params.format === true || params.inject === true
     })
-    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+    return batch?.finalResponse ? receipt : withReplyFollowUps(runtime, db, args.reader, receipt)
   }
   const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
     if (args.deferDelivery?.()) {

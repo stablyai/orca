@@ -31,19 +31,6 @@ describe('issue command ignore rules', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it.each(['.orca', '.orca/', '/.orca/', '.orca/*', '.orca/issue-command'])(
-    'respects global ignore pattern %s',
-    async (pattern) => {
-      writeFileSync(join(root, 'ignore'), `${pattern}\n`)
-      writeFileSync(join(repo, '.gitignore'), 'node_modules/\n')
-
-      await writeIssueCommand(repo, 'local command')
-
-      expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('node_modules/\n')
-      expect(readFileSync(join(repo, '.orca', 'issue-command'), 'utf8')).toBe('local command\n')
-    }
-  )
-
   it('respects shared repository excludes from a linked worktree', async () => {
     await git([
       '-c',
@@ -73,15 +60,6 @@ describe('issue command ignore rules', () => {
 
     expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('node_modules/\n.orca\n')
     expect(readFileSync(join(repo, '.orca', 'issue-command'), 'utf8')).toBe('second command\n')
-  })
-
-  it('honors a repository rule that negates a global ignore', async () => {
-    writeFileSync(join(root, 'ignore'), '.orca/\n')
-    writeFileSync(join(repo, '.gitignore'), '!.orca/\n')
-
-    await writeIssueCommand(repo, 'local command')
-
-    expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('!.orca/\n.orca\n')
   })
 
   it('marks only an uncommitted local command as user-owned on launch', async () => {

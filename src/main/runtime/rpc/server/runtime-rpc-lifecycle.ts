@@ -38,7 +38,6 @@ import {
   ensureDaemonSocketDir
 } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { errorMessage } from '../../../../shared/errors/error-message'
-import { logClientConnection } from './runtime-rpc-client-connection-log'
 import {
   loadHostDescriptor,
   publishHostDescriptor
@@ -120,6 +119,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.pairingInitializationFailure = pairingIdentity.failure
       } else {
         this.deviceRegistry = pairingIdentity.deviceRegistry
+        this.deviceRegistry.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
@@ -265,6 +265,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
       onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
     })
+    const connectionLog = this.startClientConnectionLog()
     const mobileSocketWiring = new MobileSocketWiring({
       deviceRegistry,
       e2eeKeypair,
@@ -286,7 +287,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
-        logClientConnection('connected', socket)
+        connectionLog.record('connected', socket)
         if (socket.transport.transport === 'direct') {
           this.authenticatedSourceRecorder.note(socket.transport.sourceClass)
         }
@@ -318,7 +319,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         void this.runtime.stagedFileSaves?.abortConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
         this.declaredDesktopClients.forget(socket.connectionId)
-        logClientConnection('disconnected', socket)
+        connectionLog.record('disconnected', socket)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }

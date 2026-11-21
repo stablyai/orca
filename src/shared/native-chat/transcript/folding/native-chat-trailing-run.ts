@@ -1,6 +1,7 @@
 // A tool run remains live until a later row from the same agent speaks or acts beyond it.
 
 import { isToolCallBlock, type NativeChatMessage } from '../../native-chat-types'
+import { isNativeChatOrcaCard } from '../../native-chat-orca-card'
 import { deriveNativeChatRowContent } from '../row-content/native-chat-row-content'
 import type { NativeChatResolvedPrompt } from '../../input/questions/native-chat-resolution-receipt'
 
@@ -12,7 +13,7 @@ export function nativeChatRowSpeaksOrActs(
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
 ): boolean {
   return (
-    !message.agentStart &&
+    !isNativeChatOrcaCard(message) &&
     message.role !== 'user' &&
     message.role !== 'reasoning' &&
     receipts.get(message.id)?.kind !== 'approval' &&

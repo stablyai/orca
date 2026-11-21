@@ -6,6 +6,7 @@ import type {
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from '../scanners/opencode/session-scanner-opencode-sources'
 import { zcodeDiscoveries } from '../scanners/zcode/session-scanner-zcode-sources'
+import { hermesDiscoveries } from '../scanners/hermes/session-scanner-hermes-sources'
 import { antigravityDiscoveries } from '../scanners/antigravity/session-scanner-antigravity-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
@@ -27,6 +28,7 @@ export async function discoverAiVaultSessionSources(args: {
   return Promise.all([
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
       source
@@ -71,6 +73,7 @@ function agentDiscoveries(
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
+      statCache: options.statCache,
       signal: options.signal
     })
   return source.mergeRootDiscoveries

@@ -30,7 +30,7 @@ const entry = {
     displayName: 'Ada',
     email: null
   },
-  apiKey: 'private-key',
+  credential: { apiKey: 'private-key' },
   client: new (loadLinearSdk().LinearClient)({ apiKey: 'private-key' })
 }
 entry.client.client.rawRequest = issue
@@ -65,7 +65,7 @@ describe('Linear description images', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
-          Authorization: entry.apiKey,
+          Authorization: entry.credential.apiKey,
           'public-file-urls-expire-in': '3600'
         })
       })

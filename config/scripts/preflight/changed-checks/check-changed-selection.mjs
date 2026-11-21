@@ -27,6 +27,18 @@ const SOURCE_ROOTS = ['src/', 'mobile/', 'tests/', 'config/']
 const TEST_FILE = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
 const LOCALES = 'src/renderer/src/i18n/'
 
+const MAIN_BLOCKING_GRAPH_INPUTS = [
+  'src/main/',
+  'src/shared/',
+  'src/preload/',
+  'src/packages/',
+  'src/cli/',
+  'config/build-plugins/',
+  'config/main-blocking-worker-entries.json',
+  'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs',
+  'config/scripts/workspace/source-exports/'
+]
+
 // Ratchets default to SOURCE_ROOTS; list narrower inputs only where a scan is clearly scoped.
 const RATCHET_INPUTS = {
   'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
@@ -35,12 +47,9 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
-  'check-main-sync-fs-ratchet.mjs': [
-    'src/main/',
-    'src/shared/',
-    'config/main-blocking-worker-entries.json',
-    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
-  ],
+  // Both build the event-loop import graph, so anything that changes graph edges selects them.
+  'check-main-blocking-helper-ratchet.mjs': MAIN_BLOCKING_GRAPH_INPUTS,
+  'check-main-sync-fs-ratchet.mjs': MAIN_BLOCKING_GRAPH_INPUTS,
   'check-main-sync-spawn-ratchet.mjs': [
     'src/main/',
     'src/shared/',
@@ -62,6 +71,11 @@ const RATCHET_INPUTS = {
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
   'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
+  'check-whole-hot-map-selector-ratchet.mjs': [
+    'src/renderer/src/',
+    'config/oxlint-plugins/app-store-performance.mjs',
+    'config/oxlint-whole-hot-map-ratchet.json'
+  ],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
 }
@@ -189,10 +203,15 @@ export const VERIFY_CHECKS = [
     ]
   },
   {
-    // CI's own predicate, so local and CI select this check identically.
+    // CI's predicate, narrowed locally to sources with translation evidence.
     name: 'localization extraction',
     args: ['config/scripts/localization/source-extraction/verify-localization-extraction.mjs'],
-    matches: (files) => affectsLocalizationExtraction(files)
+    matches: (files, { readVersions }) => {
+      const evidence = translationEvidence(readVersions)
+      return files.some(
+        (file) => affectsLocalizationExtraction([file]) && evidence.mayChangeExtractedKeys(file)
+      )
+    }
   },
   {
     name: 'reliability gates',
@@ -252,6 +271,59 @@ export const VERIFY_CHECKS = [
   }
 ]
 
+const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
+// Mirrors KEY_LITERAL_RE in verify-localization-extraction.mjs: quoted dotted literals keep keys referenced.
+const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+// A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
+const EXPORTED_STRING_CONSTANT =
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
+const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
+
+function flattenCatalogKeys(value, prefix = '', keys = new Set()) {
+  if (typeof value === 'string') {
+    keys.add(prefix.replace(/_(?:zero|one|two|few|many|other)$/, ''))
+  } else if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      flattenCatalogKeys(child, prefix ? `${prefix}.${key}` : key, keys)
+    }
+  }
+  return keys
+}
+
+// Why: extraction re-parses all of src/ (~1-2 min); a source that names no translation API and no
+// catalog key before or after cannot move its result. CI still runs it on every such change.
+function translationEvidence(readVersions) {
+  let catalogKeys
+  const namesCatalogKey = (text) => {
+    if (catalogKeys === undefined) {
+      const english = readVersions(`${LOCALES}locales/en.json`)[0]
+      try {
+        catalogKeys = english === null ? null : flattenCatalogKeys(JSON.parse(english))
+      } catch {
+        catalogKeys = null
+      }
+    }
+    return (
+      catalogKeys === null ||
+      [...text.matchAll(KEY_LITERAL)].some((match) => catalogKeys.has(match[1]))
+    )
+  }
+  return {
+    mayChangeExtractedKeys(file) {
+      if (!file.startsWith('src/') || !SCRIPT_SOURCE.test(file) || !readVersions) {
+        return true
+      }
+      return readVersions(file).some(
+        (text) =>
+          text !== null &&
+          (TRANSLATION_USE.test(text) ||
+            EXPORTED_STRING_CONSTANT.test(text) ||
+            namesCatalogKey(text))
+      )
+    }
+  }
+}
+
 // Projects of run-typecheck-projects-in-parallel.mjs and the source trees whose types reach them.
 const TYPECHECK_INPUTS = [
   {
@@ -271,6 +343,10 @@ const TYPECHECK_INPUTS = [
     inputs: ['src/renderer/', 'src/preload/', 'src/shared/', 'src/main/']
   },
   { config: 'config/tsconfig.tc.cli.json', inputs: ['src/cli/', 'src/shared/', 'src/main/'] },
+  {
+    config: 'config/tsconfig.tc.bot-evals.json',
+    inputs: ['src/cli/', 'src/shared/', 'src/main/', 'cloud/packages/connector-contract/']
+  },
   {
     config: 'src/packages/process-host/tsconfig.test.json',
     inputs: ['src/packages/process-host/']
@@ -306,10 +382,23 @@ export function selectTypecheckProjects(files) {
 const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
     'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs',
     'check-daemon-blocking-call-ratchet.mjs',
     'check-main-sync-fs-ratchet.mjs',
     'check-main-sync-spawn-ratchet.mjs',
     'check-recurring-timer-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/main-blocking-import-graph.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs',
+    'check-main-sync-fs-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/main-blocking-helper-propagation.mjs': [
+    'check-main-blocking-helper-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/sqlite-call-use-collector.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
     'check-react-compiler-compat-ratchet.mjs'
@@ -346,12 +435,12 @@ function listRatchetChecks(scriptsDir) {
     }))
 }
 
-function isSelected(check, files) {
+function isSelected(check, files, context) {
   const stem = ownScriptStem(check)
   return (
     (stem !== undefined && files.some((file) => file.startsWith(stem))) ||
     files.some((file) => matchesPrefix(file, check.inputs ?? [])) ||
-    (check.matches?.(files) ?? false)
+    (check.matches?.(files, context) ?? false)
   )
 }
 
@@ -380,7 +469,7 @@ export function splitUnitTestInputs(files, listDirectory = () => []) {
 }
 
 /** Decides which checks a set of changed paths needs; CI's classifier gates the expensive jobs. */
-export function planChangedChecks(files, { scriptsDir, listDirectory }) {
+export function planChangedChecks(files, { scriptsDir, listDirectory, readVersions }) {
   const jobs = classifyPrJobs(files)
   const selectAll = files.some(
     (file) => SELECT_ALL_FILES.has(file) || matchesPrefix(file, SELECT_ALL_PREFIXES)
@@ -393,7 +482,7 @@ export function planChangedChecks(files, { scriptsDir, listDirectory }) {
       ? splitUnitTestInputs(files, listDirectory)
       : { related: [], colocated: [] },
     checks: jobs.static_analysis
-      ? checks.filter((check) => selectAll || isSelected(check, files))
+      ? checks.filter((check) => selectAll || isSelected(check, files, { readVersions }))
       : []
   }
 }

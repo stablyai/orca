@@ -9,6 +9,9 @@ import {
   MobileNativeChatRootItemSourceContext
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
+import { MobileNativeChatItemNoteJoinContext } from '../messages/MobileNativeChatBotItemNoteRow'
+import { MobileNativeChatQuietTurnContext } from '../message-content/MobileNativeChatAnswerProse'
+import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import {
   resolveMobileNativeChatRowProps,
   type MobileNativeChatRowLookups
@@ -29,6 +32,10 @@ type Recovery = MobileNativeChatVisualSource & {
 export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNativeChatMessage> & {
   scope: string
   turnDiff?: NativeChatTurnDiff
+  /** The sides where this item-note row touches another. */
+  itemNoteJoin?: BotItemNoteJoin
+  inAutomationTurn?: true
+  inActingTurn?: true
   source: Recovery | null
 }
 
@@ -43,6 +50,9 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   source,
   scope: _scope,
   turnDiff,
+  itemNoteJoin,
+  inAutomationTurn,
+  inActingTurn,
   ...props
 }: MobileNativeChatRowContentProps) {
   const value = useMemo(() => {
@@ -60,9 +70,17 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
       }
     }
   }, [source])
+  const quietTurn = useMemo(
+    () => ({ inAutomationTurn: inAutomationTurn === true, inActingTurn: inActingTurn === true }),
+    [inAutomationTurn, inActingTurn]
+  )
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
-      <MobileNativeChatMessage {...props} />
+      <MobileNativeChatItemNoteJoinContext.Provider value={itemNoteJoin}>
+        <MobileNativeChatQuietTurnContext.Provider value={quietTurn}>
+          <MobileNativeChatMessage {...props} />
+        </MobileNativeChatQuietTurnContext.Provider>
+      </MobileNativeChatItemNoteJoinContext.Provider>
       {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>
   )

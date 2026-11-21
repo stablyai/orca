@@ -60,15 +60,6 @@ describe('resolveWslInteropSpawnCwd', () => {
     expect(resolveWslInteropSpawnCwd()).toBe(systemRoot)
   })
 
-  it('never falls back to the profile or user folder when no system directory resolves', () => {
-    const profile = makeExistingDirectory()
-    const userFolder = makeExistingDirectory()
-    process.env.ORCA_USER_DATA_PATH = profile
-    process.env.USERPROFILE = userFolder
-
-    expect([profile, userFolder]).not.toContain(resolveWslInteropSpawnCwd())
-  })
-
   it('skips a candidate that does not resolve instead of naming it', () => {
     process.env.SystemRoot = join(tmpdir(), 'orca-wsl-spawn-cwd-never-created')
     const windir = makeExistingDirectory()

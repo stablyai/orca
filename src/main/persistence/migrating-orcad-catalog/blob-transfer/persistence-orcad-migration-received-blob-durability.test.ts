@@ -19,7 +19,13 @@ import {
   dormantState,
   manifest
 } from '../catalog-commit/persistence-orcad-migration-catalog-fixture'
-import { createStore, readDataFile, testState, writeDataFile } from '../../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  readDataFile,
+  testState,
+  writeDataFile
+} from '../../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -98,8 +104,9 @@ describe('orcad migration received blobs wait for a durable commit', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-migration-blobs-durable-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

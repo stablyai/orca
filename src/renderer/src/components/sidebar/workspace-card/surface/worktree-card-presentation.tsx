@@ -27,6 +27,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hideRepoBadge,
     hostContextLabel,
     showProjectName,
+    compactLine,
     affiliateListMode,
     flushSurface,
     contentIndent,
@@ -52,6 +53,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     workspacePorts,
     metaAutomationProvenance,
     metaCliProvenance,
+    metaBot,
     hoverIssue,
     hoverLinearIssue,
     hoverJiraIssue,
@@ -63,7 +65,13 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   // Why: pinned trees mix repos, so ordinary rows lead with the project chip; cross-repo children keep the regular project badge.
   const showPinnedRepoIcon = inPinnedSection && !!repo && !showProjectName
   const showInlineRepoBadge =
-    cardDetails.repoInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
+    cardDetails.repoInTitle &&
+    !!repo &&
+    !hideRepoBadge &&
+    !isFolder &&
+    !showPinnedRepoIcon &&
+    !compactLine
+  const showLineRepoChip = compactLine && !!repo && !isFolder
   const showRepoBadgeInMetaRow =
     !cardDetails.repoInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const contextLabel = getVisibleContextLabel(
@@ -120,19 +128,21 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       : undefined
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
   const hasHoverDetails =
-    (newCardStyle || compactCards) &&
-    (getWorkspaceAttachments(worktree).length > 0 ||
-      hasWorktreeCardDetails({
-        issue: hoverIssue,
-        linearIssue: hoverLinearIssue,
-        jiraIssue: hoverJiraIssue,
-        review: hoverReview,
-        comment: hoverComment,
-        automationProvenance: metaAutomationProvenance,
-        cliProvenance: metaCliProvenance
-      }) ||
-      workspacePorts.length > 0 ||
-      hasHoverIdentity)
+    compactLine ||
+    ((newCardStyle || compactCards) &&
+      (getWorkspaceAttachments(worktree).length > 0 ||
+        hasWorktreeCardDetails({
+          issue: hoverIssue,
+          linearIssue: hoverLinearIssue,
+          jiraIssue: hoverJiraIssue,
+          review: hoverReview,
+          comment: hoverComment,
+          automationProvenance: metaAutomationProvenance,
+          cliProvenance: metaCliProvenance,
+          bot: metaBot
+        }) ||
+        workspacePorts.length > 0 ||
+        hasHoverIdentity))
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
   const titleWrapper = hasHoverDetails
     ? (title: React.ReactElement): React.ReactElement => title
@@ -162,6 +172,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   return {
     showPinnedRepoIcon,
     showInlineRepoBadge,
+    showLineRepoChip,
     showRepoBadgeInMetaRow,
     showHostContextBadge,
     contextLabel,

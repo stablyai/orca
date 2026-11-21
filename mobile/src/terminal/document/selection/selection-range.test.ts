@@ -50,3 +50,23 @@ describe('Unicode selection boundaries across every rendered column', () => {
     expect(f.selected()).toBe('next')
   })
 })
+
+describe('word selection follows the Word Separator setting', () => {
+  it('uses the host separators instead of the default set', async () => {
+    const f = await fixture('run fn(arg),next')
+    seedWordSelection(f.scope, 7, 0)
+    expect(f.selected()).toBe('arg')
+    f.scope.wordSeparator = ' ,'
+    seedWordSelection(f.scope, 7, 0)
+    expect(f.selected()).toBe('fn(arg)')
+  })
+})
+
+describe('word selection stops at unwritten cells', () => {
+  it('ends at the last written cell when the separators leave out space', async () => {
+    const f = await fixture('hello world')
+    f.scope.wordSeparator = ','
+    seedWordSelection(f.scope, 1, 0)
+    expect(f.selected()).toBe('hello world')
+  })
+})

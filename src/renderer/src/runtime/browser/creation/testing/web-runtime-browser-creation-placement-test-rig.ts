@@ -9,7 +9,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import { useAppStore } from '../../../../store/index'
 import { markHydratedBrowserPageHandles } from '../../../../store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type { AppState } from '../../../../store/types'
-import { applyWebSessionTabsSnapshot } from '../../../web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsSnapshot } from '../../../web-session-tabs-sync/snapshots/snapshot-api'
 import {
   ENV,
   NOW,

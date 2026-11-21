@@ -195,4 +195,26 @@ describe('runKillAllTerminalSurfaces', () => {
       closeYieldCount: 1
     })
   })
+
+  it('ends daemon sessions that have no open tab', async () => {
+    const current = state()
+    const killDaemonSessions = vi.fn().mockResolvedValue({ killedCount: 1, remainingCount: 0 })
+    const closeSurface = vi.fn()
+
+    const summary = await runKillAllTerminalSurfaces(snapshotKillAllTerminalSurfaceIds(current), {
+      getState: () => current,
+      killDaemonSessions,
+      closeSurface,
+      killPty: vi.fn().mockResolvedValue(undefined),
+      yieldToRenderer: vi.fn().mockResolvedValue(undefined),
+      reportSummary: vi.fn()
+    })
+
+    expect(killDaemonSessions).toHaveBeenCalledOnce()
+    expect(closeSurface).not.toHaveBeenCalled()
+    expect(summary).toMatchObject({
+      targetCount: 0,
+      daemon: { status: 'fulfilled', killedCount: 1 }
+    })
+  })
 })

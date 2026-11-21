@@ -161,6 +161,18 @@ describe('Claude stream-json connection', () => {
     }
   )
 
+  it('asks for the context report without per-category token-count API calls', async () => {
+    const scenario = scriptScenario([HOLD_OPEN])
+    const connection = await open(launchFor(scenario))
+    await connection.initializationResult()
+    await connection.getContextUsage()
+    expect(scenario.readReport().controlRequests).toContainEqual(
+      expect.objectContaining({
+        request: { subtype: 'get_context_usage', detail: 'summary' }
+      })
+    )
+  })
+
   it('completes task Stop through the real SDK while semantic reading is paused', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(launchFor(scenario))

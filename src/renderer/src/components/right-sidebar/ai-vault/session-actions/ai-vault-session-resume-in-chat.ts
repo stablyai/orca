@@ -31,6 +31,8 @@ export function aiVaultSessionResumeInChatWorkspaceMatters(
   return (
     agent === 'claude' ||
     agent === 'grok' ||
+    // Hermes moves a session into whatever folder loads it.
+    agent === 'hermes' ||
     agent === 'omp' ||
     agent === 'opencode' ||
     agent === 'opencode2' ||
