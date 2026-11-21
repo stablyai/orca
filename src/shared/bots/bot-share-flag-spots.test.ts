@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { botShareFlagSpot } from './bot-share-flags'
+import { botShareFlagSpot } from './bot-share-flag-spots'
 
 const daily = (prompt: string) => ({
   id: 's1',
