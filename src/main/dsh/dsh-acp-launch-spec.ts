@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { GENERIC_ACP_DIALECT } from '../acp/acp-dialects/acp-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
-import { deliverDshInstructions } from '../acp/launch/acp-instructions'
+import { deliverDshInstructions, undoDshInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
@@ -32,6 +32,7 @@ export const DSH_LAUNCH_SPEC: AcpLaunchSpec = {
     reason: 'DeepSeek Harness lists its models only inside a session it cannot delete'
   },
   instructions: deliverDshInstructions,
+  undoInstructions: undoDshInstructions,
   instructionsInWorkspace: true,
   transcriptImport: null,
   sessionHistory: DSH_SESSION_HISTORY,

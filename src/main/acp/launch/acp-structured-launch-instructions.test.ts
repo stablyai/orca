@@ -358,7 +358,6 @@ describe('ACP launch: standing instructions', () => {
       await writeFile(agentsPath, 'Workspace instructions')
       const resolved = await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
       expect(resolved.args).toEqual(['--profile', 'acp'])
-      expect(resolved.args).toEqual((await launch('dsh', { workspacePath: home })).args)
 
       const written = await readFile(agentsPath, 'utf8')
       expect(written).toMatch(/^Workspace instructions/)
@@ -372,8 +371,33 @@ describe('ACP launch: standing instructions', () => {
       expect(rewritten).toContain('Workspace instructions')
       expect(rewritten).not.toContain(PREAMBLE)
       expect(rewritten.match(/<!-- orca:begin -->/g)).toHaveLength(1)
+
+      // DSH reads this file at every start, so a launch with no instructions takes the block back
+      // out instead of leaving text no launch brought. The user's own text stays.
+      const bare = await launch('dsh', { workspacePath: home })
+      expect(bare.args).toEqual(resolved.args)
+      expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions\n')
     } finally {
       await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it("leaves no AGENTS.md holding only Orca's markers", async () => {
+    for (const existing of [null, '']) {
+      const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-empty-'))
+      try {
+        const agentsPath = join(home, 'AGENTS.md')
+        if (existing !== null) {
+          await writeFile(agentsPath, existing)
+        }
+        await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+        expect(await readFile(agentsPath, 'utf8')).toContain(PREAMBLE)
+
+        await launch('dsh', { workspacePath: home })
+        expect(await lstat(agentsPath).catch(() => null)).toBeNull()
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
     }
   })
 
