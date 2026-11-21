@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { useViewerPendingFocus } from './use-viewer-pending-focus'
 
+const NOW = 1_700_000_000_000
 const pane = { file: { id: 'file-pdf', worktreeId: 'wt-1' }, viewStateId: 'view-1' }
 
 type SetupOptions = {
@@ -38,7 +39,7 @@ function setup({
         worktreeId: pane.file.worktreeId,
         viewStateId,
         focusedAtOpen: new WeakRef(row),
-        expiresAt: Date.now() + expiresInMs,
+        expiresAt: NOW + expiresInMs,
         token: 7
       }
     })
@@ -50,7 +51,12 @@ function setup({
   return { row, viewer }
 }
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   useAppStore.setState({ pendingEditorFocusRequest: null })
   document.body.innerHTML = ''
