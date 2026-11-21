@@ -53,7 +53,7 @@ export function NativeChatEmptyState({
         ref={scrollRef}
         role={scrollable ? 'region' : undefined}
         aria-label={scrollable ? copy.title : undefined}
-        tabIndex={scrollable ? 0 : undefined}
+        tabIndex={scrollable ? 0 : -1}
         className={cn(
           'scrollbar-sleek flex h-full min-h-0 w-full flex-col justify-center-safe overflow-y-auto focus-visible:outline-none',
           fadeClassName
