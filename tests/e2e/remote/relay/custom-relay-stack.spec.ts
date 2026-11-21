@@ -197,7 +197,9 @@ test('custom relay authenticates, pairs and retires its session', async ({
   await orcaPage.getByLabel('Client ID').fill('orca-desktop')
   await orcaPage.getByLabel('Relay director URL').fill(stack.relayUrl)
   await orcaPage.getByRole('button', { name: 'Test connection' }).click()
-  await expect(orcaPage.getByText('Auth server: connection failed')).toBeVisible()
+  await expect(
+    orcaPage.getByText('Auth server: no Orca sign-in service found at this URL')
+  ).toBeVisible()
   await expect(orcaPage.getByText('Relay director: connected')).toBeVisible()
   await orcaPage.getByLabel('Auth server URL').fill(stack.authUrl)
   await orcaPage.getByRole('button', { name: 'Test connection' }).click()

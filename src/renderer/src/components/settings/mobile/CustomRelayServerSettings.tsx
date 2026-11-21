@@ -121,9 +121,16 @@ export function CustomRelayServerSettings(): React.JSX.Element {
               value={draft.authServerUrl}
               disabled={!state || busy !== null}
               onChange={(event) => update({ authServerUrl: event.target.value })}
+              aria-describedby={`${id}-auth-hint`}
               autoCapitalize="none"
               spellCheck={false}
             />
+            <p id={`${id}-auth-hint`} className="text-xs text-muted-foreground">
+              {t(
+                'settings.customRelay.authUrlHint',
+                'The Orca sign-in service (relay-auth), not your identity provider. Usually the same origin as the relay.'
+              )}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-client`}>
@@ -134,10 +141,17 @@ export function CustomRelayServerSettings(): React.JSX.Element {
               value={draft.clientId}
               disabled={!state || busy !== null}
               onChange={(event) => update({ clientId: event.target.value })}
+              aria-describedby={`${id}-client-hint`}
               autoCapitalize="none"
               spellCheck={false}
               maxLength={256}
             />
+            <p id={`${id}-client-hint`} className="text-xs text-muted-foreground">
+              {t(
+                'settings.customRelay.clientIdHint',
+                "Must match the sign-in service's ORCA_AUTH_CLIENT_ID (orca-desktop unless changed)."
+              )}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-relay`}>
@@ -201,7 +215,10 @@ export function CustomRelayServerSettings(): React.JSX.Element {
               <p>
                 {result.auth
                   ? t('settings.customRelay.authSuccess', 'Auth server: connected')
-                  : t('settings.customRelay.authFailure', 'Auth server: connection failed')}
+                  : t(
+                      'settings.customRelay.authFailure',
+                      'Auth server: no Orca sign-in service found at this URL'
+                    )}
               </p>
               <p>
                 {result.relay
