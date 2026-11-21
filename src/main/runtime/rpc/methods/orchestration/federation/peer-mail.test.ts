@@ -18,6 +18,7 @@ import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
+import { inProcessSessionLinks } from '../../../../orchestration/session-links/worker/session-link-worker.test-fixture'
 import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
 import { STATUS_METHODS } from '../../host-management/status'
 import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
@@ -102,6 +103,7 @@ describe('agent mail between paired Orca servers', () => {
     )
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => panes[handle] ?? null)
     runtime.setOrchestrationDb(db)
+    inProcessSessionLinks(db)
     return {
       db,
       runtime,

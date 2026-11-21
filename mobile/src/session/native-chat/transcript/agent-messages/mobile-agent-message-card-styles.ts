@@ -17,6 +17,7 @@ export const styles = themedStyleSheet(() => ({
   queuedMeta: { color: colors.textSecondary },
   queuedComma: { flexShrink: 0, marginLeft: -spacing.xs },
   queuedOpenableName: { color: colors.textPrimary },
+  sessionLink: { minWidth: 0 },
   name: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,

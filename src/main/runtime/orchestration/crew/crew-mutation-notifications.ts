@@ -9,6 +9,24 @@ import {
   progressMutations,
   runCoordinatorParties
 } from './crew-mutation-scopes'
+import type { MessageRow } from '../db/orchestration-records'
+
+export type CrewMessageFacts = Pick<
+  MessageRow,
+  'type' | 'delivery_contract' | 'from_handle' | 'to_handle'
+>
+
+/** What a stored message changes for Crew; a heartbeat changes nothing. */
+export function crewMessageInvalidation(message: CrewMessageFacts): CrewInvalidation | null {
+  if (message.type === 'heartbeat') {
+    return null
+  }
+  return message.delivery_contract === 'legacy_direct'
+    ? new Set(['topology'])
+    : Object.assign(new Set(['traffic'] as const), {
+        trafficAddresses: new Set([message.from_handle, message.to_handle])
+      })
+}
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
 type CrewMutationInvocation = (this: OrchestrationDb, ...args: unknown[]) => unknown
@@ -180,13 +198,8 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   const insert = prototype.insertMessage
   prototype.insertMessage = function (this: OrchestrationDb, message) {
     const result = insert.call(this, message)
-    if (result.type !== 'heartbeat') {
-      const notice: CrewInvalidation =
-        result.delivery_contract === 'legacy_direct'
-          ? new Set(['topology'])
-          : Object.assign(new Set(['traffic'] as const), {
-              trafficAddresses: new Set([result.from_handle, result.to_handle])
-            })
+    const notice = crewMessageInvalidation(result)
+    if (notice) {
       this.crewChanges.notify(notice)
     }
     return result

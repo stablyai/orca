@@ -44,6 +44,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'orchestration-reader-entry': resolve(
     'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts'
   ),
+  'session-link-worker-entry': resolve(
+    'src/main/runtime/orchestration/session-links/worker/session-link-worker-entry.ts'
+  ),
   'session-scanner-service-entry': resolve(
     'src/main/ai-vault/scan-service/session-scanner-service-entry.ts'
   ),

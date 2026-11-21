@@ -1,0 +1,3 @@
+.pane-title-bar[data-chromeless] .pane-title-split-trigger[data-session-link-active] {
+  opacity: 1;
+}

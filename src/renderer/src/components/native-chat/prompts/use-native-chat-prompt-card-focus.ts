@@ -33,7 +33,12 @@ export function isInNativeChatPaneOf(card: HTMLElement | null, element: Element 
     !element ||
     element === document.body ||
     card?.closest('.native-chat-pane-shell') === element ||
-    Boolean(card?.closest(NATIVE_CHAT_ROOT_SELECTOR)?.contains(element)) ||
+    Boolean(card?.contains(element)) ||
+    Boolean(
+      (card?.closest(NATIVE_CHAT_ROOT_SELECTOR) ?? card?.closest('[role="dialog"]'))?.contains(
+        element
+      )
+    ) ||
     // A surface outside chat that shows the card (an item page) names its own key scope.
     Boolean(card?.closest('[data-native-chat-prompt-scope]')?.contains(element))
   )

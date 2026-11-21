@@ -54,7 +54,11 @@ class OrchestrationDbCore {
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
 
+  /** The file this database opened; the session link worker joins it on its own connection. */
+  readonly path: (string & {}) | ':memory:'
+
   constructor(dbPath: (string & {}) | ':memory:') {
+    this.path = dbPath
     this.db = new Database(dbPath)
     // First, so opening beside another connection's checkpoint waits rather than failing.
     this.db.pragma('busy_timeout = 5000')

@@ -1,3 +1,6 @@
+import { SessionLinkStore } from '../../session-links/session-link-store'
+import { inProcessSessionLinks } from '../../session-links/worker/session-link-worker.test-fixture'
+import { SessionLinkParticipant } from '../../../../../shared/session-link'
 import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
@@ -450,4 +453,45 @@ describe('a send to a finished structured worker', () => {
       reply.resolve()
     }
   })
+})
+
+it('refuses linked-peer mail before starting a settled worker follow-up', async () => {
+  await openChat(COORDINATOR)
+  const { taskId } = await coordinatorRunAndTask()
+  const { identity, firstDispatchId } = await finishedStructuredWorker(taskId)
+  const participant = (id: string) =>
+    SessionLinkParticipant.parse({
+      sessionId: id,
+      conversationId: id,
+      name: id,
+      agent: 'codex',
+      role: 'implementer',
+      workspaceId: host.deps.store.getConversation(id)?.location.workspaceId,
+      directory: '/work',
+      branch: '',
+      task: 'Review',
+      context: ''
+    })
+  inProcessSessionLinks(db)
+  const links = new SessionLinkStore(db)
+  links.create('worker-link', 'Review', [participant(COORDINATOR), participant(identity.sessionId)])
+  links.control('worker-link', 'owner', 'pause-link', 1, 'pause')
+  const result = await dispatcher.dispatch(
+    request(
+      'orchestration.send',
+      {
+        to: `dispatch:${firstDispatchId}`,
+        type: 'status',
+        subject: 'Bypass',
+        body: 'Continue outside the paused link'
+      },
+      { sessionId: COORDINATOR }
+    )
+  )
+  expect(result).toMatchObject({
+    ok: false,
+    error: { message: expect.stringContaining('link-send') }
+  })
+  expect(getFollowUpDispatch(db, firstDispatchId)).toBeUndefined()
+  expect(connectionFor(identity.sessionId).turns).toHaveLength(0)
 })

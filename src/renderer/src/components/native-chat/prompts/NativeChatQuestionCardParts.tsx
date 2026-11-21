@@ -1,6 +1,6 @@
-// Pieces of the question card: another surface's look and draft for it, its step tabs for a several-question prompt, and Escape to fold it.
+// Pieces of the question card: another surface's look and draft for it, its step tabs for a several-question prompt, its typed-answer mark, and Escape to fold it.
 import { useEffect, useEffectEvent } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { useTranslate } from '@/i18n/use-translate'
@@ -18,6 +18,11 @@ export type NativeChatQuestionCardLook = {
   renderQuestion?: (content: string) => React.ReactNode
   /** Several steps' tabs and count sit inside the bordered body, not above and below it. */
   stepsInSurface?: boolean
+  /** A bold title in place of the question's words, which then follow it under the context. */
+  heading?: string
+  context?: React.ReactNode
+  /** The confirm button's words in place of Next/Submit/Skip. */
+  submitLabel?: string
 }
 
 /** An answer in progress the card starts from and reports back to, kept by its surface across remounts
@@ -100,5 +105,21 @@ export function NativeChatQuestionSteps({
         </button>
       ))}
     </div>
+  )
+}
+
+/** The typed answer's box mark: checked once it is the chosen answer, a pencil until then. */
+export function NativeChatQuestionTypedMark({ chosen }: { chosen: boolean }): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'flex size-5.5 shrink-0 items-center justify-center rounded-md border',
+        chosen
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-question-option-border text-muted-foreground'
+      )}
+    >
+      {chosen ? <Check className="size-3.5" strokeWidth={3} /> : <Pencil className="size-3.5" />}
+    </span>
   )
 }

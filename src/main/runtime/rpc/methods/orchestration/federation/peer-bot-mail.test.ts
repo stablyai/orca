@@ -19,6 +19,7 @@ import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { dropUnreadBotRequests } from '../messaging/bot-request-outcome'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
+import { inProcessSessionLinks } from '../../../../orchestration/session-links/worker/session-link-worker.test-fixture'
 import type * as RecipientRouting from '../messaging/recipient-routing'
 import {
   DOCS_CHAT,
@@ -98,6 +99,7 @@ describe('mail to a bot on a paired server', () => {
     vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
     vi.spyOn(runtime, 'listAutomationRuns').mockReturnValue([])
     runtime.setOrchestrationDb(db)
+    inProcessSessionLinks(db)
     return {
       db,
       runtime,

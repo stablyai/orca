@@ -19,7 +19,7 @@ import { useStructuredNativeChatSubagents } from './subagents/use-structured-nat
 import { NativeChatContextClearFade } from './conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './prompts/use-structured-prompt-response-hold'
-import { nativeChatStructuredAsyncQuestion } from './prompts/NativeChatStructuredAsyncQuestion'
+import { nativeChatStructuredQuestions } from './prompts/NativeChatStructuredAsyncQuestion'
 import {
   selectNativeChatViewState,
   structuredChatHistoryPhase
@@ -375,7 +375,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
                   answerInputRef={questionAnswerInputRef}
                 />
-                {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+                {nativeChatStructuredQuestions(props, controller, session, transport, submits)}
                 {botServerDown && hostOutage ? (
                   <BotServerOutageCard key={hostOutage.environmentId} outage={hostOutage} />
                 ) : null}

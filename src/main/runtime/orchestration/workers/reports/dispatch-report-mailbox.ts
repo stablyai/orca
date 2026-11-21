@@ -44,3 +44,14 @@ export function dispatchReportMailbox(
   const creator = activeCreatorDispatch(db, dispatch)
   return creator ? `dispatch:${creator.id}` : `run:${dispatch.run_id}`
 }
+
+export function dispatchReportRecipient(
+  db: OrchestrationDb,
+  dispatchId: string | undefined,
+  type: MessageType | undefined,
+  runId: string
+): string {
+  const reporting =
+    dispatchId && isDispatchReportType(type) ? db.getDispatchContextById(dispatchId) : undefined
+  return reporting ? dispatchReportMailbox(db, reporting) : `run:${runId}`
+}

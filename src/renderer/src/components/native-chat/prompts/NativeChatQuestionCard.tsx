@@ -1,6 +1,5 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useRef, useState, type RefObject } from 'react'
-import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -9,6 +8,7 @@ import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import {
   NativeChatQuestionSteps,
+  NativeChatQuestionTypedMark,
   useReportNativeChatQuestionDraft,
   foldNativeChatQuestionOnEscape,
   type NativeChatQuestionCardDraft,
@@ -31,6 +31,8 @@ import {
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
+  disabled?: boolean
+  requireAnswer?: boolean
   /** Whether the snapshotted answer is still being delivered to the agent. */
   isSubmitting?: boolean
   isCancelling?: boolean
@@ -65,6 +67,8 @@ const CONFIRM_LABEL = {
 /** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
 export function NativeChatQuestionCard({
   prompt,
+  disabled = false,
+  requireAnswer = false,
   isSubmitting = false,
   isCancelling = false,
   onAnswer,
@@ -79,7 +83,8 @@ export function NativeChatQuestionCard({
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
-  const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
+  const blocked = disabled || isSubmitting || isCancelling
+  const autoAdvance = useNativeChatQuestionAutoAdvance(blocked)
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.
@@ -213,6 +218,9 @@ export function NativeChatQuestionCard({
 
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
+    if (blocked || (requireAnswer && !currentAnswered)) {
+      return
+    }
     const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
@@ -228,7 +236,7 @@ export function NativeChatQuestionCard({
   }
   useNativeChatQuestionKeys(
     cardRef,
-    shouldFocus && !isSubmitting,
+    shouldFocus && !blocked,
     q.options.length,
     pickOption,
     (delta) => {
@@ -258,7 +266,7 @@ export function NativeChatQuestionCard({
       questions={prompt.questions}
       current={index}
       answered={prompt.questions.map((_, i) => answerFor(i).length > 0)}
-      disabled={isSubmitting}
+      disabled={blocked}
       onStep={goTo}
       className={className}
     />
@@ -279,9 +287,7 @@ export function NativeChatQuestionCard({
         look?.frameClassName
       )}
       aria-busy={isSubmitting}
-      onKeyDown={(event) =>
-        foldNativeChatQuestionOnEscape(event, isSubmitting ? undefined : collapse)
-      }
+      onKeyDown={(event) => foldNativeChatQuestionOnEscape(event, blocked ? undefined : collapse)}
     >
       <div className="mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col px-3 pt-2 pb-4 sm:px-4">
         {total > 1 && !stepsInSurface ? steps() : null}
@@ -308,7 +314,9 @@ export function NativeChatQuestionCard({
             ) : null}
             <NativeChatQuestionCardHeader
               question={q.question}
-              isSubmitting={isSubmitting}
+              heading={look?.heading}
+              context={look?.context}
+              isSubmitting={blocked}
               isCancelling={isCancelling}
               onCollapse={collapse}
               onCancel={cancel}
@@ -326,7 +334,7 @@ export function NativeChatQuestionCard({
                   description={opt.description}
                   preview={opt.preview}
                   selected={(selections[index] ?? []).includes(i)}
-                  disabled={isSubmitting}
+                  disabled={blocked}
                   onSelect={() => pickOption(i)}
                   onEnter={() => pickOption(i, 'enter')}
                 />
@@ -346,27 +354,14 @@ export function NativeChatQuestionCard({
                   freeTextInput?.multiline ? 'items-start' : 'items-center'
                 )}
               >
-                <span
-                  className={cn(
-                    'flex size-5.5 shrink-0 items-center justify-center rounded-md border',
-                    currentTypedAnswerChosen
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-question-option-border text-muted-foreground'
-                  )}
-                >
-                  {currentTypedAnswerChosen ? (
-                    <Check className="size-3.5" strokeWidth={3} />
-                  ) : (
-                    <Pencil className="size-3.5" />
-                  )}
-                </span>
+                <NativeChatQuestionTypedMark chosen={currentTypedAnswerChosen} />
                 {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
                 {freeTextInput?.multiline ? (
                   // The box draws the field's edge, so the bare field (not the bordered Textarea primitive) sits inside it.
                   <ImeTextarea
                     data-native-chat-answer-field
                     data-native-chat-prompt-card-focus-target={fieldTakesFocus}
-                    disabled={isSubmitting}
+                    disabled={blocked}
                     value={otherText[index]}
                     onChange={(e) => setOther(index, e.target.value)}
                     onClick={autoAdvance.cancel}
@@ -379,7 +374,7 @@ export function NativeChatQuestionCard({
                     rows={1}
                     data-native-chat-answer-field
                     data-native-chat-prompt-card-focus-target={fieldTakesFocus}
-                    disabled={isSubmitting}
+                    disabled={blocked}
                     value={otherText[index]}
                     // Enter submits, so a line break becomes a space; edit in place so a mid-draft paste keeps the caret.
                     onChange={(e) => {
@@ -422,13 +417,11 @@ export function NativeChatQuestionCard({
               label={
                 isSubmitting
                   ? t('components.native-chat.question.sending', 'Sending…')
-                  : CONFIRM_LABEL[confirmLabel]()
+                  : (look?.submitLabel ?? CONFIRM_LABEL[confirmLabel]())
               }
               answered={confirmLabel !== 'skip' && !nothingToSend}
-              enterHint={
-                currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
-              }
-              disabled={isSubmitting || nothingToSend}
+              enterHint={currentAnswered && !blocked && !q.multiSelect && !freeTextInput?.multiline}
+              disabled={blocked || nothingToSend || (requireAnswer && !currentAnswered)}
               onConfirm={() => confirm()}
             />
           </div>
