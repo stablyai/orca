@@ -37,7 +37,12 @@ export function BotGroupApprovalDock({
     return null
   }
   return (
-    <div>
+    // Capped and scrolling, as the worker approval stack is, so a short room keeps every answer and the composer reachable.
+    // Keyed by prompt, so the next prompt opens at its top.
+    <div
+      key={`${member.sessionId}:${session.prompts[0]?.itemId}`}
+      className="scrollbar-sleek max-h-[60%] min-h-0 shrink-0 overflow-y-auto"
+    >
       {waiting.length > 1 ? (
         <div className="mx-auto max-w-3xl px-4">
           <Select value={member.botId} onValueChange={setSelected}>
