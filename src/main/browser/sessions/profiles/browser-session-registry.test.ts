@@ -72,6 +72,10 @@ import {
   deleteManagedBrowserProfile,
   ensureManagedBrowserProfile
 } from './browser-managed-session-profiles'
+import {
+  getBrowserProfileSiteListEntries,
+  setBrowserProfileSiteList
+} from '../site-list/browser-session-site-list'
 import { setBrowserNetworkProxySettingsResolver } from '../proxy/browser-session-proxy'
 import { handleElectronProxyLogin } from '../../../network/electron-proxy-credentials'
 import { applyProxySettingsToSession } from '../../../network/proxy-settings'
@@ -233,5 +237,16 @@ describe('BrowserSessionRegistry', () => {
     await expect(deleteManagedBrowserProfile(owner)).resolves.toBe(true)
     expect(sess.clearStorageData).toHaveBeenCalledTimes(1)
     expect(browserSessionRegistry.getProfile(profile.id)).toBeNull()
+  })
+
+  it("clears a deleted profile's site list from memory", async () => {
+    const owner = { kind: 'worktree' as const, id: 'repo-1::/work/feature' }
+    const profile = await ensureManagedBrowserProfile(owner, 'Workspace: feature')
+    if (!profile) {
+      throw new Error('Expected managed profile')
+    }
+    setBrowserProfileSiteList(profile.id, ['example.com'])
+    expect(await deleteManagedBrowserProfile(owner)).toBe(true)
+    expect(getBrowserProfileSiteListEntries(profile.id)).toEqual([])
   })
 })

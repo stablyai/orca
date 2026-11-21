@@ -1,5 +1,6 @@
 import { retainLocalGoogleCookieClearTarget } from '../../browser/cookies/browser-google-cookie-clear-target'
 import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
+import { registerBrowserSessionSiteListHandlers } from './browser-session-site-list-ipc'
 import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
@@ -183,6 +184,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
+  registerBrowserSessionSiteListHandlers()
   registerGoogleCookieClearHandlers()
   registerClientHostCookieImportHandlers()
 

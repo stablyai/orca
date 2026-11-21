@@ -334,6 +334,22 @@
     }
   },
   "browser": {
+    "siteList": {
+      "label": "Site list",
+      "description": "Only these sites load in the selected profile. One host per line, such as example.com or *.example.com (subdomains only; example.com itself needs its own line). IP addresses and single-word names other than localhost cannot be listed. Leave empty to allow every site.",
+      "save": "Save",
+      "saved": "Site list saved.",
+      "saveFailed": "Could not save the site list.",
+      "errorInvalid": "\"{{entry}}\" is not a host name such as example.com or *.example.com.",
+      "errorTooMany": "At most {{max}} sites are allowed.",
+      "loadFailed": "Couldn't read the saved site lists, so editing is disabled.",
+      "confirmTitle": "Allow more sites in the browser profile \"{{profile}}\"?",
+      "confirmAddDetail": "This profile will also be able to open:",
+      "confirmClearDetail": "The site list will be removed, so this profile can open any site.",
+      "confirmMore": "and {{more}} more",
+      "confirmAllow": "Allow",
+      "confirmCancel": "Cancel"
+    },
     "googleCookieClear": {
       "signInKeyword": "sign-in",
       "unavailable": "Unavailable for this profile on the selected host.",
@@ -355,6 +371,9 @@
       "cantLoadPage": "Can't load this page",
       "blockedTitle": "{{host}} is blocked",
       "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
+      "siteListBlockedTitle": "{{host}} is not on this profile's site list",
+      "siteListBlockedDescription": "To open it, add it in Settings > Browser > Site list.",
+      "siteListBlockedProtocolDescription": "ftp: and file: pages can't open while this profile has a site list.",
       "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
       "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
       "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",

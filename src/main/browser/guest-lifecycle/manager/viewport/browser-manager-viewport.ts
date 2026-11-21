@@ -153,15 +153,18 @@ export abstract class BrowserManagerViewport extends BrowserManagerDevTools {
     }
 
     const dbg = guest.debugger
-    const metricsApplied = await this.runViewportEmulationStep(browserTabId, 'device metrics', () =>
-      override
-        ? sendGuestCdpCommand(guest, 'Emulation.setDeviceMetricsOverride', {
-            width: override.width,
-            height: override.height,
-            deviceScaleFactor: override.deviceScaleFactor,
-            mobile: override.mobile
-          })
-        : dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
+    const metricsApplied = await this.runViewportEmulationStep(
+      browserTabId,
+      'device metrics',
+      () =>
+        override
+          ? sendGuestCdpCommand(guest, 'Emulation.setDeviceMetricsOverride', {
+              width: override.width,
+              height: override.height,
+              deviceScaleFactor: override.deviceScaleFactor,
+              mobile: override.mobile
+            })
+          : dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
     )
     // Record before awaiting again so a later detach cannot be overwritten by stale applied metrics.
     if (metricsApplied) {

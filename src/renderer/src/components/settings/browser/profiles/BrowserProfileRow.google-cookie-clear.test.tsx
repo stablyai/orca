@@ -144,6 +144,7 @@ beforeEach(() => {
     },
     sessionGoogleCookieClearTarget: mocks.target,
     getPageSiteDisplay: vi.fn(async () => null),
+    sessionGetAllowedHosts: vi.fn(async () => []),
     sessionClearGoogleCookies: mocks.clear
   })
   Object.assign(window, { api })

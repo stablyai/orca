@@ -20,6 +20,7 @@ import {
   installBrowserSessionPermissionHandlers,
   type BrowserSessionPermissionOptions
 } from '../../site-settings/permissions/browser-session-permission-handlers'
+import { bindBrowserSessionToSiteListProfile } from '../site-list/browser-session-site-list'
 import { registerBrowserSessionSitePermissions } from '../../site-settings/permissions/browser-site-permission-memory'
 
 const configuredPartitions = new Set<string>()
@@ -65,6 +66,7 @@ export async function installBrowserSessionPartitionPolicies(
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
     userAgentExceptions?: boolean
+    siteListProfile?: boolean
     /** False for a session that blocks all network itself, so no certificate exception can apply. */
     certificateRequestGuard?: boolean
   } = {}
@@ -83,6 +85,9 @@ export async function installBrowserSessionPartitionPolicies(
     return proxyReady
   }
 
+  if (options.siteListProfile !== false) {
+    bindBrowserSessionToSiteListProfile(sess, profile.id)
+  }
   if (options.certificateRequestGuard !== false) {
     browserManager.installCertificateRequestGuard(sess)
   }

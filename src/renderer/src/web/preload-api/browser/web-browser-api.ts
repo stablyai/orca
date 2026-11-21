@@ -92,6 +92,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       Promise.reject(new Error('browser_local_route_unavailable')),
     sessionCreateProfile: () => Promise.resolve(null),
     sessionDeleteProfile: () => Promise.resolve(false),
+    sessionGetAllowedHosts: () => Promise.resolve(null),
+    sessionSetAllowedHosts: () => Promise.resolve({ ok: false, reason: 'unavailable' }),
     sessionImportCookies: () =>
       Promise.resolve({
         ok: false,

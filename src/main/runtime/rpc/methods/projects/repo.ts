@@ -2,6 +2,7 @@ import { defineMethod } from '../../core'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
+import { assertAgentMayChangeRepoBrowserProfile } from '../browser/browser-site-list-agent-gate'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
@@ -165,15 +166,18 @@ export const REPO_METHODS = [
     name: 'repo.update',
     permission: 'workspace',
     params: RepoUpdate,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.updateRepo(
-          params.repo,
-          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
-        ),
-        context
-      )
-    })
+    handler: async (params, context) => {
+      await assertAgentMayChangeRepoBrowserProfile(context, params.repo, params.updates)
+      return {
+        repo: projectRepoVisibilityForClient(
+          await context.runtime.updateRepo(
+            params.repo,
+            params.updates as Parameters<typeof context.runtime.updateRepo>[1]
+          ),
+          context
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'repo.setHidden',

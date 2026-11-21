@@ -59,7 +59,10 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
       throw new Error('browser_route_partition_profile_unavailable')
     }
     // Keep remote profile permissions in the session; their ids may collide with local profiles.
-    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+    return installBrowserRoutePartitionPolicies(profile, partition, {
+      sitePermissions: 'session',
+      siteListProfile: !profileMetadata
+    })
   },
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)

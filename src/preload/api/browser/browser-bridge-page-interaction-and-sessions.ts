@@ -189,6 +189,10 @@ export const browserPageInteractionAndSessionsApi = {
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
+  sessionGetAllowedHosts: (args: { profileId: string }) =>
+    ipcRenderer.invoke('browser:session:getAllowedHosts', args),
+  sessionSetAllowedHosts: (args: { profileId: string; hosts: string[] }) =>
+    ipcRenderer.invoke('browser:session:setAllowedHosts', args),
   sessionImportCookies: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
   sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
