@@ -9,7 +9,8 @@ import { leafIds, WindowSession } from '../testing/terminal-topology-window-sess
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID,
-  openTopologyStore
+  openTopologyStore,
+  closeTrackedTopologyStores
 } from '../testing/terminal-topology-profile-fixture'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -24,7 +25,8 @@ const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

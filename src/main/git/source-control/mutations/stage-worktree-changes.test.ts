@@ -180,4 +180,23 @@ describe('stageWorktreeChanges', () => {
       })
     })
   })
+
+  it('stages the rest when a shared link lives inside a tracked submodule', async () => {
+    // Git refuses any pathspec under a submodule, so naming the link to check-ignore or add fails all.
+    const child = await createRepo()
+    await writeFile(path.join(child, 'README.md'), 'child\n')
+    git(child, ['add', '.'])
+    git(child, ['commit', '-q', '-m', 'child'])
+    const repo = await createRepo()
+    git(repo, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', child, 'vendor/sub'])
+    git(repo, ['commit', '-q', '-m', 'submodule'])
+    const outside = await mkdtemp(path.join(tmpdir(), 'orca-sub-outside-'))
+    tempRoots.push(outside)
+    await symlink(outside, path.join(repo, 'vendor', 'sub', 'node_modules'), 'junction')
+    await writeFile(path.join(repo, 'new.txt'), 'new\n')
+
+    await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['vendor/sub/node_modules'] })
+
+    expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
+  })
 })

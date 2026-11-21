@@ -1,9 +1,6 @@
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
-import {
-  CLAUDE_TOOLS_REFUSED_INSTRUCTION,
-  claudeLaunchServers
-} from '../../../bots/bot-tools-claude'
-import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
+import { claudeLaunchServers } from '../../../bots/bot-tools-claude'
+import { botToolsOffInstruction, type BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import {
   linkedSkillsSection,
@@ -31,7 +28,9 @@ export async function claudeBotSessionOptions(
   // Managed settings that refuse --mcp-config would stop Claude starting; it starts without them.
   const toolsOff = tools.servers.length > 0 && refused.mcpConfig
   const instructions = toolsOff
-    ? [own, CLAUDE_TOOLS_REFUSED_INSTRUCTION].filter(Boolean).join('\n\n')
+    ? [own, botToolsOffInstruction("your organization's Claude Code managed settings refuse them")]
+        .filter(Boolean)
+        .join('\n\n')
     : own
   return {
     ...(instructions

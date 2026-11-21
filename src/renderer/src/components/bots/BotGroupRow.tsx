@@ -60,8 +60,8 @@ export function BotGroupRow({
       avatar={
         <BotGroupFaces
           faces={botGroupFaces(members, (bot) => bot.id)}
-          className="size-9"
-          slot={36}
+          className="size-8"
+          slot={32}
         />
       }
       name={group.name}

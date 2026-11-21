@@ -12,6 +12,7 @@ import {
   REPLY_ONLY_REFUSAL
 } from '../../../bots/bot-look-around-policy'
 import { postConnectorAction } from '../../../connector-cloud/connector-actions'
+import { actionGoesToSlack, slackActionArgs } from '../../../connector-cloud/connector-slack-text'
 import { cloudConversation } from '../../../../shared/connectors/connector-cloud-contract'
 import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
 import { defineMethod } from '../core'
@@ -225,13 +226,14 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
         "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
       )
     }
+    const toSlack = actionGoesToSlack({ verb, ref, title: args.title, conversation })
     const answer = await postConnectorAction(
       cloud,
       {
         botId: bot.id,
         verb,
         ...(place ? { ref: place } : {}),
-        args,
+        args: toSlack ? slackActionArgs(args) : args,
         ...(conversation ? { conversation } : {}),
         ...(conversation && target?.turnId != null ? { turnId: target.turnId } : {}),
         ...(turnFor ? { turnFor } : {})

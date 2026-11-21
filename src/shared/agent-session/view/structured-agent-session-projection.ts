@@ -15,7 +15,11 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
-import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
+import type {
+  AgentSessionAwaitedApproval,
+  AgentSessionAwaitedQuestion
+} from '../agent-session-wire'
+import { structuredAgentSessionAwaitedApproval } from './structured-agent-session-awaited-approval'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { itemBlocks } from './structured-agent-session-item-blocks'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
@@ -169,6 +173,7 @@ export type StructuredAgentSessionStatusProjection = {
   /** The newest async question still waiting for the person's next message; set by the host's
    *  journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
   openAsyncQuestion?: AgentSessionAwaitedQuestion
+  awaitsApproval?: AgentSessionAwaitedApproval
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;
@@ -236,14 +241,14 @@ export function projectStructuredAgentSessionStatusState(
     currentFence,
     request
   )
+  const pending =
+    status === 'attention' ? items.filter(pendingStructuredAgentSessionPrompt(scope)) : []
+  const awaitsApproval = structuredAgentSessionAwaitedApproval(pending[0])
   return {
     latestRequest,
     owesWork:
       status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
-    pendingPromptIds:
-      status === 'attention'
-        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
-        : [],
+    pendingPromptIds: pending.map((item) => item.itemId),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestPrompt),
@@ -251,7 +256,8 @@ export function projectStructuredAgentSessionStatusState(
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
-      ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+      ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
+      ...(awaitsApproval ? { awaitsApproval } : {})
     }
   }
 }
