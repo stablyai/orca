@@ -117,7 +117,12 @@ export function useBotItemsSeenAtOpen(bot: Bot, read: BotItemsRead | null): stri
     void callBotRpc<{ seenEventId?: string }>({ hostId }, 'bots.items.owner.opened', { botId: id })
       .then((result) => {
         if (result?.seenEventId) {
-          openedMarks.set(botRefKey({ hostId, id }), result.seenEventId)
+          // Overlapping opens can reply out of order: keep the newest mark.
+          const key = botRefKey({ hostId, id })
+          const later = laterMark(result.seenEventId, openedMarks.get(key))
+          if (later) {
+            openedMarks.set(key, later)
+          }
         }
       })
       .catch((error: unknown) => console.warn('[bots] items: marking the tab opened failed', error))
