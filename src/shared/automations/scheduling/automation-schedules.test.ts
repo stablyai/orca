@@ -117,7 +117,7 @@ describe('RRULE parts the scheduler drops', () => {
 
 describe('schedule refusal text', () => {
   const accepted =
-    'Use hourly, a 5-field cron expression, or an RRULE of FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE.'
+    'Use hourly, a 5-field cron expression such as "*/10 * * * *" (every 10 minutes), or an RRULE of FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE.'
   const hints = { extraForms: 'hourly', oneTimeRun: 'For a single run, use --once.' }
   const limits = 'Schedules repeat until removed, so DTSTART, UNTIL and COUNT are not supported.'
 
@@ -135,5 +135,9 @@ describe('schedule refusal text', () => {
     ['FREQ=DAILY;INTERVAL=2', `Bad. RRULE part "INTERVAL=2" is not supported. ${accepted}`]
   ])('refuses %j naming what is accepted', (schedule, message) => {
     expect(getAutomationScheduleInputError(schedule, 'Bad.', hints)).toBe(message)
+  })
+
+  it('accepts the cron interval example it gives', () => {
+    expect(getAutomationScheduleInputError('*/10 * * * *')).toBeNull()
   })
 })

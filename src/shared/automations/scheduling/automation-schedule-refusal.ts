@@ -1,6 +1,6 @@
 /** Refusal text for new schedule input: what was wrong, then every accepted form. */
 const ACCEPTED_SCHEDULE_FORMS =
-  'a 5-field cron expression, or an RRULE of FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE'
+  'a 5-field cron expression such as "*/10 * * * *" (every 10 minutes), or an RRULE of FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE'
 
 export type AutomationScheduleRefusalHints = {
   /** Named forms the caller expands before the schedule reaches this check, e.g. presets. */
