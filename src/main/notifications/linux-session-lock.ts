@@ -6,9 +6,15 @@ const MANAGER_PATH = '/org/freedesktop/login1'
 const SESSION = `${LOGIN}.Session`
 const PROPERTIES = 'org.freedesktop.DBus.Properties'
 
-// Orca owns the stdin writer, and only gdbus holds stdout after setup.
-const LOGIND_MONITOR_SCRIPT = `trap 'kill %1 2>/dev/null || :; wait' EXIT
+// On EOF, signal the wrapper's private process group even if gdbus has already exited.
+const LOGIND_MONITOR_SCRIPT = `cleanup() {
+  trap '' HUP INT TERM
+  kill -TERM "-$$" 2>/dev/null || :
+  wait
+}
+trap cleanup EXIT
 trap 'exit' HUP INT TERM
+set +m
 gdbus monitor --system --dest "$1" </dev/null &
 exec 1>&-
 IFS= read -r _ || :`
@@ -96,6 +102,7 @@ function monitorSession(
       program: '/bin/sh',
       args: ['-c', LOGIND_MONITOR_SCRIPT, 'orca-logind-monitor', LOGIN],
       env: { ...process.env, LC_ALL: 'C' },
+      detached: true,
       stdio: ['pipe', 'pipe', 'ignore']
     })
   } catch {
