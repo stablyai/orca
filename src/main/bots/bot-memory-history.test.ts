@@ -373,3 +373,78 @@ describe("a bot's memory history", () => {
     expect(read()).toBe('# Memory\n')
   })
 })
+
+describe('a value whose spacing matters', () => {
+  it("keeps its spaces through a chat's turn end", async () => {
+    const { read, turnEnded, write } = bot(OLD)
+    const spaced = `${OLD}2026-11-06:  header is  X-Token  abc\n- 2026-11-06 sep is "a  b"  \n`
+    write(spaced)
+    await turnEnded()
+    expect(read()).toBe(spaced)
+  })
+
+  it.each([
+    ['sep is a  b', '# Memory\n- sep is a b\n- keep\n'],
+    ['sep is a b', '# Memory\n- sep is a  b\n- keep\n']
+  ])('forgets only %j of two spacings, and Undo puts it back exactly', async (fact, left) => {
+    const file = '# Memory\n- sep is a  b\n- sep is a b\n- keep\n'
+    const { forget, read, rows, turnEnded, undo } = bot(file)
+    expect(await forget(fact)).toBe(true)
+    expect(read()).toBe(left)
+    await turnEnded()
+    expect(read()).toBe(left)
+
+    const [row] = await rows()
+    expect(row.change).toEqual({
+      added: [],
+      removed: [
+        {
+          line: `- ${fact}`,
+          after: fact === 'sep is a b' ? '- sep is a  b' : '# Memory'
+        }
+      ]
+    })
+    expect(await undo(row.id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+
+  it('forgets two identical lines one at a time, and undoes each', async () => {
+    const file = '# Memory\n- 2026-11-01 sep is a  b\n- keep\n- 2026-11-02 sep is a  b\n'
+    const { forget, read, rows, turnEnded, undo } = bot(file)
+    expect(await forget('sep is a  b')).toBe(true)
+    expect(read()).toBe('# Memory\n- keep\n- 2026-11-02 sep is a  b\n')
+    expect(await forget('sep is a  b')).toBe(true)
+    expect(read()).toBe('# Memory\n- keep\n')
+    expect(await forget('sep is a  b')).toBe(false)
+    await turnEnded()
+    expect(read()).toBe('# Memory\n- keep\n')
+
+    const [second, first] = await rows()
+    expect(second.change.removed).toEqual([{ line: '- 2026-11-02 sep is a  b', after: '- keep' }])
+    expect(first.change.removed).toEqual([{ line: '- 2026-11-01 sep is a  b', after: '# Memory' }])
+    expect(await undo(second.id)).toBe(true)
+    expect(read()).toBe('# Memory\n- keep\n- 2026-11-02 sep is a  b\n')
+    expect(await undo(first.id)).toBe(true)
+    expect(read()).toBe(file)
+    await turnEnded()
+    expect(read()).toBe(file)
+
+    // Each Undo is one line too: undoing them takes out just that line again.
+    const [undoFirst] = await rows()
+    expect(undoFirst.change).toEqual({
+      added: [{ line: '- 2026-11-01 sep is a  b', after: '# Memory' }],
+      removed: []
+    })
+    expect(await undo(undoFirst.id)).toBe(true)
+    expect(read()).toBe('# Memory\n- keep\n- 2026-11-02 sep is a  b\n')
+  })
+
+  it('leaves one line when a chat wrote the forgotten fact again before the Undo', async () => {
+    const { forget, read, rows, undo, write } = bot('# Memory\n- old\n')
+    expect(await forget('old')).toBe(true)
+    write('# Memory\n- old\n')
+
+    expect(await undo((await rows())[0].id)).toBe(false)
+    expect(read()).toBe('# Memory\n- old\n')
+  })
+})

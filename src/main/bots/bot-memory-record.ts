@@ -7,13 +7,18 @@ import {
   type BotMemoryChange,
   botMemoryChange,
   botMemoryFactKeys,
+  type BotMemoryLine,
   botMemoryLineKey,
-  dropBotMemoryFact,
   isEmptyBotMemoryChange,
   mergeBotMemoryChanges,
   tagBotMemoryChanges
 } from '../../shared/bot-memory-lines'
-import type { BotMemoryAuthor } from '../../shared/bots/bot-memory-history'
+import {
+  applyBotMemoryLines,
+  botMemoryFactCount,
+  dropBotMemoryFact
+} from '../../shared/bot-memory-line-copies'
+import type { BotMemoryAuthor, BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import type { BotHomeFilesystem } from './bot-home'
 import {
   type BotMemoryHistory,
@@ -22,7 +27,22 @@ import {
 } from './bot-memory-history'
 
 const REWRITE_ATTEMPTS = 3
+
 const NO_CHANGE: BotMemoryChange = { added: [], removed: [] }
+
+/** Of `rows` (newest first), those still in effect: a row and the Undo of it cancel out. */
+function inEffect(rows: readonly BotMemoryHistoryRow[]): BotMemoryHistoryRow[] {
+  const cancelled = new Set<string>()
+  const ids = new Set(rows.map(({ id }) => id))
+  for (const row of rows) {
+    const undone = row.by.kind === 'undo' ? row.by.of : null
+    if (undone !== null && ids.has(undone) && !cancelled.has(row.id) && !cancelled.has(undone)) {
+      cancelled.add(row.id)
+      cancelled.add(undone)
+    }
+  }
+  return rows.filter(({ id }) => !cancelled.has(id))
+}
 
 /** Null: not known yet, so a turn end takes everything in the file as new. `version` counts the
  *  record's changes; `writers` holds the last one each chat made ('' for any other writer). */
@@ -86,14 +106,26 @@ export function createBotMemoryRecord(
    * record took. A missing file starts empty and is created only while still missing. Throws when
    * the file can't be read, every guarded write lost, `make` throws, or `beforeWrite` (given what
    * the file will lose and gain, and run again on a retry) throws: MEMORY.md is then unchanged.
+   * `byLine` makes the change one line per entry (see applyBotMemoryLines), not by fact.
    */
   const change = async (
     botId: string,
     folder: string,
     by: BotMemoryAuthor,
     make: (file: string, record: string | null) => BotMemoryChange | Promise<BotMemoryChange>,
-    beforeWrite?: (made: BotMemoryChange) => Promise<void>
+    beforeWrite?: (made: BotMemoryChange) => Promise<void>,
+    byLine = false
   ): Promise<BotMemoryChange> => {
+    const apply = (
+      text: string,
+      asked: BotMemoryChange
+    ): { text: string; made: BotMemoryChange } => {
+      if (byLine) {
+        return applyBotMemoryLines(text, asked)
+      }
+      const next = applyBotMemoryChange(text, asked)
+      return { text: next, made: botMemoryChange(text, next) }
+    }
     const path = join(folder, 'MEMORY.md')
     let made = NO_CHANGE
     await after(
@@ -104,21 +136,18 @@ export function createBotMemoryRecord(
           const current = await fs.readText(path)
           const base = current ?? ''
           const asked = await make(base, text)
-          const next = applyBotMemoryChange(base, asked)
-          const recorded = text === null ? next : applyBotMemoryChange(text, asked)
+          const { text: next, made: inFile } = apply(base, asked)
+          const inRecord = text === null ? { text: next, made: NO_CHANGE } : apply(text, asked)
           unreadable = current === null
-          await beforeWrite?.(botMemoryChange(base, next))
+          await beforeWrite?.(inFile)
           const wrote =
             current === null
               ? await fs.writeText(path, next, { exclusive: true })
               : next === current || (await fs.replaceText(path, current, next))
           if (wrote) {
-            made = mergeBotMemoryChanges(
-              botMemoryChange(base, next),
-              text === null ? NO_CHANGE : botMemoryChange(text, recorded)
-            )
+            made = mergeBotMemoryChanges(inFile, inRecord.made)
             noted(botId, by, made)
-            return recorded
+            return inRecord.text
           }
         }
         throw new Error(
@@ -131,6 +160,10 @@ export function createBotMemoryRecord(
     )
     return made
   }
+
+  /** `change`, one line per entry: for Forget and Undo, so a fact stated twice loses one line. */
+  const byLine = (...args: [string, string, BotMemoryAuthor, Parameters<typeof change>[3]]) =>
+    change(...args, undefined, true)
 
   return {
     /** What a launch read, while the record is not known yet. A change still running replaces it
@@ -158,25 +191,25 @@ export function createBotMemoryRecord(
     whenUndoneKnown: (botId: string, then: () => void) => history.whenUndoneKnown(botId, then),
     /** Every history write queued so far, landed; for quit. */
     historySettled: () => history.settled(),
-    /** Takes `fact` out of MEMORY.md and the record; false when neither had it. */
+    /** Takes the first line stating `fact` out of MEMORY.md and the record, so a copy of it stays
+     *  until forgotten too; false when neither had it. */
     forget: async (
       botId: string,
       folder: string,
       fact: string,
       by: BotMemoryAuthor
     ): Promise<boolean> => {
-      const made = await change(botId, folder, by, (file, record) => ({
-        added: [],
-        removed: [file, record ?? ''].flatMap(
-          (text) => botMemoryChange(text, dropBotMemoryFact(text, fact).text).removed
-        )
-      }))
+      const made = await byLine(botId, folder, by, (file, record) => {
+        const line =
+          dropBotMemoryFact(file, fact).dropped ?? dropBotMemoryFact(record ?? '', fact).dropped
+        return { added: [], removed: line ? [line] : [] }
+      })
       return made.removed.length > 0
     },
-    /** Puts back what history row `id` changed, leaving alone any fact a later change touched or
-     *  that is gone; false when nothing was left to undo. */
+    /** Puts back what history row `id` changed, line for line, leaving alone any fact a later
+     *  change touched or that is gone; false when nothing was left to undo. */
     undo: async (botId: string, folder: string, id: string): Promise<boolean> => {
-      const made = await change(botId, folder, { kind: 'undo', of: id }, async (file, record) => {
+      const made = await byLine(botId, folder, { kind: 'undo', of: id }, async (file, record) => {
         // Read on the bot's queue, so the changes queued ahead of this Undo count as later.
         const rows = await history.list(botId)
         const index = rows.findIndex((entry) => entry.id === id)
@@ -185,23 +218,27 @@ export function createBotMemoryRecord(
           throw new Error('This change can’t be undone.')
         }
         const later = new Set(
-          rows
-            .slice(0, index)
-            .flatMap(({ change: { added, removed } }) =>
-              [...added, ...removed].map(botMemoryLineKey)
-            )
+          inEffect(rows.slice(0, index)).flatMap(({ change: { added, removed } }) =>
+            [...added, ...removed].map(botMemoryLineKey)
+          )
         )
         const present = new Set([...botMemoryFactKeys(file), ...botMemoryFactKeys(record ?? '')])
         const live = row.change.added.filter(
           (line) => present.has(botMemoryLineKey(line) ?? '') && !later.has(botMemoryLineKey(line))
         )
         // An edit whose new words were changed since or are gone was superseded: the old words
-        // stay out.
+        // stay out. A line on disk more often than in the record was written again since: it stays.
         const superseded = live.length < row.change.added.length
+        const copies = (text: string, line: BotMemoryLine): number =>
+          botMemoryFactCount(text, botMemoryLineKey(line))
         return {
           added: superseded
             ? []
-            : row.change.removed.filter((line) => !later.has(botMemoryLineKey(line))),
+            : row.change.removed.filter(
+                (line) =>
+                  !later.has(botMemoryLineKey(line)) &&
+                  copies(file, line) <= copies(record ?? file, line)
+              ),
           removed: live
         }
       })

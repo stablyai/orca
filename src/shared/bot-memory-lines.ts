@@ -25,7 +25,7 @@ const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
 const FENCE = /^\s*(`{3,}|~{3,})/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
-function splitLines(text: string): { lines: string[]; eol: string } {
+export function splitLines(text: string): { lines: string[]; eol: string } {
   return { lines: text.split(/\r?\n/), eol: text.includes('\r\n') ? '\r\n' : '\n' }
 }
 
@@ -107,19 +107,22 @@ function factParts(raw: string): FactParts | null {
 /**
  * Orca's marks on the lines `after` has that `before` didn't. A fact `before` already had, however
  * the line was rewritten, keeps its old mark or none; a new one gets `label` (null: the owner's).
- * Whatever source a changed line claims is dropped either way.
+ * Whatever source a changed line claims is dropped either way; a line with none to drop and no mark
+ * to add stays byte for byte.
  */
 export function tagBotMemoryChanges(before: string, after: string, label: string | null): string {
   const earlier = new Map<string, number>()
   const known = new Map<string, string | null>()
+  // The same words spaced otherwise are another fact, but came from where the old one did.
+  const respaced = new Map<string, string | null>()
   const was = splitLines(before).lines
   lineFacts(was).forEach((fact, index) => {
     // Only facts count as already there: a line a fence hid before is new once it is a fact.
     if (fact) {
       earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
-    }
-    if (fact && !known.has(factKey(fact.text))) {
-      known.set(factKey(fact.text), fact.source)
+      const key = factKey(fact.text)
+      known.set(key, leastTrusted(known.get(key), fact.source))
+      respaced.set(spacingAside(key), leastTrusted(respaced.get(spacingAside(key)), fact.source))
     }
   })
   const { lines, eol } = splitLines(after)
@@ -134,29 +137,31 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
       if (!fact || !text) {
         return raw
       }
-      const kept = known.get(factKey(fact.text))
-      return factLine(fact.prefix, fact.date, text, kept === undefined ? label : kept)
+      const key = factKey(fact.text)
+      const kept = known.has(key) ? known.get(key) : respaced.get(spacingAside(key))
+      const mark = kept === undefined ? label : kept
+      if (text === fact.text && !raw.includes(BOT_MEMORY_SOURCE_SEPARATOR)) {
+        return mark ? `${raw.trimEnd()}${BOT_MEMORY_SOURCE_SEPARATOR}${mark}` : raw
+      }
+      return factLine(fact.prefix, fact.date, text, mark)
     })
     .join(eol)
 }
 
-/** `text` without the lines stating `fact`, given as its words or as a whole line. */
-export function dropBotMemoryFact(text: string, fact: string): { text: string; dropped: number } {
-  const wanted = factParts(`- ${fact.trim().replace(/^[-*]\s+/, '')}`)
-  const key = wanted ? factKey(wanted.text) : ''
-  const { lines, eol } = splitLines(text)
-  const facts = lineFacts(lines)
-  const kept = lines.filter((_raw, index) => {
-    const parts = facts[index]
-    return key === '' || !parts || factKey(parts.text) !== key
-  })
-  return { text: kept.join(eol), dropped: lines.length - kept.length }
+/** Of two marks for one fact, the outside one: an outsider's words never pass as the owner's. */
+function leastTrusted(seen: string | null | undefined, source: string | null): string | null {
+  return seen ?? source
+}
+
+/** Linear: one greedy run with nothing after it to backtrack into. */
+function spacingAside(key: string): string {
+  return key.replace(/\s+/g, ' ')
 }
 
 /** A fact line, and the non-blank line it followed (null: the top of the file). */
 export type BotMemoryLine = { line: string; after: string | null }
 
-/** What a write did to MEMORY.md's facts, by their words: dates, marks and spacing aside. */
+/** What a write did to MEMORY.md's facts, by their words: dates and marks aside. */
 export type BotMemoryChange = { added: BotMemoryLine[]; removed: BotMemoryLine[] }
 
 export function isEmptyBotMemoryChange(change: BotMemoryChange): boolean {
@@ -169,7 +174,7 @@ function rawFactKey(raw: string): string | null {
 }
 
 /** Each line's fact key in `text`, fences read: null for a line that states no fact. */
-function lineKeys(lines: readonly string[]): (string | null)[] {
+export function lineKeys(lines: readonly string[]): (string | null)[] {
   return lineFacts(lines).map((fact) => (fact ? factKey(fact.text) : null))
 }
 
@@ -264,7 +269,7 @@ export function botMemorySourceLink(source: string): { text: string; url: string
   return linked ? { text: linked[1], url: linked[2] } : { text: source, url: null }
 }
 
-/** A fact's identity: its text without Orca's mark, spacing aside. */
+/** A fact's identity: its text without Orca's mark, exactly, since its spacing can be the value. */
 function factKey(text: string): string {
   return oneLine(text)
 }
@@ -291,9 +296,26 @@ export function findBotMemoryFact(text: string, fact: BotMemoryFact): BotMemoryF
   return facts.find((entry) => same(entry) && entry.line === fact.line) ?? facts.find(same)
 }
 
-/** One fact is one line. */
+/** One fact is one line: a line break and the spaces around it become one space, and every other
+ *  space stays, since it can be the value. One pass, so a long run of spaces costs no backtracking. */
 function oneLine(fact: string): string {
-  return fact.replace(/\s+/g, ' ').trim()
+  let line = ''
+  // Spaces after the last character kept, and whether a line break came since it.
+  let spaces = ''
+  let broke = false
+  for (const char of fact) {
+    if (char === ' ' || char === '\t') {
+      spaces += char
+    } else if (char === '\n' || char === '\r' || char === '\u2028' || char === '\u2029') {
+      spaces = ''
+      broke = true
+    } else {
+      line += (broke ? ' ' : spaces) + char
+      spaces = ''
+      broke = false
+    }
+  }
+  return line.trim()
 }
 
 function factLine(

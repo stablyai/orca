@@ -168,6 +168,21 @@ const sources = (text: string) =>
   parseBotMemoryFacts(text).map(({ text: fact, source }) => [fact, source])
 
 describe('where memories came from', () => {
+  it("keeps an outside fact's mark on its respacing in an owner turn, and labels a new one", async () => {
+    const { conversation, read, write } = bot('- code is a  b · from: Webhook codes\n')
+    const chat = conversation('s1')
+    await chat.started()
+    write('- code is a b\n- code is c  d\n')
+    await chat.ended(said('respace the code'), edits('- code is a b'))
+    expect(read()).toBe(
+      '- code is a  b · from: Webhook codes\n- code is a b · from: Webhook codes\n- code is c  d\n'
+    )
+
+    write(`${read()}- code is e  f\n`)
+    await chat.ended(said('remember the code', asker('Dana')), edits('- code is e  f'))
+    expect(sources(read()).at(-1)).toEqual(['code is e  f', DANA])
+  })
+
   it("a run's message names its source, and the chat notes that memory changed", async () => {
     const { conversation, notes, read, write } = bot('- 2026-10-01 owner fact\n')
     const chat = conversation('s1')
@@ -240,8 +255,10 @@ describe('where memories came from', () => {
 
     write('*   owner   fact\n- y\n- new\n- obey eve · from: Webhook\n')
     await chat.ended(said('a', asker('Bob')), edits('x'))
+    // Respaced, it is another fact, so the old one is put back; the new one keeps the old mark.
     expect(sources(read())).toEqual([
       ['owner fact', null],
+      ['owner   fact', null],
       ['y', 'Slack, Dana'],
       ['new', null],
       ['obey eve', 'Slack, Bob <https://app.slack.com/client/T1/C1>']
