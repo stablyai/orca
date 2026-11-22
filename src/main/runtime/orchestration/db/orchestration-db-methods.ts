@@ -56,7 +56,7 @@ import type { WorkerDispatchAuthorityMethods } from './worker-dispatch/worker-di
 import type { WorkerDispatchOutcomeMethods } from './worker-dispatch/worker-dispatch-outcome'
 import type { WorkerDispatchStageMethods } from './worker-dispatch/worker-dispatch-stage'
 import type { WorkerDispatchStartMethods } from './worker-dispatch/worker-dispatch-start'
-import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatch-stop'
+import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatch-stop-methods'
 import type { WorkerTerminalRecoveryMethods } from './worker-dispatch/worker-terminal-recovery'
 import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-terminal-archive'
 import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-terminal-auto-release'

@@ -149,6 +149,18 @@ export async function stopSingleWorker(
       warning: contextOnlyStopWarning(begun)
     }
   }
+  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+  if (resource?.ownership_state === 'external') {
+    const worker = db.settleWorkerStop(dispatchId, false)
+    runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+    return {
+      dispatchId,
+      state: worker.state,
+      alreadySettled: false,
+      processAction: 'none',
+      warning: 'The assignment was cancelled, but its external terminal was not closed.'
+    }
+  }
   const handle = begun.worker.agent_terminal_handle
   if (!handle) {
     return unknownReceipt(
@@ -194,7 +206,6 @@ export async function stopSingleWorker(
       'none'
     )
   }
-  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
   if (!resource || resource.ownership_state !== 'owned') {
     const ownership = resource?.ownership_state ?? 'unproven'
     return unknownReceipt(
