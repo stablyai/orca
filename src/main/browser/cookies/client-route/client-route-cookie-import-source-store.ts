@@ -73,6 +73,18 @@ export function recordClientRouteCookieImportSource(args: {
   persist(next)
 }
 
+export function forgetClientRouteCookieImportSource(args: {
+  environmentId: string
+  profileId: string
+}): void {
+  const key = entryKey(args.environmentId, args.profileId)
+  if (key in load()) {
+    const next = { ...load() }
+    delete next[key]
+    persist(next)
+  }
+}
+
 export function clientRouteCookieImportSources(
   environmentId: string
 ): Record<string, BrowserSessionProfileSource> {
