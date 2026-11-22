@@ -65,13 +65,3 @@ export function resetLinearAgentSkillSetupReminderState(): void {
   reminderStateByRuntimeKey.clear()
   nextActivationId = 0
 }
-
-export function getLinearAgentSkillSetupReminderStateCountForTests(): number {
-  return reminderStateByRuntimeKey.size
-}
-
-export function hasLinearAgentSkillSetupReminderStateForTests(
-  localDismissStorageKey: string
-): boolean {
-  return reminderStateByRuntimeKey.has(localDismissStorageKey)
-}
