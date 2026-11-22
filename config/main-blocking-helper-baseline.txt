@@ -741,7 +741,7 @@
 3 src/main/linear/projects/linear-project-queries.ts
 1 src/main/linear/projects/linear-project-team-queries.ts
 5 src/main/linear/teams/linear-team-queries.ts
-7 src/main/macos-permissions/macos-tcc-prompt-notice.ts
+6 src/main/macos-permissions/macos-tcc-prompt-notice.ts
 7 src/main/managed-data-accounts/credential-capture.ts
 1 src/main/managed-data-accounts/profile-removal.ts
 2 src/main/managed-data-accounts/service.ts
@@ -1468,7 +1468,7 @@
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
 2 src/main/windows/windows-directory-acl.ts
-15 src/main/windows/windows-process-table.ts
+11 src/main/windows/windows-process-table.ts
 3 src/main/worker-threads/forked-child-entry-path.ts
 2 src/main/worker-threads/worker-send-ledger.ts
 2 src/main/workspace-hooks/hook-orca-cli-env.ts

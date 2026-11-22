@@ -21180,9 +21180,6 @@
           "multipleErrorsCount_other": "无法检查 {{count}} 个仓库（{{names}}）。部分工作区可能未显示。请刷新后重试",
           "readyCount_other": "找到 {{count}} 个工作区"
         },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "评审 Alpha 清理"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
