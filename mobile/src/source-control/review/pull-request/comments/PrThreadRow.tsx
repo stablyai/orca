@@ -91,6 +91,8 @@ export function PrThreadRow({
   const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // The drawn web menu renders inside this row, so a click in it would bubble to the row's press.
+  const [menuOpen, setMenuOpen] = useState(false)
   const root = getPRCommentGroupRoot(group)
   const replies = group.kind === 'thread' ? group.replies : []
   const lastReply = replies.at(-1)
@@ -153,7 +155,7 @@ export function PrThreadRow({
           <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : null}
         {menuGroups.length > 0 ? (
-          <NativeMenu groups={menuGroups}>
+          <NativeMenu groups={menuGroups} onOpenChange={setMenuOpen}>
             {(openMenu) => (
               <Pressable
                 onPress={openMenu}
@@ -254,7 +256,7 @@ export function PrThreadRow({
       {openThread ? (
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          onPress={openThread}
+          onPress={menuOpen ? undefined : openThread}
         >
           {content}
         </Pressable>
