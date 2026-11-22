@@ -380,4 +380,30 @@ describe('writeFileAtomically', () => {
       cleanup()
     }
   })
+
+  it('keeps a newer edit saved while the file is held on a filesystem with no hard links', () => {
+    setup()
+    const link = fsMock.linkSync.getMockImplementation()!
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(target, 'user edit\n')
+      fsMock.linkSync.mockImplementation(() => {
+        throw Object.assign(new Error('operation not supported'), { code: 'ENOTSUP' })
+      })
+      const undo = onFirstCallTo(fsMock.renameSync, isHeld, (source, destination) => {
+        fsMock.renameSync.getMockImplementation()!(source, destination)
+        writeFileSync(target, 'newer edit\n')
+      })
+
+      expect(writeFileAtomicallyIfUnchanged(target, 'user edit\n', 'mirror\n')).toBe(false)
+      undo()
+      expect(readFileSync(target, 'utf-8')).toBe('newer edit\n')
+      const kept = readdirSync(dir).filter((name) => name.includes('.orca-kept-'))
+      expect(kept).toHaveLength(1)
+      expect(readFileSync(join(dir, kept[0]), 'utf-8')).toBe('user edit\n')
+    } finally {
+      fsMock.linkSync.mockImplementation(link)
+      cleanup()
+    }
+  })
 })

@@ -43,15 +43,10 @@ type TabsByWorktree = Record<string, Tab[]>
 type RowState = WorktreeRuntimeOwnerState & { unifiedTabsByWorktree?: TabsByWorktree }
 const EMPTY: TabsByWorktree = {}
 let rowLedger: RowLedger | undefined
-let aliasBuilds = 0
 let visits = 0
 let paneKeyEncodes = 0
-export function orchestrationRowWorkForTest(): {
-  aliasBuilds: number
-  visits: number
-  paneKeyEncodes: number
-} {
-  return { aliasBuilds, visits, paneKeyEncodes }
+export function orchestrationRowWorkForTest(): { visits: number; paneKeyEncodes: number } {
+  return { visits, paneKeyEncodes }
 }
 export const aliasKey = (host: string, key: string) => `${host}\0${key}`
 const reuseKey = (tabId: string, sessionId: string) => `${tabId}\0${sessionId}`
@@ -250,7 +245,6 @@ export function rowIdentities(state: RowState): RowIdentities {
     rowLedger.source = source
     return rowLedger.rows
   }
-  aliasBuilds++
   const changes = rowLedger && owned ? readTabMapChanges(source, rowLedger.source) : null
   if (
     rowLedger &&

@@ -70,7 +70,11 @@ export async function getPRByNumber(
   knownPullRequestData?: PullRequestLookupData | null,
   options: { includeStackSummary?: boolean } & PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null> {
-  const reads = { checkPageLimit: options.checkPageLimit, userRefresh: options.userRefresh }
+  const reads = {
+    checkPageLimit: options.checkPageLimit,
+    userRefresh: options.userRefresh,
+    batchSidebar: options.batchSidebar
+  }
   try {
     let sidebarData: Awaited<ReturnType<typeof readSharedPullRequestSidebarQuery>>
     try {

@@ -43,6 +43,7 @@ import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
+import { BotItemLoading } from './BotItemLoading'
 
 const NO_FOLDERS: never[] = []
 
@@ -54,6 +55,7 @@ export function BotItemView({
   commentRef,
   nav,
   onShown,
+  onLoading,
   onGone
 }: {
   bot: Bot
@@ -66,6 +68,7 @@ export function BotItemView({
   nav?: React.ReactNode
   /** Called once, when the item first shows. */
   onShown?: (item: BotItem) => void
+  onLoading?: () => (() => void) | undefined
   onGone?: (uid: string) => void
 }): React.JSX.Element {
   const view = useBotItemView(bot, uid, listed)
@@ -82,13 +85,14 @@ export function BotItemView({
       told.current = true
       onShown?.(item)
     }
-  }, [item, onShown])
-  const notice = deleted ? <BotItemDeletedNotice /> : null
+    return !item && !view.failed && !deleted ? onLoading?.() : undefined
+  }, [item, onShown, view.failed, deleted, onLoading])
   if (!item) {
     return (
       <BotItemUnread takeFocus={takeFocus} failed={view.failed} deleted={deleted} nav={nav}>
-        {notice}
+        {deleted ? <BotItemDeletedNotice /> : null}
         {view.failed ? <BotItemsReadFailed onRetry={view.retry} /> : null}
+        {!view.failed && !deleted ? <BotItemLoading /> : null}
       </BotItemUnread>
     )
   }
@@ -97,7 +101,7 @@ export function BotItemView({
       bot={bot}
       view={view}
       item={item}
-      notice={notice}
+      notice={deleted ? <BotItemDeletedNotice /> : null}
       deleted={deleted}
       takeFocus={takeFocus}
       commentRef={commentRef}
@@ -203,13 +207,12 @@ export function BotItemBody({
     isVisible: true
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
-  const sendComment = (
-    text: string,
-    paths: readonly string[] = [],
-    questionId?: string,
-    plain?: boolean
-  ): void => {
-    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId, plain)
+  const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (
+    text,
+    paths = [],
+    ...rest
+  ) => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, ...rest)
     jumpToLatest()
   }
   const sendLatest = useLatestHandler(sendComment)

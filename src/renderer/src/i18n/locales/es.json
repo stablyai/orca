@@ -5693,7 +5693,7 @@
           "removeWithChildrenGit_other": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeWithChildrenGit_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeSingleFolderFromOrca": "Lo quita de Orca. La carpeta en el disco se conserva.",
-          "deleteSingleWorktreeAndBranch": "Elimina el worktree y su rama (se conserva si no está fusionada)."
+          "deleteSingleWorktreeAndBranch": "Elimina el worktree y los cambios locales. También elimina su rama si ya se fusionó."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Mostrar rutas cargadas",
@@ -17277,7 +17277,6 @@
           "failed7d": "Fallidas · 7 días",
           "automation": "Automatización",
           "triggered": "Activada",
-          "trigger": "Activar",
           "loading": "Cargando ejecuciones…",
           "noRuns": "Aún no hay ejecuciones",
           "emptyDescription": "Las ejecuciones aparecerán aquí después de activar una automatización.",
@@ -17404,11 +17403,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aún no hay carreras.",
-          "13988187b3": "Fichas",
           "86a248187e": "Gastar",
           "149c0b49c7": "Espacio de trabajo",
           "8faaa00726": "Correr",
-          "a00e38d1a3": "—",
           "historyUnavailable": "El historial de ejecuciones no está disponible desde este host. Esto no significa que la automatización haya fallado ni que no tenga ejecuciones."
         },
         "AutomationSchedulePicker": {
@@ -17478,7 +17475,6 @@
           "missingWorkspace": "Espacio de trabajo ausente",
           "usageUnavailable": "Uso no disponible",
           "noRunUsageYet": "Aún no hay uso de ejecución",
-          "noWorkspace": "Sin espacio de trabajo",
           "latestSavedOutput": "Última salida guardada",
           "fullOutputUnavailable": "No se pudo cargar la salida completa.",
           "retryFullOutput": "Reintentar",
@@ -17804,7 +17800,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} gastados",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -19438,7 +19438,17 @@
         "skip": "Omitir",
         "sending": "Enviando…",
         "terminalRequired": "Responda esta pregunta OMP en la terminal.",
-        "openTerminal": "Responder en la terminal"
+        "openTerminal": "Responder en la terminal",
+        "recommended": "Recomendado",
+        "stepAnswered": "{{value0}}, respondida",
+        "stepOf": "{{value0}} de {{value1}}",
+        "answered": "Respondida",
+        "title": "Pregunta",
+        "previous": "Pregunta anterior",
+        "nextQuestion": "Siguiente pregunta",
+        "back": "Atrás",
+        "skipAndSubmit": "Omitir y enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
@@ -19520,12 +19530,10 @@
         "steerHint": "Enviar ahora, mientras el agente sigue trabajando",
         "sendHint": "Enviar este mensaje ahora",
         "delete": "Eliminar",
-        "moreActions": "Más acciones",
         "editMessage": "Editar mensaje",
         "showFullMessage": "Mostrar el mensaje completo",
         "showLess": "Mostrar menos",
         "withdrawnHold": "Detenido antes de enviarse",
-        "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
         "paused": "En pausa",
         "resume": "Reanudar",
         "fromSender": "De",
@@ -19541,14 +19549,16 @@
         "imageCount_one": "{{count}} imagen",
         "imageCount_other": "{{count}} imágenes",
         "imageCount_many": "{{count}} imágenes",
-        "collapse": "Contraer",
-        "expand": "Expandir",
         "queued": "En cola",
         "clearAll": "Borrar todo",
         "moveChanged": "La cola cambió antes de este movimiento. Intenta arrastrar el mensaje de nuevo.",
         "reorderHint": "Arrastra para reordenar o usa las teclas de flecha arriba y abajo.",
         "reorderMessage": "Reordenar mensaje",
-        "imageCount": "{{count}} imágenes"
+        "imageCount": "{{count}} imágenes",
+        "couldNotSend": "No se pudo enviar",
+        "retry": "Reintentar",
+        "showLessRows": "Mostrar menos",
+        "moreRows": "+{{value0}} más"
       },
       "thought": "Pensó",
       "thoughtForDuration": "Pensó durante {{duration}}",
@@ -20008,6 +20018,9 @@
       },
       "splitRight": "Dividir a la derecha",
       "splitDown": "Dividir hacia abajo",
+      "dock": {
+        "label": "Cuadro de mensaje y solicitudes"
+      },
       "automationSaved": {
         "openFullPage": "Abrir página"
       },
@@ -20102,9 +20115,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Revisar la limpieza alfa"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -21260,7 +21270,8 @@
         "safariFullDiskAccess": "macOS denegó el acceso a las cookies de Safari. Concede a Orca acceso total al disco en Configuración del sistema → Privacidad y seguridad → Acceso total al disco.",
         "connectionEnded": "La conexión con este servidor se interrumpió durante la importación. Vuelve a conectarte e inténtalo de nuevo.",
         "serverRepaired": "Este servidor se volvió a emparejar durante la importación. Inténtalo de nuevo.",
-        "macFullDiskAccess": "macOS denegó el acceso a las cookies de {{browser}}. Concede a Orca acceso total al disco en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco y reinicia Orca."
+        "macFullDiskAccess": "macOS denegó el acceso a las cookies de {{browser}}. Concede a Orca acceso total al disco en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco y reinicia Orca.",
+        "sshHostDisconnected": "Esta página ya no está conectada a través de su host SSH. Vuelve a conectarte e inténtalo de nuevo."
       },
       "notice": {
         "importedMore_one": "Se importó {{count}} cookie para {{domains}} +{{more}} más. Recarga la página para usarla.",
@@ -21270,6 +21281,13 @@
         "imported_other": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navegadores en este dispositivo",
+        "destination": "Importa al navegador de {{host}}.",
+        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies.",
+        "stored": "Guardado en el navegador de {{host}}.",
+        "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
       }
     },
     "passwords": {

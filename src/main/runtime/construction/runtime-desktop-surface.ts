@@ -41,6 +41,10 @@ export type RuntimeDesktopSurface = {
   encodeRepoIconPng?(bytes: Uint8Array, maxEdge: number): Uint8Array | null
   /** A GET answering redirects with the 3xx, without proxy login; absent where fetch already does. */
   fetchRepoIcon?(url: string, init: RequestInit): Promise<Response>
+  /** A GET on the page's own browser session, so the icon leaves by the page's route; null without a live guest here. */
+  browserTabFaviconFetch?(
+    browserPageId: string
+  ): ((url: string, init: RequestInit) => Promise<Response>) | null
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {

@@ -44,16 +44,10 @@ export function recordOrchestrationProducer(
   producerByContext.set(context, host)
 }
 let cache: { inputs: unknown[]; contexts: Contexts } | undefined
-let builds = 0
 let visits = 0
-export function visibleOrchestrationWorkForTest(): {
-  builds: number
-  aliasBuilds: number
-  visits: number
-  paneKeyEncodes: number
-} {
+export function visibleOrchestrationWorkForTest(): { visits: number; paneKeyEncodes: number } {
   const rows = orchestrationRowWorkForTest()
-  return { builds, ...rows, visits: visits + rows.visits }
+  return { visits: visits + rows.visits, paneKeyEncodes: rows.paneKeyEncodes }
 }
 type TerminalInputs = Pick<
   VisibleOrchestrationState,
@@ -157,7 +151,6 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   if (cache && inputs.every((value, index) => value === cache?.inputs[index])) {
     return cache
   }
-  builds++
   const { aliases, canonical } = rows
   const contexts: Contexts = Object.fromEntries([])
   const visibleKey = (key: string, host: string | null) => {

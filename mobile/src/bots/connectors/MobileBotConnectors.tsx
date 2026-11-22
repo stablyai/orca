@@ -14,7 +14,7 @@ import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openGitHubLink } from './connector-link'
 import { useMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
@@ -250,7 +250,7 @@ function ConnectorsPage(
             id: 'github',
             added: bot.github !== null,
             // Another org: GitHub's install page, where the owner picks it, as the desktop does.
-            ...(githubInstallUrl ? { addAnother: () => openExternalLink(githubInstallUrl) } : {}),
+            ...(githubInstallUrl ? { addAnother: () => openGitHubLink(githubInstallUrl) } : {}),
             add: () => setPage({ kind: 'github-setup', from: page }),
             manage
           },

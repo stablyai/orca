@@ -46,7 +46,3 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
 export async function getCheapProcessTableSnapshot(): Promise<CheapProcessTableRow[]> {
   return withEvidenceBudget(cheapProcessTableReader.getSnapshot())
 }
-
-export function resetCheapProcessTableSnapshotForTests(): void {
-  cheapProcessTableReader.reset()
-}
