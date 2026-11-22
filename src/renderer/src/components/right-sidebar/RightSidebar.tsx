@@ -43,6 +43,7 @@ import {
 } from './activity-bar/activity-bar-position-menu'
 import { RightSidebarTopActivityBar } from './activity-bar/right-sidebar-top-activity-bar'
 import { cancelActivityBarFocusHandoff } from './activity-bar/activity-bar-focus-handoff'
+import { activityBarDragAnnouncements } from './activity-bar/activity-bar-drag-announcements'
 import {
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_PADDING,
   RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_PADDING
@@ -277,29 +278,7 @@ function RightSidebarInner(): React.JSX.Element {
       modifiers={[
         (args) => ({ ...args.transform, ...(activityBarPosition === 'top' ? { y: 0 } : { x: 0 }) })
       ]}
-      accessibility={{
-        announcements: {
-          onDragStart: ({ active }) =>
-            t('activityBar.dragStart', 'Picked up {{name}}', {
-              name: orderedItems.find((item) => item.id === active.id)?.title ?? ''
-            }),
-          onDragOver: ({ active, over }) =>
-            over
-              ? t('activityBar.dragOver', '{{name}} over {{target}}', {
-                  name: orderedItems.find((item) => item.id === active.id)?.title ?? '',
-                  target: orderedItems.find((item) => item.id === over.id)?.title ?? ''
-                })
-              : undefined,
-          onDragEnd: ({ active }) =>
-            t('activityBar.dragEnd', 'Dropped {{name}}', {
-              name: orderedItems.find((item) => item.id === active.id)?.title ?? ''
-            }),
-          onDragCancel: ({ active }) =>
-            t('activityBar.dragCancel', 'Cancelled moving {{name}}', {
-              name: orderedItems.find((item) => item.id === active.id)?.title ?? ''
-            })
-        }
-      }}
+      accessibility={{ announcements: activityBarDragAnnouncements(orderedItems, t) }}
       onDragEnd={({ active, over }) => {
         if (!over || active.id === over.id) {
           return
