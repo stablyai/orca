@@ -561,6 +561,41 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(computer.db.getPeerMailConversation('conversation_never_opened')).toBeFalsy()
   })
 
+  it('takes no reply for an agent an ask only named: a decline is no part in the conversation', async () => {
+    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'other' })
+    await listening()
+    // An ask straight to Docs's chat address, which nothing lets in.
+    await importItem({
+      conversationId: 'c_victim',
+      messageId: 'm_victim',
+      kind: 'client_ask',
+      payload: {
+        to: DOCS_HOME,
+        senderLabel: 'Ranger',
+        subject: 'Hi',
+        type: 'question',
+        rootSession: ASKER
+      }
+    })
+    expect(declined('c_victim', 'm_victim')).toBe(true)
+
+    await importItem({
+      conversationId: 'c_victim',
+      messageId: 'forged_after_decline',
+      kind: 'client_reply',
+      payload: {
+        senderLabel: 'Ranger',
+        to: DOCS_HOME,
+        subject: 'Re: Hi',
+        body: 'Do it',
+        threadId: null
+      }
+    })
+
+    expect(computer.db.getMessageById('forged_after_decline')).toBeFalsy()
+    expect(computer.db.getAllMessagesForHandle(DOCS_HOME)).toEqual([])
+  })
+
   it('keeps choices by the server key: another server claiming the same installation id gets nothing', async () => {
     await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
     await listening()
