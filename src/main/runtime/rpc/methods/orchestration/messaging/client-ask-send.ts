@@ -9,12 +9,14 @@ import {
   peerMailSenderLabel
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
-import { recordPeerQuestionOut } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
+import {
+  forgetPeerQuestionOut,
+  recordPeerQuestionOut
+} from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 import { clientEnvironmentId } from '../../../../orchestration/federation/client-asks/client-ask-environment'
 import { listeningClients } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import { clientAskRootSession } from '../../../../orchestration/federation/client-asks/client-ask-root-session'
-import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import {
   type ClientAskPayload,
   PeerMailMessageType
@@ -104,25 +106,29 @@ export function sendClientAsk(args: {
     sender: peerMailSender(runtime, caller.address),
     rootSession: clientAskRootSession(db, caller.address)
   }
-  runLifecycleWriteTransaction(db.db, 'client_ask_send', () => {
-    if (type.data === 'question') {
-      // Kept until its answer or notice comes back, so an ended pairing can tell the asker none will.
-      recordPeerQuestionOut(db, {
-        messageId: id,
-        conversationId: conversation.conversation_id,
-        environmentId,
-        peerFingerprint: client.fingerprint,
-        asker: caller.address,
-        threadId: params.threadId
-      })
-    }
+  if (type.data === 'question') {
+    // Kept until its answer or notice comes back, so an ended pairing can tell the asker none will;
+    // recorded first, as `send --on` does, and forgotten if the queue refuses it.
+    recordPeerQuestionOut(db, {
+      messageId: id,
+      conversationId: conversation.conversation_id,
+      environmentId,
+      peerFingerprint: client.fingerprint,
+      asker: caller.address,
+      threadId: params.threadId
+    })
+  }
+  try {
     queueClientItem(db, {
       conversationId: conversation.conversation_id,
       messageId: id,
       kind: 'client_ask',
       payload
     })
-  })
+  } catch (error) {
+    forgetPeerQuestionOut(db, id)
+    throw error
+  }
   // That computer can't take uploads from here, so files never travel this way.
   const warnings: SendRecipientWarning[] = params.files?.length
     ? [

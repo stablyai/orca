@@ -89,25 +89,22 @@ export async function replyOverPeerMail(args: {
       NOTHING_SENT
     )
   }
-  const remoteParty = route.remote_party
   if (isClientEnvironment(environmentId)) {
     // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
-    runLifecycleWriteTransaction(db.db, 'client_reply', () => {
-      queueClientItem(db, {
-        conversationId: conversation.conversation_id,
-        messageId: id,
-        kind: 'client_reply',
-        payload: {
-          senderLabel,
-          to: remoteParty,
-          subject,
-          body: params.body,
-          threadId,
-          sender: peerMailSender(runtime, replier)
-        } satisfies z.infer<typeof ClientReplyPayload>
-      })
-      db.markAsRead([original.id], { kind: 'reply' })
+    queueClientItem(db, {
+      conversationId: conversation.conversation_id,
+      messageId: id,
+      kind: 'client_reply',
+      payload: {
+        senderLabel,
+        to: route.remote_party,
+        subject,
+        body: params.body,
+        threadId,
+        sender: peerMailSender(runtime, replier)
+      } satisfies z.infer<typeof ClientReplyPayload>
     })
+    db.markAsRead([original.id], { kind: 'reply' })
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
       { message: { id, subject }, to: original.from_handle },
