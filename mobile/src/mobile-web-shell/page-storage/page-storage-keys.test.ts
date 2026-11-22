@@ -89,10 +89,14 @@ describe('what init may carry', () => {
   it('keeps an ordinary value and names the oversized value it drops', () => {
     const held = {
       'orca:terminalTextScale': '1',
+      'orca:nativeChatMarkdownImageSize': 'compact',
       'orca:mobileStructuredSendOperations:v1': 'x'.repeat(PAGE_STORAGE_MAX_VALUE_CHARS + 1)
     }
     const { entries, dropped } = pageStorageEntriesForInit(held)
-    expect(Object.keys(entries)).toEqual(['orca:terminalTextScale'])
+    expect(entries).toEqual({
+      'orca:terminalTextScale': '1',
+      'orca:nativeChatMarkdownImageSize': 'compact'
+    })
     expect(dropped).toEqual(['orca:mobileStructuredSendOperations:v1'])
   })
 

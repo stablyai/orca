@@ -298,7 +298,7 @@ function MobileNativeChatMessageImpl({
       {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]} testID={mobileNativeChatRowId(rowId)}>
         <Marks.MobileNativeChatConnectorMarks message={message} tagged={!agentFrom} end={isUser} />
-        <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
+        <Content onLongPress={onLongPress} userMessage={isUser ? message : undefined}>
           {agentFrom ? (
             <MobileNativeChatAgentMessageCard
               message={message}
