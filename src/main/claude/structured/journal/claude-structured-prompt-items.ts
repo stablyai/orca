@@ -9,6 +9,7 @@ import {
   formatToolInput,
   truncateToolDetail
 } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
+import { nativeChatToolInputText } from '../../../../shared/native-chat/tools/native-chat-tool-input-text'
 import { isPlanApprovalSubject } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { askOptionPreview } from '../../../../shared/native-chat/input/questions/native-chat-ask-option-preview'
 import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
@@ -48,7 +49,13 @@ export function claudePromptIdentity(input: {
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
   const planSubject = isPlanApprovalSubject(prompt.subject) ? prompt.subject : null
-  const detail = truncateToolDetail(planSubject?.text ?? formatToolInput(prompt.input))
+  // A shell approval shows its script verbatim; the whole input object would fold it into JSON (#47064).
+  const detail = truncateToolDetail(
+    planSubject?.text ??
+      nativeChatToolInputText(prompt.input, 'command') ??
+      nativeChatToolInputText(prompt.input, 'cmd') ??
+      formatToolInput(prompt.input)
+  )
   return boundJournalPromptBody({
     kind: 'approval',
     title: prompt.title ?? (planSubject ? 'Review proposed plan' : `Allow ${prompt.toolName}?`),
