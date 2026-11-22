@@ -1,5 +1,5 @@
 import { access, constants } from 'node:fs/promises'
-import { resolveProviderExecPath } from '../../provider-process/provider-process-supervisor'
+import { resolveProviderExecPath } from '../../provider-process/provider-exec-path'
 
 export const FD_CLOSING_EXEC_ARGS = ['--exec-without-inherited-fds', '--'] as const
 

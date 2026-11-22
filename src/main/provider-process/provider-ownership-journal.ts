@@ -41,8 +41,15 @@ const startups = new Map<string, Promise<void>>()
 const MAX_RECORD_BYTES = 16_384
 const availableDirectories = new Map<string, string | null>()
 
+let installedDirectory: string | null = null
+
+/** The terminal daemon owns its relayed agents, so it journals them beside its own runtime state. */
+export function installProviderOwnershipDirectory(directory: string): void {
+  installedDirectory = directory
+}
+
 export function providerOwnershipDirectory(): string {
-  return join(getAppEnvironment().getPath('userData'), 'provider-processes')
+  return installedDirectory ?? join(getAppEnvironment().getPath('userData'), 'provider-processes')
 }
 
 /** This synchronous launch seam checks host capability once, never once per chat. */

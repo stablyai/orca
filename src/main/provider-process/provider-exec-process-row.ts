@@ -4,7 +4,7 @@ import {
   DEADLINE_PASSED,
   monotonicNow
 } from '../../shared/concurrency/deadline-settle-notifier'
-import { resolveProviderExecPath } from './provider-process-supervisor'
+import { resolveProviderExecPath } from './provider-exec-path'
 import type { ProcessRowRead } from './provider-process-row-read'
 
 /** The tiny helper can read exact Darwin births even when the addon's worker pool cannot. */

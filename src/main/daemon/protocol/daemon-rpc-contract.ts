@@ -1,4 +1,5 @@
 import type { HostedProviderRequest } from './daemon-provider-process-protocol'
+import type { ProviderRelayRequest } from './daemon-provider-relay-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -240,6 +241,7 @@ export type TakePendingOutputResult = {
 
 export type DaemonRequest =
   | HostedProviderRequest
+  | ProviderRelayRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
@@ -294,6 +296,17 @@ export type GetSnapshotResult<Snapshot = TerminalSnapshot> = {
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+  /** Daemon-owned chat agents still running (v63+); older daemons omit it. */
+  liveRelays?: number
+}
+
+/** Everything that would end if this daemon stopped: live PTYs plus live chat relays. */
+export function countLiveDaemonSessions(result: ListSessionsResult): number {
+  const relays = result.liveRelays
+  return (
+    result.sessions.filter((session) => session.isAlive).length +
+    (Number.isSafeInteger(relays) && (relays as number) > 0 ? (relays as number) : 0)
+  )
 }
 
 export type ShutdownIfIdleResult = {

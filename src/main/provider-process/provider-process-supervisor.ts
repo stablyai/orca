@@ -1,7 +1,6 @@
-import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { resolveProviderChildEnv, type ProviderProcessLaunch } from './provider-process-launch'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
+import { resolveProviderExecPath } from './provider-exec-path'
 
 /** Time the provider gets to exit on its own after its stdin ends, before SIGTERM. */
 export const PROVIDER_STDIN_END_GRACE_MS = 1_000
@@ -202,6 +201,8 @@ export type ProviderSupervisorOptions = {
   closeRequest?: ProviderCloseRequest
   /** The process the supervisor serves; it must be the supervisor's parent. */
   ownerPid?: number
+  /** The native owner's path, for a host that cannot resolve app resources itself. */
+  ownerExecutable?: string
   stdinEndGraceMs?: number
   sigtermGraceMs?: number
 }
@@ -269,24 +270,6 @@ export function supervisedPosixLaunch(
   }
 }
 
-export function resolveProviderExecPath(platform: NodeJS.Platform = process.platform): string {
-  const app = getAppEnvironment()
-  if (!app.isPackaged()) {
-    return join(
-      app.getAppPath(),
-      'native/provider-exec/.build',
-      `${platform}-${process.arch}`,
-      'orca-provider-exec'
-    )
-  }
-  if (process.resourcesPath) {
-    return platform === 'darwin'
-      ? join(process.resourcesPath, '..', 'MacOS', 'orca-provider-exec')
-      : join(process.resourcesPath, 'bin', 'orca-provider-exec')
-  }
-  return join(app.getAppPath(), 'bin', 'orca-provider-exec')
-}
-
 export function createProviderSpawnSpec(
   launch: ProviderProcessLaunch,
   baseEnv: NodeJS.ProcessEnv,
@@ -295,14 +278,15 @@ export function createProviderSpawnSpec(
     lifetime = 'session',
     closeRequest = 'stdin-end-and-sigterm',
     stdinEndGraceMs = PROVIDER_STDIN_END_GRACE_MS,
-    sigtermGraceMs = PROVIDER_SIGTERM_GRACE_MS
+    sigtermGraceMs = PROVIDER_SIGTERM_GRACE_MS,
+    ownerExecutable
   }: ProviderSupervisorOptions = {}
 ) {
   assertGraceWithin('stdin-end', stdinEndGraceMs, PROVIDER_STDIN_END_GRACE_MS)
   assertGraceWithin('SIGTERM', sigtermGraceMs, PROVIDER_SIGTERM_GRACE_MS)
   const supervised = platform !== 'win32'
   return {
-    program: supervised ? resolveProviderExecPath(platform) : launch.command,
+    program: supervised ? (ownerExecutable ?? resolveProviderExecPath(platform)) : launch.command,
     args: supervised
       ? [
           '--cli-input-fd7',

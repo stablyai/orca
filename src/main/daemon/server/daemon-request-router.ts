@@ -1,5 +1,6 @@
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
+import { answerShutdown, answerShutdownIfIdle } from './daemon-shutdown-requests'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
@@ -15,10 +16,11 @@ import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { DaemonHealthRequests } from '../health/daemon-health-requests'
 import type { TerminalHistorySeedTransferRegistry } from '../history/seed-transfer/terminal-history-seed-transfer-registry'
 import type { TerminalHost } from '../terminal-host/terminal-host'
+import type { ProviderRelayHost } from '../provider-relay/provider-relay-host'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
 import type { DaemonRequest, GetSnapshotRequest } from '../protocol/daemon-rpc-contract'
 
-type DaemonRequestRouterOptions = {
+export type DaemonRequestRouterOptions = {
   host: TerminalHost
   connections: DaemonClientConnections
   lifecycle: DaemonServerLifecycle
@@ -30,6 +32,7 @@ type DaemonRequestRouterOptions = {
   streamDataBatcher: DaemonStreamDataBatcher
   ptySpawnHealthCheck: () => Promise<void>
   log: DaemonFileLog
+  relays: ProviderRelayHost
 }
 
 export class DaemonRequestRouter {
@@ -169,9 +172,12 @@ export class DaemonRequestRouter {
         this.options.host[request.type](request.payload.sessionId)
         return {}
       case 'listSessions':
-        return { sessions: this.options.host.listSessions() }
+        return {
+          sessions: this.options.host.listSessions(),
+          liveRelays: this.options.relays.liveCount
+        }
       case 'shutdownIfIdle':
-        return this.shutdownIfIdle(clientId, request.id)
+        return answerShutdownIfIdle(this.options, clientId, request.id)
       case 'getSnapshot':
         return this.getSnapshot(request.payload)
       case 'getSize':
@@ -189,7 +195,7 @@ export class DaemonRequestRouter {
       case 'asyncIoHealth':
         return this.health.handle(request)
       case 'shutdown':
-        return this.shutdown(clientId, request.id, request.payload.killSessions)
+        return answerShutdown(this.options, clientId, request.id, request.payload.killSessions)
     }
     throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
@@ -229,21 +235,6 @@ export class DaemonRequestRouter {
     return {}
   }
 
-  private shutdownIfIdle(clientId: string, requestId: string): { retiring: boolean } {
-    const client = this.options.connections.get(clientId)
-    const retiring =
-      client !== undefined &&
-      client.streamSocket !== null &&
-      this.options.connections.size === 1 &&
-      this.options.admission.inFlight === 0 &&
-      this.options.host.listSessions().length === 0 &&
-      this.options.connections.hasOnlyTransportsFor(client)
-    if (retiring) {
-      this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)
-    }
-    return { retiring }
-  }
-
   private async getSnapshot({ sessionId: id, ...opts }: GetSnapshotRequest['payload']) {
     const startedAt = performance.now()
     const scrollbackRows =
@@ -259,35 +250,6 @@ export class DaemonRequestRouter {
       })
     }
     return { snapshot }
-  }
-
-  private async shutdown(clientId: string, requestId: string, killSessions: boolean) {
-    this.options.log.log('shutdown', {
-      reason: 'rpc',
-      killSessions: killSessions === true
-    })
-    const serverClose = this.options.lifecycle.beginOrdinaryShutdownFence()
-    if (killSessions) {
-      try {
-        await this.options.host.dispose()
-      } catch (error) {
-        this.options.log.log('shutdown-dispose-failed', {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    }
-    const controlSocket = this.options.connections.get(clientId)?.controlSocket
-    if (controlSocket) {
-      this.options.lifecycle.deferRpcShutdownUntilReply(
-        clientId,
-        requestId,
-        controlSocket,
-        serverClose
-      )
-    } else {
-      this.options.lifecycle.finishRpcShutdownWithoutReply(serverClose)
-    }
-    return {}
   }
 
   private sendExitEvent(
