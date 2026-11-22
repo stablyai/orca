@@ -63,7 +63,3 @@ export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadS
   }
   return hasUnread
 }
-
-export function resetFloatingWorkspaceUnreadSelectorCacheForTest(): void {
-  floatingWorkspaceUnreadCache = null
-}

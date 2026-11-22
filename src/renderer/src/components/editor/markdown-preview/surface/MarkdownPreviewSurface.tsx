@@ -136,7 +136,8 @@ export function MarkdownPreviewSurface({
           fontSize: `${editorFontSize}px`,
           overflowAnchor: largePreview ? 'none' : undefined
         }}
-        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}
+        // Why: blocks get annotation controls exactly when review tools show and a comment owner exists.
+        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}${canShowReviewTools && foundation.commentOwner ? ' has-markdown-review-rail' : ''}`}
       >
         {isSearchOpen ? (
           <MarkdownPreviewSearchBar

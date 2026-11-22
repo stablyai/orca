@@ -1,4 +1,8 @@
-import { unregisteredFolderRefusal } from '../../../shared/worktree/removal/removal'
+import {
+  CheckoutIdentityRefusal,
+  differentCheckoutAtPathError,
+  unregisteredFolderRefusal
+} from '../../../shared/worktree/removal/removal'
 import { usesNativeWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import type { LocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import { lstat } from 'node:fs/promises'
@@ -15,13 +19,21 @@ import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
-import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
+import {
+  failedWorktreeRemovals,
+  persistWorktreeRemovalRecords,
+  worktreeCheckoutExists
+} from './worktree-removal-table'
+import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
+import { readCheckoutMarkerState } from './worktree-removal-gitdir-identity'
 import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath
 } from './worktree-removal-safety'
+
+export { CheckoutIdentityRefusal, differentCheckoutAtPathError }
 
 /** Absent .git or a proven orphan marker can identify a leftover; live or foreign registrations cannot. */
 export async function isUnregisteredRemovalLeftover(
@@ -36,10 +48,40 @@ export async function isUnregisteredRemovalLeftover(
   return canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
 }
 
-export function differentCheckoutAtPathError(worktreePath: string): Error {
-  return new Error(
-    `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
-  )
+/** A leftover whose `.git` names another admin entry is a different checkout restored at this path. */
+export async function assertLeftoverIsRecordedCheckout(
+  record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>,
+  options: LocalWorktreeFilesystemOptions = {}
+): Promise<void> {
+  // A record without identity (written before it existed) cannot prove this folder is the one accepted; it stays listed.
+  if (!record.gitdir) {
+    throw new CheckoutIdentityRefusal(
+      `Orca cannot confirm the folder at ${record.worktreePath} is the checkout you deleted, so it left it in place. Remove the folder yourself.`
+    )
+  }
+  const current = await readCheckoutMarkerState(record.worktreePath, options)
+  if (current.kind !== 'file' || current.identity !== record.gitdir) {
+    throw differentCheckoutAtPathError(record.worktreePath)
+  }
+}
+
+/** For a checkout Git or Windows may already have stripped of its marker: only a marker naming another checkout refuses. */
+export async function assertCheckoutNotReplaced(
+  record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>,
+  options: LocalWorktreeFilesystemOptions = {}
+): Promise<void> {
+  const current = await readCheckoutMarkerState(record.worktreePath, options)
+  if (current.kind === 'absent') {
+    return
+  }
+  if (!record.gitdir) {
+    throw new CheckoutIdentityRefusal(
+      `Orca cannot confirm the checkout at ${record.worktreePath} is the one you deleted, so it left it in place. Remove the folder yourself.`
+    )
+  }
+  if (current.kind !== 'file' || current.identity !== record.gitdir) {
+    throw differentCheckoutAtPathError(record.worktreePath)
+  }
 }
 
 export async function registeredRemovalCheckout(
@@ -148,7 +190,15 @@ export async function isLeftoverStillRemovable(
   if (current.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
-  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current)
+  const removable = await assertUnregisteredLeftoverRemovable(
+    repoPath,
+    record.worktreePath,
+    current
+  )
+  if (removable) {
+    await assertLeftoverIsRecordedCheckout(record, localOptions)
+  }
+  return removable
 }
 
 /** Registered paths use normal deletion; otherwise the folder must be gone or provably this repo's leftover. */
@@ -163,12 +213,26 @@ export async function retryFailedRemovalUnlessRegistered(
     return false
   }
   const failed = failedWorktreeRemovals.get(worktreeId)
-  if (failed && !usesNativeWindowsRemoval(worktreePath, localOptions)) {
-    await assertUnregisteredLeftoverRemovable(
-      failed.repoPath,
-      failed.worktreePath,
-      registeredWorktrees
-    )
+  if (failed) {
+    const native = usesNativeWindowsRemoval(worktreePath, localOptions)
+    const leftover =
+      !native &&
+      (await assertUnregisteredLeftoverRemovable(
+        failed.repoPath,
+        failed.worktreePath,
+        registeredWorktrees
+      ))
+    try {
+      await (native
+        ? assertCheckoutNotReplaced(failed, localOptions)
+        : leftover && assertLeftoverIsRecordedCheckout(failed, localOptions))
+    } catch (error) {
+      // The recorded intent no longer describes this folder; the next delete starts fresh instead of looping on the refusal.
+      if (failed.gitdir && failedWorktreeRemovals.delete(worktreeId)) {
+        void persistWorktreeRemovalRecords()
+      }
+      throw error
+    }
   }
   if (retry() === undefined) {
     return false

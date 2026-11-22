@@ -1,6 +1,7 @@
 // What the owner last published a bot with, so Update link starts from those picks and that note.
 import * as z from 'zod'
 import { BOT_PACKAGE_SETUP_NOTE_MAX } from './bot-package'
+import { BotShareOutsidePickSchema } from './bot-share-skill-picks'
 
 const Names = z.array(z.string().min(1).max(200)).max(64).optional()
 
@@ -11,7 +12,8 @@ export const BotSharePicksSchema = z.object({
     tools: Names,
     schedules: Names,
     eventSuggestions: Names,
-    memory: Names
+    memory: Names,
+    outsideSkills: z.array(BotShareOutsidePickSchema).max(64).optional()
   }),
   setupNote: z.string().max(BOT_PACKAGE_SETUP_NOTE_MAX)
 })

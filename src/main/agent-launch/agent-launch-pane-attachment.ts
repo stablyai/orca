@@ -171,8 +171,3 @@ export function resolveAgentLaunchPaneVerdict(
     ? settleVerdict(pane, isPaneLive)
     : null
 }
-
-export function resetAgentLaunchPanesForTests(): void {
-  runningLaunchesByPane.clear()
-  failedLaunchesByPane.clear()
-}
