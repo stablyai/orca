@@ -115,20 +115,20 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     reattach: { launchNote?: DaemonLaunchNote | null } | undefined
   ): void {
     let agent: TuiAgent | undefined
-    if (
-      identity &&
-      pty.incarnationId === identity.incarnationId &&
-      isTuiAgent(identity.launchAgent)
-    ) {
-      if (reattach?.launchNote === null) {
-        void this.restoreUnnotedLaunchAgent(pty, identity)
-      } else {
-        pty.launchAgent = agent = identity.launchAgent
-      }
+    const fenced =
+      identity && pty.incarnationId === identity.incarnationId && isTuiAgent(identity.launchAgent)
+        ? identity
+        : null
+    const unnoted = reattach?.launchNote === null
+    if (fenced && !unnoted) {
+      pty.launchAgent = agent = fenced.launchAgent
     }
     // An older relay reports no incarnation; that still can't prove the launch gone.
     if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
       this.recordReattachedLaunch(pty, incarnationId, reattach.launchNote, agent)
+    }
+    if (fenced && unnoted) {
+      void this.restoreUnnotedLaunchAgent(pty, fenced, pty.launchEvidence)
     }
   }
 
@@ -147,17 +147,20 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
   }
 
   /** No note: main never armed one (a launch without a recipe) or saw the launch finish, while the
-   *  daemon's launch agent outlives both. Only that agent still in front proves it runs. */
+   *  daemon's launch agent outlives both. Only a shell in front proves it gone; an unreadable
+   *  foreground (Windows) keeps the restore. */
   private async restoreUnnotedLaunchAgent(
     pty: RuntimePtyWorktreeRecord,
-    identity: ReattachedLaunchIdentity
+    identity: ReattachedLaunchIdentity,
+    evidence: LaunchEvidence | undefined
   ): Promise<void> {
     const foreground = await this.readLaunchedAgentForeground(
       pty.ptyId,
       identity.launchAgent
     ).catch(() => 'unknown' as const)
     if (
-      foreground === 'agent' &&
+      foreground !== 'shell' &&
+      pty.launchEvidence === evidence &&
       this.ptysById.get(pty.ptyId) === pty &&
       pty.incarnationId === identity.incarnationId &&
       !pty.launchAgent

@@ -65,20 +65,22 @@ describe('main attach of a surviving daemon session', () => {
     await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
   })
 
-  // No note: main never armed one, or saw the launch finish; the agent in front decides.
-  it('restores an unnoted launch only while its agent holds the foreground', async () => {
-    const running = survivingSession()
-    vi.spyOn(running, 'readLaunchedAgentForeground').mockResolvedValue('agent')
-    await attachWith(running, null)
-    await vi.waitFor(() => expect(running.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
-
-    const finished = survivingSession()
-    const read = vi.spyOn(finished, 'readLaunchedAgentForeground').mockResolvedValue('shell')
-    await attachWith(finished, null)
-    await vi.waitFor(() => expect(read).toHaveBeenCalled())
-    await Promise.resolve()
-    expect(finished.getPaneTerminalAgent(PTY_ID)).toBeNull()
-  })
+  // No note: main never armed one, or saw the launch finish; only a shell in front proves it gone.
+  it.each([
+    ['agent', 'claude'],
+    ['unknown', 'claude'],
+    ['shell', null]
+  ] as const)(
+    'restores an unnoted launch unless a shell holds the foreground (%s)',
+    async (foreground, expected) => {
+      const runtime = survivingSession()
+      const read = vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue(foreground)
+      await attachWith(runtime, null)
+      await vi.waitFor(() => expect(read).toHaveBeenCalled())
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe(expected)
+    }
+  )
 
   it('drops the restored agent once a shell holds the foreground', async () => {
     const runtime = survivingSession()
