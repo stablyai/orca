@@ -38,7 +38,7 @@ export function GitHubTryItPreview({
       <p className="sr-only">
         {t(
           'bots.github.setup.preview.label',
-          'Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”',
+          'Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”.',
           { command, name: bot.name, ask, reply }
         )}
       </p>
@@ -46,7 +46,11 @@ export function GitHubTryItPreview({
         <GitHubComment
           avatar={
             <ConnectorAvatar
-              avatarUrl={userId ? `https://avatars.githubusercontent.com/u/${userId}` : null}
+              avatarUrl={
+                userId && /^\d+$/.test(userId)
+                  ? `https://avatars.githubusercontent.com/u/${userId}`
+                  : null
+              }
               name={login}
               className="size-full"
             />

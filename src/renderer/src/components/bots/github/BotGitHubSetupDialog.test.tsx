@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -246,9 +246,13 @@ describe('BotGitHubSetupDialog', () => {
     // The sample is hidden from screen readers, so one sentence says the ask and the reply.
     expect(
       screen.getByText(
-        'Mention @orca-bots ranger on an issue or pull request to ask Ranger. For example, “@orca-bots ranger review this PR”, and Ranger replies “On it.”'
+        'Mention @orca-bots ranger on an issue or pull request to ask Ranger. For example, “@orca-bots ranger review this PR”, and Ranger replies “On it.”.'
       ).className
     ).toBe('sr-only')
+    // The sample's two comments: the asker by name, the bot flagged as a bot.
+    const sample = screen.getByRole('region', { name: 'Try it on any issue or PR' })
+    expect(within(sample).getByText('dana')).toBeDefined()
+    expect(within(sample).getByText('bot')).toBeDefined()
   })
 
   it('leaves the bot off when the sign-in that linked was another surface’s, or another bot’s setup', async () => {
