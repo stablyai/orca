@@ -35,6 +35,7 @@ import type { BotController } from './bot-controller'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
+import { showBotSessionTab } from './bot-session-tab-show'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
 export type BotChatHost = StructuredAgentTurnHost &
@@ -355,13 +356,7 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
     createChat: async (bot, sessionId) => {
       await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
     },
-    showTab: (bot, sessionId) =>
-      runtime.publishStructuredAgentSessionTab({
-        workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
-        sessionId,
-        agent: bot.agent,
-        activate: false
-      }),
+    showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
     closeChat: (sessionId) => closeBotSession(runtime, sessionId)
   })
 }

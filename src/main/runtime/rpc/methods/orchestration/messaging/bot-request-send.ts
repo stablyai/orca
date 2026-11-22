@@ -301,14 +301,15 @@ async function admitBotRequestMail(
     }
     return { sent: true, receipt: sent.receipt }
   }
-  /** `home`: the owner's Chat, told where a request it would have had went; null tells none. */
-  const inOwnConversation = (home: { chat: string | null } | null) => {
+  /** `home`: the owner's Chat, told where a request it would have had went; null tells none.
+   *  `tab`: a chat the sender asked for, shown in the bot's tab bar. */
+  const inOwnConversation = (home: { chat: string | null } | null, tab: boolean) => {
     // Held before the chat is made, so a competing send makes none.
     const reservation = db.reserveBotRequest({ ...request, messageId })
     if (reservation.kind !== 'reserved') {
       return Promise.resolve(blockedReceipt(reservation).receipt)
     }
-    return admitInOwnConversation(runtime, target, record, params.subject, home, {
+    return admitInOwnConversation(runtime, target, record, params.subject, home, tab, {
       admit: (address) => admit(address, true),
       release: () => db.releaseBotRequest(messageId)
     })
@@ -318,7 +319,8 @@ async function admitBotRequestMail(
   }
   if (ownConversation) {
     // Only a teammate's request Orca kept out of the Chat is noted there; `--chat new` was the sender's choice.
-    return inOwnConversation(receiving.newChat === true ? null : { chat: target.chatSessionId })
+    const newChat = receiving.newChat === true
+    return inOwnConversation(newChat ? null : { chat: target.chatSessionId }, newChat)
   }
   // A chat whose last turn failed queues it like its owner's own follow-ups; the sender is told.
   if (receiving.via === 'address') {
