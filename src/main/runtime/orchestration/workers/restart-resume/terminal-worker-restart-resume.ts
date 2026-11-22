@@ -188,9 +188,9 @@ export class TerminalWorkerRestartResume {
       return
     }
     const db = this.deps.getDb()
-    // Stopped or released while startup settled: its coordinator's outcome stands, nothing starts.
+    // Stopped or released while startup settled: nothing starts, and today's outcome settles it.
     if (!db || !isWorkerRestartResumeOpen(db, dispatchId)) {
-      this.held.delete(dispatchId)
+      this.giveUp(dispatchId)
       return
     }
     this.reopening.add(dispatchId)

@@ -130,12 +130,15 @@ describe('TerminalWorkerRestartResume', () => {
     const dispatchId = lostWorker('working')
     const reopen = vi.fn(async () => ({ handle: 'term_resumed' }))
     const { resume } = owner({ reopen })
-    expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    const fail = vi.fn()
+    expect(resume.holdForReopen(dispatchId, fail)).toBe(true)
     db!.db
       .prepare("UPDATE worker_dispatches SET state = 'stopping' WHERE dispatch_id = ?")
       .run(dispatchId)
     resume.settleStartup()
     expect(reopen).not.toHaveBeenCalled()
+    // Today's outcome settles the stop for a terminal that is gone.
+    expect(fail).toHaveBeenCalledTimes(1)
   })
 
   it('never resumes a Dispatch its coordinator stopped', () => {
