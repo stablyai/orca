@@ -24679,7 +24679,8 @@
         "agentNotSupported": "agent not supported"
       },
       "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.",
-      "noMatchesToShow": "No matching sessions to show."
+      "noMatchesToShow": "No matching sessions to show.",
+      "titleMatchesOnly": "No full-text matches. Showing sessions whose title or details match."
     }
   },
   "sessionHistory": {

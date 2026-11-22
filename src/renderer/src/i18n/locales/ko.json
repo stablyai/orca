@@ -24257,7 +24257,8 @@
         "agentNotSupported": "지원되지 않는 에이전트"
       },
       "consentTranscriptIndex": "검색은 세션 세부 정보와 메시지 미리보기에서 일치 항목을 찾습니다. 전체 대화를 검색하려면 전체 텍스트 검색을 켜세요(로컬 기록을 가리지 않고 색인화함). 페어링된 장치에서도 검색할 수 있습니다.",
-      "noMatchesToShow": "표시할 일치하는 세션이 없습니다."
+      "noMatchesToShow": "표시할 일치하는 세션이 없습니다.",
+      "titleMatchesOnly": "전체 텍스트 검색 결과가 없습니다. 제목이나 세부 정보가 일치하는 세션을 표시합니다."
     }
   },
   "sessionHistory": {

@@ -21929,7 +21929,8 @@
         "agentNotSupported": "ajan desteklenmiyor"
       },
       "consentTranscriptIndex": "Arama, oturum ayrıntılarında ve mesaj önizlemelerinde eşleşme arar. Konuşmaların tamamında aramak için tam metin aramasını açın (yerel dökümleri sansürlemeden dizinler). Eşleştirilmiş cihazlar da bunlarda arama yapabilir.",
-      "noMatchesToShow": "Gösterilecek eşleşen oturum yok."
+      "noMatchesToShow": "Gösterilecek eşleşen oturum yok.",
+      "titleMatchesOnly": "Tam metin eşleşmesi yok. Başlığı veya ayrıntıları eşleşen oturumlar gösteriliyor."
     }
   },
   "sessionHistory": {

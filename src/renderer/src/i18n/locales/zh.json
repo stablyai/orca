@@ -23511,7 +23511,8 @@
         "agentNotSupported": "不支持该智能体"
       },
       "consentTranscriptIndex": "搜索会匹配会话详情和消息预览，如需搜索完整对话，请启用全文搜索（为本地记录建立索引，内容不会脱敏），配对设备也可以搜索这些内容",
-      "noMatchesToShow": "没有可显示的匹配会话"
+      "noMatchesToShow": "没有可显示的匹配会话",
+      "titleMatchesOnly": "没有全文匹配项。正在显示标题或详细信息匹配的会话"
     }
   },
   "sessionHistory": {

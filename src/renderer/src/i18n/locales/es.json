@@ -22074,7 +22074,8 @@
         "agentNotSupported": "agente no compatible"
       },
       "consentTranscriptIndex": "La búsqueda coincide con los detalles de las sesiones y las vistas previas de los mensajes. Para buscar en conversaciones completas, activa la búsqueda de texto completo (indexa las transcripciones locales, sin ocultar contenido). Los dispositivos emparejados también pueden buscar en ellas.",
-      "noMatchesToShow": "No hay sesiones coincidentes para mostrar."
+      "noMatchesToShow": "No hay sesiones coincidentes para mostrar.",
+      "titleMatchesOnly": "No hay coincidencias de texto completo. Se muestran las sesiones cuyo título o detalles coinciden."
     }
   },
   "sessionHistory": {
