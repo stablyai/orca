@@ -123,8 +123,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function showWholePlannedGroup(items: readonly BotItem[]) {
-  const view = render(<Panel items={items} />, { wrapper: TooltipProvider })
+async function showWholePlannedGroup(items: readonly BotItem[], allClear = false) {
+  const view = render(<Panel items={items} allClear={allClear} />, { wrapper: TooltipProvider })
   fireEvent.click(screen.getByRole('button', { name: /^Planned/ }))
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: `Show ${items.length - 5} more` }))
@@ -159,28 +159,59 @@ it.each([
   }
 )
 
-it('keeps the expanded window aligned as the all-clear appears and disappears', async () => {
+function mockAllClearLayout(): void {
   vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (
     this: HTMLElement
   ) {
     if (this.getAttribute('role') === 'grid') {
       const top = document.querySelector('[role=status]') ? 120 : 0
-      return new DOMRect(0, top, 320, OPEN * ROW_PX)
+      const scroller = screen.getByTestId('scroller')
+      return new DOMRect(0, top - scroller.scrollTop, 320, OPEN * ROW_PX)
     }
     return new DOMRect(0, 0, 320, this.dataset.testid === 'scroller' ? PANEL_PX : ROW_PX)
   })
+}
+
+function lastGridRow(): number {
+  const rows = Array.from(screen.getByRole('grid').querySelectorAll('[aria-rowindex]'))
+  return Number(rows.at(-1)?.getAttribute('aria-rowindex'))
+}
+
+it('keeps the expanded window aligned as the all-clear appears and disappears', async () => {
+  mockAllClearLayout()
   const items = hostAnswer(null)
   const view = await showWholePlannedGroup(items)
-  const grid = screen.getByRole('grid')
-  const lastRow = () =>
-    Number(
-      Array.from(grid.querySelectorAll('[aria-rowindex]')).at(-1)?.getAttribute('aria-rowindex')
-    )
-  const initialEnd = lastRow()
+  const initialEnd = lastGridRow()
 
   await act(async () => view.rerender(<Panel items={items} allClear />))
-  expect(initialEnd - lastRow()).toBe(4)
+  expect(initialEnd - lastGridRow()).toBe(4)
 
   await act(async () => view.rerender(<Panel items={items} />))
-  expect(lastRow()).toBe(initialEnd)
+  expect(lastGridRow()).toBe(initialEnd)
 })
+
+it.each([
+  { allClear: true, rowShift: -3 },
+  { allClear: false, rowShift: 5 }
+])(
+  'refreshes the expanded window on a hidden scroll with allClear=$allClear',
+  async ({ allClear, rowShift }) => {
+    mockAllClearLayout()
+    const items = hostAnswer(null)
+    const view = await showWholePlannedGroup(items, !allClear)
+    const initialEnd = lastGridRow()
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+
+    view.rerender(<Panel items={items} allClear={allClear} />)
+    expect(lastGridRow()).toBe(initialEnd)
+
+    const scroller = screen.getByTestId('scroller')
+    scroller.scrollTop = ROW_PX
+    await act(async () => {
+      fireEvent.scroll(scroller)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(lastGridRow()).toBe(initialEnd + rowShift)
+  }
+)
