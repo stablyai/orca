@@ -60,23 +60,30 @@ function zshBarrierWithStartupCommand(): SessionShellReadyBarrier {
 }
 
 // #18172: a write that lands while rc files run is eaten by anything there that reads the terminal.
-it('keeps the startup command held past the deadline until a slow shell reaches its prompt', async () => {
-  const barrier = zshBarrierWithStartupCommand()
+// ConPTY has no slave path to probe, so Windows still releases at the deadline.
+it.skipIf(process.platform === 'win32')(
+  'keeps the startup command held past the deadline until a slow shell reaches its prompt',
+  async () => {
+    const barrier = zshBarrierWithStartupCommand()
 
-  await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS * 10)
-  expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS * 10)
+    expect(written).toEqual([])
 
-  barrier.ingestSubprocessData(`READY% ${SHELL_READY_MARKER}`)
-  expect(written).toEqual(['echo SENTINEL\r'])
-})
+    barrier.ingestSubprocessData(`READY% ${SHELL_READY_MARKER}`)
+    expect(written).toEqual(['echo SENTINEL\r'])
+  }
+)
 
-it('releases the held command to a line editor that never prints the ready marker', async () => {
-  zshBarrierWithStartupCommand()
+it.skipIf(process.platform === 'win32')(
+  'releases the held command to a line editor that never prints the ready marker',
+  async () => {
+    zshBarrierWithStartupCommand()
 
-  await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS * 3)
-  expect(written).toEqual([])
+    await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS * 3)
+    expect(written).toEqual([])
 
-  stty = STTY_AT_LINE_EDITOR
-  await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS)
-  expect(written).toEqual(['echo SENTINEL\r'])
-})
+    stty = STTY_AT_LINE_EDITOR
+    await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS)
+    expect(written).toEqual(['echo SENTINEL\r'])
+  }
+)
