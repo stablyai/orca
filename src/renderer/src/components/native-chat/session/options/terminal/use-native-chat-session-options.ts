@@ -109,7 +109,7 @@ export function useNativeChatSessionOptions(args: {
       (discoveryContext ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey) : null) ??
       catalog.models
     // A new agent or session in the same terminal reports afresh, even the same model.
-    const values = takeNativeChatStatusReport(
+    const report = takeNativeChatStatusReport(
       appliedReportByPty,
       targetPtyId,
       agent,
@@ -120,8 +120,8 @@ export function useNativeChatSessionOptions(args: {
         providerSession: { id: reportingSessionId, effort: reportedEffort }
       }
     )
-    if (values) {
-      surface.reportSessionOptions(values)
+    if (report) {
+      surface.reportSessionOptions(report.values, report.forNewModel)
     }
   }, [
     agent,

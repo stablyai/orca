@@ -36,7 +36,12 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
-  reportSessionOptions(values: Record<string, SessionOptionValue>): void
+  /** Applies what the running agent reports. `forNewModel` holds values that are not news on their
+   *  own (an unchanged effort) but describe a model the session switches to. */
+  reportSessionOptions(
+    values: Record<string, SessionOptionValue>,
+    forNewModel?: Record<string, SessionOptionValue>
+  ): void
   replaceModels(models: CatalogModel[]): void
   /** The context window the host's model listing states for `modelId`, or null. */
   contextWindowTokens(modelId: string): number | null
@@ -185,8 +190,12 @@ export function createNativeChatPtySessionOptions(
         args.onAgentPicker?.()
       }
     },
-    reportSessionOptions: (values) => {
-      if (applyNativeChatReportedSessionOptions(record, values)) {
+    reportSessionOptions: (values, forNewModel) => {
+      const switches = typeof values.model === 'string' && values.model !== record.model?.value
+      const reported = switches && forNewModel ? { ...forNewModel, ...values } : values
+      const targetModel = typeof values.model === 'string' ? values.model : record.model?.value
+      const offered = offeredValues(activeModels(), targetModel, reported)
+      if (applyNativeChatReportedSessionOptions(record, offered)) {
         publish()
       }
     },
@@ -198,4 +207,25 @@ export function createNativeChatPtySessionOptions(
     contextWindowTokens: (modelId) =>
       models.find((model) => model.id === modelId)?.contextWindowTokens ?? null
   }
+}
+
+/** Keeps the reported values the receiving model offers; a hook can name a model the user already
+ *  switched away from, so values are checked against the model they land on. */
+function offeredValues(
+  models: readonly CatalogModel[],
+  modelId: SessionOptionValue | undefined,
+  values: Record<string, SessionOptionValue>
+): Record<string, SessionOptionValue> {
+  const options = models.find((model) => model.id === modelId)?.options ?? []
+  return Object.fromEntries(
+    Object.entries(values).filter(([id, value]) => {
+      if (id === 'model') {
+        return true
+      }
+      const kind = options.find((option) => option.id === id)?.kind
+      return kind?.type === 'select'
+        ? kind.choices.some((choice) => choice.value === value)
+        : kind?.type === 'boolean' && typeof value === 'boolean'
+    })
+  )
 }

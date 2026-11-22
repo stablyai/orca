@@ -229,7 +229,7 @@ export function useMobileNativeChatSessionOptions(
       return
     }
     // A restarted session reports afresh, even the same model and effort.
-    const values = takeNativeChatStatusReport(
+    const report = takeNativeChatStatusReport(
       appliedReportByScope,
       scopeKey,
       agent,
@@ -237,8 +237,8 @@ export function useMobileNativeChatSessionOptions(
       discoveredModels ?? catalog.models,
       { model: reportedModel, providerSession: { id: reportingSessionId, effort: reportedEffort } }
     )
-    if (values) {
-      surface.reportSessionOptions(values)
+    if (report) {
+      surface.reportSessionOptions(report.values, report.forNewModel)
     }
   }, [
     agent,

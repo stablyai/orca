@@ -18,12 +18,12 @@ function chip(scopeKey: string) {
     dispatchCommand: async () => {}
   })!
   const report = (model: string, effort: string, sessionId = 'session-a') => {
-    const values = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
+    const reported = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
       model,
       providerSession: { id: sessionId, effort }
     })
-    if (values) {
-      surface.reportSessionOptions(values)
+    if (reported) {
+      surface.reportSessionOptions(reported.values, reported.forNewModel)
     }
   }
   const shown = (id: string) => {
@@ -56,4 +56,23 @@ it('reports a restarted session afresh, even on the same model', async () => {
   await surface.setOption('model', 'sonnet')
   report('claude-opus-5-5', 'high', 'session-b')
   expect(shown('model')).toBe('opus')
+})
+
+it('keeps a newer effort pick when only the reported model changes', async () => {
+  const { surface, report, shown } = chip('status-report-effort-pick')
+  report('claude-opus-5-5', 'high')
+  await surface.setOption('model', 'sonnet')
+  await surface.setOption('effort', 'low')
+  // The statusline confirms Sonnet before a hook reports the new effort.
+  report('claude-sonnet-5-5', 'high')
+  expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'low'])
+})
+
+it('checks a reported effort against the model the session switched to, not the hook model', async () => {
+  const { surface, report, shown } = chip('status-report-effort-target')
+  report('claude-haiku-5-5', 'high')
+  await surface.setOption('model', 'sonnet')
+  // Hooks still name Haiku, which offers no effort, while Sonnet runs at Max.
+  report('claude-haiku-5-5', 'max')
+  expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
 })

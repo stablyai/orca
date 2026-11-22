@@ -10,16 +10,22 @@ import { matchNativeChatCatalogModelId } from './native-chat-session-option-stat
 /** The model and effort facts a chip last applied, per terminal or tab. */
 export type NativeChatStatusReportMemory = Map<string, { model: string; effort: string }>
 
+/** Fresh facts to report, plus known ones that only describe a model the chip switches to. */
+export type NativeChatStatusReport = {
+  values: Record<string, SessionOptionValue>
+  forNewModel?: Record<string, SessionOptionValue>
+}
+
 type ReportedStatus = {
   model?: string
   providerSession?: Partial<Pick<AgentProviderSessionMetadata, 'id' | 'effort'>>
 }
 
-/** What a terminal agent's status says its session runs, as values to report: the model, and the
- *  live effort where that model offers it. Desktop and phone chips both read it. Model and effort
- *  are separate facts: hooks name Claude's model only at SessionStart and its Stop read but its
- *  effort on every tool hook, so an unchanged model is not resent with a new effort, which would
- *  revert a newer model pick. A new agent session reports both afresh. */
+/** What a terminal agent's status says its session runs: its model and live effort. Desktop and
+ *  phone chips both read it. Model and effort are separate facts reported only when they change:
+ *  hooks name Claude's model only at SessionStart and its Stop read but its effort on every tool
+ *  hook, so resending an unchanged one would revert a newer pick. A new agent session reports both
+ *  afresh. The chip checks each value against the model it lands on. */
 export function takeNativeChatStatusReport(
   memory: NativeChatStatusReportMemory,
   scopeKey: string,
@@ -27,7 +33,7 @@ export function takeNativeChatStatusReport(
   catalog: AgentSessionOptionCatalog,
   models: readonly CatalogModel[],
   status: ReportedStatus | undefined
-): Record<string, SessionOptionValue> | null {
+): NativeChatStatusReport | null {
   const reportedModel = status?.model
   if (!reportedModel) {
     return null
@@ -42,7 +48,7 @@ export function takeNativeChatStatusReport(
   if (!model) {
     return null
   }
-  const effort = offeredEffort(models, model, status.providerSession?.effort)
+  const effort = status.providerSession?.effort
   const sessionId = status.providerSession?.id ?? null
   const facts = {
     model: JSON.stringify([agent, sessionId, model]),
@@ -55,23 +61,11 @@ export function takeNativeChatStatusReport(
     return null
   }
   setBoundedScopeCacheEntry(memory, scopeKey, facts)
+  const known = effort !== undefined ? { effort } : undefined
+  const fresh = effortIsNew ? known : undefined
   if (modelIsNew) {
-    return effort !== undefined ? { model, effort } : { model }
+    // An unchanged effort describes the model only if the chip switches to it.
+    return { values: { model, ...fresh }, ...(known ? { forNewModel: known } : {}) }
   }
-  return effort !== undefined ? { effort } : null
-}
-
-function offeredEffort(
-  models: readonly CatalogModel[],
-  model: string,
-  effort: string | undefined
-): string | undefined {
-  const option = models
-    .find((candidate) => candidate.id === model)
-    ?.options.find((candidate) => candidate.id === 'effort')
-  return effort !== undefined &&
-    option?.kind.type === 'select' &&
-    option.kind.choices.some((choice) => choice.value === effort)
-    ? effort
-    : undefined
+  return fresh ? { values: fresh } : null
 }
