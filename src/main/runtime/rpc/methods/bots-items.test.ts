@@ -637,7 +637,6 @@ describe('bot items over RPC', () => {
       expect.anything(),
       expect.objectContaining({
         to: `orca_session_id:${DOCS_CHAT}`,
-        keepChat: true,
         params: expect.objectContaining({
           type: 'status',
           subject: expect.stringMatching(/^Ranger commented/)

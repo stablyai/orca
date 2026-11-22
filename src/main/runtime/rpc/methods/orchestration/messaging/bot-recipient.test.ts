@@ -67,19 +67,16 @@ describe('mail to a bot', () => {
   })
   afterEach(() => h.cleanup())
 
-  it("runs a teammate's request in a conversation of its own, with Orca's record of who asked", async () => {
+  it("lands a teammate's request in the bot's Home Chat, with Orca's record of who asked", async () => {
     journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
     const receipt = await sent(RANGER_THREAD, { to: 'bot:docs', type: 'handoff' })
     expect(receipt.message).toMatchObject({
-      to_handle: `orca_session_id:${DOCS_REQUEST}`,
+      to_handle: `orca_session_id:${DOCS_CHAT}`,
       type: 'handoff'
     })
-    expect(withChat).not.toHaveBeenCalled()
+    expect(startBotSession).not.toHaveBeenCalled()
     expect(cards).toEqual([])
-    // Kept out of the owner's Chat, so the Chat says where it went.
-    expect(notes).toEqual([
-      'Request from Ranger, for Dana on Slack; it runs in its own conversation: Ranger: update the install docs'
-    ])
+    expect(notes).toEqual([])
     const id = receipt.message.id
     expect(JSON.parse(receipt.message.payload)).toEqual({
       botRequest: {
@@ -101,14 +98,14 @@ describe('mail to a bot', () => {
     })
   })
 
-  it("keeps a teammate's request out of the owner's Chat even when mailed straight to it", async () => {
+  it("lands a teammate's request mailed straight to a chat in that chat", async () => {
     journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
     const receipt = await sent(RANGER_THREAD, {
-      to: `orca_session_id:${DOCS_CHAT}`,
+      to: `orca_session_id:${DOCS_THREAD}`,
       type: 'handoff'
     })
-    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
-    expect(db.getAllMessagesForHandle(`orca_session_id:${DOCS_CHAT}`)).toHaveLength(0)
+    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_THREAD}`)
+    expect(startBotSession).not.toHaveBeenCalled()
   })
 
   it("lands a teammate's request about a chat (an item comment) in that chat, with who asked", async () => {
@@ -122,8 +119,7 @@ describe('mail to a bot', () => {
         to: `orca_session_id:${DOCS_CHAT}`,
         sender,
         routing: { run: undefined },
-        messageId: 'msg_item_comment1',
-        keepChat: true
+        messageId: 'msg_item_comment1'
       }
     )
     expect(sent).not.toBeNull()
@@ -275,7 +271,6 @@ describe('mail to a bot', () => {
         { kind: 'person', userId: 'U_NORA' }
       ])
     }
-    expect(db.getAllMessagesForHandle(`orca_session_id:${DOCS_CHAT}`)).toHaveLength(0)
   })
 
   it('refuses any other kind of mail to a bot', async () => {
@@ -331,7 +326,7 @@ describe('mail to a bot', () => {
     expect(cards).toEqual([])
   })
 
-  it("lets a teammate's turn send a bot status and then a question, each in its own conversation", async () => {
+  it("lets a teammate's turn send a bot status and then a question", async () => {
     journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
     const status = await sent(RANGER_THREAD, { to: 'bot:docs', type: 'status' })
     const question = await sent(RANGER_THREAD, { to: 'bot:docs', type: 'question' })
@@ -361,7 +356,7 @@ describe('mail to a bot', () => {
     expect(withChat).not.toHaveBeenCalled()
     await expect(
       send(RANGER_THREAD, { to: 'bot:Ranger', chat: RANGER_THREAD, type: 'question' })
-    ).rejects.toThrow("That's this chat")
+    ).rejects.toThrow('You are already in that chat; nothing was sent.')
   })
 
   it("lands --item in the chat that owns the item, or the bot's Home Chat once that chat is gone", async () => {
@@ -414,8 +409,13 @@ describe('mail to a bot', () => {
     journals[RANGER_CHAT] = [message('ask')]
     const home = await sent(RANGER_THREAD, { to: 'bot:Ranger', type: 'handoff' })
     expect(home.message.to_handle).toBe(`orca_session_id:${RANGER_CHAT}`)
+    // From a chat that acts for a teammate too, and no chat is started for it.
+    journals[RANGER_THREAD].push(message('ask again', askedBy('U_DANA', 'Dana')))
+    const teammate = await sent(RANGER_THREAD, { to: 'bot:Ranger', type: 'question' })
+    expect(teammate.message.to_handle).toBe(`orca_session_id:${RANGER_CHAT}`)
+    expect(startBotSession).not.toHaveBeenCalled()
     await expect(send(RANGER_CHAT, { to: 'bot:Ranger', type: 'handoff' })).rejects.toThrow(
-      "That's this chat"
+      'You are already in that chat; nothing was sent.'
     )
   })
 
@@ -710,12 +710,6 @@ describe('mail to a bot', () => {
     })
   })
 
-  it("keeps a teammate's request out of the tab bar when Orca, not the sender, made its chat", async () => {
-    journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
-    await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
-    expect(publishTab).not.toHaveBeenCalled()
-  })
-
   it('shows no tab for a --chat new send that was a duplicate', async () => {
     journals[RANGER_CHAT] = [message('ask')]
     await sent(RANGER_CHAT, { to: 'bot:Docs', type: 'question', chat: 'new' })
@@ -742,26 +736,6 @@ describe('mail to a bot', () => {
       send(RANGER_CHAT, { to: 'bot:Docs', type: 'status', chat: 'new' })
     ).rejects.toThrow('--chat new starts a new chat on a bot')
     expect(startBotSession).not.toHaveBeenCalled()
-  })
-
-  it("makes one conversation when a teammate's question races a retry of it", async () => {
-    journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
-    let release!: () => void
-    const blocked = new Promise<void>((resolve) => (release = resolve))
-    let entered!: () => void
-    const started = new Promise<void>((resolve) => (entered = resolve))
-    startBotSession.mockImplementationOnce(async () => {
-      entered()
-      await blocked
-      return DOCS_REQUEST
-    })
-    const first = sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
-    await started
-    const second = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
-    release()
-    expect(second).toMatchObject({ duplicate: true })
-    expect((await first).message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
-    expect(startBotSession).toHaveBeenCalledTimes(1)
   })
 
   it('makes one new chat when a second send of the turn races the first', async () => {
