@@ -39,17 +39,34 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
   }
   const dir = join(pluginDir, HERMES_SESSION_ENV_DIR)
   const file = join(dir, `${providerSessionId}.json`)
-  await mkdir(dir, { recursive: true, mode: 0o700 })
-  // Renamed into place so a tool spawned meanwhile never reads half a file.
-  const staged = `${file}.${randomBytes(6).toString('hex')}.tmp`
   const written = JSON.stringify(values)
-  await writeFile(staged, written, { mode: 0o600 })
-  await rename(staged, file)
+  await inTurn(file, async () => {
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    // Renamed into place so a tool spawned meanwhile never reads half a file.
+    const staged = `${file}.${randomBytes(6).toString('hex')}.tmp`
+    await writeFile(staged, written, { mode: 0o600 })
+    await rename(staged, file)
+  })
   // A later child of the same conversation may have replaced the file; only this one is removed.
-  return async () => {
-    const current = await readFile(file, 'utf-8').catch(() => null)
-    if (current === written) {
-      await rm(file, { force: true })
+  return () =>
+    inTurn(file, async () => {
+      if ((await readFile(file, 'utf-8').catch(() => null)) === written) {
+        await rm(file, { force: true })
+      }
+    })
+}
+
+const turns = new Map<string, Promise<void>>()
+
+/** Runs each file's writes and removals in order, so an old child's removal never takes a new one's. */
+function inTurn(file: string, run: () => Promise<void>): Promise<void> {
+  const next = (turns.get(file) ?? Promise.resolve()).then(run)
+  const settled = next.catch(() => undefined)
+  turns.set(file, settled)
+  void settled.then(() => {
+    if (turns.get(file) === settled) {
+      turns.delete(file)
     }
-  }
+  })
+  return next
 }

@@ -3,6 +3,7 @@ import {
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { SHARED_TOOL_PROCESS_SESSION_ENV_NAMES } from '../runtime/agent-session/environment/shared-tool-process-session-env'
+import { ORCA_AGENT_SESSION_TOOL_TOKEN_ENV } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 export const HERMES_PLUGIN_NAME = 'orca-status'
 export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
@@ -239,14 +240,16 @@ def _published_env(session_id: str) -> Optional[dict[str, Any]]:
         return None
 
 
-def _session_env(session_id: str) -> Optional[dict[str, Any]]:
+def _session_env(session_id: str) -> dict[str, Any]:
     published = _published_env(session_id)
-    if published is not None or _bound_session_value is None:
-        return published
-    # A delegated subagent, and the rest of a turn Hermes compressed, run under a new session id;
-    # the chat id bound to this turn still names the chat (never the gateway's os.environ copy).
-    chat_id = _bound_session_value("HERMES_SESSION_CHAT_ID")
-    return _published_env(chat_id) if isinstance(chat_id, str) and chat_id != session_id else None
+    if published is None and _bound_session_value is not None:
+        # A delegated subagent, and the rest of a turn Hermes compressed, run under a new session id;
+        # the chat id bound to this turn still names the chat (never the gateway's os.environ copy).
+        chat_id = _bound_session_value("HERMES_SESSION_CHAT_ID")
+        if isinstance(chat_id, str) and chat_id != session_id:
+            published = _published_env(chat_id)
+    # A gateway restarted from a chat's tool keeps that chat's token: no other session may use it.
+    return published if published is not None else {"${ORCA_AGENT_SESSION_TOOL_TOKEN_ENV}": None}
 
 
 def _make_hook(event_name: str) -> Callable[..., None]:

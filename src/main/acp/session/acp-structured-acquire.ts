@@ -95,8 +95,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
   const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
-  // Issued just before spawn: until the process exits, only its session's tools can name the chat.
-  const sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env)
+  let sharedTools: SharedToolProcessSession | null = null
   const connection = connect(
     {
       command: launch.command,
@@ -144,6 +143,8 @@ export async function acquireAcpStructuredSession(input: {
       }
     }
   )
+  // Until the process exits, only its session's tools can name the chat.
+  sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env)
   if (!spec.permissionModeConfig) {
     options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
   }

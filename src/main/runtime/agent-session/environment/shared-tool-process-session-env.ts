@@ -5,13 +5,22 @@ import {
 } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
 import { REMOTE_RUNTIME_SELECTOR_ENV_KEYS } from '../../../ipc/pty/host-env/inherited-orca-identity-env'
+import {
+  RUNTIME_SOURCE_ID_ENV,
+  RUNTIME_SOURCE_INCARNATION_ENV,
+  RUNTIME_SOURCE_PROFILE_PATH_ENV
+} from '../../../../shared/remote-runtime/host-catalog/runtime-source-env'
 
-/** The seal's names that route Orca's CLI to this app, which a shared process's tools need too. */
+/** The names that route Orca's CLI, as the seal sets them; a shared process's tools need them too,
+ *  and one the seal left unset must not keep the value of whoever started the shared process. */
 const THIS_APP_CLI_ENV = [
   ORCA_STRUCTURED_SESSION_ENV,
   'ORCA_USER_DATA_PATH',
   'ORCA_CLI_COMMAND',
-  ...REMOTE_RUNTIME_SELECTOR_ENV_KEYS
+  ...REMOTE_RUNTIME_SELECTOR_ENV_KEYS,
+  RUNTIME_SOURCE_ID_ENV,
+  RUNTIME_SOURCE_INCARNATION_ENV,
+  RUNTIME_SOURCE_PROFILE_PATH_ENV
 ]
 
 /** Every name `sharedToolProcessSessionEnv` gives a session's tools. */
@@ -37,14 +46,13 @@ export function sharedToolProcessSessionEnv(
   sealed: Readonly<Record<string, string>>,
   token: string
 ): { caller: Record<string, string>; tools: Record<string, string | null> } {
-  const pick = (keys: readonly string[]) =>
-    Object.fromEntries(
-      keys.flatMap((key) => (sealed[key] === undefined ? [] : [[key, sealed[key]]]))
-    )
+  const caller = Object.fromEntries(
+    CALLER_IDENTITY_ENV.flatMap((key) => (sealed[key] === undefined ? [] : [[key, sealed[key]]]))
+  )
   return {
-    caller: pick(CALLER_IDENTITY_ENV),
+    caller,
     tools: {
-      ...pick(THIS_APP_CLI_ENV),
+      ...Object.fromEntries(THIS_APP_CLI_ENV.map((key) => [key, sealed[key] ?? null])),
       ...Object.fromEntries(CALLER_IDENTITY_ENV.map((key) => [key, null])),
       [ORCA_AGENT_SESSION_TOOL_TOKEN_ENV]: token
     }
