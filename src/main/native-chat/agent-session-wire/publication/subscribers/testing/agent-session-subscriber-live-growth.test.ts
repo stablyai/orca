@@ -164,9 +164,21 @@ describe('a live reply that only grows', () => {
   })
 
   it('is no longer read for a phone whose save carried it shortened', () => {
+    let read: ((epoch: string) => readonly AgentJournalRenderItem[]) | undefined
+    const rows = new StructuredAgentSessionLiveTextRows(
+      {
+        bindLiveText: (source) => {
+          read = source.read
+          return () => {}
+        }
+      },
+      () => 'a'.repeat(128 * 1024),
+      (_key, text) => reply(text).body
+    )
+    rows.committed('reply')(reply(''), 'e')
     const { subscriber } = stream(true, () => false)
-    const saved = reply('a'.repeat(128 * 1024))
-    noteSubscriberLiveRow(subscriber)(saved, { ...saved, shortened: true }, 72 * 1024)
+    const live = read!('e')[0]!
+    noteSubscriberLiveRow(subscriber)(live, { ...live, shortened: true }, 72 * 1024)
     expect(sessionLiveTextReaders(new Map([['reader', subscriber]]))?.takes?.('reply')).toBe(false)
   })
 

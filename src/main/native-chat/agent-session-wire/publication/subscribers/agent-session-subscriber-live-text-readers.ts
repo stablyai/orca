@@ -4,15 +4,17 @@ import type {
   LiveTextReaders
 } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
 /** Replies a subscriber's last shortened rows were; one more than this is a reply long since saved. */
 const SHORTENED_ROWS_KEPT = 16
 
-/** A shortened row never grows on screen, so its live text needs no reading until its save. */
+/** A shortened reply row never grows on screen, so its live text needs no reading until its save.
+ *  Other agents' timeline rows go whole each window, as before, so they are never held back. */
 export function noteShortenedRow(subscriber: Subscriber, row: SubscriberLiveRow): void {
-  if (row.sent.shortened !== true) {
+  if (row.sent.shortened !== true || !isAppendOnlyLiveRow(row.source)) {
     return
   }
   const shortened = (subscriber.liveShortened ??= new Set())
